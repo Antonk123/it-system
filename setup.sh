@@ -1,0 +1,180 @@
+#!/bin/bash
+# IT Ticket System - Setup-script
+# Klonar repot och sätter upp ett färdigt system från grunden.
+#
+# Kör med:
+#   bash <(curl -fsSL https://raw.githubusercontent.com/OWNER/REPO/main/setup.sh)
+# Eller lokalt:
+#   bash setup.sh
+
+set -e
+
+# --- Konfiguration (uppdatera REPO_URL innan publicering) ---
+REPO_URL="https://github.com/Antonk123/it-system"
+INSTALL_DIR="$HOME/it-ticketing"
+
+# --- Färger ---
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+ok()     { echo -e "  ${GREEN}✓${NC} $1"; }
+err()    { echo -e "  ${RED}✗${NC} $1"; exit 1; }
+info()   { echo -e "  ${BLUE}→${NC} $1"; }
+warn()   { echo -e "  ${YELLOW}!${NC} $1"; }
+header() { echo -e "\n${BOLD}${BLUE}=== $1 ===${NC}\n"; }
+
+echo -e "\n${BOLD}IT Ticket System — Installationsguide${NC}"
+echo "  ─────────────────────────────────────"
+
+# --- 1. Kontrollera förutsättningar ---
+header "Kontrollerar förutsättningar"
+
+command -v docker   &>/dev/null || err "Docker är inte installerat. Se https://docs.docker.com/get-docker/"
+ok "Docker: $(docker --version | cut -d' ' -f3 | tr -d ',')"
+
+docker compose version &>/dev/null || err "Docker Compose v2 saknas. Se https://docs.docker.com/compose/install/"
+ok "Docker Compose: $(docker compose version --short)"
+
+command -v git     &>/dev/null || err "git är inte installerat (sudo apt install git)"
+ok "git: $(git --version | cut -d' ' -f3)"
+
+command -v openssl &>/dev/null || err "openssl saknas (sudo apt install openssl)"
+ok "openssl hittades"
+
+# --- 2. Klona eller uppdatera repot ---
+header "Hämtar källkod"
+
+if [ -d "$INSTALL_DIR/.git" ]; then
+  info "Katalog finns redan — uppdaterar ($INSTALL_DIR)"
+  git -C "$INSTALL_DIR" pull --quiet
+  ok "Repo uppdaterat"
+else
+  info "Klonar $REPO_URL → $INSTALL_DIR"
+  git clone --quiet "$REPO_URL" "$INSTALL_DIR"
+  ok "Repo klonat"
+fi
+
+cd "$INSTALL_DIR"
+
+# --- 3. Konfiguration ---
+header "Konfiguration"
+echo -e "  Tryck ${BOLD}Enter${NC} för att använda standardvärden (visas i [hakparentes])\n"
+
+read -rp "  Frontend-port [8082]: " FRONTEND_PORT </dev/tty
+FRONTEND_PORT=${FRONTEND_PORT:-8082}
+
+read -rp "  Backend-port [3002]: " BACKEND_PORT </dev/tty
+BACKEND_PORT=${BACKEND_PORT:-3002}
+
+DEFAULT_URL="http://localhost:${FRONTEND_PORT}"
+read -rp "  App-URL (för CORS och e-postlänkar) [${DEFAULT_URL}]: " APP_URL </dev/tty
+APP_URL=${APP_URL:-$DEFAULT_URL}
+
+echo ""
+echo -e "  ${BOLD}SMTP-konfiguration${NC} (valfritt — tryck Enter för att hoppa över)"
+read -rp "  SMTP-server: " SMTP_HOST </dev/tty
+if [ -n "$SMTP_HOST" ]; then
+  read -rp "  SMTP-port [587]: " SMTP_PORT </dev/tty
+  SMTP_PORT=${SMTP_PORT:-587}
+  read -rp "  SMTP-användare: " SMTP_USER </dev/tty
+  read -rsp "  SMTP-lösenord: " SMTP_PASS </dev/tty
+  echo ""
+  read -rp "  E-post från (avsändare): " EMAIL_FROM </dev/tty
+  read -rp "  E-post till (notifieringar skickas hit): " EMAIL_TO </dev/tty
+else
+  SMTP_PORT=587
+  SMTP_USER=""
+  SMTP_PASS=""
+  EMAIL_FROM=""
+  EMAIL_TO=""
+  info "SMTP hoppas över — e-postnotifieringar inaktiverade"
+fi
+
+# --- 4. Generera JWT_SECRET ---
+JWT_SECRET=$(openssl rand -base64 32)
+ok "JWT_SECRET genererad"
+
+# --- 5. Skriv .env ---
+cat > .env << EOF
+# Genererat av setup.sh $(date +%Y-%m-%d\ %H:%M)
+
+FRONTEND_PORT=${FRONTEND_PORT}
+BACKEND_PORT=${BACKEND_PORT}
+CORS_ORIGIN=${APP_URL}
+APP_BASE_URL=${APP_URL}
+JWT_SECRET=${JWT_SECRET}
+SMTP_HOST=${SMTP_HOST}
+SMTP_PORT=${SMTP_PORT}
+SMTP_USER=${SMTP_USER}
+SMTP_PASS=${SMTP_PASS}
+EMAIL_FROM=${EMAIL_FROM}
+EMAIL_TO=${EMAIL_TO}
+EOF
+ok ".env skapad"
+
+# --- 6. Bygg Docker-images ---
+header "Bygger Docker-images"
+
+info "Backend... (kan ta 1-2 minuter)"
+docker build -f Dockerfile.server -t it-ticketing-backend:latest . --quiet > /dev/null
+ok "Backend-image klar"
+
+info "Frontend... (kan ta 1-2 minuter)"
+docker build -f Dockerfile.client -t it-ticketing-frontend:latest . --quiet > /dev/null
+ok "Frontend-image klar"
+
+# --- 7. Docker-volym ---
+header "Docker-volym"
+docker volume create it-ticketing-data > /dev/null 2>&1 || true
+ok "Volym 'it-ticketing-data' redo"
+
+# --- 8. Starta stack ---
+header "Startar system"
+docker compose -f docker-compose.setup.yml down --remove-orphans > /dev/null 2>&1 || true
+docker compose -f docker-compose.setup.yml up -d
+ok "Containers startade"
+
+# --- 9. Vänta på backend ---
+header "Väntar på backend"
+info "Pollar http://localhost:${BACKEND_PORT}/api/health..."
+
+MAX_WAIT=60
+WAITED=0
+printf "  "
+until curl -sf "http://localhost:${BACKEND_PORT}/api/health" > /dev/null 2>&1; do
+  if [ "$WAITED" -ge "$MAX_WAIT" ]; then
+    echo ""
+    echo ""
+    err "Backend svarade inte efter ${MAX_WAIT}s. Kontrollera loggar: docker logs it-ticketing-backend"
+  fi
+  sleep 2
+  WAITED=$((WAITED + 2))
+  printf "."
+done
+echo ""
+ok "Backend svarar (${WAITED}s)"
+
+# --- 10. Initiera databas ---
+header "Initierar databas"
+docker exec it-ticketing-backend npm run init-db
+ok "Databas initierad"
+
+# --- 11. Klar! ---
+header "Installation klar!"
+echo -e "  ${BOLD}Öppna systemet i din webbläsare:${NC}"
+echo ""
+echo -e "    URL:      ${GREEN}${APP_URL}${NC}"
+echo -e "    E-post:   ${GREEN}admin@example.com${NC}"
+echo -e "    Lösenord: ${GREEN}admin123${NC}"
+echo ""
+warn "Byt lösenord direkt efter inloggning!"
+echo ""
+echo -e "  ${BOLD}Hantera systemet:${NC}"
+echo "    docker compose -f ${INSTALL_DIR}/docker-compose.setup.yml up -d    # Starta"
+echo "    docker compose -f ${INSTALL_DIR}/docker-compose.setup.yml down     # Stoppa"
+echo "    docker compose -f ${INSTALL_DIR}/docker-compose.setup.yml logs -f  # Loggar"
+echo ""
