@@ -39,10 +39,22 @@ ok "Docker: $(docker --version | cut -d' ' -f3 | tr -d ',')"
 docker compose version &>/dev/null || err "Docker Compose v2 saknas. Se https://docs.docker.com/compose/install/"
 ok "Docker Compose: $(docker compose version --short)"
 
-command -v git     &>/dev/null || err "git är inte installerat (sudo apt install git)"
+if ! command -v git &>/dev/null; then
+  info "git saknas — installerar..."
+  sudo apt-get install -y git -qq
+fi
 ok "git: $(git --version | cut -d' ' -f3)"
 
-command -v openssl &>/dev/null || err "openssl saknas (sudo apt install openssl)"
+if ! command -v curl &>/dev/null; then
+  info "curl saknas — installerar..."
+  sudo apt-get install -y curl -qq
+fi
+ok "curl hittades"
+
+if ! command -v openssl &>/dev/null; then
+  info "openssl saknas — installerar..."
+  sudo apt-get install -y openssl -qq
+fi
 ok "openssl hittades"
 
 # --- 2. Klona eller uppdatera repot ---
@@ -116,6 +128,66 @@ EMAIL_TO=${EMAIL_TO}
 EOF
 ok ".env skapad"
 
+# --- 5b. Generera docker-compose.local.yml ---
+cat > docker-compose.local.yml << 'COMPOSE_EOF'
+version: '3.8'
+
+services:
+  backend:
+    image: it-ticketing-backend:latest
+    container_name: it-ticketing-backend
+    restart: unless-stopped
+    ports:
+      - "${BACKEND_PORT:-3002}:3001"
+    volumes:
+      - it-ticketing-data:/app/data
+    environment:
+      - NODE_ENV=production
+      - JWT_SECRET=${JWT_SECRET}
+      - DB_PATH=/app/data/database.sqlite
+      - UPLOAD_DIR=/app/data/uploads
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - APP_BASE_URL=${APP_BASE_URL}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - EMAIL_TO=${EMAIL_TO:-}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - ticketing
+
+  frontend:
+    image: it-ticketing-frontend:latest
+    container_name: it-ticketing-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8082}:80"
+    depends_on:
+      - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - ticketing
+
+networks:
+  ticketing:
+    driver: bridge
+
+volumes:
+  it-ticketing-data:
+    driver: local
+COMPOSE_EOF
+ok "docker-compose.local.yml skapad"
+
 # --- 6. Bygg Docker-images ---
 header "Bygger Docker-images"
 
@@ -134,8 +206,8 @@ ok "Volym 'it-ticketing-data' redo"
 
 # --- 8. Starta stack ---
 header "Startar system"
-docker compose -f docker-compose.setup.yml down --remove-orphans > /dev/null 2>&1 || true
-docker compose -f docker-compose.setup.yml up -d
+docker compose -f docker-compose.local.yml down --remove-orphans > /dev/null 2>&1 || true
+docker compose -f docker-compose.local.yml up -d
 ok "Containers startade"
 
 # --- 9. Vänta på backend ---
@@ -174,7 +246,7 @@ echo ""
 warn "Byt lösenord direkt efter inloggning!"
 echo ""
 echo -e "  ${BOLD}Hantera systemet:${NC}"
-echo "    docker compose -f ${INSTALL_DIR}/docker-compose.setup.yml up -d    # Starta"
-echo "    docker compose -f ${INSTALL_DIR}/docker-compose.setup.yml down     # Stoppa"
-echo "    docker compose -f ${INSTALL_DIR}/docker-compose.setup.yml logs -f  # Loggar"
+echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml up -d    # Starta"
+echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml down     # Stoppa"
+echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml logs -f  # Loggar"
 echo ""
