@@ -18,3 +18,4 @@ När det är klart visas URL och inloggningsuppgifter i terminalen.
 - **Frontend:** React, TypeScript, Vite, Tailwind CSS, shadcn-ui
 - **Backend:** Node.js, Express, TypeScript, SQLite
 - **Deploy:** Docker, Docker Compose
+
