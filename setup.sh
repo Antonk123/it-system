@@ -125,6 +125,10 @@ SMTP_USER=${SMTP_USER}
 SMTP_PASS=${SMTP_PASS}
 EMAIL_FROM=${EMAIL_FROM}
 EMAIL_TO=${EMAIL_TO}
+
+# Krävs av Vite vid bygge (används ej i produktionen)
+VITE_SUPABASE_URL=http://localhost
+VITE_SUPABASE_PUBLISHABLE_KEY=placeholder
 EOF
 ok ".env skapad"
 
