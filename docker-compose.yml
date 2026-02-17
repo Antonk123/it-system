@@ -1,0 +1,47 @@
+version: '3.8'
+
+services:
+  backend:
+    image: it-ticketing-backend:latest
+    container_name: it-ticketing-backend
+    restart: unless-stopped
+    ports:
+      - "3002:3001"
+    volumes:
+      - it-ticketing-data:/app/data
+    environment:
+      - NODE_ENV=production
+      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      - DB_PATH=/app/data/database.sqlite
+      - UPLOAD_DIR=/app/data/uploads
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - ticketing
+
+  frontend:
+    image: it-ticketing-frontend:latest
+    container_name: it-ticketing-frontend
+    restart: unless-stopped
+    ports:
+      - "8082:80"
+    depends_on:
+      - backend
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - ticketing
+
+networks:
+  ticketing:
+    driver: bridge
+
+volumes:
+  it-ticketing-data:
+    driver: local
