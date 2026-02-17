@@ -43,7 +43,7 @@ const themeOptions = [
 const Settings = () => {
   const { categories, addCategory, updateCategory, deleteCategory, reorderCategories } = useCategories();
   const { templates, addTemplate, updateTemplate, deleteTemplate, reorderTemplates } = useTemplates();
-  const { users: systemUsers, isLoading: usersLoading, error: usersError, inviteUser, deleteUser } = useSystemUsers();
+  const { users: systemUsers, isLoading: usersLoading, error: usersError, inviteUser, deleteUser, updateRole } = useSystemUsers();
   const { user: currentUser } = useAuth();
   const { theme, setTheme } = useTheme();
 
@@ -56,6 +56,7 @@ const Settings = () => {
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
+  const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
   const [isInviting, setIsInviting] = useState(false);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [fontTheme, setFontTheme] = useState<FontTheme>(getStoredFontTheme());
@@ -117,10 +118,11 @@ const Settings = () => {
     }
     
     setIsInviting(true);
-    const success = await inviteUser(inviteEmail.trim(), 'user', inviteName.trim() || undefined);
+    const success = await inviteUser(inviteEmail.trim(), inviteRole, inviteName.trim() || undefined);
     if (success) {
       setInviteEmail('');
       setInviteName('');
+      setInviteRole('user');
     }
     setIsInviting(false);
   };
@@ -231,13 +233,22 @@ const Settings = () => {
                 onKeyDown={(e) => e.key === 'Enter' && !isInviting && handleInviteUser()}
                 disabled={isInviting}
               />
+              <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as 'admin' | 'user')} disabled={isInviting}>
+                <SelectTrigger className="w-36 shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">Användare</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
               <Button onClick={handleInviteUser} className="shrink-0" disabled={isInviting}>
                 {isInviting ? (
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 ) : (
                   <Mail className="w-4 h-4 mr-2" />
                 )}
-                Bjud in
+                Skapa
               </Button>
             </div>
 
@@ -286,13 +297,24 @@ const Settings = () => {
                       )}
                     </div>
                     {sysUser.id !== currentUser?.id && (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => setDeleteUserId(sysUser.id)}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateRole(sysUser.id, sysUser.role === 'admin' ? 'user' : 'admin')}
+                          title={sysUser.role === 'admin' ? 'Nedgradera till användare' : 'Uppgradera till admin'}
+                        >
+                          <Shield className="w-3 h-3 mr-1" />
+                          {sysUser.role === 'admin' ? 'Ta bort admin' : 'Gör admin'}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setDeleteUserId(sysUser.id)}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
                     )}
                   </div>
                 ))
