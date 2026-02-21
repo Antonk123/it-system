@@ -72,6 +72,10 @@ fi
 
 cd "$INSTALL_DIR"
 
+# --- 2b. Disconnecta GitHub ---
+git remote remove origin
+info "GitHub-kopplingen borttagen — systemet är nu lokalt"
+
 # --- 3. Konfiguration ---
 header "Konfiguration"
 echo -e "  Tryck ${BOLD}Enter${NC} för att använda standardvärden (visas i [hakparentes])\n"
