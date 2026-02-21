@@ -16,6 +16,7 @@ import shareRoutes from './routes/shares.js';
 import userRoutes from './routes/users.js';
 import publicRoutes from './routes/public.js';
 import templateRoutes from './routes/templates.js';
+import tagRoutes from './routes/tags.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -68,6 +69,7 @@ app.use('/api/shares', shareRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/templates', templateRoutes);
+app.use('/api/tags', tagRoutes);
 
 // Error handling
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
