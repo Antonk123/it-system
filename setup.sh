@@ -62,7 +62,9 @@ header "Hämtar källkod"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
   info "Katalog finns redan — uppdaterar ($INSTALL_DIR)"
-  git -C "$INSTALL_DIR" pull --quiet
+  git -C "$INSTALL_DIR" remote add origin "$REPO_URL" 2>/dev/null || \
+    git -C "$INSTALL_DIR" remote set-url origin "$REPO_URL"
+  git -C "$INSTALL_DIR" pull origin main --quiet
   ok "Repo uppdaterat"
 else
   info "Klonar $REPO_URL → $INSTALL_DIR"
