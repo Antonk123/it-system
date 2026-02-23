@@ -86,9 +86,24 @@ FRONTEND_PORT=${FRONTEND_PORT:-8082}
 read -rp "  Backend-port [3002]: " BACKEND_PORT </dev/tty
 BACKEND_PORT=${BACKEND_PORT:-3002}
 
-DEFAULT_URL="http://localhost:${FRONTEND_PORT}"
+# Auto-detektera serverns primära IP-adress
+LOCAL_IP=$(ip route get 1.1.1.1 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="src") print $(i+1)}' | head -1)
+if [ -z "$LOCAL_IP" ]; then
+  LOCAL_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+fi
+if [ -z "$LOCAL_IP" ]; then
+  LOCAL_IP="localhost"
+fi
+
+DEFAULT_URL="http://${LOCAL_IP}:${FRONTEND_PORT}"
 read -rp "  App-URL (för CORS och e-postlänkar) [${DEFAULT_URL}]: " APP_URL </dev/tty
 APP_URL=${APP_URL:-$DEFAULT_URL}
+
+# Validera att URL börjar med http:// eller https://
+if [[ "$APP_URL" != http://* && "$APP_URL" != https://* ]]; then
+  warn "URL saknar protokoll — lägger till http:// automatiskt"
+  APP_URL="http://${APP_URL}"
+fi
 
 echo ""
 echo -e "  ${BOLD}SMTP-konfiguration${NC} (valfritt — tryck Enter för att hoppa över)"
