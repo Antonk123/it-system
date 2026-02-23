@@ -98,6 +98,23 @@ CREATE TABLE IF NOT EXISTS ticket_links (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Tags (custom labels for organizing tickets)
+CREATE TABLE IF NOT EXISTS tags (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  color TEXT DEFAULT '#3b82f6',
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Ticket tags (many-to-many relationship)
+CREATE TABLE IF NOT EXISTS ticket_tags (
+  id TEXT PRIMARY KEY,
+  ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(ticket_id, tag_id)
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
 CREATE INDEX IF NOT EXISTS idx_tickets_priority ON tickets(priority);
@@ -113,6 +130,8 @@ CREATE INDEX IF NOT EXISTS idx_ticket_links_target ON ticket_links(target_ticket
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ticket_links_unique ON ticket_links(source_ticket_id, target_ticket_id);
 CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_ticket_tags_ticket ON ticket_tags(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_tags_tag ON ticket_tags(tag_id);
 
 -- Trigger to update updated_at on tickets
 CREATE TRIGGER IF NOT EXISTS update_ticket_updated_at

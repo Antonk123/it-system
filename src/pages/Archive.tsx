@@ -8,7 +8,7 @@ import { TicketTable } from '@/components/TicketTable';
 import { SearchBar } from '@/components/SearchBar';
 import { PaginationControls } from '@/components/PaginationControls';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Archive as ArchiveIcon, Download } from 'lucide-react';
+import { Archive as ArchiveIcon, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -20,6 +20,7 @@ import {
 import { TicketStatus, TicketPriority } from '@/types/ticket';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { ImportDialog } from '@/components/ImportDialog';
 
 const statusLabels: Record<TicketStatus, string> = {
   'open': 'Öppen',
@@ -41,6 +42,7 @@ const Archive = () => {
   const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'priority' | 'category';
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
   const [compactView, setCompactView] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   // Fetch with pagination - filter for closed tickets
   const { tickets, pagination, isLoading, updateTicket } = useTickets({
@@ -159,6 +161,15 @@ const Archive = () => {
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setImportOpen(true)}
+              className="h-8 gap-2"
+            >
+              <Upload className="w-4 h-4" />
+              Importera CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={handleExport}
               className="h-8 gap-2"
             >
@@ -251,6 +262,13 @@ const Archive = () => {
           </>
         )}
       </div>
+      <ImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onSuccess={() => {
+          setImportOpen(false);
+        }}
+      />
     </Layout>
   );
 };

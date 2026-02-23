@@ -20,6 +20,8 @@ import { Layout } from '@/components/Layout';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PriorityBadge } from '@/components/PriorityBadge';
 import { CategoryBadge } from '@/components/CategoryBadge';
+import { TagBadges } from '@/components/TagBadges';
+import { TagSelector } from '@/components/TagSelector';
 import { SecureImage, SecureDownloadLink } from '@/components/SecureAttachment';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -88,9 +90,19 @@ const TicketDetail = () => {
   const [ticketFieldValues, setTicketFieldValues] = useState<
     { field_name: string; field_label: string; field_value: string }[]
   >([]);
+  const [tagsFromAPI, setTagsFromAPI] = useState<{ id: string; name: string; color: string }[]>([]);
 
   const ticket = id ? getTicketById(id) : null;
   const user = ticket ? getUserById(ticket.requesterId) : null;
+
+  // Tags to display — prefer fresh data from single-ticket API call
+  const effectiveTags = tagsFromAPI.length > 0 ? tagsFromAPI : (ticket?.tags || []);
+
+  const refreshTagsFromAPI = (ticketId: string) => {
+    api.getTicket(ticketId).then((detail) => {
+      if (detail.tags) setTagsFromAPI(detail.tags);
+    }).catch(() => {});
+  };
 
   useEffect(() => {
     if (id) {
@@ -105,7 +117,26 @@ const TicketDetail = () => {
       if (detail.field_values && detail.field_values.length > 0) {
         setTicketFieldValues(detail.field_values);
       }
+      // Always load fresh tags from single-ticket endpoint (list endpoint may miss them)
+      if (detail.tags) setTagsFromAPI(detail.tags);
     }).catch(() => {});
+  }, [id]);
+
+  // Track recently viewed tickets in localStorage
+  useEffect(() => {
+    if (!id) return;
+    try {
+      const stored = localStorage.getItem('recently_viewed_tickets') || '[]';
+      const recentIds: string[] = JSON.parse(stored);
+
+      // Add current ID to front, remove duplicates, limit to 10
+      const updated = [id, ...recentIds.filter(rid => rid !== id)].slice(0, 10);
+
+      // Save back to localStorage
+      localStorage.setItem('recently_viewed_tickets', JSON.stringify(updated));
+    } catch {
+      // Silently fail if localStorage is unavailable
+    }
   }, [id]);
 
   if (!ticket) {
@@ -124,6 +155,13 @@ const TicketDetail = () => {
   const handleStatusChange = (status: TicketStatus) => {
     updateTicket(ticket.id, { status });
     toast.success(`Status uppdaterad till ${statusLabels[status]}`);
+  };
+
+  const handleTagsChange = (tagIds: string[]) => {
+    updateTicket(ticket.id, { tag_ids: tagIds }).then(() => {
+      refreshTagsFromAPI(ticket.id);
+    });
+    toast.success('Taggar uppdaterade');
   };
 
   const handleDelete = () => {
@@ -246,26 +284,37 @@ const TicketDetail = () => {
                   <StatusBadge status={ticket.status} />
                   <PriorityBadge priority={ticket.priority} />
                   <CategoryBadge category={ticket.category} />
+                  {effectiveTags.length > 0 && (
+                    <TagBadges tags={effectiveTags as any} maxDisplay={5} />
+                  )}
                 </div>
               </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Quick Status Change */}
-            <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg">
-              <span className="text-sm font-medium">Snabbåtgärder:</span>
-              <Select value={ticket.status} onValueChange={handleStatusChange}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="open">Öppen</SelectItem>
-                  <SelectItem value="in-progress">Pågående</SelectItem>
-                  <SelectItem value="waiting">Väntar</SelectItem>
-                  <SelectItem value="resolved">Löst</SelectItem>
-                  <SelectItem value="closed">Stäng ärende</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+              <div className="flex items-center gap-4">
+                <span className="text-sm font-medium">Status:</span>
+                <Select value={ticket.status} onValueChange={handleStatusChange}>
+                  <SelectTrigger className="w-[160px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Öppen</SelectItem>
+                    <SelectItem value="in-progress">Pågående</SelectItem>
+                    <SelectItem value="waiting">Väntar</SelectItem>
+                    <SelectItem value="resolved">Löst</SelectItem>
+                    <SelectItem value="closed">Stäng ärende</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <TagSelector
+                selectedTagIds={effectiveTags.map(t => t.id)}
+                preloadedTags={effectiveTags as any}
+                onTagsChange={handleTagsChange}
+                label="Taggar"
+              />
             </div>
 
             {/* Description / Dynamic fields */}

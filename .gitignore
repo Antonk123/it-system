@@ -28,6 +28,8 @@ dist-ssr
 !.vscode/extensions.json
 .idea
 .DS_Store
+._*
+docker-compose.dev.portainer.yml
 *.suo
 *.ntvs*
 *.njsproj

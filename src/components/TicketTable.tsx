@@ -6,6 +6,7 @@ import { ArrowUpDown, Loader2 } from 'lucide-react';
 import { Ticket, User, TicketStatus } from '@/types/ticket';
 import { PriorityBadge } from './PriorityBadge';
 import { CategoryBadge } from './CategoryBadge';
+import { TagBadges } from './TagBadges';
 import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import { useCategories } from '@/hooks/useCategories';
@@ -248,6 +249,7 @@ export const TicketTable = ({
             <TableHead>{renderSortButton('Status', 'status', enableStatusSort)}</TableHead>
             <TableHead>{renderSortButton('Prioritet', 'priority', enablePrioritySort)}</TableHead>
             <TableHead>{renderSortButton('Kategori', 'category', enableCategorySort)}</TableHead>
+            <TableHead>Taggar</TableHead>
             <TableHead>Förlopp</TableHead>
             <TableHead>Beställare</TableHead>
             <TableHead>Skapad</TableHead>
@@ -340,6 +342,13 @@ export const TicketTable = ({
                   })()
                 ) : (
                   <CategoryBadge category={ticket.category} />
+                )}
+              </TableCell>
+              <TableCell className={cn(compact && "py-2")}>
+                {ticket.tags && ticket.tags.length > 0 ? (
+                  <TagBadges tags={ticket.tags} maxDisplay={2} />
+                ) : (
+                  <span className="text-muted-foreground text-sm">—</span>
                 )}
               </TableCell>
               <TableCell className={cn(compact && "py-2")}>

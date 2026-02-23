@@ -305,40 +305,71 @@ function validatePaginationParams(query: TicketQueryParams) {
   return { page, limit, sortBy, sortDir };
 }
 
-// Helper: Build WHERE clause
+// Helper: Build WHERE clause with JOINs for enhanced search
 function buildWhereClause(filters: TicketQueryParams) {
   const conditions: string[] = [];
   const params: any[] = [];
+  let joins = '';
 
   // Handle status filter
   if (filters.status && filters.status !== 'all') {
-    conditions.push('status = ?');
+    conditions.push('tickets.status = ?');
     params.push(filters.status);
   } else if (!filters.status) {
     // Default behavior: exclude closed tickets if no status specified
-    conditions.push("status != 'closed'");
+    conditions.push("tickets.status != 'closed'");
   }
 
   if (filters.priority && filters.priority !== 'all') {
-    conditions.push('priority = ?');
+    conditions.push('tickets.priority = ?');
     params.push(filters.priority);
   }
 
   if (filters.category && filters.category !== 'all') {
-    conditions.push('category_id = ?');
+    conditions.push('tickets.category_id = ?');
     params.push(filters.category);
   }
 
+  // Enhanced search: search in multiple fields
   if (filters.search) {
-    conditions.push('(title LIKE ? OR description LIKE ?)');
     const pattern = `%${filters.search}%`;
-    params.push(pattern, pattern);
+
+    // Build search condition with all searchable fields
+    const searchConditions = [
+      'tickets.title LIKE ?',
+      'tickets.description LIKE ?',
+      'tickets.notes LIKE ?',
+      'tickets.solution LIKE ?',
+      'contacts.name LIKE ?',
+      'contacts.email LIKE ?',
+      'categories.label LIKE ?',
+      'ticket_comments.content LIKE ?',
+      'tags.name LIKE ?',
+      'ticket_field_values.field_value LIKE ?'
+    ];
+
+    conditions.push(`(${searchConditions.join(' OR ')})`);
+
+    // Add pattern for each searchable field (10 fields)
+    for (let i = 0; i < 10; i++) {
+      params.push(pattern);
+    }
+
+    // Add necessary JOINs for enhanced search
+    joins = `
+      LEFT JOIN contacts ON tickets.requester_id = contacts.id
+      LEFT JOIN categories ON tickets.category_id = categories.id
+      LEFT JOIN ticket_comments ON tickets.id = ticket_comments.ticket_id
+      LEFT JOIN ticket_tags ON tickets.id = ticket_tags.ticket_id
+      LEFT JOIN tags ON ticket_tags.tag_id = tags.id
+      LEFT JOIN ticket_field_values ON tickets.id = ticket_field_values.ticket_id
+    `;
   }
 
   // If no conditions, return '1=1' to make valid SQL
   const whereClause = conditions.length > 0 ? conditions.join(' AND ') : '1=1';
 
-  return { whereClause, params };
+  return { whereClause, params, joins };
 }
 
 // Helper: Build ORDER BY clause
@@ -347,7 +378,7 @@ function buildOrderByClause(sortBy: string, sortDir: string) {
 
   switch (sortBy) {
     case 'status':
-      return `CASE status
+      return `CASE tickets.status
         WHEN 'open' THEN 0
         WHEN 'in-progress' THEN 1
         WHEN 'waiting' THEN 2
@@ -355,16 +386,16 @@ function buildOrderByClause(sortBy: string, sortDir: string) {
         WHEN 'closed' THEN 4
       END ${dir}`;
     case 'priority':
-      return `CASE priority
+      return `CASE tickets.priority
         WHEN 'low' THEN 0
         WHEN 'medium' THEN 1
         WHEN 'high' THEN 2
         WHEN 'critical' THEN 3
       END ${dir}`;
     case 'category':
-      return `category_id ${dir}`;
+      return `tickets.category_id ${dir}`;
     default:
-      return `created_at ${dir}`;
+      return `tickets.created_at ${dir}`;
   }
 }
 
@@ -386,28 +417,55 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
 
     // NEW: Paginated response
     const { page, limit, sortBy, sortDir } = validatePaginationParams(query);
-    const { whereClause, params } = buildWhereClause(query);
+    const { whereClause, params, joins } = buildWhereClause(query);
     const orderByClause = buildOrderByClause(sortBy, sortDir);
 
-    // Get total count
-    const countResult = db.prepare(`
-      SELECT COUNT(*) as total FROM tickets WHERE ${whereClause}
-    `).get(...params) as { total: number };
+    // Get total count (use DISTINCT if search has JOINs to avoid duplicates)
+    const countQuery = joins
+      ? `SELECT COUNT(DISTINCT tickets.id) as total FROM tickets ${joins} WHERE ${whereClause}`
+      : `SELECT COUNT(*) as total FROM tickets WHERE ${whereClause}`;
+
+    const countResult = db.prepare(countQuery).get(...params) as { total: number };
     const total = countResult.total;
 
-    // Get paginated data
+    // Get paginated data (use DISTINCT if search has JOINs to avoid duplicates)
+    const selectClause = joins ? 'SELECT DISTINCT tickets.*' : 'SELECT *';
+    const fromClause = joins ? `FROM tickets ${joins}` : 'FROM tickets';
+
     const offset = (page - 1) * limit;
     const tickets = db.prepare(`
-      SELECT * FROM tickets
+      ${selectClause}
+      ${fromClause}
       WHERE ${whereClause}
       ORDER BY ${orderByClause}
       LIMIT ? OFFSET ?
     `).all(...params, limit, offset) as TicketRow[];
 
+    // Fetch tags for each ticket
+    const ticketsWithTags = tickets.map((ticket: any) => {
+      const tags = db.prepare(`
+        SELECT t.id, t.name, t.color, t.created_at
+        FROM tags t
+        JOIN ticket_tags tt ON t.id = tt.tag_id
+        WHERE tt.ticket_id = ?
+        ORDER BY t.name
+      `).all(ticket.id) as any[];
+
+      return {
+        ...ticket,
+        tags: tags.map((tag: any) => ({
+          id: tag.id,
+          name: tag.name,
+          color: tag.color,
+          createdAt: new Date(tag.created_at),
+        })),
+      };
+    });
+
     // Build pagination metadata
     const totalPages = Math.ceil(total / limit);
-    const paginatedResponse: PaginatedResponse<TicketRow> = {
-      data: tickets,
+    const paginatedResponse: PaginatedResponse<any> = {
+      data: ticketsWithTags,
       pagination: {
         page,
         limit,
@@ -644,7 +702,23 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
       'SELECT field_name, field_label, field_value FROM ticket_field_values WHERE ticket_id = ? ORDER BY rowid ASC'
     ).all(ticket.id) as { field_name: string; field_label: string; field_value: string }[];
 
-    res.json({ ...ticket, field_values: fieldValues });
+    // Fetch tags for this ticket
+    const tags = db.prepare(`
+      SELECT t.id, t.name, t.color, t.created_at
+      FROM tags t
+      JOIN ticket_tags tt ON t.id = tt.tag_id
+      WHERE tt.ticket_id = ?
+      ORDER BY t.name
+    `).all(ticket.id) as any[];
+
+    const formattedTags = tags.map((tag: any) => ({
+      id: tag.id,
+      name: tag.name,
+      color: tag.color,
+      createdAt: new Date(tag.created_at),
+    }));
+
+    res.json({ ...ticket, field_values: fieldValues, tags: formattedTags });
   } catch (error) {
     console.error('Error fetching ticket:', error);
     res.status(500).json({ error: 'Failed to fetch ticket' });
@@ -758,7 +832,7 @@ router.get('/:id/history', authenticate, (req: AuthRequest, res: Response) => {
 
 // Update ticket
 router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
-  const { title, description, status, priority, category_id, requester_id, notes, solution, customFields, template_id } = req.body;
+  const { title, description, status, priority, category_id, requester_id, notes, solution, customFields, template_id, tag_ids } = req.body;
 
   try {
     const existing = db.prepare('SELECT * FROM tickets WHERE id = ?').get(req.params.id) as TicketRow | undefined;
@@ -864,6 +938,34 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     const ticket = db.prepare('SELECT * FROM tickets WHERE id = ?').get(req.params.id) as TicketRow;
 
+    // Update tags if provided
+    if (tag_ids && Array.isArray(tag_ids)) {
+      // Delete existing tags
+      db.prepare('DELETE FROM ticket_tags WHERE ticket_id = ?').run(req.params.id);
+
+      // Insert new tags
+      const insertTag = db.prepare('INSERT INTO ticket_tags (id, ticket_id, tag_id) VALUES (?, ?, ?)');
+      tag_ids.forEach((tagId: string) => {
+        insertTag.run(uuidv4(), req.params.id, tagId);
+      });
+    }
+
+    // Fetch tags for response
+    const tags = db.prepare(`
+      SELECT t.id, t.name, t.color, t.created_at
+      FROM tags t
+      JOIN ticket_tags tt ON t.id = tt.tag_id
+      WHERE tt.ticket_id = ?
+      ORDER BY t.name
+    `).all(req.params.id) as any[];
+
+    const formattedTags = tags.map((tag: any) => ({
+      id: tag.id,
+      name: tag.name,
+      color: tag.color,
+      createdAt: new Date(tag.created_at),
+    }));
+
     if (status === 'closed' && existing.status !== 'closed') {
       const requester = ticket.requester_id
         ? (db.prepare('SELECT name, email FROM contacts WHERE id = ?').get(ticket.requester_id) as { name: string; email: string } | undefined)
@@ -883,7 +985,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       });
     }
 
-    res.json(ticket);
+    res.json({ ...ticket, tags: formattedTags });
   } catch (error) {
     console.error('Error updating ticket:', error);
     res.status(500).json({ error: 'Failed to update ticket' });
@@ -894,15 +996,115 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const result = db.prepare('DELETE FROM tickets WHERE id = ?').run(req.params.id);
-    
+
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    
+
     res.json({ message: 'Ticket deleted' });
   } catch (error) {
     console.error('Error deleting ticket:', error);
     res.status(500).json({ error: 'Failed to delete ticket' });
+  }
+});
+
+// ===== TAGS ENDPOINTS =====
+
+// Get all tags
+router.get('/tags', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const tags = db.prepare('SELECT id, name, color, created_at FROM tags ORDER BY name').all();
+
+    const formattedTags = tags.map((tag: any) => ({
+      id: tag.id,
+      name: tag.name,
+      color: tag.color,
+      createdAt: new Date(tag.created_at),
+    }));
+
+    res.json(formattedTags);
+  } catch (error) {
+    console.error('Error fetching tags:', error);
+    res.status(500).json({ error: 'Failed to fetch tags' });
+  }
+});
+
+// Create new tag
+router.post('/tags', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const { name, color } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Tag name is required' });
+    }
+
+    const id = uuidv4();
+    const tagColor = color || '#3b82f6';
+
+    db.prepare('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)').run(id, name, tagColor);
+
+    res.json({
+      id,
+      name,
+      color: tagColor,
+      createdAt: new Date(),
+    });
+  } catch (error: any) {
+    if (error.message?.includes('UNIQUE constraint failed')) {
+      return res.status(409).json({ error: 'Tag with this name already exists' });
+    }
+    console.error('Error creating tag:', error);
+    res.status(500).json({ error: 'Failed to create tag' });
+  }
+});
+
+// Update tag
+router.put('/tags/:id', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const { name, color } = req.body;
+
+    const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(req.params.id);
+    if (!tag) {
+      return res.status(404).json({ error: 'Tag not found' });
+    }
+
+    const updatedName = name || tag.name;
+    const updatedColor = color || tag.color;
+
+    db.prepare('UPDATE tags SET name = ?, color = ? WHERE id = ?').run(
+      updatedName,
+      updatedColor,
+      req.params.id
+    );
+
+    res.json({
+      id: req.params.id,
+      name: updatedName,
+      color: updatedColor,
+      createdAt: tag.created_at,
+    });
+  } catch (error: any) {
+    if (error.message?.includes('UNIQUE constraint failed')) {
+      return res.status(409).json({ error: 'Tag with this name already exists' });
+    }
+    console.error('Error updating tag:', error);
+    res.status(500).json({ error: 'Failed to update tag' });
+  }
+});
+
+// Delete tag
+router.delete('/tags/:id', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const result = db.prepare('DELETE FROM tags WHERE id = ?').run(req.params.id);
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Tag not found' });
+    }
+
+    res.json({ message: 'Tag deleted' });
+  } catch (error) {
+    console.error('Error deleting tag:', error);
+    res.status(500).json({ error: 'Failed to delete tag' });
   }
 });
 

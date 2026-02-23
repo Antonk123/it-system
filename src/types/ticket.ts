@@ -7,6 +7,13 @@ export interface Category {
   position?: number;
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: Date;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -31,6 +38,7 @@ export interface Ticket {
   solution?: string;
   templateId?: string;
   fieldValues?: CustomFieldInput[];
+  tags?: Tag[];
 }
 
 export interface Comment {
@@ -163,4 +171,11 @@ export interface CustomFieldInput {
   fieldName: string;
   fieldLabel: string;
   fieldValue: string;
+}
+
+export interface TagRow {
+  id: string;
+  name: string;
+  color: string;
+  created_at: string;
 }

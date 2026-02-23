@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Ticket, User as UserIcon, ArrowRight } from 'lucide-react';
+import { Search, Ticket, User as UserIcon, ArrowRight, Clock, Zap, Tag, Folder } from 'lucide-react';
 import {
   CommandDialog,
   CommandEmpty,
@@ -13,24 +13,77 @@ import {
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { CategoryBadge } from './CategoryBadge';
-import { Ticket as TicketType, User } from '@/types/ticket';
+import { TagBadges } from './TagBadges';
+import { Ticket as TicketType, User, Category, Tag as TagType } from '@/types/ticket';
 import { format } from 'date-fns';
 
 interface GlobalSearchProps {
   tickets: TicketType[];
   users: User[];
+  categories?: Category[];
+  tags?: TagType[];
 }
 
-export const GlobalSearch = ({ tickets, users }: GlobalSearchProps) => {
+export const GlobalSearch = ({ tickets, users, categories = [], tags = [] }: GlobalSearchProps) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
+
   const normalizeSearch = (value: string) =>
     value
       .normalize('NFKD')
       .replace(/\s+/g, ' ')
       .trim()
       .toLowerCase();
+
+  // Get recently viewed tickets from localStorage
+  const recentTickets = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('recently_viewed_tickets') || '[]';
+      const recentIds: string[] = JSON.parse(stored);
+      return recentIds
+        .map(id => tickets.find(t => t.id === id))
+        .filter((t): t is TicketType => !!t)
+        .slice(0, 3);
+    } catch {
+      return [];
+    }
+  }, [tickets]);
+
+  // Calculate popular tags
+  const popularTags = useMemo(() => {
+    const usage = new Map<string, number>();
+    tickets.forEach(ticket => {
+      ticket.tags?.forEach(tag => {
+        usage.set(tag.id, (usage.get(tag.id) || 0) + 1);
+      });
+    });
+
+    return Array.from(usage.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id]) => tags.find(t => t.id === id))
+      .filter((t): t is TagType => !!t);
+  }, [tickets, tags]);
+
+  // Calculate popular categories
+  const popularCategories = useMemo(() => {
+    const usage = new Map<string, number>();
+    tickets.forEach(ticket => {
+      if (ticket.category) {
+        usage.set(ticket.category, (usage.get(ticket.category) || 0) + 1);
+      }
+    });
+
+    return Array.from(usage.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([id, count]) => {
+        const cat = categories.find(c => c.id === id);
+        return cat ? { ...cat, count } : null;
+      })
+      .filter((c): c is Category & { count: number } => !!c);
+  }, [tickets, categories]);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -116,8 +169,97 @@ export const GlobalSearch = ({ tickets, users }: GlobalSearchProps) => {
           onValueChange={setSearch}
         />
         <CommandList>
+          {!search && (
+            <>
+              {/* Quick Actions */}
+              <CommandGroup heading={<span className="flex items-center gap-2"><Zap className="w-4 h-4" /> Snabbåtgärder</span>}>
+                <CommandItem
+                  onSelect={() => handleSelect('/tickets/new')}
+                  className="flex items-center gap-3"
+                >
+                  <span className="text-sm">Nytt ärende</span>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground ml-auto" />
+                </CommandItem>
+                <CommandItem
+                  onSelect={() => handleSelect('/settings')}
+                  className="flex items-center gap-3"
+                >
+                  <span className="text-sm">Inställningar</span>
+                  <ArrowRight className="w-4 h-4 text-muted-foreground ml-auto" />
+                </CommandItem>
+              </CommandGroup>
+
+              {/* Recent Tickets */}
+              {recentTickets.length > 0 && (
+                <>
+                  <CommandSeparator />
+                  <CommandGroup heading={<span className="flex items-center gap-2"><Clock className="w-4 h-4" /> Nyligen visade</span>}>
+                    {recentTickets.map(ticket => (
+                      <CommandItem
+                        key={ticket.id}
+                        onSelect={() => handleSelect(`/tickets/${ticket.id}`)}
+                        className="flex items-center gap-2"
+                      >
+                        <span className="text-sm flex-1 truncate">{ticket.title}</span>
+                        <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </>
+              )}
+
+              {/* Popular Tags */}
+              {popularTags.length > 0 && (
+                <>
+                  <CommandSeparator />
+                  <CommandGroup heading={<span className="flex items-center gap-2"><Tag className="w-4 h-4" /> Populära taggar</span>}>
+                    {popularTags.map(tag => {
+                      const tagCount = tickets.filter(t => t.tags?.some(tag2 => tag2.id === tag.id)).length;
+                      return (
+                        <CommandItem
+                          key={tag.id}
+                          onSelect={() => handleSelect(`/tickets?tags=${tag.id}`)}
+                          className="flex items-center gap-2"
+                        >
+                          <span
+                            style={{ backgroundColor: tag.color }}
+                            className="w-2 h-2 rounded-full"
+                          />
+                          <span className="text-sm flex-1">{tag.name}</span>
+                          <span className="text-xs text-muted-foreground">({tagCount})</span>
+                          <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                        </CommandItem>
+                      );
+                    })}
+                  </CommandGroup>
+                </>
+              )}
+
+              {/* Popular Categories */}
+              {popularCategories.length > 0 && (
+                <>
+                  <CommandSeparator />
+                  <CommandGroup heading={<span className="flex items-center gap-2"><Folder className="w-4 h-4" /> Vanliga kategorier</span>}>
+                    {popularCategories.map(cat => (
+                      <CommandItem
+                        key={cat.id}
+                        onSelect={() => handleSelect(`/tickets?category=${cat.id}`)}
+                        className="flex items-center gap-2"
+                      >
+                        <span className="text-sm flex-1">{cat.label}</span>
+                        <span className="text-xs text-muted-foreground">({cat.count})</span>
+                        <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </>
+              )}
+              <CommandSeparator />
+            </>
+          )}
+
           <CommandEmpty>Inga resultat hittades.</CommandEmpty>
-          
+
           {ticketMatches.active.length > 0 && (
             <CommandGroup heading="Ärenden">
               {ticketMatches.active.map((ticket) => (
