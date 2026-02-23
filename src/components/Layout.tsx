@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button';
 import { GlobalSearch } from '@/components/GlobalSearch';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
+import { useCategories } from '@/hooks/useCategories';
+import { useTags } from '@/hooks/useTags';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface LayoutProps {
@@ -40,10 +42,12 @@ export const Layout = ({
   children
 }: LayoutProps) => {
   const location = useLocation();
-  
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { tickets } = useTickets({ page: 1, limit: 100 });
   const { users } = useUsers();
+  const { categories } = useCategories();
+  const { tags } = useTags();
   const { signOut, user } = useAuth();
 
   const handleLogout = async () => {
@@ -108,14 +112,14 @@ export const Layout = ({
             <Menu className="w-6 h-6" />
           </button>
           <div className="flex-1">
-            <GlobalSearch tickets={tickets} users={users} />
+            <GlobalSearch tickets={tickets} users={users} categories={categories} tags={tags} />
           </div>
         </div>
 
         {/* Desktop header with search */}
         <div className="hidden lg:block sticky top-0 z-30 bg-background border-b p-4">
           <div className="max-w-md">
-            <GlobalSearch tickets={tickets} users={users} />
+            <GlobalSearch tickets={tickets} users={users} categories={categories} tags={tags} />
           </div>
         </div>
 

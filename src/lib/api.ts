@@ -598,6 +598,31 @@ class ApiClient {
     });
   }
 
+  // Tags
+  async getTags() {
+    return this.request<{ id: string; name: string; color: string; created_at: string }[]>('/tags');
+  }
+
+  async createTag(data: { name: string; color?: string }) {
+    return this.request<{ id: string; name: string; color: string; created_at: string }>('/tags', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async updateTag(id: string, data: { name: string; color?: string }) {
+    return this.request<{ id: string; name: string; color: string; created_at: string }>(`/tags/${id}`, {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
+  async deleteTag(id: string) {
+    return this.request<{ message: string }>(`/tags/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Public endpoints (no auth)
   async getPublicCategories() {
     return this.request<{ id: string; label: string }[]>('/public/categories');
@@ -656,6 +681,7 @@ export interface TicketRow {
   closed_at: string | null;
   template_id?: string | null;
   field_values?: { field_name: string; field_label: string; field_value: string }[];
+  tags?: Array<{ id: string; name: string; color: string }>;
 }
 
 export interface TicketHistoryItem {

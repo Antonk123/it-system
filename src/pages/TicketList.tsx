@@ -1,11 +1,12 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Plus, Download, Upload } from 'lucide-react';
+import { Plus, Download, Upload, LayoutGrid, Columns } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { useCategories } from '@/hooks/useCategories';
 import { Layout } from '@/components/Layout';
 import { TicketTable } from '@/components/TicketTable';
+import { KanbanView } from '@/components/KanbanView';
 import { SearchBar } from '@/components/SearchBar';
 import { PaginationControls } from '@/components/PaginationControls';
 import { ImportDialog } from '@/components/ImportDialog';
@@ -44,6 +45,15 @@ const TicketList = () => {
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
   const [compactView, setCompactView] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>(() => {
+    const saved = localStorage.getItem('ticket_view_mode');
+    return (saved as 'table' | 'kanban') || 'table';
+  });
+
+  // Save view preference to localStorage
+  useEffect(() => {
+    localStorage.setItem('ticket_view_mode', viewMode);
+  }, [viewMode]);
 
   // Fetch with pagination
   const { tickets, pagination, isLoading, updateTicket, refetch } = useTickets({
@@ -164,13 +174,33 @@ const TicketList = () => {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="outline"
+              variant={viewMode === 'table' ? 'default' : 'outline'}
               size="sm"
-              onClick={() => setCompactView((prev) => !prev)}
-              className="h-8"
+              onClick={() => setViewMode(viewMode === 'table' ? 'kanban' : 'table')}
+              className="h-8 gap-2"
             >
-              {compactView ? 'Standardvy' : 'Kompakt vy'}
+              {viewMode === 'table' ? (
+                <>
+                  <LayoutGrid className="w-4 h-4" />
+                  Kanban
+                </>
+              ) : (
+                <>
+                  <Columns className="w-4 h-4" />
+                  Tabell
+                </>
+              )}
             </Button>
+            {viewMode === 'table' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCompactView((prev) => !prev)}
+                className="h-8"
+              >
+                {compactView ? 'Standardvy' : 'Kompakt vy'}
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={handleExport}
@@ -206,18 +236,20 @@ const TicketList = () => {
             />
           </div>
           <div className="flex gap-2 flex-wrap">
-            <Select value={statusFilter} onValueChange={(v) => updateFilters({ status: v })}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alla statusar</SelectItem>
-                <SelectItem value="open">Öppen</SelectItem>
-                <SelectItem value="in-progress">Pågående</SelectItem>
-                <SelectItem value="waiting">Väntar</SelectItem>
-                <SelectItem value="resolved">Löst</SelectItem>
-              </SelectContent>
-            </Select>
+            {viewMode === 'table' && (
+              <Select value={statusFilter} onValueChange={(v) => updateFilters({ status: v })}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Alla statusar</SelectItem>
+                  <SelectItem value="open">Öppen</SelectItem>
+                  <SelectItem value="in-progress">Pågående</SelectItem>
+                  <SelectItem value="waiting">Väntar</SelectItem>
+                  <SelectItem value="resolved">Löst</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
             <Select value={priorityFilter} onValueChange={(v) => updateFilters({ priority: v })}>
               <SelectTrigger className="w-[140px]">
                 <SelectValue placeholder="Prioritet" />
@@ -281,28 +313,38 @@ const TicketList = () => {
         ) : (
           <>
             <div className={isLoading ? 'opacity-50 pointer-events-none' : ''}>
-              <TicketTable
-                tickets={tickets}
-                users={users}
-                onStatusChange={handleStatusChange}
-                onCategoryChange={handleCategoryChange}
-                sortKey={sortKey}
-                sortDirection={sortDirection}
-                onSortChange={handleSortChange}
-                compact={compactView}
-              />
-            </div>
+              {viewMode === 'table' ? (
+                <>
+                  <TicketTable
+                    tickets={tickets}
+                    users={users}
+                    onStatusChange={handleStatusChange}
+                    onCategoryChange={handleCategoryChange}
+                    sortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSortChange={handleSortChange}
+                    compact={compactView}
+                  />
 
-            {/* Pagination controls */}
-            {pagination && pagination.totalPages > 1 && (
-              <PaginationControls
-                currentPage={pagination.page}
-                totalPages={pagination.totalPages}
-                pageSize={pageSize}
-                onPageChange={handlePageChange}
-                onPageSizeChange={handlePageSizeChange}
-              />
-            )}
+                  {/* Pagination controls - Table only */}
+                  {pagination && pagination.totalPages > 1 && (
+                    <PaginationControls
+                      currentPage={pagination.page}
+                      totalPages={pagination.totalPages}
+                      pageSize={pageSize}
+                      onPageChange={handlePageChange}
+                      onPageSizeChange={handlePageSizeChange}
+                    />
+                  )}
+                </>
+              ) : (
+                <KanbanView
+                  tickets={tickets}
+                  users={users}
+                  onStatusChange={handleStatusChange}
+                />
+              )}
+            </div>
           </>
         )}
       </div>

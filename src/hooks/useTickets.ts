@@ -77,6 +77,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
           notes: t.notes || undefined,
           solution: t.solution || undefined,
           templateId: t.template_id || undefined,
+          tags: t.tags || [],
         }));
         return { tickets: mapped, pagination: null };
       } else {
@@ -96,6 +97,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
           notes: t.notes || undefined,
           solution: t.solution || undefined,
           templateId: t.template_id || undefined,
+          tags: t.tags || [],
         }));
         return { tickets: mapped, pagination: response.pagination };
       }
@@ -154,7 +156,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
 
   // Update ticket mutation
   const updateTicketMutation = useMutation({
-    mutationFn: async ({ id, updates, customFields }: { id: string; updates: Partial<Ticket>; customFields?: CustomFieldInput[] }) => {
+    mutationFn: async ({ id, updates, customFields, tagIds }: { id: string; updates: Partial<Ticket> & { tag_ids?: string[] }; customFields?: CustomFieldInput[]; tagIds?: string[] }) => {
       const validation = ticketUpdateSchema.safeParse(updates);
       if (!validation.success) {
         const errorMsg = getValidationError(validation.error);
@@ -174,6 +176,11 @@ export const useTickets = (options?: UseTicketsOptions) => {
       if (validated.notes !== undefined) updateData.notes = validated.notes || null;
       if (validated.solution !== undefined) updateData.solution = validated.solution || null;
 
+      // Handle tags
+      if (tagIds !== undefined || updates.tag_ids !== undefined) {
+        updateData.tag_ids = tagIds || updates.tag_ids || [];
+      }
+
       await api.updateTicket(id, { ...(updateData as any), customFields: customFields || undefined });
 
       // Fetch fresh data from server
@@ -192,6 +199,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
         updatedAt: new Date(freshTicket.updated_at),
         resolvedAt: freshTicket.resolved_at ? new Date(freshTicket.resolved_at) : undefined,
         closedAt: freshTicket.closed_at ? new Date(freshTicket.closed_at) : undefined,
+        tags: (freshTicket as any).tags || [],
       };
     },
     onMutate: async ({ id, updates, customFields: _cf }) => {
