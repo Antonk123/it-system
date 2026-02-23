@@ -29,7 +29,7 @@ export async function getAuthenticatedFileUrl(fileId: string): Promise<string> {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/attachments/file/${fileId}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/attachments/file/${fileId}`, {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
