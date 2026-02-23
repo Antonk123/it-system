@@ -11,7 +11,7 @@ set -e
 
 # --- Konfiguration (uppdatera REPO_URL innan publicering) ---
 REPO_URL="https://github.com/Antonk123/it-system"
-INSTALL_DIR="$HOME/it-ticketing"
+INSTALL_DIR="/opt/it-ticketing"
 
 # --- Färger ---
 RED='\033[0;31m'
