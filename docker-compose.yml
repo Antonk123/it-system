@@ -11,7 +11,7 @@ services:
       - it-ticketing-data:/app/data
     environment:
       - NODE_ENV=production
-      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      - JWT_SECRET=${JWT_SECRET}
       - DB_PATH=/app/data/database.sqlite
       - UPLOAD_DIR=/app/data/uploads
     logging:

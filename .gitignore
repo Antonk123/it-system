@@ -8,6 +8,8 @@ backup/
 
 # Lokal Claude Code-konfiguration
 .claude/settings.local.json
+CLAUDE.md
+TODO.md
 
 # Logs
 logs

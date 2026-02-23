@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
+import { randomBytes } from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 
@@ -49,8 +50,8 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
     return res.status(400).json({ error: 'Email is required' });
   }
 
-  // Generate a random password if not provided
-  const userPassword = password || Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase();
+  // Generate a cryptographically secure random password if not provided
+  const userPassword = password || randomBytes(16).toString('base64url').slice(0, 20);
 
   try {
     // Check if email already exists

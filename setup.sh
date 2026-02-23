@@ -240,7 +240,9 @@ ok "Backend svarar (${WAITED}s)"
 
 # --- 10. Initiera databas ---
 header "Initierar databas"
-docker exec it-ticketing-backend npm run init-db
+INIT_OUTPUT=$(docker exec it-ticketing-backend npm run init-db 2>&1)
+echo "$INIT_OUTPUT"
+ADMIN_PASSWORD=$(echo "$INIT_OUTPUT" | grep '^ADMIN_PASSWORD=' | cut -d= -f2)
 ok "Databas initierad"
 
 # --- 11. Klar! ---
@@ -249,9 +251,13 @@ echo -e "  ${BOLD}Öppna systemet i din webbläsare:${NC}"
 echo ""
 echo -e "    URL:      ${GREEN}${APP_URL}${NC}"
 echo -e "    E-post:   ${GREEN}admin@example.com${NC}"
-echo -e "    Lösenord: ${GREEN}admin123${NC}"
-echo ""
-warn "Byt lösenord direkt efter inloggning!"
+if [ -n "$ADMIN_PASSWORD" ]; then
+  echo -e "    Lösenord: ${GREEN}${ADMIN_PASSWORD}${NC}"
+  echo ""
+  warn "Spara detta lösenord — det visas bara en gång!"
+else
+  echo -e "    Lösenord: ${YELLOW}(se utskriften från databas-initialiseringen ovan)${NC}"
+fi
 echo ""
 echo -e "  ${BOLD}Hantera systemet:${NC}"
 echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml up -d    # Starta"
