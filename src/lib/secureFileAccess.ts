@@ -24,7 +24,7 @@ export async function getAuthenticatedFileUrl(fileId: string): Promise<string> {
 
   try {
     // Fetch file with authentication
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('auth_token');
     if (!token) {
       throw new Error('No authentication token found');
     }
