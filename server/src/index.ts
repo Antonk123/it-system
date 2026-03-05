@@ -26,13 +26,19 @@ initializeDatabase();
 
 // Middleware
 // CORS configuration - NEVER use '*' with credentials
-const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || [
+// Merge environment CORS_ORIGIN with localhost defaults for maximum flexibility
+const envOrigins = process.env.CORS_ORIGIN?.split(',').filter(Boolean) || [];
+const defaultOrigins = [
   'http://localhost:5173',          // Vite dev server (local)
   'http://localhost:8082',          // Docker frontend (local)
-  // Add your production URLs here, e.g.:
-  // 'http://your-server-ip:8082',
-  // 'https://tickets.yourcompany.com',
 ];
+// Use Set to deduplicate in case of overlaps
+const allowedOrigins = [...new Set([...envOrigins, ...defaultOrigins])];
+
+// Log CORS configuration at startup for debugging
+console.log('🔒 CORS Configuration:');
+console.log('  Environment CORS_ORIGIN:', process.env.CORS_ORIGIN || '(not set - using defaults)');
+console.log('  Allowed Origins:', allowedOrigins.join(', '));
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -45,7 +51,8 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn(`CORS: Blocked request from origin: ${origin}`);
+      console.error(`❌ CORS blocked: Origin '${origin}' not in allowed list.`);
+      console.error(`   Allowed origins: ${allowedOrigins.join(', ')}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
