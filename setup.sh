@@ -143,8 +143,6 @@ ok ".env skapad"
 
 # --- 5b. Generera docker-compose.local.yml ---
 cat > docker-compose.local.yml << 'COMPOSE_EOF'
-version: '3.8'
-
 services:
   backend:
     image: it-ticketing-backend:latest
