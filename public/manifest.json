@@ -1,0 +1,22 @@
+{
+  "name": "IT-Ticket System",
+  "short_name": "IT-Ticket",
+  "description": "IT ärendehantering & asset management",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f14",
+  "theme_color": "#ff9e4d",
+  "orientation": "portrait-primary",
+  "categories": ["productivity", "utilities"],
+  "lang": "sv",
+  "dir": "ltr",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "77x86",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

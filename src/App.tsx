@@ -19,7 +19,7 @@ import ResetPassword from "./pages/ResetPassword";
 import PublicTicketForm from "./pages/PublicTicketForm";
 import SharedTicket from "./pages/SharedTicket";
 import NotFound from "./pages/NotFound";
-import { applyFontTheme, getStoredFontTheme } from "@/lib/appearance";
+import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -38,6 +38,7 @@ const queryClient = new QueryClient({
 const AppearanceInitializer = () => {
   useEffect(() => {
     applyFontTheme(getStoredFontTheme());
+    applyMode(getStoredMode());
   }, []);
 
   return null;
@@ -102,9 +103,9 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider
       attribute="class"
-      defaultTheme="theme-midnight"
+      defaultTheme="theme-sunset"
       enableSystem={false}
-      themes={["theme-midnight", "theme-default", "theme-slate", "theme-forest"]}
+      themes={["theme-default", "theme-cyberpunk", "theme-arctic", "theme-terminal", "theme-sunset"]}
     >
       <AppearanceInitializer />
       <TooltipProvider>

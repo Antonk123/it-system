@@ -5,6 +5,7 @@ import { Ticket, User } from '@/types/ticket';
 import { Card, CardContent } from '@/components/ui/card';
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
+import { stripHtml } from '@/lib/utils';
 
 interface TicketCardProps {
   ticket: Ticket;
@@ -24,7 +25,7 @@ export const TicketCard = ({ ticket, user }: TicketCardProps) => {
           </div>
           
           <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-            {ticket.description}
+            {stripHtml(ticket.description)}
           </p>
 
           <div className="flex items-center justify-between text-xs text-muted-foreground">

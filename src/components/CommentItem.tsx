@@ -3,11 +3,12 @@ import { Comment } from '@/types/ticket';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Pencil, Trash2, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
-import { MarkdownRenderer } from '@/components/MarkdownRenderer';
+import { HtmlRenderer } from '@/components/HtmlRenderer';
+import { migrateContent } from '@/lib/contentMigration';
 
 interface CommentItemProps {
   comment: Comment;
@@ -49,10 +50,10 @@ export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) =
 
   return (
     <div className="border rounded p-2 bg-muted/20">
-      <div className="flex items-start justify-between mb-1">
+      <div className="flex items-start justify-between mb-2">
         <div>
-          <span className="font-medium text-xs">{comment.userName || comment.userEmail || 'Okänd användare'}</span>
-          <span className="text-xs text-muted-foreground ml-2">
+          <span className="font-medium text-sm">{comment.userName || comment.userEmail || 'Okänd användare'}</span>
+          <span className="text-sm text-muted-foreground ml-2">
             {format(comment.createdAt, 'PPp', { locale: sv })}
             {comment.updatedAt > comment.createdAt && ' (redigerad)'}
           </span>
@@ -81,12 +82,11 @@ export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) =
 
       {isEditing ? (
         <div className="space-y-1">
-          <Textarea
+          <RichTextEditor
             value={editContent}
-            onChange={(e) => setEditContent(e.target.value)}
-            rows={2}
+            onChange={(html) => setEditContent(html)}
+            minHeight="60px"
             disabled={isUpdating}
-            className="text-xs"
           />
           <div className="flex gap-1 justify-end">
             <Button
@@ -109,9 +109,9 @@ export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) =
           </div>
         </div>
       ) : (
-        <MarkdownRenderer
-          content={comment.content}
-          className="prose-sm prose-p:text-xs prose-p:my-1 prose-li:text-xs prose-headings:text-sm"
+        <HtmlRenderer
+          content={migrateContent(comment.content)}
+          className="prose prose-p:text-base prose-p:my-2 prose-li:text-base prose-headings:font-semibold"
         />
       )}
     </div>

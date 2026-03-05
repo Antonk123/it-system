@@ -27,8 +27,11 @@ initializeDatabase();
 // Middleware
 // CORS configuration - NEVER use '*' with credentials
 const allowedOrigins = process.env.CORS_ORIGIN?.split(',') || [
-  'http://localhost:5173',  // Vite dev server
-  'http://localhost:8082',  // Docker frontend
+  'http://localhost:5173',          // Vite dev server (local)
+  'http://localhost:8082',          // Docker frontend (local)
+  // Add your production URLs here, e.g.:
+  // 'http://your-server-ip:8082',
+  // 'https://tickets.yourcompany.com',
 ];
 
 app.use(cors({

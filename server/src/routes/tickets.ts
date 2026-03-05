@@ -274,6 +274,7 @@ interface TicketQueryParams {
   priority?: string;
   category?: string;
   search?: string;
+  tags?: string;
   sortBy?: string;
   sortDir?: string;
 }
@@ -293,11 +294,11 @@ interface PaginatedResponse<T> {
 // Helper: Validate pagination params
 function validatePaginationParams(query: TicketQueryParams) {
   const page = Math.max(1, parseInt(query.page || '1'));
-  const allowedLimits = [20, 25, 50, 100];
-  const limit = allowedLimits.includes(parseInt(query.limit || '50'))
+  const allowedLimits = [10, 20, 25, 50, 100];
+  const limit = allowedLimits.includes(parseInt(query.limit || '10'))
     ? parseInt(query.limit!)
-    : 50;
-  const sortBy = ['createdAt', 'status', 'priority', 'category'].includes(query.sortBy || '')
+    : 10;
+  const sortBy = ['createdAt', 'status', 'priority', 'category', 'tags'].includes(query.sortBy || '')
     ? query.sortBy!
     : 'createdAt';
   const sortDir = query.sortDir === 'asc' ? 'asc' : 'desc';
@@ -328,6 +329,20 @@ function buildWhereClause(filters: TicketQueryParams) {
   if (filters.category && filters.category !== 'all') {
     conditions.push('tickets.category_id = ?');
     params.push(filters.category);
+  }
+
+  // Tag filtering (OR logic for multiple tags)
+  if (filters.tags) {
+    const tagIds = filters.tags.split(',').map(id => id.trim()).filter(id => id.length > 0);
+    if (tagIds.length > 0) {
+      const tagPlaceholders = tagIds.map(() => '?').join(',');
+      conditions.push(`EXISTS (
+        SELECT 1 FROM ticket_tags
+        WHERE ticket_tags.ticket_id = tickets.id
+        AND ticket_tags.tag_id IN (${tagPlaceholders})
+      )`);
+      params.push(...tagIds);
+    }
   }
 
   // Enhanced search: search in multiple fields
@@ -394,6 +409,13 @@ function buildOrderByClause(sortBy: string, sortDir: string) {
       END ${dir}`;
     case 'category':
       return `tickets.category_id ${dir}`;
+    case 'tags':
+      return `(
+        SELECT MIN(tags.name) COLLATE NOCASE
+        FROM tags
+        JOIN ticket_tags ON tags.id = ticket_tags.tag_id
+        WHERE ticket_tags.ticket_id = tickets.id
+      ) ${dir}`;
     default:
       return `tickets.created_at ${dir}`;
   }

@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { Plus, Pencil, Trash2, Users as UsersIcon, Ticket, Download, Upload, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users as UsersIcon, Ticket, Download, Upload, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useUsers } from '@/hooks/useUsers';
 import { useTickets } from '@/hooks/useTickets';
 import { Layout } from '@/components/Layout';
@@ -46,11 +46,14 @@ const UserList = () => {
   const { users, addUser, updateUser, deleteUser, refetch } = useUsers();
   const { tickets } = useTickets();
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({ name: '', email: '', department: '' });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const ITEMS_PER_PAGE = 10;
 
   // Import state
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
@@ -98,6 +101,17 @@ const UserList = () => {
       normalizeSearch(user.email).includes(searchValue) ||
       normalizeSearch(user.department || '').includes(searchValue);
   });
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -317,8 +331,9 @@ const UserList = () => {
             </p>
           </div>
         ) : (
+          <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredUsers.map(user => (
+            {paginatedUsers.map(user => (
               <Card key={user.id}>
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between">
@@ -385,6 +400,72 @@ const UserList = () => {
               </Card>
             ))}
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t pt-4">
+              <div className="text-sm text-muted-foreground">
+                Visar {startIndex + 1}-{Math.min(endIndex, filteredUsers.length)} av {filteredUsers.length} användare
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="gap-1"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Föregående
+                </Button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => {
+                    // Show first page, last page, current page, and pages around current
+                    const showPage =
+                      page === 1 ||
+                      page === totalPages ||
+                      (page >= currentPage - 1 && page <= currentPage + 1);
+
+                    const showEllipsis =
+                      (page === 2 && currentPage > 3) ||
+                      (page === totalPages - 1 && currentPage < totalPages - 2);
+
+                    if (showEllipsis) {
+                      return <span key={page} className="px-2 text-muted-foreground">...</span>;
+                    }
+
+                    if (!showPage) return null;
+
+                    return (
+                      <Button
+                        key={page}
+                        variant={currentPage === page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(page)}
+                        className="w-9 h-9 p-0"
+                      >
+                        {page}
+                      </Button>
+                    );
+                  })}
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="gap-1"
+                >
+                  Nästa
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          </>
         )}
 
         {/* Ticket History Sheet */}

@@ -12,7 +12,8 @@ interface UseTicketsOptions {
   priority?: TicketPriority | 'all';
   category?: string | 'all';
   search?: string;
-  sortBy?: 'createdAt' | 'status' | 'priority' | 'category';
+  tags?: string;
+  sortBy?: 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
   sortDir?: 'asc' | 'desc';
 }
 
@@ -47,6 +48,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
     if (opts.priority && opts.priority !== 'all') params.append('priority', opts.priority);
     if (opts.category && opts.category !== 'all') params.append('category', opts.category);
     if (opts.search) params.append('search', opts.search);
+    if (opts.tags) params.append('tags', opts.tags);
     if (opts.sortBy) params.append('sortBy', opts.sortBy);
     if (opts.sortDir) params.append('sortDir', opts.sortDir);
     return params.toString() ? `?${params.toString()}` : '';

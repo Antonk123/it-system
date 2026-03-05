@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
@@ -21,6 +21,7 @@ import { TicketStatus, TicketPriority } from '@/types/ticket';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { ImportDialog } from '@/components/ImportDialog';
+import { CategoryFilter } from '@/components/CategoryFilter';
 
 const statusLabels: Record<TicketStatus, string> = {
   'open': 'Öppen',
@@ -35,7 +36,7 @@ const Archive = () => {
 
   // Read state from URL
   const page = Number(searchParams.get('page')) || 1;
-  const pageSize = Number(searchParams.get('limit')) || 25;
+  const pageSize = Number(searchParams.get('limit')) || 10;
   const search = searchParams.get('search') || '';
   const categoryFilter = searchParams.get('category') || 'all';
   const priorityFilter = (searchParams.get('priority') || 'all') as TicketPriority | 'all';
@@ -58,6 +59,19 @@ const Archive = () => {
 
   const { users } = useUsers();
   const { categories } = useCategories();
+
+  // Initialize URL params if missing (required for backend pagination)
+  useEffect(() => {
+    const currentPage = searchParams.get('page');
+    const currentLimit = searchParams.get('limit');
+
+    if (!currentPage || !currentLimit) {
+      const newParams = new URLSearchParams(searchParams);
+      if (!currentPage) newParams.set('page', '1');
+      if (!currentLimit) newParams.set('limit', '10');
+      setSearchParams(newParams, { replace: true });
+    }
+  }, []); // Run once on mount
 
   // Update URL params
   const updateFilters = useCallback((updates: Record<string, any>) => {
@@ -107,10 +121,8 @@ const Archive = () => {
     toast.success(`Status uppdaterad till ${statusLabels[status]}`);
   };
 
-  const handleCategoryChange = async (ticketId: string, categoryId: string) => {
-    await updateTicket(ticketId, { category: categoryId });
-    const categoryLabel = categories.find(c => c.id === categoryId)?.label || categoryId;
-    toast.success(`Kategori uppdaterad till ${categoryLabel}`);
+  const handleRemoveCategoryFilter = () => {
+    updateFilters({ category: 'all' });
   };
 
   const handleExport = async () => {
@@ -218,6 +230,12 @@ const Archive = () => {
           ))}
         </div>
 
+        {/* Active Category Filter */}
+        <CategoryFilter
+          selectedCategoryId={categoryFilter}
+          onRemoveCategory={handleRemoveCategoryFilter}
+        />
+
         {/* Loading state */}
         {isLoading && tickets.length === 0 ? (
           <div className="space-y-2">
@@ -240,7 +258,6 @@ const Archive = () => {
                 tickets={tickets}
                 users={users}
                 onStatusChange={handleStatusChange}
-                onCategoryChange={handleCategoryChange}
                 sortKey={sortKey === 'priority' || sortKey === 'category' ? sortKey : undefined}
                 sortDirection={sortDirection}
                 onSortChange={handleSortChange}

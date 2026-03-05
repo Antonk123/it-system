@@ -11,7 +11,8 @@ import { useTicketSharing } from '@/hooks/useTicketSharing';
 import { useTicketComments } from '@/hooks/useTicketComments';
 import { useTicketLinks } from '@/hooks/useTicketLinks';
 import { useTicketHistory } from '@/hooks/useTicketHistory';
-import { MarkdownRenderer } from '@/components/MarkdownRenderer';
+import { HtmlRenderer } from '@/components/HtmlRenderer';
+import { migrateContent } from '@/lib/contentMigration';
 import { TicketChecklist } from '@/components/TicketChecklist';
 import { TicketComments } from '@/components/TicketComments';
 import { TicketLinks } from '@/components/TicketLinks';
@@ -293,7 +294,7 @@ const TicketDetail = () => {
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Quick Status Change */}
-            <div className="space-y-4 p-4 bg-muted/50 rounded-lg">
+            <div className="space-y-4 p-4 bg-card border border-border rounded-lg">
               <div className="flex items-center gap-4">
                 <span className="text-sm font-medium">Status:</span>
                 <Select value={ticket.status} onValueChange={handleStatusChange}>
@@ -321,19 +322,19 @@ const TicketDetail = () => {
             <div>
               <h3 className="font-medium text-foreground mb-2">Beskrivning</h3>
               {ticketFieldValues.length > 0 ? (
-                <div className="bg-muted/30 p-4 rounded-lg space-y-4">
+                <div className="bg-secondary/30 border border-border p-4 rounded-lg space-y-4">
                   {ticketFieldValues.map((fv) => (
                     <div key={fv.field_name}>
                       <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
                         {fv.field_label}
                       </p>
-                      <MarkdownRenderer content={fv.field_value || '(ej angivet)'} />
+                      <HtmlRenderer content={migrateContent(fv.field_value || '(ej angivet)')} />
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="bg-muted/30 p-4 rounded-lg">
-                  <MarkdownRenderer content={ticket.description} />
+                <div className="bg-secondary/30 border border-border p-4 rounded-lg">
+                  <HtmlRenderer content={migrateContent(ticket.description)} />
                 </div>
               )}
             </div>
@@ -439,11 +440,11 @@ const TicketDetail = () => {
             {ticket.solution && (
               <div className="pt-4 border-t">
                 <div className="flex items-center gap-2 mb-2">
-                  <Lightbulb className="w-4 h-4 text-primary" />
+                  <Lightbulb className="w-4 h-4 text-success" />
                   <h3 className="font-medium text-foreground">Lösning</h3>
                 </div>
-                <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg">
-                  <MarkdownRenderer content={ticket.solution} />
+                <div className="bg-success/20 border border-success/40 p-4 rounded-lg">
+                  <HtmlRenderer content={migrateContent(ticket.solution)} />
                 </div>
               </div>
             )}
@@ -453,7 +454,7 @@ const TicketDetail = () => {
               <div className="pt-4 border-t">
                 <h3 className="font-medium text-foreground mb-2">Interna anteckningar</h3>
                 <div className="bg-muted/50 p-4 rounded-lg">
-                  <MarkdownRenderer content={ticket.notes} />
+                  <HtmlRenderer content={migrateContent(ticket.notes)} />
                 </div>
               </div>
             )}

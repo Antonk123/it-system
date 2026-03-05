@@ -15,8 +15,9 @@ import { DynamicFieldsForm } from '@/components/DynamicFieldsForm';
 import { CustomFieldInput, api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Label } from '@/components/ui/label';
+import { migrateContent } from '@/lib/contentMigration';
 import {
   Select,
   SelectContent,
@@ -84,13 +85,13 @@ const TicketForm = () => {
     if (existingTicket) {
       setFormData({
         title: existingTicket.title,
-        description: existingTicket.description,
+        description: migrateContent(existingTicket.description),
         priority: existingTicket.priority,
         status: existingTicket.status,
         category: existingTicket.category || 'none',
         requesterId: existingTicket.requesterId,
-        notes: existingTicket.notes || '',
-        solution: existingTicket.solution || '',
+        notes: existingTicket.notes ? migrateContent(existingTicket.notes) : '',
+        solution: existingTicket.solution ? migrateContent(existingTicket.solution) : '',
       });
     }
   }, [existingTicket]);
@@ -455,16 +456,14 @@ const TicketForm = () => {
               {(!selectedTemplate || !selectedTemplate.fields || selectedTemplate.fields.length === 0) && (
                 <div className="space-y-2">
                   <Label htmlFor="description">
-                    Beskrivning * <span className="text-xs text-muted-foreground">(Markdown stöds)</span>
+                    Beskrivning *
                   </Label>
-                  <Textarea
-                    id="description"
+                  <RichTextEditor
                     value={formData.description}
-                    onChange={(e) => { setFormData({ ...formData, description: e.target.value }); setErrors(prev => { const p = { ...prev }; delete p['description']; return p; }); }}
-                    placeholder="Detaljerad beskrivning av problemet... (stöder **fetstil**, *kursiv*, `kod`, listor, etc.)"
-                    rows={6}
+                    onChange={(html) => { setFormData({ ...formData, description: html }); setErrors(prev => { const p = { ...prev }; delete p['description']; return p; }); }}
+                    placeholder="Detaljerad beskrivning av problemet..."
+                    minHeight="150px"
                     required
-                    className="font-mono text-sm"
                   />
                 </div>
               )}
@@ -606,55 +605,23 @@ const TicketForm = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="solution">
-                  Lösning <span className="text-xs text-muted-foreground">(Markdown stöds)</span>
+                  Lösning
                 </Label>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() => insertSolutionSnippet('[Länktext](https://)')}
-                  >
-                    Länk
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      insertSolutionSnippet(
-                        '### Orsak\n- \n\n### Åtgärd\n1. \n2. \n\n### Verifiering\n- [ ] Testat\n- [ ] Klart\n'
-                      )
-                    }
-                  >
-                    Lösningsmall
-                  </Button>
-                  <Button type="button" size="sm" variant="outline" onClick={() => insertSolutionSnippet('```\n\n```', -4)}>
-                    Kodblock
-                  </Button>
-                </div>
-                <Textarea
-                  ref={solutionTextareaRef}
-                  id="solution"
+                <RichTextEditor
                   value={formData.solution}
-                  onChange={(e) => setFormData({ ...formData, solution: e.target.value })}
+                  onChange={(html) => setFormData({ ...formData, solution: html })}
                   placeholder="Dokumentera hur problemet löstes..."
-                  rows={10}
-                  className="font-mono text-sm min-h-[220px] resize-y leading-relaxed"
+                  minHeight="250px"
                 />
-                <p className="text-xs text-muted-foreground">
-                  Tips: dra i hörnet för att förstora rutan.
-                </p>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="notes">Interna anteckningar</Label>
-                <Textarea
-                  id="notes"
+                <RichTextEditor
                   value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                  onChange={(html) => setFormData({ ...formData, notes: html })}
                   placeholder="Lägg till interna anteckningar..."
-                  rows={3}
+                  minHeight="100px"
                 />
               </div>
 

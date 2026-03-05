@@ -11,7 +11,9 @@
     "update-field-label": "tsx src/db/update-field-label.ts",
     "list-fields": "tsx src/db/list-fields.ts",
     "update-prefab": "tsx src/db/update-prefab-fields.ts",
-    "remove-budget": "tsx src/db/remove-budget-field.ts"
+    "remove-budget": "tsx src/db/remove-budget-field.ts",
+    "migrate-ticket-tags": "tsx src/db/migrate-ticket-tags-add-id.ts",
+    "seed-templates": "tsx src/db/seed-templates.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

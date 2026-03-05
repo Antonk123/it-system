@@ -22,6 +22,42 @@ export interface User {
   createdAt: Date;
 }
 
+export interface RequesterAnalytics {
+  userId: string;
+  name: string;
+  totalTickets: number;
+
+  // Status breakdown (for stacked bars)
+  statusBreakdown: {
+    open: number;
+    'in-progress': number;
+    waiting: number;
+    resolved: number;
+    closed: number;
+  };
+
+  // Priority breakdown
+  priorityBreakdown: {
+    low: number;
+    medium: number;
+    high: number;
+    critical: number;
+  };
+
+  // Performance metrics
+  completionRate: number;        // (resolved + closed) / total * 100
+  avgResolutionTime: number;     // days (for resolved/closed tickets)
+  agingTickets: number;          // open tickets > 7 days
+
+  // Activity metrics
+  lastTicketDate: Date;
+  ticketVelocity: number;        // tickets per month
+
+  // Top categories/tags (for tooltips)
+  topCategories: Array<{ category: string; count: number }>;
+  topTags: Array<{ tag: string; count: number }>;
+}
+
 export interface Ticket {
   id: string;
   title: string;

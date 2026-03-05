@@ -10,6 +10,9 @@ import { KanbanView } from '@/components/KanbanView';
 import { SearchBar } from '@/components/SearchBar';
 import { PaginationControls } from '@/components/PaginationControls';
 import { ImportDialog } from '@/components/ImportDialog';
+import { TagFilter } from '@/components/TagFilter';
+import { CategoryFilter } from '@/components/CategoryFilter';
+import { TagMultiSelect } from '@/components/TagMultiSelect';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,7 +44,9 @@ const TicketList = () => {
   const statusFilter = (searchParams.get('status') || 'all') as TicketStatus | 'all';
   const priorityFilter = (searchParams.get('priority') || 'all') as TicketPriority | 'all';
   const categoryFilter = searchParams.get('category') || 'all';
-  const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'status' | 'priority' | 'category';
+  const tagsFilter = searchParams.get('tags') || '';
+  const selectedTagIds = tagsFilter ? tagsFilter.split(',').filter(id => id.trim()) : [];
+  const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
   const [compactView, setCompactView] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -63,6 +68,7 @@ const TicketList = () => {
     priority: priorityFilter,
     category: categoryFilter,
     search,
+    tags: tagsFilter,
     sortBy: sortKey,
     sortDir: sortDirection,
   });
@@ -118,10 +124,21 @@ const TicketList = () => {
     toast.success(`Status uppdaterad till ${statusLabels[status]}`);
   };
 
-  const handleCategoryChange = async (ticketId: string, categoryId: string) => {
-    await updateTicket(ticketId, { category: categoryId });
-    const categoryLabel = categories.find(c => c.id === categoryId)?.label || categoryId;
-    toast.success(`Kategori uppdaterad till ${categoryLabel}`);
+  const handleRemoveTagFilter = (tagId: string) => {
+    const newTagIds = selectedTagIds.filter(id => id !== tagId);
+    updateFilters({ tags: newTagIds.length > 0 ? newTagIds.join(',') : undefined });
+  };
+
+  const handleClearAllTags = () => {
+    updateFilters({ tags: undefined });
+  };
+
+  const handleTagSelectionChange = (tagIds: string[]) => {
+    updateFilters({ tags: tagIds.length > 0 ? tagIds.join(',') : undefined });
+  };
+
+  const handleRemoveCategoryFilter = () => {
+    updateFilters({ category: 'all' });
   };
 
   const handleExport = async () => {
@@ -132,6 +149,7 @@ const TicketList = () => {
       if (priorityFilter && priorityFilter !== 'all') params.append('priority', priorityFilter);
       if (categoryFilter && categoryFilter !== 'all') params.append('category', categoryFilter);
       if (search) params.append('search', search);
+      if (tagsFilter) params.append('tags', tagsFilter);
       const queryString = params.toString() ? `?${params.toString()}` : '';
 
       await api.exportTickets(queryString);
@@ -273,6 +291,10 @@ const TicketList = () => {
                 ))}
               </SelectContent>
             </Select>
+            <TagMultiSelect
+              selectedTagIds={selectedTagIds}
+              onChange={handleTagSelectionChange}
+            />
           </div>
         </div>
 
@@ -303,6 +325,19 @@ const TicketList = () => {
           ))}
         </div>
 
+        {/* Active Category Filter */}
+        <CategoryFilter
+          selectedCategoryId={categoryFilter}
+          onRemoveCategory={handleRemoveCategoryFilter}
+        />
+
+        {/* Active Tag Filters */}
+        <TagFilter
+          selectedTagIds={selectedTagIds}
+          onRemoveTag={handleRemoveTagFilter}
+          onClearAll={handleClearAllTags}
+        />
+
         {/* Loading state */}
         {isLoading && tickets.length === 0 ? (
           <div className="space-y-2">
@@ -319,7 +354,6 @@ const TicketList = () => {
                     tickets={tickets}
                     users={users}
                     onStatusChange={handleStatusChange}
-                    onCategoryChange={handleCategoryChange}
                     sortKey={sortKey}
                     sortDirection={sortDirection}
                     onSortChange={handleSortChange}

@@ -41,7 +41,7 @@ interface TicketTableProps {
   users: User[];
   onStatusChange?: (ticketId: string, status: TicketStatus) => void;
   onCategoryChange?: (ticketId: string, categoryId: string) => void;
-  sortKey?: 'createdAt' | 'status' | 'priority' | 'category';
+  sortKey?: 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
   sortDirection?: 'asc' | 'desc';
   onSortChange?: (key: 'status' | 'priority' | 'category') => void;
   enableStatusSort?: boolean;
@@ -164,108 +164,122 @@ export const TicketTable = ({
   // Mobile: Card layout
   if (isMobile) {
     return (
-      <div className="space-y-3">
-        {tickets.map((ticket) => {
+      <div className="space-y-4">
+        {tickets.map((ticket, index) => {
           const progress = getProgress(ticket.id);
           const saving = !!savingIds[ticket.id];
           return (
-            <Card key={ticket.id} className="p-4">
-              {/* Title - clickable */}
-              <Link
-                to={`/tickets/${ticket.id}`}
-                className="block mb-3"
+            <Link
+              key={ticket.id}
+              to={`/tickets/${ticket.id}`}
+              className="block"
+            >
+              <div
+                className="ticket-card geo-border p-5 animate-fade-in cursor-pointer"
+                style={{ animationDelay: `${index * 50}ms` }}
               >
-                <h3 className="font-medium text-foreground hover:text-primary transition-colors line-clamp-2">
+                {/* Title with neon glow on hover */}
+                <h3 className="font-semibold text-lg text-foreground transition-all duration-300 line-clamp-2 mb-4 group-hover:neon-glow">
                   {ticket.title}
                 </h3>
-              </Link>
 
-              {/* Status & Priority row */}
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <Select
-                    value={ticket.status}
-                    onValueChange={async (value) => {
-                      if (!onStatusChange) return;
-                      setSavingIds(s => ({ ...s, [ticket.id]: true }));
-                      try {
-                        await onStatusChange(ticket.id, value as TicketStatus);
-                      } catch (error) {
-                        console.error('Status update failed:', error);
-                      } finally {
-                        setSavingIds(s => ({ ...s, [ticket.id]: false }));
-                      }
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <SelectTrigger className="w-auto h-7 text-xs" disabled={saving}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="open">{statusLabels['open']}</SelectItem>
-                      <SelectItem value="in-progress">{statusLabels['in-progress']}</SelectItem>
-                      <SelectItem value="waiting">{statusLabels['waiting']}</SelectItem>
-                      <SelectItem value="resolved">{statusLabels['resolved']}</SelectItem>
-                      <SelectItem value="closed">{statusLabels['closed']}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {saving && <Loader2 className="animate-spin h-4 w-4 text-muted-foreground" />}
+                {/* Status & Priority row */}
+                <div className="flex flex-wrap items-center gap-2 mb-3">
+                  <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
+                    <Select
+                      value={ticket.status}
+                      onValueChange={async (value) => {
+                        if (!onStatusChange) return;
+                        setSavingIds(s => ({ ...s, [ticket.id]: true }));
+                        try {
+                          await onStatusChange(ticket.id, value as TicketStatus);
+                        } catch (error) {
+                          console.error('Status update failed:', error);
+                        } finally {
+                          setSavingIds(s => ({ ...s, [ticket.id]: false }));
+                        }
+                      }}
+                    >
+                      <SelectTrigger className="w-auto h-8 text-xs rounded-lg border-primary/20" disabled={saving}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">{statusLabels['open']}</SelectItem>
+                        <SelectItem value="in-progress">{statusLabels['in-progress']}</SelectItem>
+                        <SelectItem value="waiting">{statusLabels['waiting']}</SelectItem>
+                        <SelectItem value="resolved">{statusLabels['resolved']}</SelectItem>
+                        <SelectItem value="closed">{statusLabels['closed']}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {saving && <Loader2 className="animate-spin h-4 w-4 text-muted-foreground" />}
+                  </div>
+
+                  <div className="floating-tag">
+                    <PriorityBadge priority={ticket.priority} />
+                  </div>
                 </div>
 
-                <PriorityBadge priority={ticket.priority} />
+                {/* Requester with accent */}
+                <p className="text-sm text-muted-foreground mb-3 flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary/60"></span>
+                  {getUserName(ticket.requesterId)}
+                </p>
+
+                {/* Progress bar with enhanced styling */}
+                {progress && progress.total > 0 && (
+                  <div className="flex items-center gap-3 p-2 rounded-lg bg-background/20">
+                    <Progress
+                      value={Math.round((progress.completed / progress.total) * 100)}
+                      className="h-2 flex-1"
+                    />
+                    <span className="text-xs font-medium text-primary whitespace-nowrap">
+                      {progress.completed}/{progress.total}
+                    </span>
+                  </div>
+                )}
               </div>
-
-              {/* Requester */}
-              <p className="text-xs text-muted-foreground mb-2">
-                {getUserName(ticket.requesterId)}
-              </p>
-
-              {/* Progress bar */}
-              {progress && progress.total > 0 && (
-                <div className="flex items-center gap-2">
-                  <Progress
-                    value={Math.round((progress.completed / progress.total) * 100)}
-                    className="h-1.5 flex-1"
-                  />
-                  <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {progress.completed}/{progress.total}
-                  </span>
-                </div>
-              )}
-            </Card>
+            </Link>
           );
         })}
       </div>
     );
   }
 
-  // Desktop: Table layout (unchanged)
+  // Desktop: Table layout
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <div className="rounded-2xl overflow-hidden border border-border/50 backdrop-blur-sm bg-card/30">
       <Table className={cn(compact && "text-xs")}>
         <TableHeader>
-          <TableRow>
-            <TableHead>Titel</TableHead>
-            <TableHead>{renderSortButton('Status', 'status', enableStatusSort)}</TableHead>
-            <TableHead>{renderSortButton('Prioritet', 'priority', enablePrioritySort)}</TableHead>
-            <TableHead>{renderSortButton('Kategori', 'category', enableCategorySort)}</TableHead>
-            <TableHead>Taggar</TableHead>
-            <TableHead>Förlopp</TableHead>
-            <TableHead>Beställare</TableHead>
-            <TableHead>Skapad</TableHead>
-            <TableHead>Uppdaterad</TableHead>
+          <TableRow className="border-b border-border/50 bg-background/40 backdrop-blur-sm">
+            <TableHead className="font-semibold text-foreground/90">Titel</TableHead>
+            <TableHead className="font-semibold text-foreground/90">{renderSortButton('Status', 'status', enableStatusSort)}</TableHead>
+            <TableHead className="font-semibold text-foreground/90">{renderSortButton('Prioritet', 'priority', enablePrioritySort)}</TableHead>
+            <TableHead className="font-semibold text-foreground/90">{renderSortButton('Kategori', 'category', enableCategorySort)}</TableHead>
+            <TableHead className="font-semibold text-foreground/90">Taggar</TableHead>
+            <TableHead className="font-semibold text-foreground/90">Förlopp</TableHead>
+            <TableHead className="font-semibold text-foreground/90">Beställare</TableHead>
+            <TableHead className="font-semibold text-foreground/90">Skapad</TableHead>
+            <TableHead className="font-semibold text-foreground/90">Uppdaterad</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {tickets.map((ticket) => (
-            <TableRow key={ticket.id} className={cn(compact && "h-9")}>
-              <TableCell className={cn(compact && "py-2")}>
-                <Link
-                  to={`/tickets/${ticket.id}`}
-                  className="font-medium text-foreground hover:text-primary transition-colors"
-                >
+          {tickets.map((ticket, index) => (
+            <TableRow
+              key={ticket.id}
+              className={cn(
+                compact && "h-9",
+                "ticket-row animate-fade-in cursor-pointer transition-all duration-200",
+                "hover:bg-gradient-to-r hover:from-primary/5 hover:to-accent/5",
+                "border-b border-border/30 last:border-0",
+                "relative group"
+              )}
+              style={{ animationDelay: `${index * 50}ms` }}
+              onClick={() => window.location.href = `/tickets/${ticket.id}`}
+            >
+              <TableCell className={cn(compact && "py-3")}>
+                <span className="font-semibold text-foreground group-hover:text-primary transition-colors duration-200">
                   {ticket.title}
-                </Link>
+                </span>
               </TableCell>
               <TableCell className={cn(compact && "py-2")} onClick={(e) => e.stopPropagation()}>
                 {(() => {
@@ -344,24 +358,36 @@ export const TicketTable = ({
                   <CategoryBadge category={ticket.category} />
                 )}
               </TableCell>
-              <TableCell className={cn(compact && "py-2")}>
+              <TableCell className={cn(compact && "py-2")} onClick={(e) => e.stopPropagation()}>
                 {ticket.tags && ticket.tags.length > 0 ? (
                   <TagBadges tags={ticket.tags} maxDisplay={2} />
                 ) : (
                   <span className="text-muted-foreground text-sm">—</span>
                 )}
               </TableCell>
-              <TableCell className={cn(compact && "py-2")}>
+              <TableCell className={cn(compact && "py-3")}>
                 {(() => {
                   const progress = getProgress(ticket.id);
                   if (!progress || progress.total === 0) {
-                    return <span className="text-muted-foreground text-sm">—</span>;
+                    return <span className="text-muted-foreground/50 text-sm">—</span>;
                   }
                   const percentage = Math.round((progress.completed / progress.total) * 100);
+                  const isComplete = percentage === 100;
                   return (
-                    <div className="flex items-center gap-2 min-w-[100px]">
-                      <Progress value={percentage} className="h-2 flex-1" />
-                      <span className={cn("text-xs text-muted-foreground whitespace-nowrap", compact && "text-[11px]")}>
+                    <div className="flex items-center gap-3 min-w-[120px] p-1.5 rounded-lg bg-background/20 group-hover:bg-background/40 transition-colors">
+                      <div className="flex-1 relative">
+                        <Progress value={percentage} className="h-2.5" />
+                        {isComplete && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-1 h-1 rounded-full bg-primary animate-pulse"></div>
+                          </div>
+                        )}
+                      </div>
+                      <span className={cn(
+                        "text-xs font-medium whitespace-nowrap transition-colors",
+                        isComplete ? "text-primary" : "text-muted-foreground",
+                        compact && "text-[11px]"
+                      )}>
                         {progress.completed}/{progress.total}
                       </span>
                     </div>

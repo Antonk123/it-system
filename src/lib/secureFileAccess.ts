@@ -6,8 +6,6 @@
  * we need to fetch files using fetch() and create blob URLs.
  */
 
-import { api } from './api';
-
 // Cache for blob URLs to avoid re-fetching
 const blobUrlCache = new Map<string, string>();
 
@@ -24,12 +22,12 @@ export async function getAuthenticatedFileUrl(fileId: string): Promise<string> {
 
   try {
     // Fetch file with authentication
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('auth_token');
     if (!token) {
       throw new Error('No authentication token found');
     }
 
-    const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/attachments/file/${fileId}`, {
+    const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/attachments/file/${fileId}`, {
       headers: {
         'Authorization': `Bearer ${token}`,
       },

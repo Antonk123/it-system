@@ -22,6 +22,7 @@ const ALLOWED_MIME_TYPES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
   'application/pdf',
   'text/plain', 'text/csv',
+  'message/rfc822', // .eml
   'application/msword', // .doc
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
   'application/vnd.ms-excel', // .xls
@@ -36,7 +37,7 @@ const ALLOWED_MIME_TYPES = [
 const ALLOWED_EXTENSIONS = [
   'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
   'pdf',
-  'txt', 'csv',
+  'txt', 'csv', 'eml',
   'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
   'zip', 'rar', '7z',
 ];
@@ -105,13 +106,21 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
   }
 });
 
-// Upload attachment
-router.post('/ticket/:ticketId', authenticate, upload.single('file'), (req: AuthRequest, res: Response) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'No file uploaded' });
-  }
+// Upload attachment with error handling
+router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
+  // Wrap upload.single to catch multer errors
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      // Multer error (file validation failed)
+      console.error('File upload validation error:', err.message);
+      return res.status(400).json({ error: err.message });
+    }
 
-  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    try {
     // Verify ticket exists
     const ticket = db.prepare('SELECT id FROM tickets WHERE id = ?').get(req.params.ticketId);
     if (!ticket) {
@@ -133,14 +142,15 @@ router.post('/ticket/:ticketId', authenticate, upload.single('file'), (req: Auth
 
     const attachment = db.prepare('SELECT * FROM ticket_attachments WHERE id = ?').get(id) as AttachmentRow;
     
-    res.status(201).json({
-      ...attachment,
-      url: `/api/attachments/file/${attachment.id}`,
-    });
-  } catch (error) {
-    console.error('Error uploading attachment:', error);
-    res.status(500).json({ error: 'Failed to upload attachment' });
-  }
+      res.status(201).json({
+        ...attachment,
+        url: `/api/attachments/file/${attachment.id}`,
+      });
+    } catch (error) {
+      console.error('Error uploading attachment:', error);
+      res.status(500).json({ error: 'Failed to upload attachment' });
+    }
+  });
 });
 
 // Serve file (authenticated)

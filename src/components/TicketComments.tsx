@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Comment } from '@/types/ticket';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { MessageSquare, Loader2 } from 'lucide-react';
 import { CommentItem } from './CommentItem';
 import { toast } from 'sonner';
@@ -49,15 +49,14 @@ export const TicketComments = ({
 
       {/* Comment Form */}
       <form onSubmit={handleSubmit} className="space-y-2">
-        <Textarea
-          placeholder="Lägg till en intern kommentar... (Markdown stöds)"
+        <RichTextEditor
           value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          rows={2}
+          onChange={(html) => setNewComment(html)}
+          placeholder="Lägg till en intern kommentar..."
+          minHeight="80px"
           disabled={isSubmitting}
-          className="text-sm"
+          showToolbar={true}
         />
-        <p className="text-xs text-muted-foreground">Tips: använd t.ex. `**fetstil**`, listor eller länkar.</p>
         <div className="flex justify-end">
           <Button type="submit" size="sm" disabled={isSubmitting || !newComment.trim()}>
             {isSubmitting && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}

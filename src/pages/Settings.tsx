@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback, memo } from 'react';
 import { Layout } from '@/components/Layout';
 import { TemplateEditorModal } from '@/components/TemplateEditorModal';
 import { useCategories } from '@/hooks/useCategories';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Select,
   SelectContent,
@@ -37,14 +38,146 @@ import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Users, Mail, Shield, Loader2
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { FONT_OPTIONS, FontTheme, applyFontTheme, getStoredFontTheme, isFontTheme, saveFontTheme } from '@/lib/appearance';
+import { FONT_OPTIONS, FontTheme, applyFontTheme, getStoredFontTheme, isFontTheme, saveFontTheme, ModeTheme, applyMode, getStoredMode, saveModeTheme } from '@/lib/appearance';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 const themeOptions = [
-  { value: 'theme-midnight', label: 'Midnatt' },
-  { value: 'theme-default', label: 'Standard' },
-  { value: 'theme-slate', label: 'Skiffer' },
-  { value: 'theme-forest', label: 'Skog' },
+  { value: 'theme-default', label: 'Ocean Deep' },
+  { value: 'theme-cyberpunk', label: 'Cyberpunk' },
+  { value: 'theme-arctic', label: 'Arctic' },
+  { value: 'theme-terminal', label: 'Terminal' },
+  { value: 'theme-sunset', label: 'Sunset' },
 ] as const;
+
+// Memoized list item components for better performance
+const CategoryItem = memo(({
+  category,
+  isFirst,
+  isLast,
+  editingId,
+  editingName,
+  onMove,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  onDelete,
+  setEditingName
+}: any) => (
+  <div className="flex items-center gap-3 p-3">
+    {editingId === category.id ? (
+      <>
+        <Input
+          value={editingName}
+          onChange={(e) => setEditingName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') onSaveEdit();
+            if (e.key === 'Escape') onCancelEdit();
+          }}
+          className="flex-1"
+          autoFocus
+        />
+        <Button size="icon" variant="ghost" onClick={onSaveEdit}>
+          <Check className="w-4 h-4 text-green-500" />
+        </Button>
+        <Button size="icon" variant="ghost" onClick={onCancelEdit}>
+          <X className="w-4 h-4 text-muted-foreground" />
+        </Button>
+      </>
+    ) : (
+      <>
+        <span className="flex-1 font-medium">{category.label}</span>
+        <div className="flex items-center gap-1">
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onMove(category.id, 'up')}
+            disabled={isFirst}
+          >
+            <ArrowUp className="w-4 h-4 text-muted-foreground" />
+          </Button>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => onMove(category.id, 'down')}
+            disabled={isLast}
+          >
+            <ArrowDown className="w-4 h-4 text-muted-foreground" />
+          </Button>
+        </div>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => onStartEdit(category.id, category.label)}
+        >
+          <Pencil className="w-4 h-4 text-muted-foreground" />
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => onDelete(category.id)}
+        >
+          <Trash2 className="w-4 h-4 text-destructive" />
+        </Button>
+      </>
+    )}
+  </div>
+));
+
+CategoryItem.displayName = 'CategoryItem';
+
+const TemplateItem = memo(({
+  template,
+  index,
+  totalCount,
+  onMoveUp,
+  onMoveDown,
+  onEdit,
+  onDelete
+}: any) => (
+  <div className="flex items-center gap-3 p-3">
+    <div className="flex-1">
+      <p className="font-medium">{template.name}</p>
+      {template.description && (
+        <p className="text-sm text-muted-foreground">{template.description}</p>
+      )}
+    </div>
+    <div className="flex items-center gap-1">
+      <Button
+        size="icon"
+        variant="ghost"
+        onClick={onMoveUp}
+        disabled={index === 0}
+      >
+        <ArrowUp className="w-4 h-4 text-muted-foreground" />
+      </Button>
+      <Button
+        size="icon"
+        variant="ghost"
+        onClick={onMoveDown}
+        disabled={index === totalCount - 1}
+      >
+        <ArrowDown className="w-4 h-4 text-muted-foreground" />
+      </Button>
+    </div>
+    <Button
+      size="icon"
+      variant="ghost"
+      onClick={onEdit}
+    >
+      <Pencil className="w-4 h-4 text-muted-foreground" />
+    </Button>
+    <Button
+      size="icon"
+      variant="ghost"
+      onClick={onDelete}
+    >
+      <Trash2 className="w-4 h-4 text-destructive" />
+    </Button>
+  </div>
+));
+
+TemplateItem.displayName = 'TemplateItem';
 
 const Settings = () => {
   const { categories, addCategory, updateCategory, deleteCategory, reorderCategories } = useCategories();
@@ -67,6 +200,16 @@ const Settings = () => {
   const [isInviting, setIsInviting] = useState(false);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
   const [fontTheme, setFontTheme] = useState<FontTheme>(getStoredFontTheme());
+  const [mode, setMode] = useState<ModeTheme>(getStoredMode());
+
+  // Section expansion state
+  const [sectionsOpen, setSectionsOpen] = useState({
+    appearance: true,
+    users: false,
+    categories: false,
+    tags: false,
+    templates: false,
+  });
 
   // Tag state
   const [newTagName, setNewTagName] = useState('');
@@ -81,7 +224,7 @@ const Settings = () => {
     '#3b82f6', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6',
   ];
 
-  const handleAddCategory = () => {
+  const handleAddCategory = useCallback(() => {
     if (!newCategoryName.trim()) {
       toast.error('Ange ett kategorinamn');
       return;
@@ -89,14 +232,14 @@ const Settings = () => {
     addCategory(newCategoryName.trim());
     setNewCategoryName('');
     toast.success('Kategori tillagd');
-  };
+  }, [newCategoryName, addCategory]);
 
-  const handleStartEdit = (id: string, label: string) => {
+  const handleStartEdit = useCallback((id: string, label: string) => {
     setEditingId(id);
     setEditingName(label);
-  };
+  }, []);
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = useCallback(() => {
     if (!editingName.trim()) {
       toast.error('Kategorinamnet kan inte vara tomt');
       return;
@@ -107,19 +250,19 @@ const Settings = () => {
       setEditingName('');
       toast.success('Kategori uppdaterad');
     }
-  };
+  }, [editingName, editingId, updateCategory]);
 
-  const handleCancelEdit = () => {
+  const handleCancelEdit = useCallback(() => {
     setEditingId(null);
     setEditingName('');
-  };
+  }, []);
 
-  const handleDeleteCategory = (id: string) => {
+  const handleDeleteCategory = useCallback((id: string) => {
     deleteCategory(id);
     toast.success('Kategori borttagen');
-  };
+  }, [deleteCategory]);
 
-  const handleMoveCategory = (id: string, direction: 'up' | 'down') => {
+  const handleMoveCategory = useCallback((id: string, direction: 'up' | 'down') => {
     const index = categories.findIndex((cat) => cat.id === id);
     if (index === -1) return;
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
@@ -129,7 +272,7 @@ const Settings = () => {
     const [moved] = reordered.splice(index, 1);
     reordered.splice(targetIndex, 0, moved);
     reorderCategories(reordered.map((cat) => cat.id));
-  };
+  }, [categories, reorderCategories]);
 
   const handleInviteUser = async () => {
     if (!inviteEmail.trim()) {
@@ -225,23 +368,84 @@ const Settings = () => {
     toast.success('Teckensnitt uppdaterat');
   };
 
+  const handleTemplateModalClose = useCallback((open: boolean) => {
+    setTemplateModalOpen(open);
+    if (!open) {
+      // Reset editing template when modal closes
+      setEditingTemplate(null);
+    }
+  }, []);
+
+  const handleTemplateMoveUp = useCallback((index: number) => {
+    if (index > 0) {
+      const newOrder = [...templates];
+      [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+      reorderTemplates(newOrder.map(t => t.id));
+    }
+  }, [templates, reorderTemplates]);
+
+  const handleTemplateMoveDown = useCallback((index: number) => {
+    if (index < templates.length - 1) {
+      const newOrder = [...templates];
+      [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+      reorderTemplates(newOrder.map(t => t.id));
+    }
+  }, [templates, reorderTemplates]);
+
+  const handleTemplateEdit = useCallback((template: any) => {
+    setEditingTemplate(template);
+    setTemplateModalOpen(true);
+  }, []);
+
+  const handleTemplateDelete = useCallback((id: string) => {
+    deleteTemplate(id);
+  }, [deleteTemplate]);
+
   return (
     <Layout>
       <div className="max-w-2xl space-y-6">
         <h1 className="text-2xl font-bold">Inställningar</h1>
 
         {/* Appearance Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Palette className="w-5 h-5" />
-              Utseende
-            </CardTitle>
-            <CardDescription>
-              Justera tema och teckensnitt för hela sidan.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <Collapsible open={sectionsOpen.appearance} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, appearance: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <Palette className="w-5 h-5" />
+                  Utseende
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.appearance ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Justera tema och teckensnitt för hela sidan.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+            {/* Light/Dark Mode Toggle */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="mode-toggle" className="text-sm font-medium">
+                  Ljust läge
+                </Label>
+                <Switch
+                  id="mode-toggle"
+                  checked={mode === "light"}
+                  onCheckedChange={(checked) => {
+                    const newMode = checked ? "light" : "dark";
+                    setMode(newMode);
+                    applyMode(newMode);
+                    saveModeTheme(newMode);
+                    toast.success(checked ? "Bytte till ljust läge" : "Bytte till mörkt läge");
+                  }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Växla mellan ljust och mörkt läge
+              </p>
+            </div>
+
             <div className="space-y-2">
               <label className="text-sm font-medium">Tema</label>
               <Select value={theme || 'theme-midnight'} onValueChange={handleThemeChange}>
@@ -276,21 +480,28 @@ const Settings = () => {
                 </SelectContent>
               </Select>
             </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         {/* System Users Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="w-5 h-5" />
-              Systemanvändare
-            </CardTitle>
-            <CardDescription>
-              Hantera användare som har tillgång att logga in i systemet.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <Collapsible open={sectionsOpen.users} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, users: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Systemanvändare
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.users ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Hantera användare som har tillgång att logga in i systemet.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
             {/* Invite new user */}
             <div className="flex flex-col sm:flex-row gap-2">
               <Input
@@ -395,21 +606,28 @@ const Settings = () => {
                 ))
               )}
             </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         {/* Categories Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Tag className="w-5 h-5" />
-              Kategorier
-            </CardTitle>
-            <CardDescription>
-              Hantera ärendekategorier. Ändringar gäller för nya ärenden.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <Collapsible open={sectionsOpen.categories} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, categories: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <Tag className="w-5 h-5" />
+                  Kategorier
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.categories ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Hantera ärendekategorier. Ändringar gäller för nya ärenden.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
             {/* Add new category */}
             <div className="flex gap-2">
               <Input
@@ -426,65 +644,21 @@ const Settings = () => {
 
             {/* Category list */}
             <div className="border rounded-lg divide-y">
-              {categories.map((category) => (
-                <div key={category.id} className="flex items-center gap-3 p-3">
-                  {editingId === category.id ? (
-                    <>
-                      <Input
-                        value={editingName}
-                        onChange={(e) => setEditingName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleSaveEdit();
-                          if (e.key === 'Escape') handleCancelEdit();
-                        }}
-                        className="flex-1"
-                        autoFocus
-                      />
-                      <Button size="icon" variant="ghost" onClick={handleSaveEdit}>
-                        <Check className="w-4 h-4 text-green-500" />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={handleCancelEdit}>
-                        <X className="w-4 h-4 text-muted-foreground" />
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="flex-1 font-medium">{category.label}</span>
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleMoveCategory(category.id, 'up')}
-                          disabled={categories[0]?.id === category.id}
-                        >
-                          <ArrowUp className="w-4 h-4 text-muted-foreground" />
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => handleMoveCategory(category.id, 'down')}
-                          disabled={categories[categories.length - 1]?.id === category.id}
-                        >
-                          <ArrowDown className="w-4 h-4 text-muted-foreground" />
-                        </Button>
-                      </div>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleStartEdit(category.id, category.label)}
-                      >
-                        <Pencil className="w-4 h-4 text-muted-foreground" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => handleDeleteCategory(category.id)}
-                      >
-                        <Trash2 className="w-4 h-4 text-destructive" />
-                      </Button>
-                    </>
-                  )}
-                </div>
+              {categories.map((category, index) => (
+                <CategoryItem
+                  key={category.id}
+                  category={category}
+                  isFirst={index === 0}
+                  isLast={index === categories.length - 1}
+                  editingId={editingId}
+                  editingName={editingName}
+                  onMove={handleMoveCategory}
+                  onStartEdit={handleStartEdit}
+                  onSaveEdit={handleSaveEdit}
+                  onCancelEdit={handleCancelEdit}
+                  onDelete={handleDeleteCategory}
+                  setEditingName={setEditingName}
+                />
               ))}
               {categories.length === 0 && (
                 <div className="p-4 text-center text-muted-foreground">
@@ -492,21 +666,28 @@ const Settings = () => {
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         {/* Tags Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Tags className="w-5 h-5" />
-              Taggar
-            </CardTitle>
-            <CardDescription>
-              Hantera taggar för att organisera och filtrera ärenden.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <Collapsible open={sectionsOpen.tags} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, tags: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <Tags className="w-5 h-5" />
+                  Taggar
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.tags ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Hantera taggar för att organisera och filtrera ärenden.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
             {/* Add new tag */}
             <div className="flex gap-2 items-end">
               <div className="flex-1">
@@ -630,21 +811,28 @@ const Settings = () => {
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
 
         {/* Templates Section */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Type className="w-5 h-5" />
-              Ärendemallar
-            </CardTitle>
-            <CardDescription>
-              Hantera mallar för snabbare ärendeskapande. Mallar kan användas vid skapande av nya ärenden.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <Collapsible open={sectionsOpen.templates} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, templates: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <Type className="w-5 h-5" />
+                  Ärendemallar
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.templates ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Hantera mallar för snabbare ärendeskapande. Mallar kan användas vid skapande av nya ärenden.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
             {/* Add new template button */}
             <Button
               onClick={() => {
@@ -660,61 +848,16 @@ const Settings = () => {
             {/* Template list */}
             <div className="border rounded-lg divide-y">
               {templates.map((template, index) => (
-                <div key={template.id} className="flex items-center gap-3 p-3">
-                  <div className="flex-1">
-                    <p className="font-medium">{template.name}</p>
-                    {template.description && (
-                      <p className="text-sm text-muted-foreground">{template.description}</p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        if (index > 0) {
-                          const newOrder = [...templates];
-                          [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
-                          reorderTemplates(newOrder.map(t => t.id));
-                        }
-                      }}
-                      disabled={index === 0}
-                    >
-                      <ArrowUp className="w-4 h-4 text-muted-foreground" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        if (index < templates.length - 1) {
-                          const newOrder = [...templates];
-                          [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
-                          reorderTemplates(newOrder.map(t => t.id));
-                        }
-                      }}
-                      disabled={index === templates.length - 1}
-                    >
-                      <ArrowDown className="w-4 h-4 text-muted-foreground" />
-                    </Button>
-                  </div>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => {
-                      setEditingTemplate(template);
-                      setTemplateModalOpen(true);
-                    }}
-                  >
-                    <Pencil className="w-4 h-4 text-muted-foreground" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => deleteTemplate(template.id)}
-                  >
-                    <Trash2 className="w-4 h-4 text-destructive" />
-                  </Button>
-                </div>
+                <TemplateItem
+                  key={template.id}
+                  template={template}
+                  index={index}
+                  totalCount={templates.length}
+                  onMoveUp={() => handleTemplateMoveUp(index)}
+                  onMoveDown={() => handleTemplateMoveDown(index)}
+                  onEdit={() => handleTemplateEdit(template)}
+                  onDelete={() => handleTemplateDelete(template.id)}
+                />
               ))}
               {templates.length === 0 && (
                 <div className="p-4 text-center text-muted-foreground">
@@ -722,8 +865,10 @@ const Settings = () => {
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       </div>
 
       {/* Delete user confirmation dialog */}
@@ -765,7 +910,7 @@ const Settings = () => {
       {/* Template Editor Modal */}
       <TemplateEditorModal
         open={templateModalOpen}
-        onOpenChange={setTemplateModalOpen}
+        onOpenChange={handleTemplateModalClose}
         template={editingTemplate}
         categories={categories}
         onSave={addTemplate}

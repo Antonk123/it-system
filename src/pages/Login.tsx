@@ -49,7 +49,7 @@ const Login = () => {
                 <Input
                   id="signin-email"
                   type="email"
-                  placeholder="namn@prefabmastarna.se"
+                  placeholder="user@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-10"

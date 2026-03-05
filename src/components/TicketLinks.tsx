@@ -1,12 +1,26 @@
 import { useState } from 'react';
-import { Link as LinkIcon, X, Loader2 } from 'lucide-react';
+import { Link as LinkIcon, X, Loader2, Search, Check } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { TicketLink } from '@/types/ticket';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PriorityBadge } from '@/components/PriorityBadge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
+import { useTickets } from '@/hooks/useTickets';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 
 interface TicketLinksProps {
   links: TicketLink[];
@@ -23,24 +37,45 @@ export const TicketLinks = ({
   onAddLink,
   onDeleteLink,
 }: TicketLinksProps) => {
-  const [newLinkId, setNewLinkId] = useState('');
+  const [open, setOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const handleAddLink = async () => {
-    if (!newLinkId.trim()) {
-      toast.error('Please enter a ticket ID');
-      return;
-    }
+  // Fetch active tickets (open, in-progress, waiting, resolved)
+  const { tickets: activeTickets } = useTickets({
+    page: 1,
+    limit: 500,
+  });
 
-    if (newLinkId.trim() === currentTicketId) {
+  // Fetch closed/archived tickets separately
+  const { tickets: closedTickets } = useTickets({
+    page: 1,
+    limit: 500,
+    status: 'closed'
+  });
+
+  // Merge all tickets
+  const tickets = [...activeTickets, ...closedTickets];
+
+  // Debug: Log ticket statuses
+  if (import.meta.env.DEV && tickets.length > 0) {
+    const statusCounts = tickets.reduce((acc, t) => {
+      acc[t.status] = (acc[t.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+    console.log('TicketLinks - Total tickets:', tickets.length, 'By status:', statusCounts);
+  }
+
+  const handleAddLink = async (ticketId: string) => {
+    if (ticketId === currentTicketId) {
       toast.error('Cannot link a ticket to itself');
       return;
     }
 
     setIsAdding(true);
     try {
-      await onAddLink(newLinkId.trim());
-      setNewLinkId('');
+      await onAddLink(ticketId);
+      setOpen(false);
       toast.success('Link created successfully');
     } catch (error: any) {
       const message = error.message || 'Failed to create link';
@@ -49,6 +84,33 @@ export const TicketLinks = ({
       setIsAdding(false);
     }
   };
+
+  // Filter out current ticket and already linked tickets
+  const excludedTickets = tickets.filter(
+    (ticket) =>
+      ticket.id !== currentTicketId &&
+      !links.some((link) => link.linkedTicket.id === ticket.id)
+  );
+
+  // Custom search filter
+  const availableTickets = excludedTickets.filter((ticket) => {
+    if (!searchQuery) return true;
+
+    const query = searchQuery.toLowerCase();
+    const searchableText = [
+      ticket.title,
+      ticket.id,
+      ticket.description || '',
+      ticket.category || '',
+      ticket.status,
+      ticket.priority,
+      ticket.notes || '',
+      ticket.solution || '',
+      ...(ticket.tags?.map((t: any) => t.name) || []),
+    ].join(' ').toLowerCase();
+
+    return searchableText.includes(query);
+  });
 
   const handleDeleteLink = async (linkId: string) => {
     try {
@@ -67,32 +129,67 @@ export const TicketLinks = ({
       </h3>
 
       {/* Add new link form */}
-      <div className="flex gap-2">
-        <Input
-          value={newLinkId}
-          onChange={(e) => setNewLinkId(e.target.value)}
-          placeholder="Enter ticket ID to link..."
-          className="text-xs"
-          disabled={isAdding}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleAddLink();
-            }
-          }}
-        />
-        <Button
-          onClick={handleAddLink}
-          disabled={isAdding || !newLinkId.trim()}
-          size="sm"
-          className="text-xs"
-        >
-          {isAdding ? (
-            <Loader2 className="w-3 h-3 animate-spin" />
-          ) : (
-            'Link'
-          )}
-        </Button>
-      </div>
+      <Popover
+        open={open}
+        onOpenChange={(isOpen) => {
+          setOpen(isOpen);
+          if (!isOpen) setSearchQuery(''); // Clear search when closed
+        }}
+      >
+        <PopoverTrigger asChild>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-start text-xs text-muted-foreground"
+            disabled={isAdding}
+          >
+            <Search className="mr-2 h-3.5 w-3.5" />
+            Search tickets to link...
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[400px] p-0" align="start">
+          <Command shouldFilter={false}>
+            <CommandInput
+              placeholder="Search tickets..."
+              className="h-9"
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+            />
+            <CommandList>
+              <CommandEmpty>No tickets found.</CommandEmpty>
+              <CommandGroup>
+                {availableTickets.slice(0, 100).map((ticket) => (
+                  <CommandItem
+                    key={ticket.id}
+                    value={ticket.id}
+                    onSelect={() => handleAddLink(ticket.id)}
+                    disabled={isAdding}
+                    className="flex items-start gap-2 py-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium line-clamp-1">
+                        {ticket.title}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-muted-foreground font-mono">
+                          #{ticket.id.slice(0, 8)}
+                        </span>
+                        <StatusBadge status={ticket.status} />
+                        <PriorityBadge priority={ticket.priority} />
+                        {ticket.category && (
+                          <span className="text-xs text-muted-foreground">
+                            {ticket.category}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
 
       {/* Links list */}
       {isLoading ? (

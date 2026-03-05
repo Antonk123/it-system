@@ -6,8 +6,16 @@
 # Databasbackuper (innehåller verklig data)
 backup/
 
-# Lokal Claude Code-konfiguration
-.claude/settings.local.json
+# Känsliga dokument (interna anteckningar, projektinstruktioner)
+TODO.md
+CLAUDE.md
+
+# Claude Code-konfiguration (hela mappen, innehåller lokala inställningar)
+.claude/
+
+# Dev-miljö specifika filer (hot-reload, dev-setup)
+docker-compose.dev.yml
+docker-compose.dev.portainer.yml
 
 # Logs
 logs

@@ -1,12 +1,10 @@
 export const FONT_STORAGE_KEY = "app-font-theme";
 
 export const FONT_OPTIONS = [
-  { value: "font-inter", label: "Inter (standard)" },
-  { value: "font-roboto", label: "Roboto" },
+  { value: "font-jakarta", label: "Plus Jakarta Sans (standard)" },
+  { value: "font-crimson", label: "Crimson Pro" },
   { value: "font-libre", label: "Libre Caslon" },
-  { value: "font-mono", label: "Roboto Mono" },
-  { value: "font-lora", label: "Lora" },
-  { value: "font-space", label: "Space Mono" },
+  { value: "font-jetbrains", label: "JetBrains Mono" },
 ] as const;
 
 export type FontTheme = (typeof FONT_OPTIONS)[number]["value"];
@@ -17,11 +15,11 @@ export const isFontTheme = (value: string): value is FontTheme => fontClassSet.h
 
 export const getStoredFontTheme = (): FontTheme => {
   if (typeof window === "undefined") {
-    return "font-inter";
+    return "font-jakarta";
   }
 
   const stored = window.localStorage.getItem(FONT_STORAGE_KEY);
-  return stored && isFontTheme(stored) ? stored : "font-inter";
+  return stored && isFontTheme(stored) ? stored : "font-jakarta";
 };
 
 export const applyFontTheme = (fontTheme: FontTheme) => {
@@ -38,4 +36,36 @@ export const saveFontTheme = (fontTheme: FontTheme) => {
     return;
   }
   window.localStorage.setItem(FONT_STORAGE_KEY, fontTheme);
+};
+
+// Light/Dark Mode utilities
+export const MODE_STORAGE_KEY = "app-mode-theme";
+
+export type ModeTheme = "light" | "dark";
+
+export const getStoredMode = (): ModeTheme => {
+  if (typeof window === "undefined") {
+    return "dark";
+  }
+
+  const stored = window.localStorage.getItem(MODE_STORAGE_KEY);
+  return stored === "light" || stored === "dark" ? stored : "dark";
+};
+
+export const applyMode = (mode: ModeTheme) => {
+  if (typeof document === "undefined") {
+    return;
+  }
+
+  // Remove both classes first
+  document.documentElement.classList.remove("light", "dark");
+  // Add the selected mode
+  document.documentElement.classList.add(mode);
+};
+
+export const saveModeTheme = (mode: ModeTheme) => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  window.localStorage.setItem(MODE_STORAGE_KEY, mode);
 };
