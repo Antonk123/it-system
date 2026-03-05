@@ -59,6 +59,32 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
   }
 });
 
+// PUT /api/templates/:templateId/fields/reorder
+// IMPORTANT: This route must come BEFORE /:fieldId to prevent Express from matching "reorder" as a fieldId
+router.put('/reorder', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const { ids } = req.body as { ids: string[] };
+    if (!Array.isArray(ids)) {
+      return res.status(400).json({ error: 'ids must be an array' });
+    }
+
+    const updateStmt = db.prepare('UPDATE template_fields SET position = ? WHERE id = ?');
+    const transaction = db.transaction((fieldIds: string[]) => {
+      fieldIds.forEach((id, index) => {
+        updateStmt.run(index, id);
+      });
+    });
+
+    transaction(ids);
+
+    const fields = db.prepare('SELECT * FROM template_fields WHERE template_id = ? ORDER BY position ASC').all(req.params.templateId) as TemplateFieldRow[];
+    res.json(fields);
+  } catch (error) {
+    console.error('Error reordering template fields:', error);
+    res.status(500).json({ error: 'Failed to reorder template fields' });
+  }
+});
+
 // PUT /api/templates/:templateId/fields/:fieldId
 router.put('/:fieldId', authenticate, (req: AuthRequest, res: Response) => {
   try {
@@ -104,31 +130,6 @@ router.delete('/:fieldId', authenticate, (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error deleting template field:', error);
     res.status(500).json({ error: 'Failed to delete template field' });
-  }
-});
-
-// PUT /api/templates/:templateId/fields/reorder
-router.put('/reorder', authenticate, (req: AuthRequest, res: Response) => {
-  try {
-    const { ids } = req.body as { ids: string[] };
-    if (!Array.isArray(ids)) {
-      return res.status(400).json({ error: 'ids must be an array' });
-    }
-
-    const updateStmt = db.prepare('UPDATE template_fields SET position = ? WHERE id = ?');
-    const transaction = db.transaction((fieldIds: string[]) => {
-      fieldIds.forEach((id, index) => {
-        updateStmt.run(index, id);
-      });
-    });
-
-    transaction(ids);
-
-    const fields = db.prepare('SELECT * FROM template_fields WHERE template_id = ? ORDER BY position ASC').all(req.params.templateId) as TemplateFieldRow[];
-    res.json(fields);
-  } catch (error) {
-    console.error('Error reordering template fields:', error);
-    res.status(500).json({ error: 'Failed to reorder template fields' });
   }
 });
 

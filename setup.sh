@@ -90,6 +90,16 @@ DEFAULT_URL="http://localhost:${FRONTEND_PORT}"
 read -rp "  App-URL (för CORS och e-postlänkar) [${DEFAULT_URL}]: " APP_URL </dev/tty
 APP_URL=${APP_URL:-$DEFAULT_URL}
 
+# --- 3b. Detektera maskinens IP för CORS ---
+DETECTED_IP=$(hostname -I | awk '{print $1}' | tr -d '[:space:]')
+if [ -n "$DETECTED_IP" ] && [ "$DETECTED_IP" != "127.0.0.1" ]; then
+  CORS_ORIGINS="${APP_URL},http://${DETECTED_IP}:${FRONTEND_PORT}"
+  info "Detekterad IP: ${DETECTED_IP} — CORS kommer att tillåta både localhost och ${DETECTED_IP}"
+else
+  CORS_ORIGINS="${APP_URL}"
+  info "Kunde inte detektera nätverks-IP — använder endast ${APP_URL} för CORS"
+fi
+
 echo ""
 echo -e "  ${BOLD}SMTP-konfiguration${NC} (valfritt — tryck Enter för att hoppa över)"
 read -rp "  SMTP-server: " SMTP_HOST </dev/tty
@@ -120,7 +130,7 @@ cat > .env << EOF
 
 FRONTEND_PORT=${FRONTEND_PORT}
 BACKEND_PORT=${BACKEND_PORT}
-CORS_ORIGIN=${APP_URL}
+CORS_ORIGIN=${CORS_ORIGINS}
 APP_BASE_URL=${APP_URL}
 JWT_SECRET=${JWT_SECRET}
 SMTP_HOST=${SMTP_HOST}
@@ -242,6 +252,12 @@ ok "Backend svarar (${WAITED}s)"
 header "Initierar databas"
 docker exec it-ticketing-backend npm run init-db
 ok "Databas initierad"
+
+# --- 10b. Ladda mallar och dynamiska fält ---
+header "Laddar mallar och dynamiska fält"
+info "Skapar 7 kategorier och 7 kompletta mallar med 43 dynamiska fält..."
+docker exec it-ticketing-backend npm run seed-templates
+ok "Mallar och fält skapade"
 
 # --- 11. Klar! ---
 header "Installation klar!"
