@@ -11,7 +11,7 @@ set -e
 
 # --- Konfiguration (uppdatera REPO_URL innan publicering) ---
 REPO_URL="https://github.com/Antonk123/it-system"
-INSTALL_DIR="$HOME/it-ticketing"
+INSTALL_DIR="/opt/it-ticketing"
 
 # --- Färger ---
 RED='\033[0;31m'
@@ -89,6 +89,11 @@ BACKEND_PORT=${BACKEND_PORT:-3002}
 DEFAULT_URL="http://localhost:${FRONTEND_PORT}"
 read -rp "  App-URL (för CORS och e-postlänkar) [${DEFAULT_URL}]: " APP_URL </dev/tty
 APP_URL=${APP_URL:-$DEFAULT_URL}
+# Lägg till http:// om protokoll saknas
+if [[ ! "$APP_URL" =~ ^https?:// ]]; then
+  APP_URL="http://$APP_URL"
+  info "Protokoll saknades — lade till automatiskt: $APP_URL"
+fi
 
 # --- 3b. Detektera maskinens IP för CORS ---
 DETECTED_IP=$(hostname -I | awk '{print $1}' | tr -d '[:space:]')
@@ -148,8 +153,6 @@ ok ".env skapad"
 
 # --- 5b. Generera docker-compose.local.yml ---
 cat > docker-compose.local.yml << 'COMPOSE_EOF'
-version: '3.8'
-
 services:
   backend:
     image: it-ticketing-backend:latest
@@ -224,8 +227,8 @@ ok "Volym 'it-ticketing-data' redo"
 
 # --- 8. Starta stack ---
 header "Startar system"
-docker compose -f docker-compose.local.yml down --remove-orphans > /dev/null 2>&1 || true
-docker compose -f docker-compose.local.yml up -d
+docker compose -f docker-compose.local.yml --env-file .env down --remove-orphans > /dev/null 2>&1 || true
+docker compose -f docker-compose.local.yml --env-file .env up -d
 ok "Containers startade"
 
 # --- 9. Vänta på backend ---
@@ -270,7 +273,7 @@ echo ""
 warn "Byt lösenord direkt efter inloggning!"
 echo ""
 echo -e "  ${BOLD}Hantera systemet:${NC}"
-echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml up -d    # Starta"
-echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml down     # Stoppa"
-echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml logs -f  # Loggar"
+echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml --env-file ${INSTALL_DIR}/.env up -d    # Starta"
+echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml --env-file ${INSTALL_DIR}/.env down     # Stoppa"
+echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml logs -f                                 # Loggar"
 echo ""
