@@ -217,8 +217,8 @@ ok "Volym 'it-ticketing-data' redo"
 
 # --- 8. Starta stack ---
 header "Startar system"
-docker compose -f docker-compose.local.yml down --remove-orphans > /dev/null 2>&1 || true
-docker compose -f docker-compose.local.yml up -d
+docker compose -f docker-compose.local.yml --env-file .env down --remove-orphans > /dev/null 2>&1 || true
+docker compose -f docker-compose.local.yml --env-file .env up -d
 ok "Containers startade"
 
 # --- 9. Vänta på backend ---
@@ -257,7 +257,7 @@ echo ""
 warn "Byt lösenord direkt efter inloggning!"
 echo ""
 echo -e "  ${BOLD}Hantera systemet:${NC}"
-echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml up -d    # Starta"
-echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml down     # Stoppa"
-echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml logs -f  # Loggar"
+echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml --env-file ${INSTALL_DIR}/.env up -d    # Starta"
+echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml --env-file ${INSTALL_DIR}/.env down     # Stoppa"
+echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml logs -f                                 # Loggar"
 echo ""
