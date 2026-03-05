@@ -89,6 +89,11 @@ BACKEND_PORT=${BACKEND_PORT:-3002}
 DEFAULT_URL="http://localhost:${FRONTEND_PORT}"
 read -rp "  App-URL (för CORS och e-postlänkar) [${DEFAULT_URL}]: " APP_URL </dev/tty
 APP_URL=${APP_URL:-$DEFAULT_URL}
+# Lägg till http:// om protokoll saknas
+if [[ ! "$APP_URL" =~ ^https?:// ]]; then
+  APP_URL="http://$APP_URL"
+  info "Protokoll saknades — lade till automatiskt: $APP_URL"
+fi
 
 echo ""
 echo -e "  ${BOLD}SMTP-konfiguration${NC} (valfritt — tryck Enter för att hoppa över)"
