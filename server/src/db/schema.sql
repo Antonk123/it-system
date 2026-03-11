@@ -115,6 +115,18 @@ CREATE TABLE IF NOT EXISTS ticket_tags (
   UNIQUE(ticket_id, tag_id)
 );
 
+-- Ticket reminders (scheduled email notifications)
+CREATE TABLE IF NOT EXISTS ticket_reminders (
+  id TEXT PRIMARY KEY,
+  ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  reminder_time TEXT NOT NULL,
+  message TEXT,
+  sent INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  sent_at TEXT DEFAULT NULL
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
 CREATE INDEX IF NOT EXISTS idx_tickets_priority ON tickets(priority);
@@ -132,6 +144,10 @@ CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 CREATE INDEX IF NOT EXISTS idx_ticket_tags_ticket ON ticket_tags(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_tags_tag ON ticket_tags(tag_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_reminders_ticket ON ticket_reminders(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_reminders_user ON ticket_reminders(user_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_reminders_time ON ticket_reminders(reminder_time);
+CREATE INDEX IF NOT EXISTS idx_ticket_reminders_sent ON ticket_reminders(sent);
 
 -- Trigger to update updated_at on tickets
 CREATE TRIGGER IF NOT EXISTS update_ticket_updated_at

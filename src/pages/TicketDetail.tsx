@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Link as LinkIcon, Loader2 } from 'lucide-react';
@@ -11,12 +11,15 @@ import { useTicketSharing } from '@/hooks/useTicketSharing';
 import { useTicketComments } from '@/hooks/useTicketComments';
 import { useTicketLinks } from '@/hooks/useTicketLinks';
 import { useTicketHistory } from '@/hooks/useTicketHistory';
+import { useTicketReminders } from '@/hooks/useTicketReminders';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { migrateContent } from '@/lib/contentMigration';
 import { TicketChecklist } from '@/components/TicketChecklist';
 import { TicketComments } from '@/components/TicketComments';
 import { TicketLinks } from '@/components/TicketLinks';
 import { TicketActivity } from '@/components/TicketActivity';
+import { ReminderDialog } from '@/components/ReminderDialog';
+import { ReminderList } from '@/components/ReminderList';
 import { Layout } from '@/components/Layout';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PriorityBadge } from '@/components/PriorityBadge';
@@ -72,6 +75,7 @@ const statusLabels: Record<TicketStatus, string> = {
 const TicketDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { getTicketById, updateTicket, deleteTicket } = useTickets();
   const { getUserById } = useUsers();
   const { attachments, fetchAttachments } = useTicketAttachments();
@@ -79,6 +83,7 @@ const TicketDetail = () => {
   const { comments, isLoading: commentsLoading, addComment, updateComment, deleteComment } = useTicketComments(id || '');
   const { links, isLoading: linksLoading, addLink, deleteLink } = useTicketLinks(id || '');
   const { history, isLoading: historyLoading } = useTicketHistory(id || '');
+  const { reminders, fetchReminders, createReminder, deleteReminder } = useTicketReminders(id || '');
   const {
     isLoading: isShareLoading,
     shareUrl,
@@ -109,8 +114,9 @@ const TicketDetail = () => {
     if (id) {
       fetchAttachments(id);
       fetchChecklists(id);
+      fetchReminders();
     }
-  }, [id, fetchAttachments, fetchChecklists]);
+  }, [id, fetchAttachments, fetchChecklists, fetchReminders]);
 
   useEffect(() => {
     if (!id) return;
@@ -191,6 +197,20 @@ const TicketDetail = () => {
     }
   };
 
+  const handleBack = () => {
+    if (location.state?.from) {
+      // Navigate back to source page (preserves filters/pagination)
+      navigate(location.state.from);
+    } else {
+      // No source info - fall back to history or default
+      if (window.history.length > 2) {
+        navigate(-1);
+      } else {
+        navigate('/tickets');
+      }
+    }
+  };
+
   return (
     <Layout>
       <div className="max-w-3xl mx-auto space-y-6">
@@ -198,7 +218,7 @@ const TicketDetail = () => {
           <Button
             variant="ghost"
             className="gap-2"
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Tillbaka</span>
@@ -247,12 +267,17 @@ const TicketDetail = () => {
                 </div>
               </PopoverContent>
             </Popover>
-            <Link to={`/tickets/${ticket.id}/edit`}>
-              <Button variant="outline" className="gap-2">
-                <Pencil className="w-4 h-4" />
-                <span className="hidden sm:inline">Redigera</span>
-              </Button>
-            </Link>
+            <ReminderDialog onCreateReminder={createReminder} />
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => navigate(`/tickets/${ticket.id}/edit`, {
+                state: { from: location.state?.from || location.pathname + location.search }
+              })}
+            >
+              <Pencil className="w-4 h-4" />
+              <span className="hidden sm:inline">Redigera</span>
+            </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="outline" className="gap-2 text-destructive">
@@ -349,6 +374,16 @@ const TicketDetail = () => {
                     readOnly={false}
                   />
                 </div>
+              </div>
+            )}
+
+            {/* Reminders */}
+            {reminders.length > 0 && (
+              <div className="pt-4 border-t">
+                <ReminderList
+                  reminders={reminders}
+                  onDeleteReminder={deleteReminder}
+                />
               </div>
             )}
 

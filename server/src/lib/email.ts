@@ -271,3 +271,175 @@ export const sendTicketCreatedEmail = async (payload: TicketEmailPayload) => {
 export const sendTicketClosedEmail = async (payload: TicketEmailPayload) => {
   await sendEmail(`Ärende stängt: ${payload.title}`, payload);
 };
+
+export const sendTicketReminderEmail = async (data: {
+  ticket: TicketEmailPayload;
+  reminderMessage?: string;
+  userEmail: string;
+  userName: string;
+}) => {
+  const config = getEmailConfig();
+  if (!config) {
+    console.warn('Email not configured. Set SMTP_HOST, EMAIL_FROM, and EMAIL_TO to enable email.');
+    return;
+  }
+
+  const transporter = createTransporter();
+  if (!transporter) {
+    return;
+  }
+
+  const { ticket, reminderMessage, userEmail, userName } = data;
+  const categoryLabel = getCategoryLabel(ticket.categoryId);
+  const ticketUrl = config.appBaseUrl ? `${config.appBaseUrl.replace(/\/$/, '')}/tickets/${ticket.id}` : null;
+  const statusColor = getStatusColor(ticket.status);
+  const priorityColor = getPriorityColor(ticket.priority);
+
+  const subject = `Påminnelse: ${ticket.title}`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f3f4f6;">
+    <tr>
+      <td align="center" style="padding: 40px 20px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px;">
+
+          <!-- Header -->
+          <tr>
+            <td style="background-color: #f3f4f6; padding: 30px 40px; border-radius: 8px 8px 0 0;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td>
+                    <div style="display: inline-block; padding: 8px 16px; background-color: #f59e0b; color: #ffffff; border-radius: 6px; font-size: 13px; font-weight: 600; margin-bottom: 16px;">
+                      ⏰ PÅMINNELSE
+                    </div>
+                    <h1 style="margin: 0; color: #111827; font-size: 24px; font-weight: 600; line-height: 1.3;">
+                      ${escapeHtml(ticket.title)}
+                    </h1>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Content -->
+          <tr>
+            <td style="padding: 40px;">
+
+              ${reminderMessage ? `
+              <!-- Reminder Message -->
+              <div style="margin-bottom: 24px; padding: 16px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6; font-weight: 500;">
+                  ${escapeHtml(reminderMessage)}
+                </p>
+              </div>
+              ` : ''}
+
+              <!-- Badges -->
+              <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td>
+                    <span style="display: inline-block; padding: 6px 12px; background-color: ${statusColor.bg}; color: ${statusColor.text}; border-radius: 6px; font-size: 13px; font-weight: 500; margin-right: 8px;">
+                      ${getStatusLabel(ticket.status)}
+                    </span>
+                    <span style="display: inline-block; padding: 6px 12px; background-color: ${priorityColor.bg}; color: ${priorityColor.text}; border-radius: 6px; font-size: 13px; font-weight: 500;">
+                      ${getPriorityLabel(ticket.priority)}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Info Grid -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px; background-color: #f9fafb; border-radius: 8px; padding: 20px;">
+                ${categoryLabel ? `
+                <tr>
+                  <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Kategori</td>
+                  <td style="padding: 8px 0; color: #111827; font-size: 14px; text-align: right;">${escapeHtml(categoryLabel)}</td>
+                </tr>
+                ` : ''}
+                ${ticket.requesterName ? `
+                <tr>
+                  <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Beställare</td>
+                  <td style="padding: 8px 0; color: #111827; font-size: 14px; text-align: right;">${escapeHtml(ticket.requesterName)}</td>
+                </tr>
+                ` : ''}
+              </table>
+
+              <!-- Description -->
+              <div style="margin-bottom: 32px;">
+                <h3 style="margin: 0 0 12px 0; color: #374151; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
+                  Beskrivning
+                </h3>
+                <div style="padding: 16px; background-color: #f9fafb; border-left: 4px solid #667eea; border-radius: 4px; color: #374151; font-size: 14px; line-height: 1.6;">
+                  ${markdownToEmailHtml(ticket.description)}
+                </div>
+              </div>
+
+              <!-- CTA Button -->
+              ${ticketUrl ? `
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td align="center" style="padding: 12px 0;">
+                    <a href="${ticketUrl}" style="display: inline-block; padding: 14px 32px; background-color: #667eea; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: 600; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); mso-padding-alt: 0; text-align: center;">
+                      <span style="color: #ffffff; text-decoration: none;">Visa ärende</span>
+                    </a>
+                  </td>
+                </tr>
+              </table>
+              ` : ''}
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 40px; background-color: #f9fafb; border-radius: 0 0 8px 8px; border-top: 1px solid #e5e7eb;">
+              <p style="margin: 0; color: #6b7280; font-size: 12px; line-height: 1.5; text-align: center;">
+                Detta är en automatisk påminnelse från IT-ärendesystemet.<br>
+                Svara inte på detta mail.
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+
+  const text = [
+    `⏰ PÅMINNELSE: ${ticket.title}`,
+    '',
+    reminderMessage ? `Ditt meddelande: ${reminderMessage}` : null,
+    reminderMessage ? '' : null,
+    `Status: ${getStatusLabel(ticket.status)}`,
+    `Prioritet: ${getPriorityLabel(ticket.priority)}`,
+    `Kategori: ${categoryLabel || '—'}`,
+    ticket.requesterName ? `Beställare: ${ticket.requesterName}` : null,
+    '',
+    'Beskrivning:',
+    ticket.description,
+    '',
+    ticketUrl ? `Länk: ${ticketUrl}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  await transporter.sendMail({
+    from: config.from,
+    to: userEmail,
+    subject,
+    text,
+    html,
+  }).catch(error => {
+    console.error('Failed to send reminder email:', error);
+  });
+};

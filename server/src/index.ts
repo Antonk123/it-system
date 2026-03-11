@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import helmet from 'helmet';
 import { initializeDatabase } from './db/connection.js';
+import { startReminderScheduler } from './lib/reminderScheduler.js';
 import passport from './config/passport.js';
 
 // Import routes
@@ -21,8 +23,42 @@ import tagRoutes from './routes/tags.js';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust proxy - CRITICAL for correct IP detection behind nginx reverse proxy
+// Without this, req.ip will be the proxy's IP, not the client's IP
+// This affects rate limiting and logging
+app.set('trust proxy', true);
+
 // Initialize database
 initializeDatabase();
+
+// Start reminder scheduler
+startReminderScheduler();
+
+// Security headers with Helmet
+// Protects against common web vulnerabilities
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"], // Allow inline styles for React apps
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'", "data:"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true
+  },
+  noSniff: true,
+  xssFilter: true,
+  hidePoweredBy: true,
+}));
 
 // Middleware
 // CORS configuration - NEVER use '*' with credentials

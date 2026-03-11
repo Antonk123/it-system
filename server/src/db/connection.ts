@@ -334,6 +334,27 @@ const ensureTicketHistoryTable = () => {
   console.log('Created missing table: ticket_history');
 };
 
+const ensureTicketRemindersTable = () => {
+  if (tableExists('ticket_reminders')) return;
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS ticket_reminders (
+      id TEXT PRIMARY KEY,
+      ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reminder_time TEXT NOT NULL,
+      message TEXT,
+      sent INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      sent_at TEXT DEFAULT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_ticket_reminders_ticket ON ticket_reminders(ticket_id);
+    CREATE INDEX IF NOT EXISTS idx_ticket_reminders_user ON ticket_reminders(user_id);
+    CREATE INDEX IF NOT EXISTS idx_ticket_reminders_time ON ticket_reminders(reminder_time);
+    CREATE INDEX IF NOT EXISTS idx_ticket_reminders_sent ON ticket_reminders(sent);
+  `);
+  console.log('Created missing table: ticket_reminders');
+};
+
 export function initializeDatabase() {
   const schemaPath = join(__dirname, 'schema.sql');
   const schema = readFileSync(schemaPath, 'utf-8');
@@ -348,6 +369,7 @@ export function initializeDatabase() {
   ensureTemplateFieldsTable();
   ensureTicketFieldValuesTable();
   ensureTicketHistoryTable();
+  ensureTicketRemindersTable();
   console.log('Database initialized successfully');
 }
 

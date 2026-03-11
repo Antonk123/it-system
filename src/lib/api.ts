@@ -31,10 +31,17 @@ class ApiClient {
 
   setToken(token: string): void {
     localStorage.setItem('auth_token', token);
+    localStorage.setItem('token', token); // For axios interceptor
+  }
+
+  setRefreshToken(refreshToken: string): void {
+    localStorage.setItem('refreshToken', refreshToken);
   }
 
   clearToken(): void {
     localStorage.removeItem('auth_token');
+    localStorage.removeItem('token');
+    localStorage.removeItem('refreshToken');
   }
 
   async request<T>(endpoint: string, options: ApiOptions = {}): Promise<T> {
@@ -107,11 +114,14 @@ class ApiClient {
 
   // Auth
   async login(email: string, password: string) {
-    const data = await this.request<{ user: AuthUser; token: string }>('/auth/login', {
+    const data = await this.request<{ user: AuthUser; token: string; accessToken?: string; refreshToken?: string }>('/auth/login', {
       method: 'POST',
       body: { email, password },
     });
     this.setToken(data.token);
+    if (data.refreshToken) {
+      this.setRefreshToken(data.refreshToken);
+    }
     return data;
   }
 
@@ -126,8 +136,21 @@ class ApiClient {
     });
   }
 
-  logout() {
-    this.clearToken();
+  async logout() {
+    try {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        // Revoke refresh token on backend
+        await this.request('/auth/logout', {
+          method: 'POST',
+          body: { refreshToken },
+        });
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      this.clearToken();
+    }
   }
 
   // Tickets
@@ -206,6 +229,10 @@ class ApiClient {
     return this.request<TicketRow>(`/tickets/${id}`);
   }
 
+  async getTemplate(id: string) {
+    return this.request<TemplateRow & { fields: TemplateFieldRow[] }>(`/templates/${id}`);
+  }
+
   async createTicket(ticket: Partial<TicketRow> & { customFields?: CustomFieldInput[]; template_id?: string | null }) {
     return this.request<TicketRow>('/tickets', {
       method: 'POST',
@@ -269,6 +296,24 @@ class ApiClient {
 
   async deleteTicketLink(linkId: string) {
     return this.request<{ message: string }>(`/links/${linkId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Reminders
+  async createReminder(ticketId: string, data: { reminder_time: string; message?: string }) {
+    return this.request(`/tickets/${ticketId}/reminders`, {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async getReminders(ticketId: string) {
+    return this.request(`/tickets/${ticketId}/reminders`);
+  }
+
+  async deleteReminder(ticketId: string, reminderId: string) {
+    return this.request<{ message: string }>(`/tickets/${ticketId}/reminders/${reminderId}`, {
       method: 'DELETE',
     });
   }
