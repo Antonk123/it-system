@@ -1,0 +1,770 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { ArrowLeft, Loader2, PlusCircle, Pencil, LayoutTemplate } from 'lucide-react';
+import { useTickets } from '@/hooks/useTickets';
+import { useUsers } from '@/hooks/useUsers';
+import { useCategories } from '@/hooks/useCategories';
+import { useTemplates } from '@/hooks/useTemplates';
+import { useTicketAttachments, TicketAttachment } from '@/hooks/useTicketAttachments';
+import { useTicketChecklists } from '@/hooks/useTicketChecklists';
+import { Layout } from '@/components/Layout';
+import { FileUpload } from '@/components/FileUpload';
+import { TicketChecklist } from '@/components/TicketChecklist';
+import { UserCombobox } from '@/components/UserCombobox';
+import { DynamicFieldsForm } from '@/components/DynamicFieldsForm';
+import { CustomFieldInput, api } from '@/lib/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
+import { Label } from '@/components/ui/label';
+import { migrateContent } from '@/lib/contentMigration';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { TicketPriority, TicketStatus, Template } from '@/types/ticket';
+import { toast } from 'sonner';
+import { ticketInsertSchema, ticketUpdateSchema } from '@/lib/validations';
+
+const TicketForm = () => {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { addTicket, updateTicket, getTicketById } = useTickets();
+  const { users } = useUsers();
+  const { categories, addCategory } = useCategories();
+  const { templates } = useTemplates();
+  const { 
+    attachments, 
+    isUploading, 
+    fetchAttachments, 
+    uploadAttachment, 
+    deleteAttachment 
+  } = useTicketAttachments();
+  const {
+    items: checklistItems,
+    fetchChecklists,
+    addChecklistItem,
+    updateChecklistItem,
+    deleteChecklistItem,
+    bulkAddChecklistItems,
+  } = useTicketChecklists();
+  
+  const isEditing = !!id;
+  const existingTicket = isEditing ? getTicketById(id) : null;
+
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    priority: 'medium' as TicketPriority,
+    status: 'open' as TicketStatus,
+    category: 'none' as string,
+    requesterId: '',
+    notes: '',
+    solution: '',
+  });
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingChecklistItems, setPendingChecklistItems] = useState<{ id: string; label: string; completed: boolean }[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [customFieldValues, setCustomFieldValues] = useState<CustomFieldInput[]>([]);
+  const [editInitialFieldValues, setEditInitialFieldValues] = useState<CustomFieldInput[]>([]);
+  const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
+  const solutionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Stable callback for DynamicFieldsForm to prevent unnecessary re-renders
+  const handleCustomFieldsChange = useCallback((values: CustomFieldInput[]) => {
+    setCustomFieldValues(values);
+  }, []);
+
+  useEffect(() => {
+    if (existingTicket) {
+      setFormData({
+        title: existingTicket.title,
+        description: migrateContent(existingTicket.description),
+        priority: existingTicket.priority,
+        status: existingTicket.status,
+        category: existingTicket.category || 'none',
+        requesterId: existingTicket.requesterId,
+        notes: existingTicket.notes ? migrateContent(existingTicket.notes) : '',
+        solution: existingTicket.solution ? migrateContent(existingTicket.solution) : '',
+      });
+    }
+  }, [existingTicket]);
+
+  useEffect(() => {
+    if (id) {
+      fetchAttachments(id);
+      fetchChecklists(id);
+    }
+  }, [id, fetchAttachments, fetchChecklists]);
+
+  // Load dynamic field values when editing a ticket that was created from a template
+  useEffect(() => {
+    if (!isEditing || !id) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadTicketAndTemplate = async () => {
+      setIsLoadingTemplate(true);
+      try {
+        const ticketDetail = await api.getTicket(id);
+
+        if (isCancelled) return;
+
+        // If ticket has a template, fetch it with fields
+        if (ticketDetail.template_id) {
+          try {
+            const freshTemplateRow = await api.getTemplate(ticketDetail.template_id);
+
+            if (isCancelled) return;
+
+            if (freshTemplateRow && freshTemplateRow.fields && freshTemplateRow.fields.length > 0) {
+              // Map TemplateRow to Template format (snake_case to camelCase)
+              const mappedTemplate: Template = {
+                id: freshTemplateRow.id,
+                name: freshTemplateRow.name,
+                description: freshTemplateRow.description,
+                titleTemplate: freshTemplateRow.title_template,
+                descriptionTemplate: freshTemplateRow.description_template,
+                priority: freshTemplateRow.priority as Template['priority'],
+                category: freshTemplateRow.category_id,
+                notesTemplate: freshTemplateRow.notes_template,
+                solutionTemplate: freshTemplateRow.solution_template,
+                position: freshTemplateRow.position,
+                createdBy: freshTemplateRow.created_by,
+                createdAt: new Date(freshTemplateRow.created_at),
+                updatedAt: new Date(freshTemplateRow.updated_at),
+                fields: freshTemplateRow.fields,
+              };
+
+              setSelectedTemplate(mappedTemplate);
+
+              // Map saved field values to initialValues for DynamicFieldsForm
+              if (ticketDetail.field_values && ticketDetail.field_values.length > 0) {
+                const savedValues = ticketDetail.field_values.map((fv) => ({
+                  fieldName: fv.field_name,
+                  fieldLabel: fv.field_label,
+                  fieldValue: fv.field_value || '',
+                }));
+                setEditInitialFieldValues(savedValues);
+              }
+            }
+          } catch (templateError) {
+            if (import.meta.env.DEV) console.error('Error loading template:', templateError);
+            // Template deleted or not accessible
+            // If we have field_values, show them as read-only legacy fields
+            if (ticketDetail.field_values && ticketDetail.field_values.length > 0) {
+              const savedValues = ticketDetail.field_values.map((fv) => ({
+                fieldName: fv.field_name,
+                fieldLabel: fv.field_label,
+                fieldValue: fv.field_value || '',
+              }));
+              setEditInitialFieldValues(savedValues);
+              // Show warning that template is missing
+              toast.warning('Mall hittades inte - fältvärden visas som lästa från ärendet');
+            }
+          }
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) console.error('Error loading ticket for edit:', error);
+        toast.error('Kunde inte ladda ärende');
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingTemplate(false);
+        }
+      }
+    };
+
+    loadTicketAndTemplate();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isEditing, id]);
+
+  // Track unsaved changes
+  useEffect(() => {
+    if (existingTicket) {
+      const hasChanges =
+        formData.title !== existingTicket.title ||
+        formData.description !== existingTicket.description ||
+        formData.priority !== existingTicket.priority ||
+        formData.status !== existingTicket.status ||
+        formData.category !== (existingTicket.category || 'none') ||
+        formData.requesterId !== existingTicket.requesterId ||
+        formData.notes !== (existingTicket.notes || '') ||
+        formData.solution !== (existingTicket.solution || '') ||
+        pendingFiles.length > 0 ||
+        pendingChecklistItems.length > 0;
+
+      setHasUnsavedChanges(hasChanges);
+    } else if (!isEditing) {
+      // For new tickets, mark as unsaved if any data is entered
+      const hasData = formData.title || formData.description || formData.requesterId;
+      setHasUnsavedChanges(hasData);
+    }
+  }, [formData, existingTicket, isEditing, pendingFiles, pendingChecklistItems]);
+
+  // Prevent navigation with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges && !isSubmitting) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges, isSubmitting]);
+
+  const handleFilesSelect = (files: File[]) => {
+    setPendingFiles((prev) => [...prev, ...files]);
+  };
+
+  const handleRemovePending = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemoveAttachment = async (attachment: TicketAttachment) => {
+    const success = await deleteAttachment(attachment);
+    if (success) {
+      toast.success('Bilaga borttagen');
+    } else {
+      toast.error('Kunde inte ta bort bilaga');
+    }
+  };
+
+  const handleAddPendingChecklist = (label: string) => {
+    setPendingChecklistItems(prev => [
+      ...prev,
+      { id: `pending-${Date.now()}`, label, completed: false }
+    ]);
+  };
+
+  const handleDeletePendingChecklist = (id: string) => {
+    setPendingChecklistItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) {
+      toast.error('Ange ett kategorinamn');
+      return;
+    }
+    setIsAddingCategory(true);
+    const created = await addCategory(newCategoryName.trim());
+    setIsAddingCategory(false);
+    if (created) {
+      setFormData((prev) => ({ ...prev, category: created.id }));
+      setErrors((prev) => { const p = { ...prev }; delete p['category']; return p; });
+      setNewCategoryName('');
+      toast.success('Kategori tillagd');
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!formData.requesterId) {
+      toast.error('Välj en beställare');
+      return;
+    }
+
+    // If dynamic fields are used, use a placeholder so Zod validation passes.
+    // The backend composes the real description from customFields.
+    let submitFormData = { ...formData };
+    if (customFieldValues.length > 0) {
+      submitFormData = { ...submitFormData, description: 'Fältdata' };
+    }
+
+    // Validate with Zod and show inline errors
+    const schema = isEditing ? ticketUpdateSchema : ticketInsertSchema;
+    const validation = schema.safeParse(submitFormData as any);
+    if (!validation.success) {
+      const fieldErrors: Record<string, string> = {};
+      validation.error.errors.forEach((err) => {
+        const key = err.path[0] ? String(err.path[0]) : '_form';
+        fieldErrors[key] = err.message;
+      });
+      setErrors(fieldErrors);
+      toast.error('Rätta felen i formuläret');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setIsSaving(true);
+
+    try {
+      if (isEditing && id) {
+        await updateTicket(id, submitFormData, customFieldValues.length > 0 ? customFieldValues : undefined);
+
+        // Upload pending files
+        for (const file of pendingFiles) {
+          await uploadAttachment(id, file);
+        }
+
+        // Add pending checklist items
+        if (pendingChecklistItems.length > 0) {
+          await bulkAddChecklistItems(id, pendingChecklistItems.map(i => i.label));
+        }
+
+        setHasUnsavedChanges(false);
+        toast.success('Ärendet uppdaterades');
+        // Navigate back to source instead of detail page
+        if (location.state?.from) {
+          navigate(location.state.from);
+        } else {
+          navigate('/tickets');
+        }
+      } else {
+        const ticketWithTemplate = selectedTemplate
+          ? { ...submitFormData, templateId: selectedTemplate.id }
+          : submitFormData;
+        const newTicket = await addTicket(ticketWithTemplate, customFieldValues.length > 0 ? customFieldValues : undefined);
+
+        if (newTicket) {
+          // Upload pending files to the new ticket
+          let uploadErrors = 0;
+          for (const file of pendingFiles) {
+            try {
+              await uploadAttachment(newTicket.id, file);
+            } catch (error) {
+              if (import.meta.env.DEV) console.error('Error uploading file:', file.name, error);
+              uploadErrors++;
+            }
+          }
+
+          // Add pending checklist items to the new ticket
+          if (pendingChecklistItems.length > 0) {
+            try {
+              await bulkAddChecklistItems(newTicket.id, pendingChecklistItems.map(i => i.label));
+            } catch (error) {
+              if (import.meta.env.DEV) console.error('Error adding checklist items:', error);
+              toast.error('Kunde inte lägga till checklistor');
+            }
+          }
+
+          setHasUnsavedChanges(false);
+
+          if (uploadErrors > 0) {
+            toast.success(`Ärendet skapades, men ${uploadErrors} fil(er) kunde inte laddas upp`);
+          } else {
+            toast.success('Ärendet skapades');
+          }
+
+          navigate(`/tickets/${newTicket.id}`);
+          return;
+        }
+      }
+    } catch (error) {
+      if (import.meta.env.DEV) console.error('Error submitting ticket:', error);
+      toast.error('Kunde inte spara ärendet');
+    } finally {
+      setIsSubmitting(false);
+      setIsSaving(false);
+    }
+  };
+
+  const insertSolutionSnippet = (snippet: string, cursorOffset = 0) => {
+    const textarea = solutionTextareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart ?? formData.solution.length;
+    const end = textarea.selectionEnd ?? formData.solution.length;
+    const nextValue = `${formData.solution.slice(0, start)}${snippet}${formData.solution.slice(end)}`;
+    const nextCursorPosition = start + snippet.length + cursorOffset;
+
+    setFormData((prev) => ({ ...prev, solution: nextValue }));
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.setSelectionRange(nextCursorPosition, nextCursorPosition);
+    });
+  };
+
+  const handleNavigateBack = () => {
+    const goBack = () => {
+      if (location.state?.from) {
+        navigate(location.state.from);
+      } else {
+        navigate(-1);
+      }
+    };
+
+    if (hasUnsavedChanges && !isSaving) {
+      if (window.confirm('Du har osparade ändringar. Är du säker på att du vill lämna sidan?')) {
+        goBack();
+      }
+    } else {
+      goBack();
+    }
+  };
+
+  return (
+    <Layout>
+      <div className="max-w-2xl mx-auto space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              className="gap-2"
+              onClick={handleNavigateBack}
+              disabled={isSaving}
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Tillbaka
+            </Button>
+
+            {!isEditing && (
+              <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button type="button" variant="outline" className="gap-2">
+                    <LayoutTemplate className="w-4 h-4" />
+                    Skapa från mall
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Välj ärendemall</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-2">
+                    {templates.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Inga mallar tillgängliga. Skapa mallar i Inställningar.
+                      </p>
+                    ) : (
+                      templates.map((template) => (
+                        <Button
+                          key={template.id}
+                          variant="outline"
+                          className="w-full justify-start"
+                          onClick={() => {
+                            const hasFields = template.fields && template.fields.length > 0;
+                            setSelectedTemplate(template);
+                            // Don't reset customFieldValues - let DynamicFieldsForm initialize it
+                            setFormData({
+                              ...formData,
+                              title: template.titleTemplate,
+                              description: hasFields ? '' : template.descriptionTemplate,
+                              priority: template.priority,
+                              category: template.category || 'none',
+                              notes: hasFields ? '' : (template.notesTemplate || ''),
+                              solution: hasFields ? '' : (template.solutionTemplate || ''),
+                            });
+                            setTemplateDialogOpen(false);
+                            toast.success(`Mall "${template.name}" laddad`);
+                          }}
+                        >
+                          <div className="text-left">
+                            <div className="font-medium">{template.name}</div>
+                            {template.description && (
+                              <div className="text-xs text-muted-foreground">{template.description}</div>
+                            )}
+                          </div>
+                        </Button>
+                      ))
+                    )}
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
+
+          {/* Save status indicator */}
+          {isSaving && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Sparar...
+            </div>
+          )}
+          {!isSaving && hasUnsavedChanges && (
+            <div className="flex items-center gap-2 text-sm text-yellow-400/80">
+              <div className="h-2 w-2 rounded-full bg-yellow-400" />
+              Osparade ändringar
+            </div>
+          )}
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {isEditing
+                ? <><Pencil className="w-5 h-5 text-primary" />Redigera ärende</>
+                : <><PlusCircle className="w-5 h-5 text-primary" />Skapa nytt ärende</>
+              }
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="title">Titel *</Label>
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) => { setFormData({ ...formData, title: e.target.value }); setErrors(prev => { const p = { ...prev }; delete p['title']; return p; }); }}
+                  placeholder="Kort beskrivning av problemet"
+                  required
+                />
+              </div>
+
+              {isLoadingTemplate ? (
+                <div className="border border-dashed border-muted p-4 rounded text-center text-sm text-muted-foreground">
+                  Laddar mallfält...
+                </div>
+              ) : selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0 ? (
+                <div>
+                  <DynamicFieldsForm
+                    fields={selectedTemplate.fields}
+                    onValuesChange={handleCustomFieldsChange}
+                    initialValues={isEditing && editInitialFieldValues.length > 0 ? editInitialFieldValues : undefined}
+                  />
+
+                  {/* Ytterligare information section */}
+                  <div className="mt-6 border-t pt-4">
+                    <Label htmlFor="additional_notes" className="text-sm text-muted-foreground">
+                      Ytterligare information (valfritt)
+                    </Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Lägg till extra detaljer som inte passar i standardfälten ovan
+                    </p>
+                    <RichTextEditor
+                      value={formData.notes || ''}
+                      onChange={(html) => {
+                        setFormData({ ...formData, notes: html });
+                      }}
+                      placeholder="Övrig information, kommentarer, specialfall..."
+                      minHeight="100px"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    className="mt-2 text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => {
+                      // Restore existing description from ticket when clearing template
+                      if (isEditing && existingTicket && !formData.description) {
+                        setFormData(prev => ({ ...prev, description: existingTicket.description }));
+                      }
+                      setSelectedTemplate(null);
+                      setCustomFieldValues([]);
+                      setEditInitialFieldValues([]);
+                    }}
+                  >
+                    Rensa mall — skriv fri beskrivning istället
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="description">
+                    Beskrivning *
+                  </Label>
+                  <RichTextEditor
+                    value={formData.description}
+                    onChange={(html) => { setFormData({ ...formData, description: html }); setErrors(prev => { const p = { ...prev }; delete p['description']; return p; }); }}
+                    placeholder="Detaljerad beskrivning av problemet..."
+                    minHeight="150px"
+                    required
+                  />
+                </div>
+              )}
+
+              <div className="border-t border-border/60 pt-5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">Detaljer</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Beställare *</Label>
+                  <UserCombobox
+                    users={users}
+                    value={formData.requesterId}
+                    onValueChange={(v) => { setFormData({ ...formData, requesterId: v }); setErrors(prev => { const p = { ...prev }; delete p['requesterId']; return p; }); }}
+                    placeholder="Välj användare"
+                  />
+                  {users.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      <a href="/users" className="text-primary hover:underline">Lägg till användare</a> för att tilldela ärenden
+                    </p>
+                  )}
+                  {errors.requesterId && <p className="text-sm text-destructive mt-1">{errors.requesterId}</p>}
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Prioritet</Label>
+                  <Select 
+                    value={formData.priority} 
+                    onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Låg</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="high">Hög</SelectItem>
+                      <SelectItem value="critical">Kritisk</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Kategori</Label>
+                  <Select
+                    value={formData.category}
+                    onValueChange={(v) => {
+                      setFormData({ ...formData, category: v });
+                      setErrors(prev => { const p = { ...prev }; delete p['category']; return p; });
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Välj kategori" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Ingen kategori</SelectItem>
+                      {categories.map(cat => (
+                        <SelectItem
+                          key={cat.id}
+                          value={cat.id}
+                          className="data-[highlighted]:bg-primary/20 data-[highlighted]:text-foreground data-[state=checked]:bg-primary/10"
+                        >
+                          {cat.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Ny kategori..."
+                      value={newCategoryName}
+                      onChange={(e) => { setNewCategoryName(e.target.value); setErrors(prev => { const p = { ...prev }; delete p['category']; return p; }); }}
+                      onKeyDown={(e) => e.key === 'Enter' && !isAddingCategory && handleAddCategory()}
+                      disabled={isAddingCategory}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleAddCategory}
+                      disabled={isAddingCategory}
+                      className="shrink-0"
+                    >
+                      Lägg till
+                    </Button>
+                    {errors.category && <p className="text-sm text-destructive mt-1">{errors.category}</p>}
+                  </div>
+                </div>
+
+                {isEditing && (
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select 
+                      value={formData.status} 
+                      onValueChange={(v) => { setFormData({ ...formData, status: v as TicketStatus }); setErrors(prev => { const p = { ...prev }; delete p['status']; return p; }); }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">Öppen</SelectItem>
+                        <SelectItem value="in-progress">Pågående</SelectItem>
+                        <SelectItem value="waiting">Väntar</SelectItem>
+                        <SelectItem value="resolved">Löst</SelectItem>
+                        <SelectItem value="closed">Stängd</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+
+              {/* File Attachments */}
+              <div className="space-y-2">
+                <Label>Bilagor</Label>
+                <FileUpload
+                  attachments={attachments}
+                  pendingFiles={pendingFiles}
+                  onFilesSelect={handleFilesSelect}
+                  onRemovePending={handleRemovePending}
+                  onRemoveAttachment={handleRemoveAttachment}
+                  isUploading={isUploading}
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              {/* Checklist */}
+              <div className="space-y-2">
+                <Label>Checklista / Att göra</Label>
+                <div className="border rounded-lg p-4">
+                  <TicketChecklist
+                    items={checklistItems}
+                    pendingItems={pendingChecklistItems}
+                    onToggle={(id, completed) => updateChecklistItem(id, { completed })}
+                    onDelete={deleteChecklistItem}
+                    onAdd={(label) => addChecklistItem(id!, label)}
+                    onPendingAdd={handleAddPendingChecklist}
+                    onPendingDelete={handleDeletePendingChecklist}
+                  />
+                </div>
+              </div>
+
+              {isEditing && (
+                <>
+                  <div className="border-t border-border/60 pt-5">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">Handläggning</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="solution">Lösning</Label>
+                    <RichTextEditor
+                      value={formData.solution}
+                      onChange={(html) => setFormData({ ...formData, solution: html })}
+                      placeholder="Dokumentera hur problemet löstes..."
+                      minHeight="250px"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Interna anteckningar</Label>
+                    <RichTextEditor
+                      value={formData.notes}
+                      onChange={(html) => setFormData({ ...formData, notes: html })}
+                      placeholder="Lägg till interna anteckningar..."
+                      minHeight="100px"
+                    />
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={handleNavigateBack} disabled={isSaving}>
+                  Avbryt
+                </Button>
+                <Button type="submit" disabled={isSubmitting || isUploading || isSaving} className="gap-2">
+                  {isSubmitting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" />Sparar...</>
+                  ) : isEditing ? 'Spara ändringar' : 'Skapa ärende'}
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    </Layout>
+  );
+};
+
+export default TicketForm;
