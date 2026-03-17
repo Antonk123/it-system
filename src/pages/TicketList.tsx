@@ -221,7 +221,7 @@ const TicketList = () => {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-foreground">Alla ärenden</h1>
+            <h1 className="text-xl font-bold text-foreground">Alla Ärenden1</h1>
             {pagination && (
               <p className="text-muted-foreground mt-1">
                 Visar {((pagination.page - 1) * pagination.limit) + 1}-
