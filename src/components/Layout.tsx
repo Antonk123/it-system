@@ -20,7 +20,7 @@ const navItems = [{
 }, {
   path: '/tickets',
   icon: Ticket,
-  label: 'Alla Ärenden1'
+  label: 'Alla ärenden'
 }, {
   path: '/reports',
   icon: BarChart3,
