@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { ArrowUpDown, Loader2 } from 'lucide-react';
 import { Ticket, User, TicketStatus } from '@/types/ticket';
 import { PriorityBadge } from './PriorityBadge';
@@ -41,6 +41,7 @@ interface TicketTableProps {
   users: User[];
   onStatusChange?: (ticketId: string, status: TicketStatus) => void;
   onCategoryChange?: (ticketId: string, categoryId: string) => void;
+  onTicketClick?: (ticketId: string) => void;
   sortKey?: 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
   sortDirection?: 'asc' | 'desc';
   onSortChange?: (key: 'status' | 'priority' | 'category') => void;
@@ -58,11 +59,12 @@ const statusLabels: Record<TicketStatus, string> = {
   'closed': 'Stängd',
 };
 
-export const TicketTable = ({
+export const TicketTable = memo(function TicketTable({
   tickets,
   users,
   onStatusChange,
   onCategoryChange,
+  onTicketClick,
   sortKey = 'createdAt',
   sortDirection = 'desc',
   onSortChange,
@@ -70,7 +72,7 @@ export const TicketTable = ({
   enablePrioritySort = true,
   enableCategorySort = true,
   compact = false,
-}: TicketTableProps) => {
+}: TicketTableProps) {
   const { categories } = useCategories();
   const [checklistProgress, setChecklistProgress] = useState<ChecklistProgress[]>([]);
   const [savingIds, setSavingIds] = useState<Record<string, boolean>>({});
@@ -86,6 +88,9 @@ export const TicketTable = ({
   };
 
   useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
+
     const fetchChecklistProgress = async () => {
       const ticketIds = tickets.map(t => t.id);
       if (ticketIds.length === 0) return;
@@ -93,11 +98,11 @@ export const TicketTable = ({
       try {
         const progressMap = new Map<string, { total: number; completed: number }>();
 
-        // Fetch checklists for each ticket from local API
         await Promise.all(
           ticketIds.map(async (ticketId) => {
             try {
               const response = await fetch(`${API_BASE_URL}/checklists/ticket/${ticketId}`, {
+                signal,
                 headers: {
                   'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
                 },
@@ -111,23 +116,30 @@ export const TicketTable = ({
                 }
               }
             } catch (error) {
-              console.error(`Error fetching checklists for ticket ${ticketId}:`, error);
+              if ((error as Error).name !== 'AbortError') {
+                console.error(`Error fetching checklists for ticket ${ticketId}:`, error);
+              }
             }
           })
         );
 
-        setChecklistProgress(
-          Array.from(progressMap.entries()).map(([ticketId, stats]) => ({
-            ticketId,
-            ...stats,
-          }))
-        );
+        if (!signal.aborted) {
+          setChecklistProgress(
+            Array.from(progressMap.entries()).map(([ticketId, stats]) => ({
+              ticketId,
+              ...stats,
+            }))
+          );
+        }
       } catch (error) {
-        console.error('Error fetching checklist progress:', error);
+        if ((error as Error).name !== 'AbortError') {
+          console.error('Error fetching checklist progress:', error);
+        }
       }
     };
 
     fetchChecklistProgress();
+    return () => controller.abort();
   }, [tickets]);
 
   const renderSortButton = (label: string, key: 'status' | 'priority' | 'category', enabled: boolean) => {
@@ -175,8 +187,7 @@ export const TicketTable = ({
               className="block"
             >
               <div
-                className="ticket-card geo-border p-5 animate-fade-in cursor-pointer"
-                style={{ animationDelay: `${index * 50}ms` }}
+                className="ticket-card geo-border p-5 cursor-pointer"
               >
                 {/* Title with neon glow on hover */}
                 <h3 className="font-semibold text-lg text-foreground transition-all duration-300 line-clamp-2 mb-4 group-hover:neon-glow">
@@ -268,13 +279,18 @@ export const TicketTable = ({
               key={ticket.id}
               className={cn(
                 compact && "h-9",
-                "ticket-row animate-fade-in cursor-pointer transition-all duration-200",
+                "ticket-row cursor-pointer transition-all duration-200",
                 "hover:bg-gradient-to-r hover:from-primary/5 hover:to-accent/5",
                 "border-b border-border/30 last:border-0",
                 "relative group"
               )}
-              style={{ animationDelay: `${index * 50}ms` }}
-              onClick={() => window.location.href = `/tickets/${ticket.id}`}
+              onClick={() => {
+                if (onTicketClick) {
+                  onTicketClick(ticket.id);
+                } else {
+                  window.location.href = `/tickets/${ticket.id}`;
+                }
+              }}
             >
               <TableCell className={cn(compact && "py-3")}>
                 <span className="font-semibold text-foreground group-hover:text-primary transition-colors duration-200">
@@ -409,4 +425,4 @@ export const TicketTable = ({
       </Table>
     </div>
   );
-};
+});

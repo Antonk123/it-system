@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { useCategories } from '@/hooks/useCategories';
@@ -9,6 +9,16 @@ import { SearchBar } from '@/components/SearchBar';
 import { PaginationControls } from '@/components/PaginationControls';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Archive as ArchiveIcon, Download, Upload } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -22,6 +32,8 @@ import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { ImportDialog } from '@/components/ImportDialog';
 import { CategoryFilter } from '@/components/CategoryFilter';
+import { TagMultiSelect } from '@/components/TagMultiSelect';
+import { TagFilter } from '@/components/TagFilter';
 
 const statusLabels: Record<TicketStatus, string> = {
   'open': 'Öppen',
@@ -33,6 +45,8 @@ const statusLabels: Record<TicketStatus, string> = {
 
 const Archive = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Read state from URL
   const page = Number(searchParams.get('page')) || 1;
@@ -40,10 +54,13 @@ const Archive = () => {
   const search = searchParams.get('search') || '';
   const categoryFilter = searchParams.get('category') || 'all';
   const priorityFilter = (searchParams.get('priority') || 'all') as TicketPriority | 'all';
+  const tagsFilter = searchParams.get('tags') || '';
+  const selectedTagIds = tagsFilter ? tagsFilter.split(',').filter(id => id.trim()) : [];
   const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'priority' | 'category';
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
   const [compactView, setCompactView] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [pendingStatusChange, setPendingStatusChange] = useState<{ ticketId: string; status: TicketStatus } | null>(null);
 
   // Fetch with pagination - filter for closed tickets
   const { tickets, pagination, isLoading, updateTicket } = useTickets({
@@ -53,6 +70,7 @@ const Archive = () => {
     priority: priorityFilter,
     category: categoryFilter,
     search,
+    tags: tagsFilter,
     sortBy: sortKey,
     sortDir: sortDirection,
   });
@@ -78,7 +96,14 @@ const Archive = () => {
     const newParams = new URLSearchParams(searchParams);
 
     Object.entries(updates).forEach(([key, value]) => {
-      if (value && value !== 'all') {
+      if (Array.isArray(value)) {
+        // Handle arrays (tags)
+        if (value.length > 0) {
+          newParams.set(key, value.join(','));
+        } else {
+          newParams.delete(key);
+        }
+      } else if (value && value !== 'all') {
         newParams.set(key, String(value));
       } else {
         newParams.delete(key);
@@ -116,14 +141,45 @@ const Archive = () => {
     }
   };
 
-  const handleStatusChange = async (ticketId: string, status: TicketStatus) => {
-    await updateTicket(ticketId, { status });
-    toast.success(`Status uppdaterad till ${statusLabels[status]}`);
+  const handleStatusChange = (ticketId: string, status: TicketStatus) => {
+    setPendingStatusChange({ ticketId, status });
+  };
+
+  const confirmStatusChange = async () => {
+    if (!pendingStatusChange) return;
+    try {
+      await updateTicket(pendingStatusChange.ticketId, { status: pendingStatusChange.status });
+      toast.success(`Status uppdaterad till ${statusLabels[pendingStatusChange.status]}`);
+    } catch {
+      toast.error('Kunde inte uppdatera status');
+    } finally {
+      setPendingStatusChange(null);
+    }
   };
 
   const handleRemoveCategoryFilter = () => {
     updateFilters({ category: 'all' });
   };
+
+  const handleTagSelectionChange = useCallback((tagIds: string[]) => {
+    updateFilters({ tags: tagIds.length > 0 ? tagIds : undefined });
+  }, [updateFilters]);
+
+  const handleRemoveTagFilter = useCallback((tagId: string) => {
+    const newTags = selectedTagIds.filter(id => id !== tagId);
+    updateFilters({ tags: newTags.length > 0 ? newTags : undefined });
+  }, [selectedTagIds, updateFilters]);
+
+  const handleClearAllTags = useCallback(() => {
+    updateFilters({ tags: undefined });
+  }, [updateFilters]);
+
+  const handleTicketClick = useCallback((ticketId: string) => {
+    const currentPath = location.pathname + location.search;
+    navigate(`/tickets/${ticketId}`, {
+      state: { from: currentPath }
+    });
+  }, [location.pathname, location.search, navigate]);
 
   const handleExport = async () => {
     try {
@@ -133,6 +189,7 @@ const Archive = () => {
       if (priorityFilter && priorityFilter !== 'all') params.append('priority', priorityFilter);
       if (categoryFilter && categoryFilter !== 'all') params.append('category', categoryFilter);
       if (search) params.append('search', search);
+      if (tagsFilter) params.append('tags', tagsFilter);
       const queryString = `?${params.toString()}`;
 
       await api.exportTickets(queryString);
@@ -153,7 +210,7 @@ const Archive = () => {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Arkiv</h1>
+            <h1 className="text-xl font-bold text-foreground">Arkiv</h1>
             {pagination && (
               <p className="text-muted-foreground mt-1">
                 Visar {((pagination.page - 1) * pagination.limit) + 1}-
@@ -212,6 +269,10 @@ const Archive = () => {
               ))}
             </SelectContent>
           </Select>
+          <TagMultiSelect
+            selectedTagIds={selectedTagIds}
+            onChange={handleTagSelectionChange}
+          />
         </div>
 
         {/* Quick Filters */}
@@ -236,6 +297,13 @@ const Archive = () => {
           onRemoveCategory={handleRemoveCategoryFilter}
         />
 
+        {/* Active Tag Filters */}
+        <TagFilter
+          selectedTagIds={selectedTagIds}
+          onRemoveTag={handleRemoveTagFilter}
+          onClearAll={handleClearAllTags}
+        />
+
         {/* Loading state */}
         {isLoading && tickets.length === 0 ? (
           <div className="space-y-2">
@@ -258,6 +326,7 @@ const Archive = () => {
                 tickets={tickets}
                 users={users}
                 onStatusChange={handleStatusChange}
+                onTicketClick={handleTicketClick}
                 sortKey={sortKey === 'priority' || sortKey === 'category' ? sortKey : undefined}
                 sortDirection={sortDirection}
                 onSortChange={handleSortChange}
@@ -286,6 +355,22 @@ const Archive = () => {
           setImportOpen(false);
         }}
       />
+      <AlertDialog open={!!pendingStatusChange} onOpenChange={(open) => { if (!open) setPendingStatusChange(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ändra status</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingStatusChange && (
+                <>Vill du ändra status till <strong>{statusLabels[pendingStatusChange.status]}</strong>?</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmStatusChange}>Ändra</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };

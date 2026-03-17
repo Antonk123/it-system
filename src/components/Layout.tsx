@@ -1,6 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { GlobalSearch } from '@/components/GlobalSearch';
@@ -38,12 +38,140 @@ const navItems = [{
   icon: Settings,
   label: 'Inställningar'
 }];
+
+// Sidebar components
+interface NavOptionProps {
+  item: typeof navItems[0];
+  isActive: boolean;
+  open: boolean;
+  onClick: () => void;
+}
+
+const NavOption = ({ item, isActive, open, onClick }: NavOptionProps) => {
+  const Icon = item.icon;
+
+  return (
+    <Link
+      to={item.path}
+      onClick={onClick}
+      className={cn(
+        "relative flex h-11 w-full items-center rounded-md transition-all duration-200",
+        isActive
+          ? "bg-primary/10 text-primary shadow-sm border-l-2 border-primary"
+          : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
+      )}
+    >
+      <div className="grid h-full w-12 place-content-center">
+        <Icon className="h-4 w-4" />
+      </div>
+
+      {open && (
+        <span className={cn(
+          "text-sm font-medium transition-opacity duration-200",
+          open ? "opacity-100" : "opacity-0"
+        )}>
+          {item.label}
+        </span>
+      )}
+    </Link>
+  );
+};
+
+interface TitleSectionProps {
+  open: boolean;
+}
+
+const TitleSection = ({ open }: TitleSectionProps) => {
+  return (
+    <div className="p-4 border-b border-sidebar-border">
+      <div className="flex items-center gap-3">
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
+          <Ticket className="w-6 h-6 text-white" />
+        </div>
+
+        {open && (
+          <div className="transition-opacity duration-200">
+            <span className="block text-sm font-semibold text-sidebar-foreground">
+              IT-ärenden
+            </span>
+            <span className="block text-xs text-muted-foreground">
+              Ticket System
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+interface BottomSectionProps {
+  open: boolean;
+  user: any;
+  onLogout: () => void;
+  onToggle: () => void;
+}
+
+const BottomSection = ({ open, user, onLogout, onToggle }: BottomSectionProps) => {
+  return (
+    <div className="border-t border-sidebar-border p-2 space-y-2">
+      {/* "Nytt ärende" button */}
+      <Link to="/tickets/new">
+        <button className={cn(
+          "w-full flex items-center gap-2 rounded-md transition-all duration-200",
+          "bg-gradient-to-r from-primary to-accent text-white",
+          "hover:from-primary/90 hover:to-accent/90",
+          open ? "h-11 px-4" : "h-11 justify-center"
+        )}>
+          <Plus className="w-5 h-5" />
+          {open && <span className="text-sm font-medium">Nytt ärende</span>}
+        </button>
+      </Link>
+
+      {/* User email display (only when open) */}
+      {open && user && (
+        <div className="px-3 py-2 rounded-lg bg-background/20 border border-border/30">
+          <p className="text-xs text-muted-foreground truncate flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-primary/60"></span>
+            {user.email}
+          </p>
+        </div>
+      )}
+
+      {/* Logout button */}
+      <button
+        onClick={onLogout}
+        className={cn(
+          "w-full flex items-center gap-2 rounded-md transition-all duration-200",
+          "text-muted-foreground hover:text-foreground hover:bg-destructive/10",
+          open ? "h-10 px-3" : "h-10 justify-center"
+        )}
+      >
+        <LogOut className="w-4 h-4" />
+        {open && <span className="text-sm">Logga ut</span>}
+      </button>
+
+      {/* Desktop only: Toggle button (hidden on mobile) */}
+      <button
+        onClick={onToggle}
+        className="hidden lg:flex w-full items-center gap-2 px-3 py-2 rounded-md hover:bg-sidebar-accent transition-colors"
+      >
+        <ChevronsRight className={cn(
+          "h-4 w-4 transition-transform duration-300",
+          !open && "rotate-180"
+        )} />
+        {open && <span className="text-sm text-muted-foreground">Dölj</span>}
+      </button>
+    </div>
+  );
+};
+
 export const Layout = ({
   children
 }: LayoutProps) => {
   const location = useLocation();
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile toggle
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // Desktop collapse
   const { tickets } = useTickets({ page: 1, limit: 100 });
   const { users } = useUsers();
   const { categories } = useCategories();
@@ -64,88 +192,47 @@ export const Layout = ({
       {/* Mobile overlay with backdrop blur */}
       {sidebarOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden animate-fade-in" onClick={() => setSidebarOpen(false)} />}
 
-      {/* Sidebar with enhanced styling */}
+      {/* Sidebar with collapsible design */}
       <aside className={cn(
-        "fixed lg:static inset-y-0 left-0 z-50 w-64 flex flex-col transition-all duration-300 lg:translate-x-0",
-        "bg-gradient-to-b from-sidebar via-sidebar to-sidebar-accent",
-        "border-r border-sidebar-border/50 backdrop-blur-xl",
-        sidebarOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
+        "fixed lg:static inset-y-0 left-0 z-50 flex flex-col transition-all duration-300 ease-in-out",
+        "bg-sidebar border-r border-sidebar-border",
+        // Mobile
+        sidebarOpen ? "translate-x-0 w-64 shadow-2xl" : "-translate-x-full lg:translate-x-0",
+        // Desktop collapsible
+        "lg:w-64",
+        sidebarCollapsed && "lg:w-16"
       )}>
-        {/* Geometric corner accent */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-primary/10 to-transparent rounded-bl-full opacity-50"></div>
+        {/* Close button for mobile */}
+        <button
+          className="lg:hidden absolute top-4 right-4 text-sidebar-foreground hover:text-primary transition-colors z-20"
+          onClick={() => setSidebarOpen(false)}
+        >
+          <X className="w-5 h-5" />
+        </button>
 
-        <div className="p-6 flex items-center justify-between relative z-10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/25 relative overflow-hidden group">
-              <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <Ticket className="w-6 h-6 text-white relative z-10" />
-            </div>
-            <span className="font-bold text-xl bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">IT-ärenden</span>
-          </div>
-          <button className="lg:hidden text-sidebar-foreground hover:text-primary transition-colors" onClick={() => setSidebarOpen(false)}>
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+        {/* TitleSection */}
+        <TitleSection open={!sidebarCollapsed} />
 
-        <nav className="flex-1 p-4 space-y-2 relative z-10">
-          {navItems.map((item, index) => {
-          const isActive = location.pathname === item.path;
-          return <Link
-            key={item.path}
-            to={item.path}
-            onClick={() => setSidebarOpen(false)}
-            className={cn(
-              "flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 animate-slide-in-right group relative overflow-hidden",
-              isActive
-                ? "bg-gradient-to-r from-primary/15 to-accent/10 text-primary shadow-lg shadow-primary/10 border border-primary/20"
-                : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary border border-transparent"
-            )}
-            style={{ animationDelay: `${index * 50}ms` }}
-          >
-                {/* Hover effect gradient */}
-                {!isActive && (
-                  <div className="absolute inset-0 bg-gradient-to-r from-primary/10 to-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                )}
-
-                {/* Active indicator bar */}
-                {isActive && (
-                  <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-primary to-accent rounded-r"></div>
-                )}
-
-                <item.icon className={cn(
-                  "w-5 h-5 relative z-10 transition-transform duration-300",
-                  isActive ? "scale-110" : "group-hover:scale-110"
-                )} />
-                <span className="font-semibold relative z-10">{item.label}</span>
-              </Link>;
-        })}
+        {/* Nav Items */}
+        <nav className="p-2 space-y-1">
+          {navItems.map((item) => (
+            <NavOption
+              key={item.path}
+              item={item}
+              isActive={location.pathname === item.path}
+              open={!sidebarCollapsed}
+              onClick={() => setSidebarOpen(false)}
+            />
+          ))}
         </nav>
 
-        <div className="p-4 border-t border-sidebar-border/50 space-y-3 relative z-10 bg-sidebar-accent/30 backdrop-blur-sm">
-          <Link to="/tickets/new" onClick={() => setSidebarOpen(false)}>
-            <Button className="w-full gap-2 bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 shadow-lg shadow-primary/25 border-0 font-semibold relative overflow-hidden group" size="lg">
-              <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <Plus className="w-5 h-5 relative z-10 group-hover:rotate-90 transition-transform duration-300" />
-              <span className="relative z-10">Nytt ärende</span>
-            </Button>
-          </Link>
-          {user && (
-            <div className="px-3 py-2 rounded-lg bg-background/20 border border-border/30">
-              <p className="text-xs text-muted-foreground truncate flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-primary/60 animate-pulse"></span>
-                {user.email}
-              </p>
-            </div>
-          )}
-          <Button
-            variant="ghost"
-            className="w-full gap-2 text-muted-foreground hover:text-foreground hover:bg-destructive/10 transition-all duration-200"
-            onClick={handleLogout}
-          >
-            <LogOut className="w-4 h-4" />
-            Logga ut
-          </Button>
-        </div>
+        {/* Bottom section */}
+        <BottomSection
+          open={!sidebarCollapsed}
+          user={user}
+          onLogout={handleLogout}
+          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+        />
       </aside>
 
       {/* Main content */}
@@ -165,13 +252,12 @@ export const Layout = ({
 
         {/* Desktop header with search */}
         <div className="hidden lg:block sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 shadow-sm">
-          <div className="max-w-md relative">
-            <div className="absolute -left-2 top-1/2 -translate-y-1/2 w-1 h-8 bg-gradient-to-b from-primary to-accent rounded-r opacity-50"></div>
+          <div className="max-w-md">
             <GlobalSearch tickets={tickets} users={users} categories={categories} tags={tags} />
           </div>
         </div>
 
-        <div className="p-6 lg:p-8 relative z-10">
+        <div className="p-5 lg:p-6 relative z-10">
           {children}
         </div>
       </main>

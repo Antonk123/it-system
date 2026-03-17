@@ -113,6 +113,14 @@ export default {
   					opacity: '1',
   					transform: 'scale(1)'
   				}
+  			},
+  			'search-glow-slow': {
+  				from: { transform: 'translate(-50%, -50%) rotate(60deg)' },
+  				to: { transform: 'translate(-50%, -50%) rotate(-120deg)' }
+  			},
+  			'search-glow-focus': {
+  				from: { transform: 'translate(-50%, -50%) rotate(82deg)' },
+  				to: { transform: 'translate(-50%, -50%) rotate(442deg)' }
   			}
   		},
   		animation: {
@@ -120,7 +128,13 @@ export default {
   			'accordion-up': 'accordion-up 0.2s ease-out',
   			'fade-in': 'fade-in 0.5s ease-out',
   			'slide-in-right': 'slide-in-right 0.4s ease-out',
-  			'scale-in': 'scale-in 0.3s ease-out'
+  			'scale-in': 'scale-in 0.3s ease-out',
+  			'spin-slow': 'spin 4s linear infinite',
+  			'search-glow-slow': 'search-glow-slow 2s ease-in-out infinite alternate',
+  			'search-glow-focus': 'search-glow-focus 4s ease-in-out infinite'
+  		},
+  		transitionDuration: {
+  			'2000': '2000ms'
   		},
   		fontFamily: {
   			sans: [

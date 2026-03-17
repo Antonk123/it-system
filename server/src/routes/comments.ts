@@ -95,7 +95,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
   }
 
   try {
-    const existing = db.prepare('SELECT * FROM ticket_comments WHERE id = ?').get(req.params.id) as CommentRow | undefined;
+    const existing = db.prepare('SELECT id, ticket_id, user_id, content, is_internal, created_at, updated_at, deleted_at FROM ticket_comments WHERE id = ?').get(req.params.id) as CommentRow | undefined;
 
     if (!existing) {
       return res.status(404).json({ error: 'Comment not found' });
@@ -135,7 +135,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
   }
 
   try {
-    const existing = db.prepare('SELECT * FROM ticket_comments WHERE id = ?').get(req.params.id) as CommentRow | undefined;
+    const existing = db.prepare('SELECT id, ticket_id, user_id, content, is_internal, created_at, updated_at, deleted_at FROM ticket_comments WHERE id = ?').get(req.params.id) as CommentRow | undefined;
 
     if (!existing) {
       return res.status(404).json({ error: 'Comment not found' });

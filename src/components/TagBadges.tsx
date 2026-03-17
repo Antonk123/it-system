@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Tag } from '@/types/ticket';
 
@@ -8,7 +9,7 @@ interface TagBadgesProps {
   clickable?: boolean;
 }
 
-export function TagBadges({
+export const TagBadges = memo(function TagBadges({
   tags = [],
   className = '',
   maxDisplay = 3,
@@ -64,10 +65,10 @@ export function TagBadges({
         </span>
       ))}
       {hiddenCount > 0 && (
-        <span className="px-2 py-1 rounded text-xs font-medium bg-gray-300 text-gray-700 whitespace-nowrap">
+        <span className="px-2 py-1 rounded text-xs font-medium bg-muted text-muted-foreground border border-border whitespace-nowrap">
           +{hiddenCount}
         </span>
       )}
     </div>
   );
-}
+});

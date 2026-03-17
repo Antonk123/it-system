@@ -90,7 +90,7 @@ interface AttachmentRow {
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const attachments = db.prepare(`
-      SELECT * FROM ticket_attachments WHERE ticket_id = ? ORDER BY created_at ASC
+      SELECT id, ticket_id, file_name, file_path, file_size, file_type, created_at FROM ticket_attachments WHERE ticket_id = ? ORDER BY created_at ASC
     `).all(req.params.ticketId) as AttachmentRow[];
 
     // Add URL for each attachment (authentication via Authorization header)
@@ -140,7 +140,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
       req.file.mimetype
     );
 
-    const attachment = db.prepare('SELECT * FROM ticket_attachments WHERE id = ?').get(id) as AttachmentRow;
+    const attachment = db.prepare('SELECT id, ticket_id, file_name, file_path, file_size, file_type, created_at FROM ticket_attachments WHERE id = ?').get(id) as AttachmentRow;
     
       res.status(201).json({
         ...attachment,
@@ -156,7 +156,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 // Serve file (authenticated)
 router.get('/file/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const attachment = db.prepare('SELECT * FROM ticket_attachments WHERE id = ?').get(req.params.id) as AttachmentRow | undefined;
+    const attachment = db.prepare('SELECT id, ticket_id, file_name, file_path, file_size, file_type, created_at FROM ticket_attachments WHERE id = ?').get(req.params.id) as AttachmentRow | undefined;
     
     if (!attachment) {
       return res.status(404).json({ error: 'Attachment not found' });
@@ -184,21 +184,28 @@ router.get('/file/:id', authenticate, (req: AuthRequest, res: Response) => {
 // Delete attachment
 router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const attachment = db.prepare('SELECT * FROM ticket_attachments WHERE id = ?').get(req.params.id) as AttachmentRow | undefined;
-    
+    const attachment = db.prepare('SELECT id, ticket_id, file_name, file_path, file_size, file_type, created_at FROM ticket_attachments WHERE id = ?').get(req.params.id) as AttachmentRow | undefined;
+
     if (!attachment) {
       return res.status(404).json({ error: 'Attachment not found' });
     }
 
-    // Delete file from disk
+    // IMPORTANT: Delete from database FIRST, then file
+    // This prevents orphaned DB entries if file deletion fails
+    // Orphaned files are acceptable, orphaned DB entries are not
+    db.prepare('DELETE FROM ticket_attachments WHERE id = ?').run(req.params.id);
+
+    // Delete file from disk after successful DB deletion
     const filePath = join(UPLOAD_DIR, attachment.file_path);
     if (existsSync(filePath)) {
-      unlinkSync(filePath);
+      try {
+        unlinkSync(filePath);
+      } catch (fileError) {
+        // Log but don't fail the request - orphaned file is acceptable
+        console.warn('Failed to delete file from disk (orphaned file):', filePath, fileError);
+      }
     }
 
-    // Delete from database
-    db.prepare('DELETE FROM ticket_attachments WHERE id = ?').run(req.params.id);
-    
     res.json({ message: 'Attachment deleted' });
   } catch (error) {
     console.error('Error deleting attachment:', error);

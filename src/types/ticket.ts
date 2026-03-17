@@ -141,6 +141,7 @@ export interface Template {
   id: string;
   name: string;
   description: string | null;
+  type: TemplateType;
   titleTemplate: string;
   descriptionTemplate: string;
   priority: TicketPriority;
@@ -158,6 +159,7 @@ export interface TemplateRow {
   id: string;
   name: string;
   description: string | null;
+  template_type: string;
   title_template: string;
   description_template: string;
   priority: string;
@@ -172,6 +174,8 @@ export interface TemplateRow {
 }
 
 export type FieldType = 'text' | 'textarea' | 'number' | 'select' | 'date' | 'checkbox';
+
+export type TemplateType = 'standard' | 'dynamic';
 
 export interface TemplateField {
   id: string;

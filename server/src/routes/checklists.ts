@@ -109,6 +109,11 @@ router.post('/ticket/:ticketId/bulk', authenticate, (req: AuthRequest, res: Resp
 
     insertMany(labels);
 
+    // Handle empty array case to avoid SQL error: "WHERE id IN ()"
+    if (createdIds.length === 0) {
+      return res.status(201).json([]);
+    }
+
     const createdItems = db.prepare(`
       SELECT * FROM ticket_checklists WHERE id IN (${createdIds.map(() => '?').join(',')})
     `).all(...createdIds) as ChecklistRow[];

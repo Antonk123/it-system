@@ -77,6 +77,18 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
           </div>
         );
 
+      case 'date':
+        return (
+          <Input
+            id={field.field_name}
+            type="date"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={field.placeholder || ''}
+            required={field.required === 1}
+          />
+        );
+
       default:
         return <Input value={value} onChange={(e) => onChange(e.target.value)} />;
     }

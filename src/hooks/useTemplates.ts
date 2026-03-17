@@ -24,6 +24,7 @@ export const useTemplates = () => {
         id: t.id,
         name: t.name,
         description: t.description,
+        type: (t.template_type as 'standard' | 'dynamic') || 'standard',
         titleTemplate: t.title_template,
         descriptionTemplate: t.description_template,
         priority: t.priority as Template['priority'],
@@ -51,6 +52,7 @@ export const useTemplates = () => {
       const data = await api.createTemplate({
         name: validation.data.name,
         description: validation.data.description || null,
+        template_type: validation.data.type || 'standard',
         title_template: validation.data.titleTemplate,
         description_template: validation.data.descriptionTemplate,
         priority: validation.data.priority,
@@ -62,6 +64,7 @@ export const useTemplates = () => {
         id: data.id,
         name: data.name,
         description: data.description,
+        type: (data.template_type as 'standard' | 'dynamic') || 'standard',
         titleTemplate: data.title_template,
         descriptionTemplate: data.description_template,
         priority: data.priority as Template['priority'],
@@ -96,6 +99,7 @@ export const useTemplates = () => {
       const apiUpdates: any = {};
       if (validation.data.name !== undefined) apiUpdates.name = validation.data.name;
       if (validation.data.description !== undefined) apiUpdates.description = validation.data.description;
+      if (validation.data.type !== undefined) apiUpdates.template_type = validation.data.type;
       if (validation.data.titleTemplate !== undefined) apiUpdates.title_template = validation.data.titleTemplate;
       if (validation.data.descriptionTemplate !== undefined) apiUpdates.description_template = validation.data.descriptionTemplate;
       if (validation.data.priority !== undefined) apiUpdates.priority = validation.data.priority;

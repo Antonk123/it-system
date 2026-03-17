@@ -34,7 +34,8 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Users, Mail, Shield, Loader2, ArrowUp, ArrowDown, Palette, Type } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Users, Mail, Shield, Loader2, ArrowUp, ArrowDown, Palette, Type, Wrench } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
@@ -218,6 +219,7 @@ const Settings = () => {
   const [editingTagName, setEditingTagName] = useState('');
   const [editingTagColor, setEditingTagColor] = useState('');
   const [deleteTagId, setDeleteTagId] = useState<string | null>(null);
+  const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
 
   const TAG_COLORS = [
     '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
@@ -397,14 +399,17 @@ const Settings = () => {
     setTemplateModalOpen(true);
   }, []);
 
-  const handleTemplateDelete = useCallback((id: string) => {
-    deleteTemplate(id);
-  }, [deleteTemplate]);
+  const handleTemplateDelete = useCallback(async () => {
+    if (deleteTemplateId) {
+      await deleteTemplate(deleteTemplateId);
+      setDeleteTemplateId(null);
+    }
+  }, [deleteTemplate, deleteTemplateId]);
 
   return (
     <Layout>
-      <div className="max-w-2xl space-y-6">
-        <h1 className="text-2xl font-bold">Inställningar</h1>
+      <div className="max-w-2xl space-y-5">
+        <h1 className="text-xl font-bold">Inställningar</h1>
 
         {/* Appearance Section */}
         <Collapsible open={sectionsOpen.appearance} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, appearance: open }))}>
@@ -856,7 +861,7 @@ const Settings = () => {
                   onMoveUp={() => handleTemplateMoveUp(index)}
                   onMoveDown={() => handleTemplateMoveDown(index)}
                   onEdit={() => handleTemplateEdit(template)}
-                  onDelete={() => handleTemplateDelete(template.id)}
+                  onDelete={() => setDeleteTemplateId(template.id)}
                 />
               ))}
               {templates.length === 0 && (
@@ -901,6 +906,24 @@ const Settings = () => {
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteTag} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete template confirmation dialog */}
+      <AlertDialog open={!!deleteTemplateId} onOpenChange={() => setDeleteTemplateId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort mall?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Mallen och alla dess dynamiska fält kommer att raderas. Denna åtgärd kan inte ångras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction onClick={handleTemplateDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Ta bort
             </AlertDialogAction>
           </AlertDialogFooter>

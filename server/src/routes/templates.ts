@@ -10,6 +10,7 @@ interface TemplateRow {
   id: string;
   name: string;
   description: string | null;
+  template_type: string;
   title_template: string;
   description_template: string;
   priority: string;
@@ -56,12 +57,19 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
 // POST /api/templates - Create new template
 router.post('/', authenticate, (req: AuthRequest, res: Response) => {
-  const { name, description, title_template, description_template, priority, category_id, notes_template, solution_template } = req.body;
+  const { name, description, template_type, title_template, description_template, priority, category_id, notes_template, solution_template, fields } = req.body;
 
   try {
+    const templateType = template_type || 'standard';
+
     // Validate required fields
-    if (!name || !title_template || !description_template) {
-      return res.status(400).json({ error: 'Name, title_template, and description_template are required' });
+    if (!name || !title_template) {
+      return res.status(400).json({ error: 'Name and title_template are required' });
+    }
+
+    // For standard templates, description_template is required
+    if (templateType === 'standard' && !description_template) {
+      return res.status(400).json({ error: 'description_template is required for standard templates' });
     }
 
     const id = uuidv4();
@@ -69,14 +77,15 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     const position = (maxPosition.max ?? -1) + 1;
 
     db.prepare(`
-      INSERT INTO ticket_templates (id, name, description, title_template, description_template, priority, category_id, notes_template, solution_template, position, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO ticket_templates (id, name, description, template_type, title_template, description_template, priority, category_id, notes_template, solution_template, position, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       name,
       description || null,
+      templateType,
       title_template,
-      description_template,
+      description_template || null,
       priority || 'medium',
       category_id || null,
       notes_template || null,
@@ -85,8 +94,32 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       req.user?.id || null
     );
 
+    // If dynamic template with fields, create fields inline
+    if (templateType === 'dynamic' && fields && Array.isArray(fields)) {
+      const insertFieldStmt = db.prepare(`
+        INSERT INTO template_fields (id, template_id, field_name, field_label, field_type, placeholder, default_value, required, options, position)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      for (const field of fields) {
+        insertFieldStmt.run(
+          uuidv4(),
+          id,
+          field.field_name,
+          field.field_label,
+          field.field_type,
+          field.placeholder || null,
+          field.default_value || null,
+          field.required ? 1 : 0,
+          field.options || null,
+          field.position || 0
+        );
+      }
+    }
+
     const template = db.prepare('SELECT * FROM ticket_templates WHERE id = ?').get(id) as TemplateRow;
-    res.status(201).json(template);
+    const templateFields = db.prepare('SELECT * FROM template_fields WHERE template_id = ? ORDER BY position ASC').all(id);
+    res.status(201).json({ ...template, fields: templateFields });
   } catch (error) {
     console.error('Error creating template:', error);
     res.status(500).json({ error: 'Failed to create template' });
@@ -95,7 +128,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 
 // PUT /api/templates/:id - Update template
 router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
-  const { name, description, title_template, description_template, priority, category_id, notes_template, solution_template } = req.body;
+  const { name, description, template_type, title_template, description_template, priority, category_id, notes_template, solution_template } = req.body;
 
   try {
     const existing = db.prepare('SELECT * FROM ticket_templates WHERE id = ?').get(req.params.id) as TemplateRow | undefined;
@@ -105,11 +138,12 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     db.prepare(`
       UPDATE ticket_templates
-      SET name = ?, description = ?, title_template = ?, description_template = ?, priority = ?, category_id = ?, notes_template = ?, solution_template = ?, updated_at = CURRENT_TIMESTAMP
+      SET name = ?, description = ?, template_type = ?, title_template = ?, description_template = ?, priority = ?, category_id = ?, notes_template = ?, solution_template = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
       name ?? existing.name,
       description ?? existing.description,
+      template_type ?? existing.template_type,
       title_template ?? existing.title_template,
       description_template ?? existing.description_template,
       priority ?? existing.priority,
@@ -120,7 +154,8 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     );
 
     const template = db.prepare('SELECT * FROM ticket_templates WHERE id = ?').get(req.params.id) as TemplateRow;
-    res.json(template);
+    const templateFields = db.prepare('SELECT * FROM template_fields WHERE template_id = ? ORDER BY position ASC').all(req.params.id);
+    res.json({ ...template, fields: templateFields });
   } catch (error) {
     console.error('Error updating template:', error);
     res.status(500).json({ error: 'Failed to update template' });

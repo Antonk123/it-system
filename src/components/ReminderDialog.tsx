@@ -60,7 +60,7 @@ export function ReminderDialog({ onCreateReminder }: ReminderDialogProps) {
           Påminn mig
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Skapa påminnelse</DialogTitle>
         </DialogHeader>
@@ -114,7 +114,7 @@ export function ReminderDialog({ onCreateReminder }: ReminderDialogProps) {
           <Button
             onClick={handleSubmit}
             disabled={!date || isSubmitting}
-            className="w-full"
+            className="w-full mt-2 rounded-xl overflow-hidden"
           >
             {isSubmitting ? 'Skapar...' : 'Skapa påminnelse'}
           </Button>

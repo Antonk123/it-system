@@ -100,10 +100,24 @@ const escapeHtml = (str: string): string =>
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-const markdownToEmailHtml = (text: string): string =>
-  escapeHtml(text)
+const stripHtml = (html: string): string =>
+  html
+    .replace(/<[^>]*>/g, '') // Remove all HTML tags
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'");
+
+const markdownToEmailHtml = (text: string): string => {
+  // Strip any existing HTML tags first
+  const cleanText = stripHtml(text);
+  // Then escape and format
+  return escapeHtml(cleanText)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\n/g, '<br>');
+};
 
 const formatTicketHtml = (payload: TicketEmailPayload, subject: string, appBaseUrl?: string) => {
   const categoryLabel = getCategoryLabel(payload.categoryId);

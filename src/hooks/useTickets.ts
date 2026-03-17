@@ -54,9 +54,11 @@ export const useTickets = (options?: UseTicketsOptions) => {
     return params.toString() ? `?${params.toString()}` : '';
   }, []);
 
-  // Fetch tickets with React Query
+  // Fetch tickets with React Query (with caching for performance)
   const { data: queryData, isLoading } = useQuery({
     queryKey: ticketKeys.list(options || {}),
+    staleTime: 1000 * 60 * 2, // Consider data fresh for 2 minutes
+    gcTime: 1000 * 60 * 5, // Keep in cache for 5 minutes (formerly cacheTime)
     queryFn: async () => {
       const queryString = buildQueryString(options);
       const response = await api.getTickets(queryString);

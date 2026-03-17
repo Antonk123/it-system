@@ -11,7 +11,8 @@ import { Template, TemplateFieldRow } from '@/types/ticket';
 import { Category } from '@/types/ticket';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, X, Check } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, X, Check, Type } from 'lucide-react';
+import { DynamicField } from '@/components/DynamicField';
 
 interface TemplateEditorModalProps {
   open: boolean;
@@ -69,6 +70,13 @@ export const TemplateEditorModal = ({
     options: '',
     position: 0,
   });
+  // Visual select builder state
+  const [selectOptions, setSelectOptions] = useState<string[]>([]);
+  const [newOption, setNewOption] = useState('');
+
+  // Template type state
+  const [templateType, setTemplateType] = useState<'standard' | 'dynamic'>('dynamic');
+  const [showTypeChooser, setShowTypeChooser] = useState(false);
 
   // Reset form when dialog opens/closes or template changes
   useEffect(() => {
@@ -77,7 +85,7 @@ export const TemplateEditorModal = ({
     }
 
     // Defer state updates to next tick to ensure proper synchronization
-    setTimeout(() => {
+    const timeoutId = setTimeout(() => {
       if (template) {
         // Editing existing template
         const newFormData = {
@@ -91,10 +99,16 @@ export const TemplateEditorModal = ({
           solutionTemplate: template.solutionTemplate || '',
         };
         setFormData(newFormData);
+
+        // Detect template type from template.type or fallback to checking fields
+        const detectedType = template.type || (template.fields && template.fields.length > 0 ? 'dynamic' : 'standard');
+        setTemplateType(detectedType);
+        setShowTypeChooser(false);
+
         // Load fields for existing template
         loadFields(template.id);
       } else {
-        // Creating new template - reset to empty
+        // Creating new template - show type chooser
         setFormData({
           name: '',
           description: '',
@@ -106,8 +120,11 @@ export const TemplateEditorModal = ({
           solutionTemplate: '',
         });
         setFields([]);
+        setShowTypeChooser(true);
+        setTemplateType('dynamic'); // Default to dynamic
       }
     }, 0);
+    return () => clearTimeout(timeoutId);
   }, [open, template]);
 
   const loadFields = async (templateId: string) => {
@@ -123,27 +140,60 @@ export const TemplateEditorModal = ({
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate: dynamic templates need at least one field
+    if (templateType === 'dynamic' && fields.length === 0 && !isEditing) {
+      toast.error('Dynamiska mallar måste ha minst ett fält');
+      return;
+    }
 
     const templateData = {
       name: formData.name.trim(),
       description: formData.description.trim() || null,
+      type: templateType,
       titleTemplate: formData.titleTemplate.trim(),
-      descriptionTemplate: formData.descriptionTemplate.trim(),
+      descriptionTemplate: templateType === 'dynamic' ? null : formData.descriptionTemplate.trim(),
       priority: formData.priority,
       category: formData.category === 'none' ? null : formData.category,
-      notesTemplate: formData.notesTemplate.trim() || null,
-      solutionTemplate: formData.solutionTemplate.trim() || null,
+      notesTemplate: templateType === 'dynamic' ? null : (formData.notesTemplate.trim() || null),
+      solutionTemplate: templateType === 'dynamic' ? null : (formData.solutionTemplate.trim() || null),
     };
 
     if (isEditing) {
-      onUpdate(template.id, templateData);
+      await onUpdate(template.id, templateData);
+      onOpenChange(false);
     } else {
-      onSave(templateData);
-    }
+      // Create new template
+      const newTemplate = await onSave(templateData);
 
-    onOpenChange(false);
+      if (newTemplate && fields.length > 0) {
+        // Save all pending fields
+        toast.info(`Sparar ${fields.length} fält...`);
+
+        try {
+          for (const field of fields) {
+            await api.createTemplateField(newTemplate.id, {
+              field_name: field.field_name,
+              field_label: field.field_label,
+              field_type: field.field_type,
+              placeholder: field.placeholder,
+              default_value: field.default_value,
+              required: field.required,
+              options: field.options ? JSON.parse(field.options) : null,
+              position: field.position,
+            });
+          }
+          toast.success('Mall och fält skapade!');
+        } catch (error) {
+          console.error('Error saving fields:', error);
+          toast.error('Mall skapades men vissa fält kunde inte sparas');
+        }
+      }
+
+      onOpenChange(false);
+    }
   };
 
   const resetFieldForm = () => {
@@ -157,48 +207,88 @@ export const TemplateEditorModal = ({
       options: '',
       position: fields.length,
     });
+    setSelectOptions([]);
+    setNewOption('');
     setEditingFieldId(null);
     setShowNewFieldForm(false);
   };
 
   const handleAddField = async () => {
-    if (!template?.id) {
-      toast.error('Spara mallen först innan du lägger till fält');
-      return;
-    }
-
     if (!fieldFormData.field_name.trim() || !fieldFormData.field_label.trim()) {
       toast.error('Fältnamn och etikett är obligatoriska');
       return;
     }
 
-    try {
-      const newField = await api.createTemplateField(template.id, {
+    // If template exists (editing), save to API immediately
+    if (template?.id) {
+      try {
+        const newField = await api.createTemplateField(template.id, {
+          field_name: fieldFormData.field_name.trim(),
+          field_label: fieldFormData.field_label.trim(),
+          field_type: fieldFormData.field_type,
+          placeholder: fieldFormData.placeholder.trim() || null,
+          default_value: fieldFormData.default_value.trim() || null,
+          required: fieldFormData.required ? 1 : 0,
+          options: fieldFormData.options ? JSON.parse(fieldFormData.options) : null,
+          position: fields.length,
+        });
+        setFields([...fields, newField]);
+        resetFieldForm();
+        toast.success('Fält tillagt');
+      } catch (error) {
+        console.error('Error adding field:', error);
+        toast.error('Kunde inte lägga till fält');
+      }
+    } else {
+      // New template - add to local state only
+      const tempField: TemplateFieldRow = {
+        id: `temp-${Date.now()}`,
+        template_id: 'temp',
         field_name: fieldFormData.field_name.trim(),
         field_label: fieldFormData.field_label.trim(),
         field_type: fieldFormData.field_type,
         placeholder: fieldFormData.placeholder.trim() || null,
         default_value: fieldFormData.default_value.trim() || null,
         required: fieldFormData.required ? 1 : 0,
-        options: fieldFormData.options.trim() || null,
+        options: fieldFormData.options || null,
         position: fields.length,
-      });
-      setFields([...fields, newField]);
+      };
+      setFields([...fields, tempField]);
       resetFieldForm();
-      toast.success('Fält tillagt');
-    } catch (error) {
-      console.error('Error adding field:', error);
-      toast.error('Kunde inte lägga till fält');
+      toast.success('Fält tillagt (sparas när mallen skapas)');
     }
   };
 
   const handleUpdateField = async () => {
-    if (!template?.id || !editingFieldId) return;
+    if (!editingFieldId) return;
 
     if (!fieldFormData.field_name.trim() || !fieldFormData.field_label.trim()) {
       toast.error('Fältnamn och etikett är obligatoriska');
       return;
     }
+
+    // If it's a temporary field (not saved yet), just update in state
+    if (editingFieldId.startsWith('temp-')) {
+      const updatedField: TemplateFieldRow = {
+        id: editingFieldId,
+        template_id: 'temp',
+        field_name: fieldFormData.field_name.trim(),
+        field_label: fieldFormData.field_label.trim(),
+        field_type: fieldFormData.field_type,
+        placeholder: fieldFormData.placeholder.trim() || null,
+        default_value: fieldFormData.default_value.trim() || null,
+        required: fieldFormData.required ? 1 : 0,
+        options: fieldFormData.options || null,
+        position: fields.find(f => f.id === editingFieldId)?.position || 0,
+      };
+      setFields(fields.map(f => f.id === editingFieldId ? updatedField : f));
+      resetFieldForm();
+      toast.success('Fält uppdaterat');
+      return;
+    }
+
+    // Otherwise update via API
+    if (!template?.id) return;
 
     try {
       const updatedField = await api.updateTemplateField(template.id, editingFieldId, {
@@ -208,7 +298,7 @@ export const TemplateEditorModal = ({
         placeholder: fieldFormData.placeholder.trim() || null,
         default_value: fieldFormData.default_value.trim() || null,
         required: fieldFormData.required ? 1 : 0,
-        options: fieldFormData.options.trim() || null,
+        options: fieldFormData.options ? JSON.parse(fieldFormData.options) : null,
       });
       setFields(fields.map(f => f.id === editingFieldId ? updatedField : f));
       resetFieldForm();
@@ -220,8 +310,17 @@ export const TemplateEditorModal = ({
   };
 
   const handleDeleteField = async (fieldId: string) => {
-    if (!template?.id) return;
     if (!confirm('Är du säker på att du vill ta bort detta fält?')) return;
+
+    // If it's a temporary field (not saved yet), just remove from state
+    if (fieldId.startsWith('temp-')) {
+      setFields(fields.filter(f => f.id !== fieldId));
+      toast.success('Fält borttaget');
+      return;
+    }
+
+    // Otherwise delete from API
+    if (!template?.id) return;
 
     try {
       await api.deleteTemplateField(template.id, fieldId);
@@ -244,13 +343,24 @@ export const TemplateEditorModal = ({
       options: field.options || '',
       position: field.position,
     });
+
+    // Parse options for select fields
+    if (field.field_type === 'select' && field.options) {
+      try {
+        const parsed = JSON.parse(field.options);
+        setSelectOptions(Array.isArray(parsed) ? parsed : []);
+      } catch (e) {
+        setSelectOptions([]);
+      }
+    } else {
+      setSelectOptions([]);
+    }
+
     setEditingFieldId(field.id);
     setShowNewFieldForm(true);
   };
 
   const handleMoveField = async (fieldId: string, direction: 'up' | 'down') => {
-    if (!template?.id) return;
-
     const index = fields.findIndex(f => f.id === fieldId);
     if (index === -1) return;
     const targetIndex = direction === 'up' ? index - 1 : index + 1;
@@ -259,9 +369,20 @@ export const TemplateEditorModal = ({
     const reordered = [...fields];
     [reordered[index], reordered[targetIndex]] = [reordered[targetIndex], reordered[index]];
 
+    // Update positions
+    const updatedFields = reordered.map((f, i) => ({ ...f, position: i }));
+
+    // If working with temporary fields or no template yet, just update state
+    if (!template?.id || fields.some(f => f.id.startsWith('temp-'))) {
+      setFields(updatedFields);
+      toast.success('Fält omordnat');
+      return;
+    }
+
+    // Otherwise save to API
     try {
-      await api.reorderTemplateFields(template.id, reordered.map(f => f.id));
-      setFields(reordered);
+      await api.reorderTemplateFields(template.id, updatedFields.map(f => f.id));
+      setFields(updatedFields);
       toast.success('Fält omordnat');
     } catch (error) {
       console.error('Error reordering fields:', error);
@@ -276,10 +397,63 @@ export const TemplateEditorModal = ({
           <DialogTitle>{isEditing ? 'Redigera mall' : 'Skapa ny mall'}</DialogTitle>
         </DialogHeader>
 
-        <Tabs defaultValue="basic" className="w-full">
+        {showTypeChooser ? (
+          <div className="space-y-6 py-6">
+            <div className="text-center space-y-2">
+              <h3 className="text-lg font-semibold">Vilken typ av mall vill du skapa?</h3>
+              <p className="text-sm text-muted-foreground">
+                Välj hur ärenden ska struktureras med denna mall
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              {/* Dynamic template option */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTemplateType('dynamic');
+                  setShowTypeChooser(false);
+                }}
+                className="p-6 border-2 rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left space-y-3 group"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20">
+                    <Plus className="w-5 h-5 text-primary" />
+                  </div>
+                  <h4 className="font-semibold">Dynamiska fält</h4>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Strukturerad data med anpassade fält. Rekommenderat för repetitiva ärenden där du vill samla specifik information.
+                </p>
+                <div className="text-xs text-primary font-medium">→ Rekommenderat</div>
+              </button>
+
+              {/* Standard template option */}
+              <button
+                type="button"
+                onClick={() => {
+                  setTemplateType('standard');
+                  setShowTypeChooser(false);
+                }}
+                className="p-6 border-2 rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left space-y-3"
+              >
+                <div className="flex items-center gap-2">
+                  <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center">
+                    <Type className="w-5 h-5 text-muted-foreground" />
+                  </div>
+                  <h4 className="font-semibold">Standard mall</h4>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Förfyllda textrutor för beskrivning, anteckningar och lösning. Lämplig för enkla mallar.
+                </p>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <Tabs defaultValue="basic" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="basic">Grundinställningar</TabsTrigger>
-            <TabsTrigger value="fields" disabled={!isEditing}>
+            <TabsTrigger value="fields" disabled={!isEditing && templateType === 'standard'}>
               Dynamiska fält {isEditing && fields.length > 0 && `(${fields.length})`}
             </TabsTrigger>
           </TabsList>
@@ -334,18 +508,20 @@ export const TemplateEditorModal = ({
                 </div>
 
                 {/* Description Template */}
-                <div className="space-y-2 mb-4">
-                  <Label htmlFor="descriptionTemplate">
-                    Beskrivningsmall * <span className="text-xs text-muted-foreground">(används om inga dynamiska fält)</span>
-                  </Label>
-                  <RichTextEditor
-                    value={formData.descriptionTemplate}
-                    onChange={(html) => setFormData({ ...formData, descriptionTemplate: html })}
-                    placeholder="Detaljerad beskrivning av problemet..."
-                    minHeight="200px"
-                    required
-                  />
-                </div>
+                {templateType === 'standard' && (
+                  <div className="space-y-2 mb-4">
+                    <Label htmlFor="descriptionTemplate">
+                      Beskrivningsmall * <span className="text-xs text-muted-foreground">(används som huvudbeskrivning)</span>
+                    </Label>
+                    <RichTextEditor
+                      value={formData.descriptionTemplate}
+                      onChange={(html) => setFormData({ ...formData, descriptionTemplate: html })}
+                      placeholder="Detaljerad beskrivning av problemet..."
+                      minHeight="200px"
+                      required
+                    />
+                  </div>
+                )}
 
                 {/* Priority */}
                 <div className="space-y-2 mb-4">
@@ -382,30 +558,34 @@ export const TemplateEditorModal = ({
                 </div>
 
                 {/* Notes Template */}
-                <div className="space-y-2 mb-4">
-                  <Label htmlFor="notesTemplate">
-                    Anteckningar mall <span className="text-xs text-muted-foreground">(valfritt)</span>
-                  </Label>
-                  <RichTextEditor
-                    value={formData.notesTemplate}
-                    onChange={(html) => setFormData({ ...formData, notesTemplate: html })}
-                    placeholder="Kom ihåg att verifiera..."
-                    minHeight="100px"
-                  />
-                </div>
+                {templateType === 'standard' && (
+                  <div className="space-y-2 mb-4">
+                    <Label htmlFor="notesTemplate">
+                      Anteckningar mall <span className="text-xs text-muted-foreground">(valfritt)</span>
+                    </Label>
+                    <RichTextEditor
+                      value={formData.notesTemplate}
+                      onChange={(html) => setFormData({ ...formData, notesTemplate: html })}
+                      placeholder="Kom ihåg att verifiera..."
+                      minHeight="100px"
+                    />
+                  </div>
+                )}
 
                 {/* Solution Template */}
-                <div className="space-y-2">
-                  <Label htmlFor="solutionTemplate">
-                    Lösning mall <span className="text-xs text-muted-foreground">(valfritt)</span>
-                  </Label>
-                  <RichTextEditor
-                    value={formData.solutionTemplate}
-                    onChange={(html) => setFormData({ ...formData, solutionTemplate: html })}
-                    placeholder="Löst genom att..."
-                    minHeight="100px"
-                  />
-                </div>
+                {templateType === 'standard' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="solutionTemplate">
+                      Lösning mall <span className="text-xs text-muted-foreground">(valfritt)</span>
+                    </Label>
+                    <RichTextEditor
+                      value={formData.solutionTemplate}
+                      onChange={(html) => setFormData({ ...formData, solutionTemplate: html })}
+                      placeholder="Löst genom att..."
+                      minHeight="100px"
+                    />
+                  </div>
+                )}
               </div>
 
               <DialogFooter>
@@ -430,8 +610,22 @@ export const TemplateEditorModal = ({
                   Dynamiska fält ersätter standardbeskrivningen och låter användare fylla i strukturerad data.
                 </div>
 
-                {/* Field List */}
-                <div className="border rounded-lg divide-y">
+                {/* Info box */}
+                <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-sm mb-4">
+                  <p className="font-medium text-blue-900 mb-2">Om dynamiska fält</p>
+                  <ul className="text-blue-800 space-y-1 text-xs">
+                    <li>• Ersätter standardbeskrivningen med strukturerade formulärfält</li>
+                    <li>• <strong>Fältnamn</strong> används tekniskt (databas), <strong>Fältetikett</strong> visas för användare</li>
+                    <li>• Använd text för korta svar, textområde för längre beskrivningar</li>
+                  </ul>
+                </div>
+
+                {/* Split panel layout */}
+                <div className="grid grid-cols-2 gap-6">
+                  {/* Left panel: Field configuration */}
+                  <div className="space-y-4">
+                    {/* Field List */}
+                    <div className="border rounded-lg divide-y">
                   {fields.length === 0 ? (
                     <div className="p-4 text-center text-muted-foreground">
                       Inga fält ännu. Klicka på "Lägg till fält" nedan.
@@ -481,10 +675,10 @@ export const TemplateEditorModal = ({
                       </div>
                     ))
                   )}
-                </div>
+                    </div>
 
-                {/* Add/Edit Field Form */}
-                {showNewFieldForm ? (
+                    {/* Add/Edit Field Form */}
+                    {showNewFieldForm ? (
                   <div className="border rounded-lg p-4 space-y-4 bg-muted/30">
                     <div className="flex items-center justify-between">
                       <h3 className="font-semibold">
@@ -525,12 +719,42 @@ export const TemplateEditorModal = ({
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="text">Text</SelectItem>
-                            <SelectItem value="textarea">Textområde (RichTextEditor)</SelectItem>
-                            <SelectItem value="number">Nummer</SelectItem>
-                            <SelectItem value="select">Dropdown</SelectItem>
-                            <SelectItem value="date">Datum</SelectItem>
-                            <SelectItem value="checkbox">Kryssruta</SelectItem>
+                            <SelectItem value="text">
+                              <div className="flex flex-col">
+                                <span>Text</span>
+                                <span className="text-xs text-muted-foreground">Kort textfält (t.ex. namn, e-post)</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="textarea">
+                              <div className="flex flex-col">
+                                <span>Textområde</span>
+                                <span className="text-xs text-muted-foreground">Längre text med formatering</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="number">
+                              <div className="flex flex-col">
+                                <span>Nummer</span>
+                                <span className="text-xs text-muted-foreground">Endast numeriska värden</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="select">
+                              <div className="flex flex-col">
+                                <span>Dropdown</span>
+                                <span className="text-xs text-muted-foreground">Fördefinierade val</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="date">
+                              <div className="flex flex-col">
+                                <span>Datum</span>
+                                <span className="text-xs text-muted-foreground">Datumväljare</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="checkbox">
+                              <div className="flex flex-col">
+                                <span>Kryssruta</span>
+                                <span className="text-xs text-muted-foreground">Ja/Nej-val</span>
+                              </div>
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -547,13 +771,74 @@ export const TemplateEditorModal = ({
 
                     {fieldFormData.field_type === 'select' && (
                       <div className="space-y-2">
-                        <Label>Alternativ <span className="text-xs text-muted-foreground">(JSON-array, t.ex. ["Val 1", "Val 2", "Val 3"])</span></Label>
-                        <Textarea
-                          value={fieldFormData.options}
-                          onChange={(e) => setFieldFormData({ ...fieldFormData, options: e.target.value })}
-                          placeholder='["Val 1", "Val 2", "Val 3"]'
-                          rows={2}
-                        />
+                        <Label>Alternativ</Label>
+                        <div className="border rounded-md p-3 space-y-2 bg-background">
+                          {selectOptions.length === 0 ? (
+                            <p className="text-sm text-muted-foreground text-center py-2">
+                              Inga alternativ ännu. Lägg till nedan.
+                            </p>
+                          ) : (
+                            selectOptions.map((option, index) => (
+                              <div key={index} className="flex items-center gap-2">
+                                <Input
+                                  value={option}
+                                  onChange={(e) => {
+                                    const updated = [...selectOptions];
+                                    updated[index] = e.target.value;
+                                    setSelectOptions(updated);
+                                    setFieldFormData({ ...fieldFormData, options: JSON.stringify(updated) });
+                                  }}
+                                  placeholder={`Alternativ ${index + 1}`}
+                                />
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    const updated = selectOptions.filter((_, i) => i !== index);
+                                    setSelectOptions(updated);
+                                    setFieldFormData({ ...fieldFormData, options: JSON.stringify(updated) });
+                                  }}
+                                >
+                                  <X className="w-4 h-4 text-destructive" />
+                                </Button>
+                              </div>
+                            ))
+                          )}
+                          <div className="flex gap-2 pt-2">
+                            <Input
+                              value={newOption}
+                              onChange={(e) => setNewOption(e.target.value)}
+                              placeholder="Nytt alternativ..."
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  if (newOption.trim()) {
+                                    const updated = [...selectOptions, newOption.trim()];
+                                    setSelectOptions(updated);
+                                    setFieldFormData({ ...fieldFormData, options: JSON.stringify(updated) });
+                                    setNewOption('');
+                                  }
+                                }
+                              }}
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => {
+                                if (newOption.trim()) {
+                                  const updated = [...selectOptions, newOption.trim()];
+                                  setSelectOptions(updated);
+                                  setFieldFormData({ ...fieldFormData, options: JSON.stringify(updated) });
+                                  setNewOption('');
+                                }
+                              }}
+                            >
+                              <Plus className="w-4 h-4 mr-1" />
+                              Lägg till
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     )}
 
@@ -588,17 +873,46 @@ export const TemplateEditorModal = ({
                         {editingFieldId ? 'Spara ändringar' : 'Lägg till fält'}
                       </Button>
                     </div>
+                    </div>
+                    ) : (
+                      <Button onClick={() => setShowNewFieldForm(true)} className="w-full">
+                        <Plus className="w-4 h-4 mr-2" />
+                        Lägg till fält
+                      </Button>
+                    )}
                   </div>
-                ) : (
-                  <Button onClick={() => setShowNewFieldForm(true)} className="w-full">
-                    <Plus className="w-4 h-4 mr-2" />
-                    Lägg till fält
-                  </Button>
-                )}
+
+                  {/* Right panel: Live Preview */}
+                  <div className="border rounded-lg p-4 bg-muted/20 sticky top-4 self-start">
+                    <h3 className="font-semibold mb-4 flex items-center gap-2">
+                      <span>Förhandsgranskning</span>
+                      <span className="text-xs font-normal text-muted-foreground">(Så här ser formuläret ut)</span>
+                    </h3>
+
+                    {fields.length === 0 ? (
+                      <p className="text-sm text-muted-foreground text-center py-8">
+                        Lägg till fält för att se förhandsgranskning
+                      </p>
+                    ) : (
+                      <div className="space-y-4">
+                        {fields.map(field => (
+                          <DynamicField
+                            key={field.id}
+                            field={field}
+                            value={field.default_value || ''}
+                            onChange={() => {}} // Read-only preview
+                            error={undefined}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </>
             )}
           </TabsContent>
         </Tabs>
+        )}
       </DialogContent>
     </Dialog>
   );

@@ -40,8 +40,8 @@ export const KPICard = ({
   const TrendIcon = trend?.direction === 'up' ? TrendingUp : TrendingDown;
   const trendColor = trend
     ? trend.isPositive
-      ? 'text-green-500'
-      : 'text-red-500'
+      ? 'text-[hsl(var(--success))]'
+      : 'text-[hsl(var(--destructive))]'
     : '';
 
   return (
@@ -75,7 +75,7 @@ export const KPICard = ({
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
               {label}
             </p>
-            <div className="text-3xl font-bold">
+            <div className="text-2xl font-bold">
               <AnimatedNumber
                 value={value}
                 decimals={valueDecimals}

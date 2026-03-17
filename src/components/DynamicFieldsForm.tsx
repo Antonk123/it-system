@@ -27,15 +27,20 @@ export const DynamicFieldsForm = ({ fields, onValuesChange, initialValues }: Dyn
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fields]);
 
-  // Notify parent of value changes
+  // Notify parent of value changes (runs immediately when fields change)
   useEffect(() => {
     const customFields: CustomFieldInput[] = fields.map(field => ({
       fieldName: field.field_name,
       fieldLabel: field.field_label,
       fieldValue: fieldValues[field.field_name] || '',
     }));
+
+    // Debug logging
+    console.log('🔄 DynamicFieldsForm calling onValuesChange with', customFields.length, 'fields');
+
     onValuesChange(customFields);
-  }, [fieldValues, fields, onValuesChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fieldValues, fields]); // Remove onValuesChange from deps to prevent re-runs
 
   const handleFieldChange = (fieldName: string, value: string) => {
     setFieldValues(prev => ({ ...prev, [fieldName]: value }));

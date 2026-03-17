@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { ArrowLeft, Loader2, PlusCircle, Pencil, LayoutTemplate } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { useCategories } from '@/hooks/useCategories';
@@ -34,6 +34,7 @@ import { ticketInsertSchema, ticketUpdateSchema } from '@/lib/validations';
 const TicketForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { addTicket, updateTicket, getTicketById } = useTickets();
   const { users } = useUsers();
   const { categories, addCategory } = useCategories();
@@ -79,7 +80,13 @@ const TicketForm = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [customFieldValues, setCustomFieldValues] = useState<CustomFieldInput[]>([]);
   const [editInitialFieldValues, setEditInitialFieldValues] = useState<CustomFieldInput[]>([]);
+  const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
   const solutionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Stable callback for DynamicFieldsForm to prevent unnecessary re-renders
+  const handleCustomFieldsChange = useCallback((values: CustomFieldInput[]) => {
+    setCustomFieldValues(values);
+  }, []);
 
   useEffect(() => {
     if (existingTicket) {
@@ -105,22 +112,89 @@ const TicketForm = () => {
 
   // Load dynamic field values when editing a ticket that was created from a template
   useEffect(() => {
-    if (!isEditing || !id || templates.length === 0) return;
-    api.getTicket(id).then((ticketDetail) => {
-      if (ticketDetail.template_id && ticketDetail.field_values && ticketDetail.field_values.length > 0) {
-        const matchingTemplate = templates.find((t) => t.id === ticketDetail.template_id);
-        if (matchingTemplate) {
-          const savedValues = ticketDetail.field_values.map((fv) => ({
-            fieldName: fv.field_name,
-            fieldLabel: fv.field_label,
-            fieldValue: fv.field_value || '',
-          }));
-          setSelectedTemplate(matchingTemplate);
-          setEditInitialFieldValues(savedValues);
+    if (!isEditing || !id) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    const loadTicketAndTemplate = async () => {
+      setIsLoadingTemplate(true);
+      try {
+        const ticketDetail = await api.getTicket(id);
+
+        if (isCancelled) return;
+
+        // If ticket has a template, fetch it with fields
+        if (ticketDetail.template_id) {
+          try {
+            const freshTemplateRow = await api.getTemplate(ticketDetail.template_id);
+
+            if (isCancelled) return;
+
+            if (freshTemplateRow && freshTemplateRow.fields && freshTemplateRow.fields.length > 0) {
+              // Map TemplateRow to Template format (snake_case to camelCase)
+              const mappedTemplate: Template = {
+                id: freshTemplateRow.id,
+                name: freshTemplateRow.name,
+                description: freshTemplateRow.description,
+                titleTemplate: freshTemplateRow.title_template,
+                descriptionTemplate: freshTemplateRow.description_template,
+                priority: freshTemplateRow.priority as Template['priority'],
+                category: freshTemplateRow.category_id,
+                notesTemplate: freshTemplateRow.notes_template,
+                solutionTemplate: freshTemplateRow.solution_template,
+                position: freshTemplateRow.position,
+                createdBy: freshTemplateRow.created_by,
+                createdAt: new Date(freshTemplateRow.created_at),
+                updatedAt: new Date(freshTemplateRow.updated_at),
+                fields: freshTemplateRow.fields,
+              };
+
+              setSelectedTemplate(mappedTemplate);
+
+              // Map saved field values to initialValues for DynamicFieldsForm
+              if (ticketDetail.field_values && ticketDetail.field_values.length > 0) {
+                const savedValues = ticketDetail.field_values.map((fv) => ({
+                  fieldName: fv.field_name,
+                  fieldLabel: fv.field_label,
+                  fieldValue: fv.field_value || '',
+                }));
+                setEditInitialFieldValues(savedValues);
+              }
+            }
+          } catch (templateError) {
+            if (import.meta.env.DEV) console.error('Error loading template:', templateError);
+            // Template deleted or not accessible
+            // If we have field_values, show them as read-only legacy fields
+            if (ticketDetail.field_values && ticketDetail.field_values.length > 0) {
+              const savedValues = ticketDetail.field_values.map((fv) => ({
+                fieldName: fv.field_name,
+                fieldLabel: fv.field_label,
+                fieldValue: fv.field_value || '',
+              }));
+              setEditInitialFieldValues(savedValues);
+              // Show warning that template is missing
+              toast.warning('Mall hittades inte - fältvärden visas som lästa från ärendet');
+            }
+          }
+        }
+      } catch (error) {
+        if (import.meta.env.DEV) console.error('Error loading ticket for edit:', error);
+        toast.error('Kunde inte ladda ärende');
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingTemplate(false);
         }
       }
-    }).catch(() => { /* ignore */ });
-  }, [isEditing, id, templates]);
+    };
+
+    loadTicketAndTemplate();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isEditing, id]);
 
   // Track unsaved changes
   useEffect(() => {
@@ -250,7 +324,12 @@ const TicketForm = () => {
 
         setHasUnsavedChanges(false);
         toast.success('Ärendet uppdaterades');
-        navigate(`/tickets/${id}`);
+        // Navigate back to source instead of detail page
+        if (location.state?.from) {
+          navigate(location.state.from);
+        } else {
+          navigate('/tickets');
+        }
       } else {
         const ticketWithTemplate = selectedTemplate
           ? { ...submitFormData, templateId: selectedTemplate.id }
@@ -264,7 +343,7 @@ const TicketForm = () => {
             try {
               await uploadAttachment(newTicket.id, file);
             } catch (error) {
-              console.error('Error uploading file:', file.name, error);
+              if (import.meta.env.DEV) console.error('Error uploading file:', file.name, error);
               uploadErrors++;
             }
           }
@@ -274,7 +353,7 @@ const TicketForm = () => {
             try {
               await bulkAddChecklistItems(newTicket.id, pendingChecklistItems.map(i => i.label));
             } catch (error) {
-              console.error('Error adding checklist items:', error);
+              if (import.meta.env.DEV) console.error('Error adding checklist items:', error);
               toast.error('Kunde inte lägga till checklistor');
             }
           }
@@ -318,12 +397,20 @@ const TicketForm = () => {
   };
 
   const handleNavigateBack = () => {
-    if (hasUnsavedChanges && !isSaving) {
-      if (window.confirm('Du har osparade ändringar. Är du säker på att du vill lämna sidan?')) {
+    const goBack = () => {
+      if (location.state?.from) {
+        navigate(location.state.from);
+      } else {
         navigate(-1);
       }
+    };
+
+    if (hasUnsavedChanges && !isSaving) {
+      if (window.confirm('Du har osparade ändringar. Är du säker på att du vill lämna sidan?')) {
+        goBack();
+      }
     } else {
-      navigate(-1);
+      goBack();
     }
   };
 
@@ -345,7 +432,8 @@ const TicketForm = () => {
             {!isEditing && (
               <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button type="button" variant="outline">
+                  <Button type="button" variant="outline" className="gap-2">
+                    <LayoutTemplate className="w-4 h-4" />
                     Skapa från mall
                   </Button>
                 </DialogTrigger>
@@ -367,15 +455,15 @@ const TicketForm = () => {
                           onClick={() => {
                             const hasFields = template.fields && template.fields.length > 0;
                             setSelectedTemplate(template);
-                            setCustomFieldValues([]);
+                            // Don't reset customFieldValues - let DynamicFieldsForm initialize it
                             setFormData({
                               ...formData,
                               title: template.titleTemplate,
                               description: hasFields ? '' : template.descriptionTemplate,
                               priority: template.priority,
                               category: template.category || 'none',
-                              notes: template.notesTemplate || '',
-                              solution: template.solutionTemplate || '',
+                              notes: hasFields ? '' : (template.notesTemplate || ''),
+                              solution: hasFields ? '' : (template.solutionTemplate || ''),
                             });
                             setTemplateDialogOpen(false);
                             toast.success(`Mall "${template.name}" laddad`);
@@ -399,13 +487,13 @@ const TicketForm = () => {
           {/* Save status indicator */}
           {isSaving && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Sparar...
             </div>
           )}
           {!isSaving && hasUnsavedChanges && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <div className="h-2 w-2 rounded-full bg-yellow-500" />
+            <div className="flex items-center gap-2 text-sm text-yellow-400/80">
+              <div className="h-2 w-2 rounded-full bg-yellow-400" />
               Osparade ändringar
             </div>
           )}
@@ -413,7 +501,12 @@ const TicketForm = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle>{isEditing ? 'Redigera ärende' : 'Skapa nytt ärende'}</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              {isEditing
+                ? <><Pencil className="w-5 h-5 text-primary" />Redigera ärende</>
+                : <><PlusCircle className="w-5 h-5 text-primary" />Skapa nytt ärende</>
+              }
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -428,13 +521,36 @@ const TicketForm = () => {
                 />
               </div>
 
-              {selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0 && (
+              {isLoadingTemplate ? (
+                <div className="border border-dashed border-muted p-4 rounded text-center text-sm text-muted-foreground">
+                  Laddar mallfält...
+                </div>
+              ) : selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0 ? (
                 <div>
                   <DynamicFieldsForm
                     fields={selectedTemplate.fields}
-                    onValuesChange={setCustomFieldValues}
+                    onValuesChange={handleCustomFieldsChange}
                     initialValues={isEditing && editInitialFieldValues.length > 0 ? editInitialFieldValues : undefined}
                   />
+
+                  {/* Ytterligare information section */}
+                  <div className="mt-6 border-t pt-4">
+                    <Label htmlFor="additional_notes" className="text-sm text-muted-foreground">
+                      Ytterligare information (valfritt)
+                    </Label>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      Lägg till extra detaljer som inte passar i standardfälten ovan
+                    </p>
+                    <RichTextEditor
+                      value={formData.notes || ''}
+                      onChange={(html) => {
+                        setFormData({ ...formData, notes: html });
+                      }}
+                      placeholder="Övrig information, kommentarer, specialfall..."
+                      minHeight="100px"
+                    />
+                  </div>
+
                   <button
                     type="button"
                     className="mt-2 text-xs text-muted-foreground hover:text-foreground underline"
@@ -451,9 +567,7 @@ const TicketForm = () => {
                     Rensa mall — skriv fri beskrivning istället
                   </button>
                 </div>
-              )}
-
-              {(!selectedTemplate || !selectedTemplate.fields || selectedTemplate.fields.length === 0) && (
+              ) : (
                 <div className="space-y-2">
                   <Label htmlFor="description">
                     Beskrivning *
@@ -467,6 +581,10 @@ const TicketForm = () => {
                   />
                 </div>
               )}
+
+              <div className="border-t border-border/60 pt-5">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">Detaljer</p>
+              </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -603,34 +721,42 @@ const TicketForm = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="solution">
-                  Lösning
-                </Label>
-                <RichTextEditor
-                  value={formData.solution}
-                  onChange={(html) => setFormData({ ...formData, solution: html })}
-                  placeholder="Dokumentera hur problemet löstes..."
-                  minHeight="250px"
-                />
-              </div>
+              {isEditing && (
+                <>
+                  <div className="border-t border-border/60 pt-5">
+                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">Handläggning</p>
+                  </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="notes">Interna anteckningar</Label>
-                <RichTextEditor
-                  value={formData.notes}
-                  onChange={(html) => setFormData({ ...formData, notes: html })}
-                  placeholder="Lägg till interna anteckningar..."
-                  minHeight="100px"
-                />
-              </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="solution">Lösning</Label>
+                    <RichTextEditor
+                      value={formData.solution}
+                      onChange={(html) => setFormData({ ...formData, solution: html })}
+                      placeholder="Dokumentera hur problemet löstes..."
+                      minHeight="250px"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Interna anteckningar</Label>
+                    <RichTextEditor
+                      value={formData.notes}
+                      onChange={(html) => setFormData({ ...formData, notes: html })}
+                      placeholder="Lägg till interna anteckningar..."
+                      minHeight="100px"
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={handleNavigateBack} disabled={isSaving}>
                   Avbryt
                 </Button>
-                <Button type="submit" disabled={isSubmitting || isUploading || isSaving}>
-                  {isSubmitting ? 'Sparar...' : isEditing ? 'Spara ändringar' : 'Skapa ärende'}
+                <Button type="submit" disabled={isSubmitting || isUploading || isSaving} className="gap-2">
+                  {isSubmitting ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" />Sparar...</>
+                  ) : isEditing ? 'Spara ändringar' : 'Skapa ärende'}
                 </Button>
               </div>
             </form>

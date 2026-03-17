@@ -625,10 +625,10 @@ const Reports = () => {
 
   return (
     <Layout>
-      <div className="space-y-8">
+      <div className="space-y-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold font-serif text-foreground">Rapporter</h1>
+            <h1 className="text-xl font-bold font-serif text-foreground">Rapporter</h1>
             <p className="text-muted-foreground mt-2 text-lg font-light">Ärendeanalys och insikter</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

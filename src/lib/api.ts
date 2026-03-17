@@ -358,8 +358,9 @@ class ApiClient {
   async createTemplate(data: {
     name: string;
     description?: string | null;
+    template_type?: 'standard' | 'dynamic';
     title_template: string;
-    description_template: string;
+    description_template?: string | null;
     priority?: string;
     category_id?: string | null;
     notes_template?: string | null;

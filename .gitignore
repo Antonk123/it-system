@@ -43,3 +43,4 @@ docker-compose.dev.portainer.yml
 *.njsproj
 *.sln
 *.sw?
+.mcp.json

@@ -3,6 +3,8 @@ import cors from 'cors';
 import helmet from 'helmet';
 import { initializeDatabase } from './db/connection.js';
 import { startReminderScheduler } from './lib/reminderScheduler.js';
+import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
+import cron from 'node-cron';
 import passport from './config/passport.js';
 
 // Import routes
@@ -31,8 +33,23 @@ app.set('trust proxy', true);
 // Initialize database
 initializeDatabase();
 
-// Start reminder scheduler
-startReminderScheduler();
+// Start reminder scheduler (only in production or if SMTP is configured)
+if (process.env.SMTP_HOST && process.env.EMAIL_FROM) {
+  startReminderScheduler();
+  console.log('✅ Reminder scheduler enabled (SMTP configured)');
+} else {
+  console.log('⏭️  Reminder scheduler disabled (SMTP not configured)');
+}
+
+// Daily cleanup of expired/revoked refresh tokens at 03:00
+cron.schedule('0 3 * * *', () => {
+  try {
+    cleanupRefreshTokens();
+  } catch (error) {
+    console.error('Error during scheduled refresh token cleanup:', error);
+  }
+});
+console.log('✅ Refresh token cleanup scheduled (daily at 03:00)');
 
 // Security headers with Helmet
 // Protects against common web vulnerabilities

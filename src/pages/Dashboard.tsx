@@ -18,17 +18,6 @@ const Dashboard = () => {
   const { users, getUserById } = useUsers();
   const navigate = useNavigate();
 
-  // Helper to get priority color
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'critical': return 'bg-red-500';
-      case 'high': return 'bg-orange-500';
-      case 'medium': return 'bg-yellow-500';
-      case 'low': return 'bg-green-500';
-      default: return 'bg-gray-500';
-    }
-  };
-
   const stats = useMemo(() => {
     const open = tickets.filter(t => t.status === 'open').length;
     const inProgress = tickets.filter(t => t.status === 'in-progress').length;
@@ -128,9 +117,9 @@ const Dashboard = () => {
 
   return (
     <Layout>
-      <div className="space-y-8">
+      <div className="space-y-5">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Översikt</h1>
+          <h1 className="text-xl font-bold text-foreground">Översikt</h1>
           <p className="text-muted-foreground mt-1">Översikt över dina IT-supportärenden</p>
         </div>
 

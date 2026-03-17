@@ -19,7 +19,7 @@ interface ContactRow {
 // Get all contacts
 router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
   try {
-    const contacts = db.prepare('SELECT * FROM contacts ORDER BY created_at DESC').all() as ContactRow[];
+    const contacts = db.prepare('SELECT id, name, email, phone, company, created_at FROM contacts ORDER BY created_at DESC').all() as ContactRow[];
     res.json(contacts);
   } catch (error) {
     console.error('Error fetching contacts:', error);
@@ -90,7 +90,7 @@ function parseCSV(buffer: Buffer): Record<string, string>[] {
 // Export contacts to CSV (must come before /:id route)
 router.get('/export', authenticate, (_req: AuthRequest, res: Response) => {
   try {
-    const contacts = db.prepare('SELECT * FROM contacts ORDER BY created_at DESC').all() as ContactRow[];
+    const contacts = db.prepare('SELECT id, name, email, phone, company, created_at FROM contacts ORDER BY created_at DESC').all() as ContactRow[];
 
     if (contacts.length === 0) {
       return res.status(404).json({ error: 'No contacts to export' });
@@ -254,7 +254,7 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
 // Get single contact
 router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(req.params.id) as ContactRow | undefined;
+    const contact = db.prepare('SELECT id, name, email, phone, company, created_at FROM contacts WHERE id = ?').get(req.params.id) as ContactRow | undefined;
     
     if (!contact) {
       return res.status(404).json({ error: 'Contact not found' });
@@ -281,7 +281,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       id, name, email, phone || null, company || null
     );
     
-    const contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(id) as ContactRow;
+    const contact = db.prepare('SELECT id, name, email, phone, company, created_at FROM contacts WHERE id = ?').get(id) as ContactRow;
     res.status(201).json(contact);
   } catch (error) {
     console.error('Error creating contact:', error);
@@ -294,7 +294,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
   const { name, email, phone, company } = req.body;
 
   try {
-    const existing = db.prepare('SELECT * FROM contacts WHERE id = ?').get(req.params.id) as ContactRow | undefined;
+    const existing = db.prepare('SELECT id, name, email, phone, company, created_at FROM contacts WHERE id = ?').get(req.params.id) as ContactRow | undefined;
     
     if (!existing) {
       return res.status(404).json({ error: 'Contact not found' });
@@ -326,7 +326,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       db.prepare(`UPDATE contacts SET ${setClauses} WHERE id = ?`).run(...values, req.params.id);
     }
 
-    const contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(req.params.id) as ContactRow;
+    const contact = db.prepare('SELECT id, name, email, phone, company, created_at FROM contacts WHERE id = ?').get(req.params.id) as ContactRow;
     res.json(contact);
   } catch (error) {
     console.error('Error updating contact:', error);

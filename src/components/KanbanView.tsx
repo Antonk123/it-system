@@ -17,6 +17,7 @@ interface KanbanViewProps {
   tickets: TicketType[];
   users: User[];
   onStatusChange: (ticketId: string, status: TicketStatus) => void;
+  onTicketClick?: (ticketId: string) => void;
 }
 
 const STATUSES: TicketStatus[] = ['open', 'in-progress', 'waiting', 'resolved', 'closed'];
@@ -28,7 +29,7 @@ const STATUS_LABELS: Record<TicketStatus, string> = {
   'closed': 'Stängd',
 };
 
-export function KanbanView({ tickets, users, onStatusChange }: KanbanViewProps) {
+export function KanbanView({ tickets, users, onStatusChange, onTicketClick }: KanbanViewProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       distance: 8,
@@ -86,6 +87,7 @@ export function KanbanView({ tickets, users, onStatusChange }: KanbanViewProps) 
             status={status}
             label={STATUS_LABELS[status]}
             tickets={ticketsByStatus[status]}
+            onTicketClick={onTicketClick}
           />
         ))}
       </div>

@@ -32,8 +32,9 @@ passport.use(new LocalStrategy(
   },
   async (email, password, done) => {
     try {
-      const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as UserRow | undefined;
-      
+      // Only select columns needed for authentication (not all columns)
+      const user = db.prepare('SELECT id, email, password_hash, role FROM users WHERE email = ?').get(email) as UserRow | undefined;
+
       if (!user) {
         return done(null, false, { message: 'Incorrect email or password.' });
       }

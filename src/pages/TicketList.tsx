@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Download, Upload, LayoutGrid, Columns } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
@@ -13,7 +13,11 @@ import { ImportDialog } from '@/components/ImportDialog';
 import { TagFilter } from '@/components/TagFilter';
 import { CategoryFilter } from '@/components/CategoryFilter';
 import { TagMultiSelect } from '@/components/TagMultiSelect';
+import { StatusMultiSelect } from '@/components/StatusMultiSelect';
+import { FilterViewSelector } from '@/components/FilterViewSelector';
+import { FilterViewManager } from '@/components/FilterViewManager';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useFilterViews } from '@/hooks/useFilterViews';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -36,12 +40,15 @@ const statusLabels: Record<TicketStatus, string> = {
 
 const TicketList = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Read state from URL
   const page = Number(searchParams.get('page')) || 1;
   const pageSize = Number(searchParams.get('limit')) || 50;
   const search = searchParams.get('search') || '';
-  const statusFilter = (searchParams.get('status') || 'all') as TicketStatus | 'all';
+  const statusParam = searchParams.get('status') || '';
+  const selectedStatuses: TicketStatus[] = statusParam ? statusParam.split(',').filter(s => s) as TicketStatus[] : [];
   const priorityFilter = (searchParams.get('priority') || 'all') as TicketPriority | 'all';
   const categoryFilter = searchParams.get('category') || 'all';
   const tagsFilter = searchParams.get('tags') || '';
@@ -50,10 +57,22 @@ const TicketList = () => {
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
   const [compactView, setCompactView] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [manageViewsOpen, setManageViewsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>(() => {
     const saved = localStorage.getItem('ticket_view_mode');
     return (saved as 'table' | 'kanban') || 'table';
   });
+
+  // Filter views
+  const {
+    views,
+    activeView,
+    createView,
+    deleteView,
+    applyView,
+    setActiveView,
+    getCurrentFiltersAsView,
+  } = useFilterViews();
 
   // Save view preference to localStorage
   useEffect(() => {
@@ -64,7 +83,7 @@ const TicketList = () => {
   const { tickets, pagination, isLoading, updateTicket, refetch } = useTickets({
     page,
     limit: pageSize,
-    status: statusFilter,
+    status: selectedStatuses.length > 0 ? selectedStatuses.join(',') : 'all',
     priority: priorityFilter,
     category: categoryFilter,
     search,
@@ -81,7 +100,14 @@ const TicketList = () => {
     const newParams = new URLSearchParams(searchParams);
 
     Object.entries(updates).forEach(([key, value]) => {
-      if (value && value !== 'all') {
+      if (Array.isArray(value)) {
+        // Handle arrays (status, tags)
+        if (value.length > 0) {
+          newParams.set(key, value.join(','));
+        } else {
+          newParams.delete(key);
+        }
+      } else if (value && value !== 'all') {
         newParams.set(key, String(value));
       } else {
         newParams.delete(key);
@@ -91,61 +117,73 @@ const TicketList = () => {
     // Reset to page 1 on filter/sort changes
     if (Object.keys(updates).some(k => k !== 'page' && k !== 'limit')) {
       newParams.set('page', '1');
+      // Deactivate active view when filters are changed manually
+      setActiveView(null);
     }
 
     setSearchParams(newParams);
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, setActiveView]);
 
   // Event handlers
-  const handleSearchChange = (newSearch: string) => {
+  const handleSearchChange = useCallback((newSearch: string) => {
     updateFilters({ search: newSearch });
-  };
+  }, [updateFilters]);
 
-  const handlePageChange = (newPage: number) => {
+  const handlePageChange = useCallback((newPage: number) => {
     updateFilters({ page: newPage });
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, [updateFilters]);
 
-  const handlePageSizeChange = (newSize: number) => {
+  const handlePageSizeChange = useCallback((newSize: number) => {
     updateFilters({ limit: newSize, page: 1 });
-  };
+  }, [updateFilters]);
 
-  const handleSortChange = (key: 'status' | 'priority' | 'category') => {
+  const handleSortChange = useCallback((key: 'status' | 'priority' | 'category') => {
     if (sortKey === key) {
       const newDir = sortDirection === 'asc' ? 'desc' : 'asc';
       updateFilters({ sortDir: newDir });
     } else {
       updateFilters({ sortBy: key, sortDir: 'asc' });
     }
-  };
+  }, [sortKey, sortDirection, updateFilters]);
 
-  const handleStatusChange = async (ticketId: string, status: TicketStatus) => {
-    await updateTicket(ticketId, { status });
-    toast.success(`Status uppdaterad till ${statusLabels[status]}`);
-  };
+  const handleStatusChange = useCallback(async (ticketId: string, status: TicketStatus) => {
+    try {
+      await updateTicket(ticketId, { status });
+      toast.success(`Status uppdaterad till ${statusLabels[status]}`);
+    } catch {
+      toast.error('Kunde inte uppdatera status');
+    }
+  }, [updateTicket]);
 
-  const handleRemoveTagFilter = (tagId: string) => {
+  const handleRemoveTagFilter = useCallback((tagId: string) => {
     const newTagIds = selectedTagIds.filter(id => id !== tagId);
     updateFilters({ tags: newTagIds.length > 0 ? newTagIds.join(',') : undefined });
-  };
+  }, [selectedTagIds, updateFilters]);
 
-  const handleClearAllTags = () => {
+  const handleClearAllTags = useCallback(() => {
     updateFilters({ tags: undefined });
-  };
+  }, [updateFilters]);
 
-  const handleTagSelectionChange = (tagIds: string[]) => {
+  const handleTagSelectionChange = useCallback((tagIds: string[]) => {
     updateFilters({ tags: tagIds.length > 0 ? tagIds.join(',') : undefined });
-  };
+  }, [updateFilters]);
 
-  const handleRemoveCategoryFilter = () => {
+  const handleRemoveCategoryFilter = useCallback(() => {
     updateFilters({ category: 'all' });
-  };
+  }, [updateFilters]);
 
-  const handleExport = async () => {
+  const handleTicketClick = useCallback((ticketId: string) => {
+    const currentPath = location.pathname + location.search;
+    navigate(`/tickets/${ticketId}`, {
+      state: { from: currentPath }
+    });
+  }, [location.pathname, location.search, navigate]);
+
+  const handleExport = useCallback(async () => {
     try {
-      // Build query string with current filters (but no pagination)
       const params = new URLSearchParams();
-      if (statusFilter && statusFilter !== 'all') params.append('status', statusFilter);
+      if (selectedStatuses.length > 0) params.append('status', selectedStatuses.join(','));
       if (priorityFilter && priorityFilter !== 'all') params.append('priority', priorityFilter);
       if (categoryFilter && categoryFilter !== 'all') params.append('category', categoryFilter);
       if (search) params.append('search', search);
@@ -158,14 +196,7 @@ const TicketList = () => {
       console.error('Export failed:', error);
       toast.error('Misslyckades att exportera ärenden');
     }
-  };
-
-  const statusQuickFilters: { value: TicketStatus; label: string }[] = [
-    { value: 'open', label: 'Öppen' },
-    { value: 'in-progress', label: 'Pågående' },
-    { value: 'waiting', label: 'Väntar' },
-    { value: 'resolved', label: 'Löst' },
-  ];
+  }, [selectedStatuses, priorityFilter, categoryFilter, search, tagsFilter]);
 
   const priorityQuickFilters: { value: TicketPriority; label: string }[] = [
     { value: 'high', label: 'Hög' },
@@ -179,10 +210,18 @@ const TicketList = () => {
         onOpenChange={setImportDialogOpen}
         onSuccess={refetch}
       />
+      <FilterViewManager
+        open={manageViewsOpen}
+        onOpenChange={setManageViewsOpen}
+        views={views}
+        currentFilters={getCurrentFiltersAsView()}
+        onCreateView={createView}
+        onDeleteView={deleteView}
+      />
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Alla ärenden</h1>
+            <h1 className="text-xl font-bold text-foreground">Alla ärenden</h1>
             {pagination && (
               <p className="text-muted-foreground mt-1">
                 Visar {((pagination.page - 1) * pagination.limit) + 1}-
@@ -244,6 +283,28 @@ const TicketList = () => {
           </div>
         </div>
 
+        {/* Filter Views */}
+        <div className="flex items-center gap-2">
+          <FilterViewSelector
+            views={views}
+            activeViewId={activeView?.id || null}
+            onSelectView={(viewId) => {
+              const view = views.find((v) => v.id === viewId);
+              if (view) {
+                applyView(view);
+              }
+            }}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setManageViewsOpen(true)}
+            className="h-10"
+          >
+            Hantera vyer
+          </Button>
+        </div>
+
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4">
           <div className="flex-1">
@@ -255,18 +316,10 @@ const TicketList = () => {
           </div>
           <div className="flex gap-2 flex-wrap">
             {viewMode === 'table' && (
-              <Select value={statusFilter} onValueChange={(v) => updateFilters({ status: v })}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Alla statusar</SelectItem>
-                  <SelectItem value="open">Öppen</SelectItem>
-                  <SelectItem value="in-progress">Pågående</SelectItem>
-                  <SelectItem value="waiting">Väntar</SelectItem>
-                  <SelectItem value="resolved">Löst</SelectItem>
-                </SelectContent>
-              </Select>
+              <StatusMultiSelect
+                selectedStatuses={selectedStatuses}
+                onChange={(statuses) => updateFilters({ status: statuses })}
+              />
             )}
             <Select value={priorityFilter} onValueChange={(v) => updateFilters({ priority: v })}>
               <SelectTrigger className="w-[140px]">
@@ -301,17 +354,6 @@ const TicketList = () => {
         {/* Quick Filters */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">Snabbfilter:</span>
-          {statusQuickFilters.map((item) => (
-            <Button
-              key={item.value}
-              size="sm"
-              variant={statusFilter === item.value ? 'secondary' : 'outline'}
-              onClick={() => updateFilters({ status: statusFilter === item.value ? 'all' : item.value })}
-              className="h-7 px-3 text-xs"
-            >
-              {item.label}
-            </Button>
-          ))}
           {priorityQuickFilters.map((item) => (
             <Button
               key={item.value}
@@ -354,6 +396,7 @@ const TicketList = () => {
                     tickets={tickets}
                     users={users}
                     onStatusChange={handleStatusChange}
+                    onTicketClick={handleTicketClick}
                     sortKey={sortKey}
                     sortDirection={sortDirection}
                     onSortChange={handleSortChange}
@@ -376,6 +419,7 @@ const TicketList = () => {
                   tickets={tickets}
                   users={users}
                   onStatusChange={handleStatusChange}
+                  onTicketClick={handleTicketClick}
                 />
               )}
             </div>

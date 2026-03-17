@@ -1,14 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { CheckCircle, Send, AlertCircle, X, FileText, Upload, Paperclip } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { CheckCircle, Send, AlertCircle, X, FileText, Upload, Paperclip, Loader2, Ticket, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { api, CustomFieldInput } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DynamicFieldsForm } from '@/components/DynamicFieldsForm';
 import { cn } from '@/lib/utils';
 
@@ -24,7 +22,6 @@ interface Template {
 }
 
 const PublicTicketForm = () => {
-  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -58,7 +55,6 @@ const PublicTicketForm = () => {
       setFormData({ name: formData.name, email: formData.email, title: '', description: '', category: '', priority: 'medium' });
       return;
     }
-
     const template = templates.find(t => t.id === templateId);
     if (template) {
       setSelectedTemplate(template);
@@ -73,7 +69,9 @@ const PublicTicketForm = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setError(null); setIsSubmitting(true);
+    e.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
     try {
       await api.submitPublicTicket({
         name: formData.name,
@@ -86,65 +84,141 @@ const PublicTicketForm = () => {
         template_id: selectedTemplate?.id,
       });
       setIsSuccess(true);
-    } catch (err) { setError(err instanceof Error ? err.message : 'Ett oväntat fel uppstod'); }
-    finally { setIsSubmitting(false); }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ett oväntat fel uppstod');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const handleFilesSelect = (files: File[]) => {
-    setPendingFiles(prev => [...prev, ...files]);
-  };
-
-  const handleRemovePending = (index: number) => {
-    setPendingFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
+  const handleFilesSelect = (files: File[]) => setPendingFiles(prev => [...prev, ...files]);
+  const handleRemovePending = (index: number) => setPendingFiles(prev => prev.filter((_, i) => i !== index));
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
-    if (files.length > 0) {
-      handleFilesSelect(files);
-    }
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (files.length > 0) handleFilesSelect(files);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
-
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      handleFilesSelect(files);
-    }
+    if (files.length > 0) handleFilesSelect(files);
   };
-
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
+  const handleReset = () => {
+    setFormData({ name: '', email: '', title: '', description: '', category: '', priority: 'medium' });
+    setSelectedTemplate(null);
+    setCustomFieldValues([]);
+    setPendingFiles([]);
+    setIsSuccess(false);
+    setError(null);
+  };
 
-  const handleReset = () => { setFormData({ name: '', email: '', title: '', description: '', category: '', priority: 'medium' }); setSelectedTemplate(null); setCustomFieldValues([]); setPendingFiles([]); setIsSuccess(false); setError(null); };
+  const inputClass = "h-11 rounded-xl bg-input border-border text-foreground placeholder:text-muted-foreground hover:bg-input/80 hover:border-primary/40 focus-visible:ring-primary/30 focus-visible:border-primary/60 transition-all duration-200";
+  const selectTriggerClass = "h-11 rounded-xl bg-input border-border text-foreground hover:bg-input/80 hover:border-primary/40 focus:ring-primary/30 focus:border-primary/60 transition-all duration-200";
 
-  if (isSuccess) return <div className="min-h-screen bg-background flex items-center justify-center p-4"><Card className="w-full max-w-md"><CardContent className="pt-6 text-center"><CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" /><h2 className="text-2xl font-semibold mb-2">Ärendet skickat!</h2><p className="text-muted-foreground mb-6">Tack för att du kontaktar oss.</p><Button onClick={handleReset} variant="outline">Skicka ett nytt ärende</Button></CardContent></Card></div>;
+  // ── Success state ─────────────────────────────────────────────
+  if (isSuccess) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,hsl(var(--primary)/0.07)_0%,transparent_100%)] pointer-events-none" />
+        <div className="w-full max-w-md relative z-10 text-center">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 mb-6">
+            <CheckCircle className="w-10 h-10 text-primary" />
+          </div>
+          <h2 className="text-2xl font-semibold text-foreground mb-2">Ärendet skickat!</h2>
+          <p className="text-muted-foreground mb-8">Tack för att du kontaktar oss. Vi återkommer så snart som möjligt.</p>
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-2xl backdrop-blur-sm flex flex-col gap-3">
+            <Button
+              onClick={handleReset}
+              className="w-full h-11 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-colors cursor-pointer"
+            >
+              Skicka ett nytt ärende
+            </Button>
+            <Link
+              to="/login"
+              className="inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Tillbaka till inloggning
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
+  // ── Form ──────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-lg relative">
-        <Button variant="ghost" size="icon" className="absolute right-2 top-2" onClick={() => navigate('/')}><X className="h-4 w-4" /></Button>
-        <CardHeader><CardTitle>Skicka en supportförfrågan</CardTitle><CardDescription>Fyll i formuläret nedan så återkommer vi så snart som möjligt.</CardDescription></CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {error && <Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertDescription>{error}</AlertDescription></Alert>}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"><div className="space-y-2"><Label htmlFor="name">Ditt namn *</Label><Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Johan Andersson" required maxLength={100} /></div><div className="space-y-2"><Label htmlFor="email">Din e-post *</Label><Input id="email" type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} placeholder="namn@example.com" required maxLength={255} /></div></div>
+    <div className="min-h-screen bg-background flex items-start justify-center p-4 py-10 relative overflow-hidden">
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,hsl(var(--primary)/0.07)_0%,transparent_100%)] pointer-events-none" />
 
+      <div className="w-full max-w-lg relative z-10">
+        {/* Brand header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 mb-5">
+            <Ticket className="w-7 h-7 text-primary" />
+          </div>
+          <h1 className="text-2xl font-semibold text-foreground tracking-tight">Skicka en supportförfrågan</h1>
+          <p className="text-sm text-muted-foreground mt-1.5">Fyll i formuläret så återkommer vi så snart som möjligt.</p>
+        </div>
+
+        {/* Card */}
+        <div className="bg-card border border-border rounded-2xl p-8 shadow-2xl backdrop-blur-sm">
+          <form onSubmit={handleSubmit} className="space-y-5">
+
+            {/* Error */}
+            {error && (
+              <div className="flex items-start gap-3 rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Name + Email */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="name" className="text-foreground text-sm font-medium">Ditt namn *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Johan Andersson"
+                  className={inputClass}
+                  autoComplete="name"
+                  required
+                  maxLength={100}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-foreground text-sm font-medium">Din e-post *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="namn@example.com"
+                  className={inputClass}
+                  autoComplete="email"
+                  required
+                  maxLength={255}
+                />
+              </div>
+            </div>
+
+            {/* Template */}
             {templates.length > 0 && (
-              <div className="space-y-2">
-                <Label htmlFor="template">
-                  <FileText className="h-4 w-4 inline mr-2" />
+              <div className="space-y-1.5">
+                <Label htmlFor="template" className="text-foreground text-sm font-medium flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-muted-foreground" />
                   Använd mall (valfritt)
                 </Label>
                 <Select value={selectedTemplate?.id || ''} onValueChange={handleTemplateSelect}>
-                  <SelectTrigger id="template">
+                  <SelectTrigger id="template" className={selectTriggerClass}>
                     <SelectValue placeholder="Välj en mall för att förfylla formuläret" />
                   </SelectTrigger>
                   <SelectContent>
@@ -164,6 +238,7 @@ const PublicTicketForm = () => {
               </div>
             )}
 
+            {/* Dynamic fields */}
             {selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0 && (
               <DynamicFieldsForm
                 fields={selectedTemplate.fields}
@@ -171,52 +246,73 @@ const PublicTicketForm = () => {
               />
             )}
 
-            <div className="space-y-2"><Label htmlFor="title">Ärendets titel *</Label><Input id="title" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="Kort sammanfattning" required maxLength={200} /></div>
+            {/* Title */}
+            <div className="space-y-1.5">
+              <Label htmlFor="title" className="text-foreground text-sm font-medium">Ärendets titel *</Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Kort sammanfattning av problemet"
+                className={inputClass}
+                required
+                maxLength={200}
+              />
+            </div>
 
+            {/* Description */}
             {(!selectedTemplate || !selectedTemplate.fields || selectedTemplate.fields.length === 0) && (
-              <div className="space-y-2"><Label htmlFor="description">Beskrivning *</Label><RichTextEditor value={formData.description} onChange={(html) => setFormData({ ...formData, description: html })} placeholder="Beskriv ditt problem i detalj..." minHeight="250px" required /></div>
+              <div className="space-y-1.5">
+                <Label htmlFor="description" className="text-foreground text-sm font-medium">Beskrivning *</Label>
+                <RichTextEditor
+                  value={formData.description}
+                  onChange={(html) => setFormData({ ...formData, description: html })}
+                  placeholder="Beskriv ditt problem i detalj..."
+                  minHeight="200px"
+                  required
+                />
+              </div>
             )}
+
+            {/* Category + Priority */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {categories.length > 0 && (
-                <div className="space-y-2">
-                  <Label htmlFor="category">Kategori</Label>
+                <div className="space-y-1.5">
+                  <Label className="text-foreground text-sm font-medium">Kategori</Label>
                   <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                    <SelectTrigger><SelectValue placeholder="Välj kategori" /></SelectTrigger>
+                    <SelectTrigger className={selectTriggerClass}>
+                      <SelectValue placeholder="Välj kategori" />
+                    </SelectTrigger>
                     <SelectContent>
                       {categories.map((cat) => (
-                        <SelectItem
-                          key={cat.id}
-                          value={cat.id}
-                          className="data-[highlighted]:bg-primary/20 data-[highlighted]:text-foreground data-[state=checked]:bg-primary/10"
-                        >
-                          {cat.label}
-                        </SelectItem>
+                        <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
               )}
-              <div className="space-y-2">
-                <Label htmlFor="priority">Prioritet</Label>
+              <div className="space-y-1.5">
+                <Label className="text-foreground text-sm font-medium">Prioritet</Label>
                 <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger className={selectTriggerClass}>
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low" className="data-[highlighted]:bg-primary/20 data-[highlighted]:text-foreground data-[state=checked]:bg-primary/10">Låg</SelectItem>
-                    <SelectItem value="medium" className="data-[highlighted]:bg-primary/20 data-[highlighted]:text-foreground data-[state=checked]:bg-primary/10">Medium</SelectItem>
-                    <SelectItem value="high" className="data-[highlighted]:bg-primary/20 data-[highlighted]:text-foreground data-[state=checked]:bg-primary/10">Hög</SelectItem>
-                    <SelectItem value="urgent" className="data-[highlighted]:bg-primary/20 data-[highlighted]:text-foreground data-[state=checked]:bg-primary/10">Brådskande</SelectItem>
+                    <SelectItem value="low">Låg</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">Hög</SelectItem>
+                    <SelectItem value="urgent">Brådskande</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            {/* File Attachments */}
+            {/* File upload */}
             <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <Paperclip className="h-4 w-4" />
+              <Label className="text-foreground text-sm font-medium flex items-center gap-1.5">
+                <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
                 Bifoga filer (valfritt)
               </Label>
-
               <input
                 ref={fileInputRef}
                 type="file"
@@ -225,72 +321,83 @@ const PublicTicketForm = () => {
                 className="hidden"
                 accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip"
               />
-
               <div
                 className={cn(
-                  "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
-                  isDragging ? "border-primary bg-primary/10" : "border-border hover:border-primary/50",
-                  "cursor-pointer"
+                  "border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer",
+                  isDragging
+                    ? "border-primary/60 bg-primary/5"
+                    : "border-border hover:border-primary/40 hover:bg-input/40"
                 )}
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
                 onDrop={handleDrop}
               >
-                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-foreground mb-1">
-                  Klicka för att ladda upp filer, eller dra och släpp
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Bilder, PDF, Office-dokument (max 10 MB per fil)
-                </p>
+                <Upload className="h-7 w-7 mx-auto mb-2 text-muted-foreground" />
+                <p className="text-sm text-foreground/80 mb-1">Klicka för att ladda upp, eller dra och släpp</p>
+                <p className="text-xs text-muted-foreground">Bilder, PDF, Office-dokument (max 10 MB per fil)</p>
               </div>
 
-              {/* Pending Files List */}
               {pendingFiles.length > 0 && (
-                <div className="space-y-1 mt-2">
+                <div className="space-y-1.5 mt-2">
                   {pendingFiles.map((file, index) => (
                     <div
                       key={index}
-                      className="flex items-center justify-between p-2 bg-muted/50 rounded border border-border"
+                      className="flex items-center justify-between px-3 py-2 rounded-lg bg-input border border-border"
                     >
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm truncate">{file.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatFileSize(file.size)}
-                          </p>
+                          <p className="text-sm text-foreground truncate">{file.name}</p>
+                          <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
                         </div>
                       </div>
-                      <Button
+                      <button
                         type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemovePending(index);
-                        }}
-                        className="h-6 w-6 p-0"
+                        onClick={(e) => { e.stopPropagation(); handleRemovePending(index); }}
+                        className="ml-2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                        aria-label={`Ta bort ${file.name}`}
                       >
-                        <X className="h-3 w-3" />
-                      </Button>
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
                   ))}
                 </div>
               )}
-
-              {pendingFiles.length > 0 && (
-                <p className="text-xs text-muted-foreground italic">
-                  OBS: Filuppladdning för offentliga ärenden är för närvarande under utveckling. Bifogade filer kommer inte att laddas upp ännu.
-                </p>
-              )}
             </div>
 
-            <Button type="submit" className="w-full" disabled={isSubmitting}>{isSubmitting ? <><div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />Skickar...</> : <><Send className="h-4 w-4 mr-2" />Skicka ärende</>}</Button>
+            {/* Submit */}
+            <Button
+              type="submit"
+              className="w-full h-11 rounded-xl bg-gradient-to-br from-primary via-primary to-primary/90 hover:from-primary/90 hover:via-primary hover:to-primary active:scale-[0.98] text-primary-foreground shadow-lg shadow-primary/20 hover:shadow-primary/30 font-semibold transition-all duration-200 cursor-pointer"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Skickar...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Skicka ärende
+                </>
+              )}
+            </Button>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* Back link */}
+        <div className="text-center mt-6">
+          <Link
+            to="/login"
+            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Tillbaka till inloggning
+          </Link>
+        </div>
+      </div>
     </div>
   );
 };

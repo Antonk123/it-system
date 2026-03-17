@@ -34,18 +34,32 @@ export const checklistItemSchema = z.object({
 });
 
 // Template validation schemas
-export const templateSchema = z.object({
+// Base template schema without refinements (for partial updates)
+const templateBaseSchema = z.object({
   name: z.string().trim().min(1, 'Mall-namn krävs').max(100, 'Mall-namn får vara max 100 tecken'),
   description: z.string().max(500, 'Beskrivning får vara max 500 tecken').optional().nullable(),
+  type: z.enum(['standard', 'dynamic']).optional(),
   titleTemplate: z.string().trim().min(1, 'Titelmall krävs').max(200, 'Titelmall får vara max 200 tecken'),
-  descriptionTemplate: z.string().trim().min(1, 'Beskrivningsmall krävs').max(5000, 'Beskrivningsmall får vara max 5000 tecken'),
+  descriptionTemplate: z.string().trim().max(5000, 'Beskrivningsmall får vara max 5000 tecken').optional().nullable(),
   priority: z.enum(['low', 'medium', 'high', 'critical']).optional(),
   category: z.string().uuid().optional().nullable(),
   notesTemplate: z.string().max(5000).optional().nullable(),
   solutionTemplate: z.string().max(5000).optional().nullable(),
 });
 
-export const templateUpdateSchema = templateSchema.partial();
+// Full template schema with validation
+export const templateSchema = templateBaseSchema.superRefine((data, ctx) => {
+  // For standard templates, descriptionTemplate is required
+  if (data.type === 'standard' && (!data.descriptionTemplate || data.descriptionTemplate.trim().length === 0)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: 'Beskrivningsmall krävs för standard-mallar',
+      path: ['descriptionTemplate'],
+    });
+  }
+});
+
+export const templateUpdateSchema = templateBaseSchema.partial();
 
 // File upload validation
 export const fileUploadSchema = z.object({

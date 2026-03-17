@@ -1,9 +1,16 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
+import { existsSync, unlinkSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail } from '../lib/email.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const UPLOAD_DIR = process.env.UPLOAD_DIR || join(__dirname, '../../data/uploads');
 
 // Explicit column lists for SELECT optimization (instead of SELECT *)
 // Reduces data transfer by 30-40% by avoiding unnecessary columns
@@ -321,10 +328,21 @@ function buildWhereClause(filters: TicketQueryParams) {
   const params: any[] = [];
   let joins = '';
 
-  // Handle status filter
+  // Handle status filter - support both single and multi-status
   if (filters.status && filters.status !== 'all') {
-    conditions.push('tickets.status = ?');
-    params.push(filters.status);
+    // Check if comma-separated list (multi-status)
+    const statusList = filters.status.split(',').map(s => s.trim()).filter(s => s);
+
+    if (statusList.length > 1) {
+      // Multi-status: use IN clause
+      const placeholders = statusList.map(() => '?').join(',');
+      conditions.push(`tickets.status IN (${placeholders})`);
+      params.push(...statusList);
+    } else {
+      // Single status
+      conditions.push('tickets.status = ?');
+      params.push(filters.status);
+    }
   } else if (!filters.status) {
     // Default behavior: exclude closed tickets if no status specified
     conditions.push("tickets.status != 'closed'");
@@ -816,49 +834,52 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       finalDescription = description || '';
     }
 
-    const stmt = db.prepare(`
-      INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, notes, solution, template_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(
-      id,
-      title,
-      finalDescription,
-      status || 'open',
-      priority || 'medium',
-      category_id || null,
-      requester_id || null,
-      notes || null,
-      solution || null,
-      template_id || null
-    );
-
     // Warn if template is used but no custom fields provided
     if (template_id && (!customFields || customFields.length === 0)) {
       console.warn(`⚠️ Ticket created with template_id ${template_id} but no customFields provided`);
       console.warn('This likely indicates a frontend bug - field values will not be saved');
     }
 
-    // Store custom field values if provided
-    if (customFields && Array.isArray(customFields) && customFields.length > 0) {
-      console.log(`✅ Saving ${customFields.length} field values for ticket ${id}`);
-      const insertFieldStmt = db.prepare(`
-        INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-      customFields.forEach((field: any) => {
-        if (field.fieldName && field.fieldLabel) {
-          insertFieldStmt.run(uuidv4(), id, field.fieldName, field.fieldLabel, field.fieldValue || '');
-        }
-      });
-    }
+    // Wrap all inserts in a transaction for atomicity
+    const createTransaction = db.transaction(() => {
+      db.prepare(`
+        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, notes, solution, template_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        title,
+        finalDescription,
+        status || 'open',
+        priority || 'medium',
+        category_id || null,
+        requester_id || null,
+        notes || null,
+        solution || null,
+        template_id || null
+      );
+
+      // Store custom field values if provided
+      if (customFields && Array.isArray(customFields) && customFields.length > 0) {
+        console.log(`✅ Saving ${customFields.length} field values for ticket ${id}`);
+        const insertFieldStmt = db.prepare(`
+          INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
+          VALUES (?, ?, ?, ?, ?)
+        `);
+        customFields.forEach((field: any) => {
+          if (field.fieldName && field.fieldLabel) {
+            insertFieldStmt.run(uuidv4(), id, field.fieldName, field.fieldLabel, field.fieldValue || '');
+          }
+        });
+      }
+
+      // Log ticket creation in history
+      db.prepare('INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)')
+        .run(uuidv4(), id, req.user!.id, 'created', null, null);
+    });
+
+    createTransaction();
 
     const ticket = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(id) as TicketRow;
-
-    // Log ticket creation in history
-    db.prepare('INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(uuidv4(), id, req.user!.id, 'created', null, null);
 
     const requester = ticket.requester_id
       ? (db.prepare('SELECT name, email FROM contacts WHERE id = ?').get(ticket.requester_id) as { name: string; email: string } | undefined)
@@ -989,37 +1010,39 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'solution', null, isNew ? 'added' : 'updated');
     }
 
-    if (setClauses) {
-      db.prepare(`UPDATE tickets SET ${setClauses} WHERE id = ?`).run(...values, req.params.id);
-    }
+    // Wrap all DB writes in a transaction for atomicity
+    const updateTransaction = db.transaction(() => {
+      if (setClauses) {
+        db.prepare(`UPDATE tickets SET ${setClauses} WHERE id = ?`).run(...values, req.params.id);
+      }
 
-    // Replace field values if customFields were provided
-    if (customFields && Array.isArray(customFields) && customFields.length > 0) {
-      db.prepare('DELETE FROM ticket_field_values WHERE ticket_id = ?').run(req.params.id);
-      const insertFieldStmt = db.prepare(`
-        INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-      customFields.forEach((field: any) => {
-        if (field.fieldName && field.fieldLabel) {
-          insertFieldStmt.run(uuidv4(), req.params.id, field.fieldName, field.fieldLabel, field.fieldValue || '');
-        }
-      });
-    }
+      // Replace field values if customFields were provided
+      if (customFields && Array.isArray(customFields) && customFields.length > 0) {
+        db.prepare('DELETE FROM ticket_field_values WHERE ticket_id = ?').run(req.params.id);
+        const insertFieldStmt = db.prepare(`
+          INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
+          VALUES (?, ?, ?, ?, ?)
+        `);
+        customFields.forEach((field: any) => {
+          if (field.fieldName && field.fieldLabel) {
+            insertFieldStmt.run(uuidv4(), req.params.id, field.fieldName, field.fieldLabel, field.fieldValue || '');
+          }
+        });
+      }
+
+      // Update tags if provided
+      if (tag_ids && Array.isArray(tag_ids)) {
+        db.prepare('DELETE FROM ticket_tags WHERE ticket_id = ?').run(req.params.id);
+        const insertTag = db.prepare('INSERT INTO ticket_tags (id, ticket_id, tag_id) VALUES (?, ?, ?)');
+        tag_ids.forEach((tagId: string) => {
+          insertTag.run(uuidv4(), req.params.id, tagId);
+        });
+      }
+    });
+
+    updateTransaction();
 
     const ticket = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(req.params.id) as TicketRow;
-
-    // Update tags if provided
-    if (tag_ids && Array.isArray(tag_ids)) {
-      // Delete existing tags
-      db.prepare('DELETE FROM ticket_tags WHERE ticket_id = ?').run(req.params.id);
-
-      // Insert new tags
-      const insertTag = db.prepare('INSERT INTO ticket_tags (id, ticket_id, tag_id) VALUES (?, ?, ?)');
-      tag_ids.forEach((tagId: string) => {
-        insertTag.run(uuidv4(), req.params.id, tagId);
-      });
-    }
 
     // Fetch tags for response
     const tags = db.prepare(`
@@ -1066,10 +1089,27 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 // Delete ticket
 router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
+    // Fetch attachments before deleting so we can clean up files on disk
+    const attachments = db.prepare(
+      'SELECT file_path FROM ticket_attachments WHERE ticket_id = ?'
+    ).all(req.params.id) as { file_path: string }[];
+
     const result = db.prepare('DELETE FROM tickets WHERE id = ?').run(req.params.id);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    // Clean up attachment files from disk (DB relations cascade automatically)
+    for (const attachment of attachments) {
+      const filePath = join(UPLOAD_DIR, attachment.file_path);
+      if (existsSync(filePath)) {
+        try {
+          unlinkSync(filePath);
+        } catch (err) {
+          console.error(`Failed to delete attachment file ${filePath}:`, err);
+        }
+      }
     }
 
     res.json({ message: 'Ticket deleted' });
@@ -1188,6 +1228,8 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
     const ticketId = req.params.id;
     const userId = req.user!.id;
 
+    console.log('🔔 Creating reminder:', { ticketId, userId, reminder_time, message });
+
     if (!reminder_time) {
       return res.status(400).json({ error: 'Reminder time is required' });
     }
@@ -1204,12 +1246,18 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
     }
 
     const id = uuidv4();
-    db.prepare(`
+    console.log('💾 Inserting reminder with ID:', id);
+
+    const insertResult = db.prepare(`
       INSERT INTO ticket_reminders (id, ticket_id, user_id, reminder_time, message)
       VALUES (?, ?, ?, ?, ?)
     `).run(id, ticketId, userId, reminder_time, message || null);
 
+    console.log('✅ Insert result:', insertResult);
+
     const reminder = db.prepare('SELECT * FROM ticket_reminders WHERE id = ?').get(id);
+    console.log('📋 Created reminder:', reminder);
+
     res.status(201).json(reminder);
   } catch (error) {
     console.error('Error creating reminder:', error);

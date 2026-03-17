@@ -1,11 +1,11 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Ticket, User as UserIcon, ArrowRight, Clock, Zap, Tag, Folder } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import {
-  CommandDialog,
+  Command,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
   CommandList,
   CommandSeparator,
@@ -28,6 +28,8 @@ export const GlobalSearch = ({ tickets, users, categories = [], tags = [] }: Glo
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const navigate = useNavigate();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const normalizeSearch = (value: string) =>
     value
@@ -89,12 +91,27 @@ export const GlobalSearch = ({ tickets, users, categories = [], tags = [] }: Glo
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        setOpen((open) => !open);
+        inputRef.current?.focus();
+        setOpen(true);
       }
     };
     document.addEventListener('keydown', down);
     return () => document.removeEventListener('keydown', down);
   }, []);
+
+  // Handle click outside to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    if (open) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [open]);
 
   const getUserName = (userId: string) => {
     return users.find(u => u.id === userId)?.name || '';
@@ -150,25 +167,62 @@ export const GlobalSearch = ({ tickets, users, categories = [], tags = [] }: Glo
   };
 
   return (
-    <>
-      <button
-        onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground bg-muted/50 hover:bg-muted rounded-lg transition-colors w-full sm:w-auto"
-      >
-        <Search className="w-4 h-4" />
-        <span className="hidden sm:inline">Sök överallt...</span>
-        <span className="sm:hidden">Sök...</span>
-        <kbd className="hidden sm:inline-flex pointer-events-none h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
-          <span className="text-xs">⌘</span>K
-        </kbd>
-      </button>
-      <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput 
-          placeholder="Sök ärenden, användare..." 
-          value={search}
-          onValueChange={setSearch}
-        />
-        <CommandList>
+    <div ref={containerRef} className="relative w-full md:w-[280px] group">
+      {/* Layer 1: Outer rotating gradient (always visible) */}
+      <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[56px] md:max-h-[70px] rounded-xl blur-[2px] md:blur-[3px]">
+        <div className="absolute w-[999px] h-[999px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+                        bg-[conic-gradient(hsl(var(--search-glow-base)),hsl(var(--search-glow-primary-deep))_5%,hsl(var(--search-glow-base))_38%,hsl(var(--search-glow-base))_50%,hsl(var(--search-glow-accent-vivid))_60%,hsl(var(--search-glow-base))_87%)]
+                        transition-all duration-2000
+                        animate-search-glow-slow
+                        group-hover:rotate-[-120deg] group-focus-within:animate-search-glow-focus">
+        </div>
+      </div>
+
+      {/* Layer 2: Inner gradient (desktop only) */}
+      <div className="hidden md:block absolute z-[-1] overflow-hidden h-full w-full max-h-[65px] max-w-[312px] rounded-xl blur-[3px]">
+        <div className="absolute w-[600px] h-[600px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[82deg]
+                        bg-[conic-gradient(rgba(0,0,0,0),hsl(var(--search-glow-primary-dark)),rgba(0,0,0,0)_10%,rgba(0,0,0,0)_50%,hsl(var(--search-glow-accent-dark)),rgba(0,0,0,0)_60%)]
+                        transition-all duration-2000
+                        group-hover:rotate-[-98deg] group-focus-within:rotate-[442deg]">
+        </div>
+      </div>
+
+      {/* Layer 3: Highlight gradient (desktop only) */}
+      <div className="hidden md:block absolute z-[-1] overflow-hidden h-full w-full max-h-[63px] max-w-[307px] rounded-lg blur-[2px]">
+        <div className="absolute w-[600px] h-[600px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[70deg]
+                        bg-[conic-gradient(rgba(0,0,0,0)_0%,hsl(var(--search-glow-primary-bright)),rgba(0,0,0,0)_8%,rgba(0,0,0,0)_50%,hsl(var(--search-glow-accent-bright)),rgba(0,0,0,0)_58%)]
+                        brightness-140 transition-all duration-2000
+                        group-hover:rotate-[-97deg] group-focus-within:rotate-[443deg]">
+        </div>
+      </div>
+
+      {/* Search icon */}
+      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10 pointer-events-none" />
+
+      {/* Input with updated background */}
+      <Input
+        ref={inputRef}
+        placeholder="Sök överallt..."
+        value={search}
+        onChange={(e) => {
+          setSearch(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            setOpen(false);
+            e.currentTarget.blur();
+          }
+        }}
+        className="relative pl-10 pr-4 bg-[hsl(var(--search-input-bg))] border-primary/30 focus-visible:border-primary/50 focus-visible:ring-0 transition-colors"
+      />
+
+      {/* Dropdown - absolute positioned */}
+      {open && (
+        <div className="absolute top-full left-0 right-0 mt-2 bg-popover border border-border rounded-md shadow-md max-h-[400px] overflow-y-auto z-50">
+          <Command shouldFilter={false}>
+            <CommandList>
           {!search && (
             <>
               {/* Quick Actions */}
@@ -349,7 +403,9 @@ export const GlobalSearch = ({ tickets, users, categories = [], tags = [] }: Glo
             </>
           )}
         </CommandList>
-      </CommandDialog>
-    </>
+          </Command>
+        </div>
+      )}
+    </div>
   );
 };

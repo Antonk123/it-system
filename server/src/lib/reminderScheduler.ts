@@ -44,6 +44,7 @@ export function stopReminderScheduler() {
 async function checkAndSendReminders() {
   try {
     const now = new Date().toISOString();
+    console.log(`⏰ Checking for reminders at ${now}`);
 
     // Find all unsent reminders that are due
     const dueReminders = db.prepare(`
@@ -59,12 +60,14 @@ async function checkAndSendReminders() {
     `).all(now) as DueReminder[];
 
     if (dueReminders.length === 0) {
-      return; // No reminders to send
+      console.log('  No due reminders found');
+      return;
     }
 
-    console.log(`Found ${dueReminders.length} due reminder(s) to send`);
+    console.log(`📧 Found ${dueReminders.length} due reminder(s) to send`);
 
     for (const reminder of dueReminders) {
+      console.log(`  Processing reminder ${reminder.id} scheduled for ${reminder.reminder_time}`);
       try {
         await sendTicketReminderEmail({
           ticket: {

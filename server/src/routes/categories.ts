@@ -16,7 +16,7 @@ interface CategoryRow {
 // Get all categories
 router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
   try {
-    const categories = db.prepare('SELECT * FROM categories ORDER BY position ASC, created_at ASC').all() as CategoryRow[];
+    const categories = db.prepare('SELECT id, name, label, position, created_at FROM categories ORDER BY position ASC, created_at ASC').all() as CategoryRow[];
     res.json(categories);
   } catch (error) {
     console.error('Error fetching categories:', error);
@@ -41,7 +41,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 
     db.prepare('INSERT INTO categories (id, name, label, position) VALUES (?, ?, ?, ?)').run(id, name, label.trim(), position);
     
-    const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(id) as CategoryRow;
+    const category = db.prepare('SELECT id, name, label, position, created_at FROM categories WHERE id = ?').get(id) as CategoryRow;
     res.status(201).json(category);
   } catch (error) {
     console.error('Error creating category:', error);
@@ -67,7 +67,7 @@ router.put('/reorder', authenticate, (req: AuthRequest, res: Response) => {
 
     transaction(ids);
 
-    const categories = db.prepare('SELECT * FROM categories ORDER BY position ASC, created_at ASC').all() as CategoryRow[];
+    const categories = db.prepare('SELECT id, name, label, position, created_at FROM categories ORDER BY position ASC, created_at ASC').all() as CategoryRow[];
     res.json(categories);
   } catch (error) {
     console.error('Error reordering categories:', error);
@@ -91,7 +91,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Category not found' });
     }
     
-    const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(req.params.id) as CategoryRow;
+    const category = db.prepare('SELECT id, name, label, position, created_at FROM categories WHERE id = ?').get(req.params.id) as CategoryRow;
     res.json(category);
   } catch (error) {
     console.error('Error updating category:', error);

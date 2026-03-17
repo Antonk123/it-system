@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 
@@ -49,11 +50,12 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
     return res.status(400).json({ error: 'Email is required' });
   }
 
-  // Generate a random password if not provided
-  const userPassword = password || Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8).toUpperCase();
+  // Generate a cryptographically secure random password if not provided
+  // Using crypto.randomBytes instead of Math.random for security
+  const userPassword = password || crypto.randomBytes(16).toString('hex');
 
   try {
-    // Check if email already exists
+    // Check if email already exists (fast path)
     const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
     if (existing) {
       return res.status(400).json({ error: 'Email already registered' });
@@ -67,16 +69,25 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
       ? displayName.trim()
       : contact?.name || null;
 
-    db.prepare(`
-      INSERT INTO users (id, email, password_hash, role, display_name)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(id, email, passwordHash, userRole, resolvedDisplayName);
+    try {
+      // Insert user - UNIQUE constraint on email will catch race conditions
+      db.prepare(`
+        INSERT INTO users (id, email, password_hash, role, display_name)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(id, email, passwordHash, userRole, resolvedDisplayName);
 
-    res.status(201).json({
-      message: 'User created',
-      user: { id, email, role: userRole, displayName: resolvedDisplayName },
-      temporaryPassword: password ? undefined : userPassword, // Only return if auto-generated
-    });
+      res.status(201).json({
+        message: 'User created',
+        user: { id, email, role: userRole, displayName: resolvedDisplayName },
+        temporaryPassword: password ? undefined : userPassword, // Only return if auto-generated
+      });
+    } catch (insertError: any) {
+      // Handle race condition: Another request created the same user between check and insert
+      if (insertError.message && insertError.message.includes('UNIQUE constraint')) {
+        return res.status(409).json({ error: 'Email already registered (race condition detected)' });
+      }
+      throw insertError; // Re-throw if it's not a UNIQUE constraint error
+    }
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ error: 'Failed to create user' });

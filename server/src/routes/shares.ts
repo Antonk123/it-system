@@ -68,7 +68,7 @@ interface ChecklistRow {
 // Get existing share token for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const share = db.prepare('SELECT * FROM ticket_shares WHERE ticket_id = ?').get(req.params.ticketId) as ShareRow | undefined;
+    const share = db.prepare('SELECT id, ticket_id, share_token, created_by, created_at FROM ticket_shares WHERE ticket_id = ?').get(req.params.ticketId) as ShareRow | undefined;
     res.json({ share_token: share?.share_token || null });
   } catch (error) {
     console.error('Error fetching share:', error);
@@ -80,7 +80,7 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
 router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
     // Check if share already exists
-    const existing = db.prepare('SELECT * FROM ticket_shares WHERE ticket_id = ?').get(req.params.ticketId) as ShareRow | undefined;
+    const existing = db.prepare('SELECT id, ticket_id, share_token, created_by, created_at FROM ticket_shares WHERE ticket_id = ?').get(req.params.ticketId) as ShareRow | undefined;
     
     if (existing) {
       return res.json({ share_token: existing.share_token });
@@ -126,7 +126,7 @@ router.delete('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Respons
 // Get shared ticket (PUBLIC - no auth required)
 router.get('/public/:token', (req: Request, res: Response) => {
   try {
-    const share = db.prepare('SELECT * FROM ticket_shares WHERE share_token = ?').get(req.params.token) as ShareRow | undefined;
+    const share = db.prepare('SELECT id, ticket_id, share_token, created_by, created_at FROM ticket_shares WHERE share_token = ?').get(req.params.token) as ShareRow | undefined;
     
     if (!share) {
       return res.status(404).json({ error: 'Invalid or expired share link' });
@@ -188,7 +188,7 @@ router.get('/public/:token', (req: Request, res: Response) => {
 router.get('/public/file/:token/:attachmentId', (req: Request, res: Response) => {
   try {
     // Verify share token
-    const share = db.prepare('SELECT * FROM ticket_shares WHERE share_token = ?').get(req.params.token) as ShareRow | undefined;
+    const share = db.prepare('SELECT id, ticket_id, share_token, created_by, created_at FROM ticket_shares WHERE share_token = ?').get(req.params.token) as ShareRow | undefined;
     
     if (!share) {
       return res.status(404).json({ error: 'Invalid share link' });

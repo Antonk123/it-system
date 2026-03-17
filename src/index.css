@@ -96,6 +96,16 @@
     --shadow-2xl: 0 30px 50px -10px hsl(180 80% 50% / 0.35), 0 12px 20px -5px hsl(0 0% 0% / 0.4);
     --tracking-normal: 0em;
     --spacing: 0.25rem;
+
+    /* Animated search glow colors */
+    --search-glow-primary-deep: 180 85% 40%;
+    --search-glow-accent-vivid: 15 95% 65%;
+    --search-glow-primary-dark: 180 90% 20%;
+    --search-glow-accent-dark: 15 90% 35%;
+    --search-glow-primary-bright: 180 70% 75%;
+    --search-glow-accent-bright: 15 80% 80%;
+    --search-glow-base: 200 20% 8%;
+    --search-input-bg: 195 55% 10%;
   }
 
   /* Cyberpunk - Electric neon on dark void */
@@ -156,6 +166,16 @@
     --shadow-lg: 0 0 30px hsl(320 100% 60% / 0.6), 0 8px 16px hsl(0 0% 0% / 0.6);
     --shadow-xl: 0 0 40px hsl(320 100% 60% / 0.7), 0 12px 24px hsl(0 0% 0% / 0.6);
     --shadow-2xl: 0 0 60px hsl(320 100% 60% / 0.8), 0 20px 40px hsl(0 0% 0% / 0.7);
+
+    /* Animated search glow colors */
+    --search-glow-primary-deep: 320 100% 50%;
+    --search-glow-accent-vivid: 180 100% 55%;
+    --search-glow-primary-dark: 300 90% 25%;
+    --search-glow-accent-dark: 180 90% 30%;
+    --search-glow-primary-bright: 320 100% 70%;
+    --search-glow-accent-bright: 180 100% 75%;
+    --search-glow-base: 285 75% 8%;
+    --search-input-bg: 285 75% 10%;
   }
 
   /* Arctic - Deep cold blues with ice accents */
@@ -216,6 +236,16 @@
     --shadow-lg: 0 12px 24px hsl(195 90% 68% / 0.25), 0 4px 12px hsl(0 0% 0% / 0.4);
     --shadow-xl: 0 20px 40px hsl(195 90% 68% / 0.3), 0 8px 16px hsl(0 0% 0% / 0.4);
     --shadow-2xl: 0 30px 60px hsl(195 90% 68% / 0.35), 0 12px 24px hsl(0 0% 0% / 0.5);
+
+    /* Animated search glow colors */
+    --search-glow-primary-deep: 195 90% 55%;
+    --search-glow-accent-vivid: 165 75% 58%;
+    --search-glow-primary-dark: 210 80% 30%;
+    --search-glow-accent-dark: 165 70% 35%;
+    --search-glow-primary-bright: 195 85% 80%;
+    --search-glow-accent-bright: 165 70% 75%;
+    --search-glow-base: 210 60% 8%;
+    --search-input-bg: 210 60% 13%;
   }
 
   /* Terminal - Classic green phosphor CRT */
@@ -276,6 +306,16 @@
     --shadow-lg: 0 0 24px hsl(120, 100%, 55% / 0.5), 0 0 10px hsl(120, 100%, 55% / 0.7);
     --shadow-xl: 0 0 36px hsl(120, 100%, 55% / 0.6), 0 0 16px hsl(120, 100%, 55% / 0.8);
     --shadow-2xl: 0 0 50px hsl(120, 100%, 55% / 0.7), 0 0 24px hsl(120, 100%, 55% / 0.9);
+
+    /* Animated search glow colors */
+    --search-glow-primary-deep: 120 100% 45%;
+    --search-glow-accent-vivid: 120 100% 55%;
+    --search-glow-primary-dark: 120 90% 20%;
+    --search-glow-accent-dark: 120 90% 30%;
+    --search-glow-primary-bright: 120 100% 70%;
+    --search-glow-accent-bright: 120 100% 75%;
+    --search-glow-base: 120 85% 6%;
+    --search-input-bg: 125 85% 6%;
   }
 
   /* Sunset - Warm oranges and purples */
@@ -336,6 +376,16 @@
     --shadow-lg: 0 12px 30px hsl(25 95% 62% / 0.3), 0 6px 12px hsl(290 85% 68% / 0.2);
     --shadow-xl: 0 20px 45px hsl(25 95% 62% / 0.35), 0 10px 20px hsl(290 85% 68% / 0.25);
     --shadow-2xl: 0 30px 60px hsl(25 95% 62% / 0.4), 0 15px 30px hsl(290 85% 68% / 0.3);
+
+    /* Animated search glow colors */
+    --search-glow-primary-deep: 25 95% 50%;
+    --search-glow-accent-vivid: 290 85% 68%;
+    --search-glow-primary-dark: 15 85% 30%;
+    --search-glow-accent-dark: 290 75% 40%;
+    --search-glow-primary-bright: 25 90% 75%;
+    --search-glow-accent-bright: 290 80% 80%;
+    --search-glow-base: 280 40% 10%;
+    --search-input-bg: 280 45% 13%;
   }
 
   .font-jakarta {
