@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Plus, Search, Folder, Clock } from 'lucide-react';
+import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2 } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +18,22 @@ const KnowledgeBase = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
 
+  // Category management state
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryName, setEditingCategoryName] = useState('');
+
+  const fetchCategories = useCallback(async () => {
+    try {
+      const data = await api.getKbCategories();
+      setCategories(data);
+    } catch {
+      // non-critical
+    }
+  }, []);
+
   const fetchArticles = useCallback(async () => {
     try {
       const params: { search?: string; category_id?: string } = {};
@@ -25,22 +41,14 @@ const KnowledgeBase = () => {
       if (categoryFilter !== 'all') params.category_id = categoryFilter;
       const data = await api.getKbArticles(params);
       setArticles(data);
-    } catch (error) {
+    } catch {
       toast.error('Kunde inte hämta artiklar');
     }
   }, [search, categoryFilter]);
 
   useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const data = await api.getKbCategories();
-        setCategories(data);
-      } catch {
-        // non-critical
-      }
-    };
     fetchCategories();
-  }, []);
+  }, [fetchCategories]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -51,10 +59,47 @@ const KnowledgeBase = () => {
     return () => clearTimeout(timer);
   }, [fetchArticles]);
 
+  const handleCreateCategory = async () => {
+    if (!newCategoryName.trim()) return;
+    setIsCreatingCategory(true);
+    try {
+      await api.createKbCategory(newCategoryName.trim());
+      await fetchCategories();
+      setNewCategoryName('');
+      toast.success('Kategori skapad');
+    } catch {
+      toast.error('Kunde inte skapa kategori');
+    } finally {
+      setIsCreatingCategory(false);
+    }
+  };
+
+  const handleUpdateCategory = async (id: string) => {
+    if (!editingCategoryName.trim()) return;
+    try {
+      await api.updateKbCategory(id, editingCategoryName.trim());
+      await fetchCategories();
+      setEditingCategoryId(null);
+      toast.success('Kategori uppdaterad');
+    } catch {
+      toast.error('Kunde inte uppdatera kategori');
+    }
+  };
+
+  const handleDeleteCategory = async (id: string) => {
+    try {
+      await api.deleteKbCategory(id);
+      await fetchCategories();
+      if (categoryFilter === id) setCategoryFilter('all');
+      toast.success('Kategori raderad');
+    } catch {
+      toast.error('Kunde inte radera kategori');
+    }
+  };
+
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString('sv-SE', { year: 'numeric', month: 'short', day: 'numeric' });
 
-  // Strip HTML tags for preview text
   const getPreview = (html: string, maxLen = 120) => {
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     return text.length > maxLen ? text.slice(0, maxLen) + '…' : text;
@@ -74,11 +119,117 @@ const KnowledgeBase = () => {
               <p className="text-sm text-muted-foreground">{articles.length} artiklar</p>
             </div>
           </div>
-          <Button onClick={() => navigate('/kb/new')} size="sm">
-            <Plus className="w-4 h-4 mr-2" />
-            Ny artikel
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCategoryManager((v) => !v)}
+              className={cn(showCategoryManager && 'bg-accent')}
+            >
+              <Settings2 className="w-4 h-4 mr-2" />
+              Kategorier
+            </Button>
+            <Button onClick={() => navigate('/kb/new')} size="sm">
+              <Plus className="w-4 h-4 mr-2" />
+              Ny artikel
+            </Button>
+          </div>
         </div>
+
+        {/* Category manager */}
+        {showCategoryManager && (
+          <div className="border border-border rounded-lg p-4 bg-card space-y-3">
+            <h2 className="text-sm font-medium text-foreground flex items-center gap-2">
+              <Folder className="w-4 h-4 text-muted-foreground" />
+              Hantera kategorier
+            </h2>
+
+            {/* Existing categories */}
+            {categories.length === 0 ? (
+              <p className="text-xs text-muted-foreground">Inga kategorier ännu.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {categories.map((cat) => (
+                  <div key={cat.id} className="flex items-center gap-2 group">
+                    {editingCategoryId === cat.id ? (
+                      <>
+                        <Input
+                          value={editingCategoryName}
+                          onChange={(e) => setEditingCategoryName(e.target.value)}
+                          className="h-8 text-sm flex-1"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleUpdateCategory(cat.id);
+                            if (e.key === 'Escape') setEditingCategoryId(null);
+                          }}
+                          autoFocus
+                        />
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0"
+                          onClick={() => handleUpdateCategory(cat.id)}
+                        >
+                          <Check className="w-3.5 h-3.5 text-green-600" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 w-8 p-0"
+                          onClick={() => setEditingCategoryId(null)}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="flex-1 text-sm text-foreground">{cat.name}</span>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                          onClick={() => {
+                            setEditingCategoryId(cat.id);
+                            setEditingCategoryName(cat.name);
+                          }}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                          onClick={() => handleDeleteCategory(cat.id)}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Create new category */}
+            <div className="flex gap-2 pt-1">
+              <Input
+                placeholder="Ny kategori..."
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                className="h-8 text-sm"
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateCategory()}
+              />
+              <Button
+                size="sm"
+                className="h-8"
+                onClick={handleCreateCategory}
+                disabled={isCreatingCategory || !newCategoryName.trim()}
+              >
+                <Plus className="w-3.5 h-3.5 mr-1" />
+                Lägg till
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex gap-3 flex-col sm:flex-row">
