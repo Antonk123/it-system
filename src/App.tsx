@@ -112,7 +112,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider
       attribute="class"
-      defaultTheme="theme-sunset"
+      defaultTheme="theme-arctic"
       enableSystem={false}
       themes={["theme-default", "theme-cyberpunk", "theme-arctic", "theme-terminal", "theme-sunset"]}
     >
