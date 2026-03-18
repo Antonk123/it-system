@@ -80,7 +80,9 @@ const TicketList = () => {
   }, [viewMode]);
 
   // Fetch with pagination
-  const { tickets, pagination, isLoading, updateTicket, refetch } = useTickets({
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const { tickets, pagination, isLoading, updateTicket, bulkUpdateTickets, refetch } = useTickets({
     page,
     limit: pageSize,
     status: selectedStatuses.length > 0 ? selectedStatuses.join(',') : 'all',
@@ -179,6 +181,15 @@ const TicketList = () => {
       state: { from: currentPath }
     });
   }, [location.pathname, location.search, navigate]);
+
+  const handleBulkAction = useCallback(async (ids: string[], updates: { status?: TicketStatus; priority?: string; category_id?: string | null }) => {
+    try {
+      const result = await bulkUpdateTickets(ids, updates);
+      toast.success(`${result?.updated ?? ids.length} ärenden uppdaterade`);
+    } catch {
+      toast.error('Kunde inte uppdatera ärenden');
+    }
+  }, [bulkUpdateTickets]);
 
   const handleExport = useCallback(async () => {
     try {
@@ -401,6 +412,9 @@ const TicketList = () => {
                     sortDirection={sortDirection}
                     onSortChange={handleSortChange}
                     compact={compactView}
+                    selectedIds={selectedIds}
+                    onSelectionChange={setSelectedIds}
+                    onBulkAction={handleBulkAction}
                   />
 
                   {/* Pagination controls - Table only */}

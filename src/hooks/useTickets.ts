@@ -248,6 +248,19 @@ export const useTickets = (options?: UseTicketsOptions) => {
     },
   });
 
+  // Bulk update tickets mutation
+  const bulkUpdateMutation = useMutation({
+    mutationFn: async ({ ids, updates }: { ids: string[]; updates: { status?: string; priority?: string; category_id?: string | null } }) => {
+      return await api.bulkUpdateTickets(ids, updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to bulk update tickets');
+    },
+  });
+
   // Delete ticket mutation
   const deleteTicketMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -285,6 +298,13 @@ export const useTickets = (options?: UseTicketsOptions) => {
     [deleteTicketMutation]
   );
 
+  const bulkUpdateTickets = useCallback(
+    async (ids: string[], updates: { status?: string; priority?: string; category_id?: string | null }) => {
+      return await bulkUpdateMutation.mutateAsync({ ids, updates });
+    },
+    [bulkUpdateMutation]
+  );
+
   const getTicketById = useCallback(
     (id: string) => tickets.find((t) => t.id === id),
     [tickets]
@@ -301,6 +321,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
     addTicket,
     updateTicket,
     deleteTicket,
+    bulkUpdateTickets,
     getTicketById,
     refetch,
   };

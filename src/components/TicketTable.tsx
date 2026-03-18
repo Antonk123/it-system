@@ -2,8 +2,8 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { memo, useEffect, useState } from 'react';
-import { ArrowUpDown, Loader2 } from 'lucide-react';
-import { Ticket, User, TicketStatus } from '@/types/ticket';
+import { ArrowUpDown, Loader2, X } from 'lucide-react';
+import { Ticket, User, TicketStatus, TicketPriority } from '@/types/ticket';
 import { PriorityBadge } from './PriorityBadge';
 import { CategoryBadge } from './CategoryBadge';
 import { TagBadges } from './TagBadges';
@@ -12,6 +12,8 @@ import { Progress } from '@/components/ui/progress';
 import { useCategories } from '@/hooks/useCategories';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -36,6 +38,12 @@ interface ChecklistProgress {
   completed: number;
 }
 
+interface BulkUpdates {
+  status?: TicketStatus;
+  priority?: TicketPriority;
+  category_id?: string | null;
+}
+
 interface TicketTableProps {
   tickets: Ticket[];
   users: User[];
@@ -49,6 +57,9 @@ interface TicketTableProps {
   enablePrioritySort?: boolean;
   enableCategorySort?: boolean;
   compact?: boolean;
+  selectedIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
+  onBulkAction?: (ids: string[], updates: BulkUpdates) => Promise<void>;
 }
 
 const statusLabels: Record<TicketStatus, string> = {
@@ -72,10 +83,14 @@ export const TicketTable = memo(function TicketTable({
   enablePrioritySort = true,
   enableCategorySort = true,
   compact = false,
+  selectedIds = [],
+  onSelectionChange,
+  onBulkAction,
 }: TicketTableProps) {
   const { categories } = useCategories();
   const [checklistProgress, setChecklistProgress] = useState<ChecklistProgress[]>([]);
   const [savingIds, setSavingIds] = useState<Record<string, boolean>>({});
+  const [bulkSaving, setBulkSaving] = useState(false);
   const isMobile = useIsMobile();
 
   const getUserName = (userId: string) => {
@@ -163,6 +178,36 @@ export const TicketTable = memo(function TicketTable({
         )}
       </button>
     );
+  };
+
+  const allSelected = tickets.length > 0 && tickets.every(t => selectedIds.includes(t.id));
+  const someSelected = selectedIds.length > 0 && !allSelected;
+
+  const toggleAll = () => {
+    if (allSelected) {
+      onSelectionChange?.([]);
+    } else {
+      onSelectionChange?.(tickets.map(t => t.id));
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    if (selectedIds.includes(id)) {
+      onSelectionChange?.(selectedIds.filter(s => s !== id));
+    } else {
+      onSelectionChange?.([...selectedIds, id]);
+    }
+  };
+
+  const handleBulkAction = async (updates: BulkUpdates) => {
+    if (!onBulkAction || selectedIds.length === 0) return;
+    setBulkSaving(true);
+    try {
+      await onBulkAction(selectedIds, updates);
+      onSelectionChange?.([]);
+    } finally {
+      setBulkSaving(false);
+    }
   };
 
   if (tickets.length === 0) {
@@ -258,10 +303,83 @@ export const TicketTable = memo(function TicketTable({
 
   // Desktop: Table layout
   return (
+    <div className="space-y-2">
+      {/* Bulk Action Bar */}
+      {selectedIds.length > 0 && onBulkAction && (
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2 rounded-xl border border-primary/30 bg-primary/5 backdrop-blur-sm">
+          <span className="text-sm font-medium text-foreground/80">{selectedIds.length} valda</span>
+          <div className="flex items-center gap-2 ml-2">
+            <Select
+              disabled={bulkSaving}
+              onValueChange={(v) => handleBulkAction({ status: v as TicketStatus })}
+            >
+              <SelectTrigger className="h-7 w-[130px] text-xs">
+                <SelectValue placeholder="Ändra status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="open">Öppen</SelectItem>
+                <SelectItem value="in-progress">Pågående</SelectItem>
+                <SelectItem value="waiting">Väntar</SelectItem>
+                <SelectItem value="resolved">Löst</SelectItem>
+                <SelectItem value="closed">Stängd</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              disabled={bulkSaving}
+              onValueChange={(v) => handleBulkAction({ priority: v as TicketPriority })}
+            >
+              <SelectTrigger className="h-7 w-[130px] text-xs">
+                <SelectValue placeholder="Ändra prioritet" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Låg</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">Hög</SelectItem>
+                <SelectItem value="critical">Kritisk</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              disabled={bulkSaving}
+              onValueChange={(v) => handleBulkAction({ category_id: v === '__none__' ? null : v })}
+            >
+              <SelectTrigger className="h-7 w-[150px] text-xs">
+                <SelectValue placeholder="Ändra kategori" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Ingen kategori</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {bulkSaving && <Loader2 className="animate-spin h-4 w-4 text-muted-foreground" />}
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-7 text-xs gap-1"
+            onClick={() => onSelectionChange?.([])}
+          >
+            <X className="h-3 w-3" />
+            Avmarkera
+          </Button>
+        </div>
+      )}
+
     <div className="rounded-2xl overflow-hidden border border-border/50 backdrop-blur-sm bg-card/30">
       <Table className={cn(compact && "text-xs")}>
         <TableHeader>
           <TableRow className="border-b border-border/50 bg-background/40 backdrop-blur-sm">
+            {onSelectionChange && (
+              <TableHead className="w-10 pl-4">
+                <Checkbox
+                  checked={allSelected}
+                  ref={(el) => { if (el) (el as any).indeterminate = someSelected; }}
+                  onCheckedChange={toggleAll}
+                  aria-label="Markera alla"
+                />
+              </TableHead>
+            )}
             <TableHead className="font-semibold text-foreground/90">Titel</TableHead>
             <TableHead className="font-semibold text-foreground/90">{renderSortButton('Status', 'status', enableStatusSort)}</TableHead>
             <TableHead className="font-semibold text-foreground/90">{renderSortButton('Prioritet', 'priority', enablePrioritySort)}</TableHead>
@@ -282,7 +400,8 @@ export const TicketTable = memo(function TicketTable({
                 "ticket-row cursor-pointer transition-all duration-200",
                 "hover:bg-gradient-to-r hover:from-primary/5 hover:to-accent/5",
                 "border-b border-border/30 last:border-0",
-                "relative group"
+                "relative group",
+                selectedIds.includes(ticket.id) && "bg-primary/5"
               )}
               onClick={() => {
                 if (onTicketClick) {
@@ -292,6 +411,15 @@ export const TicketTable = memo(function TicketTable({
                 }
               }}
             >
+              {onSelectionChange && (
+                <TableCell className="w-10 pl-4" onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={selectedIds.includes(ticket.id)}
+                    onCheckedChange={() => toggleOne(ticket.id)}
+                    aria-label={`Markera ${ticket.title}`}
+                  />
+                </TableCell>
+              )}
               <TableCell className={cn(compact && "py-3")}>
                 <span className="font-semibold text-foreground group-hover:text-primary transition-colors duration-200">
                   {ticket.title}
@@ -423,6 +551,7 @@ export const TicketTable = memo(function TicketTable({
           ))}
         </TableBody>
       </Table>
+    </div>
     </div>
   );
 });

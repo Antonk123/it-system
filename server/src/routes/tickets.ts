@@ -922,6 +922,91 @@ router.get('/:id/history', authenticate, (req: AuthRequest, res: Response) => {
   }
 });
 
+// Bulk update tickets
+router.put('/bulk', authenticate, (req: AuthRequest, res: Response) => {
+  const { ids, updates } = req.body;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids must be a non-empty array' });
+  }
+
+  const { status, priority, category_id } = updates || {};
+
+  if (status === undefined && priority === undefined && category_id === undefined) {
+    return res.status(400).json({ error: 'At least one field to update is required' });
+  }
+
+  const validStatuses = ['open', 'in-progress', 'waiting', 'resolved', 'closed'];
+  const validPriorities = ['low', 'medium', 'high', 'critical'];
+
+  if (status !== undefined && !validStatuses.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status value' });
+  }
+  if (priority !== undefined && !validPriorities.includes(priority)) {
+    return res.status(400).json({ error: 'Invalid priority value' });
+  }
+
+  try {
+    const now = new Date().toISOString();
+    const historyInsert = db.prepare(
+      'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
+    );
+
+    const bulkUpdate = db.transaction(() => {
+      let updatedCount = 0;
+
+      for (const ticketId of ids) {
+        const existing = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(ticketId) as TicketRow | undefined;
+        if (!existing) continue;
+
+        const safeUpdates: Record<string, unknown> = {};
+
+        if (status !== undefined) {
+          safeUpdates.status = status;
+          if (status === 'resolved' && !existing.resolved_at) safeUpdates.resolved_at = now;
+          if (status === 'closed' && !existing.closed_at) safeUpdates.closed_at = now;
+          if (status !== existing.status) {
+            historyInsert.run(uuidv4(), ticketId, req.user!.id, 'status', existing.status as string, status);
+          }
+        }
+        if (priority !== undefined) {
+          safeUpdates.priority = priority;
+          if (priority !== existing.priority) {
+            historyInsert.run(uuidv4(), ticketId, req.user!.id, 'priority', existing.priority as string, priority);
+          }
+        }
+        if (category_id !== undefined) {
+          safeUpdates.category_id = category_id || null;
+          if (safeUpdates.category_id !== existing.category_id) {
+            const oldCat = existing.category_id
+              ? (db.prepare('SELECT label FROM categories WHERE id = ?').get(existing.category_id) as { label: string } | undefined)?.label ?? null
+              : null;
+            const newCat = category_id
+              ? (db.prepare('SELECT label FROM categories WHERE id = ?').get(category_id) as { label: string } | undefined)?.label ?? null
+              : null;
+            historyInsert.run(uuidv4(), ticketId, req.user!.id, 'category_id', oldCat, newCat);
+          }
+        }
+
+        if (Object.keys(safeUpdates).length === 0) continue;
+
+        const setClauses = Object.keys(safeUpdates).map(k => `${k} = ?`).join(', ');
+        const values = [...Object.values(safeUpdates), ticketId];
+        db.prepare(`UPDATE tickets SET ${setClauses} WHERE id = ?`).run(...values);
+        updatedCount++;
+      }
+
+      return updatedCount;
+    });
+
+    const count = bulkUpdate();
+    return res.json({ updated: count });
+  } catch (error) {
+    console.error('Bulk update error:', error);
+    return res.status(500).json({ error: 'Failed to bulk update tickets' });
+  }
+});
+
 // Update ticket
 router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
   const { title, description, status, priority, category_id, requester_id, notes, solution, customFields, template_id, tag_ids } = req.body;

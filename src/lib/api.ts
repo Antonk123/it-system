@@ -247,6 +247,13 @@ class ApiClient {
     });
   }
 
+  async bulkUpdateTickets(ids: string[], updates: { status?: string; priority?: string; category_id?: string | null }) {
+    return this.request<{ updated: number }>('/tickets/bulk', {
+      method: 'PUT',
+      body: { ids, updates },
+    });
+  }
+
   async deleteTicket(id: string) {
     return this.request<{ message: string }>(`/tickets/${id}`, {
       method: 'DELETE',
