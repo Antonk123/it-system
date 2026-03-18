@@ -7,14 +7,14 @@
 
 ## Mellanprioritet
 
-- [ ] **Exportfunktion** – Exportera ärendelista till CSV eller PDF för rapportering
+- [x] **Exportfunktion** – Exportera ärendelista till CSV eller PDF för rapportering
 - [ ] **Förbättrad sökfunktion** – Fulltext-sökning i kommentarer och bilagor
 - [ ] **Tagganalys på dashboard** – Visualisering av taggfördelning bland ärenden
-- [ ] **Aktivitetsheatmap** – Visualisera ärendeaktivitet per dag/vecka
+- [x] **Aktivitetsheatmap** – Implementerad men dold (aktivera vid behov)
 
 ## Övrigt / finjustering
 
-- [ ] **Mobilanpassning** – Granska och förbättra responsiv layout på mobil/surfplatta
+- [x] **Mobilanpassning** – Responsiv layout är implementerad
 - [ ] **E-postnotifieringar** – Konfigurerbara notifieringar vid statusändringar på ärenden
 
 ## Teknisk skuld / underhåll
