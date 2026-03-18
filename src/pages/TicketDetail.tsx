@@ -17,6 +17,7 @@ import { migrateContent } from '@/lib/contentMigration';
 import { TicketChecklist } from '@/components/TicketChecklist';
 import { TicketComments } from '@/components/TicketComments';
 import { TicketLinks } from '@/components/TicketLinks';
+import { KBLinksSection } from '@/components/KBLinksSection';
 import { TicketActivity } from '@/components/TicketActivity';
 import { ReminderDialog } from '@/components/ReminderDialog';
 import { ReminderList } from '@/components/ReminderList';
@@ -508,6 +509,11 @@ const TicketDetail = () => {
             {/* Activity Log */}
             <div className="pt-4 border-t">
               <TicketActivity history={history} isLoading={historyLoading} />
+            </div>
+
+            {/* Linked KB Articles */}
+            <div className="pt-4 border-t">
+              <KBLinksSection ticketId={ticket.id} />
             </div>
 
             {/* Linked Tickets */}

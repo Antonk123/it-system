@@ -6,22 +6,12 @@
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
 
-## Git/GitHub Workflow
-
-**IMPORTANT**: This project does NOT use GitHub for primary development workflow.
-
-- **GitHub Repository**: A separate copy exists for testing purposes only
-- **NO git push**: Never push changes to GitHub as part of normal development
-- **NO git pull**: Never pull changes from GitHub into the local project
-- **Local Development**: All development happens locally
-- **Deployment**: Images are rebuilt and deployed locally via Docker/Portainer
+## Deployment
 
 When deploying changes:
 1. Make changes locally
 2. Rebuild Docker images: `docker build -t it-ticketing-backend:latest -f Dockerfile.server .`
 3. Deploy via Portainer or `docker restart`
-
-Do not involve GitHub in the deployment workflow.
 
 ## Task Management
 

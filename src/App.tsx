@@ -19,6 +19,9 @@ import ResetPassword from "./pages/ResetPassword";
 import PublicTicketForm from "./pages/PublicTicketForm";
 import SharedTicket from "./pages/SharedTicket";
 import NotFound from "./pages/NotFound";
+import KnowledgeBase from "./pages/KnowledgeBase";
+import KBArticleDetail from "./pages/KBArticleDetail";
+import KBArticleForm from "./pages/KBArticleForm";
 import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
 
 const queryClient = new QueryClient({
@@ -95,6 +98,10 @@ const AppRoutes = () => (
     <Route path="/users" element={<ProtectedRoute><UserList /></ProtectedRoute>} />
     <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
     <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+    <Route path="/kb" element={<ProtectedRoute><KnowledgeBase /></ProtectedRoute>} />
+    <Route path="/kb/new" element={<ProtectedRoute><KBArticleForm /></ProtectedRoute>} />
+    <Route path="/kb/:id" element={<ProtectedRoute><KBArticleDetail /></ProtectedRoute>} />
+    <Route path="/kb/:id/edit" element={<ProtectedRoute><KBArticleForm /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>
 );

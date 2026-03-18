@@ -2,8 +2,9 @@
 
 <!--
   TODO.md - Single source of truth för IT Ticket System roadmap & tracking
-  Last updated: 2026-03-17
-  Latest cleanup: 2026-03-17 - Removed Password policy, File upload limits, Saved filter presets, Smart folders (all ✅ implemented)
+  Last updated: 2026-03-18
+  Latest cleanup: 2026-03-18 - Removed Bulk-operationer (✅ implemented: multi-select, bulk status/tag/category/export)
+  Previous cleanup: 2026-03-17 - Removed Password policy, File upload limits, Saved filter presets, Smart folders (all ✅ implemented)
   Previous cleanup: 2026-03-09 - Removed Quick Wins + Security (Rate limit, Token refresh, Helmet) + Critical bugs (FK validation, N+1 export) + Pagination
 
   Uppdateringsprocess:
@@ -52,17 +53,7 @@ docker build -f Dockerfile.client -t it-ticketing-frontend:latest .
 
 ## 🎯 Nästa Features - Hög Prioritet
 
-### 1. **Bulk-operationer** (4-6h)
-- [ ] Multi-select i TicketList (checkboxar)
-- [ ] Bulk actions toolbar
-  - Bulk status-ändring
-  - Bulk kategorisering
-  - Bulk tagging
-  - Bulk export
-
-**Impact:** Massiv produktivitetsboost för stora operationer
-
-### 2. **Notifikationer** (1-2h)
+### 1. **Notifikationer** (1-2h)
 - [ ] Daglig/veckovis digest (sammanfattning)
 - [ ] Anpassningsbara notifikationsinställningar
 
@@ -100,12 +91,12 @@ docker build -f Dockerfile.client -t it-ticketing-frontend:latest .
 
 **Impact:** Långsiktig inventarie-spårning, högst värde för IT-avdelningar
 
-### 7. **Knowledge Base** (4-6h)
-- [ ] Artiklar med markdown
-- [ ] Kategorisering
-- [ ] Sök i KB
-- [ ] Länka KB-artiklar till tickets
-- [ ] "Löstes detta ditt problem?"-feedback
+### 7. **Knowledge Base** ✅ Implementerad
+- Artiklar med TipTap-editor (HTML, visuell)
+- Egna KB-kategorier (fristående från ticketkategorier)
+- Sökning och kategorifilter
+- Länka KB-artiklar till tickets (från ticketdetaljvyn)
+- **OBS:** Kör migration på servern: `docker exec it-ticketing-backend npx tsx src/db/add-kb-tables.ts`
 
 ### 8. **Rapportering & Analytics** (1-2h)
 - [ ] Export rapporter till PDF
@@ -148,24 +139,22 @@ Dessa är inte relevanta för single-user system:
 |----------|-------------|-----------|---------------|
 | Prestandaproblem | 2 | Medel | 3-5h |
 | Säkerhetsförbättringar | 1 | Hög | 1-2h |
-| Features (Hög) | 2 | Hög | 5-8h |
+| Features (Hög) | 1 | Hög | 1-2h |
 | Features (Medel) | 3 | Medel | 6-9h |
-| Features (Låg) | 6 | Låg | 12-20h+ |
-| **TOTALT** | **14** | - | **~27-44h** |
+| Features (Låg) | 5 | Låg | 8-16h+ |
+| **TOTALT** | **12** | - | **~19-32h** |
 
 ### 🚀 Rekommenderad prioritering:
-1. **Bulk-operationer** (4-6h) - Stor produktivitetsboost
-2. **CSRF-skydd** (1-2h) - Enda kvarvarande säkerhetspunkt
-3. **Avancerad sökning** (2-3h) - Datumfilter, tag AND/OR
-4. **Automatisering** (2-3h) - Auto-close, auto-tag
+1. **CSRF-skydd** (1-2h) - Enda kvarvarande säkerhetspunkt
+2. **Avancerad sökning** (2-3h) - Datumfilter, tag AND/OR
+3. **Automatisering** (2-3h) - Auto-close, auto-tag
 
 ---
 
 ## 🎯 Rekommenderad arbetsordning
 
 ### Nästa sprint (1-2 veckor)
-1. **Bulk-operationer** (4-6h) - Stor produktivitetsboost - Avklarad
-2. **CSRF-skydd** (1-2h) - Säkerhet
+1. **CSRF-skydd** (1-2h) - Säkerhet
 
 ### Sprint 2 (2-3 veckor)
 1. Avancerad sökning & filter (datumintervall, tag AND/OR)
@@ -277,6 +266,7 @@ Integration med Tickets:
 
 ---
 
-**Senast uppdaterad:** 2026-03-17
-**Latest cleanup:** Removed multi-user features (assignee, SLA, auto-assign) + notification triggers + completed items
+**Senast uppdaterad:** 2026-03-18
+**Latest cleanup:** Removed Bulk-operationer (✅ implemented)
+**Previous cleanup:** Removed multi-user features (assignee, SLA, auto-assign) + notification triggers + completed items
 **Version history:** See `docs/archive/VERSION-HISTORY.md`

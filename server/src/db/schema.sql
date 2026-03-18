@@ -127,6 +127,34 @@ CREATE TABLE IF NOT EXISTS ticket_reminders (
   sent_at TEXT DEFAULT NULL
 );
 
+-- Knowledge Base categories
+CREATE TABLE IF NOT EXISTS kb_categories (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  color TEXT,
+  position INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Knowledge Base articles
+CREATE TABLE IF NOT EXISTS kb_articles (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  category_id TEXT REFERENCES kb_categories(id) ON DELETE SET NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Ticket <-> KB article links
+CREATE TABLE IF NOT EXISTS ticket_kb_links (
+  id TEXT PRIMARY KEY,
+  ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(ticket_id, article_id)
+);
+
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
 CREATE INDEX IF NOT EXISTS idx_tickets_priority ON tickets(priority);
@@ -148,6 +176,10 @@ CREATE INDEX IF NOT EXISTS idx_ticket_reminders_ticket ON ticket_reminders(ticke
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_user ON ticket_reminders(user_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_time ON ticket_reminders(reminder_time);
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_sent ON ticket_reminders(sent);
+CREATE INDEX IF NOT EXISTS idx_kb_articles_category ON kb_articles(category_id);
+CREATE INDEX IF NOT EXISTS idx_kb_articles_updated ON kb_articles(updated_at);
+CREATE INDEX IF NOT EXISTS idx_ticket_kb_links_ticket ON ticket_kb_links(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_kb_links_article ON ticket_kb_links(article_id);
 
 -- Trigger to update updated_at on tickets
 CREATE TRIGGER IF NOT EXISTS update_ticket_updated_at

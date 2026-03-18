@@ -21,6 +21,7 @@ import userRoutes from './routes/users.js';
 import publicRoutes from './routes/public.js';
 import templateRoutes from './routes/templates.js';
 import tagRoutes from './routes/tags.js';
+import kbRoutes from './routes/kb.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -133,6 +134,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/public', publicRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/tags', tagRoutes);
+app.use('/api/kb', kbRoutes);
 
 // Error handling
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

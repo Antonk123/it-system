@@ -676,6 +676,82 @@ class ApiClient {
     });
   }
 
+  // Knowledge Base - Categories
+  async getKbCategories() {
+    return this.request<KbCategoryRow[]>('/kb/categories');
+  }
+
+  async createKbCategory(name: string, color?: string) {
+    return this.request<KbCategoryRow>('/kb/categories', {
+      method: 'POST',
+      body: { name, color },
+    });
+  }
+
+  async updateKbCategory(id: string, name: string, color?: string) {
+    return this.request<KbCategoryRow>(`/kb/categories/${id}`, {
+      method: 'PUT',
+      body: { name, color },
+    });
+  }
+
+  async deleteKbCategory(id: string) {
+    return this.request<{ message: string }>(`/kb/categories/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Knowledge Base - Articles
+  async getKbArticles(params?: { search?: string; category_id?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.search) qs.set('search', params.search);
+    if (params?.category_id) qs.set('category_id', params.category_id);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<KbArticleRow[]>(`/kb/articles${query}`);
+  }
+
+  async getKbArticle(id: string) {
+    return this.request<KbArticleRow>(`/kb/articles/${id}`);
+  }
+
+  async createKbArticle(data: { title: string; content: string; category_id?: string | null }) {
+    return this.request<KbArticleRow>('/kb/articles', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async updateKbArticle(id: string, data: { title: string; content: string; category_id?: string | null }) {
+    return this.request<KbArticleRow>(`/kb/articles/${id}`, {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
+  async deleteKbArticle(id: string) {
+    return this.request<{ message: string }>(`/kb/articles/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Knowledge Base - Ticket links
+  async getTicketKbLinks(ticketId: string) {
+    return this.request<(KbArticleRow & { link_id: string })[]>(`/kb/ticket/${ticketId}`);
+  }
+
+  async linkKbArticleToTicket(ticketId: string, articleId: string) {
+    return this.request<{ id: string }>(`/kb/ticket/${ticketId}`, {
+      method: 'POST',
+      body: { articleId },
+    });
+  }
+
+  async unlinkKbArticleFromTicket(ticketId: string, articleId: string) {
+    return this.request<{ message: string }>(`/kb/ticket/${ticketId}/${articleId}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Public endpoints (no auth)
   async getPublicCategories() {
     return this.request<{ id: string; label: string }[]>('/public/categories');
@@ -881,6 +957,25 @@ export interface TemplateFieldRow {
   required: number;
   options: string | null;
   position: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KbCategoryRow {
+  id: string;
+  name: string;
+  color: string | null;
+  position: number;
+  created_at: string;
+}
+
+export interface KbArticleRow {
+  id: string;
+  title: string;
+  content: string;
+  category_id: string | null;
+  category_name: string | null;
+  category_color: string | null;
   created_at: string;
   updated_at: string;
 }
