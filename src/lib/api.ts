@@ -752,6 +752,27 @@ class ApiClient {
     });
   }
 
+  // Knowledge Base - Sharing
+  async getKbArticleShare(articleId: string) {
+    return this.request<{ share_token: string | null }>(`/kb/articles/${articleId}/share`);
+  }
+
+  async createKbArticleShare(articleId: string) {
+    return this.request<{ share_token: string }>(`/kb/articles/${articleId}/share`, {
+      method: 'POST',
+    });
+  }
+
+  async revokeKbArticleShare(articleId: string) {
+    return this.request<{ message: string }>(`/kb/articles/${articleId}/share`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getPublicKbArticle(token: string) {
+    return this.request<KbArticleRow>(`/kb/public/${token}`);
+  }
+
   // Public endpoints (no auth)
   async getPublicCategories() {
     return this.request<{ id: string; label: string }[]>('/public/categories');

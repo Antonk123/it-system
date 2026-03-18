@@ -1,5 +1,6 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { randomBytes } from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
@@ -280,6 +281,76 @@ router.delete('/ticket/:ticketId/:articleId', authenticate, (req: AuthRequest, r
   } catch (error) {
     console.error('Error removing KB link:', error);
     res.status(500).json({ error: 'Failed to remove KB link' });
+  }
+});
+
+// ─── Article Sharing ──────────────────────────────────────────────────────────
+
+// GET /api/kb/articles/:id/share — get existing share token
+router.get('/articles/:id/share', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const row = db.prepare('SELECT share_token FROM kb_article_shares WHERE article_id = ?').get(req.params.id) as { share_token: string } | undefined;
+    res.json({ share_token: row?.share_token || null });
+  } catch (error) {
+    console.error('Error fetching KB share:', error);
+    res.status(500).json({ error: 'Failed to fetch share' });
+  }
+});
+
+// POST /api/kb/articles/:id/share — create share token (idempotent)
+router.post('/articles/:id/share', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const existing = db.prepare('SELECT share_token FROM kb_article_shares WHERE article_id = ?').get(req.params.id) as { share_token: string } | undefined;
+    if (existing) return res.json({ share_token: existing.share_token });
+
+    const article = db.prepare('SELECT id FROM kb_articles WHERE id = ?').get(req.params.id);
+    if (!article) return res.status(404).json({ error: 'Article not found' });
+
+    const id = uuidv4();
+    const shareToken = randomBytes(12).toString('hex');
+    const now = new Date().toISOString();
+    db.prepare('INSERT INTO kb_article_shares (id, article_id, share_token, created_at) VALUES (?, ?, ?, ?)')
+      .run(id, req.params.id, shareToken, now);
+
+    res.status(201).json({ share_token: shareToken });
+  } catch (error) {
+    console.error('Error creating KB share:', error);
+    res.status(500).json({ error: 'Failed to create share' });
+  }
+});
+
+// DELETE /api/kb/articles/:id/share — revoke share token
+router.delete('/articles/:id/share', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const result = db.prepare('DELETE FROM kb_article_shares WHERE article_id = ?').run(req.params.id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Share not found' });
+    res.json({ message: 'Share revoked' });
+  } catch (error) {
+    console.error('Error revoking KB share:', error);
+    res.status(500).json({ error: 'Failed to revoke share' });
+  }
+});
+
+// GET /api/kb/public/:token — public read-only article (no auth)
+router.get('/public/:token', (_req: Request, res: Response) => {
+  const { token } = _req.params;
+  try {
+    const share = db.prepare('SELECT article_id FROM kb_article_shares WHERE share_token = ?').get(token) as { article_id: string } | undefined;
+    if (!share) return res.status(404).json({ error: 'Invalid or expired link' });
+
+    const article = db.prepare(`
+      SELECT a.id, a.title, a.content, a.created_at, a.updated_at,
+        c.name as category_name, c.color as category_color
+      FROM kb_articles a
+      LEFT JOIN kb_categories c ON a.category_id = c.id
+      WHERE a.id = ?
+    `).get(share.article_id) as KbArticleRow | undefined;
+
+    if (!article) return res.status(404).json({ error: 'Article not found' });
+    res.json(article);
+  } catch (error) {
+    console.error('Error fetching public KB article:', error);
+    res.status(500).json({ error: 'Failed to fetch article' });
   }
 });
 

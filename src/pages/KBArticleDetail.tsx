@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Folder, Calendar } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { api, KbArticleRow } from '@/lib/api';
 import { toast } from 'sonner';
@@ -25,13 +26,20 @@ const KBArticleDetail = () => {
   const [article, setArticle] = useState<KbArticleRow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [showShare, setShowShare] = useState(false);
+  const [isTogglingShare, setIsTogglingShare] = useState(false);
 
   useEffect(() => {
     if (!id) return;
     const fetch = async () => {
       try {
-        const data = await api.getKbArticle(id);
+        const [data, shareData] = await Promise.all([
+          api.getKbArticle(id),
+          api.getKbArticleShare(id),
+        ]);
         setArticle(data);
+        setShareToken(shareData.share_token);
       } catch {
         toast.error('Artikeln hittades inte');
         navigate('/kb');
@@ -53,6 +61,37 @@ const KBArticleDetail = () => {
       toast.error('Kunde inte radera artikel');
       setIsDeleting(false);
     }
+  };
+
+  const getPublicUrl = (token: string) =>
+    `${window.location.origin}/kb/shared/${token}`;
+
+  const handleToggleShare = async () => {
+    if (!id) return;
+    setIsTogglingShare(true);
+    try {
+      if (shareToken) {
+        await api.revokeKbArticleShare(id);
+        setShareToken(null);
+        setShowShare(false);
+        toast.success('Delningslänk borttagen');
+      } else {
+        const data = await api.createKbArticleShare(id);
+        setShareToken(data.share_token);
+        setShowShare(true);
+        toast.success('Delningslänk skapad');
+      }
+    } catch {
+      toast.error('Något gick fel');
+    } finally {
+      setIsTogglingShare(false);
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (!shareToken) return;
+    navigator.clipboard.writeText(getPublicUrl(shareToken));
+    toast.success('Länk kopierad!');
   };
 
   const formatDate = (iso: string) =>
@@ -83,6 +122,16 @@ const KBArticleDetail = () => {
             </Link>
           </Button>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => shareToken ? setShowShare((v) => !v) : handleToggleShare()}
+              disabled={isTogglingShare}
+              className={shareToken ? 'text-primary border-primary/40' : ''}
+            >
+              <Share2 className="w-4 h-4 mr-2" />
+              {shareToken ? 'Delad' : 'Dela'}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => navigate(`/kb/${id}/edit`)}>
               <Edit className="w-4 h-4 mr-2" />
               Redigera
@@ -111,6 +160,45 @@ const KBArticleDetail = () => {
             </AlertDialog>
           </div>
         </div>
+
+        {/* Share panel */}
+        {showShare && shareToken && (
+          <div className="border border-primary/30 rounded-lg p-4 bg-primary/5 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                <Share2 className="w-4 h-4 text-primary" />
+                Publik delningslänk
+              </p>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowShare(false)}>
+                <X className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={getPublicUrl(shareToken)}
+                className="text-xs font-mono bg-background"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <Button size="sm" variant="outline" onClick={handleCopyLink}>
+                <LinkIcon className="w-3.5 h-3.5 mr-1.5" />
+                Kopiera
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Vem som helst med länken kan läsa artikeln utan att logga in.
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive text-xs px-0"
+              onClick={handleToggleShare}
+              disabled={isTogglingShare}
+            >
+              Ta bort delningslänk
+            </Button>
+          </div>
+        )}
 
         {/* Article header */}
         <div className="space-y-3">

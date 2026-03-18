@@ -22,6 +22,7 @@ import NotFound from "./pages/NotFound";
 import KnowledgeBase from "./pages/KnowledgeBase";
 import KBArticleDetail from "./pages/KBArticleDetail";
 import KBArticleForm from "./pages/KBArticleForm";
+import SharedKBArticle from "./pages/SharedKBArticle";
 import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
 
 const queryClient = new QueryClient({
@@ -89,6 +90,7 @@ const AppRoutes = () => (
     <Route path="/reset-password" element={<ResetPassword />} />
     <Route path="/submit-ticket" element={<PublicTicketForm />} />
     <Route path="/shared/:token" element={<SharedTicket />} />
+    <Route path="/kb/shared/:token" element={<SharedKBArticle />} />
     <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
     <Route path="/tickets" element={<ProtectedRoute><TicketList /></ProtectedRoute>} />
     <Route path="/tickets/new" element={<ProtectedRoute><TicketForm /></ProtectedRoute>} />

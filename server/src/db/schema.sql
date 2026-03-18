@@ -146,6 +146,14 @@ CREATE TABLE IF NOT EXISTS kb_articles (
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+-- KB article public share tokens
+CREATE TABLE IF NOT EXISTS kb_article_shares (
+  id TEXT PRIMARY KEY,
+  article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
+  share_token TEXT UNIQUE NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Ticket <-> KB article links
 CREATE TABLE IF NOT EXISTS ticket_kb_links (
   id TEXT PRIMARY KEY,
@@ -176,6 +184,8 @@ CREATE INDEX IF NOT EXISTS idx_ticket_reminders_ticket ON ticket_reminders(ticke
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_user ON ticket_reminders(user_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_time ON ticket_reminders(reminder_time);
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_sent ON ticket_reminders(sent);
+CREATE INDEX IF NOT EXISTS idx_kb_article_shares_token ON kb_article_shares(share_token);
+CREATE INDEX IF NOT EXISTS idx_kb_article_shares_article ON kb_article_shares(article_id);
 CREATE INDEX IF NOT EXISTS idx_kb_articles_category ON kb_articles(category_id);
 CREATE INDEX IF NOT EXISTS idx_kb_articles_updated ON kb_articles(updated_at);
 CREATE INDEX IF NOT EXISTS idx_ticket_kb_links_ticket ON ticket_kb_links(ticket_id);

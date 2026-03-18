@@ -50,6 +50,15 @@ try {
       UNIQUE(ticket_id, article_id)
     );
 
+    CREATE TABLE IF NOT EXISTS kb_article_shares (
+      id TEXT PRIMARY KEY,
+      article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
+      share_token TEXT UNIQUE NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_kb_article_shares_token ON kb_article_shares(share_token);
+    CREATE INDEX IF NOT EXISTS idx_kb_article_shares_article ON kb_article_shares(article_id);
     CREATE INDEX IF NOT EXISTS idx_kb_articles_category ON kb_articles(category_id);
     CREATE INDEX IF NOT EXISTS idx_kb_articles_updated ON kb_articles(updated_at);
     CREATE INDEX IF NOT EXISTS idx_ticket_kb_links_ticket ON ticket_kb_links(ticket_id);
