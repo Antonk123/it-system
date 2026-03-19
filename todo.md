@@ -2,8 +2,9 @@
 
 <!--
   TODO.md - Single source of truth för IT Ticket System roadmap & tracking
-  Last updated: 2026-03-18
-  Latest cleanup: 2026-03-18 - Removed Bulk-operationer (✅ implemented: multi-select, bulk status/tag/category/export)
+  Last updated: 2026-03-20
+  Latest cleanup: 2026-03-20 - Removed Knowledge Base (✅ implemented), added S1-S4 security items
+  Previous cleanup: 2026-03-18 - Removed Bulk-operationer (✅ implemented: multi-select, bulk status/tag/category/export)
   Previous cleanup: 2026-03-17 - Removed Password policy, File upload limits, Saved filter presets, Smart folders (all ✅ implemented)
   Previous cleanup: 2026-03-09 - Removed Quick Wins + Security (Rate limit, Token refresh, Helmet) + Critical bugs (FK validation, N+1 export) + Pagination
 
@@ -48,6 +49,24 @@ docker build -f Dockerfile.client -t it-ticketing-frontend:latest .
   - Använd csurf middleware
   - Skydda state-changing endpoints
 
+### 2. **API rate limiting** ✅ Implementerad
+- `apiRateLimiter` (300 req/15min) via `express-rate-limit` exporterad från `middleware/rateLimit.ts`
+- Applicerad på alla `/api/*` routes i `server/src/index.ts`
+
+### 3. **JSON body size limit** ✅ Implementerad
+- `express.json({ limit: '1mb' })` i `server/src/index.ts`
+
+### 4. **KB article HTML-sanitering på server** (~1h)
+- [ ] Sanitera `content`-fältet server-side innan det sparas i databasen
+  - TipTap producerar HTML; om public share-sidan någonsin renderar server-side finns stored XSS-risk
+  - Använd `sanitize-html` eller `DOMPurify` (server-side via jsdom)
+  - Gäller POST/PUT i `server/src/routes/kb.ts`
+
+### 5. **Stärk KB share token** (~15min)
+- [ ] Öka share token från 12 → 16 bytes i `server/src/routes/kb.ts` rad ~311
+  - `randomBytes(12).toString('hex')` = 24 hex-tecken
+  - `randomBytes(16).toString('hex')` = 32 hex-tecken (128-bit, industristandard)
+
 ---
 
 
@@ -91,27 +110,20 @@ docker build -f Dockerfile.client -t it-ticketing-frontend:latest .
 
 **Impact:** Långsiktig inventarie-spårning, högst värde för IT-avdelningar
 
-### 7. **Knowledge Base** ✅ Implementerad
-- Artiklar med TipTap-editor (HTML, visuell)
-- Egna KB-kategorier (fristående från ticketkategorier)
-- Sökning och kategorifilter
-- Länka KB-artiklar till tickets (från ticketdetaljvyn)
-- **OBS:** Kör migration på servern: `docker exec it-ticketing-backend npx tsx src/db/add-kb-tables.ts`
-
-### 8. **Rapportering & Analytics** (1-2h)
+### 7. **Rapportering & Analytics** (1-2h)
 - [ ] Export rapporter till PDF
 
-### 9. **Backup & Maintenance** (2-3h)
+### 8. **Backup & Maintenance** (2-3h)
 - [ ] Automatisk databas-backup (cron)
 - [ ] Restore från backup
 - [ ] Databas-cleanup (radera gamla stängda ärenden)
 
-### 10. **Integrations (Optional)**
+### 9. **Integrations (Optional)**
 - [ ] Email-in support (skapa ärende från email)
 - [ ] Calendar sync
 - [ ] REST API dokumentation för externa system
 
-### 11. **UX Polish**
+### 10. **UX Polish**
 - [ ] **Keyboard Shortcuts Help** (~1h)
   - Settings → Genvägar sektion
   - Visa alla ⌘K shortcuts
@@ -138,23 +150,27 @@ Dessa är inte relevanta för single-user system:
 | Kategori | Återstående | Prioritet | Estimerad tid |
 |----------|-------------|-----------|---------------|
 | Prestandaproblem | 2 | Medel | 3-5h |
-| Säkerhetsförbättringar | 1 | Hög | 1-2h |
+| Säkerhetsförbättringar | 3 | Hög | 2-4h |
 | Features (Hög) | 1 | Hög | 1-2h |
 | Features (Medel) | 3 | Medel | 6-9h |
-| Features (Låg) | 5 | Låg | 8-16h+ |
-| **TOTALT** | **12** | - | **~19-32h** |
+| Features (Låg) | 4 | Låg | 8-16h+ |
+| **TOTALT** | **13** | - | **~19-35h** |
 
 ### 🚀 Rekommenderad prioritering:
-1. **CSRF-skydd** (1-2h) - Enda kvarvarande säkerhetspunkt
-2. **Avancerad sökning** (2-3h) - Datumfilter, tag AND/OR
-3. **Automatisering** (2-3h) - Auto-close, auto-tag
+1. **API rate limiting + JSON body limit** (~1-2h) - Snabb säkerhetsvinst
+2. **CSRF-skydd** (1-2h) - State-changing endpoints
+3. **KB share token + HTML-sanitering** (~1-2h) - Liten risk men enkel fix
+4. **Avancerad sökning** (2-3h) - Datumfilter, tag AND/OR
+5. **Automatisering** (2-3h) - Auto-close, auto-tag
 
 ---
 
 ## 🎯 Rekommenderad arbetsordning
 
 ### Nästa sprint (1-2 veckor)
-1. **CSRF-skydd** (1-2h) - Säkerhet
+1. **API rate limiting + JSON body limit** (~1-2h) - Snabb, enkel säkerhetsvinst
+2. **CSRF-skydd** (1-2h) - Säkerhet
+3. **KB share token + HTML-sanitering** (~2h) - Säkerhet
 
 ### Sprint 2 (2-3 veckor)
 1. Avancerad sökning & filter (datumintervall, tag AND/OR)
@@ -164,8 +180,7 @@ Dessa är inte relevanta för single-user system:
 
 ### Långsiktig backlog (3+ månader)
 1. Asset/Inventory Management (högst värde långsiktigt)
-2. Knowledge Base
-3. Rapportering & Analytics (PDF-export)
+2. Rapportering & Analytics (PDF-export)
 
 ---
 
@@ -266,7 +281,7 @@ Integration med Tickets:
 
 ---
 
-**Senast uppdaterad:** 2026-03-18
-**Latest cleanup:** Removed Bulk-operationer (✅ implemented)
-**Previous cleanup:** Removed multi-user features (assignee, SLA, auto-assign) + notification triggers + completed items
+**Senast uppdaterad:** 2026-03-20
+**Latest cleanup:** Removed Knowledge Base (✅ implemented), added S1-S4 security items
+**Previous cleanup:** Removed Bulk-operationer (✅ implemented)
 **Version history:** See `docs/archive/VERSION-HISTORY.md`

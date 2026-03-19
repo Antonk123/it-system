@@ -6,6 +6,7 @@ import { startReminderScheduler } from './lib/reminderScheduler.js';
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
 import cron from 'node-cron';
 import passport from './config/passport.js';
+import { apiRateLimiter } from './middleware/rateLimit.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -112,8 +113,11 @@ app.use(cors({
   },
   credentials: true,
 }));
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(passport.initialize());
+
+// General API rate limiter — 300 req/15min per IP (covers all /api/* including health check)
+app.use('/api', apiRateLimiter);
 
 // Health check
 app.get('/api/health', (_req, res) => {
