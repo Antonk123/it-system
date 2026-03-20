@@ -18,8 +18,11 @@ interface PaginatedResponse<T> {
   };
 }
 
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
 class ApiClient {
   private baseUrl: string;
+  private csrfToken: string | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
@@ -32,6 +35,7 @@ class ApiClient {
   setToken(token: string): void {
     localStorage.setItem('auth_token', token);
     localStorage.setItem('token', token); // For axios interceptor
+    this.csrfToken = null; // Invalidate cached CSRF token on auth change
   }
 
   setRefreshToken(refreshToken: string): void {
@@ -42,9 +46,23 @@ class ApiClient {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('token');
     localStorage.removeItem('refreshToken');
+    this.csrfToken = null;
   }
 
-  async request<T>(endpoint: string, options: ApiOptions = {}): Promise<T> {
+  // Lazily fetch and cache the CSRF token. The token is bound to the current
+  // auth session via the Authorization header (see backend getSessionIdentifier).
+  private async getCsrfToken(): Promise<string> {
+    if (this.csrfToken) return this.csrfToken;
+    const data = await this.request<{ csrfToken: string }>('/csrf-token');
+    this.csrfToken = data.csrfToken;
+    return this.csrfToken;
+  }
+
+  private isCsrfError(error: { error?: string; code?: string }): boolean {
+    return error.code === 'EBADCSRFTOKEN' || !!(error.error?.toLowerCase().includes('csrf'));
+  }
+
+  async request<T>(endpoint: string, options: ApiOptions = {}, isRetry = false): Promise<T> {
     const { method = 'GET', body, headers = {} } = options;
 
     const token = this.getToken();
@@ -57,14 +75,27 @@ class ApiClient {
       requestHeaders['Authorization'] = `Bearer ${token}`;
     }
 
+    // Attach CSRF token for all state-changing requests
+    if (MUTATING_METHODS.has(method)) {
+      requestHeaders['X-CSRF-Token'] = await this.getCsrfToken();
+    }
+
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method,
       headers: requestHeaders,
       body: body ? JSON.stringify(body) : undefined,
+      credentials: 'include', // Required for CSRF cookie to be sent
     });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ error: 'Request failed' }));
+
+      // On CSRF failure: clear stale token and retry once
+      if (response.status === 403 && !isRetry && this.isCsrfError(error)) {
+        this.csrfToken = null;
+        return this.request<T>(endpoint, options, true);
+      }
+
       throw new Error(error.error || error.message || 'Request failed');
     }
 
@@ -97,11 +128,13 @@ class ApiClient {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+    headers['X-CSRF-Token'] = await this.getCsrfToken();
 
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
       method: 'POST',
       headers,
       body: formData,
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -203,11 +236,13 @@ class ApiClient {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+    headers['X-CSRF-Token'] = await this.getCsrfToken();
 
     const response = await fetch(`${this.baseUrl}/tickets/import/preview`, {
       method: 'POST',
       headers,
       body: formData,
+      credentials: 'include',
     });
 
     if (!response.ok) {
@@ -530,11 +565,13 @@ class ApiClient {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+    headers['X-CSRF-Token'] = await this.getCsrfToken();
 
     const response = await fetch(`${this.baseUrl}/contacts/import/preview`, {
       method: 'POST',
       headers,
       body: formData,
+      credentials: 'include',
     });
 
     if (!response.ok) {

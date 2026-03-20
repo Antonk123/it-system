@@ -172,9 +172,16 @@ app.use('/api/tags', tagRoutes);
 app.use('/api/kb', kbRoutes);
 
 // Error handling
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
+// HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client
+app.use((err: Error & { status?: number; code?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const status = err.status ?? 500;
+  if (status >= 400 && status < 500) {
+    // Client errors: forward the error message and optional code (e.g. EBADCSRFTOKEN)
+    res.status(status).json({ error: err.message, code: err.code });
+  } else {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // Start server
