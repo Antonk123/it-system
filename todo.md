@@ -61,10 +61,10 @@ docker build -f Dockerfile.client -t it-ticketing-frontend:latest .
 
 ## 📋 Medel Prioritet
 
-### 3. **Avancerad sökning & filter** (2-3h)
-- [ ] Filtrera på flera taggar samtidigt (AND/OR)
-- [ ] Filtrera på datumintervall
-- [ ] Filtrera på checklist completion
+### 3. **Avancerad sökning & filter** ✅ Implementerad
+- [x] Filtrera på flera taggar samtidigt (AND/OR) — klickbar ELLER/OCH-toggle mellan taggar i TagFilter
+- [x] Filtrera på datumintervall — from/to datumväljare för created_at eller updated_at
+- [x] Filtrera på checklist completion — dropdown: klar/delvis/inget klart/har checklista/ingen checklista
 
 ### 4. **Automatisering** (2-3h)
 - [ ] Auto-close efter X dagar i "Resolved"
@@ -140,14 +140,14 @@ Dessa är inte relevanta för single-user system:
 | Prestandaproblem | 2 | Medel | 3-5h |
 | Säkerhetsförbättringar | 1 | Hög | 1-2h |
 | Features (Hög) | 1 | Hög | 1-2h |
-| Features (Medel) | 3 | Medel | 6-9h |
+| Features (Medel) | 2 | Medel | 4-6h |
 | Features (Låg) | 5 | Låg | 8-16h+ |
-| **TOTALT** | **12** | - | **~19-32h** |
+| **TOTALT** | **11** | - | **~17-29h** |
 
 ### 🚀 Rekommenderad prioritering:
 1. **CSRF-skydd** (1-2h) - Enda kvarvarande säkerhetspunkt
-2. **Avancerad sökning** (2-3h) - Datumfilter, tag AND/OR
-3. **Automatisering** (2-3h) - Auto-close, auto-tag
+2. **Automatisering** (2-3h) - Auto-close, auto-tag
+3. **Checklists-förbättringar** (2-3h) - Sub-checklists, templates, progress bar
 
 ---
 
@@ -157,10 +157,9 @@ Dessa är inte relevanta för single-user system:
 1. **CSRF-skydd** (1-2h) - Säkerhet
 
 ### Sprint 2 (2-3 veckor)
-1. Avancerad sökning & filter (datumintervall, tag AND/OR)
-2. Automatisering (auto-close, auto-tag)
-3. Checklists-förbättringar
-4. Keyboard shortcuts help
+1. Automatisering (auto-close, auto-tag)
+2. Checklists-förbättringar
+3. Keyboard shortcuts help
 
 ### Långsiktig backlog (3+ månader)
 1. Asset/Inventory Management (högst värde långsiktigt)

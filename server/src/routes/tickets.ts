@@ -291,6 +291,11 @@ interface TicketQueryParams {
   category?: string;
   search?: string;
   tags?: string;
+  tagMode?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  dateField?: string;
+  checklist?: string;
   sortBy?: string;
   sortDir?: string;
 }
@@ -358,17 +363,68 @@ function buildWhereClause(filters: TicketQueryParams) {
     params.push(filters.category);
   }
 
-  // Tag filtering (OR logic for multiple tags)
+  // Tag filtering (OR or AND logic for multiple tags)
   if (filters.tags) {
     const tagIds = filters.tags.split(',').map(id => id.trim()).filter(id => id.length > 0);
     if (tagIds.length > 0) {
       const tagPlaceholders = tagIds.map(() => '?').join(',');
-      conditions.push(`EXISTS (
-        SELECT 1 FROM ticket_tags
-        WHERE ticket_tags.ticket_id = tickets.id
-        AND ticket_tags.tag_id IN (${tagPlaceholders})
-      )`);
+      if (filters.tagMode === 'and' && tagIds.length > 1) {
+        // AND logic: ticket must have ALL specified tags
+        conditions.push(`(
+          SELECT COUNT(DISTINCT tag_id) FROM ticket_tags
+          WHERE ticket_tags.ticket_id = tickets.id
+          AND ticket_tags.tag_id IN (${tagPlaceholders})
+        ) = ${tagIds.length}`);
+      } else {
+        // OR logic (default): ticket has ANY of the specified tags
+        conditions.push(`EXISTS (
+          SELECT 1 FROM ticket_tags
+          WHERE ticket_tags.ticket_id = tickets.id
+          AND ticket_tags.tag_id IN (${tagPlaceholders})
+        )`);
+      }
       params.push(...tagIds);
+    }
+  }
+
+  // Date range filtering
+  const allowedDateFields = ['created_at', 'updated_at'];
+  const dateField = allowedDateFields.includes(filters.dateField || '') ? filters.dateField! : 'created_at';
+  if (filters.dateFrom) {
+    conditions.push(`tickets.${dateField} >= ?`);
+    params.push(filters.dateFrom + 'T00:00:00.000Z');
+  }
+  if (filters.dateTo) {
+    conditions.push(`tickets.${dateField} <= ?`);
+    params.push(filters.dateTo + 'T23:59:59.999Z');
+  }
+
+  // Checklist completion filtering
+  if (filters.checklist) {
+    switch (filters.checklist) {
+      case 'all_done':
+        // Has items AND all are completed
+        conditions.push(`(SELECT COUNT(*) FROM ticket_checklists WHERE ticket_checklists.ticket_id = tickets.id) > 0`);
+        conditions.push(`(SELECT COUNT(*) FROM ticket_checklists WHERE ticket_checklists.ticket_id = tickets.id AND ticket_checklists.completed = 0) = 0`);
+        break;
+      case 'none_done':
+        // Has items AND none are completed
+        conditions.push(`(SELECT COUNT(*) FROM ticket_checklists WHERE ticket_checklists.ticket_id = tickets.id) > 0`);
+        conditions.push(`(SELECT COUNT(*) FROM ticket_checklists WHERE ticket_checklists.ticket_id = tickets.id AND ticket_checklists.completed = 1) = 0`);
+        break;
+      case 'some_done':
+        // Has at least one done AND at least one not done
+        conditions.push(`(SELECT COUNT(*) FROM ticket_checklists WHERE ticket_checklists.ticket_id = tickets.id AND ticket_checklists.completed = 1) > 0`);
+        conditions.push(`(SELECT COUNT(*) FROM ticket_checklists WHERE ticket_checklists.ticket_id = tickets.id AND ticket_checklists.completed = 0) > 0`);
+        break;
+      case 'has_any':
+        // Has any checklist items
+        conditions.push(`(SELECT COUNT(*) FROM ticket_checklists WHERE ticket_checklists.ticket_id = tickets.id) > 0`);
+        break;
+      case 'no_items':
+        // Has no checklist items
+        conditions.push(`(SELECT COUNT(*) FROM ticket_checklists WHERE ticket_checklists.ticket_id = tickets.id) = 0`);
+        break;
     }
   }
 
