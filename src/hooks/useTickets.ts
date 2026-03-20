@@ -13,6 +13,11 @@ interface UseTicketsOptions {
   category?: string | 'all';
   search?: string;
   tags?: string;
+  tagMode?: 'or' | 'and';
+  dateFrom?: string;
+  dateTo?: string;
+  dateField?: 'created_at' | 'updated_at';
+  checklist?: string;
   sortBy?: 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
   sortDir?: 'asc' | 'desc';
 }
@@ -49,6 +54,11 @@ export const useTickets = (options?: UseTicketsOptions) => {
     if (opts.category && opts.category !== 'all') params.append('category', opts.category);
     if (opts.search) params.append('search', opts.search);
     if (opts.tags) params.append('tags', opts.tags);
+    if (opts.tagMode && opts.tagMode !== 'or') params.append('tagMode', opts.tagMode);
+    if (opts.dateFrom) params.append('dateFrom', opts.dateFrom);
+    if (opts.dateTo) params.append('dateTo', opts.dateTo);
+    if (opts.dateField && opts.dateField !== 'created_at') params.append('dateField', opts.dateField);
+    if (opts.checklist) params.append('checklist', opts.checklist);
     if (opts.sortBy) params.append('sortBy', opts.sortBy);
     if (opts.sortDir) params.append('sortDir', opts.sortDir);
     return params.toString() ? `?${params.toString()}` : '';

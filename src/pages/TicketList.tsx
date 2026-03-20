@@ -53,6 +53,11 @@ const TicketList = () => {
   const categoryFilter = searchParams.get('category') || 'all';
   const tagsFilter = searchParams.get('tags') || '';
   const selectedTagIds = tagsFilter ? tagsFilter.split(',').filter(id => id.trim()) : [];
+  const tagMode = (searchParams.get('tagMode') || 'or') as 'or' | 'and';
+  const dateFrom = searchParams.get('dateFrom') || '';
+  const dateTo = searchParams.get('dateTo') || '';
+  const dateField = (searchParams.get('dateField') || 'created_at') as 'created_at' | 'updated_at';
+  const checklistFilter = searchParams.get('checklist') || '';
   const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
   const [compactView, setCompactView] = useState(false);
@@ -90,6 +95,11 @@ const TicketList = () => {
     category: categoryFilter,
     search,
     tags: tagsFilter,
+    tagMode,
+    dateFrom,
+    dateTo,
+    dateField,
+    checklist: checklistFilter,
     sortBy: sortKey,
     sortDir: sortDirection,
   });
@@ -169,6 +179,10 @@ const TicketList = () => {
 
   const handleTagSelectionChange = useCallback((tagIds: string[]) => {
     updateFilters({ tags: tagIds.length > 0 ? tagIds.join(',') : undefined });
+  }, [updateFilters]);
+
+  const handleTagModeChange = useCallback((mode: 'or' | 'and') => {
+    updateFilters({ tagMode: mode === 'or' ? undefined : mode });
   }, [updateFilters]);
 
   const handleRemoveCategoryFilter = useCallback(() => {
@@ -359,7 +373,57 @@ const TicketList = () => {
               selectedTagIds={selectedTagIds}
               onChange={handleTagSelectionChange}
             />
+            <Select value={checklistFilter || 'all'} onValueChange={(v) => updateFilters({ checklist: v === 'all' ? undefined : v })}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Checklista" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alla ärenden</SelectItem>
+                <SelectItem value="all_done">Checklista klar</SelectItem>
+                <SelectItem value="some_done">Delvis klar</SelectItem>
+                <SelectItem value="none_done">Inget klart</SelectItem>
+                <SelectItem value="has_any">Har checklista</SelectItem>
+                <SelectItem value="no_items">Ingen checklista</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+        </div>
+
+        {/* Date range filter */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Datum:</span>
+          <Select value={dateField} onValueChange={(v) => updateFilters({ dateField: v === 'created_at' ? undefined : v })}>
+            <SelectTrigger className="w-[130px] h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="created_at">Skapad</SelectItem>
+              <SelectItem value="updated_at">Uppdaterad</SelectItem>
+            </SelectContent>
+          </Select>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => updateFilters({ dateFrom: e.target.value || undefined })}
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            placeholder="Från"
+          />
+          <span className="text-xs text-muted-foreground">–</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => updateFilters({ dateTo: e.target.value || undefined })}
+            className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+            placeholder="Till"
+          />
+          {(dateFrom || dateTo) && (
+            <button
+              onClick={() => updateFilters({ dateFrom: undefined, dateTo: undefined })}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Rensa datum
+            </button>
+          )}
         </div>
 
         {/* Quick Filters */}
@@ -387,8 +451,10 @@ const TicketList = () => {
         {/* Active Tag Filters */}
         <TagFilter
           selectedTagIds={selectedTagIds}
+          tagMode={tagMode}
           onRemoveTag={handleRemoveTagFilter}
           onClearAll={handleClearAllTags}
+          onTagModeChange={handleTagModeChange}
         />
 
         {/* Loading state */}
