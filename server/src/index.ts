@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser';
+import { doubleCsrf } from 'csrf-csrf';
 import { initializeDatabase } from './db/connection.js';
 import { startReminderScheduler } from './lib/reminderScheduler.js';
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
@@ -113,11 +115,44 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json());
+app.use(cookieParser());
 app.use(passport.initialize());
+
+// CSRF protection (Double Submit Cookie Pattern via csrf-csrf)
+// Protects all state-changing endpoints (POST, PUT, PATCH, DELETE) under /api
+// Exempt: /api/auth/login and /api/auth/refresh (authenticate with credentials, not cookies)
+const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
+  getSecret: () => process.env.CSRF_SECRET || 'csrf-dev-secret-change-in-production',
+  // Use the Authorization header as session identifier so each JWT session gets its own CSRF token
+  getSessionIdentifier: (req) => req.headers.authorization ?? '',
+  cookieName: 'csrf-token',
+  cookieOptions: {
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    httpOnly: true,
+  },
+  getCsrfTokenFromRequest: (req) => req.headers['x-csrf-token'] as string,
+});
+
+// Paths exempt from CSRF validation (authenticate by credentials, not session cookies)
+const csrfExemptPaths = new Set(['/api/auth/login', '/api/auth/refresh']);
+
+const conditionalCsrf = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (csrfExemptPaths.has(req.path)) return next();
+  doubleCsrfProtection(req, res, next);
+};
+
+app.use(conditionalCsrf);
 
 // Health check
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Expose CSRF token for SPA — frontend calls this once and caches the token
+app.get('/api/csrf-token', (req, res) => {
+  res.json({ csrfToken: generateCsrfToken(req, res) });
 });
 
 // API Routes
@@ -137,9 +172,16 @@ app.use('/api/tags', tagRoutes);
 app.use('/api/kb', kbRoutes);
 
 // Error handling
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
-  res.status(500).json({ error: 'Internal server error' });
+// HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client
+app.use((err: Error & { status?: number; code?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const status = err.status ?? 500;
+  if (status >= 400 && status < 500) {
+    // Client errors: forward the error message and optional code (e.g. EBADCSRFTOKEN)
+    res.status(status).json({ error: err.message, code: err.code });
+  } else {
+    console.error('Unhandled error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // Start server
