@@ -8,9 +8,9 @@ import { useTags } from '@/hooks/useTags';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { RequesterAnalytics } from '@/types/ticket';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { TicketTable } from '@/components/TicketTable';
 import { KPICard } from '@/components/KPICard';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { StatusFlowChart } from '@/components/StatusFlowChart';
@@ -21,7 +21,7 @@ import { KPIDetailDialog } from '@/components/KPIDetailDialog';
 import { useReportsPreferences } from '@/hooks/useReportsPreferences';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import { BarChart3, PieChart as PieChartIcon, Filter, Calendar, Ticket, Clock, CheckCircle, AlertTriangle, Users, Scale, Download } from 'lucide-react';
+import { BarChart3, PieChart as PieChartIcon, Calendar, Ticket, Clock, CheckCircle, AlertTriangle, Users, Scale, Download } from 'lucide-react';
 
 const COLORS = [
   'hsl(var(--primary))',
@@ -80,7 +80,7 @@ const RequesterTooltip = ({ active, payload }: any) => {
       {/* Status breakdown */}
       <div className="space-y-1.5 text-sm mb-3">
         <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">
-          Status Breakdown
+          Statusfördelning
         </p>
         {Object.entries(requester.statusBreakdown).map(([status, count]) => {
           if (count === 0) return null;
@@ -107,14 +107,14 @@ const RequesterTooltip = ({ active, payload }: any) => {
       {/* Performance metrics */}
       <div className="space-y-1 text-sm pt-2 border-t">
         <div className="flex justify-between">
-          <span className="text-muted-foreground">Completion Rate:</span>
+          <span className="text-muted-foreground">Avslutningsgrad:</span>
           <span className="font-mono font-semibold">
             {requester.completionRate.toFixed(0)}%
           </span>
         </div>
         {requester.avgResolutionTime > 0 && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Avg Resolution:</span>
+            <span className="text-muted-foreground">Snitt upplösningstid:</span>
             <span className="font-mono font-semibold">
               {requester.avgResolutionTime.toFixed(1)}d
             </span>
@@ -122,7 +122,7 @@ const RequesterTooltip = ({ active, payload }: any) => {
         )}
         {requester.agingTickets > 0 && (
           <div className="flex justify-between text-destructive">
-            <span>Aging Tickets:</span>
+            <span>Gamla ärenden:</span>
             <span className="font-mono font-semibold">
               {requester.agingTickets}
             </span>
@@ -133,7 +133,7 @@ const RequesterTooltip = ({ active, payload }: any) => {
       {/* Top categories (if available) */}
       {requester.topCategories.length > 0 && (
         <div className="pt-2 mt-2 border-t text-xs">
-          <p className="text-muted-foreground mb-1">Top Categories:</p>
+          <p className="text-muted-foreground mb-1">Vanligaste kategorier:</p>
           <div className="flex flex-wrap gap-1">
             {requester.topCategories.slice(0, 2).map((cat, i) => (
               <span key={i} className="px-2 py-0.5 bg-muted rounded-full">
@@ -679,56 +679,12 @@ const Reports = () => {
           </div>
         </div>
 
-        {/* Hero KPI Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KPICard
-            label="Total Tickets"
-            value={totalTickets}
-            icon={<Ticket className="w-6 h-6" />}
-            sparklineData={monthlyTrendData}
-            trend={{
-              value: ticketTrend.value,
-              direction: ticketTrend.direction,
-              isPositive: ticketTrend.direction === 'down',
-            }}
-            animationDelay={0}
-            onClick={() => setKpiModalOpen('total')}
-          />
-
-          <KPICard
-            label="Avg Resolution"
-            value={avgResolutionTime}
-            valueDecimals={1}
-            valueSuffix="d"
-            icon={<Clock className="w-6 h-6" />}
-            animationDelay={100}
-          />
-
-          <KPICard
-            label="Resolution Rate"
-            value={resolutionRate}
-            valueDecimals={0}
-            valueSuffix="%"
-            icon={<CheckCircle className="w-6 h-6" />}
-            animationDelay={200}
-          />
-
-          <KPICard
-            label="Aging Tickets"
-            value={agingTickets}
-            icon={<AlertTriangle className="w-6 h-6" />}
-            className="border-destructive/30"
-            animationDelay={300}
-            onClick={() => setKpiModalOpen('aging')}
-          />
-        </div>
-
         {/* KPI Detail Modals */}
         <KPIDetailDialog
           open={kpiModalOpen === 'aging'}
           onOpenChange={(open) => setKpiModalOpen(open ? 'aging' : null)}
-          title="Aging Tickets"
-          description={`Tickets that have been open for more than 7 days (${agingTickets} total)`}
+          title="Gamla ärenden"
+          description={`Ärenden som har varit öppna i mer än 7 dagar (${agingTickets} totalt)`}
           tickets={agingTicketsData}
           users={users}
         />
@@ -736,160 +692,337 @@ const Reports = () => {
         <KPIDetailDialog
           open={kpiModalOpen === 'total'}
           onOpenChange={(open) => setKpiModalOpen(open ? 'total' : null)}
-          title="All Tickets"
-          description={`All tickets in the current view (${totalTickets} total)`}
+          title="Alla ärenden"
+          description={`Alla ärenden i aktuell vy (${totalTickets} totalt)`}
           tickets={yearMonthFilteredTickets}
           users={users}
         />
 
-        {/* Tickets Closed by Year - Compact View */}
-        <Card className="py-4">
-          <CardContent className="py-0">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Calendar className="h-4 w-4" />
-                <span>Stängda per år:</span>
-              </div>
-              {ticketsClosedByYear.length === 0 ? (
-                <span className="text-sm text-muted-foreground">Inga stängda ärenden</span>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {ticketsClosedByYear.map((item) => (
-                    <button
-                      key={item.year}
-                      onClick={() => setSelectedYear(item.year)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium transition-colors ${
-                        selectedYear === item.year
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted hover:bg-muted/80 text-foreground'
-                      }`}
-                    >
-                      <span>{item.year}</span>
-                      <span className={`${selectedYear === item.year ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>
-                        {item.count}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+        <Tabs defaultValue="oversikt">
+          <TabsList>
+            <TabsTrigger value="oversikt">Översikt</TabsTrigger>
+            <TabsTrigger value="trend">Trend</TabsTrigger>
+            <TabsTrigger value="personer">Personer</TabsTrigger>
+            <TabsTrigger value="taggar">Taggar</TabsTrigger>
+          </TabsList>
+
+          {/* ── Flik 1: Översikt ── */}
+          <TabsContent value="oversikt" className="space-y-5 mt-5">
+
+            {/* Hero KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <KPICard
+                label="Totalt"
+                value={totalTickets}
+                icon={<Ticket className="w-6 h-6" />}
+                sparklineData={monthlyTrendData}
+                trend={{
+                  value: ticketTrend.value,
+                  direction: ticketTrend.direction,
+                  isPositive: ticketTrend.direction === 'down',
+                }}
+                animationDelay={0}
+                onClick={() => setKpiModalOpen('total')}
+              />
+
+              <KPICard
+                label="Snitt upplösningstid"
+                value={avgResolutionTime}
+                valueDecimals={1}
+                valueSuffix="d"
+                icon={<Clock className="w-6 h-6" />}
+                animationDelay={100}
+              />
+
+              <KPICard
+                label="Lösningsgrad"
+                value={resolutionRate}
+                valueDecimals={0}
+                valueSuffix="%"
+                icon={<CheckCircle className="w-6 h-6" />}
+                animationDelay={200}
+              />
+
+              <KPICard
+                label="Gamla ärenden"
+                value={agingTickets}
+                icon={<AlertTriangle className="w-6 h-6" />}
+                className="border-destructive/30"
+                animationDelay={300}
+                onClick={() => setKpiModalOpen('aging')}
+              />
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Tickets by Month (when year is selected) */}
-        {selectedYear !== 'all' && isModuleVisible('monthlyChart') && (
-          <Card>
-            <CardHeader className="flex flex-row items-center gap-2">
-              <Calendar className="h-5 w-5 text-primary" />
-              <CardTitle className="text-xl font-semibold font-serif">Ärenden skapade per månad ({selectedYear})</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {ticketsByMonth.every(m => m.count === 0) ? (
-                <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                  Inga ärenden under {selectedYear}
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
-                  <BarChart data={ticketsByMonth} margin={chartMargins}>
-                    <defs>
-                      <linearGradient id="monthBarGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.9}/>
-                        <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.6}/>
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="month" tick={{ fontSize: isMobile ? 10 : 12 }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: isMobile ? 10 : 12 }} />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: 'hsl(var(--card))',
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px',
-                      }}
-                      cursor={{ fill: 'hsl(var(--muted))' }}
-                      formatter={(value, name, props) => [value, props.payload.fullMonth]}
-                    />
-                    <Bar
-                      dataKey="count"
-                      fill="url(#monthBarGradient)"
-                      radius={[4, 4, 0, 0]}
-                      onClick={(data) => setSelectedMonth(data.monthIndex.toString())}
-                      className="cursor-pointer"
-                      animationDuration={1000}
-                      animationEasing="ease-out"
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-        )}
+            {/* Status Distribution */}
+            {isModuleVisible('statusDistribution') && (
+              <Card className="animate-fade-in" style={{ animationDelay: '350ms' }}>
+                <CardHeader className="flex flex-row items-center gap-2">
+                  <PieChartIcon className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-xl font-semibold font-serif">Ärenden per status</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {yearMonthFilteredTickets.length === 0 ? (
+                    <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                      Ingen ärendedata tillgänglig
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                      <Card className="relative overflow-hidden">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <Ticket className="w-4 h-4 text-primary" />
+                          </div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total</p>
+                          <p className="text-2xl font-mono font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                            {statusKPIs.total}
+                          </p>
+                        </CardContent>
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
+                      </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Requester Analytics */}
-          {isModuleVisible('requesterAnalytics') && (
-          <Card className="animate-fade-in" style={{ animationDelay: '700ms' }}>
-            <CardHeader className="flex flex-row items-center gap-2">
-              <BarChart3 className="h-5 w-5 text-primary" />
-              <CardTitle className="text-xl font-semibold font-serif">
-                Requester Analytics
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* KPI Summary Cards */}
-              {requesterAnalytics.length > 0 && (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-                  {/* Total Requesters */}
-                  <div>
-                    <Card className="relative overflow-hidden">
-                      <CardContent className="p-4">
+                      <Card className="relative overflow-hidden">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <Clock className="w-4 h-4 text-primary" />
+                          </div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Vanligast</p>
+                          <div className="flex items-baseline gap-2">
+                            <p className="text-lg font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent truncate">
+                              {statusKPIs.dominantStatus.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {statusKPIs.dominantStatus.percentage.toFixed(0)}%
+                            </p>
+                          </div>
+                        </CardContent>
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
+                      </Card>
+
+                      <Card className="relative overflow-hidden">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <AlertTriangle className="w-4 h-4 text-primary" />
+                          </div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Aktiva</p>
+                          <p className="text-2xl font-mono font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                            {statusKPIs.activeTickets}
+                          </p>
+                        </CardContent>
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
+                      </Card>
+
+                      <Card className="relative overflow-hidden">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <CheckCircle className="w-4 h-4 text-primary" />
+                          </div>
+                          <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Lösningsgrad</p>
+                          <p className="text-2xl font-mono font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                            {statusKPIs.resolvedRate.toFixed(0)}%
+                          </p>
+                          <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
+                              style={{ width: `${statusKPIs.resolvedRate}%` }}
+                            />
+                          </div>
+                        </CardContent>
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
+                      </Card>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Priority Chart */}
+            {isModuleVisible('priorityChart') && (
+              <Card className="animate-fade-in" style={{ animationDelay: '300ms' }}>
+                <CardHeader className="flex flex-row items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-xl font-semibold font-serif">Ärenden per prioritet</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {yearMonthFilteredTickets.length === 0 ? (
+                    <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                      Ingen ärendedata tillgänglig
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
+                      <BarChart data={ticketsByPriority} margin={chartMargins}>
+                        <defs>
+                          {COLORS.map((color, index) => (
+                            <linearGradient key={`priorityGradient${index}`} id={`priorityGradient${index}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor={color} stopOpacity={0.95}/>
+                              <stop offset="95%" stopColor={color} stopOpacity={0.7}/>
+                            </linearGradient>
+                          ))}
+                        </defs>
+                        <XAxis dataKey="name" tick={{ fontSize: isMobile ? 10 : 12 }} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: isMobile ? 10 : 12 }} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--popover))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                          }}
+                          itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
+                          cursor={{ fill: 'hsl(var(--muted) / 0.2)' }}
+                        />
+                        <Bar dataKey="value" radius={[4, 4, 0, 0]} animationDuration={800} animationEasing="ease-out">
+                          {ticketsByPriority.map((_, index) => (
+                            <Cell key={`cell-${index}`} fill={`url(#priorityGradient${index % COLORS.length})`} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* ── Flik 2: Trend ── */}
+          <TabsContent value="trend" className="space-y-5 mt-5">
+
+            {/* Tickets by Month */}
+            {selectedYear !== 'all' && isModuleVisible('monthlyChart') && (
+              <Card>
+                <CardHeader className="flex flex-row items-center gap-2">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-xl font-semibold font-serif">Ärenden skapade per månad ({selectedYear})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {ticketsByMonth.every(m => m.count === 0) ? (
+                    <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                      Inga ärenden under {selectedYear}
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
+                      <BarChart data={ticketsByMonth} margin={chartMargins}>
+                        <defs>
+                          <linearGradient id="monthBarGradient" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.9}/>
+                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.6}/>
+                          </linearGradient>
+                        </defs>
+                        <XAxis dataKey="month" tick={{ fontSize: isMobile ? 10 : 12 }} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: isMobile ? 10 : 12 }} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                          }}
+                          cursor={{ fill: 'hsl(var(--muted))' }}
+                          formatter={(value, name, props) => [value, props.payload.fullMonth]}
+                        />
+                        <Bar
+                          dataKey="count"
+                          fill="url(#monthBarGradient)"
+                          radius={[4, 4, 0, 0]}
+                          onClick={(data) => setSelectedMonth(data.monthIndex.toString())}
+                          className="cursor-pointer"
+                          animationDuration={1000}
+                          animationEasing="ease-out"
+                        />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Radial Progress Rings */}
+            {isModuleVisible('statusDistribution') && yearMonthFilteredTickets.length > 0 && (
+              <Card className="animate-fade-in">
+                <CardHeader className="flex flex-row items-center gap-2">
+                  <PieChartIcon className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-xl font-semibold font-serif">Statusfördelning</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <RadialProgressRings data={ticketsByStatus} total={statusKPIs.total} />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Activity Heatmap */}
+            {isModuleVisible('activityHeatmap') && (
+              <Card className="animate-fade-in" style={{ animationDelay: '400ms' }}>
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold font-serif">Aktivitetskalender</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Daglig ärendevolym de senaste {isMobile ? '3' : '12'} månaderna
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <ActivityHeatmap tickets={tickets} monthsToShow={isMobile ? 3 : 12} />
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Status Flow */}
+            {isModuleVisible('statusFlow') && (
+              <Card className="animate-fade-in" style={{ animationDelay: '500ms' }}>
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold font-serif">Statusflöde över tid</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Statusfördelning de senaste 12 månaderna
+                  </p>
+                </CardHeader>
+                <CardContent>
+                  <StatusFlowChart tickets={tickets} height={isMobile ? 250 : 300} />
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* ── Flik 3: Personer ── */}
+          <TabsContent value="personer" className="space-y-5 mt-5">
+            {isModuleVisible('requesterAnalytics') && (
+              <Card className="animate-fade-in" style={{ animationDelay: '700ms' }}>
+                <CardHeader className="flex flex-row items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-xl font-semibold font-serif">Per person</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {/* KPI Summary - enkla divs utan nästlade Card-komponenter */}
+                  {requesterAnalytics.length > 0 && (
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+                      <div className="relative overflow-hidden p-4 rounded-lg border bg-card">
                         <div className="flex items-center justify-between mb-2">
                           <Users className="w-4 h-4 text-primary" />
                         </div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                          Total Requesters
-                        </p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Antal personer</p>
                         <p className="text-2xl font-mono font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                           {requesterKPIs.totalRequesters}
                         </p>
-                      </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
-                    </Card>
-                  </div>
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
+                      </div>
 
-                  {/* Avg per Requester */}
-                  <div>
-                    <Card className="relative overflow-hidden">
-                      <CardContent className="p-4">
+                      <div className="relative overflow-hidden p-4 rounded-lg border bg-card">
                         <div className="flex items-center justify-between mb-2">
                           <BarChart3 className="w-4 h-4 text-primary" />
                         </div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                          Avg per Requester
-                        </p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Snitt per person</p>
                         <p className="text-2xl font-mono font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                           {requesterKPIs.avgTicketsPerRequester.toFixed(1)}
                         </p>
-                      </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
-                    </Card>
-                  </div>
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
+                      </div>
 
-                  {/* Workload Balance */}
-                  <div>
-                    <Card className="relative overflow-hidden">
-                      <CardContent className="p-4">
+                      <div className="relative overflow-hidden p-4 rounded-lg border bg-card">
                         <div className="flex items-center justify-between mb-2">
                           <Scale className="w-4 h-4 text-primary" />
                         </div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                          Workload Balance
-                        </p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Arbetsbelastning</p>
                         <div className="flex items-baseline gap-2">
                           <p className="text-2xl font-mono font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                             {requesterKPIs.workloadBalance.toFixed(0)}%
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {requesterKPIs.workloadBalance < 50 ? 'Balanced' : 'Skewed'}
+                            {requesterKPIs.workloadBalance < 50 ? 'Balanserat' : 'Ojämnt'}
                           </p>
                         </div>
                         <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
@@ -898,315 +1031,80 @@ const Reports = () => {
                             style={{ width: `${Math.min(100, requesterKPIs.workloadBalance)}%` }}
                           />
                         </div>
-                      </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
-                    </Card>
-                  </div>
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
+                      </div>
 
-                  {/* Avg Completion */}
-                  <div>
-                    <Card className="relative overflow-hidden">
-                      <CardContent className="p-4">
+                      <div className="relative overflow-hidden p-4 rounded-lg border bg-card">
                         <div className="flex items-center justify-between mb-2">
                           <CheckCircle className="w-4 h-4 text-primary" />
                         </div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                          Avg Completion
-                        </p>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Snitt avslutning</p>
                         <p className="text-2xl font-mono font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
                           {requesterKPIs.avgCompletionRate.toFixed(0)}%
                         </p>
-                      </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
-                    </Card>
-                  </div>
-                </div>
-              )}
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
+                      </div>
+                    </div>
+                  )}
 
-              {/* Stacked Bar Chart */}
-              {requesterAnalytics.length === 0 ? (
-                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                  Ingen ärendedata tillgänglig
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={chartHeight}>
-                  <BarChart
-                    data={requesterAnalytics}
-                    layout="vertical"
-                    margin={chartMargins}
-                  >
-                    <defs>
-                      {/* Enhanced gradient definitions for each status */}
-                      {Object.entries(REQUESTER_STATUS_COLORS).map(([status, color]) => (
-                        <linearGradient
-                          key={status}
-                          id={`requester-${status}`}
-                          x1="0" y1="0" x2="1" y2="0"
-                        >
-                          <stop offset="0%" stopColor={color} stopOpacity={0.95} />
-                          <stop offset="50%" stopColor={color} stopOpacity={1} />
-                          <stop offset="100%" stopColor={color} stopOpacity={0.8} />
-                        </linearGradient>
-                      ))}
-                    </defs>
-
-                    <XAxis
-                      type="number"
-                      allowDecimals={false}
-                      tick={{ fontSize: isMobile ? 10 : 12 }}
-                    />
-
-                    <YAxis
-                      type="category"
-                      dataKey="name"
-                      width={userAxisWidth}
-                      interval={0}
-                      tick={{ fontSize: isMobile ? 10 : 12 }}
-                    />
-
-                    <Tooltip content={<RequesterTooltip />} />
-
-                    <Legend
-                      wrapperStyle={{ paddingTop: '16px' }}
-                      iconType="square"
-                      formatter={(value) => {
-                        // Extract status from "statusBreakdown.status" format
-                        const status = value.replace('statusBreakdown.', '');
-                        return statusLabels[status] || status;
-                      }}
-                    />
-
-                    {/* Stacked bars - one per status (bottom to top: closed, resolved, waiting, in-progress, open) */}
-                    {['closed', 'resolved', 'waiting', 'in-progress', 'open'].map((status) => (
-                      <Bar
-                        key={status}
-                        dataKey={`statusBreakdown.${status}`}
-                        stackId="status"
-                        fill={`url(#requester-${status})`}
-                        radius={status === 'open' ? [0, 4, 4, 0] : 0}
-                        onClick={(data) => setSelectedUserId(data.userId)}
-                        className="cursor-pointer requester-bar"
-                        animationDuration={800}
-                        animationEasing="ease-out"
-                      />
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card>
-          )}
-
-          {/* Tickets by Status Pie Chart */}
-          {isModuleVisible('statusDistribution') && (
-          <Card className="animate-fade-in" style={{ animationDelay: '350ms' }}>
-            <CardHeader className="flex flex-row items-center gap-2">
-              <PieChartIcon className="h-5 w-5 text-primary" />
-              <CardTitle className="text-xl font-semibold font-serif">Ärenden per status</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {yearMonthFilteredTickets.length === 0 ? (
-                <div className="h-[300px] flex items-center justify-center text-muted-foreground">
-                  Ingen ärendedata tillgänglig
-                </div>
-              ) : (
-                <>
-                  {/* KPI Summary Cards */}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
-                    {/* Total Tickets */}
-                    <Card className="relative overflow-hidden">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <Ticket className="w-4 h-4 text-primary" />
-                        </div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                          Total
-                        </p>
-                        <p className="text-2xl font-mono font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                          {statusKPIs.total}
-                        </p>
-                      </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
-                    </Card>
-
-                    {/* Dominant Status */}
-                    <Card className="relative overflow-hidden">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <Clock className="w-4 h-4 text-primary" />
-                        </div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                          Dominant Status
-                        </p>
-                        <div className="flex items-baseline gap-2">
-                          <p className="text-lg font-semibold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent truncate">
-                            {statusKPIs.dominantStatus.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {statusKPIs.dominantStatus.percentage.toFixed(0)}%
-                          </p>
-                        </div>
-                      </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
-                    </Card>
-
-                    {/* Active Tickets */}
-                    <Card className="relative overflow-hidden">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <AlertTriangle className="w-4 h-4 text-primary" />
-                        </div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                          Active
-                        </p>
-                        <p className="text-2xl font-mono font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                          {statusKPIs.activeTickets}
-                        </p>
-                      </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
-                    </Card>
-
-                    {/* Resolved Rate */}
-                    <Card className="relative overflow-hidden">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-2">
-                          <CheckCircle className="w-4 h-4 text-primary" />
-                        </div>
-                        <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">
-                          Resolved Rate
-                        </p>
-                        <p className="text-2xl font-mono font-bold bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-                          {statusKPIs.resolvedRate.toFixed(0)}%
-                        </p>
-                        <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
-                            style={{ width: `${statusKPIs.resolvedRate}%` }}
+                  {/* Stacked Bar Chart */}
+                  {requesterAnalytics.length === 0 ? (
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                      Ingen ärendedata tillgänglig
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={chartHeight}>
+                      <BarChart data={requesterAnalytics} layout="vertical" margin={chartMargins}>
+                        <defs>
+                          {Object.entries(REQUESTER_STATUS_COLORS).map(([status, color]) => (
+                            <linearGradient key={status} id={`requester-${status}`} x1="0" y1="0" x2="1" y2="0">
+                              <stop offset="0%" stopColor={color} stopOpacity={0.95} />
+                              <stop offset="50%" stopColor={color} stopOpacity={1} />
+                              <stop offset="100%" stopColor={color} stopOpacity={0.8} />
+                            </linearGradient>
+                          ))}
+                        </defs>
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: isMobile ? 10 : 12 }} />
+                        <YAxis type="category" dataKey="name" width={userAxisWidth} interval={0} tick={{ fontSize: isMobile ? 10 : 12 }} />
+                        <Tooltip content={<RequesterTooltip />} />
+                        <Legend
+                          wrapperStyle={{ paddingTop: '16px' }}
+                          iconType="square"
+                          formatter={(value) => {
+                            const status = value.replace('statusBreakdown.', '');
+                            return statusLabels[status] || status;
+                          }}
+                        />
+                        {['closed', 'resolved', 'waiting', 'in-progress', 'open'].map((status) => (
+                          <Bar
+                            key={status}
+                            dataKey={`statusBreakdown.${status}`}
+                            stackId="status"
+                            fill={`url(#requester-${status})`}
+                            radius={status === 'open' ? [0, 4, 4, 0] : 0}
+                            onClick={(data) => setSelectedUserId(data.userId)}
+                            className="cursor-pointer requester-bar"
+                            animationDuration={800}
+                            animationEasing="ease-out"
                           />
-                        </div>
-                      </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
-                    </Card>
-                  </div>
-
-                  {/* Radial Progress Rings */}
-                  <RadialProgressRings
-                    data={ticketsByStatus}
-                    total={statusKPIs.total}
-                  />
-                </>
-              )}
-            </CardContent>
-          </Card>
-          )}
-        </div>
-
-        {/* Priority Chart */}
-        {isModuleVisible('priorityChart') && (
-        <Card className="animate-fade-in" style={{ animationDelay: '300ms' }}>
-          <CardHeader className="flex flex-row items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-primary" />
-            <CardTitle className="text-xl font-semibold font-serif">Ärenden per prioritet</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {yearMonthFilteredTickets.length === 0 ? (
-              <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                Ingen ärendedata tillgänglig
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
-                <BarChart data={ticketsByPriority} margin={chartMargins}>
-                  <defs>
-                    {COLORS.map((color, index) => (
-                      <linearGradient key={`priorityGradient${index}`} id={`priorityGradient${index}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={color} stopOpacity={0.95}/>
-                        <stop offset="95%" stopColor={color} stopOpacity={0.7}/>
-                      </linearGradient>
-                    ))}
-                  </defs>
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: isMobile ? 10 : 12 }}
-                  />
-                  <YAxis
-                    allowDecimals={false}
-                    tick={{ fontSize: isMobile ? 10 : 12 }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'hsl(var(--popover))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '8px',
-                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
-                    }}
-                    itemStyle={{
-                      color: 'hsl(var(--popover-foreground))',
-                    }}
-                    cursor={{ fill: 'hsl(var(--muted) / 0.2)' }}
-                  />
-                  <Bar
-                    dataKey="value"
-                    radius={[4, 4, 0, 0]}
-                    animationDuration={800}
-                    animationEasing="ease-out"
-                  >
-                    {ticketsByPriority.map((_, index) => (
-                      <Cell key={`cell-${index}`} fill={`url(#priorityGradient${index % COLORS.length})`} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                        ))}
+                      </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
             )}
-          </CardContent>
-        </Card>
-        )}
+          </TabsContent>
 
-        {/* Activity Heatmap */}
-        {isModuleVisible('activityHeatmap') && (
-        <Card className="animate-fade-in" style={{ animationDelay: '400ms' }}>
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold font-serif">
-              Activity Calendar
-            </CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Daily ticket creation volume over the past {isMobile ? '3' : '12'} months
-            </p>
-          </CardHeader>
-          <CardContent>
-            <ActivityHeatmap
-              tickets={tickets}
-              monthsToShow={isMobile ? 3 : 12}
-            />
-          </CardContent>
-        </Card>
-        )}
-
-        {/* Status Flow */}
-        {isModuleVisible('statusFlow') && (
-        <Card className="animate-fade-in" style={{ animationDelay: '500ms' }}>
-          <CardHeader>
-            <CardTitle className="text-xl font-semibold font-serif">
-              Status Flow Over Time
-            </CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Status distribution across the last 12 months
-            </p>
-          </CardHeader>
-          <CardContent>
-            <StatusFlowChart
-              tickets={tickets}
-              height={isMobile ? 250 : 300}
-            />
-          </CardContent>
-        </Card>
-        )}
-
-        {/* Tag Analytics */}
-        {isModuleVisible('tagAnalytics') && (
-        <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
-          <TagAnalytics tickets={tickets} tags={tags} />
-        </div>
-        )}
+          {/* ── Flik 4: Taggar ── */}
+          <TabsContent value="taggar" className="space-y-5 mt-5">
+            {isModuleVisible('tagAnalytics') && (
+              <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
+                <TagAnalytics tickets={tickets} tags={tags} />
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
 
       </div>
     </Layout>
