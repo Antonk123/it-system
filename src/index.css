@@ -16,40 +16,40 @@
     overflow-wrap: normal;
   }
 
-  /* Ocean Deep - Deep blue-teal with vibrant coral accents */
+  /* Slate - Linear/Vercel-inspired clean dark */
   :root,
   .theme-default {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
-    --background: 200 65% 5%;
-    --background-gradient: linear-gradient(135deg, hsl(200, 65%, 4%) 0%, hsl(190, 60%, 6%) 30%, hsl(185, 58%, 7%) 70%, hsl(210, 60%, 5%) 100%);
-    --foreground: 180 35% 98%;
+    --background: 222 47% 6%;
+    --background-gradient: linear-gradient(135deg, hsl(222, 47%, 5%) 0%, hsl(218, 42%, 7%) 50%, hsl(225, 45%, 6%) 100%);
+    --foreground: 210 20% 95%;
 
-    --card: 195 55% 12%;
-    --card-foreground: 180 35% 98%;
+    --card: 220 40% 9%;
+    --card-foreground: 210 20% 95%;
 
-    --popover: 195 55% 12%;
-    --popover-foreground: 180 35% 98%;
+    --popover: 220 40% 9%;
+    --popover-foreground: 210 20% 95%;
 
-    --primary: 180 85% 55%;  /* Bright aqua teal */
-    --primary-foreground: 200 65% 5%;
+    --primary: 214 100% 60%;
+    --primary-foreground: 222 47% 6%;
 
-    --secondary: 200 50% 16%;
-    --secondary-foreground: 180 35% 92%;
+    --secondary: 220 35% 13%;
+    --secondary-foreground: 210 15% 90%;
 
-    --muted: 200 45% 18%;
-    --muted-foreground: 185 25% 65%;
+    --muted: 218 32% 15%;
+    --muted-foreground: 215 18% 60%;
 
-    --accent: 15 95% 65%;  /* Vibrant coral */
-    --accent-foreground: 200 65% 5%;
+    --accent: 199 85% 58%;
+    --accent-foreground: 222 47% 6%;
 
-    --destructive: 0 85% 60%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 195 45% 22%;
-    --input: 195 55% 14%;
-    --ring: 180 85% 55%;
+    --border: 215 28% 18%;
+    --input: 218 38% 11%;
+    --ring: 214 100% 60%;
 
-    --radius: 1rem;
+    --radius: 0.625rem;
 
     /* Custom ticket status colors */
     --status-open: 217 91% 50%;
@@ -65,327 +65,389 @@
     --priority-critical: 0 84% 60%;
 
     /* Sidebar */
-    --sidebar-background: 220 32% 5%;
+    --sidebar-background: 222 50% 4%;
     --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 175 70% 45%;
-    --sidebar-primary-foreground: 218 22% 10%;
-    --sidebar-accent: 220 30% 8%;
-    --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 220 20% 18%;
-    --sidebar-ring: 175 70% 45%;
+    --sidebar-primary: 214 100% 60%;
+    --sidebar-primary-foreground: 222 50% 4%;
+    --sidebar-accent: 220 40% 8%;
+    --sidebar-accent-foreground: 210 20% 95%;
+    --sidebar-border: 215 28% 16%;
+    --sidebar-ring: 214 100% 60%;
 
-    /* Chart colors - Ocean Deep palette */
-    --chart-1: 180 85% 55%;  /* Bright aqua teal */
-    --chart-2: 15 95% 65%;   /* Vibrant coral */
-    --chart-3: 195 70% 45%;  /* Deep teal */
-    --chart-4: 25 90% 58%;   /* Warm orange */
-    --chart-5: 160 60% 50%;  /* Sea green */
+    /* Chart colors - blue spectrum */
+    --chart-1: 214 100% 60%;
+    --chart-2: 199 85% 58%;
+    --chart-3: 221 70% 70%;
+    --chart-4: 187 70% 55%;
+    --chart-5: 235 65% 65%;
     --sidebar: 0 0% 98%;
     --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
     --font-serif: 'Crimson Pro', 'Libre Caslon Text', ui-serif, Georgia, serif;
     --font-mono: 'JetBrains Mono', ui-monospace, 'Fira Code', monospace;
 
-    /* Enhanced shadows with color tint */
-    --shadow-2xs: 0 1px 2px 0px hsl(180 80% 50% / 0.05);
-    --shadow-xs: 0 1px 3px 0px hsl(180 80% 50% / 0.08);
-    --shadow-sm: 0 2px 4px -1px hsl(180 80% 50% / 0.1), 0 1px 2px 0px hsl(0 0% 0% / 0.3);
-    --shadow: 0 4px 6px -1px hsl(180 80% 50% / 0.15), 0 2px 4px -1px hsl(0 0% 0% / 0.3);
-    --shadow-md: 0 6px 12px -2px hsl(180 80% 50% / 0.2), 0 3px 6px -1px hsl(0 0% 0% / 0.3);
-    --shadow-lg: 0 10px 20px -3px hsl(180 80% 50% / 0.25), 0 4px 8px -2px hsl(0 0% 0% / 0.3);
-    --shadow-xl: 0 20px 30px -5px hsl(180 80% 50% / 0.3), 0 8px 12px -3px hsl(0 0% 0% / 0.3);
-    --shadow-2xl: 0 30px 50px -10px hsl(180 80% 50% / 0.35), 0 12px 20px -5px hsl(0 0% 0% / 0.4);
+    /* Subtle elevation shadows */
+    --shadow-2xs: 0 1px 2px 0px hsl(0 0% 0% / 0.15);
+    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.2);
+    --shadow-sm: 0 2px 4px -1px hsl(0 0% 0% / 0.25), 0 1px 2px 0px hsl(0 0% 0% / 0.15);
+    --shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.3), 0 2px 4px -1px hsl(0 0% 0% / 0.2);
+    --shadow-md: 0 6px 12px -2px hsl(0 0% 0% / 0.3), 0 3px 6px -1px hsl(0 0% 0% / 0.2);
+    --shadow-lg: 0 10px 20px -3px hsl(0 0% 0% / 0.35), 0 4px 8px -2px hsl(0 0% 0% / 0.25);
+    --shadow-xl: 0 20px 30px -5px hsl(0 0% 0% / 0.4), 0 8px 12px -3px hsl(0 0% 0% / 0.3);
+    --shadow-2xl: 0 30px 50px -10px hsl(0 0% 0% / 0.45), 0 12px 20px -5px hsl(0 0% 0% / 0.35);
     --tracking-normal: 0em;
     --spacing: 0.25rem;
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 180 85% 40%;
-    --search-glow-accent-vivid: 15 95% 65%;
-    --search-glow-primary-dark: 180 90% 20%;
-    --search-glow-accent-dark: 15 90% 35%;
-    --search-glow-primary-bright: 180 70% 75%;
-    --search-glow-accent-bright: 15 80% 80%;
-    --search-glow-base: 200 20% 8%;
-    --search-input-bg: 195 55% 10%;
+    --search-glow-primary-deep: 214 100% 50%;
+    --search-glow-accent-vivid: 199 85% 58%;
+    --search-glow-primary-dark: 214 100% 25%;
+    --search-glow-accent-dark: 199 80% 30%;
+    --search-glow-primary-bright: 214 90% 75%;
+    --search-glow-accent-bright: 199 80% 75%;
+    --search-glow-base: 220 40% 7%;
+    --search-input-bg: 218 38% 10%;
   }
 
-  /* Cyberpunk - Electric neon on dark void */
-  .theme-cyberpunk {
-    --app-font-family: 'JetBrains Mono', monospace;
-    --background: 280 85% 3%;
-    --background-gradient: linear-gradient(135deg, hsl(280, 90%, 3%) 0%, hsl(300, 85%, 4%) 25%, hsl(320, 80%, 5%) 60%, hsl(280, 85%, 4%) 100%);
-    --foreground: 320 100% 96%;
+  /* Midnight - GitHub dark-inspired deep indigo */
+  .theme-midnight {
+    --app-font-family: 'Plus Jakarta Sans', sans-serif;
+    --background: 234 50% 5%;
+    --background-gradient: linear-gradient(135deg, hsl(234, 50%, 4%) 0%, hsl(230, 45%, 6%) 50%, hsl(238, 48%, 5%) 100%);
+    --foreground: 220 15% 94%;
 
-    --card: 285 75% 10%;
-    --card-foreground: 320 100% 96%;
+    --card: 233 42% 9%;
+    --card-foreground: 220 15% 94%;
 
-    --popover: 285 75% 10%;
-    --popover-foreground: 320 100% 96%;
+    --popover: 233 42% 9%;
+    --popover-foreground: 220 15% 94%;
 
-    --primary: 320 100% 60%;  /* Electric hot pink */
-    --primary-foreground: 280 85% 3%;
+    --primary: 243 75% 68%;
+    --primary-foreground: 234 50% 5%;
 
-    --secondary: 280 70% 14%;
-    --secondary-foreground: 320 100% 95%;
+    --secondary: 232 38% 13%;
+    --secondary-foreground: 220 12% 88%;
 
-    --muted: 285 65% 16%;
-    --muted-foreground: 310 50% 70%;
+    --muted: 232 35% 15%;
+    --muted-foreground: 225 18% 58%;
 
-    --accent: 180 100% 55%;  /* Neon cyan */
-    --accent-foreground: 280 85% 3%;
+    --accent: 196 72% 58%;
+    --accent-foreground: 234 50% 5%;
 
-    --destructive: 0 90% 62%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 300 70% 22%;
-    --input: 285 75% 12%;
-    --ring: 320 100% 60%;
+    --border: 232 32% 19%;
+    --input: 233 40% 11%;
+    --ring: 243 75% 68%;
 
     --radius: 0.5rem;
 
-    --sidebar-background: 285 90% 2%;
-    --sidebar-foreground: 320 100% 96%;
-    --sidebar-primary: 320 100% 60%;
-    --sidebar-primary-foreground: 280 85% 3%;
-    --sidebar-accent: 285 75% 8%;
-    --sidebar-accent-foreground: 320 100% 96%;
-    --sidebar-border: 300 70% 18%;
-    --sidebar-ring: 180 100% 55%;
+    /* Custom ticket status colors */
+    --status-open: 217 91% 50%;
+    --status-in-progress: 45 93% 47%;
+    --status-waiting: 195 70% 45%;
+    --status-resolved: 142 71% 45%;
+    --status-closed: 215 16% 47%;
 
-    /* Chart colors - Cyberpunk neon palette */
-    --chart-1: 320 100% 60%;  /* Electric hot pink */
-    --chart-2: 180 100% 55%;  /* Neon cyan */
-    --chart-3: 270 100% 65%;  /* Electric purple */
-    --chart-4: 140 100% 55%;  /* Neon green */
-    --chart-5: 50 100% 60%;   /* Electric yellow */
+    /* Priority colors */
+    --priority-low: 142 71% 45%;
+    --priority-medium: 45 93% 47%;
+    --priority-high: 25 95% 53%;
+    --priority-critical: 0 84% 60%;
 
-    /* Neon glow shadows for cyberpunk */
-    --shadow-2xs: 0 0 4px hsl(320 100% 60% / 0.3);
-    --shadow-xs: 0 0 8px hsl(320 100% 60% / 0.3);
-    --shadow-sm: 0 0 12px hsl(320 100% 60% / 0.4), 0 2px 4px hsl(0 0% 0% / 0.5);
-    --shadow-md: 0 0 20px hsl(320 100% 60% / 0.5), 0 4px 8px hsl(0 0% 0% / 0.5);
-    --shadow-lg: 0 0 30px hsl(320 100% 60% / 0.6), 0 8px 16px hsl(0 0% 0% / 0.6);
-    --shadow-xl: 0 0 40px hsl(320 100% 60% / 0.7), 0 12px 24px hsl(0 0% 0% / 0.6);
-    --shadow-2xl: 0 0 60px hsl(320 100% 60% / 0.8), 0 20px 40px hsl(0 0% 0% / 0.7);
+    /* Sidebar */
+    --sidebar-background: 235 55% 3%;
+    --sidebar-foreground: 220 15% 92%;
+    --sidebar-primary: 243 75% 68%;
+    --sidebar-primary-foreground: 235 55% 3%;
+    --sidebar-accent: 233 42% 8%;
+    --sidebar-accent-foreground: 220 15% 94%;
+    --sidebar-border: 232 32% 17%;
+    --sidebar-ring: 243 75% 68%;
+
+    /* Chart colors - indigo spectrum */
+    --chart-1: 243 75% 68%;
+    --chart-2: 196 72% 58%;
+    --chart-3: 258 60% 65%;
+    --chart-4: 210 65% 60%;
+    --chart-5: 228 55% 70%;
+
+    /* Subtle elevation shadows */
+    --shadow-2xs: 0 1px 2px 0px hsl(0 0% 0% / 0.18);
+    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.22);
+    --shadow-sm: 0 2px 4px -1px hsl(0 0% 0% / 0.28), 0 1px 2px 0px hsl(0 0% 0% / 0.18);
+    --shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.32), 0 2px 4px -1px hsl(0 0% 0% / 0.22);
+    --shadow-md: 0 6px 12px -2px hsl(0 0% 0% / 0.32), 0 3px 6px -1px hsl(0 0% 0% / 0.22);
+    --shadow-lg: 0 10px 20px -3px hsl(0 0% 0% / 0.38), 0 4px 8px -2px hsl(0 0% 0% / 0.28);
+    --shadow-xl: 0 20px 30px -5px hsl(0 0% 0% / 0.42), 0 8px 12px -3px hsl(0 0% 0% / 0.32);
+    --shadow-2xl: 0 30px 50px -10px hsl(0 0% 0% / 0.48), 0 12px 20px -5px hsl(0 0% 0% / 0.38);
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 320 100% 50%;
-    --search-glow-accent-vivid: 180 100% 55%;
-    --search-glow-primary-dark: 300 90% 25%;
-    --search-glow-accent-dark: 180 90% 30%;
-    --search-glow-primary-bright: 320 100% 70%;
-    --search-glow-accent-bright: 180 100% 75%;
-    --search-glow-base: 285 75% 8%;
-    --search-input-bg: 285 75% 10%;
+    --search-glow-primary-deep: 243 75% 55%;
+    --search-glow-accent-vivid: 196 72% 58%;
+    --search-glow-primary-dark: 243 70% 28%;
+    --search-glow-accent-dark: 196 65% 32%;
+    --search-glow-primary-bright: 243 70% 80%;
+    --search-glow-accent-bright: 196 68% 75%;
+    --search-glow-base: 233 42% 7%;
+    --search-input-bg: 233 40% 10%;
   }
 
-  /* Arctic - Deep cold blues with ice accents */
-  .theme-arctic {
+  /* Graphite - Raycast-inspired warm neutral dark */
+  .theme-graphite {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
-    --background: 210 70% 6%;
-    --background-gradient: linear-gradient(135deg, hsl(215, 75%, 5%) 0%, hsl(200, 65%, 7%) 40%, hsl(210, 70%, 8%) 70%, hsl(220, 68%, 6%) 100%);
-    --foreground: 195 60% 97%;
+    --background: 220 14% 7%;
+    --background-gradient: linear-gradient(135deg, hsl(220, 15%, 6%) 0%, hsl(215, 12%, 8%) 50%, hsl(222, 14%, 7%) 100%);
+    --foreground: 220 8% 94%;
 
-    --card: 210 60% 13%;
-    --card-foreground: 195 60% 97%;
+    --card: 218 12% 11%;
+    --card-foreground: 220 8% 94%;
 
-    --popover: 210 60% 13%;
-    --popover-foreground: 195 60% 97%;
+    --popover: 218 12% 11%;
+    --popover-foreground: 220 8% 94%;
 
-    --primary: 195 90% 68%;  /* Bright ice blue */
-    --primary-foreground: 210 70% 6%;
+    --primary: 38 92% 55%;
+    --primary-foreground: 220 14% 7%;
 
-    --secondary: 210 55% 16%;
-    --secondary-foreground: 195 60% 95%;
+    --secondary: 218 10% 15%;
+    --secondary-foreground: 220 8% 88%;
 
-    --muted: 210 50% 18%;
-    --muted-foreground: 200 40% 68%;
+    --muted: 218 10% 17%;
+    --muted-foreground: 218 8% 56%;
 
-    --accent: 165 75% 58%;  /* Aurora teal-green */
-    --accent-foreground: 210 70% 6%;
+    --accent: 32 85% 50%;
+    --accent-foreground: 220 14% 7%;
 
-    --destructive: 0 85% 60%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 210 55% 22%;
-    --input: 210 60% 14%;
-    --ring: 195 90% 68%;
+    --border: 218 10% 20%;
+    --input: 218 12% 12%;
+    --ring: 38 92% 55%;
 
-    --radius: 0.875rem;
+    --radius: 0.5rem;
 
-    --sidebar-background: 215 75% 4%;
-    --sidebar-foreground: 195 60% 97%;
-    --sidebar-primary: 195 90% 68%;
-    --sidebar-primary-foreground: 215 75% 4%;
-    --sidebar-accent: 210 60% 11%;
-    --sidebar-accent-foreground: 195 60% 97%;
-    --sidebar-border: 210 55% 20%;
-    --sidebar-ring: 165 75% 58%;
+    /* Custom ticket status colors */
+    --status-open: 217 91% 50%;
+    --status-in-progress: 45 93% 47%;
+    --status-waiting: 195 70% 45%;
+    --status-resolved: 142 71% 45%;
+    --status-closed: 215 16% 47%;
 
-    /* Chart colors - Arctic ice palette */
-    --chart-1: 195 90% 68%;  /* Bright ice blue */
-    --chart-2: 165 75% 58%;  /* Aurora teal-green */
-    --chart-3: 210 80% 60%;  /* Deep frost blue */
-    --chart-4: 180 70% 65%;  /* Glacier cyan */
-    --chart-5: 200 60% 72%;  /* Pale ice */
+    /* Priority colors */
+    --priority-low: 142 71% 45%;
+    --priority-medium: 45 93% 47%;
+    --priority-high: 25 95% 53%;
+    --priority-critical: 0 84% 60%;
 
-    /* Frosty glow shadows */
-    --shadow-2xs: 0 1px 3px hsl(195 90% 68% / 0.08);
-    --shadow-xs: 0 2px 4px hsl(195 90% 68% / 0.1);
-    --shadow-sm: 0 3px 8px hsl(195 90% 68% / 0.15), 0 1px 3px hsl(0 0% 0% / 0.3);
-    --shadow-md: 0 6px 16px hsl(195 90% 68% / 0.2), 0 2px 6px hsl(0 0% 0% / 0.4);
-    --shadow-lg: 0 12px 24px hsl(195 90% 68% / 0.25), 0 4px 12px hsl(0 0% 0% / 0.4);
-    --shadow-xl: 0 20px 40px hsl(195 90% 68% / 0.3), 0 8px 16px hsl(0 0% 0% / 0.4);
-    --shadow-2xl: 0 30px 60px hsl(195 90% 68% / 0.35), 0 12px 24px hsl(0 0% 0% / 0.5);
+    /* Sidebar */
+    --sidebar-background: 220 16% 5%;
+    --sidebar-foreground: 220 8% 90%;
+    --sidebar-primary: 38 92% 55%;
+    --sidebar-primary-foreground: 220 16% 5%;
+    --sidebar-accent: 218 12% 10%;
+    --sidebar-accent-foreground: 220 8% 94%;
+    --sidebar-border: 218 10% 18%;
+    --sidebar-ring: 38 92% 55%;
+
+    /* Chart colors - amber/warm spectrum */
+    --chart-1: 38 92% 55%;
+    --chart-2: 25 80% 55%;
+    --chart-3: 48 88% 60%;
+    --chart-4: 15 75% 52%;
+    --chart-5: 50 70% 65%;
+
+    /* Minimal flat dark shadows */
+    --shadow-2xs: 0 1px 2px 0px hsl(0 0% 0% / 0.2);
+    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+    --shadow-sm: 0 2px 4px -1px hsl(0 0% 0% / 0.3), 0 1px 2px 0px hsl(0 0% 0% / 0.2);
+    --shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.35), 0 2px 4px -1px hsl(0 0% 0% / 0.25);
+    --shadow-md: 0 6px 12px -2px hsl(0 0% 0% / 0.35), 0 3px 6px -1px hsl(0 0% 0% / 0.25);
+    --shadow-lg: 0 10px 20px -3px hsl(0 0% 0% / 0.4), 0 4px 8px -2px hsl(0 0% 0% / 0.3);
+    --shadow-xl: 0 20px 30px -5px hsl(0 0% 0% / 0.45), 0 8px 12px -3px hsl(0 0% 0% / 0.35);
+    --shadow-2xl: 0 30px 50px -10px hsl(0 0% 0% / 0.5), 0 12px 20px -5px hsl(0 0% 0% / 0.4);
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 195 90% 55%;
-    --search-glow-accent-vivid: 165 75% 58%;
-    --search-glow-primary-dark: 210 80% 30%;
-    --search-glow-accent-dark: 165 70% 35%;
-    --search-glow-primary-bright: 195 85% 80%;
-    --search-glow-accent-bright: 165 70% 75%;
-    --search-glow-base: 210 60% 8%;
-    --search-input-bg: 210 60% 13%;
+    --search-glow-primary-deep: 38 92% 45%;
+    --search-glow-accent-vivid: 32 85% 50%;
+    --search-glow-primary-dark: 38 85% 25%;
+    --search-glow-accent-dark: 32 75% 28%;
+    --search-glow-primary-bright: 38 88% 70%;
+    --search-glow-accent-bright: 32 80% 68%;
+    --search-glow-base: 218 12% 9%;
+    --search-input-bg: 218 12% 11%;
   }
 
-  /* Terminal - Classic green phosphor CRT */
-  .theme-terminal {
-    --app-font-family: 'JetBrains Mono', monospace;
-    --background: 120 100% 1.5%;
-    --background-gradient: linear-gradient(135deg, hsl(120, 100%, 1.5%) 0%, hsl(135, 100%, 2%) 30%, hsl(125, 100%, 2.5%) 60%, hsl(115, 100%, 1.8%) 100%);
-    --foreground: 120 100% 88%;
+  /* Stone - Obsidian-inspired cool neutral with emerald */
+  .theme-stone {
+    --app-font-family: 'Plus Jakarta Sans', sans-serif;
+    --background: 200 8% 7%;
+    --background-gradient: linear-gradient(135deg, hsl(200, 8%, 6%) 0%, hsl(195, 7%, 8%) 50%, hsl(205, 8%, 7%) 100%);
+    --foreground: 180 5% 94%;
 
-    --card: 125 85% 6%;
-    --card-foreground: 120 100% 88%;
+    --card: 198 7% 11%;
+    --card-foreground: 180 5% 94%;
 
-    --popover: 125 85% 6%;
-    --popover-foreground: 120 100% 88%;
+    --popover: 198 7% 11%;
+    --popover-foreground: 180 5% 94%;
 
-    --primary: 120 100% 55%;  /* Bright phosphor green */
-    --primary-foreground: 120 100% 2%;
+    --primary: 160 55% 46%;
+    --primary-foreground: 200 8% 7%;
 
-    --secondary: 120 90% 8%;
-    --secondary-foreground: 120 100% 85%;
+    --secondary: 198 6% 15%;
+    --secondary-foreground: 180 5% 88%;
 
-    --muted: 120 80% 10%;
-    --muted-foreground: 120 60% 65%;
+    --muted: 198 6% 17%;
+    --muted-foreground: 195 6% 55%;
 
-    --accent: 120 100% 45%;  /* Medium green accent */
-    --accent-foreground: 120 100% 2%;
+    --accent: 152 45% 40%;
+    --accent-foreground: 200 8% 7%;
 
-    --destructive: 0 85% 58%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 120 85% 18%;
-    --input: 125 85% 7%;
-    --ring: 120 100% 55%;
+    --border: 196 6% 20%;
+    --input: 198 7% 12%;
+    --ring: 160 55% 46%;
 
-    --radius: 0.375rem;
+    --radius: 0.75rem;
 
-    --sidebar-background: 120 100% 2%;
-    --sidebar-foreground: 120 100% 88%;
-    --sidebar-primary: 120 100% 55%;
-    --sidebar-primary-foreground: 120 100% 2%;
-    --sidebar-accent: 125 85% 7%;
-    --sidebar-accent-foreground: 120 100% 88%;
-    --sidebar-border: 120 85% 16%;
-    --sidebar-ring: 120 100% 55%;
+    /* Custom ticket status colors */
+    --status-open: 217 91% 50%;
+    --status-in-progress: 45 93% 47%;
+    --status-waiting: 195 70% 45%;
+    --status-resolved: 142 71% 45%;
+    --status-closed: 215 16% 47%;
 
-    /* Chart colors - Terminal phosphor palette */
-    --chart-1: 120 100% 55%;  /* Bright phosphor green */
-    --chart-2: 120 100% 45%;  /* Medium green */
-    --chart-3: 120 100% 65%;  /* Light green */
-    --chart-4: 120 80% 50%;   /* Dim green */
-    --chart-5: 120 100% 35%;  /* Dark green */
+    /* Priority colors */
+    --priority-low: 142 71% 45%;
+    --priority-medium: 45 93% 47%;
+    --priority-high: 25 95% 53%;
+    --priority-critical: 0 84% 60%;
 
-    /* Terminal phosphor glow effects */
-    --shadow-2xs: 0 0 3px hsl(120, 100%, 55% / 0.2);
-    --shadow-xs: 0 0 6px hsl(120, 100%, 55% / 0.3);
-    --shadow-sm: 0 0 10px hsl(120, 100%, 55% / 0.35), 0 0 4px hsl(120, 100%, 55% / 0.5);
-    --shadow-md: 0 0 16px hsl(120, 100%, 55% / 0.4), 0 0 6px hsl(120, 100%, 55% / 0.6);
-    --shadow-lg: 0 0 24px hsl(120, 100%, 55% / 0.5), 0 0 10px hsl(120, 100%, 55% / 0.7);
-    --shadow-xl: 0 0 36px hsl(120, 100%, 55% / 0.6), 0 0 16px hsl(120, 100%, 55% / 0.8);
-    --shadow-2xl: 0 0 50px hsl(120, 100%, 55% / 0.7), 0 0 24px hsl(120, 100%, 55% / 0.9);
+    /* Sidebar */
+    --sidebar-background: 200 10% 5%;
+    --sidebar-foreground: 180 5% 90%;
+    --sidebar-primary: 160 55% 46%;
+    --sidebar-primary-foreground: 200 10% 5%;
+    --sidebar-accent: 198 7% 10%;
+    --sidebar-accent-foreground: 180 5% 94%;
+    --sidebar-border: 196 6% 18%;
+    --sidebar-ring: 160 55% 46%;
+
+    /* Chart colors - greens */
+    --chart-1: 160 55% 46%;
+    --chart-2: 152 45% 40%;
+    --chart-3: 168 50% 52%;
+    --chart-4: 142 40% 44%;
+    --chart-5: 175 48% 55%;
+
+    /* Neutral dark shadows */
+    --shadow-2xs: 0 1px 2px 0px hsl(0 0% 0% / 0.18);
+    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.22);
+    --shadow-sm: 0 2px 4px -1px hsl(0 0% 0% / 0.28), 0 1px 2px 0px hsl(0 0% 0% / 0.18);
+    --shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.32), 0 2px 4px -1px hsl(0 0% 0% / 0.22);
+    --shadow-md: 0 6px 12px -2px hsl(0 0% 0% / 0.32), 0 3px 6px -1px hsl(0 0% 0% / 0.22);
+    --shadow-lg: 0 10px 20px -3px hsl(0 0% 0% / 0.38), 0 4px 8px -2px hsl(0 0% 0% / 0.28);
+    --shadow-xl: 0 20px 30px -5px hsl(0 0% 0% / 0.42), 0 8px 12px -3px hsl(0 0% 0% / 0.32);
+    --shadow-2xl: 0 30px 50px -10px hsl(0 0% 0% / 0.48), 0 12px 20px -5px hsl(0 0% 0% / 0.38);
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 120 100% 45%;
-    --search-glow-accent-vivid: 120 100% 55%;
-    --search-glow-primary-dark: 120 90% 20%;
-    --search-glow-accent-dark: 120 90% 30%;
-    --search-glow-primary-bright: 120 100% 70%;
-    --search-glow-accent-bright: 120 100% 75%;
-    --search-glow-base: 120 85% 6%;
-    --search-input-bg: 125 85% 6%;
+    --search-glow-primary-deep: 160 55% 36%;
+    --search-glow-accent-vivid: 152 45% 40%;
+    --search-glow-primary-dark: 160 50% 20%;
+    --search-glow-accent-dark: 152 42% 22%;
+    --search-glow-primary-bright: 160 50% 62%;
+    --search-glow-accent-bright: 152 42% 58%;
+    --search-glow-base: 198 7% 9%;
+    --search-input-bg: 198 7% 11%;
   }
 
-  /* Sunset - Warm oranges and purples */
-  .theme-sunset {
-    --app-font-family: 'Crimson Pro', serif;
-    --background: 270 50% 6%;
-    --background-gradient: linear-gradient(135deg, hsl(280, 55%, 5%) 0%, hsl(310, 50%, 7%) 25%, hsl(20, 70%, 10%) 60%, hsl(15, 65%, 8%) 85%, hsl(270, 55%, 6%) 100%);
-    --foreground: 30 85% 97%;
+  /* Daylight - Light mode, Jira/ServiceNow-inspired */
+  .theme-daylight {
+    --app-font-family: 'Plus Jakarta Sans', sans-serif;
+    --background: 220 20% 98%;
+    --background-gradient: linear-gradient(135deg, hsl(220, 20%, 98%) 0%, hsl(215, 18%, 97%) 100%);
+    --foreground: 220 25% 12%;
 
-    --card: 280 45% 13%;
-    --card-foreground: 30 85% 97%;
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 12%;
 
-    --popover: 280 45% 13%;
-    --popover-foreground: 30 85% 97%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 12%;
 
-    --primary: 25 95% 62%;  /* Vibrant sunset orange */
-    --primary-foreground: 270 50% 6%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 280 40% 16%;
-    --secondary-foreground: 30 85% 95%;
+    --secondary: 220 15% 93%;
+    --secondary-foreground: 220 20% 25%;
 
-    --muted: 280 38% 18%;
-    --muted-foreground: 20 40% 70%;
+    --muted: 220 14% 93%;
+    --muted-foreground: 220 12% 48%;
 
-    --accent: 290 85% 68%;  /* Vivid purple-pink */
-    --accent-foreground: 270 50% 6%;
+    --accent: 240 55% 55%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 85% 60%;
+    --destructive: 0 84% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 280 40% 22%;
-    --input: 280 45% 14%;
-    --ring: 25 95% 62%;
+    --border: 220 15% 86%;
+    --input: 220 15% 91%;
+    --ring: 221 83% 53%;
 
-    --radius: 1rem;
+    --radius: 0.625rem;
 
-    --sidebar-background: 275 55% 4%;
-    --sidebar-foreground: 30 85% 97%;
-    --sidebar-primary: 25 95% 62%;
-    --sidebar-primary-foreground: 275 55% 4%;
-    --sidebar-accent: 280 45% 11%;
-    --sidebar-accent-foreground: 30 85% 97%;
-    --sidebar-border: 280 40% 20%;
-    --sidebar-ring: 290 85% 68%;
+    /* Custom ticket status colors */
+    --status-open: 217 91% 50%;
+    --status-in-progress: 45 93% 47%;
+    --status-waiting: 195 70% 45%;
+    --status-resolved: 142 71% 45%;
+    --status-closed: 215 16% 47%;
 
-    /* Chart colors - Sunset warm palette */
-    --chart-1: 25 95% 62%;   /* Vibrant sunset orange */
-    --chart-2: 290 85% 68%;  /* Vivid purple-pink */
-    --chart-3: 15 90% 58%;   /* Deep coral */
-    --chart-4: 310 75% 65%;  /* Lavender pink */
-    --chart-5: 35 85% 60%;   /* Golden amber */
+    /* Priority colors */
+    --priority-low: 142 71% 45%;
+    --priority-medium: 45 93% 47%;
+    --priority-high: 25 95% 53%;
+    --priority-critical: 0 84% 60%;
 
-    /* Warm glow shadows */
-    --shadow-2xs: 0 2px 4px hsl(25 95% 62% / 0.08);
-    --shadow-xs: 0 2px 6px hsl(25 95% 62% / 0.12);
-    --shadow-sm: 0 4px 12px hsl(25 95% 62% / 0.18), 0 2px 4px hsl(290 85% 68% / 0.1);
-    --shadow-md: 0 8px 20px hsl(25 95% 62% / 0.25), 0 4px 8px hsl(290 85% 68% / 0.15);
-    --shadow-lg: 0 12px 30px hsl(25 95% 62% / 0.3), 0 6px 12px hsl(290 85% 68% / 0.2);
-    --shadow-xl: 0 20px 45px hsl(25 95% 62% / 0.35), 0 10px 20px hsl(290 85% 68% / 0.25);
-    --shadow-2xl: 0 30px 60px hsl(25 95% 62% / 0.4), 0 15px 30px hsl(290 85% 68% / 0.3);
+    /* Sidebar */
+    --sidebar-background: 220 25% 96%;
+    --sidebar-foreground: 220 25% 12%;
+    --sidebar-primary: 221 83% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 92%;
+    --sidebar-accent-foreground: 220 25% 12%;
+    --sidebar-border: 220 15% 88%;
+    --sidebar-ring: 221 83% 53%;
+
+    /* Chart colors - clean blues */
+    --chart-1: 221 83% 53%;
+    --chart-2: 240 55% 55%;
+    --chart-3: 199 75% 50%;
+    --chart-4: 214 70% 60%;
+    --chart-5: 250 60% 65%;
+
+    /* Light subtle shadows */
+    --shadow-2xs: 0 1px 2px 0px hsl(220 15% 50% / 0.08);
+    --shadow-xs: 0 1px 3px 0px hsl(220 15% 50% / 0.1);
+    --shadow-sm: 0 2px 4px -1px hsl(220 15% 50% / 0.12), 0 1px 2px 0px hsl(220 15% 50% / 0.08);
+    --shadow: 0 4px 6px -1px hsl(220 15% 50% / 0.12), 0 2px 4px -1px hsl(220 15% 50% / 0.08);
+    --shadow-md: 0 6px 12px -2px hsl(220 15% 50% / 0.15), 0 3px 6px -1px hsl(220 15% 50% / 0.1);
+    --shadow-lg: 0 10px 20px -3px hsl(220 15% 50% / 0.18), 0 4px 8px -2px hsl(220 15% 50% / 0.12);
+    --shadow-xl: 0 20px 30px -5px hsl(220 15% 50% / 0.2), 0 8px 12px -3px hsl(220 15% 50% / 0.15);
+    --shadow-2xl: 0 30px 50px -10px hsl(220 15% 50% / 0.25), 0 12px 20px -5px hsl(220 15% 50% / 0.18);
+    --tracking-normal: 0em;
+    --spacing: 0.25rem;
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 25 95% 50%;
-    --search-glow-accent-vivid: 290 85% 68%;
-    --search-glow-primary-dark: 15 85% 30%;
-    --search-glow-accent-dark: 290 75% 40%;
-    --search-glow-primary-bright: 25 90% 75%;
-    --search-glow-accent-bright: 290 80% 80%;
-    --search-glow-base: 280 40% 10%;
-    --search-input-bg: 280 45% 13%;
+    --search-glow-primary-deep: 221 83% 45%;
+    --search-glow-accent-vivid: 240 55% 55%;
+    --search-glow-primary-dark: 221 75% 35%;
+    --search-glow-accent-dark: 240 50% 40%;
+    --search-glow-primary-bright: 221 80% 70%;
+    --search-glow-accent-bright: 240 52% 72%;
+    --search-glow-base: 220 15% 92%;
+    --search-input-bg: 220 15% 90%;
   }
 
   .font-jakarta {
@@ -784,110 +846,6 @@
   }
 
   /* Theme-specific enhancements */
-
-  /* Terminal theme: CRT scanlines effect */
-  .theme-terminal body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent 0px,
-      transparent 2px,
-      hsla(120, 100%, 50%, 0.03) 2px,
-      hsla(120, 100%, 50%, 0.03) 4px
-    );
-    pointer-events: none;
-    z-index: 9999;
-    animation: scanlines 8s linear infinite;
-  }
-
-  @keyframes scanlines {
-    0% { transform: translateY(0); }
-    100% { transform: translateY(4px); }
-  }
-
-  /* Terminal theme: Phosphor flicker */
-  .theme-terminal .ticket-card,
-  .theme-terminal button,
-  .theme-terminal .ticket-row {
-    animation: phosphor-flicker 0.15s infinite alternate;
-  }
-
-  @keyframes phosphor-flicker {
-    0% { opacity: 1; }
-    100% { opacity: 0.98; }
-  }
-
-  /* Cyberpunk theme: Digital grid overlay */
-  .theme-cyberpunk body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(hsla(320, 100%, 60%, 0.02) 1px, transparent 1px),
-      linear-gradient(90deg, hsla(320, 100%, 60%, 0.02) 1px, transparent 1px);
-    background-size: 50px 50px;
-    pointer-events: none;
-    z-index: 0;
-    animation: grid-pulse 4s ease-in-out infinite;
-  }
-
-  @keyframes grid-pulse {
-    0%, 100% { opacity: 0.3; }
-    50% { opacity: 0.6; }
-  }
-
-  /* Arctic theme: Snow particles */
-  .theme-arctic body::after {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      radial-gradient(circle at 20% 30%, hsla(195, 90%, 68%, 0.02) 1px, transparent 1px),
-      radial-gradient(circle at 60% 70%, hsla(195, 90%, 68%, 0.02) 1px, transparent 1px),
-      radial-gradient(circle at 80% 10%, hsla(195, 90%, 68%, 0.015) 1px, transparent 1px);
-    background-size: 200px 200px, 300px 300px, 250px 250px;
-    background-position: 0 0, 40px 60px, 130px 270px;
-    pointer-events: none;
-    z-index: 0;
-    animation: snow-drift 60s linear infinite;
-  }
-
-  @keyframes snow-drift {
-    0% { transform: translate(0, 0); }
-    100% { transform: translate(-100px, 100px); }
-  }
-
-  /* Sunset theme: Warm glow pulse */
-  .theme-sunset .ticket-card:hover,
-  .theme-sunset button:hover {
-    animation: sunset-glow 2s ease-in-out infinite;
-  }
-
-  @keyframes sunset-glow {
-    0%, 100% {
-      box-shadow:
-        0 0 20px hsla(25, 95%, 62%, 0.2),
-        0 0 40px hsla(290, 85%, 68%, 0.1);
-    }
-    50% {
-      box-shadow:
-        0 0 30px hsla(25, 95%, 62%, 0.3),
-        0 0 60px hsla(290, 85%, 68%, 0.15);
-    }
-  }
-
-  /* Ocean Deep theme: Underwater shimmer */
-  .theme-default .ticket-card::before,
-  .theme-default button::before {
-    animation: underwater-shimmer 3s ease-in-out infinite;
-  }
-
-  @keyframes underwater-shimmer {
-    0%, 100% { opacity: 0; }
-    50% { opacity: 0.15; }
-  }
 
   /* Radial Progress Rings animations */
   @keyframes ring-fill {

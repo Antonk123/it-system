@@ -44,11 +44,11 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
 const themeOptions = [
-  { value: 'theme-default', label: 'Ocean Deep' },
-  { value: 'theme-cyberpunk', label: 'Cyberpunk' },
-  { value: 'theme-arctic', label: 'Arctic' },
-  { value: 'theme-terminal', label: 'Terminal' },
-  { value: 'theme-sunset', label: 'Sunset' },
+  { value: 'theme-default', label: 'Slate' },
+  { value: 'theme-midnight', label: 'Midnight' },
+  { value: 'theme-graphite', label: 'Graphite' },
+  { value: 'theme-stone', label: 'Stone' },
+  { value: 'theme-daylight', label: 'Daylight' },
 ] as const;
 
 // Memoized list item components for better performance
