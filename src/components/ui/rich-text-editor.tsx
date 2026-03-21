@@ -1,6 +1,7 @@
 import { useEditor, EditorContent } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Link } from '@tiptap/extension-link';
+import { Image } from '@tiptap/extension-image';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
@@ -11,10 +12,11 @@ import {
   Bold, Italic, Strikethrough, Code, Link as LinkIcon,
   List, ListOrdered, Quote, CodeSquare, Minus,
   Heading2, Heading3, Table as TableIcon, RemoveFormatting,
-  Underline as UnderlineIcon, Trash2
+  Underline as UnderlineIcon, Trash2, ImageIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import { api } from '@/lib/api';
 import { Button } from './button';
 import { Input } from './input';
 import { Label } from './label';
@@ -47,6 +49,8 @@ export const RichTextEditor = ({
   showToolbar = true,
   error = false,
 }: RichTextEditorProps) => {
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
   const [savedSelection, setSavedSelection] = useState<{ from: number; to: number } | null>(null);
   const [linkUrl, setLinkUrl] = useState('');
@@ -71,6 +75,7 @@ export const RichTextEditor = ({
       },
     }),
     Underline,
+    Image.configure({ inline: false, allowBase64: false }),
     Table.configure({
       resizable: true,
     }),
@@ -164,6 +169,22 @@ export const RichTextEditor = ({
 
   const addTable = () => {
     editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so same file can be re-selected
+    e.target.value = '';
+    setImageUploading(true);
+    try {
+      const { url } = await api.uploadKbImage(file);
+      editor.chain().focus().setImage({ src: url }).run();
+    } catch (err) {
+      console.error('KB image upload failed:', err);
+    } finally {
+      setImageUploading(false);
+    }
   };
 
   return (
@@ -400,6 +421,18 @@ export const RichTextEditor = ({
             type="button"
             variant="ghost"
             size="sm"
+            onClick={() => imageInputRef.current?.click()}
+            className="h-8 w-8 p-0"
+            disabled={disabled || imageUploading}
+            title="Infoga bild"
+          >
+            <ImageIcon className={cn('h-4 w-4', imageUploading && 'animate-pulse')} />
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             className={cn(
               'h-8 w-8 p-0',
@@ -496,6 +529,17 @@ export const RichTextEditor = ({
           disabled && 'cursor-not-allowed opacity-50'
         )}
         style={{ minHeight }}
+      />
+
+      {/* Hidden file input for image upload */}
+      <input
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        ref={imageInputRef}
+        onChange={handleImageFileChange}
+        tabIndex={-1}
+        aria-hidden="true"
       />
 
       {/* Required indicator (hidden input for form validation) */}
@@ -626,6 +670,18 @@ export const RichTextEditor = ({
           border: none;
           border-top: 2px solid hsl(var(--border));
           margin: 1.5rem 0;
+        }
+
+        .rich-text-editor-content .ProseMirror img {
+          max-width: 100%;
+          border-radius: 0.5rem;
+          margin: 0.5rem 0;
+          cursor: pointer;
+        }
+
+        .rich-text-editor-content .ProseMirror img.ProseMirror-selectednode {
+          outline: 2px solid hsl(var(--primary));
+          outline-offset: 2px;
         }
       `}</style>
 

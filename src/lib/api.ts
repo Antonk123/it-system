@@ -773,6 +773,30 @@ class ApiClient {
     return this.request<KbArticleRow>(`/kb/public/${token}`);
   }
 
+  async uploadKbImage(file: File): Promise<{ url: string }> {
+    const token = this.getToken();
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${this.baseUrl}/kb/upload-image`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+      throw new Error(error.error || error.message || 'Upload failed');
+    }
+
+    return response.json();
+  }
+
   // Public endpoints (no auth)
   async getPublicCategories() {
     return this.request<{ id: string; label: string }[]>('/public/categories');
