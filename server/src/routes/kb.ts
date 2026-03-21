@@ -1,8 +1,45 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
+import multer from 'multer';
+import { existsSync, mkdirSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const UPLOAD_DIR = process.env.UPLOAD_DIR || join(__dirname, '../../data/uploads');
+
+if (!existsSync(UPLOAD_DIR)) {
+  mkdirSync(UPLOAD_DIR, { recursive: true });
+}
+
+const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
+
+const imageStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => { cb(null, UPLOAD_DIR); },
+  filename: (_req, file, cb) => {
+    const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).substring(2)}`;
+    const ext = file.originalname.split('.').pop()?.toLowerCase() || '';
+    cb(null, `kb-${uniqueSuffix}.${ext}`);
+  },
+});
+
+const uploadImage = multer({
+  storage: imageStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ext = file.originalname.split('.').pop()?.toLowerCase() || '';
+    if (!IMAGE_MIME_TYPES.includes(file.mimetype) || !IMAGE_EXTENSIONS.includes(ext)) {
+      return cb(new Error(`Only image files are allowed (jpeg, png, gif, webp).`));
+    }
+    cb(null, true);
+  },
+});
 
 const router = Router();
 
@@ -352,6 +389,36 @@ router.get('/public/:token', (_req: Request, res: Response) => {
     console.error('Error fetching public KB article:', error);
     res.status(500).json({ error: 'Failed to fetch article' });
   }
+});
+
+// ─── KB Image Upload ──────────────────────────────────────────────────────────
+
+// POST /api/kb/upload-image — upload image for KB article (authenticated)
+router.post('/upload-image', authenticate, (req: AuthRequest, res: Response) => {
+  uploadImage.single('image')(req, res, (err) => {
+    if (err) {
+      console.error('KB image upload error:', err.message);
+      return res.status(400).json({ error: err.message });
+    }
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image uploaded' });
+    }
+    res.status(201).json({ url: `/api/kb/images/${req.file.filename}` });
+  });
+});
+
+// GET /api/kb/images/:filename — serve KB image (public, KB articles can be shared publicly)
+router.get('/images/:filename', (req: Request, res: Response) => {
+  const filename = req.params.filename;
+  // Basic path traversal protection
+  if (filename.includes('..') || filename.includes('/')) {
+    return res.status(400).json({ error: 'Invalid filename' });
+  }
+  const filePath = join(UPLOAD_DIR, filename);
+  if (!existsSync(filePath)) {
+    return res.status(404).json({ error: 'Image not found' });
+  }
+  res.sendFile(filePath);
 });
 
 export default router;

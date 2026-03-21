@@ -1,6 +1,7 @@
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Link } from '@tiptap/extension-link';
+import { Image } from '@tiptap/extension-image';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
@@ -11,10 +12,173 @@ import {
   Bold, Italic, Strikethrough, Code, Link as LinkIcon,
   List, ListOrdered, Quote, CodeSquare, Minus,
   Heading2, Heading3, Table as TableIcon, RemoveFormatting,
-  Underline as UnderlineIcon, Trash2
+  Underline as UnderlineIcon, Trash2, ImageIcon
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
+import { api } from '@/lib/api';
+
+// ─── Resizable image node view ─────────────────────────────────────────────
+
+const SIZE_PRESETS = ['25%', '50%', '75%', '100%'] as const;
+
+const ResizableImageView = ({
+  node,
+  updateAttributes,
+  selected,
+}: {
+  node: { attrs: { src: string; alt?: string; title?: string; width?: string } };
+  updateAttributes: (attrs: Record<string, unknown>) => void;
+  selected: boolean;
+}) => {
+  const { src, alt, title, width } = node.attrs;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+
+  const setSize = (pct: string) => updateAttributes({ width: pct });
+
+  const onDragHandleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    const startX = e.clientX;
+    const startWidth = containerRef.current?.offsetWidth ?? 0;
+    const parentWidth = containerRef.current?.parentElement?.offsetWidth ?? 1;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isDragging.current) return;
+      const newPx = Math.max(48, startWidth + (ev.clientX - startX));
+      const newPct = Math.min(100, Math.round((newPx / parentWidth) * 100));
+      updateAttributes({ width: `${newPct}%` });
+    };
+
+    const onMouseUp = () => {
+      isDragging.current = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  return (
+    <NodeViewWrapper>
+      <div
+        ref={containerRef}
+        style={{
+          display: 'inline-block',
+          position: 'relative',
+          width: width ?? 'auto',
+          maxWidth: '100%',
+        }}
+      >
+        <img
+          src={src}
+          alt={alt ?? ''}
+          title={title ?? undefined}
+          draggable={false}
+          style={{ display: 'block', width: '100%', borderRadius: '0.5rem', margin: 0 }}
+        />
+
+        {selected && (
+          <>
+            {/* Size preset toolbar */}
+            <div
+              contentEditable={false}
+              style={{
+                position: 'absolute',
+                top: '-2.25rem',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                gap: '2px',
+                padding: '3px',
+                background: 'hsl(var(--popover))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '0.375rem',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                zIndex: 20,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {SIZE_PRESETS.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); setSize(size); }}
+                  style={{
+                    padding: '2px 7px',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    borderRadius: '3px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: width === size ? 'hsl(var(--primary))' : 'transparent',
+                    color: width === size
+                      ? 'hsl(var(--primary-foreground))'
+                      : 'hsl(var(--muted-foreground))',
+                  }}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+
+            {/* Selection outline */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                borderRadius: '0.5rem',
+                outline: '2px solid hsl(var(--primary))',
+                outlineOffset: '2px',
+                pointerEvents: 'none',
+              }}
+            />
+
+            {/* Drag handle (bottom-right corner) */}
+            <div
+              contentEditable={false}
+              onMouseDown={onDragHandleMouseDown}
+              style={{
+                position: 'absolute',
+                bottom: -5,
+                right: -5,
+                width: 12,
+                height: 12,
+                background: 'hsl(var(--primary))',
+                border: '2px solid hsl(var(--background))',
+                borderRadius: '3px',
+                cursor: 'se-resize',
+                zIndex: 20,
+              }}
+            />
+          </>
+        )}
+      </div>
+    </NodeViewWrapper>
+  );
+};
+
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        renderHTML: (attrs) => (attrs.width ? { style: `width: ${attrs.width}` } : {}),
+        parseHTML: (el) => {
+          const style = el.getAttribute('style') ?? '';
+          const m = style.match(/width:\s*([^;]+)/);
+          return m ? m[1].trim() : null;
+        },
+      },
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImageView);
+  },
+});
 import { Button } from './button';
 import { Input } from './input';
 import { Label } from './label';
@@ -47,6 +211,8 @@ export const RichTextEditor = ({
   showToolbar = true,
   error = false,
 }: RichTextEditorProps) => {
+  const [imageUploading, setImageUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
   const [savedSelection, setSavedSelection] = useState<{ from: number; to: number } | null>(null);
   const [linkUrl, setLinkUrl] = useState('');
@@ -71,6 +237,7 @@ export const RichTextEditor = ({
       },
     }),
     Underline,
+    ResizableImage.configure({ inline: false, allowBase64: false }),
     Table.configure({
       resizable: true,
     }),
@@ -164,6 +331,22 @@ export const RichTextEditor = ({
 
   const addTable = () => {
     editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  };
+
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // Reset input so same file can be re-selected
+    e.target.value = '';
+    setImageUploading(true);
+    try {
+      const { url } = await api.uploadKbImage(file);
+      editor.chain().focus().setImage({ src: url }).run();
+    } catch (err) {
+      console.error('KB image upload failed:', err);
+    } finally {
+      setImageUploading(false);
+    }
   };
 
   return (
@@ -400,6 +583,18 @@ export const RichTextEditor = ({
             type="button"
             variant="ghost"
             size="sm"
+            onClick={() => imageInputRef.current?.click()}
+            className="h-8 w-8 p-0"
+            disabled={disabled || imageUploading}
+            title="Infoga bild"
+          >
+            <ImageIcon className={cn('h-4 w-4', imageUploading && 'animate-pulse')} />
+          </Button>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             className={cn(
               'h-8 w-8 p-0',
@@ -496,6 +691,17 @@ export const RichTextEditor = ({
           disabled && 'cursor-not-allowed opacity-50'
         )}
         style={{ minHeight }}
+      />
+
+      {/* Hidden file input for image upload */}
+      <input
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        ref={imageInputRef}
+        onChange={handleImageFileChange}
+        tabIndex={-1}
+        aria-hidden="true"
       />
 
       {/* Required indicator (hidden input for form validation) */}
@@ -626,6 +832,18 @@ export const RichTextEditor = ({
           border: none;
           border-top: 2px solid hsl(var(--border));
           margin: 1.5rem 0;
+        }
+
+        .rich-text-editor-content .ProseMirror img {
+          max-width: 100%;
+          border-radius: 0.5rem;
+          margin: 0.5rem 0;
+          cursor: pointer;
+        }
+
+        .rich-text-editor-content .ProseMirror img.ProseMirror-selectednode {
+          outline: 2px solid hsl(var(--primary));
+          outline-offset: 2px;
         }
       `}</style>
 
