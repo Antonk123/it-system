@@ -6,6 +6,7 @@ import { doubleCsrf } from 'csrf-csrf';
 import { initializeDatabase } from './db/connection.js';
 import { startReminderScheduler } from './lib/reminderScheduler.js';
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
+import { startAutoCloseScheduler } from './lib/autoCloseScheduler.js';
 import cron from 'node-cron';
 import passport from './config/passport.js';
 
@@ -53,6 +54,9 @@ cron.schedule('0 3 * * *', () => {
   }
 });
 console.log('✅ Refresh token cleanup scheduled (daily at 03:00)');
+
+// Auto-close resolved tickets (daily at 02:30, configurable via AUTO_CLOSE_DAYS env var)
+startAutoCloseScheduler();
 
 // Security headers with Helmet
 // Protects against common web vulnerabilities

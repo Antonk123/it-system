@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail } from '../lib/email.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -896,6 +897,11 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       console.warn('This likely indicates a frontend bug - field values will not be saved');
     }
 
+    // Auto-priority: only when user did not explicitly provide one
+    const finalPriority = priority
+      ? priority
+      : (detectAutoPriority(title, finalDescription) ?? 'medium');
+
     // Wrap all inserts in a transaction for atomicity
     const createTransaction = db.transaction(() => {
       db.prepare(`
@@ -906,7 +912,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
         title,
         finalDescription,
         status || 'open',
-        priority || 'medium',
+        finalPriority,
         category_id || null,
         requester_id || null,
         notes || null,
@@ -934,6 +940,13 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     });
 
     createTransaction();
+
+    // Auto-tag based on keyword rules (runs after transaction so tags can be created separately)
+    try {
+      applyAutoTags(id, title, finalDescription);
+    } catch (error) {
+      console.error('Auto-tag error (non-fatal):', error);
+    }
 
     const ticket = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(id) as TicketRow;
 
