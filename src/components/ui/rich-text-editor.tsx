@@ -1,4 +1,4 @@
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Link } from '@tiptap/extension-link';
 import { Image } from '@tiptap/extension-image';
@@ -17,6 +17,168 @@ import {
 import { cn } from '@/lib/utils';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { api } from '@/lib/api';
+
+// ─── Resizable image node view ─────────────────────────────────────────────
+
+const SIZE_PRESETS = ['25%', '50%', '75%', '100%'] as const;
+
+const ResizableImageView = ({
+  node,
+  updateAttributes,
+  selected,
+}: {
+  node: { attrs: { src: string; alt?: string; title?: string; width?: string } };
+  updateAttributes: (attrs: Record<string, unknown>) => void;
+  selected: boolean;
+}) => {
+  const { src, alt, title, width } = node.attrs;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDragging = useRef(false);
+
+  const setSize = (pct: string) => updateAttributes({ width: pct });
+
+  const onDragHandleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    const startX = e.clientX;
+    const startWidth = containerRef.current?.offsetWidth ?? 0;
+    const parentWidth = containerRef.current?.parentElement?.offsetWidth ?? 1;
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!isDragging.current) return;
+      const newPx = Math.max(48, startWidth + (ev.clientX - startX));
+      const newPct = Math.min(100, Math.round((newPx / parentWidth) * 100));
+      updateAttributes({ width: `${newPct}%` });
+    };
+
+    const onMouseUp = () => {
+      isDragging.current = false;
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  };
+
+  return (
+    <NodeViewWrapper>
+      <div
+        ref={containerRef}
+        style={{
+          display: 'inline-block',
+          position: 'relative',
+          width: width ?? 'auto',
+          maxWidth: '100%',
+        }}
+      >
+        <img
+          src={src}
+          alt={alt ?? ''}
+          title={title ?? undefined}
+          draggable={false}
+          style={{ display: 'block', width: '100%', borderRadius: '0.5rem', margin: 0 }}
+        />
+
+        {selected && (
+          <>
+            {/* Size preset toolbar */}
+            <div
+              contentEditable={false}
+              style={{
+                position: 'absolute',
+                top: '-2.25rem',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                display: 'flex',
+                gap: '2px',
+                padding: '3px',
+                background: 'hsl(var(--popover))',
+                border: '1px solid hsl(var(--border))',
+                borderRadius: '0.375rem',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                zIndex: 20,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {SIZE_PRESETS.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); setSize(size); }}
+                  style={{
+                    padding: '2px 7px',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    borderRadius: '3px',
+                    border: 'none',
+                    cursor: 'pointer',
+                    background: width === size ? 'hsl(var(--primary))' : 'transparent',
+                    color: width === size
+                      ? 'hsl(var(--primary-foreground))'
+                      : 'hsl(var(--muted-foreground))',
+                  }}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+
+            {/* Selection outline */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                borderRadius: '0.5rem',
+                outline: '2px solid hsl(var(--primary))',
+                outlineOffset: '2px',
+                pointerEvents: 'none',
+              }}
+            />
+
+            {/* Drag handle (bottom-right corner) */}
+            <div
+              contentEditable={false}
+              onMouseDown={onDragHandleMouseDown}
+              style={{
+                position: 'absolute',
+                bottom: -5,
+                right: -5,
+                width: 12,
+                height: 12,
+                background: 'hsl(var(--primary))',
+                border: '2px solid hsl(var(--background))',
+                borderRadius: '3px',
+                cursor: 'se-resize',
+                zIndex: 20,
+              }}
+            />
+          </>
+        )}
+      </div>
+    </NodeViewWrapper>
+  );
+};
+
+const ResizableImage = Image.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      width: {
+        default: null,
+        renderHTML: (attrs) => (attrs.width ? { style: `width: ${attrs.width}` } : {}),
+        parseHTML: (el) => {
+          const style = el.getAttribute('style') ?? '';
+          const m = style.match(/width:\s*([^;]+)/);
+          return m ? m[1].trim() : null;
+        },
+      },
+    };
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(ResizableImageView);
+  },
+});
 import { Button } from './button';
 import { Input } from './input';
 import { Label } from './label';
@@ -75,7 +237,7 @@ export const RichTextEditor = ({
       },
     }),
     Underline,
-    Image.configure({ inline: false, allowBase64: false }),
+    ResizableImage.configure({ inline: false, allowBase64: false }),
     Table.configure({
       resizable: true,
     }),
