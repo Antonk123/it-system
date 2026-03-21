@@ -58,15 +58,15 @@ export const UserTicketHistory = ({ userId }: UserTicketHistoryProps) => {
       <div className="flex flex-wrap gap-3 text-sm">
         <span className="font-medium">{stats.total} Totalt</span>
         <span className="text-muted-foreground">|</span>
-        <span className="text-blue-600">{stats.open} Öppna</span>
+        <span className="text-[hsl(var(--status-open))]">{stats.open} Öppna</span>
         <span className="text-muted-foreground">|</span>
-        <span className="text-yellow-600">{stats.inProgress} Pågående</span>
+        <span className="text-[hsl(var(--status-in-progress))]">{stats.inProgress} Pågående</span>
         <span className="text-muted-foreground">|</span>
-        <span className="text-teal-600">{stats.waiting} Väntar</span>
+        <span className="text-[hsl(var(--status-waiting))]">{stats.waiting} Väntar</span>
         <span className="text-muted-foreground">|</span>
-        <span className="text-green-600">{stats.resolved} Lösta</span>
+        <span className="text-[hsl(var(--status-resolved))]">{stats.resolved} Lösta</span>
         <span className="text-muted-foreground">|</span>
-        <span className="text-gray-600">{stats.closed} Stängda</span>
+        <span className="text-[hsl(var(--status-closed))]">{stats.closed} Stängda</span>
       </div>
 
       {/* Ticket Table */}

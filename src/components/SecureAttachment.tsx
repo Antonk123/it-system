@@ -60,7 +60,7 @@ export const SecureImage = ({ fileId, alt, className, ...props }: SecureImagePro
 
   if (error || !blobUrl) {
     return (
-      <div className={className} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f0f0f0' }}>
+      <div className={`${className ?? ''} bg-muted`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <span style={{ fontSize: '10px' }}>❌</span>
       </div>
     );

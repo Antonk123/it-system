@@ -611,9 +611,9 @@ export const TemplateEditorModal = ({
                 </div>
 
                 {/* Info box */}
-                <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-sm mb-4">
-                  <p className="font-medium text-blue-900 mb-2">Om dynamiska fält</p>
-                  <ul className="text-blue-800 space-y-1 text-xs">
+                <div className="rounded-lg bg-primary/10 border border-primary/20 p-4 text-sm mb-4">
+                  <p className="font-medium text-primary mb-2">Om dynamiska fält</p>
+                  <ul className="text-primary/80 space-y-1 text-xs">
                     <li>• Ersätter standardbeskrivningen med strukturerade formulärfält</li>
                     <li>• <strong>Fältnamn</strong> används tekniskt (databas), <strong>Fältetikett</strong> visas för användare</li>
                     <li>• Använd text för korta svar, textområde för längre beskrivningar</li>
@@ -857,7 +857,7 @@ export const TemplateEditorModal = ({
                         id="required"
                         checked={fieldFormData.required}
                         onChange={(e) => setFieldFormData({ ...fieldFormData, required: e.target.checked })}
-                        className="rounded border-gray-300"
+                        className="rounded border-input"
                       />
                       <Label htmlFor="required" className="cursor-pointer">
                         Obligatoriskt fält

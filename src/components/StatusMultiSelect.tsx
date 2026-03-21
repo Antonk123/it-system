@@ -23,11 +23,11 @@ interface StatusMultiSelectProps {
 }
 
 const STATUS_OPTIONS: { value: TicketStatus; label: string; color: string }[] = [
-  { value: 'open', label: 'Öppen', color: '#22c55e' },
-  { value: 'in-progress', label: 'Pågående', color: '#3b82f6' },
-  { value: 'waiting', label: 'Väntar', color: '#f59e0b' },
-  { value: 'resolved', label: 'Löst', color: '#8b5cf6' },
-  { value: 'closed', label: 'Stängd', color: '#6b7280' },
+  { value: 'open', label: 'Öppen', color: 'hsl(var(--status-open))' },
+  { value: 'in-progress', label: 'Pågående', color: 'hsl(var(--status-in-progress))' },
+  { value: 'waiting', label: 'Väntar', color: 'hsl(var(--status-waiting))' },
+  { value: 'resolved', label: 'Löst', color: 'hsl(var(--status-resolved))' },
+  { value: 'closed', label: 'Stängd', color: 'hsl(var(--status-closed))' },
 ];
 
 export function StatusMultiSelect({ selectedStatuses, onChange }: StatusMultiSelectProps) {

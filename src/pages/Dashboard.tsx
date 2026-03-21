@@ -235,9 +235,9 @@ const Dashboard = () => {
               )}
 
               {agingGroups.warning.length > 0 && (
-                <Card className="border-yellow-500/50 bg-yellow-500/5">
+                <Card className="border-[hsl(var(--status-in-progress))]/50 bg-[hsl(var(--status-in-progress))]/5">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-semibold text-yellow-700 dark:text-yellow-500">
+                    <CardTitle className="text-base font-semibold text-[hsl(var(--status-in-progress))]">
                       Kräver uppmärksamhet ({agingGroups.warning.length})
                     </CardTitle>
                     <CardDescription className="text-xs">14-30 dagar gamla</CardDescription>
@@ -261,9 +261,9 @@ const Dashboard = () => {
               )}
 
               {agingGroups.attention.length > 0 && (
-                <Card className="border-orange-500/50 bg-orange-500/5">
+                <Card className="border-[hsl(var(--priority-high))]/50 bg-[hsl(var(--priority-high))]/5">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base font-semibold text-orange-700 dark:text-orange-500">
+                    <CardTitle className="text-base font-semibold text-[hsl(var(--priority-high))]">
                       Uppmärksamhet ({agingGroups.attention.length})
                     </CardTitle>
                     <CardDescription className="text-xs">7-14 dagar gamla</CardDescription>
