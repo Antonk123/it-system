@@ -66,10 +66,10 @@ docker build -f Dockerfile.client -t it-ticketing-frontend:latest .
 - [ ] Filtrera på datumintervall
 - [ ] Filtrera på checklist completion
 
-### 4. **Automatisering** (2-3h)
-- [ ] Auto-close efter X dagar i "Resolved"
-- [ ] Auto-tag baserat på keywords i beskrivning
-- [ ] Auto-priority baserat på keywords
+### 4. **Automatisering** (2-3h) ✅
+- [x] Auto-close efter X dagar i "Resolved" — daglig cron 02:30, konfigurerbart via AUTO_CLOSE_DAYS (default 30)
+- [x] Auto-tag baserat på keywords i beskrivning — regler i server/src/config/automation.ts
+- [x] Auto-priority baserat på keywords — gäller bara när användaren inte satt priority explicit
 
 ### 5. **Checklists förbättringar** (2-3h)
 - [ ] Sub-checklists (nested)
