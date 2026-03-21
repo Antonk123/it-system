@@ -819,11 +819,13 @@ class ApiClient {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
+    headers['X-CSRF-Token'] = await this.getCsrfToken();
 
     const response = await fetch(`${this.baseUrl}/kb/upload-image`, {
       method: 'POST',
       headers,
       body: formData,
+      credentials: 'include',
     });
 
     if (!response.ok) {
