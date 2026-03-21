@@ -492,8 +492,8 @@ const TicketForm = () => {
             </div>
           )}
           {!isSaving && hasUnsavedChanges && (
-            <div className="flex items-center gap-2 text-sm text-yellow-400/80">
-              <div className="h-2 w-2 rounded-full bg-yellow-400" />
+            <div className="flex items-center gap-2 text-sm text-[hsl(var(--status-in-progress))]/80">
+              <div className="h-2 w-2 rounded-full bg-[hsl(var(--status-in-progress))]" />
               Osparade ändringar
             </div>
           )}
