@@ -211,6 +211,23 @@ router.get('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
   }
 });
 
+// GET /api/kb/articles/:id/tickets — reverse lookup: tickets linked to this article
+router.get('/articles/:id/tickets', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const tickets = db.prepare(`
+      SELECT t.id, t.title, t.status, t.priority, t.created_at, t.updated_at
+      FROM tickets t
+      JOIN ticket_kb_links tkl ON t.id = tkl.ticket_id
+      WHERE tkl.article_id = ?
+      ORDER BY tkl.created_at DESC
+    `).all(req.params.id);
+    res.json(tickets);
+  } catch (error) {
+    console.error('Error fetching article linked tickets:', error);
+    res.status(500).json({ error: 'Failed to fetch linked tickets' });
+  }
+});
+
 // POST /api/kb/articles
 router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
   const { title, content = '', category_id, article_type } = req.body;

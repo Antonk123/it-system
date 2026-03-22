@@ -783,6 +783,10 @@ class ApiClient {
     return this.request<KbArticleRow>(`/kb/articles/${id}`);
   }
 
+  async getArticleLinkedTickets(articleId: string) {
+    return this.request<LinkedTicketRow[]>(`/kb/articles/${articleId}/tickets`);
+  }
+
   async createKbArticle(data: { title: string; content: string; category_id?: string | null }) {
     return this.request<KbArticleRow>('/kb/articles', {
       method: 'POST',
@@ -1111,6 +1115,17 @@ export interface KbArticleRow {
   category_id: string | null;
   category_name: string | null;
   category_color: string | null;
+  article_type?: string | null;
+  snippet?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LinkedTicketRow {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
   created_at: string;
   updated_at: string;
 }
