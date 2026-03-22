@@ -10,12 +10,18 @@ import { api, KbArticleRow, KbCategoryRow } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 
+const TYPE_LABELS: Record<string, string> = {
+  'how-to': 'Instruktion',
+  'solution': 'Lösning',
+};
+
 const KnowledgeBase = () => {
   const navigate = useNavigate();
   const [articles, setArticles] = useState<KbArticleRow[]>([]);
   const [categories, setCategories] = useState<KbCategoryRow[]>([]);
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
 
   // Category management state
@@ -36,15 +42,16 @@ const KnowledgeBase = () => {
 
   const fetchArticles = useCallback(async () => {
     try {
-      const params: { search?: string; category_id?: string } = {};
+      const params: { search?: string; category_id?: string; article_type?: string } = {};
       if (search) params.search = search;
       if (categoryFilter !== 'all') params.category_id = categoryFilter;
+      if (typeFilter !== 'all') params.article_type = typeFilter;
       const data = await api.getKbArticles(params);
       setArticles(data);
     } catch {
       toast.error('Kunde inte hämta artiklar');
     }
-  }, [search, categoryFilter]);
+  }, [search, categoryFilter, typeFilter]);
 
   useEffect(() => {
     fetchCategories();
@@ -255,6 +262,16 @@ const KnowledgeBase = () => {
               ))}
             </SelectContent>
           </Select>
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-full sm:w-[180px]">
+              <SelectValue placeholder="Alla typer" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alla typer</SelectItem>
+              <SelectItem value="how-to">Instruktion</SelectItem>
+              <SelectItem value="solution">Lösning</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Articles list */}
@@ -268,7 +285,7 @@ const KnowledgeBase = () => {
           <div className="text-center py-16 text-muted-foreground">
             <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">
-              {search || categoryFilter !== 'all'
+              {search || categoryFilter !== 'all' || typeFilter !== 'all'
                 ? 'Inga artiklar matchar sökningen'
                 : 'Inga artiklar ännu — skapa din första!'}
             </p>
@@ -288,11 +305,16 @@ const KnowledgeBase = () => {
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-foreground truncate">{article.title}</p>
-                    {article.content && (
+                    {article.snippet ? (
+                      <p
+                        className="text-sm text-muted-foreground mt-1 line-clamp-2"
+                        dangerouslySetInnerHTML={{ __html: article.snippet }}
+                      />
+                    ) : article.content ? (
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                         {getPreview(article.content)}
                       </p>
-                    )}
+                    ) : null}
                   </div>
                   <div className="flex flex-col items-end gap-1.5 shrink-0">
                     {article.category_name && (
@@ -303,6 +325,11 @@ const KnowledgeBase = () => {
                       >
                         <Folder className="w-2.5 h-2.5 mr-1" />
                         {article.category_name}
+                      </Badge>
+                    )}
+                    {article.article_type && (
+                      <Badge variant="outline" className="text-xs">
+                        {TYPE_LABELS[article.article_type]}
                       </Badge>
                     )}
                     <span className="text-xs text-muted-foreground flex items-center gap-1">

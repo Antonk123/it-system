@@ -16,6 +16,14 @@
     overflow-wrap: normal;
   }
 
+  /* Search snippet highlight */
+  mark {
+    background-color: hsl(45 93% 47% / 0.25);
+    color: hsl(45 93% 80%);
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+
   /* Slate - Linear/Vercel-inspired clean dark */
   :root,
   .theme-default {
