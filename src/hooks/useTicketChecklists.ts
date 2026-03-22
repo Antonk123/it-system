@@ -3,7 +3,17 @@ import { api, ChecklistRow } from '@/lib/api';
 import { checklistItemSchema, getValidationError } from '@/lib/validations';
 import { toast } from 'sonner';
 
-export interface ChecklistItem { id: string; ticket_id: string; label: string; completed: boolean; position: number; created_at: string; updated_at: string; }
+export interface ChecklistItem {
+  id: string;
+  ticket_id: string;
+  label: string;
+  completed: boolean;
+  position: number;
+  parent_id: string | null;
+  due_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 export const useTicketChecklists = (ticketId?: string) => {
   const [items, setItems] = useState<ChecklistItem[]>([]);
@@ -20,24 +30,36 @@ export const useTicketChecklists = (ticketId?: string) => {
     finally { setIsLoading(false); }
   }, [ticketId]);
 
-  const addChecklistItem = useCallback(async (targetTicketId: string, label: string) => {
+  const addChecklistItem = useCallback(async (
+    targetTicketId: string,
+    label: string,
+    options?: { parent_id?: string | null; due_date?: string | null }
+  ) => {
     const validation = checklistItemSchema.safeParse({ label });
     if (!validation.success) { toast.error(getValidationError(validation.error) || 'Invalid checklist item'); return null; }
     try {
-      const data = await api.createChecklistItem(targetTicketId, validation.data.label);
+      const data = await api.createChecklistItem(targetTicketId, validation.data.label, options);
       setItems(prev => [...prev, data as ChecklistItem]);
       return data;
     } catch (error) { toast.error('Failed to add checklist item'); return null; }
   }, []);
 
-  const updateChecklistItem = useCallback(async (id: string, updates: Partial<Pick<ChecklistItem, 'label' | 'completed'>>) => {
-    try { await api.updateChecklistItem(id, updates); setItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item)); }
-    catch (error) { if (import.meta.env.DEV) console.error('Error updating checklist item:', error); }
+  const updateChecklistItem = useCallback(async (
+    id: string,
+    updates: Partial<Pick<ChecklistItem, 'label' | 'completed' | 'due_date' | 'parent_id'>>
+  ) => {
+    try {
+      await api.updateChecklistItem(id, updates);
+      setItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+    } catch (error) { if (import.meta.env.DEV) console.error('Error updating checklist item:', error); }
   }, []);
 
   const deleteChecklistItem = useCallback(async (id: string) => {
-    try { await api.deleteChecklistItem(id); setItems(prev => prev.filter(item => item.id !== id)); }
-    catch (error) { if (import.meta.env.DEV) console.error('Error deleting checklist item:', error); }
+    try {
+      await api.deleteChecklistItem(id);
+      // Also remove children
+      setItems(prev => prev.filter(item => item.id !== id && item.parent_id !== id));
+    } catch (error) { if (import.meta.env.DEV) console.error('Error deleting checklist item:', error); }
   }, []);
 
   const bulkAddChecklistItems = useCallback(async (targetTicketId: string, labels: string[]) => {

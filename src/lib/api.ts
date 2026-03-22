@@ -615,10 +615,10 @@ class ApiClient {
     return this.request<ChecklistRow[]>(`/checklists/ticket/${ticketId}`);
   }
 
-  async createChecklistItem(ticketId: string, label: string) {
+  async createChecklistItem(ticketId: string, label: string, options?: { parent_id?: string | null; due_date?: string | null }) {
     return this.request<ChecklistRow>(`/checklists/ticket/${ticketId}`, {
       method: 'POST',
-      body: { label },
+      body: { label, ...options },
     });
   }
 
@@ -629,7 +629,7 @@ class ApiClient {
     });
   }
 
-  async updateChecklistItem(id: string, updates: Partial<Pick<ChecklistRow, 'label' | 'completed'>>) {
+  async updateChecklistItem(id: string, updates: Partial<Pick<ChecklistRow, 'label' | 'completed' | 'due_date' | 'parent_id'>>) {
     return this.request<ChecklistRow>(`/checklists/${id}`, {
       method: 'PUT',
       body: updates,
@@ -639,6 +639,38 @@ class ApiClient {
   async deleteChecklistItem(id: string) {
     return this.request<{ message: string }>(`/checklists/${id}`, {
       method: 'DELETE',
+    });
+  }
+
+  // Checklist Templates
+  async getChecklistTemplates() {
+    return this.request<ChecklistTemplate[]>('/checklist-templates');
+  }
+
+  async createChecklistTemplate(data: { name: string; description?: string; items: { label: string; parent_label?: string }[] }) {
+    return this.request<ChecklistTemplate>('/checklist-templates', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async updateChecklistTemplate(id: string, data: { name?: string; description?: string; items?: { label: string; parent_label?: string }[] }) {
+    return this.request<ChecklistTemplate>(`/checklist-templates/${id}`, {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
+  async deleteChecklistTemplate(id: string) {
+    return this.request<{ message: string }>(`/checklist-templates/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async applyChecklistTemplate(templateId: string, ticketId: string) {
+    return this.request<ChecklistRow[]>(`/checklist-templates/${templateId}/apply`, {
+      method: 'POST',
+      body: { ticketId },
     });
   }
 
@@ -942,8 +974,27 @@ export interface ChecklistRow {
   label: string;
   completed: boolean;
   position: number;
+  parent_id: string | null;
+  due_date: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ChecklistTemplateItem {
+  id: string;
+  template_id: string;
+  label: string;
+  parent_label: string | null;
+  position: number;
+}
+
+export interface ChecklistTemplate {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  items: ChecklistTemplateItem[];
 }
 
 export interface SystemUser {
