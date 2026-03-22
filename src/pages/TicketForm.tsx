@@ -60,8 +60,8 @@ const TicketForm = () => {
     fetchTemplates: fetchChecklistTemplates,
   } = useChecklistTemplates();
 
-  // Fetch templates on mount
-  useState(() => { fetchChecklistTemplates(); });
+  // Fetch checklist templates on mount
+  useEffect(() => { fetchChecklistTemplates(); }, [fetchChecklistTemplates]);
 
   const isEditing = !!id;
   const existingTicket = isEditing ? getTicketById(id) : null;

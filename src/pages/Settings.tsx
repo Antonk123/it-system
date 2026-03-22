@@ -1,4 +1,4 @@
-import { useState, useCallback, memo } from 'react';
+import { useState, useCallback, memo, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { TemplateEditorModal } from '@/components/TemplateEditorModal';
 import { useCategories } from '@/hooks/useCategories';
@@ -339,7 +339,7 @@ const Settings = () => {
   };
 
   // Fetch checklist templates on mount
-  useState(() => { fetchChecklistTemplates(); });
+  useEffect(() => { fetchChecklistTemplates(); }, [fetchChecklistTemplates]);
 
   const handleClOpenCreate = () => {
     setClEditingId(null);

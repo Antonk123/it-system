@@ -6,7 +6,7 @@ import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText,
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { useTicketAttachments } from '@/hooks/useTicketAttachments';
-import { useTicketChecklists } from '@/hooks/useTicketChecklists';
+import { useTicketChecklists, ChecklistItem } from '@/hooks/useTicketChecklists';
 import { useChecklistTemplates } from '@/hooks/useChecklistTemplates';
 import { useTicketSharing } from '@/hooks/useTicketSharing';
 import { useTicketComments } from '@/hooks/useTicketComments';
@@ -382,7 +382,7 @@ const TicketDetail = () => {
                   onApplyTemplate={async (template) => {
                     if (!id) return;
                     const newItems = await applyChecklistTemplate(template.id, id);
-                    if (newItems) setChecklistItems(newItems as any);
+                    if (newItems) setChecklistItems(newItems as ChecklistItem[]);
                   }}
                   onSaveAsTemplate={async (currentItems) => {
                     const name = window.prompt('Namn på mallen:');
