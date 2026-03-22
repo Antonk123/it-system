@@ -6,7 +6,7 @@ This milestone closes three capability gaps in an otherwise feature-complete sin
 
 ## Phases
 
-- [ ] **Phase 1: Reports Fix & Improvements** - Fix analytics to run on full dataset; add category breakdown, open/closed trend, and print-to-PDF
+- [x] **Phase 1: Reports Fix & Improvements** - Fix analytics to run on full dataset; add category breakdown, open/closed trend, and print-to-PDF (completed 2026-03-22)
 - [ ] **Phase 2: Knowledge Base Rework** - FTS5 full-text search, reverse KB-to-ticket links, article type field
 - [ ] **Phase 3: Archive Enhancement** - Closed date range filter with supporting database index
 
@@ -26,7 +26,7 @@ This milestone closes three capability gaps in an otherwise feature-complete sin
 Plans:
 - [x] 01-01: Backend reports summary endpoint (`GET /api/reports/summary`) with SQL GROUP BY aggregation
 - [x] 01-02: Wire Reports.tsx to new endpoint; add category breakdown chart and open/closed trend overlay
-- [ ] 01-03: Print-optimized `@media print` CSS and print button
+- [x] 01-03: Print-optimized `@media print` CSS and print button
 
 ### Phase 2: Knowledge Base Rework
 **Goal**: KB search uses full-text indexing with highlighted snippets, articles link back to the tickets that reference them, and articles carry an optional type classification
@@ -63,7 +63,7 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Reports Fix & Improvements | 0/3 | Not started | - |
+| 1. Reports Fix & Improvements | 3/3 | Complete   | 2026-03-22 |
 | 2. Knowledge Base Rework | 0/3 | Not started | - |
 | 3. Archive Enhancement | 0/2 | Not started | - |
 
