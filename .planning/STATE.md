@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 01-reports-fix-improvements 01-03-PLAN.md
-last_updated: "2026-03-22T07:48:41.263Z"
+stopped_at: Completed 01-reports-fix-improvements 01-04-PLAN.md
+last_updated: "2026-03-22T08:21:56.587Z"
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 4
+  completed_plans: 4
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 01 (reports-fix-improvements) — EXECUTING
-Plan: 3 of 3
+Plan: 2 of 4
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Plan: 3 of 3
 | Phase 01-reports-fix-improvements P01 | 15 | 2 tasks | 3 files |
 | Phase 01-reports-fix-improvements P02 | 15 | 1 tasks | 2 files |
 | Phase 01-reports-fix-improvements P03 | 5 | 1 tasks | 2 files |
+| Phase 01-reports-fix-improvements P04 | 10 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,8 @@ Recent decisions affecting current work:
 - [Phase 01-reports-fix-improvements]: useTickets kept for TagAnalytics, ActivityHeatmap, StatusFlowChart components — they require raw ticket arrays not available from summary endpoint
 - [Phase 01-reports-fix-improvements]: Printer button uses window.print() — no external PDF dependency
 - [Phase 01-reports-fix-improvements]: data-radix-tabs-content[data-state=inactive] selector for print tab isolation — zero JS override needed
+- [Phase 01-reports-fix-improvements]: byPriority SQL uses CASE ordering (critical->high->medium->low) for deterministic chart order in the priority chart
+- [Phase 01-reports-fix-improvements]: useTickets limit 10000: all raw-ticket consumers in Reports.tsx receive full dataset, not 10-row default
 
 ### Pending Todos
 
@@ -78,6 +81,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-22T07:48:41.259Z
-Stopped at: Completed 01-reports-fix-improvements 01-03-PLAN.md
+Last session: 2026-03-22T08:21:56.585Z
+Stopped at: Completed 01-reports-fix-improvements 01-04-PLAN.md
 Resume file: None
