@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
-import { api, KbArticleRow } from '@/lib/api';
+import { api, KbArticleRow, LinkedTicketRow } from '@/lib/api';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -29,17 +29,20 @@ const KBArticleDetail = () => {
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
   const [isTogglingShare, setIsTogglingShare] = useState(false);
+  const [linkedTickets, setLinkedTickets] = useState<LinkedTicketRow[]>([]);
 
   useEffect(() => {
     if (!id) return;
     const fetch = async () => {
       try {
-        const [data, shareData] = await Promise.all([
+        const [data, shareData, ticketsData] = await Promise.all([
           api.getKbArticle(id),
           api.getKbArticleShare(id),
+          api.getArticleLinkedTickets(id),
         ]);
         setArticle(data);
         setShareToken(shareData.share_token);
+        setLinkedTickets(ticketsData);
       } catch {
         toast.error('Artikeln hittades inte');
         navigate('/kb');
@@ -230,6 +233,32 @@ const KBArticleDetail = () => {
             <HtmlRenderer content={article.content} />
           ) : (
             <p className="text-muted-foreground text-sm italic">Inget innehåll ännu.</p>
+          )}
+        </div>
+
+        {/* Linked Tickets panel */}
+        <div className="pt-2 border-t">
+          <h3 className="text-sm font-semibold mb-3">Länkade biljetter</h3>
+          {linkedTickets.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Ingen biljett är länkad till den här artikeln
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {linkedTickets.map((ticket) => (
+                <Link
+                  key={ticket.id}
+                  to={`/tickets/${ticket.id}`}
+                  className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  <span className="text-sm font-medium truncate mr-2">{ticket.title}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="outline" className="text-xs">{ticket.status}</Badge>
+                    <Badge variant="secondary" className="text-xs">{ticket.priority}</Badge>
+                  </div>
+                </Link>
+              ))}
+            </div>
           )}
         </div>
       </div>
