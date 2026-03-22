@@ -11,6 +11,7 @@ export interface ReportsSummary {
     total: number;
   };
   byCategory: { category: string; count: number }[];
+  byPriority: { priority: string; count: number }[];
   trend: { month: string; created: number; closed: number }[];
   avgResolutionDays: number;
   agingTickets: number;

@@ -68,6 +68,21 @@ router.get('/summary', authenticate, (req: AuthRequest, res) => {
     ORDER BY count DESC
   `).all(...filterParams) as { category: string; count: number }[];
 
+  // 2b. byPriority — count per priority level, filtered by same created_at conditions
+  const byPriority = db.prepare(`
+    SELECT priority, COUNT(*) as count
+    FROM tickets
+    ${whereCreated}
+    GROUP BY priority
+    ORDER BY CASE priority
+      WHEN 'critical' THEN 1
+      WHEN 'high' THEN 2
+      WHEN 'medium' THEN 3
+      WHEN 'low' THEN 4
+      ELSE 5
+    END
+  `).all(...filterParams) as { priority: string; count: number }[];
+
   // 3. Trend — two separate queries merged via Map (avoids SQLite FULL OUTER JOIN limitation)
   let trendWhereCreated: string;
   let trendWhereClosed: string;
@@ -144,6 +159,7 @@ router.get('/summary', authenticate, (req: AuthRequest, res) => {
   res.json({
     totals,
     byCategory,
+    byPriority,
     trend,
     avgResolutionDays,
     agingTickets,
