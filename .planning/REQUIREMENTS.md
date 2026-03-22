@@ -23,7 +23,7 @@
 ### Archive
 
 - [ ] **ARCH-01**: Archive page supports filtering by closed date range (from/to date pickers)
-- [ ] **ARCH-02**: Database index on `(status, closed_at)` for fast archive queries
+- [x] **ARCH-02**: Database index on `(status, closed_at)` for fast archive queries
 
 ## v2 Requirements
 
@@ -67,7 +67,7 @@
 | KB-04 | Phase 2 | Complete |
 | KB-05 | Phase 2 | Complete |
 | ARCH-01 | Phase 3 | Pending |
-| ARCH-02 | Phase 3 | Pending |
+| ARCH-02 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 11 total

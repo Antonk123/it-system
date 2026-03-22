@@ -57,7 +57,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Composite index on (status, closed_at) + add closed_at to allowed date fields in backend and useTickets type
+- [x] 03-01-PLAN.md — Composite index on (status, closed_at) + add closed_at to allowed date fields in backend and useTickets type
 - [ ] 03-02-PLAN.md — Date range inputs in Archive.tsx filter bar with URL persistence and human verification
 
 ## Progress
