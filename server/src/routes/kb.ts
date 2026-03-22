@@ -271,7 +271,7 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: 'Title is required' });
   }
   try {
-    const existing = db.prepare('SELECT id FROM kb_articles WHERE id = ?').get(req.params.id);
+    const existing = db.prepare('SELECT id, title, content, rowid FROM kb_articles WHERE id = ?').get(req.params.id) as { id: string; title: string; content: string; rowid: number } | undefined;
     if (!existing) return res.status(404).json({ error: 'Article not found' });
 
     const now = new Date().toISOString();
@@ -279,13 +279,14 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
     const articleContent = content ?? '';
 
     const updateArticleAndFts = db.transaction((aid: string, articleTitle: string, articleContent: string, categoryId: string | null, articleTypeVal: string | null, timestamp: string) => {
+      // For contentless FTS5 (content=''), DELETE is not supported — use auxiliary delete command with old values
+      db.prepare("INSERT INTO kb_articles_fts(kb_articles_fts, rowid, title, content_plain) VALUES('delete', ?, ?, ?)")
+        .run(existing!.rowid, existing!.title, stripHtml(existing!.content));
       db.prepare(
         'UPDATE kb_articles SET title = ?, content = ?, category_id = ?, article_type = ?, updated_at = ? WHERE id = ?'
       ).run(articleTitle, articleContent, categoryId, articleTypeVal, timestamp, aid);
-      const row = db.prepare('SELECT rowid FROM kb_articles WHERE id = ?').get(aid) as { rowid: number };
-      db.prepare('DELETE FROM kb_articles_fts WHERE rowid = ?').run(row.rowid);
       db.prepare('INSERT INTO kb_articles_fts(rowid, title, content_plain) VALUES (?,?,?)')
-        .run(row.rowid, articleTitle, stripHtml(articleContent));
+        .run(existing!.rowid, articleTitle, stripHtml(articleContent));
     });
 
     updateArticleAndFts(articleId, String(title).trim(), articleContent, category_id || null, article_type || null, now);
