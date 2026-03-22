@@ -7,7 +7,7 @@
 
 ### Reports
 
-- [ ] **RPT-01**: Reports analytics compute on the full ticket dataset via a dedicated backend endpoint (currently computed client-side on paginated data — produces wrong charts)
+- [x] **RPT-01**: Reports analytics compute on the full ticket dataset via a dedicated backend endpoint (currently computed client-side on paginated data — produces wrong charts)
 - [ ] **RPT-02**: Category breakdown chart showing ticket counts per category
 - [ ] **RPT-03**: Open vs. closed trend overlay on the existing timeline chart
 - [ ] **RPT-04**: Print-optimized CSS on reports page so browser print-to-PDF produces a clean output
@@ -57,7 +57,7 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RPT-01 | Phase 1 | Pending |
+| RPT-01 | Phase 1 | Complete |
 | RPT-02 | Phase 1 | Pending |
 | RPT-03 | Phase 1 | Pending |
 | RPT-04 | Phase 1 | Pending |
