@@ -16,7 +16,7 @@ interface UseTicketsOptions {
   tagMode?: 'or' | 'and';
   dateFrom?: string;
   dateTo?: string;
-  dateField?: 'created_at' | 'updated_at';
+  dateField?: 'created_at' | 'updated_at' | 'closed_at';
   checklist?: string;
   sortBy?: 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
   sortDir?: 'asc' | 'desc';

@@ -459,6 +459,7 @@ export function initializeDatabase() {
   ensureChecklistExtensions();
   ensureChecklistTemplatesTable();
   ensureKbFts5AndType();
+  db.exec('CREATE INDEX IF NOT EXISTS idx_tickets_closed_at ON tickets(status, closed_at DESC)');
   console.log('Database initialized successfully');
 }
 

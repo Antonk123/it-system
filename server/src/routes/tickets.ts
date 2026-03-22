@@ -389,7 +389,7 @@ function buildWhereClause(filters: TicketQueryParams) {
   }
 
   // Date range filtering
-  const allowedDateFields = ['created_at', 'updated_at'];
+  const allowedDateFields = ['created_at', 'updated_at', 'closed_at'];
   const dateField = allowedDateFields.includes(filters.dateField || '') ? filters.dateField! : 'created_at';
   if (filters.dateFrom) {
     conditions.push(`tickets.${dateField} >= ?`);
