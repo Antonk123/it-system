@@ -7,6 +7,7 @@ import { useCategories } from '@/hooks/useCategories';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useTicketAttachments, TicketAttachment } from '@/hooks/useTicketAttachments';
 import { useTicketChecklists } from '@/hooks/useTicketChecklists';
+import { useChecklistTemplates } from '@/hooks/useChecklistTemplates';
 import { Layout } from '@/components/Layout';
 import { FileUpload } from '@/components/FileUpload';
 import { TicketChecklist } from '@/components/TicketChecklist';
@@ -54,7 +55,14 @@ const TicketForm = () => {
     deleteChecklistItem,
     bulkAddChecklistItems,
   } = useTicketChecklists();
-  
+  const {
+    templates: checklistTemplates,
+    fetchTemplates: fetchChecklistTemplates,
+  } = useChecklistTemplates();
+
+  // Fetch templates on mount
+  useState(() => { fetchChecklistTemplates(); });
+
   const isEditing = !!id;
   const existingTicket = isEditing ? getTicketById(id) : null;
 
@@ -712,11 +720,21 @@ const TicketForm = () => {
                   <TicketChecklist
                     items={checklistItems}
                     pendingItems={pendingChecklistItems}
-                    onToggle={(id, completed) => updateChecklistItem(id, { completed })}
+                    onToggle={(itemId, completed) => updateChecklistItem(itemId, { completed })}
                     onDelete={deleteChecklistItem}
-                    onAdd={(label) => addChecklistItem(id!, label)}
+                    onAdd={(label, parentId) => id ? addChecklistItem(id, label, { parent_id: parentId }) : undefined}
+                    onUpdate={(itemId, updates) => updateChecklistItem(itemId, updates)}
                     onPendingAdd={handleAddPendingChecklist}
                     onPendingDelete={handleDeletePendingChecklist}
+                    templates={checklistTemplates}
+                    onApplyTemplate={(template) => {
+                      // In create mode: add as pending items (flat)
+                      if (!isEditing) {
+                        template.items
+                          .filter(i => !i.parent_label)
+                          .forEach(i => handleAddPendingChecklist(i.label));
+                      }
+                    }}
                   />
                 </div>
               </div>
