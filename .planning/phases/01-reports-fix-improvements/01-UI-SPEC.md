@@ -22,7 +22,7 @@ created: 2026-03-22
 | Preset | default, baseColor: slate, cssVariables: true | components.json |
 | Component library | Radix UI (via shadcn) | components.json + src/components/ui/ |
 | Icon library | lucide-react | Reports.tsx line 24 |
-| Font (sans) | Plus Jakarta Sans 400/500/600/700/800 | tailwind.config.ts + index.css |
+| Font (sans) | Plus Jakarta Sans 400/700 | tailwind.config.ts + index.css |
 | Font (serif) | Crimson Pro (decorative only — tooltips) | tailwind.config.ts |
 | Font (mono) | JetBrains Mono (code/data values) | tailwind.config.ts |
 | Theme | Dark — Linear/Vercel-inspired slate | index.css :root block |
@@ -55,11 +55,13 @@ Exceptions:
 
 All roles use Plus Jakarta Sans unless noted. Pre-populated from tailwind.config.ts and existing KPICard patterns.
 
+Exactly 2 font weights are used across all roles: **400** (regular) and **700** (bold).
+
 | Role | Size | Weight | Line Height | Usage |
 |------|------|--------|-------------|-------|
 | Body | 14px | 400 | 1.5 | Chart axis tick labels, tooltip body text |
-| Label | 12px | 500 | 1.4 | KPI card labels (`text-xs font-medium uppercase tracking-wider`) |
-| Heading | 16px | 600 | 1.4 | Card titles (`CardTitle`), tab trigger labels |
+| Label | 12px | 400 | 1.4 | KPI card labels (`text-xs uppercase tracking-wider`) — visual differentiation via uppercase + tracking, not weight |
+| Heading | 16px | 700 | 1.4 | Card titles (`CardTitle`), tab trigger labels |
 | Display | 24px | 700 | 1.2 | KPI card metric values (`text-2xl font-bold`) |
 
 Notes:
@@ -72,6 +74,8 @@ Notes:
 ## Color
 
 All values are CSS variable references resolved at runtime. The theme is dark by default (:root block).
+
+Primary focal point: KPI metric values (Display role, 24px, gradient text using `--primary` to `--accent`) in the Översikt tab — these are the first elements the eye should land on when the page loads.
 
 | Role | CSS Variable | Resolved (dark) | Usage |
 |------|-------------|-----------------|-------|
