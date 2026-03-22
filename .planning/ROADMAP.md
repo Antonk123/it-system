@@ -54,11 +54,11 @@ Plans:
   1. The archive filter bar contains "from" and "to" date pickers that filter tickets by their `closed_at` date
   2. Selecting a date range and clearing it both produce correct filtered results with no stale data shown
   3. Archive queries against large datasets remain fast due to the composite index on `(status, closed_at)`
-**Plans**: 3 plans
+**Plans**: 2 plans
 
 Plans:
-- [ ] 03-01: Composite index `idx_tickets_closed_at ON tickets(status, closed_at DESC)` and `dateFrom`/`dateTo` query params on the archive endpoint
-- [ ] 03-02: Date range inputs in Archive.tsx filter bar with React Query cache invalidation
+- [ ] 03-01-PLAN.md — Composite index on (status, closed_at) + add closed_at to allowed date fields in backend and useTickets type
+- [ ] 03-02-PLAN.md — Date range inputs in Archive.tsx filter bar with URL persistence and human verification
 
 ## Progress
 
