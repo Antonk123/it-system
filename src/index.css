@@ -883,3 +883,39 @@
     transform: translateX(2px);
   }
 }
+
+@media print {
+  /* Hide all navigation chrome (per D-14) */
+  nav, header, aside,
+  [data-sidebar], [data-print-hide] {
+    display: none !important;
+  }
+
+  /* Hide inactive tabs — only print active tab content (per D-13) */
+  [data-radix-tabs-content][data-state="inactive"] {
+    display: none !important;
+  }
+
+  /* Hide tab list and filter controls (per D-14) */
+  [role="tablist"],
+  .reports-filter-bar {
+    display: none !important;
+  }
+
+  /* Ensure charts render at fixed height for print (per D-15) */
+  .recharts-responsive-container {
+    height: 300px !important;
+  }
+
+  /* Force page background white for PDF readability */
+  body {
+    background: white !important;
+    color: black !important;
+  }
+
+  /* Cards render with visible borders in print */
+  .card, [data-card] {
+    border: 1px solid #ccc !important;
+    break-inside: avoid;
+  }
+}

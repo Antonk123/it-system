@@ -594,6 +594,7 @@ const Reports = () => {
               size="sm"
               onClick={() => window.print()}
               className="gap-2 print:hidden"
+              data-print-hide
             >
               <Printer className="h-4 w-4" />
               <span className="hidden sm:inline">Skriv ut</span>
