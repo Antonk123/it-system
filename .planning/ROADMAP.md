@@ -25,7 +25,7 @@ This milestone closes three capability gaps in an otherwise feature-complete sin
 
 Plans:
 - [x] 01-01: Backend reports summary endpoint (`GET /api/reports/summary`) with SQL GROUP BY aggregation
-- [ ] 01-02: Wire Reports.tsx to new endpoint; add category breakdown chart and open/closed trend overlay
+- [x] 01-02: Wire Reports.tsx to new endpoint; add category breakdown chart and open/closed trend overlay
 - [ ] 01-03: Print-optimized `@media print` CSS and print button
 
 ### Phase 2: Knowledge Base Rework
