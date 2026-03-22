@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 02-knowledge-base-rework 02-01-PLAN.md
-last_updated: "2026-03-22T08:59:44.067Z"
+stopped_at: Completed 02-knowledge-base-rework 02-02-PLAN.md
+last_updated: "2026-03-22T09:03:23.324Z"
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-22)
 ## Current Position
 
 Phase: 02 (knowledge-base-rework) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -51,6 +51,7 @@ Plan: 2 of 3
 | Phase 01-reports-fix-improvements P03 | 5 | 1 tasks | 2 files |
 | Phase 01-reports-fix-improvements P04 | 10 | 2 tasks | 3 files |
 | Phase 02-knowledge-base-rework P01 | 4 | 2 tasks | 2 files |
+| Phase 02-knowledge-base-rework P02 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -73,6 +74,8 @@ Recent decisions affecting current work:
 - [Phase 02-knowledge-base-rework]: FTS5 contentless mode (content='') chosen: avoids data duplication, delete handled by trigger, POST/PUT sync via db.transaction()
 - [Phase 02-knowledge-base-rework]: FTS5 input sanitized via double-quoting entire term as phrase to prevent special char injection
 - [Phase 02-knowledge-base-rework]: article_type CHECK constraint enforced at DB level (how-to, solution) matching template_fields field_type pattern
+- [Phase 02-knowledge-base-rework]: Reverse lookup route GET /articles/:id/tickets placed after GET /articles/:id; Express 3-segment path handling correct without special ordering
+- [Phase 02-knowledge-base-rework]: Linked Tickets panel always visible (not collapsible) per design requirement D-08
 
 ### Pending Todos
 
@@ -85,6 +88,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-22T08:59:44.065Z
-Stopped at: Completed 02-knowledge-base-rework 02-01-PLAN.md
+Last session: 2026-03-22T09:03:23.322Z
+Stopped at: Completed 02-knowledge-base-rework 02-02-PLAN.md
 Resume file: None
