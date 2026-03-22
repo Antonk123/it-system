@@ -21,7 +21,7 @@ This milestone closes three capability gaps in an otherwise feature-complete sin
   2. A category breakdown chart is visible showing ticket counts per category
   3. The timeline chart shows both open and closed ticket counts as an overlaid trend
   4. Triggering browser print (or clicking the print button) produces a clean, chart-visible PDF with no navigation chrome
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 01-01: Backend reports summary endpoint (`GET /api/reports/summary`) with SQL GROUP BY aggregation
@@ -38,7 +38,7 @@ Plans:
   3. A KB article detail page shows a "Linked Tickets" panel listing all tickets that reference that article, with links to each ticket
   4. KB articles can be tagged as "how-to" or "solution"; the type badge is visible in the article list and filterable
   5. Existing articles without a type set show no badge and continue to function normally
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 02-01: FTS5 migration — virtual table, sync triggers, HTML-stripped initial population, rowid join pattern
@@ -53,7 +53,7 @@ Plans:
   1. The archive filter bar contains "from" and "to" date pickers that filter tickets by their `closed_at` date
   2. Selecting a date range and clearing it both produce correct filtered results with no stale data shown
   3. Archive queries against large datasets remain fast due to the composite index on `(status, closed_at)`
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
 - [ ] 03-01: Composite index `idx_tickets_closed_at ON tickets(status, closed_at DESC)` and `dateFrom`/`dateTo` query params on the archive endpoint
