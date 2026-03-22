@@ -26,6 +26,7 @@ import publicRoutes from './routes/public.js';
 import templateRoutes from './routes/templates.js';
 import tagRoutes from './routes/tags.js';
 import kbRoutes from './routes/kb.js';
+import reportsRoutes from './routes/reports.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -176,6 +177,7 @@ app.use('/api/public', publicRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/kb', kbRoutes);
+app.use('/api/reports', reportsRoutes);
 
 // Error handling
 // HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client
