@@ -41,6 +41,17 @@ const uploadImage = multer({
   },
 });
 
+function stripHtml(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 const router = Router();
 
 interface KbCategoryRow {
@@ -58,6 +69,8 @@ interface KbArticleRow {
   category_id: string | null;
   category_name?: string | null;
   category_color?: string | null;
+  article_type?: string | null;
+  snippet?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -132,34 +145,45 @@ router.delete('/categories/:id', authenticate, (req: AuthRequest, res: Response)
 
 // ─── Articles ─────────────────────────────────────────────────────────────────
 
-// GET /api/kb/articles?search=&category_id=
+// GET /api/kb/articles?search=&category_id=&article_type=
 router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const { search, category_id } = req.query as Record<string, string>;
+    const { search, category_id, article_type } = req.query as Record<string, string>;
+    const trimmedSearch = search?.trim();
 
-    let query = `
-      SELECT
-        a.id, a.title, a.content, a.category_id, a.created_at, a.updated_at,
-        c.name as category_name, c.color as category_color
-      FROM kb_articles a
-      LEFT JOIN kb_categories c ON a.category_id = c.id
-      WHERE 1=1
-    `;
-    const params: unknown[] = [];
+    let articles: KbArticleRow[];
 
-    if (search) {
-      query += ' AND (a.title LIKE ? OR a.content LIKE ?)';
-      params.push(`%${search}%`, `%${search}%`);
+    if (trimmedSearch) {
+      // FTS5 search: sanitize input to avoid injection via double-quoting
+      const safeQuery = '"' + trimmedSearch.replace(/"/g, '""') + '"';
+      articles = db.prepare(`
+        SELECT
+          a.id, a.title, a.content, a.category_id, a.article_type, a.created_at, a.updated_at,
+          c.name as category_name, c.color as category_color,
+          snippet(kb_articles_fts, 1, '<mark>', '</mark>', '...', 25) AS snippet
+        FROM kb_articles_fts fts
+        JOIN kb_articles a ON a.rowid = fts.rowid
+        LEFT JOIN kb_categories c ON a.category_id = c.id
+        WHERE kb_articles_fts MATCH @search
+          AND (@category_id IS NULL OR a.category_id = @category_id)
+          AND (@article_type IS NULL OR a.article_type = @article_type)
+        ORDER BY rank
+      `).all({ search: safeQuery, category_id: category_id || null, article_type: article_type || null }) as KbArticleRow[];
+    } else {
+      // No search: standard query with article_type filter support
+      articles = db.prepare(`
+        SELECT
+          a.id, a.title, a.content, a.category_id, a.article_type, a.created_at, a.updated_at,
+          c.name as category_name, c.color as category_color
+        FROM kb_articles a
+        LEFT JOIN kb_categories c ON a.category_id = c.id
+        WHERE 1=1
+          AND (@category_id IS NULL OR a.category_id = @category_id)
+          AND (@article_type IS NULL OR a.article_type = @article_type)
+        ORDER BY a.updated_at DESC
+      `).all({ category_id: category_id || null, article_type: article_type || null }) as KbArticleRow[];
     }
 
-    if (category_id) {
-      query += ' AND a.category_id = ?';
-      params.push(category_id);
-    }
-
-    query += ' ORDER BY a.updated_at DESC';
-
-    const articles = db.prepare(query).all(...params) as KbArticleRow[];
     res.json(articles);
   } catch (error) {
     console.error('Error fetching KB articles:', error);
@@ -172,7 +196,7 @@ router.get('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const article = db.prepare(`
       SELECT
-        a.id, a.title, a.content, a.category_id, a.created_at, a.updated_at,
+        a.id, a.title, a.content, a.category_id, a.article_type, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
@@ -189,19 +213,27 @@ router.get('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
 
 // POST /api/kb/articles
 router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
-  const { title, content = '', category_id } = req.body;
+  const { title, content = '', category_id, article_type } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'Title is required' });
   }
   try {
     const id = uuidv4();
     const now = new Date().toISOString();
-    db.prepare(
-      'INSERT INTO kb_articles (id, title, content, category_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(id, title.trim(), content, category_id || null, now, now);
+
+    const insertArticleAndFts = db.transaction((articleId: string, articleTitle: string, articleContent: string, categoryId: string | null, articleTypeVal: string | null, timestamp: string) => {
+      db.prepare(
+        'INSERT INTO kb_articles (id, title, content, category_id, article_type, created_at, updated_at) VALUES (?,?,?,?,?,?,?)'
+      ).run(articleId, articleTitle, articleContent, categoryId, articleTypeVal, timestamp, timestamp);
+      const row = db.prepare('SELECT rowid FROM kb_articles WHERE id = ?').get(articleId) as { rowid: number };
+      db.prepare('INSERT INTO kb_articles_fts(rowid, title, content_plain) VALUES (?,?,?)')
+        .run(row.rowid, articleTitle, stripHtml(articleContent));
+    });
+
+    insertArticleAndFts(id, title.trim(), content, category_id || null, article_type || null, now);
 
     const article = db.prepare(`
-      SELECT a.id, a.title, a.content, a.category_id, a.created_at, a.updated_at,
+      SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
@@ -217,7 +249,7 @@ router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
 
 // PUT /api/kb/articles/:id
 router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
-  const { title, content, category_id } = req.body;
+  const { title, content, category_id, article_type } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'Title is required' });
   }
@@ -226,17 +258,28 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (!existing) return res.status(404).json({ error: 'Article not found' });
 
     const now = new Date().toISOString();
-    db.prepare(
-      'UPDATE kb_articles SET title = ?, content = ?, category_id = ?, updated_at = ? WHERE id = ?'
-    ).run(title.trim(), content ?? '', category_id || null, now, req.params.id);
+    const articleId = req.params.id as string;
+    const articleContent = content ?? '';
+
+    const updateArticleAndFts = db.transaction((aid: string, articleTitle: string, articleContent: string, categoryId: string | null, articleTypeVal: string | null, timestamp: string) => {
+      db.prepare(
+        'UPDATE kb_articles SET title = ?, content = ?, category_id = ?, article_type = ?, updated_at = ? WHERE id = ?'
+      ).run(articleTitle, articleContent, categoryId, articleTypeVal, timestamp, aid);
+      const row = db.prepare('SELECT rowid FROM kb_articles WHERE id = ?').get(aid) as { rowid: number };
+      db.prepare('DELETE FROM kb_articles_fts WHERE rowid = ?').run(row.rowid);
+      db.prepare('INSERT INTO kb_articles_fts(rowid, title, content_plain) VALUES (?,?,?)')
+        .run(row.rowid, articleTitle, stripHtml(articleContent));
+    });
+
+    updateArticleAndFts(articleId, String(title).trim(), articleContent, category_id || null, article_type || null, now);
 
     const article = db.prepare(`
-      SELECT a.id, a.title, a.content, a.category_id, a.created_at, a.updated_at,
+      SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
       WHERE a.id = ?
-    `).get(req.params.id) as KbArticleRow;
+    `).get(articleId) as KbArticleRow;
 
     res.json(article);
   } catch (error) {
@@ -246,6 +289,7 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // DELETE /api/kb/articles/:id
+// Note: FTS sync is handled automatically by the kb_articles_fts_delete trigger
 router.delete('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const existing = db.prepare('SELECT id FROM kb_articles WHERE id = ?').get(req.params.id);
@@ -376,7 +420,7 @@ router.get('/public/:token', (_req: Request, res: Response) => {
     if (!share) return res.status(404).json({ error: 'Invalid or expired link' });
 
     const article = db.prepare(`
-      SELECT a.id, a.title, a.content, a.created_at, a.updated_at,
+      SELECT a.id, a.title, a.content, a.article_type, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
