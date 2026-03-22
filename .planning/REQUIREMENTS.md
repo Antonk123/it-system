@@ -14,11 +14,11 @@
 
 ### Knowledge Base
 
-- [ ] **KB-01**: KB search uses SQLite FTS5 virtual table (replacing current LIKE queries) with snippet highlighting in results
-- [ ] **KB-02**: FTS5 indexing strips HTML tags before indexing so Tiptap markup does not pollute search tokens
+- [x] **KB-01**: KB search uses SQLite FTS5 virtual table (replacing current LIKE queries) with snippet highlighting in results
+- [x] **KB-02**: FTS5 indexing strips HTML tags before indexing so Tiptap markup does not pollute search tokens
 - [ ] **KB-03**: API endpoint `GET /api/kb/articles/:id/tickets` returns tickets linked to a KB article
 - [ ] **KB-04**: "Linked Tickets" panel visible in KB article detail page
-- [ ] **KB-05**: KB articles have an optional `article_type` field (e.g. "how-to" or "solution"); existing articles default to null
+- [x] **KB-05**: KB articles have an optional `article_type` field (e.g. "how-to" or "solution"); existing articles default to null
 
 ### Archive
 
@@ -61,11 +61,11 @@
 | RPT-02 | Phase 1 | Complete |
 | RPT-03 | Phase 1 | Complete |
 | RPT-04 | Phase 1 | Complete |
-| KB-01 | Phase 2 | Pending |
-| KB-02 | Phase 2 | Pending |
+| KB-01 | Phase 2 | Complete |
+| KB-02 | Phase 2 | Complete |
 | KB-03 | Phase 2 | Pending |
 | KB-04 | Phase 2 | Pending |
-| KB-05 | Phase 2 | Pending |
+| KB-05 | Phase 2 | Complete |
 | ARCH-01 | Phase 3 | Pending |
 | ARCH-02 | Phase 3 | Pending |
 

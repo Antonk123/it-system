@@ -42,7 +42,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: FTS5 virtual table + article_type column migration, FTS5 search route with snippet(), article_type CRUD
+- [x] 02-01: FTS5 virtual table + article_type column migration, FTS5 search route with snippet(), article_type CRUD
 - [ ] 02-02: `GET /api/kb/articles/:id/tickets` endpoint, frontend API method, "Linked Tickets" panel in KBArticleDetail
 - [ ] 02-03: Frontend snippet display, type badge + filter in KB list, type selector in article form, human verification
 
@@ -65,7 +65,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Reports Fix & Improvements | 4/4 | Complete   | 2026-03-22 |
-| 2. Knowledge Base Rework | 0/3 | Not started | - |
+| 2. Knowledge Base Rework | 1/3 | In Progress|  |
 | 3. Archive Enhancement | 0/2 | Not started | - |
 
 ---

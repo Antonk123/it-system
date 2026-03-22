@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 01-reports-fix-improvements 01-04-PLAN.md
-last_updated: "2026-03-22T08:31:18.364Z"
+stopped_at: Completed 02-knowledge-base-rework 02-01-PLAN.md
+last_updated: "2026-03-22T08:59:44.067Z"
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
+  total_plans: 7
+  completed_plans: 5
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-22)
 
 **Core value:** Every ticket gets tracked, resolved, and documented — nothing falls through the cracks and solutions are reusable.
-**Current focus:** Phase 01 — reports-fix-improvements
+**Current focus:** Phase 02 — knowledge-base-rework
 
 ## Current Position
 
-Phase: 2
-Plan: Not started
+Phase: 02 (knowledge-base-rework) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -50,6 +50,7 @@ Plan: Not started
 | Phase 01-reports-fix-improvements P02 | 15 | 1 tasks | 2 files |
 | Phase 01-reports-fix-improvements P03 | 5 | 1 tasks | 2 files |
 | Phase 01-reports-fix-improvements P04 | 10 | 2 tasks | 3 files |
+| Phase 02-knowledge-base-rework P01 | 4 | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -69,6 +70,9 @@ Recent decisions affecting current work:
 - [Phase 01-reports-fix-improvements]: data-radix-tabs-content[data-state=inactive] selector for print tab isolation — zero JS override needed
 - [Phase 01-reports-fix-improvements]: byPriority SQL uses CASE ordering (critical->high->medium->low) for deterministic chart order in the priority chart
 - [Phase 01-reports-fix-improvements]: useTickets limit 10000: all raw-ticket consumers in Reports.tsx receive full dataset, not 10-row default
+- [Phase 02-knowledge-base-rework]: FTS5 contentless mode (content='') chosen: avoids data duplication, delete handled by trigger, POST/PUT sync via db.transaction()
+- [Phase 02-knowledge-base-rework]: FTS5 input sanitized via double-quoting entire term as phrase to prevent special char injection
+- [Phase 02-knowledge-base-rework]: article_type CHECK constraint enforced at DB level (how-to, solution) matching template_fields field_type pattern
 
 ### Pending Todos
 
@@ -81,6 +85,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-22T08:21:56.585Z
-Stopped at: Completed 01-reports-fix-improvements 01-04-PLAN.md
+Last session: 2026-03-22T08:59:44.065Z
+Stopped at: Completed 02-knowledge-base-rework 02-01-PLAN.md
 Resume file: None
