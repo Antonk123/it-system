@@ -1,16 +1,19 @@
 import { useMemo, useState } from 'react';
-import { differenceInDays, format, startOfMonth, subMonths, isSameMonth, subDays, startOfDay, isSameDay, endOfMonth } from 'date-fns';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { differenceInDays } from 'date-fns';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, ComposedChart, Line } from 'recharts';
 import { Layout } from '@/components/Layout';
-import { useTickets } from '@/hooks/useTickets';
+import { useReportsSummary } from '@/hooks/useReportsSummary';
 import { useUsers } from '@/hooks/useUsers';
 import { useTags } from '@/hooks/useTags';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { RequesterAnalytics } from '@/types/ticket';
+import { useTickets } from '@/hooks/useTickets';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { KPICard } from '@/components/KPICard';
 import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { StatusFlowChart } from '@/components/StatusFlowChart';
@@ -21,7 +24,7 @@ import { KPIDetailDialog } from '@/components/KPIDetailDialog';
 import { useReportsPreferences } from '@/hooks/useReportsPreferences';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import { BarChart3, PieChart as PieChartIcon, Calendar, Ticket, Clock, CheckCircle, AlertTriangle, Users, Scale, Download } from 'lucide-react';
+import { BarChart3, PieChart as PieChartIcon, Calendar, Ticket, Clock, CheckCircle, AlertTriangle, Users, Scale, Download, Printer } from 'lucide-react';
 
 const COLORS = [
   'hsl(var(--primary))',
@@ -163,23 +166,26 @@ const Reports = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [kpiModalOpen, setKpiModalOpen] = useState<string | null>(null);
 
-  // Get available years from tickets
-  const availableYears = useMemo(() => {
-    const years = new Set<number>();
-    tickets.forEach((ticket) => {
-      const createdYear = new Date(ticket.createdAt).getFullYear();
-      years.add(createdYear);
-      if (ticket.closedAt) {
-        years.add(new Date(ticket.closedAt).getFullYear());
-      }
-    });
-    return Array.from(years).sort((a, b) => b - a);
-  }, [tickets]);
+  // Fetch all report summary data from the new endpoint
+  const { data: summary, isLoading, isError } = useReportsSummary(selectedYear, selectedMonth);
 
-  // Filter tickets by year and month
+  // Get available years from summary trend data
+  const availableYears = useMemo(() => {
+    if (!summary?.trend || summary.trend.length === 0) {
+      return [String(new Date().getFullYear())];
+    }
+    const yearSet = new Set<string>();
+    summary.trend.forEach(t => {
+      const year = t.month.substring(0, 4);
+      yearSet.add(year);
+    });
+    return Array.from(yearSet).sort((a, b) => b.localeCompare(a));
+  }, [summary?.trend]);
+
+  // Requester analytics - comprehensive metrics per requester (uses raw tickets for per-person breakdown)
   const yearMonthFilteredTickets = useMemo(() => {
     let filtered = tickets;
-    
+
     if (selectedYear !== 'all') {
       const year = parseInt(selectedYear);
       filtered = filtered.filter((ticket) => {
@@ -187,7 +193,7 @@ const Reports = () => {
         return createdYear === year;
       });
     }
-    
+
     if (selectedMonth !== 'all') {
       const month = parseInt(selectedMonth);
       filtered = filtered.filter((ticket) => {
@@ -195,48 +201,10 @@ const Reports = () => {
         return createdMonth === month;
       });
     }
-    
+
     return filtered;
   }, [tickets, selectedYear, selectedMonth]);
 
-  // Tickets closed by year (for overview chart)
-  const ticketsClosedByYear = useMemo(() => {
-    const yearMap = new Map<number, number>();
-    tickets.forEach((ticket) => {
-      if (ticket.closedAt) {
-        const year = new Date(ticket.closedAt).getFullYear();
-        const count = yearMap.get(year) || 0;
-        yearMap.set(year, count + 1);
-      }
-    });
-    return Array.from(yearMap.entries())
-      .map(([year, count]) => ({ year: year.toString(), count }))
-      .sort((a, b) => parseInt(a.year) - parseInt(b.year));
-  }, [tickets]);
-
-  // Tickets by month (for selected year)
-  const ticketsByMonth = useMemo(() => {
-    if (selectedYear === 'all') return [];
-    
-    const year = parseInt(selectedYear);
-    const monthCounts = new Array(12).fill(0);
-    
-    tickets.forEach((ticket) => {
-      const date = new Date(ticket.createdAt);
-      if (date.getFullYear() === year) {
-        monthCounts[date.getMonth()]++;
-      }
-    });
-    
-    return monthCounts.map((count, index) => ({
-      month: MONTH_NAMES[index].substring(0, 3),
-      fullMonth: MONTH_NAMES[index],
-      monthIndex: index,
-      count,
-    }));
-  }, [tickets, selectedYear]);
-
-  // Requester analytics - comprehensive metrics per requester (OPTIMIZED)
   const requesterAnalytics = useMemo(() => {
     const analytics: Record<string, RequesterAnalytics> = {};
     const ticketsByRequester: Record<string, typeof yearMonthFilteredTickets> = {};
@@ -409,38 +377,31 @@ const Reports = () => {
     return Math.max(base, requesterAnalytics.length * perRow);
   }, [requesterAnalytics.length, isMobile]);
 
-  // Tickets by status - filtered by year and month
+  // Derive ticketsByStatus from summary for status distribution display
   const ticketsByStatus = useMemo(() => {
-    const counts: Record<string, number> = {
-      open: 0,
-      'in-progress': 0,
-      waiting: 0,
-      resolved: 0,
-      closed: 0,
-    };
+    if (!summary) return [];
+    const { totals } = summary;
+    return [
+      { name: 'Öppen', value: totals.open, status: 'open' },
+      { name: 'Pågående', value: totals.inProgress, status: 'in-progress' },
+      { name: 'Väntar', value: totals.waiting, status: 'waiting' },
+      { name: 'Löst', value: totals.resolved, status: 'resolved' },
+      { name: 'Stängd', value: totals.closed, status: 'closed' },
+    ];
+  }, [summary]);
 
-    yearMonthFilteredTickets.forEach(ticket => {
-      counts[ticket.status] = (counts[ticket.status] || 0) + 1;
-    });
-
-    const statusLabels: Record<string, string> = {
-      'open': 'Öppen',
-      'in-progress': 'Pågående',
-      'waiting': 'Väntar',
-      'resolved': 'Löst',
-      'closed': 'Stängd',
-    };
-
-    return Object.entries(counts).map(([status, count]) => ({
-      name: statusLabels[status] || status,
-      value: count,
-      status,
-    }));
-  }, [yearMonthFilteredTickets]);
-
-  // Status KPIs
+  // Status KPIs derived from summary
   const statusKPIs = useMemo(() => {
-    const total = yearMonthFilteredTickets.length;
+    if (!summary) {
+      return {
+        total: 0,
+        activeTickets: 0,
+        resolvedRate: 0,
+        dominantStatus: { name: '-', percentage: 0, status: 'open' },
+      };
+    }
+    const { totals } = summary;
+    const total = totals.total;
     if (total === 0) {
       return {
         total: 0,
@@ -449,34 +410,26 @@ const Reports = () => {
         dominantStatus: { name: '-', percentage: 0, status: 'open' },
       };
     }
-
-    const statusCounts = ticketsByStatus.reduce((acc, item) => {
-      acc[item.status] = item.value;
-      return acc;
-    }, {} as Record<string, number>);
-
-    const activeTickets = (statusCounts.open || 0) + (statusCounts['in-progress'] || 0) + (statusCounts.waiting || 0);
-    const resolvedCount = (statusCounts.resolved || 0) + (statusCounts.closed || 0);
+    const activeTickets = totals.open + totals.inProgress + totals.waiting;
+    const resolvedCount = totals.resolved + totals.closed;
     const resolvedRate = (resolvedCount / total) * 100;
-
-    // Find dominant status
     const dominant = ticketsByStatus.reduce((max, item) =>
       item.value > max.value ? item : max
-    );
+    , ticketsByStatus[0]);
 
     return {
       total,
       activeTickets,
       resolvedRate,
       dominantStatus: {
-        name: dominant.name,
-        percentage: (dominant.value / total) * 100,
-        status: dominant.status,
+        name: dominant?.name ?? '-',
+        percentage: dominant ? (dominant.value / total) * 100 : 0,
+        status: dominant?.status ?? 'open',
       },
     };
-  }, [ticketsByStatus, yearMonthFilteredTickets.length]);
+  }, [summary, ticketsByStatus]);
 
-  // Tickets by priority - filtered by year and month
+  // ticketsByPriority — still derived client-side from filtered raw tickets (personas tab uses this indirectly)
   const ticketsByPriority = useMemo(() => {
     const counts: Record<string, number> = {
       low: 0,
@@ -484,34 +437,23 @@ const Reports = () => {
       high: 0,
       critical: 0,
     };
-    
+
     yearMonthFilteredTickets.forEach(ticket => {
       counts[ticket.priority] = (counts[ticket.priority] || 0) + 1;
     });
-    
+
     const priorityLabels: Record<string, string> = {
       'low': 'Låg',
       'medium': 'Medium',
       'high': 'Hög',
       'critical': 'Kritisk',
     };
-    
+
     return Object.entries(counts).map(([priority, count]) => ({
       name: priorityLabels[priority] || priority,
       value: count,
     }));
   }, [yearMonthFilteredTickets]);
-
-  // Filtered tickets by selected user
-  const filteredTickets = useMemo(() => {
-    if (selectedUserId === 'all') {
-      return yearMonthFilteredTickets;
-    }
-    if (selectedUserId === 'unassigned') {
-      return yearMonthFilteredTickets.filter(t => !t.requesterId);
-    }
-    return yearMonthFilteredTickets.filter(t => t.requesterId === selectedUserId);
-  }, [yearMonthFilteredTickets, selectedUserId]);
 
   const selectedUserName = useMemo(() => {
     if (selectedUserId === 'all') return 'Alla användare';
@@ -519,30 +461,18 @@ const Reports = () => {
     return users.find(u => u.id === selectedUserId)?.name || 'Okänd';
   }, [selectedUserId, users]);
 
-  // KPI Calculations
-  const totalTickets = useMemo(() => tickets.length, [tickets]);
-
-  const avgResolutionTime = useMemo(() => {
-    const resolvedTickets = tickets.filter(t => t.closedAt && t.createdAt);
-    if (resolvedTickets.length === 0) return 0;
-
-    const totalDays = resolvedTickets.reduce((sum, ticket) => {
-      const days = differenceInDays(ticket.closedAt!, ticket.createdAt);
-      return sum + days;
-    }, 0);
-
-    return totalDays / resolvedTickets.length;
-  }, [tickets]);
-
+  // KPI values from summary
+  const totalTickets = summary?.totals.total ?? 0;
+  const avgResolutionTime = summary?.avgResolutionDays ?? 0;
   const resolutionRate = useMemo(() => {
-    if (tickets.length === 0) return 0;
-    const resolvedCount = tickets.filter(
-      t => t.status === 'resolved' || t.status === 'closed'
-    ).length;
-    return (resolvedCount / tickets.length) * 100;
-  }, [tickets]);
+    if (!summary) return 0;
+    const { totals } = summary;
+    if (totals.total === 0) return 0;
+    return ((totals.resolved + totals.closed) / totals.total) * 100;
+  }, [summary]);
+  const agingTickets = summary?.agingTickets ?? 0;
 
-  // Store full array of aging tickets for modal display
+  // agingTicketsData still needs raw tickets for the detail modal
   const agingTicketsData = useMemo(() => {
     return tickets.filter(t => {
       if (t.status !== 'open') return false;
@@ -551,7 +481,30 @@ const Reports = () => {
     });
   }, [tickets]);
 
-  const agingTickets = agingTicketsData.length;
+  // Monthly trend data for KPICard sparklines (from summary.trend)
+  const monthlyTrendData = useMemo(() => {
+    if (!summary?.trend) return [];
+    return summary.trend.slice(-12).map(t => ({
+      month: t.month,
+      value: t.created,
+    }));
+  }, [summary?.trend]);
+
+  // Ticket trend (month-over-month) from summary.trend
+  const ticketTrend = useMemo(() => {
+    if (!summary?.trend || summary.trend.length < 2) {
+      return { value: 0, direction: 'up' as const };
+    }
+    const sorted = [...summary.trend].sort((a, b) => a.month.localeCompare(b.month));
+    const thisMonth = sorted[sorted.length - 1]?.created ?? 0;
+    const lastMonth = sorted[sorted.length - 2]?.created ?? 0;
+    if (lastMonth === 0) return { value: 0, direction: 'up' as const };
+    const percentChange = ((thisMonth - lastMonth) / lastMonth) * 100;
+    return {
+      value: Math.abs(percentChange),
+      direction: percentChange >= 0 ? 'up' as const : 'down' as const,
+    };
+  }, [summary?.trend]);
 
   // CSV Export handler
   const handleExport = async () => {
@@ -585,44 +538,6 @@ const Reports = () => {
     }
   };
 
-  // Monthly trend data for sparklines
-  const monthlyTrendData = useMemo(() => {
-    const last12Months = Array.from({ length: 12 }, (_, i) => {
-      const date = subMonths(new Date(), 11 - i);
-      return {
-        month: format(date, 'MMM'),
-        monthDate: startOfMonth(date),
-      };
-    });
-
-    return last12Months.map(({ month, monthDate }) => {
-      const count = tickets.filter(t => {
-        const ticketMonth = startOfMonth(t.createdAt);
-        return isSameMonth(ticketMonth, monthDate);
-      }).length;
-      return { month, value: count };
-    });
-  }, [tickets]);
-
-  // Ticket trend (month-over-month)
-  const ticketTrend = useMemo(() => {
-    const thisMonth = tickets.filter(t =>
-      isSameMonth(t.createdAt, new Date())
-    ).length;
-
-    const lastMonth = tickets.filter(t =>
-      isSameMonth(t.createdAt, subMonths(new Date(), 1))
-    ).length;
-
-    if (lastMonth === 0) return { value: 0, direction: 'up' as const };
-
-    const percentChange = ((thisMonth - lastMonth) / lastMonth) * 100;
-    return {
-      value: Math.abs(percentChange),
-      direction: percentChange >= 0 ? 'up' as const : 'down' as const,
-    };
-  }, [tickets]);
-
   return (
     <Layout>
       <div className="space-y-5">
@@ -631,7 +546,7 @@ const Reports = () => {
             <h1 className="text-xl font-bold font-serif text-foreground">Rapporter</h1>
             <p className="text-muted-foreground mt-2 text-lg font-light">Ärendeanalys och insikter</p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="reports-filter-bar flex flex-wrap items-center gap-2">
             <Calendar className="h-4 w-4 text-muted-foreground" />
             <Select value={selectedYear} onValueChange={(value) => {
               setSelectedYear(value);
@@ -643,7 +558,7 @@ const Reports = () => {
               <SelectContent>
                 <SelectItem value="all">Alla år</SelectItem>
                 {availableYears.map((year) => (
-                  <SelectItem key={year} value={year.toString()}>
+                  <SelectItem key={year} value={year}>
                     {year}
                   </SelectItem>
                 ))}
@@ -674,10 +589,27 @@ const Reports = () => {
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Export CSV</span>
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => window.print()}
+              className="gap-2 print:hidden"
+            >
+              <Printer className="h-4 w-4" />
+              <span className="hidden sm:inline">Skriv ut</span>
+            </Button>
             <div className="w-px h-6 bg-border" />
             <ReportsCustomization />
           </div>
         </div>
+
+        {/* Error state */}
+        {isError && (
+          <Alert variant="destructive">
+            <AlertTitle>Kunde inte ladda rapportdata</AlertTitle>
+            <AlertDescription>Kontrollera anslutningen och ladda om sidan.</AlertDescription>
+          </Alert>
+        )}
 
         {/* KPI Detail Modals */}
         <KPIDetailDialog
@@ -710,48 +642,57 @@ const Reports = () => {
           <TabsContent value="oversikt" className="space-y-5 mt-5">
 
             {/* Hero KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <KPICard
-                label="Totalt"
-                value={totalTickets}
-                icon={<Ticket className="w-6 h-6" />}
-                sparklineData={monthlyTrendData}
-                trend={{
-                  value: ticketTrend.value,
-                  direction: ticketTrend.direction,
-                  isPositive: ticketTrend.direction === 'down',
-                }}
-                animationDelay={0}
-                onClick={() => setKpiModalOpen('total')}
-              />
+            {isLoading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <KPICard
+                  label="Totalt"
+                  value={totalTickets}
+                  icon={<Ticket className="w-6 h-6" />}
+                  sparklineData={monthlyTrendData}
+                  trend={{
+                    value: ticketTrend.value,
+                    direction: ticketTrend.direction,
+                    isPositive: ticketTrend.direction === 'down',
+                  }}
+                  animationDelay={0}
+                  onClick={() => setKpiModalOpen('total')}
+                />
 
-              <KPICard
-                label="Snitt upplösningstid"
-                value={avgResolutionTime}
-                valueDecimals={1}
-                valueSuffix="d"
-                icon={<Clock className="w-6 h-6" />}
-                animationDelay={100}
-              />
+                <KPICard
+                  label="Snitt upplösningstid"
+                  value={avgResolutionTime}
+                  valueDecimals={1}
+                  valueSuffix="d"
+                  icon={<Clock className="w-6 h-6" />}
+                  animationDelay={100}
+                />
 
-              <KPICard
-                label="Lösningsgrad"
-                value={resolutionRate}
-                valueDecimals={0}
-                valueSuffix="%"
-                icon={<CheckCircle className="w-6 h-6" />}
-                animationDelay={200}
-              />
+                <KPICard
+                  label="Lösningsgrad"
+                  value={resolutionRate}
+                  valueDecimals={0}
+                  valueSuffix="%"
+                  icon={<CheckCircle className="w-6 h-6" />}
+                  animationDelay={200}
+                />
 
-              <KPICard
-                label="Gamla ärenden"
-                value={agingTickets}
-                icon={<AlertTriangle className="w-6 h-6" />}
-                className="border-destructive/30"
-                animationDelay={300}
-                onClick={() => setKpiModalOpen('aging')}
-              />
-            </div>
+                <KPICard
+                  label="Gamla ärenden"
+                  value={agingTickets}
+                  icon={<AlertTriangle className="w-6 h-6" />}
+                  className="border-destructive/30"
+                  animationDelay={300}
+                  onClick={() => setKpiModalOpen('aging')}
+                />
+              </div>
+            )}
 
             {/* Status Distribution */}
             {isModuleVisible('statusDistribution') && (
@@ -761,7 +702,9 @@ const Reports = () => {
                   <CardTitle className="text-xl font-semibold font-serif">Ärenden per status</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {yearMonthFilteredTickets.length === 0 ? (
+                  {isLoading ? (
+                    <Skeleton className="h-[300px] w-full" />
+                  ) : statusKPIs.total === 0 ? (
                     <div className="h-[200px] flex items-center justify-center text-muted-foreground">
                       Ingen ärendedata tillgänglig
                     </div>
@@ -843,7 +786,9 @@ const Reports = () => {
                   <CardTitle className="text-xl font-semibold font-serif">Ärenden per prioritet</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {yearMonthFilteredTickets.length === 0 ? (
+                  {isLoading ? (
+                    <Skeleton className="h-[300px] w-full" />
+                  ) : yearMonthFilteredTickets.length === 0 ? (
                     <div className="h-[200px] flex items-center justify-center text-muted-foreground">
                       Ingen ärendedata tillgänglig
                     </div>
@@ -881,53 +826,83 @@ const Reports = () => {
                 </CardContent>
               </Card>
             )}
-          </TabsContent>
 
-          {/* ── Flik 2: Trend ── */}
-          <TabsContent value="trend" className="space-y-5 mt-5">
-
-            {/* Tickets by Month */}
-            {selectedYear !== 'all' && isModuleVisible('monthlyChart') && (
-              <Card>
+            {/* Category Breakdown Chart */}
+            {isModuleVisible('categoryChart') && (
+              <Card className="animate-fade-in" style={{ animationDelay: '400ms' }}>
                 <CardHeader className="flex flex-row items-center gap-2">
-                  <Calendar className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-xl font-semibold font-serif">Ärenden skapade per månad ({selectedYear})</CardTitle>
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-xl font-semibold font-serif">Kategorier</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {ticketsByMonth.every(m => m.count === 0) ? (
+                  {isLoading ? (
+                    <Skeleton className="h-[300px] w-full" />
+                  ) : !summary?.byCategory || summary.byCategory.length === 0 ? (
                     <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                      Inga ärenden under {selectedYear}
+                      Inga kategorier
                     </div>
                   ) : (
-                    <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
-                      <BarChart data={ticketsByMonth} margin={chartMargins}>
-                        <defs>
-                          <linearGradient id="monthBarGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.9}/>
-                            <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0.6}/>
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="month" tick={{ fontSize: isMobile ? 10 : 12 }} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: isMobile ? 10 : 12 }} />
+                    <ResponsiveContainer width="100%" height={Math.max(200, summary.byCategory.length * 40)}>
+                      <BarChart
+                        layout="vertical"
+                        data={summary.byCategory}
+                        margin={{ left: 80, right: 20, top: 5, bottom: 5 }}
+                      >
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                        <YAxis type="category" dataKey="category" tick={{ fontSize: 12 }} width={80} />
                         <Tooltip
                           contentStyle={{
                             backgroundColor: 'hsl(var(--card))',
                             border: '1px solid hsl(var(--border))',
                             borderRadius: '8px',
                           }}
-                          cursor={{ fill: 'hsl(var(--muted))' }}
-                          formatter={(value, name, props) => [value, props.payload.fullMonth]}
                         />
-                        <Bar
-                          dataKey="count"
-                          fill="url(#monthBarGradient)"
-                          radius={[4, 4, 0, 0]}
-                          onClick={(data) => setSelectedMonth(data.monthIndex.toString())}
-                          className="cursor-pointer"
-                          animationDuration={1000}
-                          animationEasing="ease-out"
-                        />
+                        <Bar dataKey="count" name="Ärenden" radius={[0, 4, 4, 0]}>
+                          {summary.byCategory.map((_, index) => (
+                            <Cell key={`cell-cat-${index}`} fill={COLORS[index % COLORS.length]} />
+                          ))}
+                        </Bar>
                       </BarChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* ── Flik 2: Trend ── */}
+          <TabsContent value="trend" className="space-y-5 mt-5">
+
+            {/* Created vs Closed Trend — ComposedChart */}
+            {isModuleVisible('monthlyChart') && (
+              <Card>
+                <CardHeader className="flex flex-row items-center gap-2">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-xl font-semibold font-serif">Skapade och stängda ärenden</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isLoading ? (
+                    <Skeleton className="h-[300px] w-full" />
+                  ) : !summary?.trend || summary.trend.length === 0 ? (
+                    <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                      Ingen trenddata tillgänglig
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <ComposedChart data={summary.trend} margin={{ left: 20, right: 20, top: 5, bottom: 5 }}>
+                        <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                        <Tooltip
+                          contentStyle={{
+                            backgroundColor: 'hsl(var(--card))',
+                            border: '1px solid hsl(var(--border))',
+                            borderRadius: '8px',
+                          }}
+                        />
+                        <Legend />
+                        <Bar dataKey="created" name="Skapad" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                        <Line type="monotone" dataKey="closed" name="Stängd" stroke="hsl(var(--chart-4))" strokeWidth={2} dot={{ r: 3 }} />
+                      </ComposedChart>
                     </ResponsiveContainer>
                   )}
                 </CardContent>
@@ -935,14 +910,18 @@ const Reports = () => {
             )}
 
             {/* Radial Progress Rings */}
-            {isModuleVisible('statusDistribution') && yearMonthFilteredTickets.length > 0 && (
+            {isModuleVisible('statusDistribution') && statusKPIs.total > 0 && (
               <Card className="animate-fade-in">
                 <CardHeader className="flex flex-row items-center gap-2">
                   <PieChartIcon className="h-5 w-5 text-primary" />
                   <CardTitle className="text-xl font-semibold font-serif">Statusfördelning</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <RadialProgressRings data={ticketsByStatus} total={statusKPIs.total} />
+                  {isLoading ? (
+                    <Skeleton className="h-[300px] w-full" />
+                  ) : (
+                    <RadialProgressRings data={ticketsByStatus} total={statusKPIs.total} />
+                  )}
                 </CardContent>
               </Card>
             )}

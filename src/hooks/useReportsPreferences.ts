@@ -7,7 +7,8 @@ export type ReportModuleId =
   | 'monthlyChart'
   | 'activityHeatmap'
   | 'statusFlow'
-  | 'tagAnalytics';
+  | 'tagAnalytics'
+  | 'categoryChart';
 
 export interface ReportModule {
   id: ReportModuleId;
@@ -61,6 +62,12 @@ const DEFAULT_MODULES: ReportModule[] = [
     id: 'tagAnalytics',
     label: 'Tag Analytics',
     description: 'Tag usage statistics',
+    visible: true,
+  },
+  {
+    id: 'categoryChart',
+    label: 'Kategorier',
+    description: 'Ärenden per kategori',
     visible: true,
   },
 ];
