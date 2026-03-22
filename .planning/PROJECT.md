@@ -29,13 +29,19 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 
 ### Active
 
-- [ ] Reports page — ticket stats over time (open/closed trend charts by week/month)
-- [ ] Reports page — category and tag breakdown charts
-- [ ] Reports page — export filtered ticket sets to CSV or PDF
-- [ ] Archive view — separate page for closed/resolved tickets, removed from main list
-- [ ] KB rework — full-text search across all articles
-- [ ] KB rework — two-way linking between tickets and KB articles
-- [ ] KB rework — article categories (how-to guides vs. ticket solutions)
+*(all v1.0 requirements validated — see Validated section)*
+
+### Validated (continued)
+
+- ✓ Reports page — ticket stats over time (open/closed trend charts by week/month) — Validated in Phase 01: reports-fix-improvements
+- ✓ Reports page — category and tag breakdown charts — Validated in Phase 01: reports-fix-improvements
+- ✓ Reports page — export filtered ticket sets to CSV or PDF — Validated in Phase 01: reports-fix-improvements
+- ✓ Archive view — separate page for closed/resolved tickets, removed from main list — Validated in Phase 01: reports-fix-improvements
+- ✓ KB rework — full-text search across all articles — Validated in Phase 02: knowledge-base-rework
+- ✓ KB rework — two-way linking between tickets and KB articles — Validated in Phase 02: knowledge-base-rework
+- ✓ KB rework — article categories (how-to guides vs. ticket solutions) — Validated in Phase 02: knowledge-base-rework
+- ✓ Archive date range filter (closed_at from/to date pickers, URL persistence) — Validated in Phase 03: archive-enhancement
+- ✓ Composite index on (status, closed_at) for fast archive queries — Validated in Phase 03: archive-enhancement
 
 ### Out of Scope
 
@@ -52,7 +58,7 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - **Deployment**: Two Docker containers (nginx frontend, Node backend) with persistent volume for DB and uploads
 - **KB current state**: CRUD works, Tiptap editor in place, but missing search, article organization, and ticket integration
 - **Reports current state**: Reports page complete — full-dataset analytics (SQL GROUP BY), category breakdown bar chart, created+closed trend chart, print-to-PDF support. Validated in Phase 01: reports-fix-improvements
-- **Archive current state**: Closed tickets exist in the DB but appear in the main ticket list with no separation
+- **Archive current state**: Separate Archive page for closed/resolved tickets. Date range filter ("Stängd period: Från/Till") with URL persistence and composite DB index on (status, closed_at). Validated in Phase 03.
 
 ## Constraints
 
@@ -87,4 +93,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-22 after Phase 01 (reports-fix-improvements) completion*
+*Last updated: 2026-03-22 after Phase 03 (archive-enhancement) completion — v1.0 milestone complete*
