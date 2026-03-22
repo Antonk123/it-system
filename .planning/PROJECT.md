@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An internal IT ticket system for single-user use. Tickets are submitted, tracked, and resolved through a web interface. A knowledge base stores how-to guides and ticket solutions. Reports and an archive provide historical visibility into resolved work.
+An internal IT ticket system for single-user use. Tickets are submitted, tracked, and resolved through a web interface. A knowledge base stores how-to guides and ticket solutions, with full-text search, article type classification, and two-way ticket links. Reports provide analytics over the full ticket dataset. An archive gives period-based visibility into closed work with date range filtering.
 
 ## Core Value
 
@@ -26,22 +26,20 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - ✓ JWT authentication with refresh tokens — existing
 - ✓ Contacts/requesters management — existing
 - ✓ Filter presets (save/apply complex filters) — existing
+- ✓ Reports analytics on full ticket dataset via dedicated SQL GROUP BY endpoint — v1.0
+- ✓ Category breakdown chart and open/closed trend overlay on Reports page — v1.0
+- ✓ Print-to-PDF: `@media print` CSS with `window.print()` button — v1.0
+- ✓ KB full-text search via FTS5 with highlighted `<mark>` snippets — v1.0
+- ✓ FTS5 strips HTML before indexing (no false matches on markup) — v1.0
+- ✓ KB article type classification (how-to / solution) with badge and filter — v1.0
+- ✓ Linked Tickets reverse-lookup panel in KB article detail — v1.0
+- ✓ `GET /api/kb/articles/:id/tickets` endpoint — v1.0
+- ✓ Archive date range filter on `closed_at` with URL persistence — v1.0
+- ✓ Composite index on `(status, closed_at)` for fast archive queries — v1.0
 
 ### Active
 
-*(all v1.0 requirements validated — see Validated section)*
-
-### Validated (continued)
-
-- ✓ Reports page — ticket stats over time (open/closed trend charts by week/month) — Validated in Phase 01: reports-fix-improvements
-- ✓ Reports page — category and tag breakdown charts — Validated in Phase 01: reports-fix-improvements
-- ✓ Reports page — export filtered ticket sets to CSV or PDF — Validated in Phase 01: reports-fix-improvements
-- ✓ Archive view — separate page for closed/resolved tickets, removed from main list — Validated in Phase 01: reports-fix-improvements
-- ✓ KB rework — full-text search across all articles — Validated in Phase 02: knowledge-base-rework
-- ✓ KB rework — two-way linking between tickets and KB articles — Validated in Phase 02: knowledge-base-rework
-- ✓ KB rework — article categories (how-to guides vs. ticket solutions) — Validated in Phase 02: knowledge-base-rework
-- ✓ Archive date range filter (closed_at from/to date pickers, URL persistence) — Validated in Phase 03: archive-enhancement
-- ✓ Composite index on (status, closed_at) for fast archive queries — Validated in Phase 03: archive-enhancement
+*(planning v1.1 — run `/gsd:new-milestone` to define next requirements)*
 
 ### Out of Scope
 
@@ -49,16 +47,19 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - OAuth / SSO — email + password is sufficient
 - Mobile native app — web (PWA) is sufficient
 - Real-time collaboration — single user, not needed
+- PDF download button — print dialog via `window.print()` is sufficient; avoids `@react-pdf/renderer` dependency
 
 ## Context
 
 - **Stack**: React 18 + Vite (frontend), Express 4 + SQLite via better-sqlite3 (backend), Docker deployment
-- **UI**: shadcn/Radix UI, Tailwind CSS, Framer Motion, recharts (already installed)
+- **UI**: shadcn/Radix UI, Tailwind CSS, Framer Motion, recharts
 - **Auth**: JWT + Passport local strategy, single admin user
 - **Deployment**: Two Docker containers (nginx frontend, Node backend) with persistent volume for DB and uploads
-- **KB current state**: CRUD works, Tiptap editor in place, but missing search, article organization, and ticket integration
-- **Reports current state**: Reports page complete — full-dataset analytics (SQL GROUP BY), category breakdown bar chart, created+closed trend chart, print-to-PDF support. Validated in Phase 01: reports-fix-improvements
-- **Archive current state**: Separate Archive page for closed/resolved tickets. Date range filter ("Stängd period: Från/Till") with URL persistence and composite DB index on (status, closed_at). Validated in Phase 03.
+- **Codebase**: ~496K LOC TypeScript across 40+ files modified in v1.0
+- **Reports**: Full-dataset analytics via SQL GROUP BY endpoint (`/api/reports/summary`). Category breakdown, open/closed trend overlay, print-to-PDF.
+- **Knowledge Base**: FTS5 virtual table (`kb_articles_fts`) in contentless mode with HTML stripping. Article type field (`how-to` / `solution`). Linked Tickets reverse-lookup panel. Migration wired into `initializeDatabase()`.
+- **Archive**: Closed-only view with date range filter on `closed_at`. Composite index `idx_tickets_closed_at ON tickets(status, closed_at DESC)`. URL-persisted filter params.
+- **Tech debt (non-blocking)**: 9 human-verification items pending live-browser confirmation (print quality, search highlights, linked tickets panel, type badge/filter, date filter correctness). All code is present and wired.
 
 ## Constraints
 
@@ -74,6 +75,12 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 | JWT stateless auth | No session store needed | ✓ Good |
 | recharts for reports | Already installed, fits the React stack | ✓ Good |
 | Tiptap for KB editor | Rich text with image support | ✓ Good |
+| Reports via SQL GROUP BY endpoint | Client-side aggregation on paginated data produced silently wrong charts | ✓ Good |
+| Print-to-PDF via `window.print()` | Avoids `@react-pdf/renderer` dependency entirely | ✓ Good |
+| FTS5 contentless mode (`content=''`) | Avoids data duplication; sync via `db.transaction()` in Node.js | ✓ Good |
+| KB migrations wired into `initializeDatabase()` | Ensures FTS5 table and `article_type` column exist on every fresh container start | ✓ Good |
+| Archive = closed tickets only (not resolved) | User confirmed resolved stays in main list; archive = closed only | ✓ Good |
+| Composite index `(status, closed_at DESC)` | Archive queries filter status first for maximum selectivity | ✓ Good |
 
 ## Evolution
 
@@ -93,4 +100,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-22 after Phase 03 (archive-enhancement) completion — v1.0 milestone complete*
+*Last updated: 2026-03-22 after v1.0 milestone*
