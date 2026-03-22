@@ -18,6 +18,7 @@ const KBArticleForm = () => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [categoryId, setCategoryId] = useState<string>('none');
+  const [articleType, setArticleType] = useState<string>('none');
   const [categories, setCategories] = useState<KbCategoryRow[]>([]);
   const [isLoading, setIsLoading] = useState(isEditing);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -43,6 +44,7 @@ const KBArticleForm = () => {
         setTitle(article.title);
         setContent(article.content);
         setCategoryId(article.category_id ?? 'none');
+        setArticleType(article.article_type || 'none');
       } catch {
         toast.error('Kunde inte ladda artikel');
         navigate('/kb');
@@ -69,6 +71,7 @@ const KBArticleForm = () => {
         title: title.trim(),
         content,
         category_id: categoryId === 'none' ? null : categoryId,
+        article_type: articleType === 'none' ? null : articleType,
       };
       if (isEditing && id) {
         await api.updateKbArticle(id, payload);
@@ -141,6 +144,20 @@ const KBArticleForm = () => {
                     {cat.name}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="article-type">Typ</Label>
+            <Select value={articleType} onValueChange={setArticleType}>
+              <SelectTrigger id="article-type">
+                <SelectValue placeholder="Välj typ (valfritt)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Ingen typ</SelectItem>
+                <SelectItem value="how-to">Instruktion</SelectItem>
+                <SelectItem value="solution">Lösning</SelectItem>
               </SelectContent>
             </Select>
           </div>
