@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: unknown
-stopped_at: Completed 02-knowledge-base-rework 02-02-PLAN.md
-last_updated: "2026-03-22T09:03:23.324Z"
+stopped_at: Completed 02-knowledge-base-rework 02-03-PLAN.md
+last_updated: "2026-03-22T09:30:14.355Z"
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
 ---
 
 # Project State
@@ -52,6 +52,7 @@ Plan: 3 of 3
 | Phase 01-reports-fix-improvements P04 | 10 | 2 tasks | 3 files |
 | Phase 02-knowledge-base-rework P01 | 4 | 2 tasks | 2 files |
 | Phase 02-knowledge-base-rework P02 | 2 | 2 tasks | 3 files |
+| Phase 02-knowledge-base-rework P03 | 35 | 4 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -76,6 +77,9 @@ Recent decisions affecting current work:
 - [Phase 02-knowledge-base-rework]: article_type CHECK constraint enforced at DB level (how-to, solution) matching template_fields field_type pattern
 - [Phase 02-knowledge-base-rework]: Reverse lookup route GET /articles/:id/tickets placed after GET /articles/:id; Express 3-segment path handling correct without special ordering
 - [Phase 02-knowledge-base-rework]: Linked Tickets panel always visible (not collapsible) per design requirement D-08
+- [Phase 02-knowledge-base-rework]: dangerouslySetInnerHTML used for FTS5 snippet output — content is server-generated, safe to render <mark> tags
+- [Phase 02-knowledge-base-rework]: TYPE_LABELS constant maps how-to/solution to Swedish display names at component level
+- [Phase 02-knowledge-base-rework]: Form uses 'none' sentinel for empty type, mapped to null on submit — matches existing category_id pattern
 
 ### Pending Todos
 
@@ -88,6 +92,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-22T09:03:23.322Z
-Stopped at: Completed 02-knowledge-base-rework 02-02-PLAN.md
+Last session: 2026-03-22T09:30:14.353Z
+Stopped at: Completed 02-knowledge-base-rework 02-03-PLAN.md
 Resume file: None

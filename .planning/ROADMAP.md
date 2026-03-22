@@ -7,7 +7,7 @@ This milestone closes three capability gaps in an otherwise feature-complete sin
 ## Phases
 
 - [x] **Phase 1: Reports Fix & Improvements** - Fix analytics to run on full dataset; add category breakdown, open/closed trend, and print-to-PDF (gap closure in progress) (completed 2026-03-22)
-- [ ] **Phase 2: Knowledge Base Rework** - FTS5 full-text search, reverse KB-to-ticket links, article type field
+- [x] **Phase 2: Knowledge Base Rework** - FTS5 full-text search, reverse KB-to-ticket links, article type field (completed 2026-03-22)
 - [ ] **Phase 3: Archive Enhancement** - Closed date range filter with supporting database index
 
 ## Phase Details
@@ -44,7 +44,7 @@ Plans:
 Plans:
 - [x] 02-01: FTS5 virtual table + article_type column migration, FTS5 search route with snippet(), article_type CRUD
 - [x] 02-02: `GET /api/kb/articles/:id/tickets` endpoint, frontend API method, "Linked Tickets" panel in KBArticleDetail
-- [ ] 02-03: Frontend snippet display, type badge + filter in KB list, type selector in article form, human verification
+- [x] 02-03: Frontend snippet display, type badge + filter in KB list, type selector in article form, human verification
 
 ### Phase 3: Archive Enhancement
 **Goal**: The archive can be filtered by the date a ticket was closed, backed by a database index for fast queries
@@ -65,7 +65,7 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Reports Fix & Improvements | 4/4 | Complete   | 2026-03-22 |
-| 2. Knowledge Base Rework | 1/3 | In Progress|  |
+| 2. Knowledge Base Rework | 3/3 | Complete   | 2026-03-22 |
 | 3. Archive Enhancement | 0/2 | Not started | - |
 
 ---
