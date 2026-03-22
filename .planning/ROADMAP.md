@@ -42,9 +42,9 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 02-01: FTS5 migration — virtual table, sync triggers, HTML-stripped initial population, rowid join pattern
-- [ ] 02-02: `GET /api/kb/articles/:id/tickets` endpoint and "Linked Tickets" panel in KBArticleDetail
-- [ ] 02-03: `article_type` column migration, type selector in KB article form, type badge and filter in KB list
+- [ ] 02-01: FTS5 virtual table + article_type column migration, FTS5 search route with snippet(), article_type CRUD
+- [ ] 02-02: `GET /api/kb/articles/:id/tickets` endpoint, frontend API method, "Linked Tickets" panel in KBArticleDetail
+- [ ] 02-03: Frontend snippet display, type badge + filter in KB list, type selector in article form, human verification
 
 ### Phase 3: Archive Enhancement
 **Goal**: The archive can be filtered by the date a ticket was closed, backed by a database index for fast queries
