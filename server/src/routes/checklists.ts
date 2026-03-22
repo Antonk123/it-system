@@ -11,9 +11,16 @@ interface ChecklistRow {
   label: string;
   completed: number;
   position: number;
+  parent_id: string | null;
+  due_date: string | null;
   created_at: string;
   updated_at: string;
 }
+
+const mapItem = (item: ChecklistRow) => ({
+  ...item,
+  completed: item.completed === 1,
+});
 
 // Get checklists for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
@@ -21,14 +28,7 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
     const items = db.prepare(`
       SELECT * FROM ticket_checklists WHERE ticket_id = ? ORDER BY position ASC
     `).all(req.params.ticketId) as ChecklistRow[];
-    
-    // Convert completed from integer to boolean
-    const mapped = items.map(item => ({
-      ...item,
-      completed: item.completed === 1,
-    }));
-    
-    res.json(mapped);
+    res.json(items.map(mapItem));
   } catch (error) {
     console.error('Error fetching checklists:', error);
     res.status(500).json({ error: 'Failed to fetch checklists' });
@@ -37,7 +37,7 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
 
 // Add checklist item
 router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
-  const { label } = req.body;
+  const { label, parent_id, due_date } = req.body;
 
   if (!label || typeof label !== 'string' || label.trim().length === 0) {
     return res.status(400).json({ error: 'Label is required' });
@@ -54,21 +54,17 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     const maxPos = db.prepare(`
       SELECT MAX(position) as maxPosition FROM ticket_checklists WHERE ticket_id = ?
     `).get(req.params.ticketId) as { maxPosition: number | null };
-    
+
     const position = (maxPos.maxPosition ?? -1) + 1;
     const id = uuidv4();
 
     db.prepare(`
-      INSERT INTO ticket_checklists (id, ticket_id, label, position)
-      VALUES (?, ?, ?, ?)
-    `).run(id, req.params.ticketId, label.trim(), position);
+      INSERT INTO ticket_checklists (id, ticket_id, label, position, parent_id, due_date)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, req.params.ticketId, label.trim(), position, parent_id || null, due_date || null);
 
     const item = db.prepare('SELECT * FROM ticket_checklists WHERE id = ?').get(id) as ChecklistRow;
-    
-    res.status(201).json({
-      ...item,
-      completed: item.completed === 1,
-    });
+    res.status(201).json(mapItem(item));
   } catch (error) {
     console.error('Error creating checklist item:', error);
     res.status(500).json({ error: 'Failed to create checklist item' });
@@ -77,9 +73,28 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 
 // Bulk add checklist items
 router.post('/ticket/:ticketId/bulk', authenticate, (req: AuthRequest, res: Response) => {
-  const { labels } = req.body;
+  const { labels, items: itemObjects } = req.body;
 
-  if (!Array.isArray(labels) || labels.length === 0) {
+  // Support both plain string array (labels) and object array (items)
+  const rawItems: { label: string; parent_id?: string | null; due_date?: string | null }[] = [];
+
+  if (Array.isArray(itemObjects)) {
+    for (const item of itemObjects) {
+      if (typeof item === 'string' && item.trim().length > 0) {
+        rawItems.push({ label: item });
+      } else if (item && typeof item.label === 'string' && item.label.trim().length > 0) {
+        rawItems.push({ label: item.label, parent_id: item.parent_id || null, due_date: item.due_date || null });
+      }
+    }
+  } else if (Array.isArray(labels)) {
+    for (const label of labels) {
+      if (typeof label === 'string' && label.trim().length > 0) {
+        rawItems.push({ label });
+      }
+    }
+  }
+
+  if (rawItems.length === 0) {
     return res.status(400).json({ error: 'Labels array is required' });
   }
 
@@ -91,25 +106,22 @@ router.post('/ticket/:ticketId/bulk', authenticate, (req: AuthRequest, res: Resp
     }
 
     const insertStmt = db.prepare(`
-      INSERT INTO ticket_checklists (id, ticket_id, label, position)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO ticket_checklists (id, ticket_id, label, position, parent_id, due_date)
+      VALUES (?, ?, ?, ?, ?, ?)
     `);
 
     const createdIds: string[] = [];
 
-    const insertMany = db.transaction((items: string[]) => {
-      items.forEach((label, index) => {
-        if (typeof label === 'string' && label.trim().length > 0) {
-          const id = uuidv4();
-          insertStmt.run(id, req.params.ticketId, label.trim(), index);
-          createdIds.push(id);
-        }
+    const insertMany = db.transaction((items: typeof rawItems) => {
+      items.forEach((item, index) => {
+        const id = uuidv4();
+        insertStmt.run(id, req.params.ticketId, item.label.trim(), index, item.parent_id ?? null, item.due_date ?? null);
+        createdIds.push(id);
       });
     });
 
-    insertMany(labels);
+    insertMany(rawItems);
 
-    // Handle empty array case to avoid SQL error: "WHERE id IN ()"
     if (createdIds.length === 0) {
       return res.status(201).json([]);
     }
@@ -118,12 +130,7 @@ router.post('/ticket/:ticketId/bulk', authenticate, (req: AuthRequest, res: Resp
       SELECT * FROM ticket_checklists WHERE id IN (${createdIds.map(() => '?').join(',')})
     `).all(...createdIds) as ChecklistRow[];
 
-    const mapped = createdItems.map(item => ({
-      ...item,
-      completed: item.completed === 1,
-    }));
-
-    res.status(201).json(mapped);
+    res.status(201).json(createdItems.map(mapItem));
   } catch (error) {
     console.error('Error bulk creating checklist items:', error);
     res.status(500).json({ error: 'Failed to create checklist items' });
@@ -132,17 +139,17 @@ router.post('/ticket/:ticketId/bulk', authenticate, (req: AuthRequest, res: Resp
 
 // Update checklist item
 router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
-  const { label, completed } = req.body;
+  const { label, completed, due_date, parent_id } = req.body;
 
   try {
     const existing = db.prepare('SELECT * FROM ticket_checklists WHERE id = ?').get(req.params.id) as ChecklistRow | undefined;
-    
+
     if (!existing) {
       return res.status(404).json({ error: 'Checklist item not found' });
     }
 
     const updates: string[] = [];
-    const values: (string | number)[] = [];
+    const values: (string | number | null)[] = [];
 
     if (label !== undefined) {
       updates.push('label = ?');
@@ -152,6 +159,14 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       updates.push('completed = ?');
       values.push(completed ? 1 : 0);
     }
+    if (due_date !== undefined) {
+      updates.push('due_date = ?');
+      values.push(due_date || null);
+    }
+    if (parent_id !== undefined) {
+      updates.push('parent_id = ?');
+      values.push(parent_id || null);
+    }
 
     if (updates.length > 0) {
       values.push(req.params.id);
@@ -159,11 +174,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     }
 
     const item = db.prepare('SELECT * FROM ticket_checklists WHERE id = ?').get(req.params.id) as ChecklistRow;
-    
-    res.json({
-      ...item,
-      completed: item.completed === 1,
-    });
+    res.json(mapItem(item));
   } catch (error) {
     console.error('Error updating checklist item:', error);
     res.status(500).json({ error: 'Failed to update checklist item' });
@@ -174,11 +185,11 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const result = db.prepare('DELETE FROM ticket_checklists WHERE id = ?').run(req.params.id);
-    
+
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Checklist item not found' });
     }
-    
+
     res.json({ message: 'Checklist item deleted' });
   } catch (error) {
     console.error('Error deleting checklist item:', error);

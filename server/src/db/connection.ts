@@ -355,6 +355,42 @@ const ensureTicketRemindersTable = () => {
   console.log('Created missing table: ticket_reminders');
 };
 
+const ensureChecklistExtensions = () => {
+  if (!tableExists('ticket_checklists')) return;
+  if (!columnExists('ticket_checklists', 'parent_id')) {
+    db.exec('ALTER TABLE ticket_checklists ADD COLUMN parent_id TEXT REFERENCES ticket_checklists(id) ON DELETE CASCADE;');
+    console.log('Added parent_id column to ticket_checklists');
+  }
+  if (!columnExists('ticket_checklists', 'due_date')) {
+    db.exec('ALTER TABLE ticket_checklists ADD COLUMN due_date TEXT;');
+    console.log('Added due_date column to ticket_checklists');
+  }
+};
+
+const ensureChecklistTemplatesTable = () => {
+  if (tableExists('checklist_templates')) return;
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS checklist_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE TABLE IF NOT EXISTS checklist_template_items (
+      id TEXT PRIMARY KEY,
+      template_id TEXT NOT NULL REFERENCES checklist_templates(id) ON DELETE CASCADE,
+      label TEXT NOT NULL,
+      parent_label TEXT,
+      position INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_checklist_templates_name ON checklist_templates(name);
+    CREATE INDEX IF NOT EXISTS idx_checklist_template_items_template ON checklist_template_items(template_id);
+  `);
+  console.log('Created checklist_templates and checklist_template_items tables');
+};
+
 export function initializeDatabase() {
   const schemaPath = join(__dirname, 'schema.sql');
   const schema = readFileSync(schemaPath, 'utf-8');
@@ -370,6 +406,8 @@ export function initializeDatabase() {
   ensureTicketFieldValuesTable();
   ensureTicketHistoryTable();
   ensureTicketRemindersTable();
+  ensureChecklistExtensions();
+  ensureChecklistTemplatesTable();
   console.log('Database initialized successfully');
 }
 

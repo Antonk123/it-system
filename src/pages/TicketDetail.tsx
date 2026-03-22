@@ -6,7 +6,8 @@ import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText,
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { useTicketAttachments } from '@/hooks/useTicketAttachments';
-import { useTicketChecklists } from '@/hooks/useTicketChecklists';
+import { useTicketChecklists, ChecklistItem } from '@/hooks/useTicketChecklists';
+import { useChecklistTemplates } from '@/hooks/useChecklistTemplates';
 import { useTicketSharing } from '@/hooks/useTicketSharing';
 import { useTicketComments } from '@/hooks/useTicketComments';
 import { useTicketLinks } from '@/hooks/useTicketLinks';
@@ -80,7 +81,8 @@ const TicketDetail = () => {
   const { getTicketById, updateTicket, deleteTicket } = useTickets();
   const { getUserById } = useUsers();
   const { attachments, fetchAttachments } = useTicketAttachments();
-  const { items: checklistItems, fetchChecklists, updateChecklistItem } = useTicketChecklists();
+  const { items: checklistItems, fetchChecklists, addChecklistItem, updateChecklistItem, deleteChecklistItem, setItems: setChecklistItems } = useTicketChecklists();
+  const { templates: checklistTemplates, fetchTemplates: fetchChecklistTemplates, createTemplate: createChecklistTemplate, applyTemplate: applyChecklistTemplate } = useChecklistTemplates();
   const { comments, isLoading: commentsLoading, addComment, updateComment, deleteComment } = useTicketComments(id || '');
   const { links, isLoading: linksLoading, addLink, deleteLink } = useTicketLinks(id || '');
   const { history, isLoading: historyLoading } = useTicketHistory(id || '');
@@ -116,8 +118,9 @@ const TicketDetail = () => {
       fetchAttachments(id);
       fetchChecklists(id);
       fetchReminders();
+      fetchChecklistTemplates();
     }
-  }, [id, fetchAttachments, fetchChecklists, fetchReminders]);
+  }, [id, fetchAttachments, fetchChecklists, fetchReminders, fetchChecklistTemplates]);
 
   useEffect(() => {
     if (!id) return;
@@ -366,17 +369,38 @@ const TicketDetail = () => {
             </div>
 
             {/* Checklist */}
-            {checklistItems.length > 0 && (
-              <div className="pt-4 border-t">
-                <div className="border rounded-lg p-4">
-                  <TicketChecklist
-                    items={checklistItems}
-                    onToggle={(id, completed) => updateChecklistItem(id, { completed })}
-                    readOnly={false}
-                  />
-                </div>
+            <div className="pt-4 border-t">
+              <div className="border rounded-lg p-4">
+                <TicketChecklist
+                  items={checklistItems}
+                  onToggle={(itemId, completed) => updateChecklistItem(itemId, { completed })}
+                  onDelete={(itemId) => deleteChecklistItem(itemId)}
+                  onAdd={(label, parentId) => id ? addChecklistItem(id, label, { parent_id: parentId }) : undefined}
+                  onUpdate={(itemId, updates) => updateChecklistItem(itemId, updates)}
+                  readOnly={false}
+                  templates={checklistTemplates}
+                  onApplyTemplate={async (template) => {
+                    if (!id) return;
+                    const newItems = await applyChecklistTemplate(template.id, id);
+                    if (newItems) setChecklistItems(newItems as ChecklistItem[]);
+                  }}
+                  onSaveAsTemplate={async (currentItems) => {
+                    const name = window.prompt('Namn på mallen:');
+                    if (!name?.trim()) return;
+                    const templateItems = currentItems
+                      .filter(i => !i.parent_id)
+                      .flatMap(parent => {
+                        const children = currentItems.filter(c => c.parent_id === parent.id);
+                        return [
+                          { label: parent.label },
+                          ...children.map(c => ({ label: c.label, parent_label: parent.label })),
+                        ];
+                      });
+                    await createChecklistTemplate({ name: name.trim(), items: templateItems });
+                  }}
+                />
               </div>
-            )}
+            </div>
 
             {/* Reminders */}
             {reminders.length > 0 && (

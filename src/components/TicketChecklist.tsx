@@ -2,8 +2,12 @@ import { useState } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { X, Plus, CheckSquare } from 'lucide-react';
+import { X, Plus, CheckSquare, Calendar, ListChecks, Bookmark, CornerDownRight } from 'lucide-react';
 import { ChecklistItem } from '@/hooks/useTicketChecklists';
+import { ChecklistTemplate } from '@/lib/api';
+import { ChecklistTemplateModal } from './ChecklistTemplateModal';
+import { format, parseISO, isPast, startOfDay } from 'date-fns';
+import { sv } from 'date-fns/locale';
 
 interface PendingItem {
   id: string;
@@ -16,10 +20,14 @@ interface TicketChecklistProps {
   pendingItems?: PendingItem[];
   onToggle?: (id: string, completed: boolean) => void;
   onDelete?: (id: string) => void;
-  onAdd?: (label: string) => void;
+  onAdd?: (label: string, parentId?: string | null) => void;
+  onUpdate?: (id: string, updates: Partial<Pick<ChecklistItem, 'label' | 'due_date'>>) => void;
   onPendingAdd?: (label: string) => void;
   onPendingDelete?: (id: string) => void;
   readOnly?: boolean;
+  templates?: ChecklistTemplate[];
+  onApplyTemplate?: (template: ChecklistTemplate) => void;
+  onSaveAsTemplate?: (items: ChecklistItem[]) => void;
 }
 
 export const TicketChecklist = ({
@@ -28,80 +36,252 @@ export const TicketChecklist = ({
   onToggle,
   onDelete,
   onAdd,
+  onUpdate,
   onPendingAdd,
   onPendingDelete,
   readOnly = false,
+  templates = [],
+  onApplyTemplate,
+  onSaveAsTemplate,
 }: TicketChecklistProps) => {
   const [newItemLabel, setNewItemLabel] = useState('');
+  const [subItemInputs, setSubItemInputs] = useState<Record<string, string>>({});
+  const [showSubInputFor, setShowSubInputFor] = useState<string | null>(null);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
 
-  const allItems = [...items, ...pendingItems.map(p => ({ ...p, ticket_id: '', position: 0, created_at: '', updated_at: '' }))];
   const completedCount = items.filter(i => i.completed).length;
   const totalCount = items.length + pendingItems.length;
 
-  const handleAddItem = () => {
+  const topLevelItems = items.filter(i => !i.parent_id);
+  const getChildren = (parentId: string) => items.filter(i => i.parent_id === parentId);
+
+  const handleAddTopLevel = () => {
     if (!newItemLabel.trim()) return;
-    
     if (onPendingAdd) {
       onPendingAdd(newItemLabel.trim());
     } else if (onAdd) {
-      onAdd(newItemLabel.trim());
+      onAdd(newItemLabel.trim(), null);
     }
     setNewItemLabel('');
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleAddSubItem = (parentId: string) => {
+    const label = subItemInputs[parentId]?.trim();
+    if (!label) return;
+    onAdd?.(label, parentId);
+    setSubItemInputs(prev => ({ ...prev, [parentId]: '' }));
+    setShowSubInputFor(null);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent, action: () => void) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleAddItem();
+      action();
+    }
+    if (e.key === 'Escape') {
+      setShowSubInputFor(null);
     }
   };
 
-  const isPending = (id: string) => pendingItems.some(p => p.id === id);
+  const isOverdue = (dueDate: string, completed: boolean) =>
+    !completed && isPast(startOfDay(parseISO(dueDate)));
+
+  const renderDueDateBadge = (item: ChecklistItem) => {
+    if (!item.due_date) return null;
+    const overdue = isOverdue(item.due_date, item.completed);
+    return (
+      <span
+        className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded shrink-0 ${
+          overdue
+            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+            : 'bg-muted text-muted-foreground'
+        }`}
+      >
+        <Calendar className="h-3 w-3" />
+        {format(parseISO(item.due_date), 'd MMM', { locale: sv })}
+      </span>
+    );
+  };
+
+  const renderDatePicker = (item: ChecklistItem) => {
+    if (readOnly || !onUpdate) return null;
+    return (
+      <label
+        htmlFor={`date-${item.id}`}
+        className="opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+        title="Sätt förfallodatum"
+      >
+        <input
+          id={`date-${item.id}`}
+          type="date"
+          value={item.due_date || ''}
+          onChange={(e) => onUpdate(item.id, { due_date: e.target.value || null })}
+          className="sr-only"
+        />
+        <span className="inline-flex items-center justify-center h-6 w-6 rounded hover:bg-muted transition-colors">
+          <Calendar className="h-3 w-3 text-muted-foreground" />
+        </span>
+      </label>
+    );
+  };
+
+  const renderItem = (item: ChecklistItem, isChild = false) => {
+    const children = getChildren(item.id);
+    const hasChildren = children.length > 0;
+
+    return (
+      <div key={item.id}>
+        <div
+          className={`flex items-center gap-2 p-2 rounded-md hover:bg-muted/50 group ${
+            isChild ? 'ml-6' : ''
+          }`}
+        >
+          {isChild && <CornerDownRight className="h-3 w-3 text-muted-foreground shrink-0" />}
+          <Checkbox
+            checked={item.completed}
+            onCheckedChange={(checked) => {
+              if (!readOnly && onToggle) {
+                onToggle(item.id, checked as boolean);
+              }
+            }}
+            disabled={readOnly}
+          />
+          <span
+            className={`flex-1 text-sm min-w-0 ${
+              item.completed ? 'line-through text-muted-foreground' : ''
+            }`}
+          >
+            {item.label}
+          </span>
+
+          {renderDueDateBadge(item)}
+          {renderDatePicker(item)}
+
+          {!readOnly && !isChild && onAdd && (
+            <button
+              onClick={() => setShowSubInputFor(showSubInputFor === item.id ? null : item.id)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center h-6 w-6 rounded hover:bg-muted"
+              title="Lägg till deluppgift"
+            >
+              <CornerDownRight className="h-3 w-3 text-muted-foreground" />
+            </button>
+          )}
+
+          {!readOnly && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+              onClick={() => onDelete?.(item.id)}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          )}
+        </div>
+
+        {/* Sub-item input */}
+        {showSubInputFor === item.id && !readOnly && (
+          <div className="ml-12 mt-1 flex items-center gap-2">
+            <Input
+              placeholder="Lägg till deluppgift..."
+              value={subItemInputs[item.id] || ''}
+              onChange={(e) => setSubItemInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
+              onKeyDown={(e) => handleKeyDown(e, () => handleAddSubItem(item.id))}
+              className="flex-1 h-8 text-sm"
+              autoFocus
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => handleAddSubItem(item.id)}
+              disabled={!subItemInputs[item.id]?.trim()}
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 shrink-0"
+              onClick={() => setShowSubInputFor(null)}
+            >
+              <X className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+
+        {/* Children */}
+        {hasChildren && (
+          <div className="space-y-0.5 mt-0.5">
+            {children.map(child => renderItem(child, true))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <CheckSquare className="h-4 w-4" />
-        <span>
-          Checklista {totalCount > 0 && `(${completedCount}/${totalCount} slutförda)`}
-        </span>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <CheckSquare className="h-4 w-4" />
+          <span>
+            Checklista {totalCount > 0 && `(${completedCount}/${totalCount} slutförda)`}
+          </span>
+        </div>
+        {!readOnly && (
+          <div className="flex items-center gap-1">
+            {onApplyTemplate && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => setShowTemplateModal(true)}
+              >
+                <ListChecks className="h-3.5 w-3.5" />
+                Välj mall
+              </Button>
+            )}
+            {onSaveAsTemplate && items.length > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs gap-1"
+                onClick={() => onSaveAsTemplate(items)}
+              >
+                <Bookmark className="h-3.5 w-3.5" />
+                Spara som mall
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="space-y-2">
-        {allItems.map((item) => (
+      {/* Items */}
+      <div className="space-y-0.5">
+        {topLevelItems.map(item => renderItem(item))}
+
+        {/* Pending items */}
+        {pendingItems.map((item) => (
           <div
             key={item.id}
-            className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/50 group"
+            className="flex items-center gap-2 p-2 rounded-md hover:bg-muted/50 group"
           >
-            <Checkbox
-              checked={item.completed}
-              onCheckedChange={(checked) => {
-                if (!readOnly && onToggle && !isPending(item.id)) {
-                  onToggle(item.id, checked as boolean);
-                }
-              }}
-              disabled={readOnly || isPending(item.id)}
-            />
-            <span
-              className={`flex-1 text-sm ${
-                item.completed ? 'line-through text-muted-foreground' : ''
-              } ${isPending(item.id) ? 'italic text-muted-foreground' : ''}`}
-            >
-              {item.label}
-              {isPending(item.id) && ' (väntar)'}
+            <Checkbox checked={false} disabled />
+            <span className="flex-1 text-sm italic text-muted-foreground">
+              {item.label} (väntar)
             </span>
             {!readOnly && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={() => {
-                  if (isPending(item.id)) {
-                    onPendingDelete?.(item.id);
-                  } else {
-                    onDelete?.(item.id);
-                  }
-                }}
+                onClick={() => onPendingDelete?.(item.id)}
               >
                 <X className="h-3 w-3" />
               </Button>
@@ -110,25 +290,36 @@ export const TicketChecklist = ({
         ))}
       </div>
 
+      {/* Add top-level item */}
       {!readOnly && (
         <div className="flex items-center gap-2">
           <Input
             placeholder="Lägg till ny punkt..."
             value={newItemLabel}
             onChange={(e) => setNewItemLabel(e.target.value)}
-            onKeyDown={handleKeyDown}
+            onKeyDown={(e) => handleKeyDown(e, handleAddTopLevel)}
             className="flex-1"
           />
           <Button
             type="button"
             variant="outline"
             size="icon"
-            onClick={handleAddItem}
+            onClick={handleAddTopLevel}
             disabled={!newItemLabel.trim()}
           >
             <Plus className="h-4 w-4" />
           </Button>
         </div>
+      )}
+
+      {/* Template modal */}
+      {onApplyTemplate && (
+        <ChecklistTemplateModal
+          open={showTemplateModal}
+          onClose={() => setShowTemplateModal(false)}
+          templates={templates}
+          onSelect={onApplyTemplate}
+        />
       )}
     </div>
   );
