@@ -151,7 +151,7 @@ const RequesterTooltip = ({ active, payload }: any) => {
 };
 
 const Reports = () => {
-  const { tickets } = useTickets();
+  const { tickets } = useTickets({ limit: 10000 });
   const { users } = useUsers();
   const { tags } = useTags();
   const isMobile = useIsMobile();
@@ -429,31 +429,20 @@ const Reports = () => {
     };
   }, [summary, ticketsByStatus]);
 
-  // ticketsByPriority — still derived client-side from filtered raw tickets (personas tab uses this indirectly)
+  // ticketsByPriority — derived from server-side summary.byPriority (full dataset, not paginated)
   const ticketsByPriority = useMemo(() => {
-    const counts: Record<string, number> = {
-      low: 0,
-      medium: 0,
-      high: 0,
-      critical: 0,
-    };
-
-    yearMonthFilteredTickets.forEach(ticket => {
-      counts[ticket.priority] = (counts[ticket.priority] || 0) + 1;
-    });
-
+    if (!summary?.byPriority) return [];
     const priorityLabels: Record<string, string> = {
       'low': 'Låg',
       'medium': 'Medium',
       'high': 'Hög',
       'critical': 'Kritisk',
     };
-
-    return Object.entries(counts).map(([priority, count]) => ({
+    return summary.byPriority.map(({ priority, count }) => ({
       name: priorityLabels[priority] || priority,
       value: count,
     }));
-  }, [yearMonthFilteredTickets]);
+  }, [summary?.byPriority]);
 
   const selectedUserName = useMemo(() => {
     if (selectedUserId === 'all') return 'Alla användare';
