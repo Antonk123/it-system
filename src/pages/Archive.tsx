@@ -58,6 +58,8 @@ const Archive = () => {
   const selectedTagIds = tagsFilter ? tagsFilter.split(',').filter(id => id.trim()) : [];
   const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'priority' | 'category';
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
+  const dateFrom = searchParams.get('dateFrom') || '';
+  const dateTo = searchParams.get('dateTo') || '';
   const [compactView, setCompactView] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pendingStatusChange, setPendingStatusChange] = useState<{ ticketId: string; status: TicketStatus } | null>(null);
@@ -73,6 +75,9 @@ const Archive = () => {
     tags: tagsFilter,
     sortBy: sortKey,
     sortDir: sortDirection,
+    ...(dateFrom ? { dateFrom } : {}),
+    ...(dateTo ? { dateTo } : {}),
+    ...((dateFrom || dateTo) ? { dateField: 'closed_at' as const } : {}),
   });
 
   const { users } = useUsers();
@@ -190,6 +195,9 @@ const Archive = () => {
       if (categoryFilter && categoryFilter !== 'all') params.append('category', categoryFilter);
       if (search) params.append('search', search);
       if (tagsFilter) params.append('tags', tagsFilter);
+      if (dateFrom) params.append('dateFrom', dateFrom);
+      if (dateTo) params.append('dateTo', dateTo);
+      if (dateFrom || dateTo) params.append('dateField', 'closed_at');
       const queryString = `?${params.toString()}`;
 
       await api.exportTickets(queryString);
@@ -275,6 +283,41 @@ const Archive = () => {
           />
         </div>
 
+        {/* Date range filter */}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-muted-foreground whitespace-nowrap">Stängd period:</span>
+          <div className="flex items-center gap-2">
+            <label htmlFor="dateFrom" className="text-xs text-muted-foreground">Från</label>
+            <input
+              id="dateFrom"
+              type="date"
+              value={dateFrom}
+              onChange={(e) => updateFilters({ dateFrom: e.target.value || undefined })}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <label htmlFor="dateTo" className="text-xs text-muted-foreground">Till</label>
+            <input
+              id="dateTo"
+              type="date"
+              value={dateTo}
+              onChange={(e) => updateFilters({ dateTo: e.target.value || undefined })}
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+            />
+          </div>
+          {(dateFrom || dateTo) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => updateFilters({ dateFrom: undefined, dateTo: undefined })}
+              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Rensa datum
+            </Button>
+          )}
+        </div>
+
         {/* Quick Filters */}
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">Snabbfilter:</span>
@@ -311,7 +354,7 @@ const Archive = () => {
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        ) : tickets.length === 0 && search === '' && categoryFilter === 'all' && priorityFilter === 'all' ? (
+        ) : tickets.length === 0 && search === '' && categoryFilter === 'all' && priorityFilter === 'all' && !dateFrom && !dateTo ? (
           <div className="text-center py-16 border rounded-lg bg-card">
             <ArchiveIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">Inga arkiverade ärenden ännu</p>
