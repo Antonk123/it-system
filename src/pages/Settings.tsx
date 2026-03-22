@@ -4,6 +4,7 @@ import { TemplateEditorModal } from '@/components/TemplateEditorModal';
 import { useCategories } from '@/hooks/useCategories';
 import { useTags } from '@/hooks/useTags';
 import { useTemplates } from '@/hooks/useTemplates';
+import { useChecklistTemplates } from '@/hooks/useChecklistTemplates';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from 'next-themes';
@@ -34,7 +35,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Users, Mail, Shield, Loader2, ArrowUp, ArrowDown, Palette, Type, Wrench } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Users, Mail, Shield, Loader2, ArrowUp, ArrowDown, Palette, Type, Wrench, ListChecks, CornerDownRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -187,6 +188,13 @@ const Settings = () => {
   const { users: systemUsers, isLoading: usersLoading, error: usersError, inviteUser, deleteUser, updateRole } = useSystemUsers();
   const { user: currentUser } = useAuth();
   const { theme, setTheme } = useTheme();
+  const {
+    templates: checklistTemplates,
+    fetchTemplates: fetchChecklistTemplates,
+    createTemplate: createChecklistTemplate,
+    updateTemplate: updateChecklistTemplate,
+    deleteTemplate: deleteChecklistTemplate,
+  } = useChecklistTemplates();
 
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -194,6 +202,15 @@ const Settings = () => {
 
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<any>(null);
+
+  // Checklist template state
+  const [clTemplateFormOpen, setClTemplateFormOpen] = useState(false);
+  const [clEditingId, setClEditingId] = useState<string | null>(null);
+  const [clTemplateName, setClTemplateName] = useState('');
+  const [clTemplateDesc, setClTemplateDesc] = useState('');
+  const [clTemplateItems, setClTemplateItems] = useState<{ label: string; isChild: boolean; parentIndex: number | null }[]>([]);
+  const [clNewItemLabel, setClNewItemLabel] = useState('');
+  const [deleteClTemplateId, setDeleteClTemplateId] = useState<string | null>(null);
 
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteName, setInviteName] = useState('');
@@ -210,6 +227,7 @@ const Settings = () => {
     categories: false,
     tags: false,
     templates: false,
+    checklistTemplates: false,
   });
 
   // Tag state
@@ -318,6 +336,78 @@ const Settings = () => {
     setEditingTagId(id);
     setEditingTagName(name);
     setEditingTagColor(color);
+  };
+
+  // Fetch checklist templates on mount
+  useState(() => { fetchChecklistTemplates(); });
+
+  const handleClOpenCreate = () => {
+    setClEditingId(null);
+    setClTemplateName('');
+    setClTemplateDesc('');
+    setClTemplateItems([]);
+    setClNewItemLabel('');
+    setClTemplateFormOpen(true);
+  };
+
+  const handleClOpenEdit = (t: typeof checklistTemplates[0]) => {
+    setClEditingId(t.id);
+    setClTemplateName(t.name);
+    setClTemplateDesc(t.description || '');
+    // Reconstruct items with child metadata
+    const builtItems: { label: string; isChild: boolean; parentIndex: number | null }[] = [];
+    const parents = t.items.filter(i => !i.parent_label);
+    parents.forEach(p => {
+      const parentIdx = builtItems.length;
+      builtItems.push({ label: p.label, isChild: false, parentIndex: null });
+      t.items.filter(c => c.parent_label === p.label).forEach(c => {
+        builtItems.push({ label: c.label, isChild: true, parentIndex: parentIdx });
+      });
+    });
+    setClTemplateItems(builtItems);
+    setClNewItemLabel('');
+    setClTemplateFormOpen(true);
+  };
+
+  const handleClSave = async () => {
+    if (!clTemplateName.trim()) { toast.error('Namn krävs'); return; }
+    if (clTemplateItems.length === 0) { toast.error('Minst ett item krävs'); return; }
+    // Convert to API format
+    const apiItems = clTemplateItems.map(item => {
+      if (item.isChild && item.parentIndex !== null) {
+        const parent = clTemplateItems[item.parentIndex];
+        return { label: item.label, parent_label: parent?.label };
+      }
+      return { label: item.label };
+    });
+    if (clEditingId) {
+      await updateChecklistTemplate(clEditingId, { name: clTemplateName.trim(), description: clTemplateDesc.trim() || undefined, items: apiItems });
+    } else {
+      await createChecklistTemplate({ name: clTemplateName.trim(), description: clTemplateDesc.trim() || undefined, items: apiItems });
+    }
+    setClTemplateFormOpen(false);
+    await fetchChecklistTemplates();
+  };
+
+  const handleClAddItem = (isChild: boolean, parentIdx: number | null) => {
+    if (!clNewItemLabel.trim()) return;
+    setClTemplateItems(prev => [...prev, { label: clNewItemLabel.trim(), isChild, parentIndex: parentIdx }]);
+    setClNewItemLabel('');
+  };
+
+  const handleClDeleteItem = (idx: number) => {
+    setClTemplateItems(prev => prev.filter((_, i) => i !== idx).map(item => {
+      if (item.parentIndex === idx) return { ...item, isChild: false, parentIndex: null };
+      if (item.parentIndex !== null && item.parentIndex > idx) return { ...item, parentIndex: item.parentIndex - 1 };
+      return item;
+    }));
+  };
+
+  const handleClDeleteTemplate = async () => {
+    if (deleteClTemplateId) {
+      await deleteChecklistTemplate(deleteClTemplateId);
+      setDeleteClTemplateId(null);
+    }
   };
 
   const handleSaveTagEdit = async () => {
@@ -874,7 +964,144 @@ const Settings = () => {
             </CollapsibleContent>
           </Card>
         </Collapsible>
+
+        {/* Checklist Templates Section */}
+        <Collapsible open={sectionsOpen.checklistTemplates} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, checklistTemplates: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <ListChecks className="w-5 h-5" />
+                  Checklistmallar
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.checklistTemplates ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Återanvändbara checklistmallar som kan appliceras på ärenden.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+                {!clTemplateFormOpen ? (
+                  <Button onClick={handleClOpenCreate} className="w-full">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Ny checklistmall
+                  </Button>
+                ) : (
+                  <div className="border rounded-lg p-4 space-y-3">
+                    <div className="font-medium text-sm">{clEditingId ? 'Redigera mall' : 'Ny mall'}</div>
+                    <Input
+                      placeholder="Mallnamn (t.ex. Ny dator-setup)..."
+                      value={clTemplateName}
+                      onChange={(e) => setClTemplateName(e.target.value)}
+                    />
+                    <Input
+                      placeholder="Beskrivning (valfri)..."
+                      value={clTemplateDesc}
+                      onChange={(e) => setClTemplateDesc(e.target.value)}
+                    />
+                    <div className="space-y-1">
+                      {clTemplateItems.map((item, idx) => (
+                        <div key={idx} className={`flex items-center gap-2 ${item.isChild ? 'ml-6' : ''}`}>
+                          {item.isChild && <CornerDownRight className="h-3 w-3 text-muted-foreground shrink-0" />}
+                          <span className="flex-1 text-sm border rounded px-2 py-1 bg-muted/30">{item.label}</span>
+                          {!item.isChild && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              title="Lägg till deluppgift under denna"
+                              onClick={() => {
+                                const sub = window.prompt('Deluppgiftens text:');
+                                if (sub?.trim()) {
+                                  setClTemplateItems(prev => {
+                                    const next = [...prev];
+                                    next.splice(idx + 1, 0, { label: sub.trim(), isChild: true, parentIndex: idx });
+                                    return next;
+                                  });
+                                }
+                              }}
+                            >
+                              <CornerDownRight className="h-3 w-3" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleClDeleteItem(idx)}>
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Ny punkt..."
+                        value={clNewItemLabel}
+                        onChange={(e) => setClNewItemLabel(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleClAddItem(false, null)}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => handleClAddItem(false, null)}
+                        disabled={!clNewItemLabel.trim()}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex gap-2 justify-end">
+                      <Button variant="outline" onClick={() => setClTemplateFormOpen(false)}>Avbryt</Button>
+                      <Button onClick={handleClSave}>Spara mall</Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Template list */}
+                <div className="border rounded-lg divide-y">
+                  {checklistTemplates.map((t) => (
+                    <div key={t.id} className="flex items-center gap-3 p-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm">{t.name}</div>
+                        {t.description && <div className="text-xs text-muted-foreground">{t.description}</div>}
+                        <div className="text-xs text-muted-foreground">{t.items.length} punkt{t.items.length !== 1 ? 'er' : ''}</div>
+                      </div>
+                      <Button size="icon" variant="ghost" onClick={() => handleClOpenEdit(t)}>
+                        <Pencil className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => setDeleteClTemplateId(t.id)}>
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                  {checklistTemplates.length === 0 && (
+                    <div className="p-4 text-center text-muted-foreground">
+                      Inga checklistmallar ännu. Skapa din första ovan.
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
       </div>
+
+      {/* Delete checklist template confirmation */}
+      <AlertDialog open={!!deleteClTemplateId} onOpenChange={() => setDeleteClTemplateId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort checklistmall?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Mallen tas bort permanent. Ärenden som redan fått items från mallen påverkas inte.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClDeleteTemplate} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Delete user confirmation dialog */}
       <AlertDialog open={!!deleteUserId} onOpenChange={() => setDeleteUserId(null)}>
