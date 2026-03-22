@@ -391,6 +391,56 @@ const ensureChecklistTemplatesTable = () => {
   console.log('Created checklist_templates and checklist_template_items tables');
 };
 
+function stripHtmlForFts(html: string): string {
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+const ensureKbFts5AndType = () => {
+  if (!tableExists('kb_articles')) return;
+
+  // Create FTS5 virtual table if missing
+  if (!tableExists('kb_articles_fts')) {
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS kb_articles_fts
+        USING fts5(title, content_plain, content='', tokenize='unicode61');
+    `);
+    console.log('Created kb_articles_fts virtual table');
+  }
+
+  // Create delete trigger (idempotent)
+  db.exec(`
+    CREATE TRIGGER IF NOT EXISTS kb_articles_fts_delete
+      AFTER DELETE ON kb_articles BEGIN
+        DELETE FROM kb_articles_fts WHERE rowid = OLD.rowid;
+      END;
+  `);
+
+  // Add article_type column if missing
+  if (!columnExists('kb_articles', 'article_type')) {
+    db.exec(`ALTER TABLE kb_articles ADD COLUMN article_type TEXT CHECK(article_type IN ('how-to', 'solution'));`);
+    console.log('Added article_type column to kb_articles');
+  }
+
+  // Backfill FTS if empty
+  const ftsCount = (db.prepare('SELECT COUNT(*) as count FROM kb_articles_fts').get() as { count: number }).count;
+  if (ftsCount === 0) {
+    const articles = db.prepare('SELECT rowid, title, content FROM kb_articles').all() as { rowid: number; title: string; content: string }[];
+    if (articles.length > 0) {
+      const stmt = db.prepare('INSERT INTO kb_articles_fts(rowid, title, content_plain) VALUES (?,?,?)');
+      const backfill = db.transaction(() => { for (const a of articles) stmt.run(a.rowid, a.title, stripHtmlForFts(a.content)); });
+      backfill();
+      console.log(`Backfilled ${articles.length} articles into kb_articles_fts`);
+    }
+  }
+};
+
 export function initializeDatabase() {
   const schemaPath = join(__dirname, 'schema.sql');
   const schema = readFileSync(schemaPath, 'utf-8');
@@ -408,6 +458,7 @@ export function initializeDatabase() {
   ensureTicketRemindersTable();
   ensureChecklistExtensions();
   ensureChecklistTemplatesTable();
+  ensureKbFts5AndType();
   console.log('Database initialized successfully');
 }
 
