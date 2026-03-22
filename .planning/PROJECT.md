@@ -51,7 +51,7 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - **Auth**: JWT + Passport local strategy, single admin user
 - **Deployment**: Two Docker containers (nginx frontend, Node backend) with persistent volume for DB and uploads
 - **KB current state**: CRUD works, Tiptap editor in place, but missing search, article organization, and ticket integration
-- **Reports current state**: recharts is installed but no reports page exists yet
+- **Reports current state**: Reports page complete — full-dataset analytics (SQL GROUP BY), category breakdown bar chart, created+closed trend chart, print-to-PDF support. Validated in Phase 01: reports-fix-improvements
 - **Archive current state**: Closed tickets exist in the DB but appear in the main ticket list with no separation
 
 ## Constraints
@@ -66,7 +66,7 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 |----------|-----------|---------|
 | SQLite over Postgres | Simpler ops for single-user internal tool | ✓ Good |
 | JWT stateless auth | No session store needed | ✓ Good |
-| recharts for reports | Already installed, fits the React stack | — Pending |
+| recharts for reports | Already installed, fits the React stack | ✓ Good |
 | Tiptap for KB editor | Rich text with image support | ✓ Good |
 
 ## Evolution
@@ -87,4 +87,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-22 after initialization*
+*Last updated: 2026-03-22 after Phase 01 (reports-fix-improvements) completion*
