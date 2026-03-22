@@ -8,7 +8,7 @@ This milestone closes three capability gaps in an otherwise feature-complete sin
 
 - [x] **Phase 1: Reports Fix & Improvements** - Fix analytics to run on full dataset; add category breakdown, open/closed trend, and print-to-PDF (gap closure in progress) (completed 2026-03-22)
 - [x] **Phase 2: Knowledge Base Rework** - FTS5 full-text search, reverse KB-to-ticket links, article type field (completed 2026-03-22)
-- [ ] **Phase 3: Archive Enhancement** - Closed date range filter with supporting database index
+- [x] **Phase 3: Archive Enhancement** - Closed date range filter with supporting database index (completed 2026-03-22)
 
 ## Phase Details
 
@@ -58,7 +58,7 @@ Plans:
 
 Plans:
 - [x] 03-01-PLAN.md — Composite index on (status, closed_at) + add closed_at to allowed date fields in backend and useTickets type
-- [ ] 03-02-PLAN.md — Date range inputs in Archive.tsx filter bar with URL persistence and human verification
+- [x] 03-02-PLAN.md — Date range inputs in Archive.tsx filter bar with URL persistence and human verification
 
 ## Progress
 
@@ -66,7 +66,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Reports Fix & Improvements | 4/4 | Complete   | 2026-03-22 |
 | 2. Knowledge Base Rework | 3/3 | Complete   | 2026-03-22 |
-| 3. Archive Enhancement | 0/2 | Not started | - |
+| 3. Archive Enhancement | 2/2 | Complete   | 2026-03-22 |
 
 ---
 *Roadmap created: 2026-03-22*
