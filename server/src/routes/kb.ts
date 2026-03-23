@@ -307,12 +307,15 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // DELETE /api/kb/articles/:id
-// Note: FTS sync is handled automatically by the kb_articles_fts_delete trigger
 router.delete('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const existing = db.prepare('SELECT id FROM kb_articles WHERE id = ?').get(req.params.id);
+    const existing = db.prepare('SELECT id, title, content, rowid FROM kb_articles WHERE id = ?').get(req.params.id) as { id: string; title: string; content: string; rowid: number } | undefined;
     if (!existing) return res.status(404).json({ error: 'Article not found' });
-    db.prepare('DELETE FROM kb_articles WHERE id = ?').run(req.params.id);
+    db.transaction(() => {
+      db.prepare("INSERT INTO kb_articles_fts(kb_articles_fts, rowid, title, content_plain) VALUES('delete', ?, ?, ?)")
+        .run(existing.rowid, existing.title, stripHtml(existing.content));
+      db.prepare('DELETE FROM kb_articles WHERE id = ?').run(req.params.id);
+    })();
     res.json({ message: 'Article deleted' });
   } catch (error) {
     console.error('Error deleting KB article:', error);

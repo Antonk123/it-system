@@ -414,13 +414,8 @@ const ensureKbFts5AndType = () => {
     console.log('Created kb_articles_fts virtual table');
   }
 
-  // Create delete trigger (idempotent)
-  db.exec(`
-    CREATE TRIGGER IF NOT EXISTS kb_articles_fts_delete
-      AFTER DELETE ON kb_articles BEGIN
-        DELETE FROM kb_articles_fts WHERE rowid = OLD.rowid;
-      END;
-  `);
+  // Drop the broken delete trigger (it used DELETE on a contentless FTS5 table which throws)
+  db.exec(`DROP TRIGGER IF EXISTS kb_articles_fts_delete;`);
 
   // Add article_type column if missing
   if (!columnExists('kb_articles', 'article_type')) {
