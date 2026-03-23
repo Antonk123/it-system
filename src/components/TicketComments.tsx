@@ -44,7 +44,7 @@ export const TicketComments = ({
     <div className="space-y-3">
       <h3 className="font-medium text-foreground flex items-center gap-2 text-sm">
         <MessageSquare className="w-4 h-4" />
-        Interna kommentarer ({comments.length})
+        Kommentarer ({comments.length})
       </h3>
 
       {/* Comment Form */}

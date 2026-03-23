@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Link as LinkIcon, Loader2 } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Link as LinkIcon, Loader2, ListChecks, Plus } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { useTicketAttachments } from '@/hooks/useTicketAttachments';
@@ -96,6 +96,12 @@ const TicketDetail = () => {
     setShareUrl
   } = useTicketSharing();
   const [sharePopoverOpen, setSharePopoverOpen] = useState(false);
+  const [checklistOpen, setChecklistOpen] = useState(false);
+
+  const hasVisibleContent = (html: string | null | undefined): boolean => {
+    if (!html) return false;
+    return html.replace(/<[^>]*>/g, '').trim().length > 0;
+  };
   const [ticketFieldValues, setTicketFieldValues] = useState<
     { field_name: string; field_label: string; field_value: string }[]
   >([]);
@@ -368,39 +374,52 @@ const TicketDetail = () => {
               )}
             </div>
 
-            {/* Checklist */}
-            <div className="pt-4 border-t">
-              <div className="border rounded-lg p-4">
-                <TicketChecklist
-                  items={checklistItems}
-                  onToggle={(itemId, completed) => updateChecklistItem(itemId, { completed })}
-                  onDelete={(itemId) => deleteChecklistItem(itemId)}
-                  onAdd={(label, parentId) => id ? addChecklistItem(id, label, { parent_id: parentId }) : undefined}
-                  onUpdate={(itemId, updates) => updateChecklistItem(itemId, updates)}
-                  readOnly={false}
-                  templates={checklistTemplates}
-                  onApplyTemplate={async (template) => {
-                    if (!id) return;
-                    const newItems = await applyChecklistTemplate(template.id, id);
-                    if (newItems) setChecklistItems(newItems as ChecklistItem[]);
-                  }}
-                  onSaveAsTemplate={async (currentItems) => {
-                    const name = window.prompt('Namn på mallen:');
-                    if (!name?.trim()) return;
-                    const templateItems = currentItems
-                      .filter(i => !i.parent_id)
-                      .flatMap(parent => {
-                        const children = currentItems.filter(c => c.parent_id === parent.id);
-                        return [
-                          { label: parent.label },
-                          ...children.map(c => ({ label: c.label, parent_label: parent.label })),
-                        ];
-                      });
-                    await createChecklistTemplate({ name: name.trim(), items: templateItems });
-                  }}
-                />
+            {/* Checklist — only expand when there are items or user opens it */}
+            {checklistItems.length > 0 || checklistOpen ? (
+              <div className="pt-4 border-t">
+                <div className="border rounded-lg p-4">
+                  <TicketChecklist
+                    items={checklistItems}
+                    onToggle={(itemId, completed) => updateChecklistItem(itemId, { completed })}
+                    onDelete={(itemId) => deleteChecklistItem(itemId)}
+                    onAdd={(label, parentId) => id ? addChecklistItem(id, label, { parent_id: parentId }) : undefined}
+                    onUpdate={(itemId, updates) => updateChecklistItem(itemId, updates)}
+                    readOnly={false}
+                    templates={checklistTemplates}
+                    onApplyTemplate={async (template) => {
+                      if (!id) return;
+                      const newItems = await applyChecklistTemplate(template.id, id);
+                      if (newItems) setChecklistItems(newItems as ChecklistItem[]);
+                    }}
+                    onSaveAsTemplate={async (currentItems) => {
+                      const name = window.prompt('Namn på mallen:');
+                      if (!name?.trim()) return;
+                      const templateItems = currentItems
+                        .filter(i => !i.parent_id)
+                        .flatMap(parent => {
+                          const children = currentItems.filter(c => c.parent_id === parent.id);
+                          return [
+                            { label: parent.label },
+                            ...children.map(c => ({ label: c.label, parent_label: parent.label })),
+                          ];
+                        });
+                      await createChecklistTemplate({ name: name.trim(), items: templateItems });
+                    }}
+                  />
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="pt-4 border-t">
+                <button
+                  onClick={() => setChecklistOpen(true)}
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <ListChecks className="w-3.5 h-3.5" />
+                  Lägg till checklista
+                </button>
+              </div>
+            )}
 
             {/* Reminders */}
             {reminders.length > 0 && (
@@ -509,18 +528,24 @@ const TicketDetail = () => {
               </div>
             )}
 
-            {/* Notes */}
-            {ticket.notes && (
-              <div className="pt-4 border-t">
-                <h3 className="font-medium text-foreground mb-2">Interna anteckningar</h3>
-                <div className="bg-muted/50 p-4 rounded-lg">
-                  <HtmlRenderer content={migrateContent(ticket.notes)} />
-                </div>
-              </div>
-            )}
-
-            {/* Internal Comments */}
+            {/* Notes + Comments — unified internal communication section */}
             <div className="pt-4 border-t">
+              {hasVisibleContent(ticket.notes) && (
+                <div className="mb-4 bg-muted/40 border border-border p-4 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Anteckning</span>
+                    <button
+                      onClick={() => navigate(`/tickets/${ticket.id}/edit`, {
+                        state: { from: location.state?.from || location.pathname + location.search }
+                      })}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Redigera
+                    </button>
+                  </div>
+                  <HtmlRenderer content={migrateContent(ticket.notes!)} />
+                </div>
+              )}
               <TicketComments
                 comments={comments}
                 isLoading={commentsLoading}
