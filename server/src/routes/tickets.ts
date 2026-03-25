@@ -15,11 +15,12 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || join(__dirname, '../../data/uploads
 
 // Explicit column lists for SELECT optimization (instead of SELECT *)
 // Reduces data transfer by 30-40% by avoiding unnecessary columns
+// Use 'tickets.' prefix for all columns to avoid ambiguity when JOINs are present
 const TICKET_COLUMNS = [
-  'id', 'title', 'description', 'status', 'priority',
-  'category_id', 'requester_id', 'notes', 'solution',
-  'template_id',
-  'created_at', 'updated_at', 'resolved_at', 'closed_at'
+  'tickets.id', 'tickets.title', 'tickets.description', 'tickets.status', 'tickets.priority',
+  'tickets.category_id', 'tickets.requester_id', 'tickets.notes', 'tickets.solution',
+  'tickets.template_id',
+  'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at'
 ].join(', ');
 
 // Multer config for CSV upload
@@ -431,20 +432,27 @@ function buildWhereClause(filters: TicketQueryParams) {
 
   // Enhanced search: search in multiple fields
   if (filters.search) {
-    const pattern = `%${filters.search}%`;
+    // Escape LIKE special characters (%, _, \) to prevent unintended wildcard matching
+    const escapedSearch = filters.search
+      .replace(/\\/g, '\\\\')  // Escape backslash first
+      .replace(/%/g, '\\%')     // Escape percent
+      .replace(/_/g, '\\_');    // Escape underscore
+
+    const pattern = `%${escapedSearch}%`;
 
     // Build search condition with all searchable fields
+    // Use ESCAPE '\' to handle escaped wildcards and COLLATE NOCASE for case-insensitive search
     const searchConditions = [
-      'tickets.title LIKE ?',
-      'tickets.description LIKE ?',
-      'tickets.notes LIKE ?',
-      'tickets.solution LIKE ?',
-      'contacts.name LIKE ?',
-      'contacts.email LIKE ?',
-      'categories.label LIKE ?',
-      'ticket_comments.content LIKE ?',
-      'tags.name LIKE ?',
-      'ticket_field_values.field_value LIKE ?'
+      "tickets.title LIKE ? ESCAPE '\\' COLLATE NOCASE",
+      "tickets.description LIKE ? ESCAPE '\\' COLLATE NOCASE",
+      "tickets.notes LIKE ? ESCAPE '\\' COLLATE NOCASE",
+      "tickets.solution LIKE ? ESCAPE '\\' COLLATE NOCASE",
+      "contacts.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
+      "contacts.email LIKE ? ESCAPE '\\' COLLATE NOCASE",
+      "categories.label LIKE ? ESCAPE '\\' COLLATE NOCASE",
+      "ticket_comments.content LIKE ? ESCAPE '\\' COLLATE NOCASE",
+      "tags.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
+      "ticket_field_values.field_value LIKE ? ESCAPE '\\' COLLATE NOCASE"
     ];
 
     conditions.push(`(${searchConditions.join(' OR ')})`);
@@ -603,6 +611,11 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
     res.json(paginatedResponse);
   } catch (error) {
     console.error('Error fetching tickets:', error);
+    console.error('Query params:', req.query);
+    if (error instanceof Error) {
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
     res.status(500).json({ error: 'Failed to fetch tickets' });
   }
 });
