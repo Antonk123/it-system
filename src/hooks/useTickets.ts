@@ -49,7 +49,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
     const params = new URLSearchParams();
     if (opts.page) params.append('page', String(opts.page));
     if (opts.limit) params.append('limit', String(opts.limit));
-    if (opts.status && opts.status !== 'all') params.append('status', opts.status);
+    if (opts.status) params.append('status', opts.status);
     if (opts.priority && opts.priority !== 'all') params.append('priority', opts.priority);
     if (opts.category && opts.category !== 'all') params.append('category', opts.category);
     if (opts.search) params.append('search', opts.search);
