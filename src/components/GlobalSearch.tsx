@@ -1,6 +1,6 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Ticket, User as UserIcon, ArrowRight, Clock, Zap, Tag, Folder } from 'lucide-react';
+import { Search, Ticket, User as UserIcon, ArrowRight, Clock, Zap, Tag, Folder, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   Command,
@@ -13,9 +13,8 @@ import {
 import { StatusBadge } from './StatusBadge';
 import { PriorityBadge } from './PriorityBadge';
 import { CategoryBadge } from './CategoryBadge';
-import { TagBadges } from './TagBadges';
-import { Ticket as TicketType, User, Category, Tag as TagType } from '@/types/ticket';
-import { format } from 'date-fns';
+import { Ticket as TicketType, TicketStatus, TicketPriority, User, Category, Tag as TagType } from '@/types/ticket';
+import { api } from '@/lib/api';
 
 interface GlobalSearchProps {
   tickets: TicketType[];
@@ -24,12 +23,53 @@ interface GlobalSearchProps {
   tags?: TagType[];
 }
 
+interface TicketRow {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  category_id: string | null;
+  requester_id: string | null;
+  notes: string | null;
+  solution: string | null;
+  template_id: string | null;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+  closed_at: string | null;
+  tags?: { id: string; name: string; color: string; created_at: string }[];
+}
+
+function mapTicketRow(t: TicketRow): TicketType {
+  return {
+    id: t.id,
+    title: t.title,
+    description: t.description,
+    status: t.status as TicketStatus,
+    priority: t.priority as TicketPriority,
+    category: t.category_id || undefined,
+    requesterId: t.requester_id || '',
+    createdAt: new Date(t.created_at),
+    updatedAt: new Date(t.updated_at),
+    resolvedAt: t.resolved_at ? new Date(t.resolved_at) : undefined,
+    closedAt: t.closed_at ? new Date(t.closed_at) : undefined,
+    notes: t.notes || undefined,
+    solution: t.solution || undefined,
+    templateId: t.template_id || undefined,
+    tags: t.tags?.map(tag => ({ id: tag.id, name: tag.name, color: tag.color, createdAt: new Date(tag.created_at) })) || [],
+  };
+}
+
 export const GlobalSearch = ({ tickets, users, categories = [], tags = [] }: GlobalSearchProps) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<{ active: TicketType[]; archived: TicketType[] } | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const normalizeSearch = (value: string) =>
     value
@@ -87,6 +127,57 @@ export const GlobalSearch = ({ tickets, users, categories = [], tags = [] }: Glo
       .filter((c): c is Category & { count: number } => !!c);
   }, [tickets, categories]);
 
+  // Debounced backend search
+  const performSearch = useCallback(async (term: string) => {
+    if (!term.trim()) {
+      setSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const params = new URLSearchParams({
+        page: '1',
+        limit: '20',
+        status: 'all',
+        search: term,
+      });
+      const response = await api.getTickets(`?${params.toString()}`);
+      const rows: TicketRow[] = Array.isArray(response) ? response : response.data;
+      const mapped = rows.map(mapTicketRow);
+
+      setSearchResults({
+        active: mapped.filter(t => t.status !== 'closed').slice(0, 10),
+        archived: mapped.filter(t => t.status === 'closed').slice(0, 10),
+      });
+    } catch {
+      setSearchResults({ active: [], archived: [] });
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+
+  // Debounce search input
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!search.trim()) {
+      setSearchResults(null);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    debounceRef.current = setTimeout(() => {
+      performSearch(search);
+    }, 250);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [search, performSearch]);
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
@@ -117,39 +208,21 @@ export const GlobalSearch = ({ tickets, users, categories = [], tags = [] }: Glo
     return users.find(u => u.id === userId)?.name || '';
   };
 
+  // Use backend results when searching, client-side data when idle
   const ticketMatches = useMemo(() => {
-    if (!search) {
-      const active = tickets.filter((t) => t.status !== "closed").slice(0, 5);
-      const archived = tickets.filter((t) => t.status === "closed").slice(0, 5);
-      return { active, archived };
-    }
-
-    const normalized = normalizeSearch(search);
-    const tokens = normalized.split(" ").filter(Boolean);
-    const matches = tickets.filter((t) => {
-      const requesterName = normalizeSearch(getUserName(t.requesterId));
-      const haystack = [
-        t.title,
-        t.description,
-        t.category || "",
-        requesterName,
-      ]
-        .map(normalizeSearch)
-        .join(" ");
-
-      return tokens.every((token) => haystack.includes(token));
-    });
-
+    if (search && searchResults) return searchResults;
+    if (search) return { active: [], archived: [] }; // Still loading
+    // No search: show preview from client-side data
     return {
-      active: matches.filter((t) => t.status !== "closed").slice(0, 10),
-      archived: matches.filter((t) => t.status === "closed").slice(0, 10),
+      active: tickets.filter((t) => t.status !== "closed").slice(0, 5),
+      archived: tickets.filter((t) => t.status === "closed").slice(0, 5),
     };
-  }, [tickets, users, search]);
+  }, [search, searchResults, tickets]);
 
   const filteredUsers = useMemo(() => {
     if (!search) return users.slice(0, 5);
     const lower = normalizeSearch(search);
-    return users.filter(u => 
+    return users.filter(u =>
       normalizeSearch(u.name).includes(lower) ||
       normalizeSearch(u.email).includes(lower) ||
       normalizeSearch(u.department || '').includes(lower)
@@ -197,7 +270,11 @@ export const GlobalSearch = ({ tickets, users, categories = [], tags = [] }: Glo
       </div>
 
       {/* Search icon */}
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10 pointer-events-none" />
+      {isSearching ? (
+        <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10 pointer-events-none animate-spin" />
+      ) : (
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground z-10 pointer-events-none" />
+      )}
 
       {/* Input with updated background */}
       <Input
@@ -312,7 +389,9 @@ export const GlobalSearch = ({ tickets, users, categories = [], tags = [] }: Glo
             </>
           )}
 
-          <CommandEmpty>Inga resultat hittades.</CommandEmpty>
+          {!isSearching && search && ticketMatches.active.length === 0 && ticketMatches.archived.length === 0 && filteredUsers.length === 0 && (
+            <CommandEmpty>Inga resultat hittades.</CommandEmpty>
+          )}
 
           {ticketMatches.active.length > 0 && (
             <CommandGroup heading="Ärenden">
