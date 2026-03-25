@@ -176,7 +176,7 @@ export const Layout = ({
 
   const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile toggle
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // Desktop collapse
-  const { tickets } = useTickets({ page: 1, limit: 100 });
+  const { tickets } = useTickets({ page: 1, limit: 500, status: 'all' });
   const { users } = useUsers();
   const { categories } = useCategories();
   const { tags } = useTags();

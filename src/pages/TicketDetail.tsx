@@ -181,10 +181,14 @@ const TicketDetail = () => {
     toast.success('Taggar uppdaterade');
   };
 
-  const handleDelete = () => {
-    deleteTicket(ticket.id);
-    toast.success('Ärendet borttaget');
-    navigate('/tickets');
+  const handleDelete = async () => {
+    try {
+      await deleteTicket(ticket.id);
+      toast.success('Ärendet borttaget');
+      navigate('/tickets');
+    } catch {
+      toast.error('Kunde inte ta bort ärendet');
+    }
   };
 
   const handleShare = async () => {
