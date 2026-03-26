@@ -38,7 +38,10 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
   3. Saved filter presets can be applied on both the ticket list page and the Archive page
   4. The Archive page offers the same filter options as the ticket list (priority, checklist completion, date range)
   5. The Archive page supports bulk operations: select multiple tickets and change status or priority
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 04-01-PLAN.md — Build shared filter components (UnifiedFilterBar, ActiveFilterChips, DateRangePopover) and extend filter preset system
+- [ ] 04-02-PLAN.md — Wire components into TicketList and Archive, add bulk operations and backend bulk-delete endpoint
 **UI hint**: yes
 
 ### Phase 5: Automation — Recurring Tickets & Dashboard Queues
@@ -74,6 +77,6 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 | 1. Reports Fix & Improvements | v1.0 | 4/4 | Complete | 2026-03-22 |
 | 2. Knowledge Base Rework | v1.0 | 3/3 | Complete | 2026-03-22 |
 | 3. Archive Enhancement | v1.0 | 2/2 | Complete | 2026-03-22 |
-| 4. Filter Consolidation & Archive Parity | v1.1 | 0/? | Not started | - |
+| 4. Filter Consolidation & Archive Parity | v1.1 | 0/2 | Planning | - |
 | 5. Automation — Recurring & Queues | v1.1 | 0/? | Not started | - |
 | 6. Reports Cleanup | v1.1 | 0/? | Not started | - |
