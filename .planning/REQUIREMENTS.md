@@ -64,28 +64,28 @@ Requirements for milestone v1.1 Quality & Automation. Each maps to roadmap phase
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FILT-01 | — | Pending |
-| FILT-02 | — | Pending |
-| FILT-03 | — | Pending |
-| FILT-04 | — | Pending |
-| FILT-05 | — | Pending |
-| RECUR-01 | — | Pending |
-| RECUR-02 | — | Pending |
-| RECUR-03 | — | Pending |
-| RECUR-04 | — | Pending |
-| DASH-01 | — | Pending |
-| DASH-02 | — | Pending |
-| DASH-03 | — | Pending |
-| RPT-01 | — | Pending |
-| RPT-02 | — | Pending |
-| RPT-03 | — | Pending |
-| RPT-04 | — | Pending |
+| FILT-01 | Phase 4 | Pending |
+| FILT-02 | Phase 4 | Pending |
+| FILT-03 | Phase 4 | Pending |
+| FILT-04 | Phase 4 | Pending |
+| FILT-05 | Phase 4 | Pending |
+| RECUR-01 | Phase 5 | Pending |
+| RECUR-02 | Phase 5 | Pending |
+| RECUR-03 | Phase 5 | Pending |
+| RECUR-04 | Phase 5 | Pending |
+| DASH-01 | Phase 5 | Pending |
+| DASH-02 | Phase 5 | Pending |
+| DASH-03 | Phase 5 | Pending |
+| RPT-01 | Phase 6 | Pending |
+| RPT-02 | Phase 6 | Pending |
+| RPT-03 | Phase 6 | Pending |
+| RPT-04 | Phase 6 | Pending |
 
 **Coverage:**
 - v1.1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 ⚠️
+- Mapped to phases: 16
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-26*
-*Last updated: 2026-03-26 after initial definition*
+*Last updated: 2026-03-26 after roadmap creation*
