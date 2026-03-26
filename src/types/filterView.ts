@@ -8,6 +8,12 @@ export interface FilterView {
     category?: string;
     tags?: string[];
     search?: string;
+    // Extended filter fields (Phase 04)
+    tagMode?: 'or' | 'and';
+    checklist?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    dateField?: 'created_at' | 'updated_at' | 'closed_at';
   };
   viewPreferences?: {
     viewMode?: 'table' | 'kanban';

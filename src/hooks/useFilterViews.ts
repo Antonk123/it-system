@@ -76,6 +76,22 @@ export function useFilterViews() {
       if (view.filters.search) {
         newParams.set('search', view.filters.search);
       }
+      // Restore extended filter fields (Phase 04)
+      if (view.filters.tagMode && view.filters.tagMode !== 'or') {
+        newParams.set('tagMode', view.filters.tagMode);
+      }
+      if (view.filters.checklist) {
+        newParams.set('checklist', view.filters.checklist);
+      }
+      if (view.filters.dateFrom) {
+        newParams.set('dateFrom', view.filters.dateFrom);
+      }
+      if (view.filters.dateTo) {
+        newParams.set('dateTo', view.filters.dateTo);
+      }
+      if (view.filters.dateField && view.filters.dateField !== 'created_at') {
+        newParams.set('dateField', view.filters.dateField);
+      }
       setSearchParams(newParams, { replace: true });
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -148,14 +164,16 @@ export function useFilterViews() {
   }, []);
 
   const applyView = useCallback(
-    (view: FilterView) => {
+    (view: FilterView, context: 'ticketlist' | 'archive' = 'ticketlist') => {
       const newParams = new URLSearchParams(searchParams);
 
-      // Apply status filter
-      if (view.filters.status && view.filters.status.length > 0) {
-        newParams.set('status', view.filters.status.join(','));
-      } else {
-        newParams.delete('status');
+      // Apply status filter — skip on Archive (incompatible, per D-09)
+      if (context !== 'archive') {
+        if (view.filters.status && view.filters.status.length > 0) {
+          newParams.set('status', view.filters.status.join(','));
+        } else {
+          newParams.delete('status');
+        }
       }
 
       // Apply priority filter
@@ -186,7 +204,36 @@ export function useFilterViews() {
         newParams.delete('search');
       }
 
-      // Apply view preferences (sortBy, sortDir can be added if needed)
+      // Apply extended filter fields (Phase 04)
+      if (view.filters.tagMode && view.filters.tagMode !== 'or') {
+        newParams.set('tagMode', view.filters.tagMode);
+      } else {
+        newParams.delete('tagMode');
+      }
+
+      if (view.filters.checklist) {
+        newParams.set('checklist', view.filters.checklist);
+      } else {
+        newParams.delete('checklist');
+      }
+
+      if (view.filters.dateFrom) {
+        newParams.set('dateFrom', view.filters.dateFrom);
+      } else {
+        newParams.delete('dateFrom');
+      }
+
+      if (view.filters.dateTo) {
+        newParams.set('dateTo', view.filters.dateTo);
+      } else {
+        newParams.delete('dateTo');
+      }
+
+      if (view.filters.dateField && view.filters.dateField !== 'created_at') {
+        newParams.set('dateField', view.filters.dateField);
+      } else {
+        newParams.delete('dateField');
+      }
 
       // Reset to page 1
       newParams.set('page', '1');
@@ -210,6 +257,13 @@ export function useFilterViews() {
     const tagsParam = searchParams.get('tags') || '';
     const selectedTags = tagsParam ? tagsParam.split(',').filter((t) => t) : [];
 
+    // Extended filter fields (Phase 04)
+    const tagModeParam = searchParams.get('tagMode');
+    const checklistParam = searchParams.get('checklist');
+    const dateFromParam = searchParams.get('dateFrom');
+    const dateToParam = searchParams.get('dateTo');
+    const dateFieldParam = searchParams.get('dateField') as 'created_at' | 'updated_at' | 'closed_at' | null;
+
     return {
       name: '',
       isDefault: false,
@@ -219,6 +273,12 @@ export function useFilterViews() {
         category: searchParams.get('category') || undefined,
         tags: selectedTags.length > 0 ? selectedTags : undefined,
         search: searchParams.get('search') || undefined,
+        // Extended fields — only include if non-default
+        tagMode: (tagModeParam && tagModeParam !== 'or') ? tagModeParam as 'or' | 'and' : undefined,
+        checklist: checklistParam || undefined,
+        dateFrom: dateFromParam || undefined,
+        dateTo: dateToParam || undefined,
+        dateField: (dateFieldParam && dateFieldParam !== 'created_at') ? dateFieldParam : undefined,
       },
       viewPreferences: {},
     };
