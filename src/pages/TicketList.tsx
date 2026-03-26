@@ -1,31 +1,18 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Download, Upload, LayoutGrid, Columns } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
-import { useCategories } from '@/hooks/useCategories';
 import { Layout } from '@/components/Layout';
 import { TicketTable } from '@/components/TicketTable';
 import { KanbanView } from '@/components/KanbanView';
-import { SearchBar } from '@/components/SearchBar';
 import { PaginationControls } from '@/components/PaginationControls';
 import { ImportDialog } from '@/components/ImportDialog';
-import { TagFilter } from '@/components/TagFilter';
-import { CategoryFilter } from '@/components/CategoryFilter';
-import { TagMultiSelect } from '@/components/TagMultiSelect';
-import { StatusMultiSelect } from '@/components/StatusMultiSelect';
-import { FilterViewSelector } from '@/components/FilterViewSelector';
 import { FilterViewManager } from '@/components/FilterViewManager';
+import { UnifiedFilterBar } from '@/components/UnifiedFilterBar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFilterViews } from '@/hooks/useFilterViews';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { TicketStatus, TicketPriority } from '@/types/ticket';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -56,7 +43,7 @@ const TicketList = () => {
   const tagMode = (searchParams.get('tagMode') || 'or') as 'or' | 'and';
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
-  const dateField = (searchParams.get('dateField') || 'created_at') as 'created_at' | 'updated_at';
+  const dateField = (searchParams.get('dateField') || 'created_at') as 'created_at' | 'updated_at' | 'closed_at';
   const checklistFilter = searchParams.get('checklist') || '';
   const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
@@ -105,7 +92,6 @@ const TicketList = () => {
   });
 
   const { users } = useUsers();
-  const { categories } = useCategories();
 
   // Update URL params
   const updateFilters = useCallback((updates: Record<string, any>) => {
@@ -137,10 +123,6 @@ const TicketList = () => {
   }, [searchParams, setSearchParams, setActiveView]);
 
   // Event handlers
-  const handleSearchChange = useCallback((newSearch: string) => {
-    updateFilters({ search: newSearch });
-  }, [updateFilters]);
-
   const handlePageChange = useCallback((newPage: number) => {
     updateFilters({ page: newPage });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -167,27 +149,6 @@ const TicketList = () => {
       toast.error('Kunde inte uppdatera status');
     }
   }, [updateTicket]);
-
-  const handleRemoveTagFilter = useCallback((tagId: string) => {
-    const newTagIds = selectedTagIds.filter(id => id !== tagId);
-    updateFilters({ tags: newTagIds.length > 0 ? newTagIds.join(',') : undefined });
-  }, [selectedTagIds, updateFilters]);
-
-  const handleClearAllTags = useCallback(() => {
-    updateFilters({ tags: undefined });
-  }, [updateFilters]);
-
-  const handleTagSelectionChange = useCallback((tagIds: string[]) => {
-    updateFilters({ tags: tagIds.length > 0 ? tagIds.join(',') : undefined });
-  }, [updateFilters]);
-
-  const handleTagModeChange = useCallback((mode: 'or' | 'and') => {
-    updateFilters({ tagMode: mode === 'or' ? undefined : mode });
-  }, [updateFilters]);
-
-  const handleRemoveCategoryFilter = useCallback(() => {
-    updateFilters({ category: 'all' });
-  }, [updateFilters]);
 
   const handleTicketClick = useCallback((ticketId: string) => {
     const currentPath = location.pathname + location.search;
@@ -222,11 +183,6 @@ const TicketList = () => {
       toast.error('Misslyckades att exportera ärenden');
     }
   }, [selectedStatuses, priorityFilter, categoryFilter, search, tagsFilter]);
-
-  const priorityQuickFilters: { value: TicketPriority; label: string }[] = [
-    { value: 'high', label: 'Hög' },
-    { value: 'critical', label: 'Kritisk' },
-  ];
 
   return (
     <Layout>
@@ -308,153 +264,28 @@ const TicketList = () => {
           </div>
         </div>
 
-        {/* Filter Views */}
-        <div className="flex items-center gap-2">
-          <FilterViewSelector
-            views={views}
-            activeViewId={activeView?.id || null}
-            onSelectView={(viewId) => {
-              const view = views.find((v) => v.id === viewId);
-              if (view) {
-                applyView(view);
-              }
-            }}
-          />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setManageViewsOpen(true)}
-            className="h-10"
-          >
-            Hantera vyer
-          </Button>
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <SearchBar
-              value={search}
-              onChange={handleSearchChange}
-              placeholder="Sök ärenden..."
-            />
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            {viewMode === 'table' && (
-              <StatusMultiSelect
-                selectedStatuses={selectedStatuses}
-                onChange={(statuses) => updateFilters({ status: statuses })}
-              />
-            )}
-            <Select value={priorityFilter} onValueChange={(v) => updateFilters({ priority: v })}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Prioritet" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alla prioriteter</SelectItem>
-                <SelectItem value="low">Låg</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="high">Hög</SelectItem>
-                <SelectItem value="critical">Kritisk</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={categoryFilter} onValueChange={(v) => updateFilters({ category: v })}>
-              <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Kategori" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alla kategorier</SelectItem>
-                {categories.map(cat => (
-                  <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <TagMultiSelect
-              selectedTagIds={selectedTagIds}
-              onChange={handleTagSelectionChange}
-            />
-            <Select value={checklistFilter || 'all'} onValueChange={(v) => updateFilters({ checklist: v === 'all' ? undefined : v })}>
-              <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Checklista" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Alla ärenden</SelectItem>
-                <SelectItem value="all_done">Checklista klar</SelectItem>
-                <SelectItem value="some_done">Delvis klar</SelectItem>
-                <SelectItem value="none_done">Inget klart</SelectItem>
-                <SelectItem value="has_any">Har checklista</SelectItem>
-                <SelectItem value="no_items">Ingen checklista</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        {/* Date range filter */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Datum:</span>
-          <Select value={dateField} onValueChange={(v) => updateFilters({ dateField: v === 'created_at' ? undefined : v })}>
-            <SelectTrigger className="w-[130px] h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="created_at">Skapad</SelectItem>
-              <SelectItem value="updated_at">Uppdaterad</SelectItem>
-            </SelectContent>
-          </Select>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => updateFilters({ dateFrom: e.target.value || undefined })}
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            placeholder="Från"
-          />
-          <span className="text-xs text-muted-foreground">–</span>
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => updateFilters({ dateTo: e.target.value || undefined })}
-            className="h-8 rounded-md border border-input bg-background px-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-            placeholder="Till"
-          />
-          {(dateFrom || dateTo) && (
-            <button
-              onClick={() => updateFilters({ dateFrom: undefined, dateTo: undefined })}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Rensa datum
-            </button>
-          )}
-        </div>
-
-        {/* Quick Filters */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Snabbfilter:</span>
-          {priorityQuickFilters.map((item) => (
-            <Button
-              key={item.value}
-              size="sm"
-              variant={priorityFilter === item.value ? 'secondary' : 'outline'}
-              onClick={() => updateFilters({ priority: priorityFilter === item.value ? 'all' : item.value })}
-              className="h-7 px-3 text-xs"
-            >
-              {item.label}
-            </Button>
-          ))}
-        </div>
-
-        {/* Active Category Filter */}
-        <CategoryFilter
-          selectedCategoryId={categoryFilter}
-          onRemoveCategory={handleRemoveCategoryFilter}
-        />
-
-        {/* Active Tag Filters */}
-        <TagFilter
+        {/* Unified Filter Bar (single row, replaces all legacy filter sections) */}
+        <UnifiedFilterBar
+          search={search}
+          selectedStatuses={selectedStatuses}
+          priorityFilter={priorityFilter}
+          categoryFilter={categoryFilter}
           selectedTagIds={selectedTagIds}
           tagMode={tagMode}
-          onRemoveTag={handleRemoveTagFilter}
-          onClearAll={handleClearAllTags}
-          onTagModeChange={handleTagModeChange}
+          checklistFilter={checklistFilter}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          dateField={dateField}
+          views={views}
+          activeViewId={activeView?.id ?? null}
+          onSelectView={(view) => applyView(view, 'ticketlist')}
+          onManageViews={() => setManageViewsOpen(true)}
+          onChange={updateFilters}
+          onClearAll={() => updateFilters({
+            search: '', status: [], priority: 'all', category: 'all',
+            tags: [], tagMode: 'or', checklist: '', dateFrom: '', dateTo: '', dateField: 'created_at'
+          })}
+          searchPlaceholder="Sok arenden..."
         />
 
         {/* Loading state */}

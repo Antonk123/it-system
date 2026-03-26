@@ -289,6 +289,13 @@ class ApiClient {
     });
   }
 
+  async bulkDeleteTickets(ids: string[]): Promise<{ deleted: number }> {
+    return this.request('/tickets/bulk-delete', {
+      method: 'POST',
+      body: { ids },
+    });
+  }
+
   async deleteTicket(id: string) {
     return this.request<{ message: string }>(`/tickets/${id}`, {
       method: 'DELETE',
