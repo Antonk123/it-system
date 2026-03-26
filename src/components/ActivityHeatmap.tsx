@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { subDays, startOfDay, isSameDay, format, getDay } from 'date-fns';
+import { sv } from 'date-fns/locale';
 import { Ticket } from '@/types/ticket';
 import { cn } from '@/lib/utils';
 
@@ -117,7 +118,7 @@ export const ActivityHeatmap = ({
     return weeksData;
   }, [heatmapData]);
 
-  const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayLabels = ['Sön', 'Mån', 'Tis', 'Ons', 'Tor', 'Fre', 'Lör'];
 
   return (
     <div className={cn('relative', className)}>
@@ -151,7 +152,7 @@ export const ActivityHeatmap = ({
                     onMouseEnter={day ? (e) => handleMouseEnter(day, e) : undefined}
                     onMouseLeave={day ? handleMouseLeave : undefined}
                     onClick={day ? () => handleDayClick(day) : undefined}
-                    title={day ? `${format(day.date, 'MMM d, yyyy')}: ${day.count} tickets` : ''}
+                    title={day ? `${format(day.date, 'd MMM yyyy', { locale: sv })}: ${day.count} ärenden` : ''}
                   />
                 ))}
               </div>
@@ -162,7 +163,7 @@ export const ActivityHeatmap = ({
 
       {/* Legend */}
       <div className="flex items-center gap-2 mt-4 text-xs text-muted-foreground">
-        <span>Less</span>
+        <span>Mindre</span>
         <div className="flex gap-1">
           {[0, 1, 2, 3, 4].map((level) => (
             <div
@@ -171,7 +172,7 @@ export const ActivityHeatmap = ({
             />
           ))}
         </div>
-        <span>More</span>
+        <span>Mer</span>
       </div>
 
       {/* Tooltip */}
@@ -185,9 +186,9 @@ export const ActivityHeatmap = ({
           }}
         >
           <div className="bg-popover text-popover-foreground px-3 py-2 rounded-lg shadow-lg border text-sm whitespace-nowrap">
-            <div className="font-semibold">{format(hoveredDay.date, 'MMM d, yyyy')}</div>
+            <div className="font-semibold">{format(hoveredDay.date, 'd MMM yyyy', { locale: sv })}</div>
             <div className="text-muted-foreground">
-              {hoveredDay.count} {hoveredDay.count === 1 ? 'ticket' : 'tickets'}
+              {hoveredDay.count} {hoveredDay.count === 1 ? 'ärende' : 'ärenden'}
             </div>
           </div>
         </div>

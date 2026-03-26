@@ -2,13 +2,11 @@ import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
-import { useCategories } from '@/hooks/useCategories';
 import { Layout } from '@/components/Layout';
 import { TicketTable } from '@/components/TicketTable';
-import { SearchBar } from '@/components/SearchBar';
 import { PaginationControls } from '@/components/PaginationControls';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Archive as ArchiveIcon, Download, Upload } from 'lucide-react';
+import { Archive as ArchiveIcon, Upload } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,20 +18,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { TicketStatus, TicketPriority } from '@/types/ticket';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { ImportDialog } from '@/components/ImportDialog';
-import { CategoryFilter } from '@/components/CategoryFilter';
-import { TagMultiSelect } from '@/components/TagMultiSelect';
-import { TagFilter } from '@/components/TagFilter';
+import { UnifiedFilterBar } from '@/components/UnifiedFilterBar';
+import { BulkActionBar } from '@/components/BulkActionBar';
+import { FilterViewManager } from '@/components/FilterViewManager';
+import { useFilterViews } from '@/hooks/useFilterViews';
 
 const statusLabels: Record<TicketStatus, string> = {
   'open': 'Öppen',
@@ -56,16 +48,33 @@ const Archive = () => {
   const priorityFilter = (searchParams.get('priority') || 'all') as TicketPriority | 'all';
   const tagsFilter = searchParams.get('tags') || '';
   const selectedTagIds = tagsFilter ? tagsFilter.split(',').filter(id => id.trim()) : [];
+  const tagMode = (searchParams.get('tagMode') || 'or') as 'or' | 'and';
+  const checklistFilter = searchParams.get('checklist') || '';
+  const dateField = 'closed_at' as const; // Locked per D-06
   const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'priority' | 'category';
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
+
   const [compactView, setCompactView] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pendingStatusChange, setPendingStatusChange] = useState<{ ticketId: string; status: TicketStatus } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [manageViewsOpen, setManageViewsOpen] = useState(false);
+
+  // Filter views
+  const {
+    views,
+    activeView,
+    createView,
+    deleteView,
+    applyView,
+    setActiveView,
+    getCurrentFiltersAsView,
+  } = useFilterViews();
 
   // Fetch with pagination - filter for closed tickets
-  const { tickets, pagination, isLoading, updateTicket } = useTickets({
+  const { tickets, pagination, isLoading, updateTicket, refetch } = useTickets({
     page,
     limit: pageSize,
     status: 'closed',
@@ -73,15 +82,16 @@ const Archive = () => {
     category: categoryFilter,
     search,
     tags: tagsFilter,
+    tagMode,
+    dateFrom,
+    dateTo,
+    dateField: 'closed_at',
+    checklist: checklistFilter,
     sortBy: sortKey,
     sortDir: sortDirection,
-    ...(dateFrom ? { dateFrom } : {}),
-    ...(dateTo ? { dateTo } : {}),
-    ...((dateFrom || dateTo) ? { dateField: 'closed_at' as const } : {}),
   });
 
   const { users } = useUsers();
-  const { categories } = useCategories();
 
   // Initialize URL params if missing (required for backend pagination)
   useEffect(() => {
@@ -95,6 +105,11 @@ const Archive = () => {
       setSearchParams(newParams, { replace: true });
     }
   }, []); // Run once on mount
+
+  // Clear selection when filters or page changes
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [page, priorityFilter, categoryFilter, tagsFilter, search, checklistFilter, dateFrom, dateTo]);
 
   // Update URL params
   const updateFilters = useCallback((updates: Record<string, any>) => {
@@ -118,16 +133,14 @@ const Archive = () => {
     // Reset to page 1 on filter/sort changes
     if (Object.keys(updates).some(k => k !== 'page' && k !== 'limit')) {
       newParams.set('page', '1');
+      // Deactivate active view when filters are changed manually
+      setActiveView(null);
     }
 
     setSearchParams(newParams);
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, setActiveView]);
 
   // Event handlers
-  const handleSearchChange = (newSearch: string) => {
-    updateFilters({ search: newSearch });
-  };
-
   const handlePageChange = (newPage: number) => {
     updateFilters({ page: newPage });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -162,23 +175,6 @@ const Archive = () => {
     }
   };
 
-  const handleRemoveCategoryFilter = () => {
-    updateFilters({ category: 'all' });
-  };
-
-  const handleTagSelectionChange = useCallback((tagIds: string[]) => {
-    updateFilters({ tags: tagIds.length > 0 ? tagIds : undefined });
-  }, [updateFilters]);
-
-  const handleRemoveTagFilter = useCallback((tagId: string) => {
-    const newTags = selectedTagIds.filter(id => id !== tagId);
-    updateFilters({ tags: newTags.length > 0 ? newTags : undefined });
-  }, [selectedTagIds, updateFilters]);
-
-  const handleClearAllTags = useCallback(() => {
-    updateFilters({ tags: undefined });
-  }, [updateFilters]);
-
   const handleTicketClick = useCallback((ticketId: string) => {
     const currentPath = location.pathname + location.search;
     navigate(`/tickets/${ticketId}`, {
@@ -186,32 +182,76 @@ const Archive = () => {
     });
   }, [location.pathname, location.search, navigate]);
 
-  const handleExport = async () => {
+  // Bulk action handlers
+  const handleBulkReopen = useCallback(async () => {
     try {
-      // Build query string with current filters (always include status=closed for archive)
-      const params = new URLSearchParams();
-      params.append('status', 'closed');
-      if (priorityFilter && priorityFilter !== 'all') params.append('priority', priorityFilter);
-      if (categoryFilter && categoryFilter !== 'all') params.append('category', categoryFilter);
-      if (search) params.append('search', search);
-      if (tagsFilter) params.append('tags', tagsFilter);
-      if (dateFrom) params.append('dateFrom', dateFrom);
-      if (dateTo) params.append('dateTo', dateTo);
-      if (dateFrom || dateTo) params.append('dateField', 'closed_at');
-      const queryString = `?${params.toString()}`;
-
-      await api.exportTickets(queryString);
-      toast.success('CSV-export lyckades!');
-    } catch (error) {
-      console.error('Export failed:', error);
-      toast.error('Misslyckades att exportera arkiverade ärenden');
+      const result = await api.bulkUpdateTickets(selectedIds, { status: 'open' });
+      toast.success(`${result?.updated ?? selectedIds.length} ärenden öppnade igen`);
+      setSelectedIds([]);
+      refetch();
+    } catch {
+      toast.error('Kunde inte öppna ärenden igen');
     }
-  };
+  }, [selectedIds, refetch]);
 
-  const priorityQuickFilters: { value: TicketPriority; label: string }[] = [
-    { value: 'high', label: 'Hög' },
-    { value: 'critical', label: 'Kritisk' },
-  ];
+  const handleBulkChangePriority = useCallback(async (priority: TicketPriority) => {
+    try {
+      const result = await api.bulkUpdateTickets(selectedIds, { priority });
+      toast.success(`Prioritet ändrad för ${result?.updated ?? selectedIds.length} ärenden`);
+      setSelectedIds([]);
+      refetch();
+    } catch {
+      toast.error('Kunde inte ändra prioritet');
+    }
+  }, [selectedIds, refetch]);
+
+  const handleBulkExportCsv = useCallback(() => {
+    const selected = tickets.filter(t => selectedIds.includes(t.id));
+    if (selected.length === 0) return;
+
+    const headers = ['ID', 'Titel', 'Prioritet', 'Kategori', 'Taggar', 'Stangd'];
+    const rows = selected.map(t => [
+      t.id,
+      t.title,
+      t.priority,
+      t.category_id || '',
+      (t.tags || []).map((tag: { name: string }) => tag.name).join('; '),
+      t.closed_at || '',
+    ]);
+
+    const csvContent = [headers, ...rows]
+      .map(row => row.map(field => {
+        const str = String(field ?? '');
+        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+          return `"${str.replace(/"/g, '""')}"`;
+        }
+        return str;
+      }).join(','))
+      .join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `arkiv-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+
+    toast.success(`${selected.length} arenden exporterade till CSV`);
+  }, [tickets, selectedIds]);
+
+  const handleBulkDelete = useCallback(async () => {
+    try {
+      const result = await api.bulkDeleteTickets(selectedIds);
+      toast.success(`${result.deleted} ärenden raderade permanent`);
+      setSelectedIds([]);
+      refetch();
+    } catch {
+      toast.error('Kunde inte radera ärenden');
+    }
+  }, [selectedIds, refetch]);
 
   return (
     <Layout>
@@ -244,107 +284,33 @@ const Archive = () => {
               <Upload className="w-4 h-4" />
               Importera CSV
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExport}
-              className="h-8 gap-2"
-            >
-              <Download className="w-4 h-4" />
-              Exportera CSV
-            </Button>
           </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1 max-w-md">
-            <SearchBar
-              value={search}
-              onChange={handleSearchChange}
-              placeholder="Sök arkiverade ärenden..."
-            />
-          </div>
-          <Select value={categoryFilter} onValueChange={(v) => updateFilters({ category: v })}>
-            <SelectTrigger className="w-full sm:w-48">
-              <SelectValue placeholder="Alla kategorier" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Alla kategorier</SelectItem>
-              {categories.map((cat) => (
-                <SelectItem key={cat.id} value={cat.id}>
-                  {cat.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <TagMultiSelect
-            selectedTagIds={selectedTagIds}
-            onChange={handleTagSelectionChange}
-          />
-        </div>
-
-        {/* Date range filter */}
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-sm text-muted-foreground whitespace-nowrap">Stängd period:</span>
-          <div className="flex items-center gap-2">
-            <label htmlFor="dateFrom" className="text-xs text-muted-foreground">Från</label>
-            <input
-              id="dateFrom"
-              type="date"
-              value={dateFrom}
-              onChange={(e) => updateFilters({ dateFrom: e.target.value || undefined })}
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <label htmlFor="dateTo" className="text-xs text-muted-foreground">Till</label>
-            <input
-              id="dateTo"
-              type="date"
-              value={dateTo}
-              onChange={(e) => updateFilters({ dateTo: e.target.value || undefined })}
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
-            />
-          </div>
-          {(dateFrom || dateTo) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => updateFilters({ dateFrom: undefined, dateTo: undefined })}
-              className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Rensa datum
-            </Button>
-          )}
-        </div>
-
-        {/* Quick Filters */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted-foreground">Snabbfilter:</span>
-          {priorityQuickFilters.map((item) => (
-            <Button
-              key={item.value}
-              size="sm"
-              variant={priorityFilter === item.value ? 'secondary' : 'outline'}
-              onClick={() => updateFilters({ priority: priorityFilter === item.value ? 'all' : item.value })}
-              className="h-7 px-3 text-xs"
-            >
-              {item.label}
-            </Button>
-          ))}
-        </div>
-
-        {/* Active Category Filter */}
-        <CategoryFilter
-          selectedCategoryId={categoryFilter}
-          onRemoveCategory={handleRemoveCategoryFilter}
-        />
-
-        {/* Active Tag Filters */}
-        <TagFilter
+        {/* Unified Filter Bar — status hidden, date field locked to closed_at */}
+        <UnifiedFilterBar
+          search={search}
+          selectedStatuses={[]}
+          priorityFilter={priorityFilter}
+          categoryFilter={categoryFilter}
           selectedTagIds={selectedTagIds}
-          onRemoveTag={handleRemoveTagFilter}
-          onClearAll={handleClearAllTags}
+          tagMode={tagMode}
+          checklistFilter={checklistFilter}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          dateField={dateField}
+          hideStatus={true}
+          hideDateFieldSelector={true}
+          views={views}
+          activeViewId={activeView?.id ?? null}
+          onSelectView={(view) => applyView(view, 'archive')}
+          onManageViews={() => setManageViewsOpen(true)}
+          onChange={updateFilters}
+          onClearAll={() => updateFilters({
+            search: '', priority: 'all', category: 'all',
+            tags: [], tagMode: 'or', checklist: '', dateFrom: '', dateTo: ''
+          })}
+          searchPlaceholder="Sok arkiverade arenden..."
         />
 
         {/* Loading state */}
@@ -375,6 +341,8 @@ const Archive = () => {
                 onSortChange={handleSortChange}
                 enableStatusSort={false}
                 compact={compactView}
+                selectedIds={selectedIds}
+                onSelectionChange={setSelectedIds}
               />
             </div>
 
@@ -391,6 +359,26 @@ const Archive = () => {
           </>
         )}
       </div>
+
+      {/* Floating bulk action bar */}
+      <BulkActionBar
+        selectedCount={selectedIds.length}
+        onReopen={handleBulkReopen}
+        onChangePriority={handleBulkChangePriority}
+        onExportCsv={handleBulkExportCsv}
+        onDeletePermanently={handleBulkDelete}
+      />
+
+      {/* Filter view manager dialog */}
+      <FilterViewManager
+        open={manageViewsOpen}
+        onOpenChange={setManageViewsOpen}
+        views={views}
+        currentFilters={getCurrentFiltersAsView()}
+        onCreateView={createView}
+        onDeleteView={deleteView}
+      />
+
       <ImportDialog
         open={importOpen}
         onOpenChange={setImportOpen}

@@ -55,6 +55,13 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { TicketStatus } from '@/types/ticket';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -97,6 +104,9 @@ const TicketDetail = () => {
   } = useTicketSharing();
   const [sharePopoverOpen, setSharePopoverOpen] = useState(false);
   const [checklistOpen, setChecklistOpen] = useState(false);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [pendingTemplateItems, setPendingTemplateItems] = useState<ChecklistItem[]>([]);
 
   const hasVisibleContent = (html: string | null | undefined): boolean => {
     if (!html) return false;
@@ -396,18 +406,9 @@ const TicketDetail = () => {
                       if (newItems) setChecklistItems(newItems as ChecklistItem[]);
                     }}
                     onSaveAsTemplate={async (currentItems) => {
-                      const name = window.prompt('Namn på mallen:');
-                      if (!name?.trim()) return;
-                      const templateItems = currentItems
-                        .filter(i => !i.parent_id)
-                        .flatMap(parent => {
-                          const children = currentItems.filter(c => c.parent_id === parent.id);
-                          return [
-                            { label: parent.label },
-                            ...children.map(c => ({ label: c.label, parent_label: parent.label })),
-                          ];
-                        });
-                      await createChecklistTemplate({ name: name.trim(), items: templateItems });
+                      setPendingTemplateItems(currentItems);
+                      setTemplateName('');
+                      setTemplateDialogOpen(true);
                     }}
                   />
                 </div>
@@ -582,6 +583,56 @@ const TicketDetail = () => {
           </CardContent>
         </Card>
       </div>
+      {/* Template name dialog */}
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Spara som mall</DialogTitle>
+          </DialogHeader>
+          <Input
+            placeholder="Namn på mallen..."
+            value={templateName}
+            onChange={(e) => setTemplateName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && templateName.trim()) {
+                const items = pendingTemplateItems
+                  .filter(i => !i.parent_id)
+                  .flatMap(parent => {
+                    const children = pendingTemplateItems.filter(c => c.parent_id === parent.id);
+                    return [
+                      { label: parent.label },
+                      ...children.map(c => ({ label: c.label, parent_label: parent.label })),
+                    ];
+                  });
+                createChecklistTemplate({ name: templateName.trim(), items });
+                setTemplateDialogOpen(false);
+              }
+            }}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplateDialogOpen(false)}>Avbryt</Button>
+            <Button
+              disabled={!templateName.trim()}
+              onClick={() => {
+                const items = pendingTemplateItems
+                  .filter(i => !i.parent_id)
+                  .flatMap(parent => {
+                    const children = pendingTemplateItems.filter(c => c.parent_id === parent.id);
+                    return [
+                      { label: parent.label },
+                      ...children.map(c => ({ label: c.label, parent_label: parent.label })),
+                    ];
+                  });
+                createChecklistTemplate({ name: templateName.trim(), items });
+                setTemplateDialogOpen(false);
+              }}
+            >
+              Spara
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 };

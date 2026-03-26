@@ -1089,6 +1089,53 @@ router.put('/bulk', authenticate, (req: AuthRequest, res: Response) => {
   }
 });
 
+// Bulk delete tickets permanently
+router.post('/bulk-delete', authenticate, (req: AuthRequest, res: Response) => {
+  const { ids } = req.body;
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({ error: 'ids must be a non-empty array' });
+  }
+
+  try {
+    const bulkDelete = db.transaction(() => {
+      let deletedCount = 0;
+
+      for (const ticketId of ids) {
+        // Fetch attachments before deleting so we can clean up files on disk
+        const attachments = db.prepare(
+          'SELECT file_path FROM ticket_attachments WHERE ticket_id = ?'
+        ).all(ticketId) as { file_path: string }[];
+
+        const result = db.prepare('DELETE FROM tickets WHERE id = ?').run(ticketId);
+
+        if (result.changes > 0) {
+          deletedCount++;
+          // Clean up attachment files from disk (DB CASCADE handles relation tables)
+          for (const attachment of attachments) {
+            const filePath = join(UPLOAD_DIR, attachment.file_path);
+            if (existsSync(filePath)) {
+              try {
+                unlinkSync(filePath);
+              } catch (err) {
+                console.error(`Failed to delete attachment file ${filePath}:`, err);
+              }
+            }
+          }
+        }
+      }
+
+      return deletedCount;
+    });
+
+    const count = bulkDelete();
+    return res.json({ deleted: count });
+  } catch (error) {
+    console.error('Bulk delete error:', error);
+    return res.status(500).json({ error: 'Failed to bulk delete tickets' });
+  }
+});
+
 // Update ticket
 router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
   const { title, description, status, priority, category_id, requester_id, notes, solution, customFields, template_id, tag_ids } = req.body;

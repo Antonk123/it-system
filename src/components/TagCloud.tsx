@@ -96,7 +96,7 @@ export const TagCloud = ({
   if (tagCloudData.length === 0) {
     return (
       <div className={cn('flex items-center justify-center h-64 text-muted-foreground', className)}>
-        No tags available
+        Inga taggar tillgängliga
       </div>
     );
   }
@@ -153,10 +153,10 @@ export const TagCloud = ({
               <span className="font-semibold">{hoveredTag.tag.name}</span>
             </div>
             <div className="text-sm text-muted-foreground">
-              {hoveredTag.count} {hoveredTag.count === 1 ? 'ticket' : 'tickets'}
+              {hoveredTag.count} {hoveredTag.count === 1 ? 'ärende' : 'ärenden'}
             </div>
             <div className="text-xs text-muted-foreground mt-1 italic">
-              Click to filter
+              Klicka för att filtrera
             </div>
           </div>
         </div>

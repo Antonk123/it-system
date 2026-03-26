@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
+import { sv } from 'date-fns/locale';
 import { Clock, User as UserIcon } from 'lucide-react';
 import { Ticket, User } from '@/types/ticket';
 import { Card, CardContent } from '@/components/ui/card';
@@ -40,7 +41,7 @@ export const TicketCard = ({ ticket, user }: TicketCardProps) => {
             </div>
             <div className="flex items-center gap-1">
               <Clock className="w-3.5 h-3.5" />
-              <span>{format(ticket.createdAt, 'MMM d, yyyy')}</span>
+              <span>{format(ticket.createdAt, 'd MMM yyyy', { locale: sv })}</span>
             </div>
           </div>
         </CardContent>

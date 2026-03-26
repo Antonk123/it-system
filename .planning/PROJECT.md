@@ -39,7 +39,16 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 
 ### Active
 
-*(planning v1.1 — run `/gsd:new-milestone` to define next requirements)*
+## Current Milestone: v1.1 Quality & Automation
+
+**Goal:** Rensa upp filtreringsröran, ge Arkiv samma verktyg som ärendelistan, lägg till återkommande ärenden, smarta dashboard-köer, och polera Reports.
+
+**Target features:**
+- Konsolidera filterupplevelsen på Alla ärenden (ta bort redundanta lager, slå ihop)
+- Ge Arkiv-sidan paritet med Alla ärenden (filtervyer, checklistefilter, bulk-operationer)
+- Återkommande ärenden — auto-skapa ärenden på schema
+- Dashboard-köer — sparade snabbvyer på Dashboard
+- Reports-rensning — ta bort överlappande moduler, fixa tagg-analytics-bugg, strama upp design
 
 ### Out of Scope
 
@@ -100,4 +109,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-22 after v1.0 milestone*
+*Last updated: 2026-03-26 after v1.1 milestone start*
