@@ -41,7 +41,7 @@ Declared values (must be multiples of 4):
 | 2xl | 48px | Major layout breaks |
 | 3xl | 64px | Page-level spacing (not used in this phase) |
 
-Exceptions: Floating bulk action bar uses 12px vertical padding (not on standard scale) to keep it compact and visually distinct from the page content it floats above.
+Exceptions: Floating bulk action bar uses 8px vertical padding to keep it compact and visually distinct from the page content it floats above.
 
 ---
 
@@ -50,11 +50,11 @@ Exceptions: Floating bulk action bar uses 12px vertical padding (not on standard
 | Role | Size | Weight | Line Height |
 |------|------|--------|-------------|
 | Body | 14px | 400 | 1.5 |
-| Label | 12px | 500 | 1.4 |
+| Label / Filter chip text | 12px | 600 | 1.4 |
 | Heading | 20px | 600 | 1.2 |
-| Filter chip text | 12px | 500 | 1 |
 
-Font: Plus Jakarta Sans in all roles.
+Font: Plus Jakarta Sans in all roles. Two weights only: 400 (body) and 600 (label, chip, heading).
+
 Source: `src/index.css` (`--font-sans`, existing component usage patterns).
 
 ---
@@ -73,6 +73,15 @@ Accent reserved for: active filter chip border and left-dot indicator, row selec
 Secondary semantic: `--success` (hsl 142 71% 45%) — used on the "Öppna igen" (re-open) status badge in the bulk action bar to signal a positive restore action.
 
 Source: `src/index.css` (CSS variable definitions, theme-default block).
+
+---
+
+## Visuals — Primary Focal Points
+
+| Page | Primary Focal Point |
+|------|---------------------|
+| TicketList | The ticket table body — all filter and chip rows direct the eye downward toward ticket rows as the main content |
+| Archive | The bulk action bar at viewport bottom — when tickets are selected it becomes the dominant interaction surface; when idle, the archive table rows hold focus |
 
 ---
 
@@ -112,7 +121,7 @@ Existing components reused directly (no changes):
 
 - Appears as a row directly below the filter control row, only when at least one filter is active.
 - Chip anatomy: `[Filter label]: [value] ×` — e.g., "Prioritet: Hög ×".
-- All chips share identical visual style: `secondary` background, 1px `primary` border, 12px label at weight 500, `×` remove button with hover state `destructive` text color.
+- All chips share identical visual style: `secondary` background, 1px `primary` border, 12px label at weight 600, `×` remove button with hover state `destructive` text color.
 - Date range chip format: "Datum: 2026-01-01 → 2026-03-31 ×".
 - "Rensa alla" button at the far right of the chip row: `ghost` variant, 12px text, only visible when 2+ chips are active.
 - Chip row animates in with `fade-in` (0.2s ease-out) when first chip appears.
@@ -131,8 +140,8 @@ Existing components reused directly (no changes):
 
 - Triggered by: any row checkbox checked, or header "select all" checkbox.
 - Fixed position: `fixed bottom-6 left-1/2 -translate-x-1/2` — centered floating bar above page bottom.
-- Visual: `card` background, `shadow-lg`, `rounded-lg`, 12px vertical / 16px horizontal padding.
-- Content left: "{N} ärenden valda" label at 14px weight 500.
+- Visual: `card` background, `shadow-lg`, `rounded-lg`, 8px vertical / 16px horizontal padding.
+- Content left: "{N} ärenden valda" label at 14px weight 400.
 - Content right: 4 action buttons (left to right):
   1. "Öppna igen" — `outline` variant, success-tinted border (restore to open status)
   2. "Ändra prioritet" — `outline` variant, neutral
@@ -140,7 +149,7 @@ Existing components reused directly (no changes):
   4. "Radera permanent" — `destructive` variant
 - Bar slides in with `translateY(100%) → translateY(0)` transition, 200ms ease-out.
 - Bar slides out on deselect with `translateY(0) → translateY(100%)`, 150ms ease-in.
-- "Radera permanent" opens AlertDialog: title "Radera permanent?", body "Du håller på att radera {N} ärende(n) permanent. Åtgärden kan inte ångras.", cancel "Avbryt", confirm "Radera" (`destructive` button).
+- "Radera permanent" opens AlertDialog: title "Radera permanent?", body "Du håller på att radera {N} ärende(n) permanent. Åtgärden kan inte ångras.", cancel "Avbryt", confirm "Radera ärendena" (`destructive` button).
 
 ### Row Selection (Archive table)
 
@@ -168,7 +177,7 @@ Existing components reused directly (no changes):
 | Delete confirmation title | "Radera permanent?" |
 | Delete confirmation body | "Du håller på att radera {N} ärende(n) permanent. Åtgärden kan inte ångras." |
 | Delete confirmation cancel | "Avbryt" |
-| Delete confirmation confirm | "Radera" |
+| Delete confirmation confirm | "Radera ärendena" |
 | Archive search placeholder | "Sök arkiverade ärenden..." |
 | TicketList search placeholder | "Sök ärenden..." |
 | Empty state heading (no filter results) | "Inga ärenden matchar filtret" |
@@ -178,6 +187,9 @@ Existing components reused directly (no changes):
 | Preset saved toast | "Filtervyn sparades" |
 | Preset deleted toast | "Filtervyn togs bort" |
 | Export success toast | "{N} ärenden exporterade till CSV" |
+| Error: CSV export failed | "Export misslyckades. Försök igen." |
+| Error: bulk re-open failed | "Kunde inte öppna ärendena. Försök igen." |
+| Error: bulk delete failed | "Borttagningen misslyckades. Försök igen." |
 
 Source: existing Swedish-language interface convention (TicketList.tsx, Archive.tsx). All copy is Swedish to match the established interface language.
 
