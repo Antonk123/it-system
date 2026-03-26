@@ -33,6 +33,11 @@ export function DateRangePopover({
 
   const hasActiveDate = Boolean(dateFrom || dateTo);
 
+  const getDateFieldLabel = () => {
+    const field = DATE_FIELD_OPTIONS.find(f => f.value === dateField);
+    return field?.label || 'Skapad';
+  };
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -41,7 +46,10 @@ export function DateRangePopover({
             <span className="w-2 h-2 rounded-full bg-primary" aria-hidden="true" />
           )}
           <Calendar className="w-4 h-4" />
-          Datum
+          <span className="flex items-center gap-1">
+            <span className="text-muted-foreground">Datum:</span>
+            <span className="text-xs">{getDateFieldLabel()}</span>
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[360px] p-4 space-y-4" align="start">

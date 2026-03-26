@@ -71,6 +71,36 @@ export function UnifiedFilterBar({
 }: UnifiedFilterBarProps) {
   const { categories } = useCategories();
 
+  // Helper to get priority label
+  const getPriorityLabel = (value: string) => {
+    switch(value) {
+      case 'all': return 'Alla';
+      case 'low': return 'Låg';
+      case 'medium': return 'Medium';
+      case 'high': return 'Hög';
+      case 'critical': return 'Kritisk';
+      default: return 'Alla';
+    }
+  };
+
+  // Helper to get category label
+  const getCategoryLabel = (value: string) => {
+    if (value === 'all') return 'Alla';
+    const category = categories.find(c => c.id === value);
+    return category?.label || 'Alla';
+  };
+
+  // Helper to get checklist label
+  const getChecklistLabel = (value: string) => {
+    switch(value) {
+      case 'all': return 'Alla';
+      case '': return 'Alla';
+      case 'has_checklist': return 'Med checklista';
+      case 'no_checklist': return 'Utan checklista';
+      default: return 'Alla';
+    }
+  };
+
   const handleSelectViewById = (viewId: string) => {
     const view = views.find((v) => v.id === viewId);
     if (view) {
@@ -104,14 +134,17 @@ export function UnifiedFilterBar({
           value={priorityFilter}
           onValueChange={(value) => onChange({ priority: value })}
         >
-          <SelectTrigger className="w-[130px]">
-            <SelectValue placeholder="Prioritet" />
+          <SelectTrigger className="w-[160px]">
+            <span className="flex items-center gap-1">
+              <span className="text-muted-foreground">Prioritet:</span>
+              <span>{getPriorityLabel(priorityFilter)}</span>
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Alla</SelectItem>
-            <SelectItem value="low">Lag</SelectItem>
+            <SelectItem value="low">Låg</SelectItem>
             <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="high">Hog</SelectItem>
+            <SelectItem value="high">Hög</SelectItem>
             <SelectItem value="critical">Kritisk</SelectItem>
           </SelectContent>
         </Select>
@@ -121,8 +154,11 @@ export function UnifiedFilterBar({
           value={categoryFilter}
           onValueChange={(value) => onChange({ category: value })}
         >
-          <SelectTrigger className="w-[140px]">
-            <SelectValue placeholder="Kategori" />
+          <SelectTrigger className="w-[170px]">
+            <span className="flex items-center gap-1">
+              <span className="text-muted-foreground">Kategori:</span>
+              <span>{getCategoryLabel(categoryFilter)}</span>
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Alla</SelectItem>
@@ -145,8 +181,11 @@ export function UnifiedFilterBar({
           value={checklistFilter || 'all'}
           onValueChange={(value) => onChange({ checklist: value === 'all' ? '' : value })}
         >
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="Checklista" />
+          <SelectTrigger className="w-[210px]">
+            <span className="flex items-center gap-1">
+              <span className="text-muted-foreground">Checklista:</span>
+              <span>{getChecklistLabel(checklistFilter || 'all')}</span>
+            </span>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Alla</SelectItem>

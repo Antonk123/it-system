@@ -29,8 +29,11 @@ export function FilterViewSelector({
 
   return (
     <Select value={activeViewId || 'custom'} onValueChange={onSelectView}>
-      <SelectTrigger className="w-[180px]">
-        <SelectValue>{displayValue}</SelectValue>
+      <SelectTrigger className="w-[200px]">
+        <span className="flex items-center gap-1">
+          <span className="text-muted-foreground">Vy:</span>
+          <span>{displayValue}</span>
+        </span>
       </SelectTrigger>
       <SelectContent>
         {defaultViews.length > 0 && (
