@@ -9,9 +9,9 @@ Requirements for milestone v1.1 Quality & Automation. Each maps to roadmap phase
 
 ### Filter & UX
 
-- [ ] **FILT-01**: Alla ärenden har en enda konsoliderad filterrad (sök, status, prioritet, kategori, taggar, datum — inga separata snabbfilter eller datumrader)
-- [ ] **FILT-02**: Aktiva filter visas som kompakta chips som kan tas bort, integrerade i filterraden
-- [ ] **FILT-03**: Filtervyer (spara/ladda filter-presets) fungerar på både Alla ärenden och Arkiv
+- [x] **FILT-01**: Alla ärenden har en enda konsoliderad filterrad (sök, status, prioritet, kategori, taggar, datum — inga separata snabbfilter eller datumrader)
+- [x] **FILT-02**: Aktiva filter visas som kompakta chips som kan tas bort, integrerade i filterraden
+- [x] **FILT-03**: Filtervyer (spara/ladda filter-presets) fungerar på både Alla ärenden och Arkiv
 - [ ] **FILT-04**: Arkiv-sidan har samma filteralternativ som Alla ärenden (prioritet, checklistefilter, datumfilter)
 - [ ] **FILT-05**: Arkiv-sidan stödjer bulk-operationer (markera flera, ändra status/prioritet)
 
@@ -64,9 +64,9 @@ Requirements for milestone v1.1 Quality & Automation. Each maps to roadmap phase
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FILT-01 | Phase 4 | Pending |
-| FILT-02 | Phase 4 | Pending |
-| FILT-03 | Phase 4 | Pending |
+| FILT-01 | Phase 4 | Complete |
+| FILT-02 | Phase 4 | Complete |
+| FILT-03 | Phase 4 | Complete |
 | FILT-04 | Phase 4 | Pending |
 | FILT-05 | Phase 4 | Pending |
 | RECUR-01 | Phase 5 | Pending |
