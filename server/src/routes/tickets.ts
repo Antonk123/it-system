@@ -317,7 +317,7 @@ interface PaginatedResponse<T> {
 // Helper: Validate pagination params
 function validatePaginationParams(query: TicketQueryParams) {
   const page = Math.max(1, parseInt(query.page || '1'));
-  const allowedLimits = [10, 20, 25, 50, 100];
+  const allowedLimits = [10, 20, 25, 50, 100, 1000];
   const limit = allowedLimits.includes(parseInt(query.limit || '10'))
     ? parseInt(query.limit!)
     : 10;

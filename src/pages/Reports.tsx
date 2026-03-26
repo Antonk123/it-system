@@ -151,7 +151,7 @@ const RequesterTooltip = ({ active, payload }: any) => {
 };
 
 const Reports = () => {
-  const { tickets } = useTickets({ limit: 10000 });
+  const { tickets } = useTickets({ limit: 1000, status: 'all' });
   const { users } = useUsers();
   const { tags } = useTags();
   const isMobile = useIsMobile();
