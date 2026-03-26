@@ -84,7 +84,7 @@ export const TagDistributionChart = ({
           <span className="font-semibold">{data.name}</span>
         </div>
         <div className="text-sm text-muted-foreground">
-          {data.count} {data.count === 1 ? 'ticket' : 'tickets'}
+          {data.count} {data.count === 1 ? 'ärende' : 'ärenden'}
         </div>
       </div>
     );
@@ -109,7 +109,7 @@ export const TagDistributionChart = ({
   if (tagDistData.length === 0) {
     return (
       <div className={cn('flex items-center justify-center h-64 text-muted-foreground', className)}>
-        No tag data available
+        Ingen taggdata tillgänglig
       </div>
     );
   }

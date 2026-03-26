@@ -68,7 +68,7 @@ export const TicketLinks = ({
 
   const handleAddLink = async (ticketId: string) => {
     if (ticketId === currentTicketId) {
-      toast.error('Cannot link a ticket to itself');
+      toast.error('Kan inte länka ett ärende till sig självt');
       return;
     }
 
@@ -76,9 +76,9 @@ export const TicketLinks = ({
     try {
       await onAddLink(ticketId);
       setOpen(false);
-      toast.success('Link created successfully');
+      toast.success('Länk skapad');
     } catch (error: any) {
-      const message = error.message || 'Failed to create link';
+      const message = error.message || 'Kunde inte skapa länk';
       toast.error(message);
     } finally {
       setIsAdding(false);
@@ -115,9 +115,9 @@ export const TicketLinks = ({
   const handleDeleteLink = async (linkId: string) => {
     try {
       await onDeleteLink(linkId);
-      toast.success('Link removed successfully');
+      toast.success('Länk borttagen');
     } catch (error) {
-      toast.error('Failed to remove link');
+      toast.error('Kunde inte ta bort länk');
     }
   };
 
@@ -125,7 +125,7 @@ export const TicketLinks = ({
     <div className="space-y-3">
       <h3 className="font-medium text-foreground flex items-center gap-2 text-sm">
         <LinkIcon className="w-4 h-4 text-muted-foreground" />
-        Related Tickets ({links.length})
+        Relaterade ärenden ({links.length})
       </h3>
 
       {/* Add new link form */}
@@ -144,19 +144,19 @@ export const TicketLinks = ({
             disabled={isAdding}
           >
             <Search className="mr-2 h-3.5 w-3.5" />
-            Search tickets to link...
+            Sök ärenden att länka...
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[400px] p-0" align="start">
           <Command shouldFilter={false}>
             <CommandInput
-              placeholder="Search tickets..."
+              placeholder="Sök ärenden..."
               className="h-9"
               value={searchQuery}
               onValueChange={setSearchQuery}
             />
             <CommandList>
-              <CommandEmpty>No tickets found.</CommandEmpty>
+              <CommandEmpty>Inga ärenden hittades.</CommandEmpty>
               <CommandGroup>
                 {availableTickets.slice(0, 100).map((ticket) => (
                   <CommandItem
@@ -198,7 +198,7 @@ export const TicketLinks = ({
         </div>
       ) : links.length === 0 ? (
         <p className="text-xs text-muted-foreground py-2">
-          No linked tickets yet
+          Inga länkade ärenden ännu
         </p>
       ) : (
         <div className="space-y-2">

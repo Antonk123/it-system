@@ -246,6 +246,7 @@ export const Layout = ({
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 rounded-lg hover:bg-primary/10 transition-colors"
+            aria-label="Öppna meny"
           >
             <Menu className="w-6 h-6" />
           </button>

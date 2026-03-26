@@ -515,15 +515,15 @@ const Reports = () => {
       await api.exportTickets(queryString);
 
       const filterDesc = selectedYear === 'all'
-        ? 'all tickets'
+        ? 'alla ärenden'
         : selectedMonth === 'all'
-          ? `tickets from ${selectedYear}`
-          : `tickets from ${MONTH_NAMES[parseInt(selectedMonth)]} ${selectedYear}`;
+          ? `ärenden från ${selectedYear}`
+          : `ärenden från ${MONTH_NAMES[parseInt(selectedMonth)]} ${selectedYear}`;
 
-      toast.success(`CSV export successful: ${filterDesc}`);
+      toast.success(`CSV-export klar: ${filterDesc}`);
     } catch (error) {
       console.error('Export failed:', error);
-      toast.error('Failed to export report data');
+      toast.error('Kunde inte exportera rapportdata');
     }
   };
 
