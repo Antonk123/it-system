@@ -6,14 +6,16 @@ import { db } from '../db/connection.js';
 
 // CRITICAL: JWT_SECRET must be set in environment variables
 // Never use a hardcoded fallback in production
-const JWT_SECRET = process.env.JWT_SECRET;
-
-if (!JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET environment variable is not set!');
-  console.error('Please set JWT_SECRET to a strong random value.');
-  console.error('Generate one with: openssl rand -base64 32');
-  process.exit(1);
-}
+const JWT_SECRET: string = (() => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    console.error('FATAL: JWT_SECRET environment variable is not set!');
+    console.error('Please set JWT_SECRET to a strong random value.');
+    console.error('Generate one with: openssl rand -base64 32');
+    process.exit(1);
+  }
+  return secret;
+})();
 
 interface UserRow {
   id: string;

@@ -1388,7 +1388,7 @@ router.put('/tags/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const { name, color } = req.body;
 
-    const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(req.params.id);
+    const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(req.params.id) as { id: string; name: string; color: string; created_at: string } | undefined;
     if (!tag) {
       return res.status(404).json({ error: 'Tag not found' });
     }

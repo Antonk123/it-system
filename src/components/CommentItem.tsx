@@ -9,6 +9,17 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { migrateContent } from '@/lib/contentMigration';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface CommentItemProps {
   comment: Comment;
@@ -39,7 +50,6 @@ export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) =
   };
 
   const handleDelete = async () => {
-    if (!confirm('Är du säker på att du vill ta bort denna kommentar?')) return;
     try {
       await onDelete(comment.id);
       toast.success('Kommentar borttagen');
@@ -68,14 +78,31 @@ export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) =
             >
               <Pencil className="w-3 h-3" />
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleDelete}
-              className="h-6 w-6 p-0 text-destructive hover:text-destructive"
-            >
-              <Trash2 className="w-3 h-3" />
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Ta bort kommentar</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Är du säker på att du vill ta bort denna kommentar? Detta kan inte ångras.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Avbryt</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Ta bort
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         )}
       </div>

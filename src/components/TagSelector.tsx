@@ -141,7 +141,7 @@ export function TagSelector({ selectedTagIds = [], preloadedTags, onTagsChange, 
                 placeholder="Taggnamn"
                 value={newTagName}
                 onChange={(e) => setNewTagName(e.target.value)}
-                onKeyPress={(e) => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     handleCreateTag();
                   }

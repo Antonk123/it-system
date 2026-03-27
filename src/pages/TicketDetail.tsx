@@ -85,7 +85,7 @@ const TicketDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { getTicketById, updateTicket, deleteTicket } = useTickets();
+  const { getTicketById, updateTicket, deleteTicket, isLoading: ticketsLoading } = useTickets();
   const { getUserById } = useUsers();
   const { attachments, fetchAttachments } = useTicketAttachments();
   const { items: checklistItems, fetchChecklists, addChecklistItem, updateChecklistItem, deleteChecklistItem, setItems: setChecklistItems } = useTicketChecklists();
@@ -166,6 +166,16 @@ const TicketDetail = () => {
     }
   }, [id]);
 
+  if (ticketsLoading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        </div>
+      </Layout>
+    );
+  }
+
   if (!ticket) {
     return (
       <Layout>
@@ -187,8 +197,11 @@ const TicketDetail = () => {
   const handleTagsChange = (tagIds: string[]) => {
     updateTicket(ticket.id, { tag_ids: tagIds }).then(() => {
       refreshTagsFromAPI(ticket.id);
+      toast.success('Taggar uppdaterade');
+    }).catch(() => {
+      refreshTagsFromAPI(ticket.id);
+      toast.error('Kunde inte uppdatera taggar');
     });
-    toast.success('Taggar uppdaterade');
   };
 
   const handleDelete = async () => {

@@ -474,7 +474,7 @@ router.post('/upload-image', authenticate, (req: AuthRequest, res: Response) => 
 
 // GET /api/kb/images/:filename — serve KB image (public, KB articles can be shared publicly)
 router.get('/images/:filename', (req: Request, res: Response) => {
-  const filename = req.params.filename;
+  const filename = req.params.filename as string;
   // Basic path traversal protection
   if (filename.includes('..') || filename.includes('/')) {
     return res.status(400).json({ error: 'Invalid filename' });

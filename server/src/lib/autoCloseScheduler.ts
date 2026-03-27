@@ -27,7 +27,7 @@ function autoCloseResolvedTickets(): void {
 
   const now = new Date().toISOString();
 
-  const closeTicket = db.transaction((ticket: { id: string; title: string }) => {
+  const closeTicket = db.transaction((ticket: { id: string; title: string; updated_at: string }) => {
     db.prepare(`
       UPDATE tickets
       SET status = 'closed', closed_at = ?, updated_at = ?

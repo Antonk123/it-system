@@ -167,7 +167,7 @@ const Reports = () => {
   const [kpiModalOpen, setKpiModalOpen] = useState<string | null>(null);
 
   // Fetch all report summary data from the new endpoint
-  const { data: summary, isLoading, isError } = useReportsSummary(selectedYear, selectedMonth);
+  const { data: summary, isLoading, isError, error } = useReportsSummary(selectedYear, selectedMonth);
 
   // Get available years from summary trend data
   const availableYears = useMemo(() => {
@@ -597,7 +597,9 @@ const Reports = () => {
         {isError && (
           <Alert variant="destructive">
             <AlertTitle>Kunde inte ladda rapportdata</AlertTitle>
-            <AlertDescription>Kontrollera anslutningen och ladda om sidan.</AlertDescription>
+            <AlertDescription>
+              {error instanceof Error ? error.message : 'Kontrollera anslutningen och ladda om sidan.'}
+            </AlertDescription>
           </Alert>
         )}
 

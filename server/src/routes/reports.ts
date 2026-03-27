@@ -12,13 +12,24 @@ router.get('/summary', authenticate, (req: AuthRequest, res) => {
   const filterParams: string[] = [];
 
   if (year && year !== 'all') {
+    const yearNum = parseInt(year, 10);
+    if (isNaN(yearNum) || yearNum < 2000 || yearNum > 2100) {
+      res.status(400).json({ error: 'Invalid year parameter' });
+      return;
+    }
     filterConditions.push("strftime('%Y', created_at) = ?");
     filterParams.push(year);
   }
 
   if (month && month !== 'all') {
-    // Zero-pad the month param (e.g. "3" -> "03")
-    const paddedMonth = String(parseInt(month, 10)).padStart(2, '0');
+    // Frontend sends 0-based month index (0=Jan, 11=Dec).
+    // strftime('%m') returns 1-based ("01"-"12"), so add 1.
+    const monthNum = parseInt(month, 10);
+    if (isNaN(monthNum) || monthNum < 0 || monthNum > 11) {
+      res.status(400).json({ error: 'Invalid month parameter (expected 0-11)' });
+      return;
+    }
+    const paddedMonth = String(monthNum + 1).padStart(2, '0');
     filterConditions.push("strftime('%m', created_at) = ?");
     filterParams.push(paddedMonth);
   }

@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction, RequestHandler } from 'express';
 import passport from 'passport';
 
 export interface AuthUser {
@@ -7,11 +7,16 @@ export interface AuthUser {
   role: 'admin' | 'user';
 }
 
-export interface AuthRequest extends Request {
-  user?: AuthUser;
+// Extend Express Request to include user from passport
+declare global {
+  namespace Express {
+    interface User extends AuthUser {}
+  }
 }
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+export type AuthRequest = Request;
+
+export const authenticate: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
   passport.authenticate('jwt', { session: false }, (err: Error | null, user: AuthUser | false) => {
     if (err) {
       return res.status(500).json({ error: 'Authentication error' });
@@ -24,9 +29,15 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
   })(req, res, next);
 };
 
-export const requireAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
-  if (!req.user || req.user.role !== 'admin') {
+export const requireAdmin: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
+  const user = req.user as AuthUser | undefined;
+  if (!user || user.role !== 'admin') {
     return res.status(403).json({ error: 'Forbidden: Admin access required' });
   }
   next();
 };
+
+/** Helper to get typed user from request (use after authenticate middleware) */
+export function getUser(req: Request): AuthUser {
+  return req.user as AuthUser;
+}

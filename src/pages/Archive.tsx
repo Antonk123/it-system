@@ -209,14 +209,14 @@ const Archive = () => {
     const selected = tickets.filter(t => selectedIds.includes(t.id));
     if (selected.length === 0) return;
 
-    const headers = ['ID', 'Titel', 'Prioritet', 'Kategori', 'Taggar', 'Stangd'];
+    const headers = ['ID', 'Titel', 'Prioritet', 'Kategori', 'Taggar', 'Stängd'];
     const rows = selected.map(t => [
       t.id,
       t.title,
       t.priority,
-      t.category_id || '',
+      t.category || '',
       (t.tags || []).map((tag: { name: string }) => tag.name).join('; '),
-      t.closed_at || '',
+      t.closedAt || '',
     ]);
 
     const csvContent = [headers, ...rows]

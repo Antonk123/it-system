@@ -22,6 +22,35 @@ const mapItem = (item: ChecklistRow) => ({
   completed: item.completed === 1,
 });
 
+// Get checklist progress for multiple tickets (batch)
+router.post('/progress', authenticate, (req: AuthRequest, res: Response) => {
+  const { ticketIds } = req.body;
+
+  if (!Array.isArray(ticketIds) || ticketIds.length === 0) {
+    return res.status(400).json({ error: 'ticketIds array is required' });
+  }
+
+  try {
+    const placeholders = ticketIds.map(() => '?').join(',');
+    const rows = db.prepare(`
+      SELECT ticket_id, COUNT(*) as total, SUM(completed) as completed
+      FROM ticket_checklists
+      WHERE ticket_id IN (${placeholders})
+      GROUP BY ticket_id
+    `).all(...ticketIds) as { ticket_id: string; total: number; completed: number }[];
+
+    const result: Record<string, { total: number; completed: number }> = {};
+    rows.forEach(row => {
+      result[row.ticket_id] = { total: row.total, completed: row.completed };
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching batch checklist progress:', error);
+    res.status(500).json({ error: 'Failed to fetch checklist progress' });
+  }
+});
+
 // Get checklists for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
@@ -140,9 +169,10 @@ router.post('/ticket/:ticketId/bulk', authenticate, (req: AuthRequest, res: Resp
 // Update checklist item
 router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
   const { label, completed, due_date, parent_id } = req.body;
+  const itemId = req.params.id as string;
 
   try {
-    const existing = db.prepare('SELECT * FROM ticket_checklists WHERE id = ?').get(req.params.id) as ChecklistRow | undefined;
+    const existing = db.prepare('SELECT * FROM ticket_checklists WHERE id = ?').get(itemId) as ChecklistRow | undefined;
 
     if (!existing) {
       return res.status(404).json({ error: 'Checklist item not found' });
@@ -169,11 +199,11 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     }
 
     if (updates.length > 0) {
-      values.push(req.params.id);
+      values.push(itemId);
       db.prepare(`UPDATE ticket_checklists SET ${updates.join(', ')} WHERE id = ?`).run(...values);
     }
 
-    const item = db.prepare('SELECT * FROM ticket_checklists WHERE id = ?').get(req.params.id) as ChecklistRow;
+    const item = db.prepare('SELECT * FROM ticket_checklists WHERE id = ?').get(itemId) as ChecklistRow;
     res.json(mapItem(item));
   } catch (error) {
     console.error('Error updating checklist item:', error);

@@ -1,7 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   DndContext,
   DragEndEvent,
+  DragStartEvent,
   DragOverlay,
   closestCorners,
   PointerSensor,
@@ -30,6 +31,7 @@ const STATUS_LABELS: Record<TicketStatus, string> = {
 };
 
 export function KanbanView({ tickets, users, onStatusChange, onTicketClick }: KanbanViewProps) {
+  const [activeId, setActiveId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, {
       distance: 8,
@@ -55,7 +57,12 @@ export function KanbanView({ tickets, users, onStatusChange, onTicketClick }: Ka
     return grouped;
   }, [tickets]);
 
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveId(null);
     const { active, over } = event;
 
     if (!over) return;
@@ -78,6 +85,7 @@ export function KanbanView({ tickets, users, onStatusChange, onTicketClick }: Ka
     <DndContext
       sensors={sensors}
       collisionDetection={closestCorners}
+      onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 overflow-x-auto pb-4">
@@ -92,7 +100,10 @@ export function KanbanView({ tickets, users, onStatusChange, onTicketClick }: Ka
         ))}
       </div>
       <DragOverlay>
-        {/* Overlay content during drag - can be enhanced later */}
+        {activeId ? (() => {
+          const activeTicket = tickets.find(t => t.id === activeId);
+          return activeTicket ? <KanbanCard ticket={activeTicket} /> : null;
+        })() : null}
       </DragOverlay>
     </DndContext>
   );
