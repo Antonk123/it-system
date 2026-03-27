@@ -14,7 +14,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { cn } from '@/lib/utils';
 
 const Dashboard = () => {
-  const { tickets } = useTickets();
+  const { tickets } = useTickets({ limit: 1000, status: 'all' });
   const { users, getUserById } = useUsers();
   const navigate = useNavigate();
 

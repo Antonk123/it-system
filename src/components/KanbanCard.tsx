@@ -62,7 +62,6 @@ export const KanbanCard = memo(function KanbanCard({ ticket, onTicketClick }: Ka
       {...listeners}
       onPointerDown={(e) => {
         handlePointerDown(e);
-        // Call dnd-kit's onPointerDown too
         listeners?.onPointerDown?.(e as any);
       }}
       onClick={handleClick}

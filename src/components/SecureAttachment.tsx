@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useState } from 'react';
-import { getAuthenticatedFileUrl, downloadAuthenticatedFile } from '@/lib/secureFileAccess';
+import { getAuthenticatedFileUrl, downloadAuthenticatedFile, revokeBlobUrl } from '@/lib/secureFileAccess';
 import { Loader2 } from 'lucide-react';
 
 interface SecureImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
@@ -47,6 +47,7 @@ export const SecureImage = ({ fileId, alt, className, ...props }: SecureImagePro
 
     return () => {
       mounted = false;
+      revokeBlobUrl(fileId);
     };
   }, [fileId]);
 

@@ -19,6 +19,27 @@ interface TagDistData {
   color: string;
 }
 
+const TagDistTooltip = ({ active, payload }: any) => {
+  if (!active || !payload || !payload.length) return null;
+
+  const data = payload[0].payload as TagDistData;
+
+  return (
+    <div className="bg-popover text-popover-foreground px-4 py-2 rounded-lg shadow-lg border">
+      <div className="flex items-center gap-2 mb-1">
+        <div
+          className="w-3 h-3 rounded-sm"
+          style={{ backgroundColor: data.color }}
+        />
+        <span className="font-semibold">{data.name}</span>
+      </div>
+      <div className="text-sm text-muted-foreground">
+        {data.count} {data.count === 1 ? 'ärende' : 'ärenden'}
+      </div>
+    </div>
+  );
+};
+
 export const TagDistributionChart = ({
   tickets,
   tags,
@@ -50,10 +71,9 @@ export const TagDistributionChart = ({
       .slice(0, topN);
   }, [tickets, tags, topN]);
 
-  // Generate unique gradient IDs for each tag
   const gradients = useMemo(() => {
     return tagDistData.map(tag => ({
-      id: `gradient-${tag.tagId}-${Math.random().toString(36).substr(2, 9)}`,
+      id: `gradient-tag-${tag.tagId}`,
       color: tag.color,
     }));
   }, [tagDistData]);
@@ -66,28 +86,6 @@ export const TagDistributionChart = ({
       // Navigate to tickets page with tag filter
       navigate(`/tickets?tags=${data.tagId}`);
     }
-  };
-
-  // Custom tooltip
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (!active || !payload || !payload.length) return null;
-
-    const data = payload[0].payload as TagDistData;
-
-    return (
-      <div className="bg-popover text-popover-foreground px-4 py-2 rounded-lg shadow-lg border">
-        <div className="flex items-center gap-2 mb-1">
-          <div
-            className="w-3 h-3 rounded-sm"
-            style={{ backgroundColor: data.color }}
-          />
-          <span className="font-semibold">{data.name}</span>
-        </div>
-        <div className="text-sm text-muted-foreground">
-          {data.count} {data.count === 1 ? 'ärende' : 'ärenden'}
-        </div>
-      </div>
-    );
   };
 
   // Custom bar label
@@ -149,7 +147,7 @@ export const TagDistributionChart = ({
             width={120}
           />
 
-          <Tooltip content={<CustomTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.2)' }} />
+          <Tooltip content={<TagDistTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.2)' }} />
 
           <Bar
             dataKey="count"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, PlusCircle, Pencil, LayoutTemplate } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
@@ -89,7 +89,6 @@ const TicketForm = () => {
   const [customFieldValues, setCustomFieldValues] = useState<CustomFieldInput[]>([]);
   const [editInitialFieldValues, setEditInitialFieldValues] = useState<CustomFieldInput[]>([]);
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
-  const solutionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Stable callback for DynamicFieldsForm to prevent unnecessary re-renders
   const handleCustomFieldsChange = useCallback((values: CustomFieldInput[]) => {
@@ -385,23 +384,6 @@ const TicketForm = () => {
       setIsSubmitting(false);
       setIsSaving(false);
     }
-  };
-
-  const insertSolutionSnippet = (snippet: string, cursorOffset = 0) => {
-    const textarea = solutionTextareaRef.current;
-    if (!textarea) return;
-
-    const start = textarea.selectionStart ?? formData.solution.length;
-    const end = textarea.selectionEnd ?? formData.solution.length;
-    const nextValue = `${formData.solution.slice(0, start)}${snippet}${formData.solution.slice(end)}`;
-    const nextCursorPosition = start + snippet.length + cursorOffset;
-
-    setFormData((prev) => ({ ...prev, solution: nextValue }));
-
-    requestAnimationFrame(() => {
-      textarea.focus();
-      textarea.setSelectionRange(nextCursorPosition, nextCursorPosition);
-    });
   };
 
   const handleNavigateBack = () => {

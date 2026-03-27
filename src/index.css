@@ -604,9 +604,9 @@
   }
 
   @keyframes mesh-shift {
-    0% { transform: translate(0, 0) scale(1); }
-    50% { transform: translate(2%, 1%) scale(1.02); }
-    100% { transform: translate(-1%, -2%) scale(0.98); }
+    0% { background-position: 15% 20%, 85% 75%, 45% 85%, 70% 15%; opacity: 0.8; }
+    50% { background-position: 17% 21%, 83% 76%, 46% 84%, 68% 16%; opacity: 0.85; }
+    100% { background-position: 14% 18%, 86% 73%, 44% 86%, 71% 14%; opacity: 0.75; }
   }
 
   /* KPI Card animations */

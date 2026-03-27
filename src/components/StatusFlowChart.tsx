@@ -20,6 +20,38 @@ interface MonthStatusData {
   closed: number;
 }
 
+const StatusFlowTooltip = ({ active, payload, label }: any) => {
+  if (!active || !payload || !payload.length) return null;
+
+  const total = payload.reduce((sum: number, entry: any) => sum + entry.value, 0);
+
+  return (
+    <div className="bg-popover text-popover-foreground px-4 py-3 rounded-lg shadow-lg border">
+      <p className="font-semibold mb-2">{label}</p>
+      <div className="space-y-1 text-sm">
+        {[...payload].reverse().map((entry: any) => (
+          <div key={entry.dataKey} className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <div
+                className="w-3 h-3 rounded-sm"
+                style={{ backgroundColor: entry.color }}
+              />
+              <span className="capitalize">
+                {entry.dataKey === 'in-progress' ? 'In Progress' : entry.dataKey}
+              </span>
+            </div>
+            <span className="font-mono font-semibold">{entry.value}</span>
+          </div>
+        ))}
+        <div className="flex items-center justify-between gap-4 pt-2 mt-2 border-t">
+          <span className="font-semibold">Total</span>
+          <span className="font-mono font-semibold">{total}</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const StatusFlowChart = ({
   tickets,
   className,
@@ -52,14 +84,13 @@ export const StatusFlowChart = ({
     return months;
   }, [tickets]);
 
-  // Generate unique gradient IDs
-  const gradients = useMemo(() => ({
-    open: `gradient-open-${Math.random().toString(36).substr(2, 9)}`,
-    inProgress: `gradient-inprogress-${Math.random().toString(36).substr(2, 9)}`,
-    waiting: `gradient-waiting-${Math.random().toString(36).substr(2, 9)}`,
-    resolved: `gradient-resolved-${Math.random().toString(36).substr(2, 9)}`,
-    closed: `gradient-closed-${Math.random().toString(36).substr(2, 9)}`,
-  }), []);
+  const gradients = {
+    open: 'gradient-status-open',
+    inProgress: 'gradient-status-inprogress',
+    waiting: 'gradient-status-waiting',
+    resolved: 'gradient-status-resolved',
+    closed: 'gradient-status-closed',
+  };
 
   // Status colors from Reports.tsx
   const statusColors = {
@@ -68,39 +99,6 @@ export const StatusFlowChart = ({
     waiting: 'hsl(var(--chart-5))',
     resolved: 'hsl(var(--chart-3))',
     closed: 'hsl(var(--chart-4))',
-  };
-
-  // Custom tooltip
-  const CustomTooltip = ({ active, payload, label }: any) => {
-    if (!active || !payload || !payload.length) return null;
-
-    const total = payload.reduce((sum: number, entry: any) => sum + entry.value, 0);
-
-    return (
-      <div className="bg-popover text-popover-foreground px-4 py-3 rounded-lg shadow-lg border">
-        <p className="font-semibold mb-2">{label}</p>
-        <div className="space-y-1 text-sm">
-          {payload.reverse().map((entry: any) => (
-            <div key={entry.dataKey} className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-2">
-                <div
-                  className="w-3 h-3 rounded-sm"
-                  style={{ backgroundColor: entry.color }}
-                />
-                <span className="capitalize">
-                  {entry.dataKey === 'in-progress' ? 'In Progress' : entry.dataKey}
-                </span>
-              </div>
-              <span className="font-mono font-semibold">{entry.value}</span>
-            </div>
-          ))}
-          <div className="flex items-center justify-between gap-4 pt-2 mt-2 border-t">
-            <span className="font-semibold">Total</span>
-            <span className="font-mono font-semibold">{total}</span>
-          </div>
-        </div>
-      </div>
-    );
   };
 
   return (
@@ -154,7 +152,7 @@ export const StatusFlowChart = ({
             tickLine={{ stroke: 'hsl(var(--muted-foreground))' }}
           />
 
-          <Tooltip content={<CustomTooltip />} />
+          <Tooltip content={<StatusFlowTooltip />} />
 
           <Legend
             wrapperStyle={{ paddingTop: '20px' }}

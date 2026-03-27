@@ -19,7 +19,7 @@ interface DateRangePopoverProps {
 const DATE_FIELD_OPTIONS: { value: 'created_at' | 'updated_at' | 'closed_at'; label: string }[] = [
   { value: 'created_at', label: 'Skapad' },
   { value: 'updated_at', label: 'Uppdaterad' },
-  { value: 'closed_at', label: 'Stangd' },
+  { value: 'closed_at', label: 'Stängd' },
 ];
 
 export function DateRangePopover({
@@ -73,7 +73,7 @@ export function DateRangePopover({
 
         <div className="space-y-2">
           <Label htmlFor="date-from" className="text-xs text-muted-foreground">
-            Fran
+            Från
           </Label>
           <input
             id="date-from"

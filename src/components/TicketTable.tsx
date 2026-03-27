@@ -111,36 +111,20 @@ export const TicketTable = memo(function TicketTable({
       if (ticketIds.length === 0) return;
 
       try {
-        const progressMap = new Map<string, { total: number; completed: number }>();
+        const response = await fetch(`${API_BASE_URL}/checklists/progress`, {
+          method: 'POST',
+          signal,
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ ticketIds }),
+        });
 
-        await Promise.all(
-          ticketIds.map(async (ticketId) => {
-            try {
-              const response = await fetch(`${API_BASE_URL}/checklists/ticket/${ticketId}`, {
-                signal,
-                headers: {
-                  'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-                },
-              });
-
-              if (response.ok) {
-                const data = await response.json();
-                if (Array.isArray(data) && data.length > 0) {
-                  const completed = data.filter((item: any) => item.completed).length;
-                  progressMap.set(ticketId, { total: data.length, completed });
-                }
-              }
-            } catch (error) {
-              if ((error as Error).name !== 'AbortError') {
-                console.error(`Error fetching checklists for ticket ${ticketId}:`, error);
-              }
-            }
-          })
-        );
-
-        if (!signal.aborted) {
+        if (response.ok && !signal.aborted) {
+          const data = await response.json() as Record<string, { total: number; completed: number }>;
           setChecklistProgress(
-            Array.from(progressMap.entries()).map(([ticketId, stats]) => ({
+            Object.entries(data).map(([ticketId, stats]) => ({
               ticketId,
               ...stats,
             }))

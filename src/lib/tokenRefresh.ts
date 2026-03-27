@@ -41,14 +41,14 @@ export async function refreshAccessToken(): Promise<string | null> {
     const { accessToken } = response.data;
 
     // Store new access token
-    localStorage.setItem('token', accessToken);
+    localStorage.setItem('auth_token', accessToken);
 
     return accessToken;
   } catch (error) {
     console.error('Failed to refresh token:', error);
 
     // Clear tokens on refresh failure
-    localStorage.removeItem('token');
+    localStorage.removeItem('auth_token');
     localStorage.removeItem('refreshToken');
 
     // Redirect to login
@@ -65,7 +65,7 @@ export function setupTokenRefreshInterceptor() {
   // Request interceptor: Add token to all requests
   axios.interceptors.request.use(
     (config) => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('auth_token');
 
       if (token && config.headers) {
         config.headers.Authorization = `Bearer ${token}`;
@@ -143,7 +143,7 @@ export async function logout() {
     console.error('Error during logout:', error);
   } finally {
     // Clear local storage
-    localStorage.removeItem('token');
+    localStorage.removeItem('auth_token');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
 

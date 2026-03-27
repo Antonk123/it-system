@@ -21,18 +21,18 @@ interface ActiveFilterChipsProps {
 }
 
 const PRIORITY_LABELS: Record<string, string> = {
-  low: 'Lag',
+  low: 'Låg',
   medium: 'Medium',
-  high: 'Hog',
+  high: 'Hög',
   critical: 'Kritisk',
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  open: 'Oppen',
-  'in-progress': 'Pagaende',
-  waiting: 'Vantar',
-  resolved: 'Lost',
-  closed: 'Stangd',
+  open: 'Öppen',
+  'in-progress': 'Pågående',
+  waiting: 'Väntar',
+  resolved: 'Löst',
+  closed: 'Stängd',
 };
 
 const CHECKLIST_LABELS: Record<string, string> = {

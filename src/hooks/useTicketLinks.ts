@@ -36,8 +36,39 @@ export const useTicketLinks = (ticketId: string) => {
   }, [ticketId]);
 
   useEffect(() => {
-    fetchLinks();
-  }, [fetchLinks]);
+    let mounted = true;
+    const load = async () => {
+      if (!ticketId) return;
+      setIsLoading(true);
+      try {
+        const data = await api.getTicketLinks(ticketId) as TicketLinkRow[];
+        if (!mounted) return;
+        const mapped: TicketLink[] = data.map((link) => ({
+          id: link.id,
+          sourceTicketId: link.sourceTicketId,
+          targetTicketId: link.targetTicketId,
+          linkType: link.linkType as 'related',
+          createdBy: link.createdBy,
+          createdAt: new Date(link.createdAt),
+          linkedTicket: {
+            id: link.linkedTicket.id,
+            title: link.linkedTicket.title,
+            status: link.linkedTicket.status as any,
+            priority: link.linkedTicket.priority as any,
+            createdAt: new Date(link.linkedTicket.created_at),
+          },
+        }));
+        setLinks(mapped);
+      } catch (error) {
+        if (!mounted) return;
+        console.error('Error fetching ticket links:', error);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [ticketId]);
 
   const addLink = useCallback(async (targetTicketId: string, linkType: string = 'related') => {
     try {

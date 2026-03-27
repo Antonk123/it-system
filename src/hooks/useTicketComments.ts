@@ -33,8 +33,36 @@ export const useTicketComments = (ticketId: string) => {
   }, [ticketId]);
 
   useEffect(() => {
-    fetchComments();
-  }, [fetchComments]);
+    let mounted = true;
+    const load = async () => {
+      if (!ticketId) return;
+      setIsLoading(true);
+      try {
+        const data = await api.getComments(ticketId) as CommentRow[];
+        if (!mounted) return;
+        const mapped: Comment[] = data.map((c) => ({
+          id: c.id,
+          ticketId: c.ticket_id,
+          userId: c.user_id,
+          content: c.content,
+          isInternal: c.is_internal === 1,
+          createdAt: new Date(c.created_at),
+          updatedAt: new Date(c.updated_at),
+          deletedAt: c.deleted_at ? new Date(c.deleted_at) : undefined,
+          userName: c.user_name,
+          userEmail: c.user_email,
+        }));
+        setComments(mapped);
+      } catch (error) {
+        if (!mounted) return;
+        console.error('Error fetching comments:', error);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [ticketId]);
 
   const addComment = useCallback(async (content: string, isInternal: boolean = true) => {
     try {
