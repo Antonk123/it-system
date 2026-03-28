@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Quality & Automation
 status: Ready to execute
-stopped_at: Completed 04-filter-consolidation-archive-parity-01-PLAN.md
-last_updated: "2026-03-26T10:53:22.798Z"
+stopped_at: Completed 04-filter-consolidation-archive-parity-02-PLAN.md
+last_updated: "2026-03-28T15:49:30.225Z"
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -43,6 +43,7 @@ Plan: 2 of 2
 All decisions logged in PROJECT.md Key Decisions table.
 
 - [Phase 04-filter-consolidation-archive-parity]: UnifiedFilterBar is stateless — delegates all state to parent via onChange; FilterViewSelector resolves view internally; applyView defaults to ticketlist context
+- [Phase 04-filter-consolidation-archive-parity]: BulkActionBar owns its AlertDialog state; Archive dateField locked as const; CSV export runs client-side from fetched data
 
 ### Pending Todos
 
@@ -54,6 +55,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-26T10:53:22.795Z
-Stopped at: Completed 04-filter-consolidation-archive-parity-01-PLAN.md
+Last session: 2026-03-28T15:49:30.221Z
+Stopped at: Completed 04-filter-consolidation-archive-parity-02-PLAN.md
 Resume file: None

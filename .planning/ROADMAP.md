@@ -41,7 +41,7 @@ Full details: `.planning/milestones/v1.0-ROADMAP.md`
 **Plans**: 2 plans
 Plans:
 - [x] 04-01-PLAN.md — Build shared filter components (UnifiedFilterBar, ActiveFilterChips, DateRangePopover) and extend filter preset system
-- [ ] 04-02-PLAN.md — Wire components into TicketList and Archive, add bulk operations and backend bulk-delete endpoint
+- [x] 04-02-PLAN.md — Wire components into TicketList and Archive, add bulk operations and backend bulk-delete endpoint
 **UI hint**: yes
 
 ### Phase 5: Automation — Recurring Tickets & Dashboard Queues
