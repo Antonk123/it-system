@@ -54,7 +54,11 @@ Plans:
   3. User can see the history of tickets created by each recurring schedule
   4. Dashboard displays saved queues (e.g. "Pending", "No activity 7+ days", "Critical") each showing a live ticket count, clickable to the filtered ticket list
   5. User can create, edit, and delete dashboard queues
-**Plans**: TBD
+**Plans**: 3 plans
+Plans:
+- [ ] 05-01-PLAN.md — Backend: DB migration (recurring_templates + history tables), CRUD API routes, background scheduler
+- [ ] 05-02-PLAN.md — Frontend: Recurring templates management page with create/edit/delete/toggle/history UI
+- [ ] 05-03-PLAN.md — Dashboard queues: countOnly API, useDashboardQueues hook, queue cards replacing aging groups
 **UI hint**: yes
 
 ### Phase 6: Reports Cleanup
@@ -78,5 +82,5 @@ Plans:
 | 2. Knowledge Base Rework | v1.0 | 3/3 | Complete | 2026-03-22 |
 | 3. Archive Enhancement | v1.0 | 2/2 | Complete | 2026-03-22 |
 | 4. Filter Consolidation & Archive Parity | v1.1 | 1/2 | In Progress|  |
-| 5. Automation — Recurring & Queues | v1.1 | 0/? | Not started | - |
+| 5. Automation — Recurring & Queues | v1.1 | 0/3 | Not started | - |
 | 6. Reports Cleanup | v1.1 | 0/? | Not started | - |
