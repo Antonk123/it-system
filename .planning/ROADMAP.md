@@ -56,7 +56,7 @@ Plans:
   5. User can create, edit, and delete dashboard queues
 **Plans**: 3 plans
 Plans:
-- [ ] 05-01-PLAN.md — Backend: DB migration (recurring_templates + history tables), CRUD API routes, background scheduler
+- [x] 05-01-PLAN.md — Backend: DB migration (recurring_templates + history tables), CRUD API routes, background scheduler
 - [ ] 05-02-PLAN.md — Frontend: Recurring templates management page with create/edit/delete/toggle/history UI
 - [ ] 05-03-PLAN.md — Dashboard queues: countOnly API, useDashboardQueues hook, queue cards replacing aging groups
 **UI hint**: yes

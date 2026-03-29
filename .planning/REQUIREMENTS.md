@@ -17,10 +17,10 @@ Requirements for milestone v1.1 Quality & Automation. Each maps to roadmap phase
 
 ### Återkommande ärenden
 
-- [ ] **RECUR-01**: Användaren kan skapa en återkommande ärendemall med schema (daglig/veckovis/månatlig/anpassad cron)
-- [ ] **RECUR-02**: Systemet skapar ärenden automatiskt enligt schemat via bakgrundsschemaläggare
-- [ ] **RECUR-03**: Användaren kan pausa, redigera och ta bort återkommande scheman
-- [ ] **RECUR-04**: Användaren kan se historik över skapade ärenden per schema
+- [x] **RECUR-01**: Användaren kan skapa en återkommande ärendemall med schema (daglig/veckovis/månatlig/anpassad cron)
+- [x] **RECUR-02**: Systemet skapar ärenden automatiskt enligt schemat via bakgrundsschemaläggare
+- [x] **RECUR-03**: Användaren kan pausa, redigera och ta bort återkommande scheman
+- [x] **RECUR-04**: Användaren kan se historik över skapade ärenden per schema
 
 ### Dashboard-köer
 
@@ -69,10 +69,10 @@ Requirements for milestone v1.1 Quality & Automation. Each maps to roadmap phase
 | FILT-03 | Phase 4 | Complete |
 | FILT-04 | Phase 4 | Complete |
 | FILT-05 | Phase 4 | Complete |
-| RECUR-01 | Phase 5 | Pending |
-| RECUR-02 | Phase 5 | Pending |
-| RECUR-03 | Phase 5 | Pending |
-| RECUR-04 | Phase 5 | Pending |
+| RECUR-01 | Phase 5 | Complete |
+| RECUR-02 | Phase 5 | Complete |
+| RECUR-03 | Phase 5 | Complete |
+| RECUR-04 | Phase 5 | Complete |
 | DASH-01 | Phase 5 | Pending |
 | DASH-02 | Phase 5 | Pending |
 | DASH-03 | Phase 5 | Pending |
