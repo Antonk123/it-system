@@ -66,7 +66,7 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 
 Plans:
 - [ ] 10-01-PLAN.md — Remove view_count, KB home sections, and unused default templates
-- [ ] 10-02-PLAN.md — Fix silent token refresh with rolling refresh tokens
+- [x] 10-02-PLAN.md — Fix silent token refresh with rolling refresh tokens
 
 ### Phase 11: Form Simplification
 **Goal**: Ticket create and edit forms are lean — advanced fields hidden by default, all selectors searchable, template selection inline
@@ -104,6 +104,6 @@ Plans:
 | 7. KB Foundations — Tags, Status, View Count & Quick Wins | v1.2 | 2/2 | Complete | 2026-03-29 |
 | 8. Content Quality — ToC, Templates & Staleness | v1.2 | 2/2 | Complete | 2026-03-29 |
 | 9. Discoverability & Workflow — Cross-refs, Popular, Shortcuts | v1.2 | 2/2 | Complete | 2026-03-29 |
-| 10. KB Cleanup | v1.3 | 0/2 | Not started | - |
+| 10. KB Cleanup | v1.3 | 1/2 | In Progress|  |
 | 11. Form Simplification | v1.3 | 0/TBD | Not started | - |
 | 12. Quick Capture | v1.3 | 0/TBD | Not started | - |
