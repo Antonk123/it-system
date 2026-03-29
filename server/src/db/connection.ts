@@ -433,6 +433,35 @@ const ensureRecurringTemplatesTable = () => {
   console.log('Created missing tables: recurring_templates, recurring_ticket_history');
 };
 
+const ensureKbV2Columns = () => {
+  if (!tableExists('kb_articles')) return;
+
+  if (!columnExists('kb_articles', 'status')) {
+    db.exec(`ALTER TABLE kb_articles ADD COLUMN status TEXT NOT NULL DEFAULT 'published' CHECK(status IN ('draft','published'));`);
+    console.log('Added status column to kb_articles');
+  }
+  if (!columnExists('kb_articles', 'view_count')) {
+    db.exec(`ALTER TABLE kb_articles ADD COLUMN view_count INTEGER NOT NULL DEFAULT 0;`);
+    console.log('Added view_count column to kb_articles');
+  }
+};
+
+const ensureKbArticleTagsTable = () => {
+  if (tableExists('kb_article_tags')) return;
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS kb_article_tags (
+      id TEXT PRIMARY KEY,
+      article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
+      tag TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(article_id, tag)
+    );
+    CREATE INDEX IF NOT EXISTS idx_kb_article_tags_article ON kb_article_tags(article_id);
+    CREATE INDEX IF NOT EXISTS idx_kb_article_tags_tag ON kb_article_tags(tag);
+  `);
+  console.log('Created table: kb_article_tags');
+};
+
 const ensureKbFts5AndType = () => {
   if (!tableExists('kb_articles')) return;
 
@@ -485,6 +514,8 @@ export function initializeDatabase() {
   ensureChecklistExtensions();
   ensureChecklistTemplatesTable();
   ensureKbFts5AndType();
+  ensureKbV2Columns();
+  ensureKbArticleTagsTable();
   ensureRecurringTemplatesTable();
   db.exec('CREATE INDEX IF NOT EXISTS idx_tickets_closed_at ON tickets(status, closed_at DESC)');
   console.log('Database initialized successfully');
