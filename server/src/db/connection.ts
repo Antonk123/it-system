@@ -109,26 +109,6 @@ const ensureTicketTemplatesTable = () => {
   // Insert default templates
   const defaultTemplates = [
     {
-      id: 'template-1',
-      name: 'Lösenordsåterställning',
-      description: 'Mall för lösenordsåterställning',
-      title_template: 'Lösenordsåterställning för [användarnamn]',
-      description_template: 'Användaren behöver få sitt lösenord återställt.\n\nAnvändarnamn: \nAvdelning: \n\nÅtgärd:\n1. Verifiera användarens identitet\n2. Återställ lösenord i AD\n3. Meddela användaren via e-post',
-      priority: 'medium',
-      notes_template: 'Kom ihåg att verifiera identitet innan återställning.',
-      position: 0
-    },
-    {
-      id: 'template-2',
-      name: 'Ny användare',
-      description: 'Mall för att skapa ny användare',
-      title_template: 'Skapa ny användare: [namn]',
-      description_template: 'Ny användare ska skapas i systemet.\n\nNamn: \nE-post: \nAvdelning: \nChef: \nStartdatum: \n\nÅtkomst som behövs:\n- [ ] E-postkonto\n- [ ] Filserver\n- [ ] CRM\n- [ ] Annat: ',
-      priority: 'high',
-      notes_template: 'Kontrollera med chef vilka åtkomster som behövs.',
-      position: 1
-    },
-    {
       id: 'template-3',
       name: 'Hårdvarubeställning',
       description: 'Mall för hårdvarubeställning',
@@ -136,7 +116,7 @@ const ensureTicketTemplatesTable = () => {
       description_template: 'Beställning av ny hårdvara.\n\nTyp av utrustning: \nAntal: \nMotivering: \nBudget: \nLeveransadress: \n\nSpecifikationer:\n',
       priority: 'low',
       notes_template: 'Säkerställ att budget finns innan beställning.',
-      position: 2
+      position: 0
     }
   ];
 
@@ -229,34 +209,6 @@ const ensureTemplateFieldsTable = () => {
     }
   }
 
-  // Add sample fields for "Ny användare" template
-  const newUserTemplate = db.prepare("SELECT id FROM ticket_templates WHERE name = ?").get("Ny användare") as { id: string } | undefined;
-  if (newUserTemplate) {
-    const existingFields = db.prepare("SELECT COUNT(*) as count FROM template_fields WHERE template_id = ?").get(newUserTemplate.id) as { count: number };
-    if (existingFields.count === 0) {
-      const fields = [
-        { name: 'user_name', label: 'Namn', type: 'text', placeholder: 'För- och efternamn', required: 1, position: 0 },
-        { name: 'user_email', label: 'E-post', type: 'text', placeholder: 'namn@företag.se', required: 1, position: 1 },
-        { name: 'department', label: 'Avdelning', type: 'text', placeholder: 'T.ex. Ekonomi', required: 1, position: 2 },
-        { name: 'manager', label: 'Chef', type: 'text', placeholder: 'Namn på chef', required: 1, position: 3 },
-        { name: 'start_date', label: 'Startdatum', type: 'date', placeholder: '', required: 1, position: 4 },
-        { name: 'access_email', label: 'E-postkonto', type: 'checkbox', placeholder: '', required: 0, position: 5 },
-        { name: 'access_fileserver', label: 'Filserver', type: 'checkbox', placeholder: '', required: 0, position: 6 },
-        { name: 'access_crm', label: 'CRM', type: 'checkbox', placeholder: '', required: 0, position: 7 },
-        { name: 'access_other', label: 'Annan åtkomst', type: 'text', placeholder: 'Beskriv övrig åtkomst som behövs', required: 0, position: 8 }
-      ];
-
-      const insertStmt = db.prepare(`
-        INSERT INTO template_fields (id, template_id, field_name, field_label, field_type, placeholder, required, position)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-
-      for (const field of fields) {
-        insertStmt.run(randomUUID(), newUserTemplate.id, field.name, field.label, field.type, field.placeholder, field.required, field.position);
-      }
-      console.log('Inserted default template fields for Ny användare');
-    }
-  }
 };
 
 const ensureTicketFieldValuesTable = () => {
@@ -531,6 +483,17 @@ const ensureKbFts5AndType = () => {
   }
 };
 
+const ensureDefaultTemplatesRemoved = () => {
+  // Null out FK references first — safe to run multiple times
+  db.prepare(
+    "UPDATE tickets SET template_id = NULL WHERE template_id IN (SELECT id FROM ticket_templates WHERE name IN ('Lösenordsåterställning', 'Ny användare'))"
+  ).run();
+  // Delete by name — ON DELETE CASCADE removes associated template_fields and template_checklists
+  db.prepare(
+    "DELETE FROM ticket_templates WHERE name IN ('Lösenordsåterställning', 'Ny användare')"
+  ).run();
+};
+
 export function initializeDatabase() {
   const schemaPath = join(__dirname, 'schema.sql');
   const schema = readFileSync(schemaPath, 'utf-8');
@@ -543,6 +506,7 @@ export function initializeDatabase() {
   ensureTicketTemplatesTable();
   ensureTemplateChecklistsTable();
   ensureTemplateFieldsTable();
+  ensureDefaultTemplatesRemoved();
   ensureTicketFieldValuesTable();
   ensureTicketHistoryTable();
   ensureTicketRemindersTable();

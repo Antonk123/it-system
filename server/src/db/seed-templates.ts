@@ -166,26 +166,8 @@ async function main() {
   createField(softwareTemplate, { fieldName: 'installation_deadline', fieldLabel: 'Önskat installationsdatum', fieldType: 'date', required: false, position: 5 });
   createField(softwareTemplate, { fieldName: 'training_needed', fieldLabel: 'Behövs utbildning?', fieldType: 'checkbox', defaultValue: 'Nej', required: false, position: 6 });
 
-  // 4. Password Reset
-  console.log('4️⃣ Lösenordsåterställning');
-  const passwordTemplate = createTemplate({
-    name: 'Lösenordsåterställning',
-    description: 'Snabb mall för lösenordsåterställning',
-    titleTemplate: 'Lösenordsåterställning: [System]',
-    descriptionTemplate: '<p>Använd detta formulär för att återställa ditt lösenord.</p>',
-    priority: 'high',
-    categoryId: categories.access,
-    notesTemplate: '<p>Verifiera användarens identitet innan lösenordsåterställning.</p>',
-    solutionTemplate: '<p>Lösenord återställt. Användaren instruerad att ändra vid nästa inloggning.</p>',
-  });
-  createField(passwordTemplate, { fieldName: 'system', fieldLabel: 'System', fieldType: 'select', placeholder: 'Välj system', required: true, options: '["Windows-inloggning", "E-post", "Business Central", "VPN", "Övrigt"]', position: 0 });
-  createField(passwordTemplate, { fieldName: 'username', fieldLabel: 'Användarnamn', fieldType: 'text', placeholder: 'T.ex. john.doe', required: true, position: 1 });
-  createField(passwordTemplate, { fieldName: 'last_successful_login', fieldLabel: 'Senaste lyckade inloggning (om känt)', fieldType: 'date', required: false, position: 2 });
-  createField(passwordTemplate, { fieldName: 'error_message', fieldLabel: 'Felmeddelande som visas', fieldType: 'text', placeholder: 'T.ex. "Incorrect password"', required: false, position: 3 });
-  createField(passwordTemplate, { fieldName: 'account_locked', fieldLabel: 'Kontot är låst', fieldType: 'checkbox', defaultValue: 'Nej', required: false, position: 4 });
-
-  // 5. Network Issue
-  console.log('5️⃣ Nätverksproblem');
+  // 4. Network Issue
+  console.log('4️⃣ Nätverksproblem');
   const networkTemplate = createTemplate({
     name: 'Nätverksproblem',
     description: 'För anslutningsproblem och nätverksfrågor',
