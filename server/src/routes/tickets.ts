@@ -517,11 +517,12 @@ function buildOrderByClause(sortBy: string, sortDir: string) {
 router.get('/', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const query = req.query as TicketQueryParams;
+    const countOnly = req.query.countOnly === 'true';
 
     // Check if pagination is requested
     const usePagination = query.page || query.limit;
 
-    if (!usePagination) {
+    if (!usePagination && !countOnly) {
       // BACKWARD COMPATIBILITY: Return old format
       const tickets = db.prepare(`
         SELECT ${TICKET_COLUMNS} FROM tickets ORDER BY created_at DESC
@@ -529,7 +530,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
       return res.json(tickets);
     }
 
-    // NEW: Paginated response
+    // NEW: Paginated response (also used for countOnly)
     const { page, limit, sortBy, sortDir } = validatePaginationParams(query);
     const { whereClause, params, joins } = buildWhereClause(query);
     const orderByClause = buildOrderByClause(sortBy, sortDir);
@@ -541,6 +542,11 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
 
     const countResult = db.prepare(countQuery).get(...params) as { total: number };
     const total = countResult.total;
+
+    // countOnly: skip the expensive ticket fetch and return just the count
+    if (countOnly) {
+      return res.json({ count: total });
+    }
 
     // Get paginated data (use DISTINCT if search has JOINs to avoid duplicates)
     const selectClause = joins ? `SELECT DISTINCT ${TICKET_COLUMNS}` : `SELECT ${TICKET_COLUMNS}`;
