@@ -38,6 +38,12 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 
 **Requirements:** ORG-01, ORG-02, ORG-03, QUAL-01, DISC-01, WF-01
 
+**Plans:** 2 plans
+
+Plans:
+- [ ] 07-01-PLAN.md — Backend foundation: schema migration + route updates for tags, status, view_count
+- [ ] 07-02-PLAN.md — Frontend: tag input/filter, status toggle, recently updated, print button, view count display
+
 **Scope:**
 - `kb_article_tags` join table + tag input in article form + tag filter on KB list
 - `status` column (draft/published) with list/FTS filtering
@@ -90,6 +96,6 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 | 4. Filter Consolidation & Archive Parity | v1.1 | 2/2 | Complete | 2026-03-29 |
 | 5. Automation — Recurring & Queues | v1.1 | 3/3 | Complete | 2026-03-29 |
 | 6. Reports Cleanup | v1.1 | 2/2 | Complete | 2026-03-29 |
-| 7. KB Foundations — Tags, Status, View Count & Quick Wins | v1.2 | 0/? | Pending | — |
+| 7. KB Foundations — Tags, Status, View Count & Quick Wins | v1.2 | 0/2 | Planned | — |
 | 8. Content Quality — ToC, Templates & Staleness | v1.2 | 0/? | Pending | — |
 | 9. Discoverability & Workflow — Cross-refs, Popular, Shortcuts | v1.2 | 0/? | Pending | — |
