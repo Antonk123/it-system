@@ -57,6 +57,17 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 
 ### Active
 
+## Current Milestone: v1.3 Streamline & Declutter
+
+**Goal:** Make ticket creation instant, editing lightweight, and the whole UI feel fast by removing noise and simplifying workflows.
+
+**Target features:**
+- Quick capture — minimal ticket creation (title + go), no name/email friction on public form
+- Clone ticket — duplicate a past ticket as a new one (repeat hardware orders)
+- Simplified forms — collapsible sections, hide empty fields, progressive disclosure
+- Remove dead weight — KB view counter, "Senast uppdaterade", unused templates
+- Leaner template flow — keep hardware template, streamline the picker
+
 ### Out of Scope
 
 - Multi-user support — single user system, no team features needed
@@ -131,4 +142,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-29 after v1.2 milestone completion*
+*Last updated: 2026-03-30 after v1.3 milestone start*
