@@ -70,7 +70,10 @@ Plans:
   2. The tag analytics section lists every tag that appears on any ticket — no entries missing
   3. The Reports layout is visually consistent with no overlapping or duplicated modules
   4. The show/hide module customization UI is removed — all remaining modules are always visible
-**Plans**: TBD
+**Plans**: 2 plans
+Plans:
+- [ ] 06-01-PLAN.md — Remove ActivityHeatmap, RadialProgressRings, ReportsCustomization and all module-visibility gating
+- [ ] 06-02-PLAN.md — Fix tag analytics to show all tags from tickets (not just tags table)
 
 ## Progress
 
@@ -83,4 +86,4 @@ Plans:
 | 3. Archive Enhancement | v1.0 | 2/2 | Complete | 2026-03-22 |
 | 4. Filter Consolidation & Archive Parity | v1.1 | 1/2 | In Progress|  |
 | 5. Automation — Recurring & Queues | v1.1 | 0/3 | Not started | - |
-| 6. Reports Cleanup | v1.1 | 0/? | Not started | - |
+| 6. Reports Cleanup | v1.1 | 0/2 | Not started | - |
