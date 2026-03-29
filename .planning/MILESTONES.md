@@ -1,5 +1,19 @@
 # Milestones
 
+## v1.1 Quality & Automation (Shipped: 2026-03-29)
+
+**Phases completed:** 3 phases, 7 plans, 8 tasks
+
+**Key accomplishments:**
+
+- UnifiedFilterBar wired into TicketList (single filter row) and Archive (status hidden, date locked), BulkActionBar with re-open/priority/CSV/permanent-delete, and POST /tickets/bulk-delete backend endpoint
+- One-liner:
+- One-liner:
+- One-liner:
+- One-liner:
+
+---
+
 ## v1.0 MVP (Shipped: 2026-03-22)
 
 **Phases completed:** 3 phases, 9 plans, 18 tasks
