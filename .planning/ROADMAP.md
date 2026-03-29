@@ -104,6 +104,6 @@ Plans:
 | 7. KB Foundations — Tags, Status, View Count & Quick Wins | v1.2 | 2/2 | Complete | 2026-03-29 |
 | 8. Content Quality — ToC, Templates & Staleness | v1.2 | 2/2 | Complete | 2026-03-29 |
 | 9. Discoverability & Workflow — Cross-refs, Popular, Shortcuts | v1.2 | 2/2 | Complete | 2026-03-29 |
-| 10. KB Cleanup | v1.3 | 2/2 | Complete   | 2026-03-29 |
+| 10. KB Cleanup | v1.3 | 2/2 | Complete    | 2026-03-29 |
 | 11. Form Simplification | v1.3 | 0/TBD | Not started | - |
 | 12. Quick Capture | v1.3 | 0/TBD | Not started | - |
