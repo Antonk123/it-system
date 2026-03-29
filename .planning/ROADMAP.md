@@ -38,11 +38,11 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 
 **Requirements:** ORG-01, ORG-02, ORG-03, QUAL-01, DISC-01, WF-01
 
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 07-01-PLAN.md — Backend foundation: schema migration + route updates for tags, status, view_count
-- [ ] 07-02-PLAN.md — Frontend: tag input/filter, status toggle, recently updated, print button, view count display
+- [x] 07-02-PLAN.md — Frontend: tag input/filter, status toggle, recently updated, print button, view count display
 
 **Scope:**
 - `kb_article_tags` join table + tag input in article form + tag filter on KB list
