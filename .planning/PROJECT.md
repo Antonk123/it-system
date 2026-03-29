@@ -41,6 +41,8 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - ✓ Recurring ticket templates with CRUD API and cron scheduler — Phase 5
 - ✓ Recurring tickets frontend: manage templates, toggle, view history — Phase 5
 - ✓ Dashboard queue cards: user-defined queues from saved filter views with live counts — Phase 5
+- ✓ Reports cleanup: removed Activity Heatmap, Radial Progress Rings, and module customization UI — Phase 6
+- ✓ Tag analytics bug fix: all tags from tickets now appear in Tag Cloud and Distribution Chart — Phase 6
 
 ### Active
 
@@ -117,4 +119,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-29 after Phase 5 completion*
+*Last updated: 2026-03-29 after Phase 6 completion (v1.1 milestone complete)*
