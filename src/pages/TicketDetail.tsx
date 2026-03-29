@@ -580,7 +580,7 @@ const TicketDetail = () => {
 
             {/* Linked KB Articles */}
             <div className="pt-4 border-t">
-              <KBLinksSection ticketId={ticket.id} />
+              <KBLinksSection ticketId={ticket.id} ticketTitle={ticket.title} />
             </div>
 
             {/* Linked Tickets */}

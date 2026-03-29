@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { BookOpen, X, Search, Loader2 } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { BookOpen, X, Search, Loader2, FilePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -25,9 +25,11 @@ interface LinkedArticle extends KbArticleRow {
 
 interface KBLinksSectionProps {
   ticketId: string;
+  ticketTitle?: string;
 }
 
-export const KBLinksSection = ({ ticketId }: KBLinksSectionProps) => {
+export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) => {
+  const navigate = useNavigate();
   const [linked, setLinked] = useState<LinkedArticle[]>([]);
   const [allArticles, setAllArticles] = useState<KbArticleRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -97,10 +99,25 @@ export const KBLinksSection = ({ ticketId }: KBLinksSectionProps) => {
 
   return (
     <div className="space-y-3">
-      <h3 className="font-medium text-foreground flex items-center gap-2 text-sm">
-        <BookOpen className="w-4 h-4 text-muted-foreground" />
-        Knowledge Base ({linked.length})
-      </h3>
+      <div className="flex items-center justify-between">
+        <h3 className="font-medium text-foreground flex items-center gap-2 text-sm">
+          <BookOpen className="w-4 h-4 text-muted-foreground" />
+          Knowledge Base ({linked.length})
+        </h3>
+        <Button
+          variant="outline"
+          size="sm"
+          className="text-xs h-7"
+          onClick={() =>
+            navigate(
+              `/kb/new?title=${encodeURIComponent(ticketTitle || '')}&article_type=solution&ticket_id=${ticketId}`
+            )
+          }
+        >
+          <FilePlus className="w-3.5 h-3.5 mr-1" />
+          Skapa KB-artikel
+        </Button>
+      </div>
 
       {/* Add link */}
       <Popover
