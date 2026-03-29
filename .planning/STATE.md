@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Quality & Automation
-status: Ready to execute
-stopped_at: Completed 04-filter-consolidation-archive-parity-01-PLAN.md
-last_updated: "2026-03-26T10:53:22.798Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 05-automation-recurring-tickets-dashboard-queues-03-PLAN.md
+last_updated: "2026-03-29T02:59:19.273Z"
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -43,6 +43,7 @@ Plan: 2 of 2
 All decisions logged in PROJECT.md Key Decisions table.
 
 - [Phase 04-filter-consolidation-archive-parity]: UnifiedFilterBar is stateless — delegates all state to parent via onChange; FilterViewSelector resolves view internally; applyView defaults to ticketlist context
+- [Phase 05-automation-recurring-tickets-dashboard-queues]: countOnly bypasses ticket fetch but runs full WHERE clause for accurate filter counts
 
 ### Pending Todos
 
@@ -54,6 +55,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-26T10:53:22.795Z
-Stopped at: Completed 04-filter-consolidation-archive-parity-01-PLAN.md
+Last session: 2026-03-29T02:59:19.269Z
+Stopped at: Completed 05-automation-recurring-tickets-dashboard-queues-03-PLAN.md
 Resume file: None
