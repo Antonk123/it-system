@@ -1,120 +1,12 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Ticket, Clock, CheckCircle, Archive, AlertTriangle, ArrowRight, PauseCircle, Plus, X, LayoutList, ChevronUp, ChevronDown } from 'lucide-react';
+import { Ticket, Clock, CheckCircle, Archive, AlertTriangle, ArrowRight, PauseCircle } from 'lucide-react';
 import { subDays, isSameDay, format, startOfDay } from 'date-fns';
-import { useQuery } from '@tanstack/react-query';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
-import { useDashboardQueues, DashboardQueue } from '@/hooks/useDashboardQueues';
-import { useFilterViews } from '@/hooks/useFilterViews';
-import { FilterView } from '@/types/filterView';
 import { Layout } from '@/components/Layout';
 import { KPICard } from '@/components/KPICard';
 import { Button } from '@/components/ui/button';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { api } from '@/lib/api';
-
-// ---------------------------------------------------------------------------
-// QueueCard — individual dashboard queue card
-// ---------------------------------------------------------------------------
-
-interface QueueCardProps {
-  queue: DashboardQueue;
-  filterView: FilterView | undefined;
-  onRemove: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-  isFirst: boolean;
-  isLast: boolean;
-  onNavigate: () => void;
-}
-
-function QueueCard({ queue, filterView, onRemove, onMoveUp, onMoveDown, isFirst, isLast, onNavigate }: QueueCardProps) {
-  // Build query params from filterView.filters for the count API call
-  const filterParams = useMemo(() => {
-    if (!filterView) return null;
-    const params = new URLSearchParams();
-    params.set('countOnly', 'true');
-    // Need at least one param so pagination code path runs
-    params.set('page', '1');
-    params.set('limit', '1');
-    const f = filterView.filters;
-    if (f.status?.length) params.set('status', f.status.join(','));
-    if (f.priority) params.set('priority', f.priority);
-    if (f.category) params.set('category', f.category);
-    if (f.tags?.length) params.set('tags', f.tags.join(','));
-    if (f.tagMode) params.set('tagMode', f.tagMode);
-    if (f.search) params.set('search', f.search);
-    if (f.checklist) params.set('checklist', f.checklist);
-    if (f.dateFrom) params.set('dateFrom', f.dateFrom);
-    if (f.dateTo) params.set('dateTo', f.dateTo);
-    if (f.dateField) params.set('dateField', f.dateField);
-    return params.toString();
-  }, [filterView]);
-
-  const { data } = useQuery({
-    queryKey: ['tickets', 'count', queue.filterViewId, filterParams],
-    queryFn: () => api.request<{ count: number }>(`/tickets?${filterParams}`),
-    enabled: !!filterParams,
-    staleTime: 30_000, // 30 seconds
-    refetchInterval: 60_000, // refresh every minute
-  });
-
-  if (!filterView) return null; // orphaned queue — filter view was deleted
-
-  const count = (data as { count: number } | null)?.count ?? 0;
-
-  return (
-    <Card
-      className="cursor-pointer hover:border-primary/50 transition-colors group relative"
-      onClick={onNavigate}
-    >
-      <CardHeader className="pb-2">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            {filterView.name}
-          </CardTitle>
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              disabled={isFirst}
-              onClick={(e) => { e.stopPropagation(); onMoveUp(); }}
-              title="Flytta upp"
-            >
-              <ChevronUp className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              disabled={isLast}
-              onClick={(e) => { e.stopPropagation(); onMoveDown(); }}
-              title="Flytta ner"
-            >
-              <ChevronDown className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={(e) => { e.stopPropagation(); onRemove(); }}
-              title="Ta bort ko"
-            >
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <p className="text-3xl font-bold">{count}</p>
-        <p className="text-xs text-muted-foreground mt-1">matchande ärenden</p>
-      </CardContent>
-    </Card>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Dashboard
@@ -124,9 +16,6 @@ const Dashboard = () => {
   const { tickets } = useTickets({ limit: 1000, status: 'all' });
   const { users, getUserById } = useUsers();
   const navigate = useNavigate();
-  const { queues, addQueue, removeQueue, moveQueue } = useDashboardQueues();
-  const { views: allViews } = useFilterViews();
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   const stats = useMemo(() => {
     const open = tickets.filter(t => t.status === 'open').length;
@@ -275,88 +164,6 @@ const Dashboard = () => {
             </div>
           </div>
         )}
-
-        {/* Dashboard Queues (replaces aging groups) */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <LayoutList className="h-5 w-5" />
-              Köer
-            </h2>
-            <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1">
-                  <Plus className="h-4 w-4" /> Lägg till kö
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Välj filtervy</DialogTitle>
-                <DialogDescription>Välj en filtervy att lägga till som kö på dashboarden.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {allViews
-                    .filter(v => !queues.some(q => q.filterViewId === v.id))
-                    .map(view => (
-                      <Button
-                        key={view.id}
-                        variant="ghost"
-                        className="w-full justify-start"
-                        onClick={() => { addQueue(view.id); setAddDialogOpen(false); }}
-                      >
-                        {view.name}
-                      </Button>
-                    ))}
-                  {allViews.filter(v => !queues.some(q => q.filterViewId === v.id)).length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-4">
-                      Alla filtervyer är redan tillagda. Skapa nya filtervyer på ärendesidan.
-                    </p>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-
-          {queues.length === 0 ? (
-            <div className="text-center py-12 border rounded-lg bg-card">
-              <LayoutList className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Inga köer tillagda</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Lägg till filtervyer som köer för att se antal matchande ärenden här.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {queues.map((queue, index) => {
-                const filterView = allViews.find(v => v.id === queue.filterViewId);
-                return (
-                  <QueueCard
-                    key={queue.id}
-                    queue={queue}
-                    filterView={filterView}
-                    onRemove={() => removeQueue(queue.id)}
-                    onMoveUp={() => moveQueue(queue.id, 'up')}
-                    onMoveDown={() => moveQueue(queue.id, 'down')}
-                    isFirst={index === 0}
-                    isLast={index === queues.length - 1}
-                    onNavigate={() => {
-                      if (filterView) {
-                        const params = new URLSearchParams();
-                        const f = filterView.filters;
-                        if (f.status?.length) f.status.forEach(s => params.append('status', s));
-                        if (f.priority) params.set('priority', f.priority);
-                        if (f.category) params.set('category', f.category);
-                        if (f.tags?.length) params.set('tags', f.tags.join(','));
-                        if (f.search) params.set('search', f.search);
-                        navigate(`/tickets?${params.toString()}`);
-                      }
-                    }}
-                  />
-                );
-              })}
-            </div>
-          )}
-        </div>
       </div>
     </Layout>
   );
