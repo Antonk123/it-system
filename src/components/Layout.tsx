@@ -1,6 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen } from 'lucide-react';
+import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { GlobalSearch } from '@/components/GlobalSearch';
@@ -21,6 +21,10 @@ const navItems = [{
   path: '/tickets',
   icon: Ticket,
   label: 'Alla ärenden'
+}, {
+  path: '/recurring',
+  icon: RefreshCw,
+  label: 'Återkommande'
 }, {
   path: '/reports',
   icon: BarChart3,

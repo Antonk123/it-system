@@ -23,6 +23,7 @@ import KnowledgeBase from "./pages/KnowledgeBase";
 import KBArticleDetail from "./pages/KBArticleDetail";
 import KBArticleForm from "./pages/KBArticleForm";
 import SharedKBArticle from "./pages/SharedKBArticle";
+import Recurring from "./pages/Recurring";
 import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
 
 const queryClient = new QueryClient({
@@ -96,6 +97,7 @@ const AppRoutes = () => (
     <Route path="/tickets/new" element={<ProtectedRoute><TicketForm /></ProtectedRoute>} />
     <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetail /></ProtectedRoute>} />
     <Route path="/tickets/:id/edit" element={<ProtectedRoute><TicketForm /></ProtectedRoute>} />
+    <Route path="/recurring" element={<ProtectedRoute><Recurring /></ProtectedRoute>} />
     <Route path="/archive" element={<ProtectedRoute><Archive /></ProtectedRoute>} />
     <Route path="/users" element={<ProtectedRoute><UserList /></ProtectedRoute>} />
     <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
