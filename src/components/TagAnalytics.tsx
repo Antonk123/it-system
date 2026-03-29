@@ -18,7 +18,7 @@ export const TagAnalytics = ({
   className,
 }: TagAnalyticsProps) => {
   // Check if there are any tags
-  const hasTags = tags.length > 0 && tickets.some(t => t.tags && t.tags.length > 0);
+  const hasTags = tickets.some(t => t.tags && t.tags.length > 0);
 
   if (!hasTags) {
     return (
