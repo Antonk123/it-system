@@ -778,11 +778,12 @@ class ApiClient {
   }
 
   // Knowledge Base - Articles
-  async getKbArticles(params?: { search?: string; category_id?: string; article_type?: string }) {
+  async getKbArticles(params?: { search?: string; category_id?: string; article_type?: string; tag?: string }) {
     const qs = new URLSearchParams();
     if (params?.search) qs.set('search', params.search);
     if (params?.category_id) qs.set('category_id', params.category_id);
     if (params?.article_type) qs.set('article_type', params.article_type);
+    if (params?.tag) qs.set('tag', params.tag);
     const query = qs.toString() ? `?${qs.toString()}` : '';
     return this.request<KbArticleRow[]>(`/kb/articles${query}`);
   }
@@ -795,14 +796,14 @@ class ApiClient {
     return this.request<LinkedTicketRow[]>(`/kb/articles/${articleId}/tickets`);
   }
 
-  async createKbArticle(data: { title: string; content: string; category_id?: string | null; article_type?: string | null }) {
+  async createKbArticle(data: { title: string; content: string; category_id?: string | null; article_type?: string | null; tags?: string[]; status?: 'draft' | 'published' }) {
     return this.request<KbArticleRow>('/kb/articles', {
       method: 'POST',
       body: data,
     });
   }
 
-  async updateKbArticle(id: string, data: { title: string; content: string; category_id?: string | null; article_type?: string | null }) {
+  async updateKbArticle(id: string, data: { title: string; content: string; category_id?: string | null; article_type?: string | null; tags?: string[]; status?: 'draft' | 'published' }) {
     return this.request<KbArticleRow>(`/kb/articles/${id}`, {
       method: 'PUT',
       body: data,
@@ -1124,6 +1125,9 @@ export interface KbArticleRow {
   category_name: string | null;
   category_color: string | null;
   article_type?: string | null;
+  status: 'draft' | 'published';
+  view_count: number;
+  tags: string[];
   snippet?: string | null;
   created_at: string;
   updated_at: string;

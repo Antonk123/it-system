@@ -70,6 +70,9 @@ interface KbArticleRow {
   category_name?: string | null;
   category_color?: string | null;
   article_type?: string | null;
+  status: 'draft' | 'published';
+  view_count: number;
+  tags?: string[];
   snippet?: string | null;
   created_at: string;
   updated_at: string;
@@ -145,44 +148,55 @@ router.delete('/categories/:id', authenticate, (req: AuthRequest, res: Response)
 
 // ─── Articles ─────────────────────────────────────────────────────────────────
 
-// GET /api/kb/articles?search=&category_id=&article_type=
+// GET /api/kb/articles?search=&category_id=&article_type=&tag=
 router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const { search, category_id, article_type } = req.query as Record<string, string>;
+    const { search, category_id, article_type, tag } = req.query as Record<string, string>;
     const trimmedSearch = search?.trim();
 
-    let articles: KbArticleRow[];
+    let rawArticles: (KbArticleRow & { tags_csv?: string | null })[];
 
     if (trimmedSearch) {
       // FTS5 search: sanitize input to avoid injection via double-quoting
       const safeQuery = '"' + trimmedSearch.replace(/"/g, '""') + '"';
-      articles = db.prepare(`
+      rawArticles = db.prepare(`
         SELECT
-          a.id, a.title, a.content, a.category_id, a.article_type, a.created_at, a.updated_at,
+          a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.created_at, a.updated_at,
           c.name as category_name, c.color as category_color,
-          snippet(kb_articles_fts, 1, '<mark>', '</mark>', '...', 25) AS snippet
+          snippet(kb_articles_fts, 1, '<mark>', '</mark>', '...', 25) AS snippet,
+          (SELECT GROUP_CONCAT(kat.tag, ',') FROM kb_article_tags kat WHERE kat.article_id = a.id ORDER BY kat.tag) as tags_csv
         FROM kb_articles_fts fts
         JOIN kb_articles a ON a.rowid = fts.rowid
         LEFT JOIN kb_categories c ON a.category_id = c.id
         WHERE kb_articles_fts MATCH @search
+          AND a.status = 'published'
           AND (@category_id IS NULL OR a.category_id = @category_id)
           AND (@article_type IS NULL OR a.article_type = @article_type)
+          AND (@tag IS NULL OR EXISTS (SELECT 1 FROM kb_article_tags WHERE article_id = a.id AND tag = @tag))
         ORDER BY rank
-      `).all({ search: safeQuery, category_id: category_id || null, article_type: article_type || null }) as KbArticleRow[];
+      `).all({ search: safeQuery, category_id: category_id || null, article_type: article_type || null, tag: tag || null }) as (KbArticleRow & { tags_csv?: string | null })[];
     } else {
-      // No search: standard query with article_type filter support
-      articles = db.prepare(`
+      // No search: standard query with status, tag, article_type filter support
+      rawArticles = db.prepare(`
         SELECT
-          a.id, a.title, a.content, a.category_id, a.article_type, a.created_at, a.updated_at,
-          c.name as category_name, c.color as category_color
+          a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.created_at, a.updated_at,
+          c.name as category_name, c.color as category_color,
+          (SELECT GROUP_CONCAT(kat.tag, ',') FROM kb_article_tags kat WHERE kat.article_id = a.id ORDER BY kat.tag) as tags_csv
         FROM kb_articles a
         LEFT JOIN kb_categories c ON a.category_id = c.id
-        WHERE 1=1
+        WHERE a.status = 'published'
           AND (@category_id IS NULL OR a.category_id = @category_id)
           AND (@article_type IS NULL OR a.article_type = @article_type)
+          AND (@tag IS NULL OR EXISTS (SELECT 1 FROM kb_article_tags WHERE article_id = a.id AND tag = @tag))
         ORDER BY a.updated_at DESC
-      `).all({ category_id: category_id || null, article_type: article_type || null }) as KbArticleRow[];
+      `).all({ category_id: category_id || null, article_type: article_type || null, tag: tag || null }) as (KbArticleRow & { tags_csv?: string | null })[];
     }
+
+    const articles = rawArticles.map((a) => ({
+      ...a,
+      tags: a.tags_csv ? a.tags_csv.split(',') : [],
+      tags_csv: undefined,
+    }));
 
     res.json(articles);
   } catch (error) {
@@ -196,15 +210,22 @@ router.get('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const article = db.prepare(`
       SELECT
-        a.id, a.title, a.content, a.category_id, a.article_type, a.created_at, a.updated_at,
+        a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
       WHERE a.id = ?
-    `).get(req.params.id) as KbArticleRow | undefined;
+    `).get(req.params.id) as (KbArticleRow & { view_count: number }) | undefined;
 
     if (!article) return res.status(404).json({ error: 'Article not found' });
-    res.json(article);
+
+    // Increment view count after confirming article exists
+    db.prepare('UPDATE kb_articles SET view_count = view_count + 1 WHERE id = ?').run(req.params.id);
+
+    // Fetch tags
+    const tags = (db.prepare('SELECT tag FROM kb_article_tags WHERE article_id = ? ORDER BY tag ASC').all(req.params.id) as { tag: string }[]).map((r) => r.tag);
+
+    res.json({ ...article, view_count: article.view_count + 1, tags });
   } catch (error) {
     console.error('Error fetching KB article:', error);
     res.status(500).json({ error: 'Failed to fetch KB article' });
@@ -230,34 +251,45 @@ router.get('/articles/:id/tickets', authenticate, (req: AuthRequest, res: Respon
 
 // POST /api/kb/articles
 router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
-  const { title, content = '', category_id, article_type } = req.body;
+  const { title, content = '', category_id, article_type, tags, status } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'Title is required' });
   }
   try {
     const id = uuidv4();
     const now = new Date().toISOString();
+    const articleStatus: 'draft' | 'published' = status === 'draft' ? 'draft' : 'published';
 
-    const insertArticleAndFts = db.transaction((articleId: string, articleTitle: string, articleContent: string, categoryId: string | null, articleTypeVal: string | null, timestamp: string) => {
+    const insertArticleAndFts = db.transaction((articleId: string, articleTitle: string, articleContent: string, categoryId: string | null, articleTypeVal: string | null, articleStatusVal: string, timestamp: string) => {
       db.prepare(
-        'INSERT INTO kb_articles (id, title, content, category_id, article_type, created_at, updated_at) VALUES (?,?,?,?,?,?,?)'
-      ).run(articleId, articleTitle, articleContent, categoryId, articleTypeVal, timestamp, timestamp);
+        'INSERT INTO kb_articles (id, title, content, category_id, article_type, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)'
+      ).run(articleId, articleTitle, articleContent, categoryId, articleTypeVal, articleStatusVal, timestamp, timestamp);
       const row = db.prepare('SELECT rowid FROM kb_articles WHERE id = ?').get(articleId) as { rowid: number };
       db.prepare('INSERT INTO kb_articles_fts(rowid, title, content_plain) VALUES (?,?,?)')
         .run(row.rowid, articleTitle, stripHtml(articleContent));
+      // Insert tags
+      if (Array.isArray(tags) && tags.length > 0) {
+        const insertTag = db.prepare('INSERT OR IGNORE INTO kb_article_tags (id, article_id, tag) VALUES (?, ?, ?)');
+        for (const t of tags) {
+          const trimmed = String(t).trim().toLowerCase();
+          if (trimmed) insertTag.run(uuidv4(), articleId, trimmed);
+        }
+      }
     });
 
-    insertArticleAndFts(id, title.trim(), content, category_id || null, article_type || null, now);
+    insertArticleAndFts(id, title.trim(), content, category_id || null, article_type || null, articleStatus, now);
 
     const article = db.prepare(`
-      SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.created_at, a.updated_at,
+      SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
       WHERE a.id = ?
     `).get(id) as KbArticleRow;
 
-    res.status(201).json(article);
+    const articleTags = (db.prepare('SELECT tag FROM kb_article_tags WHERE article_id = ? ORDER BY tag ASC').all(id) as { tag: string }[]).map((r) => r.tag);
+
+    res.status(201).json({ ...article, tags: articleTags });
   } catch (error) {
     console.error('Error creating KB article:', error);
     res.status(500).json({ error: 'Failed to create KB article' });
@@ -266,7 +298,7 @@ router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
 
 // PUT /api/kb/articles/:id
 router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
-  const { title, content, category_id, article_type } = req.body;
+  const { title, content, category_id, article_type, tags, status } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'Title is required' });
   }
@@ -277,29 +309,41 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
     const now = new Date().toISOString();
     const articleId = req.params.id as string;
     const articleContent = content ?? '';
+    const articleStatus: 'draft' | 'published' = status === 'draft' ? 'draft' : 'published';
 
-    const updateArticleAndFts = db.transaction((aid: string, articleTitle: string, articleContent: string, categoryId: string | null, articleTypeVal: string | null, timestamp: string) => {
+    const updateArticleAndFts = db.transaction((aid: string, articleTitle: string, articleContent: string, categoryId: string | null, articleTypeVal: string | null, articleStatusVal: string, timestamp: string) => {
       // For contentless FTS5 (content=''), DELETE is not supported — use auxiliary delete command with old values
       db.prepare("INSERT INTO kb_articles_fts(kb_articles_fts, rowid, title, content_plain) VALUES('delete', ?, ?, ?)")
         .run(existing!.rowid, existing!.title, stripHtml(existing!.content));
       db.prepare(
-        'UPDATE kb_articles SET title = ?, content = ?, category_id = ?, article_type = ?, updated_at = ? WHERE id = ?'
-      ).run(articleTitle, articleContent, categoryId, articleTypeVal, timestamp, aid);
+        'UPDATE kb_articles SET title = ?, content = ?, category_id = ?, article_type = ?, status = ?, updated_at = ? WHERE id = ?'
+      ).run(articleTitle, articleContent, categoryId, articleTypeVal, articleStatusVal, timestamp, aid);
       db.prepare('INSERT INTO kb_articles_fts(rowid, title, content_plain) VALUES (?,?,?)')
         .run(existing!.rowid, articleTitle, stripHtml(articleContent));
+      // Replace tags atomically
+      db.prepare('DELETE FROM kb_article_tags WHERE article_id = ?').run(aid);
+      if (Array.isArray(tags) && tags.length > 0) {
+        const insertTag = db.prepare('INSERT OR IGNORE INTO kb_article_tags (id, article_id, tag) VALUES (?, ?, ?)');
+        for (const t of tags) {
+          const trimmed = String(t).trim().toLowerCase();
+          if (trimmed) insertTag.run(uuidv4(), aid, trimmed);
+        }
+      }
     });
 
-    updateArticleAndFts(articleId, String(title).trim(), articleContent, category_id || null, article_type || null, now);
+    updateArticleAndFts(articleId, String(title).trim(), articleContent, category_id || null, article_type || null, articleStatus, now);
 
     const article = db.prepare(`
-      SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.created_at, a.updated_at,
+      SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
       WHERE a.id = ?
     `).get(articleId) as KbArticleRow;
 
-    res.json(article);
+    const articleTags = (db.prepare('SELECT tag FROM kb_article_tags WHERE article_id = ? ORDER BY tag ASC').all(articleId) as { tag: string }[]).map((r) => r.tag);
+
+    res.json({ ...article, tags: articleTags });
   } catch (error) {
     console.error('Error updating KB article:', error);
     res.status(500).json({ error: 'Failed to update KB article' });
@@ -441,15 +485,21 @@ router.get('/public/:token', (_req: Request, res: Response) => {
     if (!share) return res.status(404).json({ error: 'Invalid or expired link' });
 
     const article = db.prepare(`
-      SELECT a.id, a.title, a.content, a.article_type, a.created_at, a.updated_at,
+      SELECT a.id, a.title, a.content, a.article_type, a.status, a.view_count, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
       WHERE a.id = ?
-    `).get(share.article_id) as KbArticleRow | undefined;
+    `).get(share.article_id) as (KbArticleRow & { view_count: number }) | undefined;
 
     if (!article) return res.status(404).json({ error: 'Article not found' });
-    res.json(article);
+
+    // Increment view count on public read — every view is a real read
+    db.prepare('UPDATE kb_articles SET view_count = view_count + 1 WHERE id = ?').run(share.article_id);
+
+    const tags = (db.prepare('SELECT tag FROM kb_article_tags WHERE article_id = ? ORDER BY tag ASC').all(share.article_id) as { tag: string }[]).map((r) => r.tag);
+
+    res.json({ ...article, view_count: article.view_count + 1, tags });
   } catch (error) {
     console.error('Error fetching public KB article:', error);
     res.status(500).json({ error: 'Failed to fetch article' });
