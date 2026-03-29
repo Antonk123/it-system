@@ -462,6 +462,13 @@ const ensureKbArticleTagsTable = () => {
   console.log('Created table: kb_article_tags');
 };
 
+const ensureKbReviewColumn = () => {
+  if (!tableExists('kb_articles')) return;
+  if (columnExists('kb_articles', 'last_reviewed_at')) return;
+  db.exec(`ALTER TABLE kb_articles ADD COLUMN last_reviewed_at TEXT;`);
+  console.log('Added last_reviewed_at column to kb_articles');
+};
+
 const ensureKbFts5AndType = () => {
   if (!tableExists('kb_articles')) return;
 
@@ -516,6 +523,7 @@ export function initializeDatabase() {
   ensureKbFts5AndType();
   ensureKbV2Columns();
   ensureKbArticleTagsTable();
+  ensureKbReviewColumn();
   ensureRecurringTemplatesTable();
   db.exec('CREATE INDEX IF NOT EXISTS idx_tickets_closed_at ON tickets(status, closed_at DESC)');
   console.log('Database initialized successfully');

@@ -151,7 +151,7 @@ router.delete('/categories/:id', authenticate, (req: AuthRequest, res: Response)
 // GET /api/kb/articles?search=&category_id=&article_type=&tag=
 router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const { search, category_id, article_type, tag } = req.query as Record<string, string>;
+    const { search, category_id, article_type, tag, stale } = req.query as Record<string, string>;
     const trimmedSearch = search?.trim();
 
     let rawArticles: (KbArticleRow & { tags_csv?: string | null })[];
@@ -161,7 +161,7 @@ router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
       const safeQuery = '"' + trimmedSearch.replace(/"/g, '""') + '"';
       rawArticles = db.prepare(`
         SELECT
-          a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.created_at, a.updated_at,
+          a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.last_reviewed_at, a.created_at, a.updated_at,
           c.name as category_name, c.color as category_color,
           snippet(kb_articles_fts, 1, '<mark>', '</mark>', '...', 25) AS snippet,
           (SELECT GROUP_CONCAT(kat.tag, ',') FROM kb_article_tags kat WHERE kat.article_id = a.id ORDER BY kat.tag) as tags_csv
@@ -173,13 +173,14 @@ router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
           AND (@category_id IS NULL OR a.category_id = @category_id)
           AND (@article_type IS NULL OR a.article_type = @article_type)
           AND (@tag IS NULL OR EXISTS (SELECT 1 FROM kb_article_tags WHERE article_id = a.id AND tag = @tag))
+          AND (@stale IS NULL OR (julianday('now') - julianday(COALESCE(a.last_reviewed_at, a.created_at))) > 90)
         ORDER BY rank
-      `).all({ search: safeQuery, category_id: category_id || null, article_type: article_type || null, tag: tag || null }) as (KbArticleRow & { tags_csv?: string | null })[];
+      `).all({ search: safeQuery, category_id: category_id || null, article_type: article_type || null, tag: tag || null, stale: stale || null }) as (KbArticleRow & { tags_csv?: string | null })[];
     } else {
       // No search: standard query with status, tag, article_type filter support
       rawArticles = db.prepare(`
         SELECT
-          a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.created_at, a.updated_at,
+          a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.last_reviewed_at, a.created_at, a.updated_at,
           c.name as category_name, c.color as category_color,
           (SELECT GROUP_CONCAT(kat.tag, ',') FROM kb_article_tags kat WHERE kat.article_id = a.id ORDER BY kat.tag) as tags_csv
         FROM kb_articles a
@@ -188,8 +189,9 @@ router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
           AND (@category_id IS NULL OR a.category_id = @category_id)
           AND (@article_type IS NULL OR a.article_type = @article_type)
           AND (@tag IS NULL OR EXISTS (SELECT 1 FROM kb_article_tags WHERE article_id = a.id AND tag = @tag))
+          AND (@stale IS NULL OR (julianday('now') - julianday(COALESCE(a.last_reviewed_at, a.created_at))) > 90)
         ORDER BY a.updated_at DESC
-      `).all({ category_id: category_id || null, article_type: article_type || null, tag: tag || null }) as (KbArticleRow & { tags_csv?: string | null })[];
+      `).all({ category_id: category_id || null, article_type: article_type || null, tag: tag || null, stale: stale || null }) as (KbArticleRow & { tags_csv?: string | null })[];
     }
 
     const articles = rawArticles.map((a) => ({
@@ -210,7 +212,7 @@ router.get('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const article = db.prepare(`
       SELECT
-        a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.created_at, a.updated_at,
+        a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.last_reviewed_at, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
@@ -347,6 +349,20 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error updating KB article:', error);
     res.status(500).json({ error: 'Failed to update KB article' });
+  }
+});
+
+// PATCH /api/kb/articles/:id/review
+router.patch('/articles/:id/review', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const existing = db.prepare('SELECT id FROM kb_articles WHERE id = ?').get(req.params.id);
+    if (!existing) return res.status(404).json({ error: 'Article not found' });
+    const now = new Date().toISOString();
+    db.prepare('UPDATE kb_articles SET last_reviewed_at = ? WHERE id = ?').run(now, req.params.id);
+    res.json({ last_reviewed_at: now });
+  } catch (error) {
+    console.error('Error marking KB article as reviewed:', error);
+    res.status(500).json({ error: 'Failed to mark article as reviewed' });
   }
 });
 
