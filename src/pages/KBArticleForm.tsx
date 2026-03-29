@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Loader2, X } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, Loader2, X, Link2 } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +8,16 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import { api, KbCategoryRow } from '@/lib/api';
+import { api, KbCategoryRow, KbArticleRow, LinkedArticleRow } from '@/lib/api';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
 
 const ARTICLE_TEMPLATES = [
@@ -35,12 +44,15 @@ const ARTICLE_TEMPLATES = [
 const KBArticleForm = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isEditing = Boolean(id);
 
-  const [title, setTitle] = useState('');
+  const [title, setTitle] = useState(() => searchParams.get('title') ?? '');
   const [content, setContent] = useState('');
   const [categoryId, setCategoryId] = useState<string>('none');
-  const [articleType, setArticleType] = useState<string>('none');
+  const [articleType, setArticleType] = useState<string>(
+    () => searchParams.get('article_type') ?? 'none'
+  );
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
   const [status, setStatus] = useState<'draft' | 'published'>('published');
@@ -48,7 +60,17 @@ const KBArticleForm = () => {
   const [isLoading, setIsLoading] = useState(isEditing);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ title?: string }>({});
-  const [templateDismissed, setTemplateDismissed] = useState(false);
+  const [templateDismissed, setTemplateDismissed] = useState(
+    () => !!(searchParams.get('title') || searchParams.get('article_type'))
+  );
+
+  // Cross-ref state (only used in edit mode)
+  const [crossRefs, setCrossRefs] = useState<LinkedArticleRow[]>([]);
+  const [allArticles, setAllArticles] = useState<KbArticleRow[]>([]);
+  const [linkPickerOpen, setLinkPickerOpen] = useState(false);
+  const [linkSearch, setLinkSearch] = useState('');
+
+  const sourceTicketId = searchParams.get('ticket_id');
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -73,6 +95,9 @@ const KBArticleForm = () => {
         setArticleType(article.article_type || 'none');
         setTags(article.tags || []);
         setStatus(article.status || 'published');
+        // Also fetch cross-refs and all articles for the picker
+        api.getKbArticleLinks(id).then(setCrossRefs).catch(() => {});
+        api.getKbArticles().then(setAllArticles).catch(() => {});
       } catch {
         toast.error('Kunde inte ladda artikel');
         navigate('/kb');
@@ -82,6 +107,47 @@ const KBArticleForm = () => {
     };
     fetch();
   }, [id, isEditing, navigate]);
+
+  const availableLinkTargets = useMemo(
+    () =>
+      allArticles.filter(
+        a => a.id !== id && a.status === 'published' && !crossRefs.some(r => r.id === a.id)
+      ),
+    [allArticles, id, crossRefs]
+  );
+
+  const filteredLinkTargets = useMemo(
+    () =>
+      availableLinkTargets.filter(a =>
+        a.title.toLowerCase().includes(linkSearch.toLowerCase())
+      ),
+    [availableLinkTargets, linkSearch]
+  );
+
+  const handleAddLink = async (targetId: string) => {
+    if (!id) return;
+    try {
+      await api.addKbArticleLink(id, targetId);
+      const updated = await api.getKbArticleLinks(id);
+      setCrossRefs(updated);
+      setLinkPickerOpen(false);
+      setLinkSearch('');
+      toast.success('Se även-koppling tillagd');
+    } catch {
+      toast.error('Kunde inte lägga till koppling');
+    }
+  };
+
+  const handleRemoveLink = async (targetId: string) => {
+    if (!id) return;
+    try {
+      await api.removeKbArticleLink(id, targetId);
+      setCrossRefs(prev => prev.filter(r => r.id !== targetId));
+      toast.success('Se även-koppling borttagen');
+    } catch {
+      toast.error('Kunde inte ta bort koppling');
+    }
+  };
 
   const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' || e.key === ',') {
@@ -127,6 +193,14 @@ const KBArticleForm = () => {
         navigate(`/kb/${id}`);
       } else {
         const created = await api.createKbArticle(payload);
+        if (sourceTicketId) {
+          try {
+            await api.linkKbArticleToTicket(sourceTicketId, created.id);
+          } catch {
+            // Non-fatal: article was created, link just failed
+            console.warn('Could not auto-link article to source ticket');
+          }
+        }
         toast.success('Artikel skapad');
         navigate(`/kb/${created.id}`);
       }
@@ -274,6 +348,62 @@ const KBArticleForm = () => {
               />
             </div>
           </div>
+
+          {/* Cross-ref link picker — only shown in edit mode */}
+          {isEditing && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <Link2 className="w-3.5 h-3.5 text-muted-foreground" />
+                Se även-kopplingar
+              </Label>
+              {crossRefs.length > 0 && (
+                <div className="space-y-1 mb-2">
+                  {crossRefs.map((ref) => (
+                    <div key={ref.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                      <span className="text-sm truncate">{ref.title}</span>
+                      <Button variant="ghost" size="sm" type="button" onClick={() => handleRemoveLink(ref.id)}>
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <Popover open={linkPickerOpen} onOpenChange={setLinkPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" type="button">
+                    Lägg till koppling
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="start">
+                  <Command shouldFilter={false}>
+                    <CommandInput
+                      placeholder="Sök artikel..."
+                      value={linkSearch}
+                      onValueChange={setLinkSearch}
+                    />
+                    <CommandList>
+                      <CommandEmpty>Inga artiklar hittades</CommandEmpty>
+                      <CommandGroup>
+                        {filteredLinkTargets.slice(0, 10).map((article) => (
+                          <CommandItem
+                            key={article.id}
+                            onSelect={() => handleAddLink(article.id)}
+                          >
+                            <span className="truncate">{article.title}</span>
+                            {article.article_type && (
+                              <Badge variant="secondary" className="ml-auto shrink-0 text-xs">
+                                {article.article_type === 'how-to' ? 'Instruktion' : article.article_type === 'solution' ? 'Lösning' : 'Felsökning'}
+                              </Badge>
+                            )}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label>Innehåll</Label>

@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X, Printer, Eye, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X, Printer, Eye, CheckCircle, Link2 } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
-import { api, KbArticleRow, LinkedTicketRow } from '@/lib/api';
+import { api, KbArticleRow, LinkedTicketRow, LinkedArticleRow } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -42,6 +42,7 @@ const KBArticleDetail = () => {
   const [showShare, setShowShare] = useState(false);
   const [isTogglingShare, setIsTogglingShare] = useState(false);
   const [linkedTickets, setLinkedTickets] = useState<LinkedTicketRow[]>([]);
+  const [crossRefs, setCrossRefs] = useState<LinkedArticleRow[]>([]);
   const contentRef = useRef<HTMLDivElement>(null);
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const [activeId, setActiveId] = useState<string>('');
@@ -58,6 +59,7 @@ const KBArticleDetail = () => {
         setArticle(data);
         setShareToken(shareData.share_token);
         setLinkedTickets(ticketsData);
+        api.getKbArticleLinks(id).then(setCrossRefs).catch(() => {});
       } catch {
         toast.error('Artikeln hittades inte');
         navigate('/kb');
@@ -389,6 +391,32 @@ const KBArticleDetail = () => {
             </aside>
           )}
         </div>
+
+        {/* Se aven cross-reference panel */}
+        {crossRefs.length > 0 && (
+          <div className="max-w-3xl pt-2 border-t">
+            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+              <Link2 className="w-4 h-4 text-muted-foreground" />
+              Se även
+            </h3>
+            <div className="space-y-2">
+              {crossRefs.map((ref) => (
+                <Link
+                  key={ref.id}
+                  to={`/kb/${ref.id}`}
+                  className="flex items-center gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  <span className="text-sm font-medium truncate">{ref.title}</span>
+                  {ref.article_type && (
+                    <Badge variant="secondary" className="shrink-0 text-xs">
+                      {ref.article_type === 'how-to' ? 'Instruktion' : ref.article_type === 'solution' ? 'Lösning' : 'Felsökning'}
+                    </Badge>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Linked Tickets panel */}
         <div className="max-w-3xl pt-2 border-t">
