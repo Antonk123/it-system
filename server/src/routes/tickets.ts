@@ -523,9 +523,9 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
     const usePagination = query.page || query.limit;
 
     if (!usePagination && !countOnly) {
-      // BACKWARD COMPATIBILITY: Return old format
+      // BACKWARD COMPATIBILITY: Return old format (capped at 1000)
       const tickets = db.prepare(`
-        SELECT ${TICKET_COLUMNS} FROM tickets ORDER BY created_at DESC
+        SELECT ${TICKET_COLUMNS} FROM tickets ORDER BY created_at DESC LIMIT 1000
       `).all() as TicketRow[];
       return res.json(tickets);
     }
@@ -810,13 +810,13 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
     const query = req.query as TicketQueryParams;
 
     // Build WHERE clause from filters
-    const { whereClause, params } = buildWhereClause(query);
+    const { whereClause, params, joins } = buildWhereClause(query);
 
     // Get all matching tickets (no pagination for export)
     const tickets = db.prepare(`
-      SELECT * FROM tickets
+      SELECT DISTINCT tickets.* FROM tickets ${joins}
       WHERE ${whereClause}
-      ORDER BY created_at DESC
+      ORDER BY tickets.created_at DESC
     `).all(...params) as TicketRow[];
 
     // Get all categories for lookup
@@ -1173,6 +1173,11 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (solution !== undefined) updates.solution = solution || null;
     if (template_id !== undefined) updates.template_id = template_id || null;
 
+    // Always set updated_at when any field changes
+    if (Object.keys(updates).length > 0) {
+      updates.updated_at = new Date().toISOString();
+    }
+
     // Handle resolved_at and closed_at
     if (status === 'resolved' && !existing.resolved_at) {
       updates.resolved_at = new Date().toISOString();
@@ -1200,40 +1205,40 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     const setClauses = Object.keys(safeUpdates).map(key => `${key} = ?`).join(', ');
     const values = Object.values(safeUpdates);
 
-    // Log meaningful field changes to history
-    const historyInsert = db.prepare(
-      'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
-    );
-    if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
-      historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'status', existing.status as string, safeUpdates.status as string);
-    }
-    if ('priority' in safeUpdates && safeUpdates.priority !== existing.priority) {
-      historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'priority', existing.priority as string, safeUpdates.priority as string);
-    }
-    if ('category_id' in safeUpdates && safeUpdates.category_id !== existing.category_id) {
-      const oldCat = existing.category_id
-        ? (db.prepare('SELECT label FROM categories WHERE id = ?').get(existing.category_id) as { label: string } | undefined)?.label ?? null
-        : null;
-      const newCat = safeUpdates.category_id
-        ? (db.prepare('SELECT label FROM categories WHERE id = ?').get(safeUpdates.category_id as string) as { label: string } | undefined)?.label ?? null
-        : null;
-      historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'category_id', oldCat, newCat);
-    }
-    if ('title' in safeUpdates && safeUpdates.title !== existing.title) {
-      historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'title', null, null);
-    }
-    if ('notes' in safeUpdates && safeUpdates.notes !== existing.notes) {
-      historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'notes', null, null);
-    }
-    if ('solution' in safeUpdates && safeUpdates.solution !== existing.solution) {
-      const isNew = !existing.solution && safeUpdates.solution;
-      historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'solution', null, isNew ? 'added' : 'updated');
-    }
-
-    // Wrap all DB writes in a transaction for atomicity
+    // Wrap all DB writes (including history) in a transaction for atomicity
     const updateTransaction = db.transaction(() => {
       if (setClauses) {
         db.prepare(`UPDATE tickets SET ${setClauses} WHERE id = ?`).run(...values, req.params.id);
+      }
+
+      // Log meaningful field changes to history (inside transaction)
+      const historyInsert = db.prepare(
+        'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
+      );
+      if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
+        historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'status', existing.status as string, safeUpdates.status as string);
+      }
+      if ('priority' in safeUpdates && safeUpdates.priority !== existing.priority) {
+        historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'priority', existing.priority as string, safeUpdates.priority as string);
+      }
+      if ('category_id' in safeUpdates && safeUpdates.category_id !== existing.category_id) {
+        const oldCat = existing.category_id
+          ? (db.prepare('SELECT label FROM categories WHERE id = ?').get(existing.category_id) as { label: string } | undefined)?.label ?? null
+          : null;
+        const newCat = safeUpdates.category_id
+          ? (db.prepare('SELECT label FROM categories WHERE id = ?').get(safeUpdates.category_id as string) as { label: string } | undefined)?.label ?? null
+          : null;
+        historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'category_id', oldCat, newCat);
+      }
+      if ('title' in safeUpdates && safeUpdates.title !== existing.title) {
+        historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'title', null, null);
+      }
+      if ('notes' in safeUpdates && safeUpdates.notes !== existing.notes) {
+        historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'notes', null, null);
+      }
+      if ('solution' in safeUpdates && safeUpdates.solution !== existing.solution) {
+        const isNew = !existing.solution && safeUpdates.solution;
+        historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'solution', null, isNew ? 'added' : 'updated');
       }
 
       // Replace field values if customFields were provided

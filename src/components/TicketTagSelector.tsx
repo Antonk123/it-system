@@ -68,7 +68,7 @@ export const TicketTagSelector = ({ ticketId }: TicketTagSelectorProps) => {
   const handleCreateAndAdd = async () => {
     const name = search.trim();
     if (!name) return;
-    const created = await createTag(name, DEFAULT_NEW_TAG_COLOR);
+    const created = await createTag({ name, color: DEFAULT_NEW_TAG_COLOR });
     if (created) {
       await setTags([...ticketTags.map((t) => t.id), created.id]);
     }

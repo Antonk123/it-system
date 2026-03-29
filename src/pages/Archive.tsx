@@ -259,7 +259,7 @@ const Archive = () => {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-foreground">Arkiv</h1>
-            {pagination && (
+            {pagination && pagination.total > 0 && (
               <p className="text-muted-foreground mt-1">
                 Visar {((pagination.page - 1) * pagination.limit) + 1}-
                 {Math.min(pagination.page * pagination.limit, pagination.total)} av {pagination.total} stängda ärenden
@@ -384,6 +384,7 @@ const Archive = () => {
         onOpenChange={setImportOpen}
         onSuccess={() => {
           setImportOpen(false);
+          refetch();
         }}
       />
       <AlertDialog open={!!pendingStatusChange} onOpenChange={(open) => { if (!open) setPendingStatusChange(null); }}>

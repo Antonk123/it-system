@@ -37,16 +37,23 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
       'SELECT * FROM recurring_templates ORDER BY created_at DESC'
     ).all() as RecurringTemplateRow[];
 
-    const result = templates.map(t => {
-      const history = db.prepare(`
-        SELECT rth.id, rth.ticket_id, rth.created_at, tk.title AS ticket_title
-        FROM recurring_ticket_history rth
-        JOIN tickets tk ON tk.id = rth.ticket_id
-        WHERE rth.template_id = ?
-        ORDER BY rth.created_at DESC
-        LIMIT 10
-      `).all(t.id) as HistoryRow[];
+    // Batch-load last 10 history entries per template in one query
+    const allHistory = db.prepare(`
+      SELECT rth.id, rth.template_id, rth.ticket_id, rth.created_at, tk.title AS ticket_title
+      FROM recurring_ticket_history rth
+      JOIN tickets tk ON tk.id = rth.ticket_id
+      ORDER BY rth.created_at DESC
+    `).all() as (HistoryRow & { template_id: string })[];
+    const historyByTemplate = new Map<string, HistoryRow[]>();
+    for (const h of allHistory) {
+      const list = historyByTemplate.get(h.template_id) || [];
+      if (list.length < 10) {
+        list.push({ id: h.id, ticket_id: h.ticket_id, created_at: h.created_at, ticket_title: h.ticket_title });
+        historyByTemplate.set(h.template_id, list);
+      }
+    }
 
+    const result = templates.map(t => {
       let parsedTags: string[] = [];
       try {
         parsedTags = JSON.parse(t.tags || '[]');
@@ -54,7 +61,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
         parsedTags = [];
       }
 
-      return { ...t, tags: parsedTags, history };
+      return { ...t, tags: parsedTags, history: historyByTemplate.get(t.id) || [] };
     });
 
     res.json(result);

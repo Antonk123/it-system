@@ -32,10 +32,19 @@ router.get('/templates', (_req: Request, res: Response) => {
     const templates = db.prepare('SELECT id, name, description, title_template, description_template, priority, category_id FROM ticket_templates ORDER BY position ASC, name ASC').all() as TemplateRow[];
 
     // Attach fields to each template
-    const templatesWithFields = templates.map(template => {
-      const fields = db.prepare('SELECT * FROM template_fields WHERE template_id = ? ORDER BY position ASC').all(template.id);
-      return { ...template, fields };
-    });
+    // Batch-load all fields in one query, then group by template_id
+    const allFields = db.prepare('SELECT * FROM template_fields ORDER BY position ASC').all() as (Record<string, unknown> & { template_id: string })[];
+    const fieldsByTemplate = new Map<string, typeof allFields>();
+    for (const field of allFields) {
+      const list = fieldsByTemplate.get(field.template_id) || [];
+      list.push(field);
+      fieldsByTemplate.set(field.template_id, list);
+    }
+
+    const templatesWithFields = templates.map(template => ({
+      ...template,
+      fields: fieldsByTemplate.get(template.id) || [],
+    }));
 
     res.json(templatesWithFields);
   } catch (error) {
@@ -82,7 +91,7 @@ router.post('/tickets', (req: Request, res: Response) => {
   if (title.length > 200) {
     return res.status(400).json({ error: 'Title must be 200 characters or less' });
   }
-  if (description.length > 5000) {
+  if (description && description.length > 5000) {
     return res.status(400).json({ error: 'Description must be 5000 characters or less' });
   }
 

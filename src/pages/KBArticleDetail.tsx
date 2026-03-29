@@ -72,23 +72,28 @@ const KBArticleDetail = () => {
 
   useEffect(() => {
     if (!contentRef.current || !article?.content) return;
-    const headings = contentRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
-    const usedSlugs = new Set<string>();
-    const items: TocItem[] = [];
-    headings.forEach((el) => {
-      const text = el.textContent?.trim() ?? '';
-      if (!text) return;
-      let slug = slugify(text);
-      if (usedSlugs.has(slug)) {
-        let i = 2;
-        while (usedSlugs.has(`${slug}-${i}`)) i++;
-        slug = `${slug}-${i}`;
-      }
-      usedSlugs.add(slug);
-      el.setAttribute('id', slug);
-      items.push({ id: slug, text, level: parseInt(el.tagName[1]) });
-    });
-    setTocItems(items);
+    // Defer to next tick so the DOM has committed after content render
+    const timer = setTimeout(() => {
+      if (!contentRef.current) return;
+      const headings = contentRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      const usedSlugs = new Set<string>();
+      const items: TocItem[] = [];
+      headings.forEach((el) => {
+        const text = el.textContent?.trim() ?? '';
+        if (!text) return;
+        let slug = slugify(text);
+        if (usedSlugs.has(slug)) {
+          let i = 2;
+          while (usedSlugs.has(`${slug}-${i}`)) i++;
+          slug = `${slug}-${i}`;
+        }
+        usedSlugs.add(slug);
+        el.setAttribute('id', slug);
+        items.push({ id: slug, text, level: parseInt(el.tagName[1]) });
+      });
+      setTocItems(items);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [article?.content]);
 
   useEffect(() => {

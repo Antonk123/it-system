@@ -30,7 +30,19 @@ const tableExists = (name: string) => {
   return !!row;
 };
 
+const VALID_TABLE_NAMES = new Set([
+  'tickets', 'categories', 'contacts', 'users', 'tags', 'ticket_tags',
+  'ticket_templates', 'template_checklists', 'template_fields', 'ticket_field_values',
+  'ticket_attachments', 'ticket_comments', 'ticket_history', 'ticket_reminders',
+  'ticket_checklists', 'checklist_templates', 'checklist_template_items',
+  'kb_articles', 'kb_articles_fts', 'kb_categories', 'kb_article_tags', 'kb_article_links', 'kb_article_shares',
+  'recurring_templates', 'recurring_ticket_history', 'filter_views',
+]);
+
 const columnExists = (tableName: string, columnName: string) => {
+  if (!VALID_TABLE_NAMES.has(tableName)) {
+    throw new Error(`columnExists: unknown table "${tableName}"`);
+  }
   const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[];
   return columns.some((column) => column.name === columnName);
 };
