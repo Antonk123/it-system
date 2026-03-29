@@ -43,6 +43,17 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - ✓ Dashboard queue cards: user-defined queues from saved filter views with live counts — Phase 5
 - ✓ Reports cleanup: removed Activity Heatmap, Radial Progress Rings, and module customization UI — Phase 6
 - ✓ Tag analytics bug fix: all tags from tickets now appear in Tag Cloud and Distribution Chart — Phase 6
+- ✓ KB article tags (fristående från ticket-taggar) with filter — Phase 7
+- ✓ KB draft/published status with list filtering — Phase 7
+- ✓ KB view counter incrementing on article view — Phase 7
+- ✓ KB "Senast uppdaterade" section and print button — Phase 7
+- ✓ KB table of contents with anchor links on article detail — Phase 8
+- ✓ KB article templates (Solution, How-to, Troubleshooting) — Phase 8
+- ✓ KB staleness detection with last_reviewed_at and stale filter — Phase 8
+- ✓ KB "Populära artiklar" section on KB home (top 5 by view_count) — Phase 9
+- ✓ KB "Se även" cross-references with bidirectional display and link picker — Phase 9
+- ✓ KB `/` keyboard shortcut to focus search — Phase 9
+- ✓ Ticket-to-KB article creation with pre-filled title and type — Phase 9
 
 ### Active
 
@@ -70,7 +81,7 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - **Deployment**: Two Docker containers (nginx frontend, Node backend) with persistent volume for DB and uploads
 - **Codebase**: ~496K LOC TypeScript across 40+ files modified in v1.0, expanded in v1.1
 - **Reports**: Focused analytics via SQL GROUP BY endpoint (`/api/reports/summary`). 4-tab layout: Overview, Trend, People, Tags. No redundant modules.
-- **Knowledge Base**: FTS5 virtual table (`kb_articles_fts`) in contentless mode with HTML stripping. Article type field (`how-to` / `solution`). Linked Tickets reverse-lookup panel.
+- **Knowledge Base**: FTS5 virtual table (`kb_articles_fts`) in contentless mode with HTML stripping. Article type field (`how-to` / `solution`). Linked Tickets reverse-lookup panel. Tags, draft/published status, view counter, staleness detection. Table of contents, article templates, "Se även" cross-references, popular articles section, `/` search shortcut, ticket-to-KB creation.
 - **Archive**: Closed-only view with full filter parity (UnifiedFilterBar, bulk operations, CSV export). Composite index on `(status, closed_at DESC)`.
 - **Recurring Tickets**: `recurring_templates` + `recurring_ticket_history` tables, CRUD API at `/api/recurring`, node-cron scheduler running every minute. Management UI at `/recurring`.
 - **Dashboard Queues**: User-defined queue cards from saved filter views with `countOnly` API for live counts. localStorage-backed config.
@@ -122,4 +133,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-29 after v1.2 milestone start*
+*Last updated: 2026-03-29 after Phase 9 completion (v1.2 final phase)*
