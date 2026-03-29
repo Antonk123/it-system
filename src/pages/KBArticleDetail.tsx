@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X, Printer, Eye } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X, Printer, Eye, CheckCircle } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -26,6 +26,7 @@ const KBArticleDetail = () => {
   const [article, setArticle] = useState<KbArticleRow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isReviewing, setIsReviewing] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
   const [isTogglingShare, setIsTogglingShare] = useState(false);
@@ -95,6 +96,20 @@ const KBArticleDetail = () => {
     if (!shareToken) return;
     navigator.clipboard.writeText(getPublicUrl(shareToken));
     toast.success('Länk kopierad!');
+  };
+
+  const handleMarkReviewed = async () => {
+    if (!id) return;
+    setIsReviewing(true);
+    try {
+      const result = await api.reviewKbArticle(id);
+      setArticle(prev => prev ? { ...prev, last_reviewed_at: result.last_reviewed_at } : prev);
+      toast.success('Artikel markerad som granskad');
+    } catch {
+      toast.error('Kunde inte markera som granskad');
+    } finally {
+      setIsReviewing(false);
+    }
   };
 
   const formatDate = (iso: string) =>
@@ -235,6 +250,18 @@ const KBArticleDetail = () => {
               <Eye className="w-4 h-4" />
               <span>{article.view_count} {article.view_count === 1 ? 'visning' : 'visningar'}</span>
             </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto py-0.5 px-2 text-sm text-muted-foreground hover:text-green-600 gap-1.5"
+              onClick={handleMarkReviewed}
+              disabled={isReviewing}
+            >
+              <CheckCircle className="w-3.5 h-3.5" />
+              {article.last_reviewed_at
+                ? `Granskad ${formatDate(article.last_reviewed_at)}`
+                : 'Markera som granskad'}
+            </Button>
           </div>
           {article.tags && article.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5">

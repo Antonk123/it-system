@@ -778,18 +778,25 @@ class ApiClient {
   }
 
   // Knowledge Base - Articles
-  async getKbArticles(params?: { search?: string; category_id?: string; article_type?: string; tag?: string }) {
+  async getKbArticles(params?: { search?: string; category_id?: string; article_type?: string; tag?: string; stale?: boolean }) {
     const qs = new URLSearchParams();
     if (params?.search) qs.set('search', params.search);
     if (params?.category_id) qs.set('category_id', params.category_id);
     if (params?.article_type) qs.set('article_type', params.article_type);
     if (params?.tag) qs.set('tag', params.tag);
+    if (params?.stale) qs.set('stale', '1');
     const query = qs.toString() ? `?${qs.toString()}` : '';
     return this.request<KbArticleRow[]>(`/kb/articles${query}`);
   }
 
   async getKbArticle(id: string) {
     return this.request<KbArticleRow>(`/kb/articles/${id}`);
+  }
+
+  async reviewKbArticle(id: string) {
+    return this.request<{ last_reviewed_at: string }>(`/kb/articles/${id}/review`, {
+      method: 'PATCH',
+    });
   }
 
   async getArticleLinkedTickets(articleId: string) {
@@ -1131,6 +1138,7 @@ export interface KbArticleRow {
   snippet?: string | null;
   created_at: string;
   updated_at: string;
+  last_reviewed_at?: string | null;
 }
 
 export interface LinkedTicketRow {

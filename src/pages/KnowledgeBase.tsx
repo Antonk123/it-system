@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2 } from 'lucide-react';
+import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +20,8 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 const TYPE_LABELS: Record<string, string> = {
   'how-to': 'Instruktion',
@@ -34,6 +36,7 @@ const KnowledgeBase = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
   const [tagFilter, setTagFilter] = useState<string>('all');
+  const [staleFilter, setStaleFilter] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Category management state
@@ -54,17 +57,18 @@ const KnowledgeBase = () => {
 
   const fetchArticles = useCallback(async () => {
     try {
-      const params: { search?: string; category_id?: string; article_type?: string; tag?: string } = {};
+      const params: { search?: string; category_id?: string; article_type?: string; tag?: string; stale?: boolean } = {};
       if (search) params.search = search;
       if (categoryFilter !== 'all') params.category_id = categoryFilter;
       if (typeFilter !== 'all') params.article_type = typeFilter;
       if (tagFilter !== 'all') params.tag = tagFilter;
+      if (staleFilter) params.stale = true;
       const data = await api.getKbArticles(params);
       setArticles(data);
     } catch {
       toast.error('Kunde inte hämta artiklar');
     }
-  }, [search, categoryFilter, typeFilter, tagFilter]);
+  }, [search, categoryFilter, typeFilter, tagFilter, staleFilter]);
 
   useEffect(() => {
     fetchCategories();
@@ -76,7 +80,12 @@ const KnowledgeBase = () => {
       await fetchArticles();
       setIsLoading(false);
     }, 200);
-    return () => clearTimeout(timer);
+    const isStale = (article: KbArticleRow): boolean => {
+    const ref = article.last_reviewed_at || article.created_at;
+    return (Date.now() - new Date(ref).getTime()) / (86400 * 1000) > 90;
+  };
+
+  return () => clearTimeout(timer);
   }, [fetchArticles]);
 
   const availableTags = useMemo(() => {
@@ -90,7 +99,7 @@ const KnowledgeBase = () => {
     [articles]
   );
 
-  const hasActiveFilters = search || categoryFilter !== 'all' || typeFilter !== 'all' || tagFilter !== 'all';
+  const hasActiveFilters = search || categoryFilter !== 'all' || typeFilter !== 'all' || tagFilter !== 'all' || staleFilter;
 
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
@@ -324,6 +333,10 @@ const KnowledgeBase = () => {
               ))}
             </SelectContent>
           </Select>
+          <div className="flex items-center gap-2 shrink-0">
+            <Switch id="stale-filter" checked={staleFilter} onCheckedChange={setStaleFilter} />
+            <Label htmlFor="stale-filter" className="text-sm cursor-pointer whitespace-nowrap">Visa inaktuella</Label>
+          </div>
         </div>
 
         {/* Articles list */}
@@ -404,6 +417,12 @@ const KnowledgeBase = () => {
                       {article.article_type && (
                         <Badge variant="outline" className="text-xs">
                           {TYPE_LABELS[article.article_type]}
+                        </Badge>
+                      )}
+                      {isStale(article) && (
+                        <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-600 gap-1">
+                          <AlertTriangle className="w-3 h-3" />
+                          Inaktuell
                         </Badge>
                       )}
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
