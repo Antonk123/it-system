@@ -1,19 +1,19 @@
 # Project Research Summary
 
-**Project:** IT Ticket System — Reports, Archive, KB Milestone
-**Domain:** Single-user internal IT ticket management
-**Researched:** 2026-03-22
+**Project:** IT Ticket System — Knowledge Base Expansion (v1.2)
+**Domain:** Internal IT knowledge base — single-user, SQLite-backed, Tiptap rich text
+**Researched:** 2026-03-29
 **Confidence:** HIGH
 
 ---
 
 ## Executive Summary
 
-The codebase is significantly more complete than the PROJECT.md "Active" list implies. Direct inspection found that Reports, Archive, and KB each have a large working core — the milestone is about closing specific, well-defined gaps rather than building features from scratch. This changes the effort profile: each area needs 1-3 targeted additions, not redesigns. The implementation risk is low because the schema already supports every required feature; the work is mostly new API endpoints and new frontend panels wired to existing data structures.
+This milestone extends an already-functional KB module with eight capability areas: article versioning/history, tags, related articles, article templates, ratings/feedback, rich media embedding, table of contents, and article export. Research confirms that the existing stack (React 18 + Vite 7 + Express 4 + better-sqlite3 + Tiptap 3.20 + Tailwind + shadcn) handles all of these natively — only 5 new packages are needed (4 Tiptap extensions + `slugify`), and the rest is pure schema additions and application logic. No new databases, no new services, no architectural pivots.
 
-The recommended approach is to move all analytics aggregation from the frontend (where it currently runs on a paginated subset of tickets) to the backend via a new `/api/reports/summary` endpoint using SQL `GROUP BY` queries. This is the highest-priority fix in the whole milestone because the current architecture silently produces incorrect charts. For KB, FTS5 is a single migration with no new packages; it is the right call and already confirmed to be compiled into the bundled SQLite. For PDF export, the user's decision to use print CSS (`window.print()`) eliminates the only potential new dependency (`@react-pdf/renderer`) — zero new packages are required.
+The recommended approach is additive: every new feature slots into the established migration pattern (`initializeDatabase()` guards in `connection.ts`), all new routes append to the existing `kb.ts` router, and all frontend components mount into existing pages. The build order is driven by dependency and risk — low-risk additive features first, pure-frontend features second, the one feature that modifies a tested write path (versioning) last.
 
-The primary risks are: (1) the analytics-on-paginated-data bug in Reports.tsx must be fixed before any chart work, or new charts will inherit the same bug; (2) FTS5 indexes raw Tiptap HTML, which bloats the index with tag tokens — a simple regex strip before indexing prevents this; (3) the Archive page currently excludes `resolved` tickets, but the user has confirmed that `closed`-only is the correct behavior for this system, so this is not a gap to fix.
+The dominant risk is correctness at two integration seams: FTS5 sync (the contentless virtual table must not be altered and the version snapshot must be inside the same transaction as the article update) and the ToC rendering path (headings must be extracted from the rendered DOM, not by regex over stored HTML). Both risks have clear, verified prevention patterns already documented in the codebase.
 
 ---
 
@@ -21,153 +21,190 @@ The primary risks are: (1) the analytics-on-paginated-data bug in Reports.tsx mu
 
 ### Recommended Stack
 
-The existing stack handles everything in this milestone without new packages. `better-sqlite3` v11 bundles SQLite 3.46+ with FTS5 compiled in — no build flags or additional packages needed. `recharts` is already installed and will remain the charting library; it receives pre-aggregated data from the backend rather than raw ticket arrays.
+The existing stack requires minimal extension. Four Tiptap 3.21.x extensions cover the rich content needs (YouTube embed, syntax-highlighted code blocks, table of contents, and heading anchors). One backend utility (`slugify@1.6.8`) handles URL-safe slug generation with correct Swedish character normalization. Every other capability — versioning, tags, relations, templates, feedback, export — is implemented with pure SQL schema additions and application logic. `turndown` for Markdown export is already installed.
 
-The only package that was researched as a candidate addition (`@react-pdf/renderer ^4.x`) is not needed given the print CSS decision. CSV export already works via a hand-rolled generator. The net result: zero new dependencies for this milestone.
+**New dependencies (5 total):**
+- `@tiptap/extension-youtube@^3.21.0` — YouTube/Vimeo embed node in editor — only Tiptap-native approach
+- `@tiptap/extension-code-block-lowlight@^3.21.0` + `lowlight@^3.3.0` — syntax-highlighted code blocks — replaces starter-kit's plain CodeBlock; register only `bash`, `typescript`, `javascript`, `sql`, `yaml`, `json`, `powershell` to avoid bundle bloat
+- `@tiptap/extension-table-of-contents@^3.21.0` — live ToC in editor; DOM `querySelectorAll` for read-only view
+- `slugify@^1.6.8` (backend) — URL-safe slugs with unicode normalization including Swedish characters
 
-**Core technologies (unchanged):**
-- `better-sqlite3` v11 — synchronous SQLite with FTS5 built in; all new queries follow existing `db.prepare().get()/.all()` patterns
-- `recharts` — remains the chart renderer; fed pre-shaped data from `/api/reports/summary` instead of raw ticket arrays
-- React Query — used for the new `useReportsSummary()` and `useArticleTickets()` hooks, following the existing hook pattern
-- Express Router — new `reports.ts` route file mounted at `/api/reports`, new endpoint added to `kb.ts`
+**Explicitly avoid:** `diff`/`jsdiff`, `react-syntax-highlighter`, `marked`, `meilisearch`, `sanitize-html` (DOMPurify already installed), any alternative Tiptap/editor library.
 
 ### Expected Features
 
-Based on codebase inspection against what the milestone targets:
+Research drew a clear line between table stakes, differentiators, and explicit anti-features for this single-user system.
 
-**Already built (do not re-implement):**
-- Reports: KPI cards, bar/pie charts, heatmap, status flow, tag analytics, requester analytics, module toggle, CSV export, year/month filter
-- Archive: `/archive` route, closed-ticket filter, search, category/tag/priority filters, sort, pagination, compact view, CSV/import, reopen dialog
-- KB: Tiptap CRUD, category management, LIKE search, ticket→KB links (API + UI), public share tokens
+**Must have (table stakes):**
+- Tags on articles — cross-cutting labels beyond flat categories; normalized junction table (`kb_tags` + `kb_article_tags`)
+- Draft/published status — prevents half-written articles appearing in search
+- Article view count — passive quality signal; enables "popular articles" surface
+- "Recently updated" section on KB home — no backend change needed
+- Table of contents — standard expectation for long how-to guides; pure frontend
+- Print article — copy existing Reports `@media print` pattern; ~30 minutes
 
-**Must close (table stakes gaps):**
-- Reports: category breakdown chart — connects existing `categories` table to charts; one new backend query
-- Reports: open vs. closed trend overlay — compute from existing ticket data; one new chart replacing/supplementing current "created" bar chart
-- KB: KB→ticket reverse links — one new endpoint (`GET /api/kb/articles/:id/tickets`) and one new panel in `KBArticleDetail`
-- KB: FTS5 search — one migration (`ensureKbArticlesFts()`), one query change in `kb.ts`, snippet display in frontend
-- KB: `article_type` field — one new column, one form select, one list filter badge
+**Should have (differentiators):**
+- Staleness detection (`last_reviewed_at` column + "mark reviewed" button + stale filter)
+- Article templates — hard-coded Tiptap content scaffolds applied client-side; no template CRUD needed initially
+- "See Also" cross-references — manual related-article links via bidirectional junction table
+- Popular articles surface — trivial once view_count exists; one query + one section
+- Keyboard shortcuts (`Ctrl+K` global search modal) — high polish-to-effort ratio
+- "Convert ticket to KB article" shortcut — pre-fills form from ticket data via URL params
 
-**Should close (differentiators):**
-- Reports: PDF via print CSS — `@media print` stylesheet, `window.print()` button; zero dependencies
-- Archive: closed-date range filter (`dateFrom`/`dateTo` on `closed_at`) — adds audit/period-review capability
+**Defer indefinitely:**
+- Article versioning/revision history — FEATURES.md marks this as anti-feature for single-user system; modeled in ARCHITECTURE.md for teams that want it — treat as optional phase
+- Hierarchical sub-categories — flat categories + tags cover organizational needs completely
+- User ratings from audience — no audience; use view_count as passive quality signal
+- AI-generated summaries — external API dependency with cost and privacy concerns
 
-**Defer:**
-- Reports: arbitrary date range picker (year/month dropdowns are sufficient)
-- KB: related article suggestions, view counters, inline article creation from ticket
-- Archive: bulk reopen, summary stats header
-- Archive: including `resolved` tickets — user confirmed `closed`-only is correct behavior
+> **Scope conflict resolved:** FEATURES.md marks versioning as anti-feature #1. STACK.md, ARCHITECTURE.md, and PITFALLS.md model it in full detail. Roadmapper should treat Phase 5 (versioning) as optional — include if revision history is desired, exclude if simplicity is preferred. Both modes are safe given the research available.
+
+> **Second scope conflict resolved:** ARCHITECTURE.md models category hierarchy (`parent_id`); FEATURES.md lists it as anti-feature. Category hierarchy is excluded from this milestone — flat categories + tags are sufficient.
 
 ### Architecture Approach
 
-Every feature in this milestone follows the same pattern as the existing codebase: Express Router file per domain, synchronous `better-sqlite3` queries, React Query hooks on the frontend, `useTickets()`-style hooks for data fetching. No new patterns are introduced. Schema changes are limited to: one FTS5 virtual table + 3 triggers (KB search), one `article_type` column (KB types), and one composite index on `(status, closed_at)` (archive performance). All migrations are idempotent `ensure*` functions called from `initializeDatabase()`.
+All new features follow the established KB architecture: tables created via `tableExists()`/`columnExists()` guards in `connection.ts`, routes appended to `server/src/routes/kb.ts`, migrations never standalone. The article detail page extends its existing `Promise.all` fetch to include related articles and feedback. Version history loads lazily on panel expand only. The single modification to an existing write path is the `PUT /articles/:id` transaction, which gains a version snapshot insert as step 1 (before the FTS delete), keeping full atomicity.
 
-**Change surface per feature area:**
+**Major components:**
 
-| Feature | Schema | New Route/Endpoint | Modified Route | New Frontend |
-|---------|--------|--------------------|----------------|--------------|
-| Reports aggregation | None | `GET /api/reports/summary` | None | `Reports.tsx` wired to new endpoint |
-| Reports category chart | None | Included in summary endpoint | None | New chart in Reports.tsx |
-| Reports open/closed trend | None | Included in summary endpoint | None | New chart in Reports.tsx |
-| Reports print CSS PDF | None | None | None | `@media print` CSS + button |
-| Archive closed-date filter | Index only | None | `GET /api/tickets` (params) | Date inputs in Archive.tsx |
-| KB two-way links | None | `GET /api/kb/articles/:id/tickets` | None | Linked tickets panel in KBArticleDetail |
-| KB FTS5 | Virtual table + triggers | None | `GET /api/kb/articles` (search path) | Snippet display in search results |
-| KB article type | `article_type` column | None | KB CRUD routes (include new field) | Type select in form, badge in list |
+1. **DB schema additions** — 5 new tables (`kb_tags`, `kb_article_tags`, `kb_article_relations`, `kb_article_templates`, `kb_article_feedback`) + new columns on `kb_articles` (`status`, `view_count`, `last_reviewed_at`, `slug`); optional 6th table `kb_article_versions` if versioning phase is included
+2. **`kb.ts` route extensions** — relation CRUD, template CRUD, feedback GET/POST, tag filtering — all appended to existing router; no new router files
+3. **Frontend page enhancements** — `KBArticleDetail.tsx` gains ToC sidebar, related articles panel, feedback widget; `KBArticleForm.tsx` gains template picker, tag input, relation picker; `KnowledgeBase.tsx` gains recently-updated strip, popular articles strip, tag filter, stale articles filter
+4. **New standalone components** — `KBTableOfContents.tsx`, `KBRelatedArticles.tsx`, `KBTemplatePicker.tsx`; `KBVersionHistory.tsx` if versioning included
+5. **Tiptap extension additions** — YouTube, code-block-lowlight, table-of-contents extensions registered in `RichTextEditor.tsx`
 
 ### Critical Pitfalls
 
-1. **Analytics computed on paginated data** — `Reports.tsx` currently calls `useTickets()` without a limit override, meaning all `useMemo` aggregations run on one page (10 tickets) of data, not the full dataset. Fix this first, before adding any new charts. All aggregation must move to `/api/reports/summary` using SQL `GROUP BY`. Detection: charts show suspiciously small or round numbers.
+1. **FTS5 virtual table cannot be ALTERed** — Do not add columns to `kb_articles_fts`. For new searchable fields (e.g. tags), append to `content_plain` at insert time: `stripHtml(content) + ' ' + tags.join(' ')`. Any migration containing `ALTER TABLE kb_articles_fts` will fail with a hard SQLite error. Applies to any phase touching tags or FTS filtering.
 
-2. **FTS5 indexing raw Tiptap HTML** — If `kb_articles.content` (which stores HTML like `<p><strong>password</strong></p>`) is inserted directly into the FTS table, the tokenizer will index tag strings (`p`, `strong`, `href`, `class`) as searchable tokens. Strip HTML with a regex (`content.replace(/<[^>]+>/g, ' ')`) in the Express route before inserting to the FTS table. The stripping must happen in Node.js, not inside a SQLite trigger, because SQLite triggers cannot call external code.
+2. **Version save must be inside the article update transaction** — The `updateArticleAndFts` transaction wraps FTS delete + article UPDATE + FTS insert. The version snapshot insert must be step 1 inside this same transaction. Any insert outside the transaction risks FTS out-of-sync state on crash. Verify correctness with a forced crash test before marking versioning complete.
 
-3. **FTS5 user input causes SQLite errors** — FTS5 MATCH syntax treats `+`, `-`, `*`, `[`, `"` as operators. A user searching for `C++` will crash the query. Wrap all user search terms in double quotes: `"${term.replace(/"/g, '""')}"`. Add a try/catch at the route level with fallback to LIKE if FTS5 throws.
+3. **ToC must use DOM query, not regex over stored HTML** — `/<h[23][^>]*>(.*?)<\/h[23]>/gi` fails on headings with nested marks (`<h2><strong>Title</strong></h2>` — captured text includes `<strong>` tags). After `HtmlRenderer` renders content into the DOM, use `containerRef.current.querySelectorAll('h2, h3, h4')` to get clean `textContent`. `HtmlRenderer` uses `dangerouslySetInnerHTML` — there is no Tiptap editor instance in the read view, so `@tiptap/extension-table-of-contents` cannot be used there.
 
-4. **FTS5 rowid vs UUID join** — `kb_articles` uses a TEXT UUID primary key. The FTS5 `content_rowid='rowid'` maps to the internal integer rowid, not the UUID `id`. Search results must join back to `kb_articles` via `a.rowid = fts.rowid`, not via `a.id`. Getting this wrong returns no results or wrong rows with no obvious error.
+4. **Related articles: enforce canonical pair ordering** — Use `CHECK(article_a < article_b)` on the junction table to prevent duplicate `(A,B)` and `(B,A)` rows. All inserts must sort IDs lexicographically. All reads use `WHERE article_a = ? OR article_b = ?`. All deletes must find the relation regardless of which ID was the "source."
 
-5. **CSV export `SELECT *` and in-memory build** — The existing export route uses `SELECT *` (known tech debt) and builds the full CSV string in memory before sending. For a new reports-specific export, use `SELECT ${TICKET_COLUMNS}` and `stmt.iterate()` with `res.write()` streaming. Do not extend the current hand-rolled generator for the reports export path.
+5. **Version restore must go through `updateArticleAndFts` transaction** — Restoring an old version must be treated identically to a save: run the same `updateArticleAndFts` transaction with the restored content. A raw `UPDATE kb_articles` without the FTS step leaves the search index pointing at the wrong content.
 
 ---
 
 ## Implications for Roadmap
 
-Based on dependencies and risk profile, three phases are the right structure.
+Based on combined research, a 4-phase structure (+ 1 optional phase) optimizes for value delivery, dependency satisfaction, and risk sequencing.
 
-### Phase 1: Reports Backend Fix + New Charts
+### Phase 1: Core Article Enhancements (Foundational)
 
-**Rationale:** The current analytics architecture is broken (paginated data). This must be fixed before any UI work, or new charts inherit the same bug. The backend endpoint is a prerequisite for all chart additions.
+**Rationale:** All items are additive, require only column migrations (no new tables except tags), and deliver immediate visible value. Draft status and view count are prerequisites for later features (popular articles surface, quality filtering). Tags require a junction table but are table stakes. Print and recently-updated are near-zero effort. None of these touch existing write paths.
 
-**Delivers:**
-- `GET /api/reports/summary` with pre-aggregated data (status counts, category counts, monthly trend with open/closed split)
-- All SQL aggregation moved out of the frontend
-- Category breakdown chart (new)
-- Open vs. closed trend overlay (new)
-- Print CSS `@media print` stylesheet + print button (PDF — zero dependencies)
+**Delivers:** A KB that feels complete for daily use — articles have lifecycle status, quantified popularity, cross-cutting labels, and print capability.
 
-**Key pitfalls to avoid:**
-- Do not let any chart computation remain in `useMemo` on raw ticket arrays after this phase
-- Use `strftime` for all date grouping in SQL, never `new Date().getMonth()` in JS
-- Only mount chart components for the active tab (not all tabs simultaneously)
+**Addresses:**
+- Print button on article detail (copy Reports `@media print` pattern)
+- "Recently updated" section on KB home (no backend, slice of existing `updated_at DESC` data)
+- Draft/published status (`status` column, filter in list + FTS, toggle in form)
+- Article view count (`view_count` column, increment on GET/:id, display on detail)
+- Tags on articles + tag filter on KB list (`kb_tags` + `kb_article_tags` junction table, tag input component)
 
-**Research flag:** Standard patterns — no additional research needed. SQL `GROUP BY` + recharts is well-documented.
+**Schema changes:** `status` column, `view_count` column, `slug` column on `kb_articles`; `kb_tags` + `kb_article_tags` tables
 
----
+**Pitfalls to avoid:** If tag text is appended to FTS indexing, append to `content_plain` only — do not alter `kb_articles_fts`. Draft articles must be excluded from `kb_articles_fts` inserts (filter `WHERE status = 'published'` in the FTS sync path).
 
-### Phase 2: KB Improvements (FTS5 + Two-Way Links + Article Types)
-
-**Rationale:** These three KB features are independent of Reports but share the same migration deployment window. FTS5 migration and the `article_type` column should ship together to avoid multiple schema deployments. Two-way linking is pure endpoint + UI with no schema change, so it can slot into the same phase.
-
-**Delivers:**
-- `ensureKbArticlesFts()` migration: FTS5 virtual table, 3 sync triggers, initial population from existing articles
-- Search upgraded from LIKE to FTS5 MATCH with BM25 ranking
-- Snippet highlighting in search results (`<mark>` tags via `snippet()`)
-- `GET /api/kb/articles/:id/tickets` endpoint using the existing `idx_ticket_kb_links_article` index
-- "Linked Tickets" panel in `KBArticleDetail` with links to `/tickets/:id`
-- `article_type` column (`'guide' | 'solution'`), type selector in KB article form, type badge + filter in KB article list
-
-**Key pitfalls to avoid:**
-- Strip HTML before FTS5 insert (regex in Node.js route, not in trigger)
-- Wrap FTS5 user queries in double quotes; add try/catch with LIKE fallback
-- Join FTS results to `kb_articles` via `rowid`, not `id`
-- Run `INSERT INTO kb_articles_fts(kb_articles_fts) VALUES('rebuild')` at end of migration to ensure index is consistent
-- Show pre-delete warning count when deleting an article that has linked tickets
-
-**Research flag:** FTS5 mechanics are well-documented in official SQLite docs. No additional research needed. The rowid vs UUID join pattern is confirmed and coded in ARCHITECTURE.md.
+**Research flag:** Standard patterns — skip `/gsd:research-phase`.
 
 ---
 
-### Phase 3: Archive Filter Enhancement
+### Phase 2: Article Detail and Authoring Experience
 
-**Rationale:** Archive is the most complete feature already. The one meaningful addition is a closed-date range filter for period-based audits. This is a low-risk, low-complexity addition that does not touch the schema (only adds query parameters to the existing endpoint and date inputs to Archive.tsx).
+**Rationale:** These features operate on the article detail or form views without touching the article list or FTS. ToC is pure frontend. Templates are fully isolated from the article save path. Staleness detection adds one column and one button. No risk to existing write paths.
 
-**Delivers:**
-- `dateFrom` / `dateTo` query parameters on `GET /api/tickets` (or a new archive-specific endpoint) filtering on `closed_at`
-- Date range inputs in Archive.tsx filter bar
-- Composite index `idx_tickets_closed_at ON tickets(status, closed_at DESC)` for query performance
+**Delivers:** Long articles become navigable; new articles start from structure; outdated articles are surfaced for review.
 
-**Key pitfalls to avoid:**
-- After a status change (reopen from archive), explicitly invalidate the React Query cache so the ticket disappears from the list immediately
-- Show a toast with a link to the ticket's new location when it disappears from the archive after reopening
-- Use UTC-consistent date comparison in SQL (`closed_at >= ? AND closed_at < ?` with ISO strings)
+**Addresses:**
+- Table of contents (DOM `querySelectorAll` after render; `KBTableOfContents.tsx` sticky sidebar; `@tiptap/extension-table-of-contents` in editor for live preview only)
+- Article templates (hard-coded templates, `KBTemplatePicker.tsx` modal in new-article mode, client-side `editor.commands.setContent()` — no server-side string interpolation)
+- Staleness detection (`last_reviewed_at` column, "mark reviewed" button, stale badge on article list card, stale filter)
 
-**Research flag:** Standard patterns — no additional research needed.
+**Stack additions:** `@tiptap/extension-table-of-contents@^3.21.0` (editor side only)
+
+**Pitfalls to avoid:** ToC must use `querySelectorAll` on rendered DOM — not regex on stored HTML. Template application must use `editor.commands.setContent()` client-side — never string-interpolate user values into HTML on the server (XSS risk). Applying a template to an article with existing content must show a confirmation dialog.
+
+**Research flag:** Standard patterns — skip `/gsd:research-phase`.
+
+---
+
+### Phase 3: Discovery and Cross-Referencing
+
+**Rationale:** Popular articles depends on `view_count` from Phase 1. "See Also" relations require a new junction table but zero modification to existing routes. Keyboard shortcuts are pure frontend. "Convert ticket to KB article" touches the ticket detail page read-only (URL params only). This phase turns the KB from a list of isolated articles into a connected, discoverable system.
+
+**Delivers:** Users can find related content, discover the most-used articles, and convert resolved tickets into KB articles with one click.
+
+**Addresses:**
+- Popular articles surface (one query `ORDER BY view_count DESC LIMIT 5`, one section on KB home)
+- "See Also" cross-references (`kb_article_relations` junction table, `KBRelatedArticles.tsx` panel, article picker reuses existing KB search API)
+- Keyboard shortcuts (`Ctrl+K` global search modal, `useEffect` keydown listeners)
+- "Convert ticket to KB article" shortcut (URL params `?fromTicket=:id` in `KBArticleForm.tsx`, button on ticket detail page)
+
+**Schema changes:** `kb_article_relations` junction table with `CHECK(article_a < article_b)` canonical ordering constraint
+
+**Pitfalls to avoid:** Related article junction table must enforce canonical pair ordering (critical pitfall #4). Single JOIN query for "related articles" — avoid N+1 per article. Show category badge and article type alongside each related article title for context.
+
+**Research flag:** Standard patterns — skip `/gsd:research-phase`.
+
+---
+
+### Phase 4: Rich Media and Export (Editor Enhancements)
+
+**Rationale:** These features extend the Tiptap editor itself. Grouped together because they all touch `RichTextEditor.tsx` and require the Tiptap 3.21.x extension npm installs. Article export uses the already-installed `turndown` — client-side only. YouTube embed and syntax highlighting are independent editor additions with no schema changes.
+
+**Delivers:** Authors can embed YouTube videos, write syntax-highlighted code blocks, and export articles as Markdown files. All visible in both editor and read-only view via the shared Tiptap renderer.
+
+**Addresses:**
+- Rich media embedding (YouTube/Vimeo via `@tiptap/extension-youtube`)
+- Syntax-highlighted code blocks (`@tiptap/extension-code-block-lowlight` + `lowlight`)
+- Article export as Markdown (client-side `turndown(article.content)` + `Blob` download — no backend change)
+
+**Stack additions:** `@tiptap/extension-youtube@^3.21.0`, `@tiptap/extension-code-block-lowlight@^3.21.0`, `lowlight@^3.3.0`, `slugify@^1.6.8` (backend, for slug column on `kb_articles`)
+
+**Pitfalls to avoid:** Disable starter-kit's `CodeBlock` when adding `extension-code-block-lowlight` — they conflict. Register only the relevant language subset from lowlight (not `common` preset) to control bundle size. Verify Tiptap 3.21.x extension compatibility after npm install — all existing extensions are `^3.20.x`, npm will resolve to 3.21.x single instance.
+
+**Research flag:** Standard patterns — skip `/gsd:research-phase`.
+
+---
+
+### Phase 5: Article Versioning (Optional — Modifies Write Path)
+
+**Rationale:** Versioning is the only feature that modifies an existing production-tested write path (`PUT /articles/:id`). Placing it last ensures all other features are battle-tested before the transaction is extended. FEATURES.md explicitly marks versioning as an anti-feature for a single-user system. Include this phase only if revision history is desired by the user; the milestone is complete without it.
+
+**Delivers:** Every article save creates a recoverable snapshot; users can view any past version and restore with one click.
+
+**Addresses:**
+- Article versioning/history (`kb_article_versions` table; version list/get/restore endpoints; `KBVersionHistory.tsx` lazy-loaded collapsible panel in `KBArticleDetail.tsx`)
+
+**Schema changes:** `kb_article_versions` table; extends `updateArticleAndFts` transaction in `PUT /articles/:id`
+
+**Pitfalls to avoid:** Version insert must be step 1 inside the same `db.transaction()` as FTS sync (critical pitfall #2). Version restore must call `updateArticleAndFts` — not a raw UPDATE (critical pitfall #5). Version list endpoint must not include `content` — load lazily on panel expand only. Show only 10 most recent versions by default; include "load more." Warn before deleting an article that has versions (CASCADE will destroy history).
+
+**Research flag:** Needs careful implementation review — this is the highest-risk integration point in the milestone. Verify transaction atomicity with a forced crash test before marking done.
 
 ---
 
 ### Phase Ordering Rationale
 
-- Phase 1 must come first because the broken analytics foundation makes new chart work pointless until fixed.
-- Phase 2 groups all three KB changes to minimize migration deployments (one Docker restart covers all schema changes).
-- Phase 3 is last because Archive already works and the addition is cosmetic/filtering only — lowest risk, highest tolerance for shifting if earlier phases run long.
-- The print CSS PDF approach (Phase 1) avoids the `@react-pdf/renderer` dependency entirely, keeping the build clean and the Docker image unchanged.
+- Phase 1 before Phase 3: `view_count` is a hard dependency for "popular articles"
+- Phase 2 before Phase 5: client-side confirmation guard in template apply mitigates "overwrote real content" without requiring versioning first; templates ship safely without versioning as a safety net
+- Phase 4 grouped separately: batching all Tiptap 3.21.x extension installs minimizes npm install and compatibility verification cycles
+- Phase 5 last: only write-path modification in the milestone; all other features must be working and tested before `PUT /articles/:id` is touched
+- Phases 1-4 can be reordered by product priority without breaking dependencies; Phase 5 must remain last if included
 
 ### Research Flags
 
-Phases with standard patterns (no additional research needed):
-- **Phase 1:** SQL GROUP BY aggregation + recharts — textbook patterns, fully documented
-- **Phase 2:** FTS5 mechanics fully confirmed via official SQLite docs; rowid join pattern coded in ARCHITECTURE.md; two-way link schema already exists
-- **Phase 3:** Date range filtering on an existing paginated endpoint — no novel patterns
+Phases with standard, well-documented patterns — skip `/gsd:research-phase`:
+- **Phase 1** — column migrations, junction table, filter logic; all patterns proven in existing codebase
+- **Phase 2** — Tiptap ToC extension documented; DOM `querySelectorAll` is standard; template picker is modal + state pre-fill
+- **Phase 3** — junction table + query patterns established in codebase; keyboard shortcut hooks are standard React
+- **Phase 4** — Tiptap extension registration is mechanical; `turndown` API is trivial
 
-No phases require a `/gsd:research-phase` call before implementation.
+Phase needing careful implementation review:
+- **Phase 5 (Versioning)** — modifies existing write path; transaction boundary correctness is non-trivial; FTS sync on restore is easy to forget; worth a dedicated implementation checklist and forced crash test
 
 ---
 
@@ -175,35 +212,40 @@ No phases require a `/gsd:research-phase` call before implementation.
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Based on direct `package.json` inspection; better-sqlite3 v11 FTS5 inclusion confirmed |
-| Features | HIGH | Based on direct codebase inspection of all affected source files; gaps are confirmed absences, not inferences |
-| Architecture | HIGH | Direct inspection of `schema.sql`, `connection.ts`, `kb.ts`, `tickets.ts`, `index.ts`; all patterns verified |
-| Pitfalls | HIGH (SQLite/CSV), MEDIUM (recharts) | SQLite and CSV pitfalls verified in source; recharts tab-render pitfall is training knowledge |
+| Stack | HIGH | All 5 new packages version-verified via npm registry; existing stack confirmed from `package.json`; no version conflicts identified |
+| Features | HIGH | Existing feature inventory from direct codebase read of all KB source files; table stakes from established KB products (Confluence, Notion, Zendesk Guide); anti-features backed by explicit PROJECT.md single-user constraint |
+| Architecture | HIGH | All patterns confirmed from direct source analysis of `kb.ts`, `connection.ts`, all KB pages and components; no inference required |
+| Pitfalls | HIGH | FTS5 mechanics from SQLite official docs; transaction patterns from better-sqlite3 docs; ToC and category pitfalls from codebase inspection; versioning pitfalls from direct transaction source read |
 
-**Overall confidence: HIGH**
+**Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **HTML stripping quality:** The regex approach (`/<[^>]+>/g`) handles standard HTML but may misbehave on malformed Tiptap output (unclosed tags, inline `<script>` from copy-paste). Monitor FTS search quality after deployment; upgrade to `striptags` package if needed.
-- **FTS5 Swedish stemming:** The `unicode61` tokenizer does not stem Swedish words. Searching "lösenord" will not match "lösenordets". This is acceptable for now but should be documented for users. No fix is needed in this milestone.
-- **recharts tab performance:** The claim that inactive tabs cause layout thrash is based on established recharts patterns, not live profiling. Verify during Phase 1 implementation and apply conditional rendering if visible.
+- **Tiptap 3.21 vs 3.20 compatibility:** New extensions pin to `^3.21.0`; existing packages are `^3.20.x`. npm will resolve to a single 3.21.x instance via semver range. Confirm no breaking changes during Phase 4 install. Low risk — Tiptap follows semver within major version.
+
+- **Ratings vs feedback scope:** FEATURES.md explicitly excludes ratings/feedback as "user ratings are meaningless for single-user." ARCHITECTURE.md models a `kb_article_feedback` table. Resolution: implement feedback as internal quality-tracking (thumbs up/down + optional note, authenticated admin only), not as audience ratings. This is consistent with the single-user constraint. Roadmapper should include `kb_article_feedback` as part of Phase 3 if quality-tracking is desired.
+
+- **ToC in read-only vs editor contexts:** `@tiptap/extension-table-of-contents` works only in a Tiptap editor instance. `HtmlRenderer` uses `dangerouslySetInnerHTML` — not a Tiptap editor — so the extension cannot be used there. ToC for the article read view must use the DOM `querySelectorAll` approach. Both can coexist: extension in editor for live preview, DOM query in detail view for display. Implementation must account for both contexts.
 
 ---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- Direct codebase inspection — `src/pages/Reports.tsx`, `src/pages/Archive.tsx`, `src/pages/KnowledgeBase.tsx`, `src/pages/KBArticleDetail.tsx`, `server/src/routes/kb.ts`, `server/src/routes/tickets.ts`, `server/src/db/schema.sql`, `server/src/db/connection.ts`
-- SQLite FTS5 official documentation: https://www.sqlite.org/fts5.html
-- SQLite strftime documentation: https://www.sqlite.org/lang_datefunc.html
-- `.planning/codebase/CONCERNS.md` — confirmed tech debt and known bugs
+- `server/src/routes/kb.ts` — existing endpoints, FTS5 sync pattern, transaction structure
+- `server/src/db/connection.ts` — `initializeDatabase()` migration pattern, `tableExists()`/`columnExists()` guards
+- `server/src/db/add-kb-tables.ts`, `add-kb-fts5-and-type.ts` — existing schema
+- `src/pages/KBArticleDetail.tsx`, `KBArticleForm.tsx`, `KnowledgeBase.tsx` — existing frontend structure
+- `src/components/ui/rich-text-editor.tsx` — Tiptap extensions, heading levels confirmed at h2/h3
+- `package.json`, `server/package.json` — installed packages, confirmed versions
+- `.planning/PROJECT.md` — single-user constraint, out-of-scope list
+- npm registry — `@tiptap/extension-youtube@3.21.0`, `@tiptap/extension-code-block-lowlight@3.21.0`, `@tiptap/extension-table-of-contents@3.21.0`, `lowlight@3.3.0`, `slugify@1.6.8` versions verified
 
 ### Secondary (MEDIUM confidence)
-- `@react-pdf/renderer` GitHub — evaluated and ruled out in favor of print CSS
-- recharts ResponsiveContainer behavior — established community patterns
-- Jira, Linear, Zendesk, Notion, Freshdesk — reference patterns for feature expectations
+- Confluence, Notion, Zendesk Guide, GitBook feature sets — KB table stakes classification
+- SQLite FTS5 docs (sqlite.org/fts5.html) — contentless mode, virtual table ALTER restriction
+- better-sqlite3 transaction API (GitHub docs) — transaction boundary patterns
 
 ---
-
-*Research completed: 2026-03-22*
+*Research completed: 2026-03-29*
 *Ready for roadmap: yes*
