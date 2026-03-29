@@ -47,6 +47,11 @@ const KnowledgeBase = () => {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState('');
 
+  const isStale = (article: KbArticleRow): boolean => {
+    const ref = article.last_reviewed_at || article.created_at;
+    return (Date.now() - new Date(ref).getTime()) / (86400 * 1000) > 90;
+  };
+
   const fetchCategories = useCallback(async () => {
     try {
       const data = await api.getKbCategories();
@@ -81,12 +86,7 @@ const KnowledgeBase = () => {
       await fetchArticles();
       setIsLoading(false);
     }, 200);
-    const isStale = (article: KbArticleRow): boolean => {
-    const ref = article.last_reviewed_at || article.created_at;
-    return (Date.now() - new Date(ref).getTime()) / (86400 * 1000) > 90;
-  };
-
-  return () => clearTimeout(timer);
+    return () => clearTimeout(timer);
   }, [fetchArticles]);
 
   useEffect(() => {
