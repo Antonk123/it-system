@@ -55,7 +55,7 @@ function QueueCard({ queue, filterView, onRemove, onMoveUp, onMoveDown, isFirst,
 
   const { data } = useQuery({
     queryKey: ['tickets', 'count', queue.filterViewId, filterParams],
-    queryFn: () => api.get<{ count: number }>(`/tickets?${filterParams}`),
+    queryFn: () => api.request<{ count: number }>(`/tickets?${filterParams}`),
     enabled: !!filterParams,
     staleTime: 30_000, // 30 seconds
     refetchInterval: 60_000, // refresh every minute
