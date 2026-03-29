@@ -7,6 +7,7 @@ import { initializeDatabase } from './db/connection.js';
 import { startReminderScheduler } from './lib/reminderScheduler.js';
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
 import { startAutoCloseScheduler } from './lib/autoCloseScheduler.js';
+import { startRecurringScheduler } from './lib/recurringScheduler.js';
 import cron from 'node-cron';
 import passport from './config/passport.js';
 
@@ -27,6 +28,7 @@ import templateRoutes from './routes/templates.js';
 import tagRoutes from './routes/tags.js';
 import kbRoutes from './routes/kb.js';
 import reportsRoutes from './routes/reports.js';
+import recurringRoutes from './routes/recurring.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -59,6 +61,9 @@ console.log('✅ Refresh token cleanup scheduled (daily at 03:00)');
 
 // Auto-close resolved tickets (daily at 02:30, configurable via AUTO_CLOSE_DAYS env var)
 startAutoCloseScheduler();
+
+// Recurring ticket scheduler (every minute)
+startRecurringScheduler();
 
 // Security headers with Helmet
 // Protects against common web vulnerabilities
@@ -178,6 +183,7 @@ app.use('/api/templates', templateRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/kb', kbRoutes);
 app.use('/api/reports', reportsRoutes);
+app.use('/api/recurring', recurringRoutes);
 
 // Error handling
 // HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client
