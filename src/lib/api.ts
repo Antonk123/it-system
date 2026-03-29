@@ -88,6 +88,36 @@ class ApiClient {
     });
 
     if (!response.ok) {
+      // Handle 401: attempt silent token refresh BEFORE consuming body
+      if (response.status === 401 && !isRetry) {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (refreshToken) {
+          try {
+            const refreshRes = await fetch(`${this.baseUrl}/auth/refresh`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ refreshToken }),
+            });
+            if (refreshRes.ok) {
+              const data = await refreshRes.json() as { accessToken: string; refreshToken?: string };
+              this.setToken(data.accessToken);
+              if (data.refreshToken) {
+                localStorage.setItem('refreshToken', data.refreshToken);
+              }
+              // Retry the original request with new token
+              return this.request<T>(endpoint, options, true);
+            }
+          } catch {
+            // Swallow refresh errors — fall through to redirect
+          }
+        }
+        // Refresh token absent or expired — silent redirect, no toast
+        this.clearToken();
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+        throw new Error('Session expired');
+      }
+
       const error = await response.json().catch(() => ({ error: 'Request failed' }));
 
       // On CSRF failure: clear stale token and retry once
