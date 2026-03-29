@@ -71,7 +71,6 @@ interface KbArticleRow {
   category_color?: string | null;
   article_type?: string | null;
   status: 'draft' | 'published';
-  view_count: number;
   tags?: string[];
   snippet?: string | null;
   created_at: string;
@@ -161,7 +160,7 @@ router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
       const safeQuery = '"' + trimmedSearch.replace(/"/g, '""') + '"';
       rawArticles = db.prepare(`
         SELECT
-          a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.last_reviewed_at, a.created_at, a.updated_at,
+          a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.last_reviewed_at, a.created_at, a.updated_at,
           c.name as category_name, c.color as category_color,
           snippet(kb_articles_fts, 1, '<mark>', '</mark>', '...', 25) AS snippet,
           (SELECT GROUP_CONCAT(kat.tag, ',') FROM kb_article_tags kat WHERE kat.article_id = a.id ORDER BY kat.tag) as tags_csv
@@ -180,7 +179,7 @@ router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
       // No search: standard query with status, tag, article_type filter support
       rawArticles = db.prepare(`
         SELECT
-          a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.last_reviewed_at, a.created_at, a.updated_at,
+          a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.last_reviewed_at, a.created_at, a.updated_at,
           c.name as category_name, c.color as category_color,
           (SELECT GROUP_CONCAT(kat.tag, ',') FROM kb_article_tags kat WHERE kat.article_id = a.id ORDER BY kat.tag) as tags_csv
         FROM kb_articles a
@@ -212,22 +211,19 @@ router.get('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const article = db.prepare(`
       SELECT
-        a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.last_reviewed_at, a.created_at, a.updated_at,
+        a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.last_reviewed_at, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
       WHERE a.id = ?
-    `).get(req.params.id) as (KbArticleRow & { view_count: number }) | undefined;
+    `).get(req.params.id) as KbArticleRow | undefined;
 
     if (!article) return res.status(404).json({ error: 'Article not found' });
-
-    // Increment view count after confirming article exists
-    db.prepare('UPDATE kb_articles SET view_count = view_count + 1 WHERE id = ?').run(req.params.id);
 
     // Fetch tags
     const tags = (db.prepare('SELECT tag FROM kb_article_tags WHERE article_id = ? ORDER BY tag ASC').all(req.params.id) as { tag: string }[]).map((r) => r.tag);
 
-    res.json({ ...article, view_count: article.view_count + 1, tags });
+    res.json({ ...article, tags });
   } catch (error) {
     console.error('Error fetching KB article:', error);
     res.status(500).json({ error: 'Failed to fetch KB article' });
@@ -282,7 +278,7 @@ router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
     insertArticleAndFts(id, title.trim(), content, category_id || null, article_type || null, articleStatus, now);
 
     const article = db.prepare(`
-      SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.created_at, a.updated_at,
+      SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
@@ -336,7 +332,7 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
     updateArticleAndFts(articleId, String(title).trim(), articleContent, category_id || null, article_type || null, articleStatus, now);
 
     const article = db.prepare(`
-      SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.view_count, a.created_at, a.updated_at,
+      SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
@@ -571,21 +567,18 @@ router.get('/public/:token', (_req: Request, res: Response) => {
     if (!share) return res.status(404).json({ error: 'Invalid or expired link' });
 
     const article = db.prepare(`
-      SELECT a.id, a.title, a.content, a.article_type, a.status, a.view_count, a.created_at, a.updated_at,
+      SELECT a.id, a.title, a.content, a.article_type, a.status, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
       WHERE a.id = ?
-    `).get(share.article_id) as (KbArticleRow & { view_count: number }) | undefined;
+    `).get(share.article_id) as KbArticleRow | undefined;
 
     if (!article) return res.status(404).json({ error: 'Article not found' });
 
-    // Increment view count on public read — every view is a real read
-    db.prepare('UPDATE kb_articles SET view_count = view_count + 1 WHERE id = ?').run(share.article_id);
-
     const tags = (db.prepare('SELECT tag FROM kb_article_tags WHERE article_id = ? ORDER BY tag ASC').all(share.article_id) as { tag: string }[]).map((r) => r.tag);
 
-    res.json({ ...article, view_count: article.view_count + 1, tags });
+    res.json({ ...article, tags });
   } catch (error) {
     console.error('Error fetching public KB article:', error);
     res.status(500).json({ error: 'Failed to fetch article' });

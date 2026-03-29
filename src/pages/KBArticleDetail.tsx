@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X, Printer, Eye, CheckCircle, Link2 } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X, Printer, CheckCircle, Link2 } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -306,10 +306,6 @@ const KBArticleDetail = () => {
               <Calendar className="w-3.5 h-3.5" />
               Skapad {formatDate(article.created_at)}
             </span>
-            <div className="flex items-center gap-1.5">
-              <Eye className="w-4 h-4" />
-              <span>{article.view_count} {article.view_count === 1 ? 'visning' : 'visningar'}</span>
-            </div>
             <Button
               variant="ghost"
               size="sm"

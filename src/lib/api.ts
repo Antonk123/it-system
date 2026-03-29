@@ -1181,7 +1181,6 @@ export interface KbArticleRow {
   category_color: string | null;
   article_type?: string | null;
   status: 'draft' | 'published';
-  view_count: number;
   tags: string[];
   snippet?: string | null;
   created_at: string;

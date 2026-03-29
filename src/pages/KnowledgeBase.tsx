@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle, TrendingUp } from 'lucide-react';
+import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -107,20 +107,6 @@ const KnowledgeBase = () => {
     articles.forEach(a => a.tags?.forEach(t => tagSet.add(t)));
     return Array.from(tagSet).sort();
   }, [articles]);
-
-  const recentlyUpdated = useMemo(
-    () => [...articles].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5),
-    [articles]
-  );
-
-  const popularArticles = useMemo(
-    () =>
-      [...articles]
-        .filter(a => a.status === 'published' && a.view_count > 0)
-        .sort((a, b) => b.view_count - a.view_count)
-        .slice(0, 5),
-    [articles]
-  );
 
   const hasActiveFilters = search || categoryFilter !== 'all' || typeFilter !== 'all' || tagFilter !== 'all' || staleFilter;
 
@@ -382,51 +368,6 @@ const KnowledgeBase = () => {
           </div>
         ) : (
           <>
-            {/* Recently updated section — only shown when no filters active */}
-            {!hasActiveFilters && recentlyUpdated.length > 0 && (
-              <div className="mb-8">
-                <h2 className="text-lg font-semibold mb-3">Senast uppdaterade</h2>
-                <div className="grid gap-2">
-                  {recentlyUpdated.map(article => (
-                    <Link
-                      key={article.id}
-                      to={`/kb/${article.id}`}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent transition-colors"
-                    >
-                      <span className="font-medium truncate">{article.title}</span>
-                      <span className="text-sm text-muted-foreground whitespace-nowrap ml-4">
-                        {new Date(article.updated_at).toLocaleDateString('sv-SE')}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Popular articles section — only shown when no filters active and at least one has views */}
-            {!hasActiveFilters && popularArticles.length > 0 && (
-              <div className="mb-8">
-                <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-muted-foreground" />
-                  Populara artiklar
-                </h2>
-                <div className="grid gap-2">
-                  {popularArticles.map(article => (
-                    <Link
-                      key={article.id}
-                      to={`/kb/${article.id}`}
-                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent transition-colors"
-                    >
-                      <span className="font-medium truncate">{article.title}</span>
-                      <span className="text-sm text-muted-foreground whitespace-nowrap ml-4">
-                        {article.view_count} {article.view_count === 1 ? 'visning' : 'visningar'}
-                      </span>
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            )}
-
             <div className="space-y-2">
               {articles.map((article) => (
                 <button
