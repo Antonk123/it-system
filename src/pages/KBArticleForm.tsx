@@ -11,6 +11,27 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { api, KbCategoryRow } from '@/lib/api';
 import { toast } from 'sonner';
 
+const ARTICLE_TEMPLATES = [
+  {
+    id: 'solution',
+    label: 'Lösning',
+    description: 'Problem, orsak, lösning, förebyggande',
+    body: '<h2>Problem</h2><p>Beskriv problemet som artikeln löser.</p><h2>Orsak</h2><p>Varför uppstår problemet?</p><h2>Lösning</h2><p>Steg-för-steg lösning.</p><h2>Förebyggande</h2><p>Hur förhindrar man att problemet återkommer?</p>',
+  },
+  {
+    id: 'how-to',
+    label: 'Instruktion',
+    description: 'Förutsättningar, steg, verifiering',
+    body: '<h2>Förutsättningar</h2><p>Vad behövs innan du börjar?</p><h2>Steg</h2><ol><li>Steg ett</li><li>Steg två</li><li>Steg tre</li></ol><h2>Verifiering</h2><p>Hur vet du att det fungerade?</p>',
+  },
+  {
+    id: 'troubleshooting',
+    label: 'Felsökning',
+    description: 'Symptom, diagnos, åtgärd',
+    body: '<h2>Symptom</h2><p>Vad ser användaren?</p><h2>Diagnos</h2><p>Hur identifierar du grundorsaken?</p><h2>Åtgärd</h2><p>Vilka åtgärder löser problemet?</p>',
+  },
+] as const;
+
 const KBArticleForm = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -27,6 +48,7 @@ const KBArticleForm = () => {
   const [isLoading, setIsLoading] = useState(isEditing);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ title?: string }>({});
+  const [templateDismissed, setTemplateDismissed] = useState(false);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -140,6 +162,35 @@ const KBArticleForm = () => {
             {isEditing ? 'Redigera artikel' : 'Ny artikel'}
           </h1>
         </div>
+
+        {/* Template picker — only for new articles */}
+        {!isEditing && !templateDismissed && (
+          <div className="space-y-3 p-4 rounded-lg border border-border bg-muted/20">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Välj mall (valfritt)</p>
+              <button
+                type="button"
+                onClick={() => setTemplateDismissed(true)}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                Hoppa över
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {ARTICLE_TEMPLATES.map((tmpl) => (
+                <button
+                  key={tmpl.id}
+                  type="button"
+                  onClick={() => { setContent(tmpl.body); setTemplateDismissed(true); }}
+                  className="text-left p-4 rounded-lg border border-border hover:border-primary/50 hover:bg-accent transition-colors"
+                >
+                  <p className="font-medium text-sm">{tmpl.label}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{tmpl.description}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
