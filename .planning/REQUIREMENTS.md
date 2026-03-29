@@ -26,6 +26,7 @@ Requirements for Streamline & Declutter milestone. Each maps to roadmap phases.
 - [ ] **CLEAN-02**: Remove "Senast uppdaterade" section from KB home
 - [ ] **CLEAN-03**: Remove default unused templates (Lösenordsåterställning, Ny användare)
 - [ ] **CLEAN-04**: Remove "Populära artiklar" section from KB home (depends on view_count removal)
+- [ ] **CLEAN-05**: Fix silent token refresh so user never sees login screen unless inactive for 7+ days
 
 ## Future Requirements
 
@@ -43,23 +44,24 @@ None deferred — all identified features scoped into v1.3.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| QCAP-01 | — | Pending |
-| QCAP-02 | — | Pending |
-| QCAP-03 | — | Pending |
-| FORM-01 | — | Pending |
-| FORM-02 | — | Pending |
-| FORM-03 | — | Pending |
-| FORM-04 | — | Pending |
-| CLEAN-01 | — | Pending |
-| CLEAN-02 | — | Pending |
-| CLEAN-03 | — | Pending |
-| CLEAN-04 | — | Pending |
+| CLEAN-01 | Phase 10 | Pending |
+| CLEAN-02 | Phase 10 | Pending |
+| CLEAN-03 | Phase 10 | Pending |
+| CLEAN-04 | Phase 10 | Pending |
+| CLEAN-05 | Phase 10 | Pending |
+| FORM-01 | Phase 11 | Pending |
+| FORM-02 | Phase 11 | Pending |
+| FORM-03 | Phase 11 | Pending |
+| FORM-04 | Phase 11 | Pending |
+| QCAP-01 | Phase 12 | Pending |
+| QCAP-02 | Phase 12 | Pending |
+| QCAP-03 | Phase 12 | Pending |
 
 **Coverage:**
-- v1.3 requirements: 11 total
-- Mapped to phases: 0
-- Unmapped: 11 ⚠️
+- v1.3 requirements: 12 total
+- Mapped to phases: 12
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-30*
-*Last updated: 2026-03-30 after initial definition*
+*Last updated: 2026-03-30 — traceability mapped after roadmap creation*
