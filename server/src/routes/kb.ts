@@ -446,6 +446,76 @@ router.delete('/ticket/:ticketId/:articleId', authenticate, (req: AuthRequest, r
   }
 });
 
+// ─── Article Cross-References ─────────────────────────────────────────────────
+
+// GET /api/kb/articles/:id/links — bidirectional cross-reference list
+router.get('/articles/:id/links', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const links = db.prepare(`
+      SELECT a.id, a.title, a.article_type, kl.id as link_id
+      FROM kb_article_links kl
+      JOIN kb_articles a ON a.id = kl.target_article_id
+      WHERE kl.source_article_id = ? AND a.status = 'published'
+      UNION
+      SELECT a.id, a.title, a.article_type, kl.id as link_id
+      FROM kb_article_links kl
+      JOIN kb_articles a ON a.id = kl.source_article_id
+      WHERE kl.target_article_id = ? AND a.status = 'published'
+      ORDER BY title ASC
+    `).all(id, id);
+    res.json(links);
+  } catch (error) {
+    console.error('Error fetching article links:', error);
+    res.status(500).json({ error: 'Failed to fetch article links' });
+  }
+});
+
+// POST /api/kb/articles/:id/links — create directional link
+router.post('/articles/:id/links', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { targetArticleId } = req.body;
+    if (!targetArticleId) return res.status(400).json({ error: 'targetArticleId is required' });
+    if (id === targetArticleId) return res.status(400).json({ error: 'Cannot link article to itself' });
+
+    // Check if link already exists in either direction
+    const existing = db.prepare(`
+      SELECT id FROM kb_article_links
+      WHERE (source_article_id = ? AND target_article_id = ?)
+         OR (source_article_id = ? AND target_article_id = ?)
+    `).get(id, targetArticleId, targetArticleId, id);
+    if (existing) return res.status(409).json({ error: 'Link already exists' });
+
+    const linkId = uuidv4();
+    db.prepare(`
+      INSERT INTO kb_article_links (id, source_article_id, target_article_id)
+      VALUES (?, ?, ?)
+    `).run(linkId, id, targetArticleId);
+    res.status(201).json({ id: linkId, source_article_id: id, target_article_id: targetArticleId });
+  } catch (error) {
+    console.error('Error creating article link:', error);
+    res.status(500).json({ error: 'Failed to create article link' });
+  }
+});
+
+// DELETE /api/kb/articles/:id/links/:targetId — remove link (bidirectional)
+router.delete('/articles/:id/links/:targetId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id, targetId } = req.params;
+    const result = db.prepare(`
+      DELETE FROM kb_article_links
+      WHERE (source_article_id = ? AND target_article_id = ?)
+         OR (source_article_id = ? AND target_article_id = ?)
+    `).run(id, targetId, targetId, id);
+    if (result.changes === 0) return res.status(404).json({ error: 'Link not found' });
+    res.json({ message: 'Link removed' });
+  } catch (error) {
+    console.error('Error removing article link:', error);
+    res.status(500).json({ error: 'Failed to remove article link' });
+  }
+});
+
 // ─── Article Sharing ──────────────────────────────────────────────────────────
 
 // GET /api/kb/articles/:id/share — get existing share token

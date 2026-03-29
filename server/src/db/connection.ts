@@ -462,6 +462,22 @@ const ensureKbArticleTagsTable = () => {
   console.log('Created table: kb_article_tags');
 };
 
+const ensureKbArticleLinksTable = () => {
+  if (tableExists('kb_article_links')) return;
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS kb_article_links (
+      id TEXT PRIMARY KEY,
+      source_article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
+      target_article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(source_article_id, target_article_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_kb_article_links_source ON kb_article_links(source_article_id);
+    CREATE INDEX IF NOT EXISTS idx_kb_article_links_target ON kb_article_links(target_article_id);
+  `);
+  console.log('Created table: kb_article_links');
+};
+
 const ensureKbReviewColumn = () => {
   if (!tableExists('kb_articles')) return;
   if (columnExists('kb_articles', 'last_reviewed_at')) return;
@@ -525,6 +541,7 @@ export function initializeDatabase() {
   ensureKbArticleTagsTable();
   ensureKbReviewColumn();
   ensureRecurringTemplatesTable();
+  ensureKbArticleLinksTable();
   db.exec('CREATE INDEX IF NOT EXISTS idx_tickets_closed_at ON tickets(status, closed_at DESC)');
   console.log('Database initialized successfully');
 }
