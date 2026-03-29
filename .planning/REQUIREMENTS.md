@@ -30,10 +30,10 @@ Requirements for milestone v1.1 Quality & Automation. Each maps to roadmap phase
 
 ### Reports-rensning
 
-- [ ] **RPT-01**: Activity Heatmap och Radial Progress Rings är borttagna från Reports
+- [x] **RPT-01**: Activity Heatmap och Radial Progress Rings är borttagna från Reports
 - [x] **RPT-02**: Tagg-analytics visar alla taggar som används på ärenden (buggfix)
-- [ ] **RPT-03**: Reports-designen är renare och mer sammanhängande (konsekvent layout, borttagning av överlappande moduler)
-- [ ] **RPT-04**: ReportsCustomization-funktionen (dölja/visa moduler) tas bort — alla synliga moduler visas alltid
+- [x] **RPT-03**: Reports-designen är renare och mer sammanhängande (konsekvent layout, borttagning av överlappande moduler)
+- [x] **RPT-04**: ReportsCustomization-funktionen (dölja/visa moduler) tas bort — alla synliga moduler visas alltid
 
 ## Future Requirements
 
@@ -76,10 +76,10 @@ Requirements for milestone v1.1 Quality & Automation. Each maps to roadmap phase
 | DASH-01 | Phase 5 | Complete |
 | DASH-02 | Phase 5 | Complete |
 | DASH-03 | Phase 5 | Complete |
-| RPT-01 | Phase 6 | Pending |
+| RPT-01 | Phase 6 | Complete |
 | RPT-02 | Phase 6 | Complete |
-| RPT-03 | Phase 6 | Pending |
-| RPT-04 | Phase 6 | Pending |
+| RPT-03 | Phase 6 | Complete |
+| RPT-04 | Phase 6 | Complete |
 
 **Coverage:**
 - v1.1 requirements: 16 total
