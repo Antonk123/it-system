@@ -52,15 +52,26 @@ export const TagDistributionChart = ({
   // Calculate tag distribution data
   const tagDistData = useMemo(() => {
     const tagCounts = new Map<string, number>();
+    const tagLookup = new Map<string, Tag>();
 
+    // Build counts and collect tag objects from tickets
     tickets.forEach(ticket => {
       ticket.tags?.forEach(tag => {
         tagCounts.set(tag.id, (tagCounts.get(tag.id) || 0) + 1);
+        if (!tagLookup.has(tag.id)) {
+          tagLookup.set(tag.id, tag);
+        }
       });
     });
 
-    return tags
-      .filter(tag => tagCounts.has(tag.id))
+    // Prefer canonical tag data from tags prop where available
+    tags.forEach(tag => {
+      if (tagLookup.has(tag.id)) {
+        tagLookup.set(tag.id, tag);
+      }
+    });
+
+    return Array.from(tagLookup.values())
       .map(tag => ({
         name: tag.name,
         count: tagCounts.get(tag.id) || 0,
