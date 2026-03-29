@@ -858,6 +858,24 @@ class ApiClient {
     });
   }
 
+  // Knowledge Base - Cross-References
+  async getKbArticleLinks(articleId: string) {
+    return this.request<LinkedArticleRow[]>(`/kb/articles/${articleId}/links`);
+  }
+
+  async addKbArticleLink(articleId: string, targetArticleId: string) {
+    return this.request<{ id: string; source_article_id: string; target_article_id: string }>(`/kb/articles/${articleId}/links`, {
+      method: 'POST',
+      body: { targetArticleId },
+    });
+  }
+
+  async removeKbArticleLink(articleId: string, targetArticleId: string) {
+    return this.request<{ message: string }>(`/kb/articles/${articleId}/links/${targetArticleId}`, {
+      method: 'DELETE',
+    });
+  }
+
   async getPublicKbArticle(token: string) {
     return this.request<KbArticleRow>(`/kb/public/${token}`);
   }
@@ -1148,6 +1166,13 @@ export interface LinkedTicketRow {
   priority: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface LinkedArticleRow {
+  id: string;
+  title: string;
+  article_type: string | null;
+  link_id: string;
 }
 
 export interface CustomFieldInput {
