@@ -16,8 +16,8 @@ Requirements for Knowledge Base Expansion milestone.
 ### Innehållskvalitet
 
 - [x] **QUAL-01**: Artiklar har en visningsräknare som ökar vid varje visning — 07-01
-- [ ] **QUAL-02**: Artiklar har ett `last_reviewed_at`-fält med "Markera som granskad"-knapp
-- [ ] **QUAL-03**: KB-listan kan filtreras på inaktuella artiklar (ej granskade på N dagar)
+- [x] **QUAL-02**: Artiklar har ett `last_reviewed_at`-fält med "Markera som granskad"-knapp
+- [x] **QUAL-03**: KB-listan kan filtreras på inaktuella artiklar (ej granskade på N dagar)
 
 ### Artikelmallar
 
@@ -63,8 +63,8 @@ Explicitly excluded from v1.2.
 | ORG-02 | Phase 7 | Done |
 | ORG-03 | Phase 7 | Done |
 | QUAL-01 | Phase 7 | Done |
-| QUAL-02 | Phase 8 | Pending |
-| QUAL-03 | Phase 8 | Pending |
+| QUAL-02 | Phase 8 | Complete |
+| QUAL-03 | Phase 8 | Complete |
 | TMPL-01 | Phase 8 | Pending |
 | TMPL-02 | Phase 8 | Pending |
 | TOC-01 | Phase 8 | Pending |

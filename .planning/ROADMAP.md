@@ -61,10 +61,10 @@ Plans:
 
 **Requirements:** QUAL-02, QUAL-03, TMPL-01, TMPL-02, TOC-01, TOC-02
 
-**Plans:** 2 plans
+**Plans:** 1/2 plans executed
 
 Plans:
-- [ ] 08-01-PLAN.md — Staleness detection: schema migration, review endpoint, stale filter + badge, review button
+- [x] 08-01-PLAN.md — Staleness detection: schema migration, review endpoint, stale filter + badge, review button
 - [ ] 08-02-PLAN.md — Table of contents sidebar + article template picker
 
 **Scope:**
@@ -103,5 +103,5 @@ Plans:
 | 5. Automation — Recurring & Queues | v1.1 | 3/3 | Complete | 2026-03-29 |
 | 6. Reports Cleanup | v1.1 | 2/2 | Complete | 2026-03-29 |
 | 7. KB Foundations — Tags, Status, View Count & Quick Wins | v1.2 | 2/2 | Complete | 2026-03-29 |
-| 8. Content Quality — ToC, Templates & Staleness | v1.2 | 0/2 | Planned | — |
+| 8. Content Quality — ToC, Templates & Staleness | v1.2 | 1/2 | In Progress|  |
 | 9. Discoverability & Workflow — Cross-refs, Popular, Shortcuts | v1.2 | 0/? | Pending | — |

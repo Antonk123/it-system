@@ -2,15 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Knowledge Base Expansion
-status: completed
-stopped_at: Phase 8 context gathered
-last_updated: "2026-03-29T15:41:22.147Z"
-last_activity: 2026-03-29 -- Phase 07 Plan 02 complete
+status: Ready to execute
+stopped_at: Completed 08-01-PLAN.md
+last_updated: "2026-03-29T16:03:18.254Z"
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
 ---
 
 # Project State
@@ -20,14 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26 after v1.1 milestone start)
 
 **Core value:** Every ticket gets tracked, resolved, and documented — nothing falls through the cracks and solutions are reusable.
-**Current focus:** Phase 07 — kb-foundations-tags-status-view-count-quick-wins
+**Current focus:** Phase 08 — content-quality-toc-templates-staleness
 
 ## Current Position
 
-Phase: 07 (kb-foundations-tags-status-view-count-quick-wins) — COMPLETE
-Plan: 2 of 2 (all plans complete)
-Status: Phase 07 complete
-Last activity: 2026-03-29 -- Phase 07 Plan 02 complete
+Phase: 08 (content-quality-toc-templates-staleness) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -54,6 +51,8 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 07-02]: availableTags derived from already-loaded articles via useMemo — no extra API call since list endpoint returns tags[] per article
 - [Phase 07-02]: Senast uppdaterade section hidden when hasActiveFilters is truthy — prevents confusion when user applies filters and sees unrelated recent articles
 - [Phase 07-02]: Draft indicator added to KB article detail page so author knows when viewing unpublished article via direct /kb/:id link
+- [Phase 08]: COALESCE(last_reviewed_at, created_at) for staleness baseline — never-reviewed articles fall back to created_at
+- [Phase 08]: Review button in KB article detail metadata row, not action bar — avoids crowding 4 existing buttons
 
 ### Pending Todos
 
@@ -65,6 +64,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-29T15:41:22.143Z
-Stopped at: Phase 8 context gathered
-Resume file: .planning/phases/08-content-quality-toc-templates-staleness/08-CONTEXT.md
+Last session: 2026-03-29T16:03:18.249Z
+Stopped at: Completed 08-01-PLAN.md
+Resume file: None
