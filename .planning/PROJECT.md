@@ -46,7 +46,13 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 
 ### Active
 
-(Next milestone requirements TBD)
+## Current Milestone: v1.2 Knowledge Base Expansion
+
+**Goal:** Build out the knowledge base with features that make it genuinely useful for a single-user internal IT tool.
+
+**Target features:**
+- TBD — research phase will identify what's standard and valuable
+- Scope will be refined after research completes
 
 ### Out of Scope
 
@@ -116,4 +122,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-29 after v1.1 milestone completion*
+*Last updated: 2026-03-29 after v1.2 milestone start*
