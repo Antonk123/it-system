@@ -4,31 +4,27 @@ import { TAG_RULES, PRIORITY_RULES } from '../config/automation.js';
 
 // ─── Auto-tag ─────────────────────────────────────────────────────────────────
 
+/** Word-boundary match: ensures "office" doesn't match "backoffice" */
+function matchesWord(text: string, keyword: string): boolean {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
+}
+
 /**
  * Applies auto-tags to a newly created ticket based on TAG_RULES.
- * Tags are created on first use; existing tags are reused.
- * Runs inside the same synchronous DB context as ticket creation.
+ * Only matches against the title (not description) using word-boundary matching.
+ * Only applies tags that already exist — never creates new ones.
  */
-export function applyAutoTags(ticketId: string, title: string, description: string): void {
-  const text = `${title} ${description}`.toLowerCase();
+export function applyAutoTags(ticketId: string, title: string, _description: string): void {
   const addedTagNames = new Set<string>();
 
   for (const rule of TAG_RULES) {
-    if (!text.includes(rule.keyword.toLowerCase())) continue;
-    if (addedTagNames.has(rule.tagName)) continue; // already added this tag
+    if (!matchesWord(title, rule.keyword)) continue;
+    if (addedTagNames.has(rule.tagName)) continue;
 
-    // Find or create the tag
-    let tag = db.prepare('SELECT id FROM tags WHERE name = ?').get(rule.tagName) as { id: string } | undefined;
-    if (!tag) {
-      const newId = uuidv4();
-      db.prepare('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)').run(
-        newId,
-        rule.tagName,
-        rule.tagColor
-      );
-      tag = { id: newId };
-      console.log(`🏷️  Auto-tag: created new tag "${rule.tagName}"`);
-    }
+    // Only use existing tags — never create new ones
+    const tag = db.prepare('SELECT id FROM tags WHERE name = ?').get(rule.tagName) as { id: string } | undefined;
+    if (!tag) continue;
 
     // Link tag to ticket (ignore if already linked)
     const exists = db.prepare('SELECT 1 FROM ticket_tags WHERE ticket_id = ? AND tag_id = ?').get(ticketId, tag.id);

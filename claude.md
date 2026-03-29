@@ -1,17 +1,61 @@
-# IT Ticket System — Developer Guide
+# IT-Ticket — Developer Guide
+
+## Project Overview
+
+**IT-Ticket** är ett ärendehanteringssystem byggt för enskild användare (Anton) på Prefabmästarna. Systemet används för att:
+- Skapa och hantera IT-ärenden
+- Arkivera lösningar för framtida referens
+- Skicka ut instruktioner och lösningar
+
+Single-user system — ingen annan har tillgång.
+
+## Tech Stack
+
+| Lager | Teknologi |
+|-------|-----------|
+| Frontend | React, TypeScript, Vite, Tailwind CSS, shadcn/ui |
+| Backend | Node.js, Express, TypeScript |
+| Databas | SQLite |
+| PWA | vite-plugin-pwa med Workbox |
+
+## Infrastruktur & Hosting
+
+- **Host**: Proxmox-server med Docker via Portainer
+- **Git**: [GitHub — Antonk123/it-system](https://github.com/Antonk123/it-system)
+
+### Miljöer
+
+| Miljö | URL | Syfte |
+|-------|-----|-------|
+| **Prod** | `https://ticket.prefabmastarna.se` | Live-system |
+| **Dev** | `http://10.38.195.180:5174/` | Testmiljö på servern |
+| **Lokal** | `localhost` via `docker-compose.local.yml` | Lokal dev för att testa innan push |
+
+### Portar
+
+| Tjänst | Intern port | Extern port |
+|--------|-------------|-------------|
+| Backend (Express API) | 3001 | 3002 |
+| Frontend (nginx/prod) | 80 | 8082 |
+| Frontend (Vite/dev) | 8080 | — |
+
+## Deployment
+
+Flödet: lokal utveckling → git push → git pull på servern → Docker rebuild.
+
+1. Gör ändringar lokalt (testa via `docker-compose.local.yml` vid behov)
+2. `git push` till GitHub
+3. På servern: `git pull`
+4. Bygg Docker-images:
+   - Backend: `docker build -t it-ticketing-backend:latest -f Dockerfile.server .`
+   - Frontend: `docker build -t it-ticketing-frontend:latest -f Dockerfile.client .`
+5. Starta om via Portainer eller `docker restart`
 
 ## Core Principles
 
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
-
-## Deployment
-
-When deploying changes:
-1. Make changes locally
-2. Rebuild Docker images: `docker build -t it-ticketing-backend:latest -f Dockerfile.server .`
-3. Deploy via Portainer or `docker restart`
 
 ## Task Management
 
@@ -24,7 +68,7 @@ When deploying changes:
 
 ## Working Rules
 
-### 1. Plan Node Default
+### 1. Plan Mode Default
 
 - Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions).
 - If something goes sideways, STOP and re-plan immediately — don't keep pushing.

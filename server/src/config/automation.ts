@@ -7,9 +7,10 @@
 export const AUTO_CLOSE_DAYS = Number(process.env.AUTO_CLOSE_DAYS ?? 30);
 
 // ─── Auto-tag rules ───────────────────────────────────────────────────────────
-// When a ticket is created, its title + description are matched (case-insensitive)
-// against each keyword. If matched, the tag is added automatically.
-// The tag is created on first use with the provided color; existing tags are reused.
+// When a ticket is created, its TITLE is matched (case-insensitive, word-boundary)
+// against each keyword. If matched and the tag exists, it is added automatically.
+// Tags are never created automatically — only existing tags are used.
+// Word-boundary matching prevents "office" from matching inside "backoffice".
 export interface TagRule {
   keyword: string;
   tagName: string;
