@@ -12,7 +12,7 @@ import { loginRateLimiter } from '../middleware/rateLimit.js';
 const router = Router();
 
 // Token expiration times
-const ACCESS_TOKEN_EXPIRY = '1h'; // Short-lived access token
+const ACCESS_TOKEN_EXPIRY = '15m'; // Short-lived access token (silent refresh handles re-auth)
 const REFRESH_TOKEN_EXPIRY_DAYS = 7; // Refresh token valid for 7 days
 
 // Generate cryptographically secure refresh token
@@ -136,12 +136,21 @@ router.post('/refresh', (req: Request, res: Response) => {
       { expiresIn: ACCESS_TOKEN_EXPIRY }
     );
 
-    // Update last_used_at for refresh token
-    db.prepare('UPDATE refresh_tokens SET last_used_at = CURRENT_TIMESTAMP WHERE id = ?').run(tokenRow.id);
+    // Delete consumed refresh token (rolling token pattern — single use)
+    db.prepare('DELETE FROM refresh_tokens WHERE id = ?').run(tokenRow.id);
+
+    // Issue new refresh token with fresh 7-day expiry (rolling per D-06)
+    const newRefreshToken = generateRefreshToken();
+    const newRefreshTokenId = uuidv4();
+    const newExpiresAt = getRefreshTokenExpiry();
+    db.prepare(
+      'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
+    ).run(newRefreshTokenId, tokenRow.user_id, newRefreshToken, newExpiresAt);
 
     res.json({
       accessToken,
       token: accessToken, // For backward compatibility
+      refreshToken: newRefreshToken,
     });
   } catch (error) {
     console.error('Error refreshing token:', error);
