@@ -15,13 +15,9 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { KPICard } from '@/components/KPICard';
-import { ActivityHeatmap } from '@/components/ActivityHeatmap';
 import { StatusFlowChart } from '@/components/StatusFlowChart';
 import { TagAnalytics } from '@/components/TagAnalytics';
-import { RadialProgressRings } from '@/components/RadialProgressRings';
-import { ReportsCustomization } from '@/components/ReportsCustomization';
 import { KPIDetailDialog } from '@/components/KPIDetailDialog';
-import { useReportsPreferences } from '@/hooks/useReportsPreferences';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { BarChart3, PieChart as PieChartIcon, Calendar, Ticket, Clock, CheckCircle, AlertTriangle, Users, Scale, Download, Printer } from 'lucide-react';
@@ -155,19 +151,13 @@ const Reports = () => {
   const { users } = useUsers();
   const { tags } = useTags();
   const isMobile = useIsMobile();
-  const { preferences } = useReportsPreferences();
   const [selectedUserId, setSelectedUserId] = useState<string>('all');
-
-  // Helper to check if a module is visible
-  const isModuleVisible = (moduleId: string) => {
-    return preferences.modules.find(m => m.id === moduleId)?.visible ?? true;
-  };
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [kpiModalOpen, setKpiModalOpen] = useState<string | null>(null);
 
   // Fetch all report summary data from the new endpoint
-  const { data: summary, isLoading, isError } = useReportsSummary(selectedYear, selectedMonth);
+  const { data: summary, isLoading, isError, error } = useReportsSummary(selectedYear, selectedMonth);
 
   // Get available years from summary trend data
   const availableYears = useMemo(() => {
@@ -588,8 +578,6 @@ const Reports = () => {
               <Printer className="h-4 w-4" />
               <span className="hidden sm:inline">Skriv ut</span>
             </Button>
-            <div className="w-px h-6 bg-border" />
-            <ReportsCustomization />
           </div>
         </div>
 
@@ -597,7 +585,9 @@ const Reports = () => {
         {isError && (
           <Alert variant="destructive">
             <AlertTitle>Kunde inte ladda rapportdata</AlertTitle>
-            <AlertDescription>Kontrollera anslutningen och ladda om sidan.</AlertDescription>
+            <AlertDescription>
+              {error instanceof Error ? error.message : 'Kontrollera anslutningen och ladda om sidan.'}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -685,12 +675,11 @@ const Reports = () => {
             )}
 
             {/* Status Distribution */}
-            {isModuleVisible('statusDistribution') && (
-              <Card className="animate-fade-in" style={{ animationDelay: '350ms' }}>
-                <CardHeader className="flex flex-row items-center gap-2">
-                  <PieChartIcon className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-xl font-semibold font-serif">Ärenden per status</CardTitle>
-                </CardHeader>
+            <Card className="animate-fade-in" style={{ animationDelay: '350ms' }}>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <PieChartIcon className="h-5 w-5 text-primary" />
+                <CardTitle className="text-xl font-semibold font-serif">Ärenden per status</CardTitle>
+              </CardHeader>
                 <CardContent>
                   {isLoading ? (
                     <Skeleton className="h-[300px] w-full" />
@@ -765,16 +754,14 @@ const Reports = () => {
                     </div>
                   )}
                 </CardContent>
-              </Card>
-            )}
+            </Card>
 
             {/* Priority Chart */}
-            {isModuleVisible('priorityChart') && (
-              <Card className="animate-fade-in" style={{ animationDelay: '300ms' }}>
-                <CardHeader className="flex flex-row items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-xl font-semibold font-serif">Ärenden per prioritet</CardTitle>
-                </CardHeader>
+            <Card className="animate-fade-in" style={{ animationDelay: '300ms' }}>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-primary" />
+                <CardTitle className="text-xl font-semibold font-serif">Ärenden per prioritet</CardTitle>
+              </CardHeader>
                 <CardContent>
                   {isLoading ? (
                     <Skeleton className="h-[300px] w-full" />
@@ -814,147 +801,107 @@ const Reports = () => {
                     </ResponsiveContainer>
                   )}
                 </CardContent>
-              </Card>
-            )}
+            </Card>
 
             {/* Category Breakdown Chart */}
-            {isModuleVisible('categoryChart') && (
-              <Card className="animate-fade-in" style={{ animationDelay: '400ms' }}>
-                <CardHeader className="flex flex-row items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-xl font-semibold font-serif">Kategorier</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {isLoading ? (
-                    <Skeleton className="h-[300px] w-full" />
-                  ) : !summary?.byCategory || summary.byCategory.length === 0 ? (
-                    <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                      Inga kategorier
-                    </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={Math.max(200, summary.byCategory.length * 40)}>
-                      <BarChart
-                        layout="vertical"
-                        data={summary.byCategory}
-                        margin={{ left: 80, right: 20, top: 5, bottom: 5 }}
-                      >
-                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
-                        <YAxis type="category" dataKey="category" tick={{ fontSize: 12 }} width={80} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--card))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px',
-                          }}
-                        />
-                        <Bar dataKey="count" name="Ärenden" radius={[0, 4, 4, 0]}>
-                          {summary.byCategory.map((_, index) => (
-                            <Cell key={`cell-cat-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-            )}
+            <Card className="animate-fade-in" style={{ animationDelay: '400ms' }}>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-primary" />
+                <CardTitle className="text-xl font-semibold font-serif">Kategorier</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-[300px] w-full" />
+                ) : !summary?.byCategory || summary.byCategory.length === 0 ? (
+                  <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                    Inga kategorier
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={Math.max(200, summary.byCategory.length * 40)}>
+                    <BarChart
+                      layout="vertical"
+                      data={summary.byCategory}
+                      margin={{ left: 80, right: 20, top: 5, bottom: 5 }}
+                    >
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 12 }} />
+                      <YAxis type="category" dataKey="category" tick={{ fontSize: 12 }} width={80} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                      />
+                      <Bar dataKey="count" name="Ärenden" radius={[0, 4, 4, 0]}>
+                        {summary.byCategory.map((_, index) => (
+                          <Cell key={`cell-cat-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* ── Flik 2: Trend ── */}
           <TabsContent value="trend" className="space-y-5 mt-5">
 
             {/* Created vs Closed Trend — ComposedChart */}
-            {isModuleVisible('monthlyChart') && (
-              <Card>
-                <CardHeader className="flex flex-row items-center gap-2">
-                  <Calendar className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-xl font-semibold font-serif">Skapade och stängda ärenden</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {isLoading ? (
-                    <Skeleton className="h-[300px] w-full" />
-                  ) : !summary?.trend || summary.trend.length === 0 ? (
-                    <div className="h-[200px] flex items-center justify-center text-muted-foreground">
-                      Ingen trenddata tillgänglig
-                    </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <ComposedChart data={summary.trend} margin={{ left: 20, right: 20, top: 5, bottom: 5 }}>
-                        <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
-                        <Tooltip
-                          contentStyle={{
-                            backgroundColor: 'hsl(var(--card))',
-                            border: '1px solid hsl(var(--border))',
-                            borderRadius: '8px',
-                          }}
-                        />
-                        <Legend />
-                        <Bar dataKey="created" name="Skapad" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                        <Line type="monotone" dataKey="closed" name="Stängd" stroke="hsl(var(--chart-4))" strokeWidth={2} dot={{ r: 3 }} />
-                      </ComposedChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Radial Progress Rings */}
-            {isModuleVisible('statusDistribution') && statusKPIs.total > 0 && (
-              <Card className="animate-fade-in">
-                <CardHeader className="flex flex-row items-center gap-2">
-                  <PieChartIcon className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-xl font-semibold font-serif">Statusfördelning</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {isLoading ? (
-                    <Skeleton className="h-[300px] w-full" />
-                  ) : (
-                    <RadialProgressRings data={ticketsByStatus} total={statusKPIs.total} />
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Activity Heatmap */}
-            {isModuleVisible('activityHeatmap') && (
-              <Card className="animate-fade-in" style={{ animationDelay: '400ms' }}>
-                <CardHeader>
-                  <CardTitle className="text-xl font-semibold font-serif">Aktivitetskalender</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Daglig ärendevolym de senaste {isMobile ? '3' : '12'} månaderna
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <ActivityHeatmap tickets={tickets} monthsToShow={isMobile ? 3 : 12} />
-                </CardContent>
-              </Card>
-            )}
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                <CardTitle className="text-xl font-semibold font-serif">Skapade och stängda ärenden</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {isLoading ? (
+                  <Skeleton className="h-[300px] w-full" />
+                ) : !summary?.trend || summary.trend.length === 0 ? (
+                  <div className="h-[200px] flex items-center justify-center text-muted-foreground">
+                    Ingen trenddata tillgänglig
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <ComposedChart data={summary.trend} margin={{ left: 20, right: 20, top: 5, bottom: 5 }}>
+                      <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                      <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--card))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                        }}
+                      />
+                      <Legend />
+                      <Bar dataKey="created" name="Skapad" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                      <Line type="monotone" dataKey="closed" name="Stängd" stroke="hsl(var(--chart-4))" strokeWidth={2} dot={{ r: 3 }} />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Status Flow */}
-            {isModuleVisible('statusFlow') && (
-              <Card className="animate-fade-in" style={{ animationDelay: '500ms' }}>
-                <CardHeader>
-                  <CardTitle className="text-xl font-semibold font-serif">Statusflöde över tid</CardTitle>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Statusfördelning de senaste 12 månaderna
-                  </p>
-                </CardHeader>
-                <CardContent>
-                  <StatusFlowChart tickets={tickets} height={isMobile ? 250 : 300} />
-                </CardContent>
-              </Card>
-            )}
+            <Card className="animate-fade-in" style={{ animationDelay: '500ms' }}>
+              <CardHeader>
+                <CardTitle className="text-xl font-semibold font-serif">Statusflöde över tid</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Statusfördelning de senaste 12 månaderna
+                </p>
+              </CardHeader>
+              <CardContent>
+                <StatusFlowChart tickets={tickets} height={isMobile ? 250 : 300} />
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* ── Flik 3: Personer ── */}
           <TabsContent value="personer" className="space-y-5 mt-5">
-            {isModuleVisible('requesterAnalytics') && (
-              <Card className="animate-fade-in" style={{ animationDelay: '700ms' }}>
-                <CardHeader className="flex flex-row items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-primary" />
-                  <CardTitle className="text-xl font-semibold font-serif">Per person</CardTitle>
-                </CardHeader>
+            <Card className="animate-fade-in" style={{ animationDelay: '700ms' }}>
+              <CardHeader className="flex flex-row items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-primary" />
+                <CardTitle className="text-xl font-semibold font-serif">Per person</CardTitle>
+              </CardHeader>
                 <CardContent>
                   {/* KPI Summary - enkla divs utan nästlade Card-komponenter */}
                   {requesterAnalytics.length > 0 && (
@@ -1060,18 +1007,15 @@ const Reports = () => {
                       </BarChart>
                     </ResponsiveContainer>
                   )}
-                </CardContent>
-              </Card>
-            )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* ── Flik 4: Taggar ── */}
           <TabsContent value="taggar" className="space-y-5 mt-5">
-            {isModuleVisible('tagAnalytics') && (
-              <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
-                <TagAnalytics tickets={tickets} tags={tags} />
-              </div>
-            )}
+            <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
+              <TagAnalytics tickets={tickets} tags={tags} />
+            </div>
           </TabsContent>
         </Tabs>
 
