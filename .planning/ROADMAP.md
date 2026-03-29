@@ -72,7 +72,7 @@ Plans:
   4. The show/hide module customization UI is removed — all remaining modules are always visible
 **Plans**: 2 plans
 Plans:
-- [ ] 06-01-PLAN.md — Remove ActivityHeatmap, RadialProgressRings, ReportsCustomization and all module-visibility gating
+- [x] 06-01-PLAN.md — Remove ActivityHeatmap, RadialProgressRings, ReportsCustomization and all module-visibility gating
 - [x] 06-02-PLAN.md — Fix tag analytics to show all tags from tickets (not just tags table)
 
 ## Progress
