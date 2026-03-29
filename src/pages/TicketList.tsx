@@ -285,7 +285,7 @@ const TicketList = () => {
             search: '', status: [], priority: 'all', category: 'all',
             tags: [], tagMode: 'or', checklist: '', dateFrom: '', dateTo: '', dateField: 'created_at'
           })}
-          searchPlaceholder="Sok arenden..."
+          searchPlaceholder="Sök ärenden..."
         />
 
         {/* Loading state */}

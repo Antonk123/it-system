@@ -25,7 +25,10 @@ export function useDashboardQueues() {
     setQueues(prev => {
       // Don't add duplicate
       if (prev.some(q => q.filterViewId === filterViewId)) return prev;
-      return [...prev, { id: crypto.randomUUID(), filterViewId }];
+      const id = (typeof crypto !== 'undefined' && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+      return [...prev, { id, filterViewId }];
     });
   }, []);
 

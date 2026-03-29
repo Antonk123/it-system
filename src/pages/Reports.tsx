@@ -610,16 +610,16 @@ const Reports = () => {
           users={users}
         />
 
-        <Tabs defaultValue="oversikt">
+        <Tabs defaultValue="översikt">
           <TabsList>
-            <TabsTrigger value="oversikt">Översikt</TabsTrigger>
+            <TabsTrigger value="översikt">Översikt</TabsTrigger>
             <TabsTrigger value="trend">Trend</TabsTrigger>
             <TabsTrigger value="personer">Personer</TabsTrigger>
             <TabsTrigger value="taggar">Taggar</TabsTrigger>
           </TabsList>
 
           {/* ── Flik 1: Översikt ── */}
-          <TabsContent value="oversikt" className="space-y-5 mt-5">
+          <TabsContent value="översikt" className="space-y-5 mt-5">
 
             {/* Hero KPI Cards */}
             {isLoading ? (

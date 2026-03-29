@@ -57,17 +57,17 @@ export function BulkActionBar({
           onClick={onReopen}
           className="border-green-500 text-green-500 hover:bg-green-500/10 hover:text-green-500"
         >
-          Oppna igen
+          Öppna igen
         </Button>
 
         <Select onValueChange={(value) => onChangePriority(value as TicketPriority)}>
           <SelectTrigger className="h-8 w-[150px]">
-            <SelectValue placeholder="Andra prioritet" />
+            <SelectValue placeholder="Ändra prioritet" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="low">Lag prioritet</SelectItem>
+            <SelectItem value="low">Låg prioritet</SelectItem>
             <SelectItem value="medium">Medium prioritet</SelectItem>
-            <SelectItem value="high">Hog prioritet</SelectItem>
+            <SelectItem value="high">Hög prioritet</SelectItem>
             <SelectItem value="critical">Kritisk prioritet</SelectItem>
           </SelectContent>
         </Select>
@@ -94,7 +94,7 @@ export function BulkActionBar({
           <AlertDialogHeader>
             <AlertDialogTitle>Radera permanent?</AlertDialogTitle>
             <AlertDialogDescription>
-              Du haller pa att radera {selectedCount} arende(n) permanent. Atgarden kan inte angras.
+              Du håller på att radera {selectedCount} ärende(n) permanent. Åtgärden kan inte ångras.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -106,7 +106,7 @@ export function BulkActionBar({
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Radera arendena
+              Radera ärendena
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

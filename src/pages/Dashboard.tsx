@@ -12,7 +12,7 @@ import { Layout } from '@/components/Layout';
 import { KPICard } from '@/components/KPICard';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
@@ -110,7 +110,7 @@ function QueueCard({ queue, filterView, onRemove, onMoveUp, onMoveDown, isFirst,
       </CardHeader>
       <CardContent>
         <p className="text-3xl font-bold">{count}</p>
-        <p className="text-xs text-muted-foreground mt-1">matchande arenden</p>
+        <p className="text-xs text-muted-foreground mt-1">matchande ärenden</p>
       </CardContent>
     </Card>
   );
@@ -200,14 +200,14 @@ const Dashboard = () => {
     <Layout>
       <div className="space-y-5">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Oversikt</h1>
-          <p className="text-muted-foreground mt-1">Oversikt over dina IT-supportarenden</p>
+          <h1 className="text-xl font-bold text-foreground">Översikt</h1>
+          <p className="text-muted-foreground mt-1">Översikt över dina IT-supportärenden</p>
         </div>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <KPICard
-            label="Oppna arenden"
+            label="Öppna ärenden"
             value={stats.open}
             icon={<Ticket className="w-5 h-5" />}
             trend={trends.open}
@@ -216,7 +216,7 @@ const Dashboard = () => {
             animationDelay={0}
           />
           <KPICard
-            label="Pagaende"
+            label="Pågående"
             value={stats.inProgress}
             icon={<Clock className="w-5 h-5" />}
             trend={trends.inProgress}
@@ -225,7 +225,7 @@ const Dashboard = () => {
             animationDelay={100}
           />
           <KPICard
-            label="Vantar"
+            label="Väntar"
             value={stats.waiting}
             icon={<PauseCircle className="w-5 h-5" />}
             trend={trends.waiting}
@@ -234,7 +234,7 @@ const Dashboard = () => {
             animationDelay={200}
           />
           <KPICard
-            label="Losta"
+            label="Lösta"
             value={stats.resolved}
             icon={<CheckCircle className="w-5 h-5" />}
             trend={trends.resolved}
@@ -264,7 +264,7 @@ const Dashboard = () => {
               <AlertTriangle className="w-5 h-5 text-destructive" />
               <div className="flex-1">
                 <p className="font-medium text-destructive">
-                  {stats.critical} kritisk{stats.critical > 1 ? 'a' : 't'} arende{stats.critical > 1 ? 'n' : ''} kraver uppmarksamhet
+                  {stats.critical} kritisk{stats.critical > 1 ? 'a' : 't'} ärende{stats.critical > 1 ? 'n' : ''} kräver uppmärksamhet
                 </p>
               </div>
               <Link to="/tickets?priority=critical">
@@ -281,17 +281,18 @@ const Dashboard = () => {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <LayoutList className="h-5 w-5" />
-              Koer
+              Köer
             </h2>
             <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1">
-                  <Plus className="h-4 w-4" /> Lagg till ko
+                  <Plus className="h-4 w-4" /> Lägg till kö
                 </Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
-                  <DialogTitle>Valj filtervy</DialogTitle>
+                  <DialogTitle>Välj filtervy</DialogTitle>
+                <DialogDescription>Välj en filtervy att lägga till som kö på dashboarden.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {allViews
@@ -308,7 +309,7 @@ const Dashboard = () => {
                     ))}
                   {allViews.filter(v => !queues.some(q => q.filterViewId === v.id)).length === 0 && (
                     <p className="text-sm text-muted-foreground text-center py-4">
-                      Alla filtervyer ar redan tillagda. Skapa nya filtervyer pa arendesidan.
+                      Alla filtervyer är redan tillagda. Skapa nya filtervyer på ärendesidan.
                     </p>
                   )}
                 </div>
@@ -319,9 +320,9 @@ const Dashboard = () => {
           {queues.length === 0 ? (
             <div className="text-center py-12 border rounded-lg bg-card">
               <LayoutList className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">Inga koer tillagda</p>
+              <p className="text-muted-foreground">Inga köer tillagda</p>
               <p className="text-sm text-muted-foreground mt-1">
-                Lagg till filtervyer som koer for att se antal matchande arenden har.
+                Lägg till filtervyer som köer för att se antal matchande ärenden här.
               </p>
             </div>
           ) : (

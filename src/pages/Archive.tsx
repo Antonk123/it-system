@@ -310,7 +310,7 @@ const Archive = () => {
             search: '', priority: 'all', category: 'all',
             tags: [], tagMode: 'or', checklist: '', dateFrom: '', dateTo: ''
           })}
-          searchPlaceholder="Sok arkiverade arenden..."
+          searchPlaceholder="Sök arkiverade ärenden..."
         />
 
         {/* Loading state */}

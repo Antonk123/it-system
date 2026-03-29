@@ -67,7 +67,7 @@ export function UnifiedFilterBar({
   onManageViews,
   onChange,
   onClearAll,
-  searchPlaceholder = 'Sok arenden...',
+  searchPlaceholder = 'Sök ärenden...',
 }: UnifiedFilterBarProps) {
   const { categories } = useCategories();
 
