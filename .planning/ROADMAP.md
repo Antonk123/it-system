@@ -82,11 +82,11 @@ Plans:
 
 **Requirements:** DISC-02, DISC-03, DISC-04, WF-02, WF-03
 
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 
 Plans:
 - [x] 09-01-PLAN.md — Backend: kb_article_links schema migration + cross-reference CRUD endpoints + API client methods
-- [ ] 09-02-PLAN.md — Frontend: popular articles section, Se aven panel, link picker, / shortcut, ticket-to-KB button
+- [x] 09-02-PLAN.md — Frontend: popular articles section, Se aven panel, link picker, / shortcut, ticket-to-KB button
 
 **Scope:**
 - Popular articles section on KB home (uses view_count from Phase 7)
@@ -110,4 +110,4 @@ Plans:
 | 6. Reports Cleanup | v1.1 | 2/2 | Complete | 2026-03-29 |
 | 7. KB Foundations — Tags, Status, View Count & Quick Wins | v1.2 | 2/2 | Complete | 2026-03-29 |
 | 8. Content Quality — ToC, Templates & Staleness | v1.2 | 2/2 | Complete   | 2026-03-29 |
-| 9. Discoverability & Workflow — Cross-refs, Popular, Shortcuts | v1.2 | 0/2 | In Progress | — |
+| 9. Discoverability & Workflow — Cross-refs, Popular, Shortcuts | v1.2 | 2/2 | Complete   | 2026-03-29 |

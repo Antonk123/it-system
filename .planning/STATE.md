@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Knowledge Base Expansion
-status: Ready to execute
-stopped_at: Completed 09-01-PLAN.md
-last_updated: "2026-03-29T16:35:42.822Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 09-02-PLAN.md
+last_updated: "2026-03-29T16:41:54.386Z"
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 6
-  completed_plans: 5
+  completed_plans: 6
 ---
 
 # Project State
@@ -56,6 +56,9 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 08]: slugify normalizes Swedish chars for DOMPurify-safe anchor IDs; IDs set post-render via setAttribute
 - [Phase 08]: Template picker dismissed on selection or skip; not shown for edit routes
 - [Phase 09]: kb_article_links stores directional links; GET and DELETE use UNION/OR for bidirectional behavior
+- [Phase 09]: Popular articles filter includes status=published guard per D-05 plan-checker warning
+- [Phase 09]: Template picker auto-dismissed when query params present to avoid overwriting pre-filled content
+- [Phase 09]: Link picker shows only published articles and excludes self and already-linked articles
 
 ### Pending Todos
 
@@ -67,6 +70,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-29T16:35:42.818Z
-Stopped at: Completed 09-01-PLAN.md
+Last session: 2026-03-29T16:41:54.381Z
+Stopped at: Completed 09-02-PLAN.md
 Resume file: None
