@@ -36,6 +36,11 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - ✓ `GET /api/kb/articles/:id/tickets` endpoint — v1.0
 - ✓ Archive date range filter on `closed_at` with URL persistence — v1.0
 - ✓ Composite index on `(status, closed_at)` for fast archive queries — v1.0
+- ✓ Unified filter bar across Alla ärenden and Arkiv with filter views — Phase 4
+- ✓ Arkiv parity: same filters, bulk operations, CSV export as Alla ärenden — Phase 4
+- ✓ Recurring ticket templates with CRUD API and cron scheduler — Phase 5
+- ✓ Recurring tickets frontend: manage templates, toggle, view history — Phase 5
+- ✓ Dashboard queue cards: user-defined queues from saved filter views with live counts — Phase 5
 
 ### Active
 
@@ -90,6 +95,9 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 | KB migrations wired into `initializeDatabase()` | Ensures FTS5 table and `article_type` column exist on every fresh container start | ✓ Good |
 | Archive = closed tickets only (not resolved) | User confirmed resolved stays in main list; archive = closed only | ✓ Good |
 | Composite index `(status, closed_at DESC)` | Archive queries filter status first for maximum selectivity | ✓ Good |
+| node-cron for recurring scheduler | Lightweight, runs in-process, no external job queue needed for single-user | ✓ Good |
+| localStorage for dashboard queues | No backend storage needed for personal queue config; persists across sessions | ✓ Good |
+| countOnly API parameter | Avoids fetching full ticket data when only count is needed for queue cards | ✓ Good |
 
 ## Evolution
 
@@ -109,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-26 after v1.1 milestone start*
+*Last updated: 2026-03-29 after Phase 5 completion*
