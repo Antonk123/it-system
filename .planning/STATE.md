@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Knowledge Base Expansion
-status: Ready to plan
-stopped_at: Phase 9 plans verified
-last_updated: "2026-03-29T16:32:18.689Z"
+status: Ready to execute
+stopped_at: Completed 09-01-PLAN.md
+last_updated: "2026-03-29T16:35:42.822Z"
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26 after v1.1 milestone start)
 
 **Core value:** Every ticket gets tracked, resolved, and documented — nothing falls through the cracks and solutions are reusable.
-**Current focus:** Phase 08 — content-quality-toc-templates-staleness
+**Current focus:** Phase 09 — discoverability-workflow-cross-refs-popular-shortcuts
 
 ## Current Position
 
-Phase: 9
-Plan: Not started
+Phase: 09 (discoverability-workflow-cross-refs-popular-shortcuts) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 08]: Review button in KB article detail metadata row, not action bar — avoids crowding 4 existing buttons
 - [Phase 08]: slugify normalizes Swedish chars for DOMPurify-safe anchor IDs; IDs set post-render via setAttribute
 - [Phase 08]: Template picker dismissed on selection or skip; not shown for edit routes
+- [Phase 09]: kb_article_links stores directional links; GET and DELETE use UNION/OR for bidirectional behavior
 
 ### Pending Todos
 
@@ -66,6 +67,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-29T16:32:18.685Z
-Stopped at: Phase 9 plans verified
-Resume file: .planning/phases/09-discoverability-workflow-cross-refs-popular-shortcuts/09-01-PLAN.md
+Last session: 2026-03-29T16:35:42.818Z
+Stopped at: Completed 09-01-PLAN.md
+Resume file: None

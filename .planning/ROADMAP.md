@@ -85,7 +85,7 @@ Plans:
 **Plans:** 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Backend: kb_article_links schema migration + cross-reference CRUD endpoints + API client methods
+- [x] 09-01-PLAN.md — Backend: kb_article_links schema migration + cross-reference CRUD endpoints + API client methods
 - [ ] 09-02-PLAN.md — Frontend: popular articles section, Se aven panel, link picker, / shortcut, ticket-to-KB button
 
 **Scope:**

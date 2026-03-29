@@ -33,8 +33,8 @@ Requirements for Knowledge Base Expansion milestone.
 
 - [x] **DISC-01**: KB-startsidan visar en "Senast uppdaterade"-sektion (topp 5) — 07-02
 - [ ] **DISC-02**: KB-startsidan visar en "Populära artiklar"-sektion baserad på visningsräknare
-- [ ] **DISC-03**: Artikeldetaljsidan visar "Se även"-korsreferenser till andra artiklar
-- [ ] **DISC-04**: Användaren kan lägga till/ta bort "Se även"-kopplingar vid redigering
+- [x] **DISC-03**: Artikeldetaljsidan visar "Se även"-korsreferenser till andra artiklar
+- [x] **DISC-04**: Användaren kan lägga till/ta bort "Se även"-kopplingar vid redigering
 
 ### Genvägar & Arbetsflöde
 
@@ -71,8 +71,8 @@ Explicitly excluded from v1.2.
 | TOC-02 | Phase 8 | Complete |
 | DISC-01 | Phase 7 | Done |
 | DISC-02 | Phase 9 | Pending |
-| DISC-03 | Phase 9 | Pending |
-| DISC-04 | Phase 9 | Pending |
+| DISC-03 | Phase 9 | Complete |
+| DISC-04 | Phase 9 | Complete |
 | WF-01 | Phase 7 | Done |
 | WF-02 | Phase 9 | Pending |
 | WF-03 | Phase 9 | Pending |
