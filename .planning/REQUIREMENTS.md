@@ -31,14 +31,14 @@ Requirements for Knowledge Base Expansion milestone.
 
 ### Upptäckbarhet
 
-- [ ] **DISC-01**: KB-startsidan visar en "Senast uppdaterade"-sektion (topp 5)
+- [x] **DISC-01**: KB-startsidan visar en "Senast uppdaterade"-sektion (topp 5) — 07-02
 - [ ] **DISC-02**: KB-startsidan visar en "Populära artiklar"-sektion baserad på visningsräknare
 - [ ] **DISC-03**: Artikeldetaljsidan visar "Se även"-korsreferenser till andra artiklar
 - [ ] **DISC-04**: Användaren kan lägga till/ta bort "Se även"-kopplingar vid redigering
 
 ### Genvägar & Arbetsflöde
 
-- [ ] **WF-01**: Skriv ut-knapp på artikeldetaljsidan (använder befintlig window.print()-pattern)
+- [x] **WF-01**: Skriv ut-knapp på artikeldetaljsidan (använder befintlig window.print()-pattern) — 07-02
 - [ ] **WF-02**: Tangentbordsgenväg `/` för att fokusera KB-sökfältet
 - [ ] **WF-03**: Från ticket-detaljsidan kan användaren skapa en KB-artikel som förifyller titel och typ
 
@@ -59,21 +59,21 @@ Explicitly excluded from v1.2.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| ORG-01 | Phase 7 | Pending |
-| ORG-02 | Phase 7 | Pending |
-| ORG-03 | Phase 7 | Pending |
-| QUAL-01 | Phase 7 | Pending |
+| ORG-01 | Phase 7 | Done |
+| ORG-02 | Phase 7 | Done |
+| ORG-03 | Phase 7 | Done |
+| QUAL-01 | Phase 7 | Done |
 | QUAL-02 | Phase 8 | Pending |
 | QUAL-03 | Phase 8 | Pending |
 | TMPL-01 | Phase 8 | Pending |
 | TMPL-02 | Phase 8 | Pending |
 | TOC-01 | Phase 8 | Pending |
 | TOC-02 | Phase 8 | Pending |
-| DISC-01 | Phase 7 | Pending |
+| DISC-01 | Phase 7 | Done |
 | DISC-02 | Phase 9 | Pending |
 | DISC-03 | Phase 9 | Pending |
 | DISC-04 | Phase 9 | Pending |
-| WF-01 | Phase 7 | Pending |
+| WF-01 | Phase 7 | Done |
 | WF-02 | Phase 9 | Pending |
 | WF-03 | Phase 9 | Pending |
 
