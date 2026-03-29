@@ -50,6 +50,56 @@
 
 ---
 
+## Milestone: v1.1 — Quality & Automation
+
+**Shipped:** 2026-03-29
+**Phases:** 3 | **Plans:** 7 | **Sessions:** ~3 days
+
+### What Was Built
+
+- Unified filter bar (UnifiedFilterBar) shared across tickets and archive with saved filter views and active filter chips
+- Archive parity — bulk operations (reopen, priority, CSV export, permanent delete), full filter support
+- Recurring ticket templates with CRUD API, node-cron scheduler, and full management UI at /recurring
+- Dashboard queue cards with live ticket counts from saved filter views, localStorage-backed config
+- Reports cleanup — removed Activity Heatmap, Radial Progress Rings, and module customization system
+- Tag analytics bug fix — tags now built from ticket data, not tags table (handles deleted tags)
+
+### What Worked
+
+- **Parallel execution via worktrees**: Wave 1 of Phase 5 ran 05-01 and 05-03 in parallel worktrees — both completed successfully with only merge conflicts in planning docs (expected and trivially resolved)
+- **Verifier catching real bugs**: Phase 5 verifier caught `api.get()` (nonexistent method) → `api.request()` fix. Phase 6 verifier caught `tags.length > 0` gate blocking analytics when tags table empty. Both were 1-line fixes that would have been runtime crashes.
+- **Small cleanup phase**: Phase 6 (Reports Cleanup) was 2 plans, 1 wave, pure deletion/fix — fast execution, minimal risk
+- **Integration checker thoroughness**: Milestone audit's integration checker verified all 16 requirement wiring paths end-to-end, including API routes, imports, and component rendering
+
+### What Was Inefficient
+
+- **Phase 04 missing VERIFICATION.md**: Phase 4 was executed before the GSD verification workflow was fully wired for this project. 5 FILT requirements are code-complete per integration checker but lack formal verification evidence.
+- **SUMMARY frontmatter gaps persist**: Plans 05-01, 05-02, 06-01, 06-02 have empty `requirements_completed` fields. Same issue as v1.0 — executors don't consistently fill frontmatter.
+- **REQUIREMENTS.md traceability drift**: RPT-01/03/04 showed "Pending" in traceability table even after verification passed 4/4. Required manual fix during audit. The `phase complete` CLI didn't sync these.
+- **ROADMAP.md progress table stale**: Showed Phase 4 as "1/2 In Progress" and Phase 5 as "Not started" when both were complete. Parallel worktree agents updated their own copies, but merges didn't reconcile the progress table.
+
+### Patterns Established
+
+- **Worktree-based parallel execution**: Wave plans that don't share files can safely run in parallel worktrees. Merge conflicts are limited to planning docs and trivially resolvable.
+- **`countOnly` API pattern**: Short-circuit ticket fetch with `?countOnly=true` for live counts — full WHERE clause runs but skips row serialization
+- **localStorage for personal config**: Dashboard queues don't need backend storage for a single-user system
+- **Ticket-first tag aggregation**: Build tag lists from `ticket.tags` first, then enrich with canonical metadata. Never filter tag table → ticket intersection.
+
+### Key Lessons
+
+1. **Verifiers catch real runtime bugs that TypeScript misses** — permissive tsconfig (`noImplicitAny: false`) means undefined method calls compile clean. The verifier's code inspection caught 2 bugs that would only surface in the browser.
+2. **SUMMARY frontmatter must be enforced** — executor agents consistently skip `requirements_completed`. This causes audit cross-reference gaps. The executor workflow should validate frontmatter before creating SUMMARY.md.
+3. **Traceability table needs post-execution sync** — the `phase complete` CLI marks phases done in ROADMAP but doesn't update REQUIREMENTS.md traceability rows from "Pending" to "Complete". Manual fix required.
+4. **Run verification on all phases** — Phase 04's missing VERIFICATION.md was only caught at milestone audit. Every phase should have verification, even if scope seems trivial.
+
+### Cost Observations
+
+- Model mix: Opus orchestrator, Sonnet executors/verifiers/checker
+- Sessions: ~3 days (2026-03-26 → 2026-03-29)
+- Notable: 7 plans across 3 phases with parallel execution. Integration checker saved significant manual review time.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -57,14 +107,18 @@
 | Milestone | Sessions | Phases | Key Change |
 |-----------|----------|--------|------------|
 | v1.0 | 1 day | 3 | Initial GSD workflow adoption |
+| v1.1 | 3 days | 3 | Parallel worktree execution, verifier-caught runtime bugs |
 
 ### Cumulative Quality
 
 | Milestone | Tests | Coverage | Zero-Dep Additions |
 |-----------|-------|----------|--------------------|
 | v1.0 | 0 | 0% | 0 (window.print() over @react-pdf/renderer) |
+| v1.1 | 0 | 0% | 1 (node-cron for scheduler, localStorage for queues) |
 
 ### Top Lessons (Verified Across Milestones)
 
 1. Wire all schema migrations into `initializeDatabase()` — standalone scripts silently skip on fresh deploys
 2. Batch human-verification items after each Docker rebuild, not per-plan
+3. Verifiers catch runtime bugs that TypeScript misses with permissive tsconfig — always run verification
+4. SUMMARY frontmatter `requirements_completed` must be enforced — causes audit gaps in every milestone
