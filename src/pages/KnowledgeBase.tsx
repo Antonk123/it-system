@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2 } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ const KnowledgeBase = () => {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [tagFilter, setTagFilter] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
 
   // Category management state
@@ -53,16 +54,17 @@ const KnowledgeBase = () => {
 
   const fetchArticles = useCallback(async () => {
     try {
-      const params: { search?: string; category_id?: string; article_type?: string } = {};
+      const params: { search?: string; category_id?: string; article_type?: string; tag?: string } = {};
       if (search) params.search = search;
       if (categoryFilter !== 'all') params.category_id = categoryFilter;
       if (typeFilter !== 'all') params.article_type = typeFilter;
+      if (tagFilter !== 'all') params.tag = tagFilter;
       const data = await api.getKbArticles(params);
       setArticles(data);
     } catch {
       toast.error('Kunde inte hämta artiklar');
     }
-  }, [search, categoryFilter, typeFilter]);
+  }, [search, categoryFilter, typeFilter, tagFilter]);
 
   useEffect(() => {
     fetchCategories();
@@ -76,6 +78,19 @@ const KnowledgeBase = () => {
     }, 200);
     return () => clearTimeout(timer);
   }, [fetchArticles]);
+
+  const availableTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    articles.forEach(a => a.tags?.forEach(t => tagSet.add(t)));
+    return Array.from(tagSet).sort();
+  }, [articles]);
+
+  const recentlyUpdated = useMemo(
+    () => [...articles].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5),
+    [articles]
+  );
+
+  const hasActiveFilters = search || categoryFilter !== 'all' || typeFilter !== 'all' || tagFilter !== 'all';
 
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
@@ -265,7 +280,7 @@ const KnowledgeBase = () => {
         )}
 
         {/* Filters */}
-        <div className="flex gap-3 flex-col sm:flex-row">
+        <div className="flex gap-3 flex-col sm:flex-row flex-wrap">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -298,6 +313,17 @@ const KnowledgeBase = () => {
               <SelectItem value="solution">Lösning</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={tagFilter} onValueChange={setTagFilter}>
+            <SelectTrigger className="w-full sm:w-[160px]">
+              <SelectValue placeholder="Alla taggar" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alla taggar</SelectItem>
+              {availableTags.map(tag => (
+                <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Articles list */}
@@ -311,62 +337,85 @@ const KnowledgeBase = () => {
           <div className="text-center py-16 text-muted-foreground">
             <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">
-              {search || categoryFilter !== 'all' || typeFilter !== 'all'
+              {search || categoryFilter !== 'all' || typeFilter !== 'all' || tagFilter !== 'all'
                 ? 'Inga artiklar matchar sökningen'
                 : 'Inga artiklar ännu — skapa din första!'}
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {articles.map((article) => (
-              <button
-                key={article.id}
-                onClick={() => navigate(`/kb/${article.id}`)}
-                className={cn(
-                  'w-full text-left p-4 rounded-lg border border-border bg-card',
-                  'hover:bg-accent/50 hover:border-primary/30 transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
-                )}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">{article.title}</p>
-                    {article.snippet ? (
-                      <p
-                        className="text-sm text-muted-foreground mt-1 line-clamp-2"
-                        dangerouslySetInnerHTML={{ __html: article.snippet }}
-                      />
-                    ) : article.content ? (
-                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        {getPreview(article.content)}
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-col items-end gap-1.5 shrink-0">
-                    {article.category_name && (
-                      <Badge
-                        variant="secondary"
-                        className="text-xs"
-                        style={article.category_color ? { backgroundColor: article.category_color + '22', color: article.category_color } : undefined}
-                      >
-                        <Folder className="w-2.5 h-2.5 mr-1" />
-                        {article.category_name}
-                      </Badge>
-                    )}
-                    {article.article_type && (
-                      <Badge variant="outline" className="text-xs">
-                        {TYPE_LABELS[article.article_type]}
-                      </Badge>
-                    )}
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {formatDate(article.updated_at)}
-                    </span>
-                  </div>
+          <>
+            {/* Recently updated section — only shown when no filters active */}
+            {!hasActiveFilters && recentlyUpdated.length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-lg font-semibold mb-3">Senast uppdaterade</h2>
+                <div className="grid gap-2">
+                  {recentlyUpdated.map(article => (
+                    <Link
+                      key={article.id}
+                      to={`/kb/${article.id}`}
+                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent transition-colors"
+                    >
+                      <span className="font-medium truncate">{article.title}</span>
+                      <span className="text-sm text-muted-foreground whitespace-nowrap ml-4">
+                        {new Date(article.updated_at).toLocaleDateString('sv-SE')}
+                      </span>
+                    </Link>
+                  ))}
                 </div>
-              </button>
-            ))}
-          </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {articles.map((article) => (
+                <button
+                  key={article.id}
+                  onClick={() => navigate(`/kb/${article.id}`)}
+                  className={cn(
+                    'w-full text-left p-4 rounded-lg border border-border bg-card',
+                    'hover:bg-accent/50 hover:border-primary/30 transition-colors',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-foreground truncate">{article.title}</p>
+                      {article.snippet ? (
+                        <p
+                          className="text-sm text-muted-foreground mt-1 line-clamp-2"
+                          dangerouslySetInnerHTML={{ __html: article.snippet }}
+                        />
+                      ) : article.content ? (
+                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                          {getPreview(article.content)}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      {article.category_name && (
+                        <Badge
+                          variant="secondary"
+                          className="text-xs"
+                          style={article.category_color ? { backgroundColor: article.category_color + '22', color: article.category_color } : undefined}
+                        >
+                          <Folder className="w-2.5 h-2.5 mr-1" />
+                          {article.category_name}
+                        </Badge>
+                      )}
+                      {article.article_type && (
+                        <Badge variant="outline" className="text-xs">
+                          {TYPE_LABELS[article.article_type]}
+                        </Badge>
+                      )}
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {formatDate(article.updated_at)}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </Layout>
