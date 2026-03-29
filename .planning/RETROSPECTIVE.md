@@ -100,6 +100,54 @@
 
 ---
 
+## Milestone: v1.2 — Knowledge Base Expansion
+
+**Shipped:** 2026-03-29
+**Phases:** 3 | **Plans:** 6 | **Sessions:** Same day as v1.1 completion
+
+### What Was Built
+
+- KB article tags (freeform, separate from ticket tags), draft/published status, view counter, tag-based filtering
+- Staleness detection with `last_reviewed_at`, stale filter, amber badge, review button
+- Table of contents with IntersectionObserver scroll-spy and anchor links
+- Article templates (Solution, How-to, Troubleshooting) with Swedish-language picker
+- "Se även" bidirectional cross-references with link picker and REST API
+- Popular articles section on KB home, `/` keyboard shortcut for search focus
+- Ticket-to-KB article creation with query param pre-fill
+
+### What Worked
+
+- **Incremental schema strategy**: Phase 7 laid all schema foundations (tags, status, view_count) that Phase 8-9 built on. No migration conflicts across phases.
+- **Directional links with bidirectional reads**: `kb_article_links` stores one direction but UNION queries make it bidirectional. Simple storage, full UX.
+- **Post-render DOM mutation for ToC**: DOMPurify strips custom IDs, so setAttribute after render works cleanly with scroll-spy.
+- **Query param pre-fill pattern**: Ticket-to-KB creation passes title and type via URL params, template picker auto-dismisses when params present.
+
+### What Was Inefficient
+
+- **SUMMARY frontmatter extraction still broken**: Plans 08-01, 08-02, 09-01, 09-02 had `One-liner:` prefix in frontmatter that the CLI couldn't parse. Same issue as v1.0 and v1.1.
+- **Conversation cleared before phase-9 verification**: User accidentally cleared conversation before confirming phase-9 changes were working.
+
+### Patterns Established
+
+- **Freeform tag join table**: `kb_article_tags` with text column, no canonical tag table — simpler for single-user
+- **Bidirectional link pattern**: Store directional, read with UNION, delete with OR
+- **Template picker UX**: Show on new article, auto-dismiss when query params present, skip on edit
+- **IntersectionObserver scroll-spy**: For ToC active heading tracking on long articles
+
+### Key Lessons
+
+1. **SUMMARY frontmatter extraction is a recurring pain point** — three milestones in a row with broken one-liner extraction. The format or the extractor needs fixing.
+2. **Phase dependencies within a milestone work well** — 7→8→9 dependency chain was clean because schema was laid in Phase 7.
+3. **Don't clear conversation before verification** — always confirm changes before clearing context.
+
+### Cost Observations
+
+- Model mix: Opus orchestrator, Sonnet executors
+- Sessions: Same day as v1.1, rapid execution
+- Notable: 6 plans across 3 phases with clean dependency chain. 17/17 requirements delivered.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -108,6 +156,7 @@
 |-----------|----------|--------|------------|
 | v1.0 | 1 day | 3 | Initial GSD workflow adoption |
 | v1.1 | 3 days | 3 | Parallel worktree execution, verifier-caught runtime bugs |
+| v1.2 | 1 day | 3 | Incremental schema dependencies, bidirectional link pattern |
 
 ### Cumulative Quality
 
@@ -115,6 +164,7 @@
 |-----------|-------|----------|--------------------|
 | v1.0 | 0 | 0% | 0 (window.print() over @react-pdf/renderer) |
 | v1.1 | 0 | 0% | 1 (node-cron for scheduler, localStorage for queues) |
+| v1.2 | 0 | 0% | 0 (all features built on existing stack) |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -122,3 +172,4 @@
 2. Batch human-verification items after each Docker rebuild, not per-plan
 3. Verifiers catch runtime bugs that TypeScript misses with permissive tsconfig — always run verification
 4. SUMMARY frontmatter `requirements_completed` must be enforced — causes audit gaps in every milestone
+5. SUMMARY one-liner extraction broken across all 3 milestones — needs format or tooling fix

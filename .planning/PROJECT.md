@@ -57,14 +57,6 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 
 ### Active
 
-## Current Milestone: v1.2 Knowledge Base Expansion
-
-**Goal:** Build out the knowledge base with features that make it genuinely useful for a single-user internal IT tool.
-
-**Target features:**
-- TBD — research phase will identify what's standard and valuable
-- Scope will be refined after research completes
-
 ### Out of Scope
 
 - Multi-user support — single user system, no team features needed
@@ -86,7 +78,7 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - **Recurring Tickets**: `recurring_templates` + `recurring_ticket_history` tables, CRUD API at `/api/recurring`, node-cron scheduler running every minute. Management UI at `/recurring`.
 - **Dashboard Queues**: User-defined queue cards from saved filter views with `countOnly` API for live counts. localStorage-backed config.
 - **Filtering**: UnifiedFilterBar shared across tickets and archive. Saved filter views (`useFilterViews`). Active filter chips.
-- **Tech debt (non-blocking)**: 4 human-verification items pending live-browser testing (dashboard queue counts, scheduler fire, template toggle, Reports layout). 9 items from v1.0 still pending.
+- **Tech debt (non-blocking)**: Human-verification items pending live-browser testing from v1.0-v1.2 (dashboard queue counts, scheduler fire, template toggle, Reports layout, KB features visual checks).
 
 ## Constraints
 
@@ -114,6 +106,12 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 | UnifiedFilterBar shared component | Single filter bar for tickets + archive, stateless with onChange delegation | ✓ Good |
 | Dashboard queue edit = remove + re-add | Queues are lightweight filterViewId refs, no edit-in-place needed | ✓ Good |
 | Tag analytics from ticket data | Build tag lists from ticket.tags, not tags table — handles deleted tags | ✓ Good |
+| KB tags separate from ticket tags | Freeform join table, no shared vocabulary — different domains | ✓ Good |
+| COALESCE(last_reviewed_at, created_at) for staleness | Never-reviewed articles fall back to created_at | ✓ Good |
+| slugify for ToC anchor IDs | Normalizes Swedish chars for DOMPurify-safe IDs, set post-render via setAttribute | ✓ Good |
+| Hard-coded article templates | 3 templates (Solution, How-to, Troubleshooting) — no CRUD needed for single user | ✓ Good |
+| kb_article_links directional with UNION read | Stores one direction, reads/deletes bidirectionally via UNION/OR | ✓ Good |
+| Link picker excludes self and already-linked | Prevents duplicates and self-references in Se även panel | ✓ Good |
 
 ## Evolution
 
@@ -133,4 +131,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-29 after Phase 9 completion (v1.2 final phase)*
+*Last updated: 2026-03-29 after v1.2 milestone completion*

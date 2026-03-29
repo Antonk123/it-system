@@ -1,5 +1,19 @@
 # Milestones
 
+## v1.2 Knowledge Base Expansion (Shipped: 2026-03-29)
+
+**Phases completed:** 3 phases, 6 plans, 7 tasks
+
+**Key accomplishments:**
+
+- KB article tags, draft/published status, view counter, and tag-based filtering — full backend + frontend for Phase 7 foundations
+- Staleness detection with `last_reviewed_at`, stale filter, review button, and amber badge for content quality tracking
+- Table of contents with scroll-spy anchor links on article detail, plus 3-card Swedish-language template picker
+- Cross-reference system with bidirectional "Se även" links, link picker, and REST API
+- Popular articles section, `/` keyboard shortcut, and ticket-to-KB article creation with pre-fill
+
+---
+
 ## v1.1 Quality & Automation (Shipped: 2026-03-29)
 
 **Phases completed:** 3 phases, 7 plans, 8 tasks
