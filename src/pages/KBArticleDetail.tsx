@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X, Printer, Eye, CheckCircle } from 'lucide-react';
 import { Layout } from '@/components/Layout';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { api, KbArticleRow, LinkedTicketRow } from '@/lib/api';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +21,16 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 
+type TocItem = { id: string; text: string; level: number };
+
+const slugify = (text: string): string =>
+  text
+    .toLowerCase()
+    .replace(/[åä]/g, 'a')
+    .replace(/[ö]/g, 'o')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+
 const KBArticleDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -31,6 +42,9 @@ const KBArticleDetail = () => {
   const [showShare, setShowShare] = useState(false);
   const [isTogglingShare, setIsTogglingShare] = useState(false);
   const [linkedTickets, setLinkedTickets] = useState<LinkedTicketRow[]>([]);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [tocItems, setTocItems] = useState<TocItem[]>([]);
+  const [activeId, setActiveId] = useState<string>('');
 
   useEffect(() => {
     if (!id) return;
@@ -53,6 +67,41 @@ const KBArticleDetail = () => {
     };
     fetch();
   }, [id, navigate]);
+
+  useEffect(() => {
+    if (!contentRef.current || !article?.content) return;
+    const headings = contentRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    const usedSlugs = new Set<string>();
+    const items: TocItem[] = [];
+    headings.forEach((el) => {
+      const text = el.textContent?.trim() ?? '';
+      if (!text) return;
+      let slug = slugify(text);
+      if (usedSlugs.has(slug)) {
+        let i = 2;
+        while (usedSlugs.has(`${slug}-${i}`)) i++;
+        slug = `${slug}-${i}`;
+      }
+      usedSlugs.add(slug);
+      el.setAttribute('id', slug);
+      items.push({ id: slug, text, level: parseInt(el.tagName[1]) });
+    });
+    setTocItems(items);
+  }, [article?.content]);
+
+  useEffect(() => {
+    if (tocItems.length < 2 || !contentRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter(e => e.isIntersecting);
+        if (visible.length > 0) setActiveId(visible[0].target.id);
+      },
+      { rootMargin: '-10% 0% -60% 0%', threshold: 0 }
+    );
+    const headings = contentRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    headings.forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [tocItems]);
 
   const handleDelete = async () => {
     if (!id) return;
@@ -130,100 +179,104 @@ const KBArticleDetail = () => {
 
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-6">
+      <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
         {/* Back + actions */}
-        <div className="flex items-center justify-between">
-          <Button variant="ghost" size="sm" asChild>
-            <Link to="/kb">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Knowledge Base
-            </Link>
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 print:hidden" data-print-hide>
-              <Printer className="w-4 h-4" />
-              <span>Skriv ut</span>
+        <div className="max-w-3xl">
+          <div className="flex items-center justify-between">
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/kb">
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Knowledge Base
+              </Link>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => shareToken ? setShowShare((v) => !v) : handleToggleShare()}
-              disabled={isTogglingShare}
-              className={shareToken ? 'text-primary border-primary/40' : ''}
-            >
-              <Share2 className="w-4 h-4 mr-2" />
-              {shareToken ? 'Delad' : 'Dela'}
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate(`/kb/${id}/edit`)}>
-              <Edit className="w-4 h-4 mr-2" />
-              Redigera
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" disabled={isDeleting}>
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Radera
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Radera artikel?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Detta går inte att ångra. Artikeln tas bort från alla länkade ärenden.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Avbryt</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 print:hidden" data-print-hide>
+                <Printer className="w-4 h-4" />
+                <span>Skriv ut</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => shareToken ? setShowShare((v) => !v) : handleToggleShare()}
+                disabled={isTogglingShare}
+                className={shareToken ? 'text-primary border-primary/40' : ''}
+              >
+                <Share2 className="w-4 h-4 mr-2" />
+                {shareToken ? 'Delad' : 'Dela'}
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => navigate(`/kb/${id}/edit`)}>
+                <Edit className="w-4 h-4 mr-2" />
+                Redigera
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" disabled={isDeleting}>
+                    <Trash2 className="w-4 h-4 mr-2" />
                     Radera
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Radera artikel?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Detta går inte att ångra. Artikeln tas bort från alla länkade ärenden.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Avbryt</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
+                      Radera
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
         </div>
 
         {/* Share panel */}
         {showShare && shareToken && (
-          <div className="border border-primary/30 rounded-lg p-4 bg-primary/5 space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium text-foreground flex items-center gap-2">
-                <Share2 className="w-4 h-4 text-primary" />
-                Publik delningslänk
+          <div className="max-w-3xl">
+            <div className="border border-primary/30 rounded-lg p-4 bg-primary/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                  <Share2 className="w-4 h-4 text-primary" />
+                  Publik delningslänk
+                </p>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowShare(false)}>
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Input
+                  readOnly
+                  value={getPublicUrl(shareToken)}
+                  className="text-xs font-mono bg-background"
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
+                />
+                <Button size="sm" variant="outline" onClick={handleCopyLink}>
+                  <LinkIcon className="w-3.5 h-3.5 mr-1.5" />
+                  Kopiera
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Vem som helst med länken kan läsa artikeln utan att logga in.
               </p>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowShare(false)}>
-                <X className="w-3.5 h-3.5" />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive text-xs px-0"
+                onClick={handleToggleShare}
+                disabled={isTogglingShare}
+              >
+                Ta bort delningslänk
               </Button>
             </div>
-            <div className="flex gap-2">
-              <Input
-                readOnly
-                value={getPublicUrl(shareToken)}
-                className="text-xs font-mono bg-background"
-                onClick={(e) => (e.target as HTMLInputElement).select()}
-              />
-              <Button size="sm" variant="outline" onClick={handleCopyLink}>
-                <LinkIcon className="w-3.5 h-3.5 mr-1.5" />
-                Kopiera
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Vem som helst med länken kan läsa artikeln utan att logga in.
-            </p>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-destructive hover:text-destructive text-xs px-0"
-              onClick={handleToggleShare}
-              disabled={isTogglingShare}
-            >
-              Ta bort delningslänk
-            </Button>
           </div>
         )}
 
         {/* Article header */}
-        <div className="space-y-3">
+        <div className="max-w-3xl space-y-3">
           <h1 className="text-2xl font-bold text-foreground">{article.title}</h1>
           <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
             {article.status === 'draft' && (
@@ -272,17 +325,73 @@ const KBArticleDetail = () => {
           )}
         </div>
 
-        {/* Content */}
-        <div className="prose-wrapper border border-border rounded-lg p-5 bg-card min-h-[200px]">
-          {article.content ? (
-            <HtmlRenderer content={article.content} />
-          ) : (
-            <p className="text-muted-foreground text-sm italic">Inget innehåll ännu.</p>
+        {/* Content + ToC side-by-side */}
+        <div className="flex gap-8 items-start">
+          {/* Main content column */}
+          <div className="flex-1 min-w-0">
+            {/* Mobile ToC — collapsible */}
+            {tocItems.length >= 2 && (
+              <details className="lg:hidden mb-4 border rounded-lg p-3 bg-card print:hidden">
+                <summary className="text-sm font-medium cursor-pointer select-none">
+                  Innehåll
+                </summary>
+                <nav className="mt-2 space-y-1">
+                  {tocItems.map((item) => (
+                    <a
+                      key={item.id}
+                      href={`#${item.id}`}
+                      className={cn(
+                        'block text-sm py-0.5 transition-colors',
+                        item.level >= 3 ? 'pl-4' : item.level === 2 ? 'pl-2' : '',
+                        'text-muted-foreground hover:text-foreground'
+                      )}
+                    >
+                      {item.text}
+                    </a>
+                  ))}
+                </nav>
+              </details>
+            )}
+
+            {/* Article content */}
+            <div ref={contentRef} className="prose-wrapper border border-border rounded-lg p-5 bg-card min-h-[200px]">
+              {article.content ? (
+                <HtmlRenderer content={article.content} />
+              ) : (
+                <p className="text-muted-foreground text-sm italic">Inget innehåll ännu.</p>
+              )}
+            </div>
+          </div>
+
+          {/* Desktop ToC sidebar — sticky right side */}
+          {tocItems.length >= 2 && (
+            <aside className="hidden lg:block w-52 shrink-0 print:hidden">
+              <div className="sticky top-24 space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                  Innehåll
+                </p>
+                {tocItems.map((item) => (
+                  <a
+                    key={item.id}
+                    href={`#${item.id}`}
+                    className={cn(
+                      'block text-sm py-0.5 transition-colors',
+                      item.level >= 3 ? 'pl-4' : item.level === 2 ? 'pl-2' : '',
+                      activeId === item.id
+                        ? 'text-primary font-medium'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    {item.text}
+                  </a>
+                ))}
+              </div>
+            </aside>
           )}
         </div>
 
         {/* Linked Tickets panel */}
-        <div className="pt-2 border-t">
+        <div className="max-w-3xl pt-2 border-t">
           <h3 className="text-sm font-semibold mb-3">Länkade biljetter</h3>
           {linkedTickets.length === 0 ? (
             <p className="text-sm text-muted-foreground">
