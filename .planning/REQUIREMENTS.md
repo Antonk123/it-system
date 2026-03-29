@@ -21,13 +21,13 @@ Requirements for Knowledge Base Expansion milestone.
 
 ### Artikelmallar
 
-- [ ] **TMPL-01**: Vid skapande av ny artikel kan användaren välja en mall (t.ex. Solution, How-to)
-- [ ] **TMPL-02**: Mallen fyller i Tiptap-editorn med fördefinierad struktur
+- [x] **TMPL-01**: Vid skapande av ny artikel kan användaren välja en mall (t.ex. Solution, How-to)
+- [x] **TMPL-02**: Mallen fyller i Tiptap-editorn med fördefinierad struktur
 
 ### Innehållsförteckning
 
-- [ ] **TOC-01**: Artikeldetaljsidan visar en innehållsförteckning genererad från rubriker i artikeln
-- [ ] **TOC-02**: Innehållsförteckningen har klickbara ankarlänkar till varje rubrik
+- [x] **TOC-01**: Artikeldetaljsidan visar en innehållsförteckning genererad från rubriker i artikeln
+- [x] **TOC-02**: Innehållsförteckningen har klickbara ankarlänkar till varje rubrik
 
 ### Upptäckbarhet
 
@@ -65,10 +65,10 @@ Explicitly excluded from v1.2.
 | QUAL-01 | Phase 7 | Done |
 | QUAL-02 | Phase 8 | Complete |
 | QUAL-03 | Phase 8 | Complete |
-| TMPL-01 | Phase 8 | Pending |
-| TMPL-02 | Phase 8 | Pending |
-| TOC-01 | Phase 8 | Pending |
-| TOC-02 | Phase 8 | Pending |
+| TMPL-01 | Phase 8 | Complete |
+| TMPL-02 | Phase 8 | Complete |
+| TOC-01 | Phase 8 | Complete |
+| TOC-02 | Phase 8 | Complete |
 | DISC-01 | Phase 7 | Done |
 | DISC-02 | Phase 9 | Pending |
 | DISC-03 | Phase 9 | Pending |

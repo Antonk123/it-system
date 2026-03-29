@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Knowledge Base Expansion
-status: Ready to execute
-stopped_at: Completed 08-01-PLAN.md
-last_updated: "2026-03-29T16:03:18.254Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 08-02-PLAN.md
+last_updated: "2026-03-29T16:07:03.973Z"
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -53,6 +53,8 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 07-02]: Draft indicator added to KB article detail page so author knows when viewing unpublished article via direct /kb/:id link
 - [Phase 08]: COALESCE(last_reviewed_at, created_at) for staleness baseline — never-reviewed articles fall back to created_at
 - [Phase 08]: Review button in KB article detail metadata row, not action bar — avoids crowding 4 existing buttons
+- [Phase 08]: slugify normalizes Swedish chars for DOMPurify-safe anchor IDs; IDs set post-render via setAttribute
+- [Phase 08]: Template picker dismissed on selection or skip; not shown for edit routes
 
 ### Pending Todos
 
@@ -64,6 +66,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-29T16:03:18.249Z
-Stopped at: Completed 08-01-PLAN.md
+Last session: 2026-03-29T16:07:03.969Z
+Stopped at: Completed 08-02-PLAN.md
 Resume file: None
