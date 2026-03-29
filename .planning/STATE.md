@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Streamline & Declutter
-status: Ready to execute
-stopped_at: Completed 10-02-PLAN.md (silent refresh + rolling tokens)
-last_updated: "2026-03-29T22:53:50.997Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 10-01-PLAN.md
+last_updated: "2026-03-29T22:55:42.197Z"
 progress:
   total_phases: 3
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 2
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -42,6 +42,7 @@ Plan: 2 of 2
 All decisions logged in PROJECT.md Key Decisions table.
 
 - [Phase 10-kb-cleanup]: Deleted tokenRefresh.ts — Axios interceptor never fired (api.ts uses fetch). 401-retry wired directly into ApiClient.request() with rolling refresh tokens.
+- [Phase 10-kb-cleanup]: ensureDefaultTemplatesRemoved nulls FK refs before DELETE to avoid constraint errors on existing tickets
 
 ### Pending Todos
 
@@ -53,6 +54,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-29T22:53:50.991Z
-Stopped at: Completed 10-02-PLAN.md (silent refresh + rolling tokens)
+Last session: 2026-03-29T22:55:42.193Z
+Stopped at: Completed 10-01-PLAN.md
 Resume file: None

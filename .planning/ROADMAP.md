@@ -46,7 +46,7 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 
 **Milestone Goal:** Make ticket creation instant, editing lightweight, and the whole UI feel fast by removing noise and simplifying workflows.
 
-- [ ] **Phase 10: KB Cleanup** — Remove dead weight from the knowledge base (view counter, unused sections, stale templates)
+- [x] **Phase 10: KB Cleanup** — Remove dead weight from the knowledge base (view counter, unused sections, stale templates) (completed 2026-03-29)
 - [ ] **Phase 11: Form Simplification** — Rework ticket create/edit forms with collapsible sections, hidden empty fields, and streamlined controls
 - [ ] **Phase 12: Quick Capture** — Minimal ticket creation (title-only), authenticated public form shortcut, and ticket cloning
 
@@ -65,7 +65,7 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 **Plans**: 2 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — Remove view_count, KB home sections, and unused default templates
+- [x] 10-01-PLAN.md — Remove view_count, KB home sections, and unused default templates
 - [x] 10-02-PLAN.md — Fix silent token refresh with rolling refresh tokens
 
 ### Phase 11: Form Simplification
@@ -104,6 +104,6 @@ Plans:
 | 7. KB Foundations — Tags, Status, View Count & Quick Wins | v1.2 | 2/2 | Complete | 2026-03-29 |
 | 8. Content Quality — ToC, Templates & Staleness | v1.2 | 2/2 | Complete | 2026-03-29 |
 | 9. Discoverability & Workflow — Cross-refs, Popular, Shortcuts | v1.2 | 2/2 | Complete | 2026-03-29 |
-| 10. KB Cleanup | v1.3 | 1/2 | In Progress|  |
+| 10. KB Cleanup | v1.3 | 2/2 | Complete   | 2026-03-29 |
 | 11. Form Simplification | v1.3 | 0/TBD | Not started | - |
 | 12. Quick Capture | v1.3 | 0/TBD | Not started | - |

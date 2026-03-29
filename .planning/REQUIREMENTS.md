@@ -22,10 +22,10 @@ Requirements for Streamline & Declutter milestone. Each maps to roadmap phases.
 
 ### Cleanup
 
-- [ ] **CLEAN-01**: Remove KB view counter (view_count column, API increment, display)
-- [ ] **CLEAN-02**: Remove "Senast uppdaterade" section from KB home
-- [ ] **CLEAN-03**: Remove default unused templates (Lösenordsåterställning, Ny användare)
-- [ ] **CLEAN-04**: Remove "Populära artiklar" section from KB home (depends on view_count removal)
+- [x] **CLEAN-01**: Remove KB view counter (view_count column, API increment, display)
+- [x] **CLEAN-02**: Remove "Senast uppdaterade" section from KB home
+- [x] **CLEAN-03**: Remove default unused templates (Lösenordsåterställning, Ny användare)
+- [x] **CLEAN-04**: Remove "Populära artiklar" section from KB home (depends on view_count removal)
 - [x] **CLEAN-05**: Fix silent token refresh so user never sees login screen unless inactive for 7+ days
 
 ## Future Requirements
@@ -44,10 +44,10 @@ None deferred — all identified features scoped into v1.3.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CLEAN-01 | Phase 10 | Pending |
-| CLEAN-02 | Phase 10 | Pending |
-| CLEAN-03 | Phase 10 | Pending |
-| CLEAN-04 | Phase 10 | Pending |
+| CLEAN-01 | Phase 10 | Complete |
+| CLEAN-02 | Phase 10 | Complete |
+| CLEAN-03 | Phase 10 | Complete |
+| CLEAN-04 | Phase 10 | Complete |
 | CLEAN-05 | Phase 10 | Complete |
 | FORM-01 | Phase 11 | Pending |
 | FORM-02 | Phase 11 | Pending |
