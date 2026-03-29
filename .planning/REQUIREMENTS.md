@@ -24,9 +24,9 @@ Requirements for milestone v1.1 Quality & Automation. Each maps to roadmap phase
 
 ### Dashboard-köer
 
-- [ ] **DASH-01**: Dashboard visar sparade snabbvyer/köer (t.ex. "Väntande", "Utan aktivitet 7+ dagar", "Kritiska")
-- [ ] **DASH-02**: Användaren kan skapa, redigera och ta bort dashboard-köer
-- [ ] **DASH-03**: Varje kö visar antal matchande ärenden och kan klickas för att navigera till filtrerad vy
+- [x] **DASH-01**: Dashboard visar sparade snabbvyer/köer (t.ex. "Väntande", "Utan aktivitet 7+ dagar", "Kritiska")
+- [x] **DASH-02**: Användaren kan skapa, redigera och ta bort dashboard-köer
+- [x] **DASH-03**: Varje kö visar antal matchande ärenden och kan klickas för att navigera till filtrerad vy
 
 ### Reports-rensning
 
@@ -73,9 +73,9 @@ Requirements for milestone v1.1 Quality & Automation. Each maps to roadmap phase
 | RECUR-02 | Phase 5 | Complete |
 | RECUR-03 | Phase 5 | Complete |
 | RECUR-04 | Phase 5 | Complete |
-| DASH-01 | Phase 5 | Pending |
-| DASH-02 | Phase 5 | Pending |
-| DASH-03 | Phase 5 | Pending |
+| DASH-01 | Phase 5 | Complete |
+| DASH-02 | Phase 5 | Complete |
+| DASH-03 | Phase 5 | Complete |
 | RPT-01 | Phase 6 | Pending |
 | RPT-02 | Phase 6 | Pending |
 | RPT-03 | Phase 6 | Pending |
