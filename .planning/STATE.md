@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Quality & Automation
-status: Ready to execute
-stopped_at: Completed 04-filter-consolidation-archive-parity-01-PLAN.md
-last_updated: "2026-03-26T10:53:22.798Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-03-29T03:05:24.997Z"
 progress:
   total_phases: 3
   completed_phases: 0
@@ -43,6 +43,7 @@ Plan: 2 of 2
 All decisions logged in PROJECT.md Key Decisions table.
 
 - [Phase 04-filter-consolidation-archive-parity]: UnifiedFilterBar is stateless — delegates all state to parent via onChange; FilterViewSelector resolves view internally; applyView defaults to ticketlist context
+- [Phase 05]: Used api.request() directly in useRecurringTemplates.ts — ApiClient has no short-form generic get/post/put/delete methods
 
 ### Pending Todos
 
@@ -54,6 +55,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-26T10:53:22.795Z
-Stopped at: Completed 04-filter-consolidation-archive-parity-01-PLAN.md
+Last session: 2026-03-29T03:05:24.994Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None
