@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X, Printer, Eye } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -125,6 +125,10 @@ const KBArticleDetail = () => {
             </Link>
           </Button>
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 print:hidden" data-print-hide>
+              <Printer className="w-4 h-4" />
+              <span>Skriv ut</span>
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -207,6 +211,9 @@ const KBArticleDetail = () => {
         <div className="space-y-3">
           <h1 className="text-2xl font-bold text-foreground">{article.title}</h1>
           <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+            {article.status === 'draft' && (
+              <Badge variant="outline" className="border-amber-500 text-amber-600">Utkast</Badge>
+            )}
             {article.category_name && (
               <Badge
                 variant="secondary"
@@ -224,7 +231,18 @@ const KBArticleDetail = () => {
               <Calendar className="w-3.5 h-3.5" />
               Skapad {formatDate(article.created_at)}
             </span>
+            <div className="flex items-center gap-1.5">
+              <Eye className="w-4 h-4" />
+              <span>{article.view_count} {article.view_count === 1 ? 'visning' : 'visningar'}</span>
+            </div>
           </div>
+          {article.tags && article.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {article.tags.map(tag => (
+                <Badge key={tag} variant="secondary">{tag}</Badge>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Content */}
