@@ -41,7 +41,7 @@ Full details: `.planning/milestones/v1.1-ROADMAP.md`
 **Plans:** 2 plans
 
 Plans:
-- [ ] 07-01-PLAN.md — Backend foundation: schema migration + route updates for tags, status, view_count
+- [x] 07-01-PLAN.md — Backend foundation: schema migration + route updates for tags, status, view_count
 - [ ] 07-02-PLAN.md — Frontend: tag input/filter, status toggle, recently updated, print button, view count display
 
 **Scope:**
@@ -96,6 +96,6 @@ Plans:
 | 4. Filter Consolidation & Archive Parity | v1.1 | 2/2 | Complete | 2026-03-29 |
 | 5. Automation — Recurring & Queues | v1.1 | 3/3 | Complete | 2026-03-29 |
 | 6. Reports Cleanup | v1.1 | 2/2 | Complete | 2026-03-29 |
-| 7. KB Foundations — Tags, Status, View Count & Quick Wins | v1.2 | 0/2 | Planned | — |
+| 7. KB Foundations — Tags, Status, View Count & Quick Wins | v1.2 | 1/2 | In Progress | — |
 | 8. Content Quality — ToC, Templates & Staleness | v1.2 | 0/? | Pending | — |
 | 9. Discoverability & Workflow — Cross-refs, Popular, Shortcuts | v1.2 | 0/? | Pending | — |

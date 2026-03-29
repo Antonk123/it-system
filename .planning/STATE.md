@@ -1,15 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.1
-milestone_name: Quality & Automation
-status: Defining requirements
-stopped_at: Milestone v1.2 started — researching
-last_updated: "2026-03-29T12:00:00.000Z"
+milestone: v1.2
+milestone_name: Knowledge Base Expansion
+status: In Progress
+stopped_at: Completed 07-01-PLAN.md
+last_updated: "2026-03-29T07:37:43Z"
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 6
+  completed_plans: 1
 ---
 
 # Project State
@@ -19,14 +19,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-26 after v1.1 milestone start)
 
 **Core value:** Every ticket gets tracked, resolved, and documented — nothing falls through the cracks and solutions are reusable.
-**Current focus:** v1.2 — Knowledge Base Expansion
+**Current focus:** v1.2 — Knowledge Base Expansion, Phase 07
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-03-29 — Milestone v1.2 started
+Phase: 07-kb-foundations-tags-status-view-count-quick-wins
+Plan: 02 (07-01 completed)
+Status: In Progress
+Last activity: 2026-03-29 — Completed 07-01-PLAN.md (backend KB data model)
 
 ## Performance Metrics
 
@@ -50,6 +50,9 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 05-automation-recurring-tickets-dashboard-queues]: countOnly bypasses ticket fetch but runs full WHERE clause for accurate filter counts
 - [Phase 05]: Used api.request() directly in useRecurringTemplates.ts — ApiClient has no short-form generic get/post/put/delete methods
 - [Phase 06]: Build tag lists from ticket.tags data first, then enrich with canonical tags-table data — ensures deleted-tag entries are never dropped from analytics views
+- [Phase 07-01]: KB article tags are freeform text in kb_article_tags join table — separate from ticket tags, no master tags table needed
+- [Phase 07-01]: GET /api/kb/articles/:id returns article regardless of status (author direct link); list/FTS endpoints filter to published-only
+- [Phase 07-01]: view_count incremented on both authenticated and public share reads — every view is a real read
 
 ### Pending Todos
 
@@ -61,6 +64,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-29T05:41:03.042Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-03-29T07:37:43Z
+Stopped at: Completed 07-01-PLAN.md
 Resume file: None

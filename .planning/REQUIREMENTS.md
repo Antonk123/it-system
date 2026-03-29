@@ -9,13 +9,13 @@ Requirements for Knowledge Base Expansion milestone.
 
 ### Artikelorganisering
 
-- [ ] **ORG-01**: Användaren kan lägga till taggar på KB-artiklar (fristående från ticket-taggar)
-- [ ] **ORG-02**: Användaren kan filtrera artiklar efter tagg i KB-listan
-- [ ] **ORG-03**: Artiklar har draft/publicerad-status — utkast döljs från sök och lista som standard
+- [x] **ORG-01**: Användaren kan lägga till taggar på KB-artiklar (fristående från ticket-taggar) — 07-01
+- [x] **ORG-02**: Användaren kan filtrera artiklar efter tagg i KB-listan — 07-01
+- [x] **ORG-03**: Artiklar har draft/publicerad-status — utkast döljs från sök och lista som standard — 07-01
 
 ### Innehållskvalitet
 
-- [ ] **QUAL-01**: Artiklar har en visningsräknare som ökar vid varje visning
+- [x] **QUAL-01**: Artiklar har en visningsräknare som ökar vid varje visning — 07-01
 - [ ] **QUAL-02**: Artiklar har ett `last_reviewed_at`-fält med "Markera som granskad"-knapp
 - [ ] **QUAL-03**: KB-listan kan filtreras på inaktuella artiklar (ej granskade på N dagar)
 
