@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle, TrendingUp } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,6 +30,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 const KnowledgeBase = () => {
   const navigate = useNavigate();
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [articles, setArticles] = useState<KbArticleRow[]>([]);
   const [categories, setCategories] = useState<KbCategoryRow[]>([]);
   const [search, setSearch] = useState('');
@@ -88,6 +89,19 @@ const KnowledgeBase = () => {
   return () => clearTimeout(timer);
   }, [fetchArticles]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== '/') return;
+      const target = e.target as HTMLElement;
+      const tag = target.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || target.isContentEditable) return;
+      e.preventDefault();
+      searchInputRef.current?.focus();
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const availableTags = useMemo(() => {
     const tagSet = new Set<string>();
     articles.forEach(a => a.tags?.forEach(t => tagSet.add(t)));
@@ -96,6 +110,15 @@ const KnowledgeBase = () => {
 
   const recentlyUpdated = useMemo(
     () => [...articles].sort((a, b) => b.updated_at.localeCompare(a.updated_at)).slice(0, 5),
+    [articles]
+  );
+
+  const popularArticles = useMemo(
+    () =>
+      [...articles]
+        .filter(a => a.status === 'published' && a.view_count > 0)
+        .sort((a, b) => b.view_count - a.view_count)
+        .slice(0, 5),
     [articles]
   );
 
@@ -293,11 +316,13 @@ const KnowledgeBase = () => {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
+              ref={searchInputRef}
               placeholder="Sök artiklar..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
+              className="pl-9 pr-8"
             />
+            <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded border font-mono">/</kbd>
           </div>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="w-full sm:w-[200px]">
@@ -371,6 +396,30 @@ const KnowledgeBase = () => {
                       <span className="font-medium truncate">{article.title}</span>
                       <span className="text-sm text-muted-foreground whitespace-nowrap ml-4">
                         {new Date(article.updated_at).toLocaleDateString('sv-SE')}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Popular articles section — only shown when no filters active and at least one has views */}
+            {!hasActiveFilters && popularArticles.length > 0 && (
+              <div className="mb-8">
+                <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-muted-foreground" />
+                  Populara artiklar
+                </h2>
+                <div className="grid gap-2">
+                  {popularArticles.map(article => (
+                    <Link
+                      key={article.id}
+                      to={`/kb/${article.id}`}
+                      className="flex items-center justify-between p-3 rounded-lg border hover:bg-accent transition-colors"
+                    >
+                      <span className="font-medium truncate">{article.title}</span>
+                      <span className="text-sm text-muted-foreground whitespace-nowrap ml-4">
+                        {article.view_count} {article.view_count === 1 ? 'visning' : 'visningar'}
                       </span>
                     </Link>
                   ))}
