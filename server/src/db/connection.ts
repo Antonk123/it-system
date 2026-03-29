@@ -402,6 +402,37 @@ function stripHtmlForFts(html: string): string {
     .trim();
 }
 
+const ensureRecurringTemplatesTable = () => {
+  if (tableExists('recurring_templates')) return;
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS recurring_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      priority TEXT DEFAULT 'medium' CHECK(priority IN ('low','medium','high','critical')),
+      category_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
+      tags TEXT DEFAULT '[]',
+      interval_type TEXT NOT NULL CHECK(interval_type IN ('daily','weekly','monthly')),
+      interval_day INTEGER,
+      is_active INTEGER DEFAULT 1,
+      last_run TEXT,
+      next_run TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_recurring_templates_next_run ON recurring_templates(is_active, next_run);
+    CREATE TABLE IF NOT EXISTS recurring_ticket_history (
+      id TEXT PRIMARY KEY,
+      template_id TEXT NOT NULL REFERENCES recurring_templates(id) ON DELETE CASCADE,
+      ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_recurring_history_template ON recurring_ticket_history(template_id, created_at DESC);
+  `);
+  console.log('Created missing tables: recurring_templates, recurring_ticket_history');
+};
+
 const ensureKbFts5AndType = () => {
   if (!tableExists('kb_articles')) return;
 
@@ -454,6 +485,7 @@ export function initializeDatabase() {
   ensureChecklistExtensions();
   ensureChecklistTemplatesTable();
   ensureKbFts5AndType();
+  ensureRecurringTemplatesTable();
   db.exec('CREATE INDEX IF NOT EXISTS idx_tickets_closed_at ON tickets(status, closed_at DESC)');
   console.log('Database initialized successfully');
 }
