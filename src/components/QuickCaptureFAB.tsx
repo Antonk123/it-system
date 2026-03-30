@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,8 +12,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 
-export const QuickCaptureFAB = () => {
-  const { isAuthenticated, user } = useAuth();
+interface QuickCaptureFABProps {
+  className?: string;
+}
+
+export const QuickCaptureFAB = ({ className }: QuickCaptureFABProps) => {
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -36,7 +41,6 @@ export const QuickCaptureFAB = () => {
         status: 'open',
         priority: 'medium',
         category_id: null,
-        requester_id: user!.id,
       });
       await queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
       setOpen(false);
@@ -81,7 +85,7 @@ export const QuickCaptureFAB = () => {
           <PopoverTrigger asChild>
             <Button
               size="icon"
-              className="fixed bottom-6 right-6 z-50 h-14 w-14 rounded-full shadow-lg bg-primary text-primary-foreground hover:scale-105 hover:shadow-xl active:scale-95 transition-transform duration-200"
+              className={cn("fixed bottom-6 z-50 h-14 w-14 rounded-full shadow-lg bg-primary text-primary-foreground hover:scale-105 hover:shadow-xl active:scale-95 transition-transform duration-200", className)}
               aria-label="Snabbt ärende"
             >
               <Plus className="h-6 w-6" />

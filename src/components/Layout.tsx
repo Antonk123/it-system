@@ -9,6 +9,7 @@ import { useUsers } from '@/hooks/useUsers';
 import { useCategories } from '@/hooks/useCategories';
 import { useTags } from '@/hooks/useTags';
 import { useAuth } from '@/contexts/AuthContext';
+import { QuickCaptureFAB } from '@/components/QuickCaptureFAB';
 
 interface LayoutProps {
   children: ReactNode;
@@ -270,5 +271,10 @@ export const Layout = ({
           {children}
         </div>
       </main>
+
+      <QuickCaptureFAB className={cn(
+        "left-4 lg:transition-[left] lg:duration-300",
+        sidebarCollapsed ? "lg:left-20" : "lg:left-[17rem]"
+      )} />
     </div>;
 };
