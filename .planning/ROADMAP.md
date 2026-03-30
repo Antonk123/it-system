@@ -48,7 +48,7 @@ Full details: `.planning/milestones/v1.2-ROADMAP.md`
 
 - [x] **Phase 10: KB Cleanup** — Remove dead weight from the knowledge base (view counter, unused sections, stale templates) (completed 2026-03-29)
 - [x] **Phase 11: Form Simplification** — Rework ticket create/edit forms with collapsible sections, hidden empty fields, and streamlined controls (completed 2026-03-30)
-- [ ] **Phase 12: Quick Capture** — Minimal ticket creation (title-only), authenticated public form shortcut, and ticket cloning
+- [x] **Phase 12: Quick Capture** — Minimal ticket creation (title-only), authenticated public form shortcut, and ticket cloning (completed 2026-03-30)
 
 ## Phase Details
 
@@ -96,8 +96,8 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 12-01-PLAN.md — QuickCaptureFAB component and public form auth detection
-- [ ] 12-02-PLAN.md — Ticket cloning from detail page with form pre-fill
+- [x] 12-01-PLAN.md — QuickCaptureFAB component and public form auth detection
+- [x] 12-02-PLAN.md — Ticket cloning from detail page with form pre-fill
 
 ## Progress
 
@@ -114,4 +114,4 @@ Plans:
 | 9. Discoverability & Workflow — Cross-refs, Popular, Shortcuts | v1.2 | 2/2 | Complete | 2026-03-29 |
 | 10. KB Cleanup | v1.3 | 2/2 | Complete    | 2026-03-29 |
 | 11. Form Simplification | v1.3 | 2/2 | Complete   | 2026-03-30 |
-| 12. Quick Capture | v1.3 | 0/2 | Not started | - |
+| 12. Quick Capture | v1.3 | 2/2 | Complete   | 2026-03-30 |
