@@ -234,6 +234,28 @@ const TicketDetail = () => {
     }
   };
 
+  const handleClone = () => {
+    navigate('/tickets/new', {
+      state: {
+        cloneData: {
+          title: ticket.title,
+          description: ticket.description,
+          category: ticket.category || 'none',
+          priority: ticket.priority,
+          templateId: ticket.templateId || null,
+          customFieldValues: ticketFieldValues.length > 0
+            ? ticketFieldValues.map(fv => ({
+                field_name: fv.field_name,
+                field_label: fv.field_label,
+                field_value: fv.field_value,
+              }))
+            : [],
+        },
+      },
+    });
+    toast.success(`Formuläret förfyllt från ärende #${ticket.id}`);
+  };
+
   const handleBack = () => {
     if (location.state?.from) {
       // Navigate back to source page (preserves filters/pagination)
@@ -314,6 +336,14 @@ const TicketDetail = () => {
             >
               <Pencil className="w-4 h-4" />
               <span className="hidden sm:inline">Redigera</span>
+            </Button>
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={handleClone}
+            >
+              <Copy className="w-4 h-4" />
+              <span className="hidden sm:inline">Klona ärende</span>
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
