@@ -51,15 +51,19 @@ Exceptions:
 
 ## Typography
 
+Two weights only: 400 (body, label) and 600 (heading, display). Size distinction separates heading and display roles.
+
 | Role | Size | Weight | Line Height |
 |------|------|--------|-------------|
 | Body | 14px | 400 | 1.5 |
-| Label | 13px | 500 | 1.4 |
+| Label | 14px | 400 | 1.4 |
 | Heading | 16px | 600 | 1.3 |
-| Display | 20px | 700 | 1.2 |
+| Display | 20px | 600 | 1.2 |
 
 Font: Plus Jakarta Sans for all UI elements in this phase.
 Mono font (JetBrains Mono) is not used in this phase.
+
+Weight rule: use weight 400 for body text and inline labels; use weight 600 for headings and display elements. No intermediate weights (500) and no heavier weights (700) are used.
 
 ---
 
@@ -126,7 +130,7 @@ An inline badge shown in `PublicTicketForm.tsx` when a valid auth token is detec
 
 - **Shape:** Pill badge, `bg-primary/15 text-primary border border-primary/30 rounded-full px-3 py-1`
 - **Icon:** `User` from lucide-react, 14px, inline left of name
-- **Text:** "Inloggad som [firstName]" — 13px, weight 500
+- **Text:** "Inloggad som [firstName]" — 14px, weight 400
 - **Position:** Rendered above the form title, replacing the name/email fields section
 
 ### 4. Clone Button (ticket detail action bar)
@@ -135,7 +139,7 @@ Added to the existing action bar in `TicketDetail.tsx` alongside Edit/Delete/Sha
 
 - **Component:** shadcn `Button` variant `outline`, size `sm`
 - **Icon:** `Copy` from lucide-react, 16px (already imported in `TicketDetail.tsx`)
-- **Label:** "Klona"
+- **Label:** "Klona ärende"
 - **Placement:** Between "Dela" (Share) and "Radera" (Delete) in the action bar
 - **Behavior on click:** Navigates to `/tickets/new` with `location.state = { cloneData: { title, description, category_id, priority, template_id, template_field_values } }`
 
@@ -183,12 +187,12 @@ Added to the existing action bar in `TicketDetail.tsx` alongside Edit/Delete/Sha
 | Empty title validation error | Ange en rubrik för att fortsätta |
 | Auth badge (public form) | Inloggad som [firstName] |
 | Public form quick-create heading | Skicka in ett ärende |
-| Clone button label | Klona |
+| Clone button label | Klona ärende |
 | Clone navigation toast | Formuläret förfyllt från ärende #ID |
 | Empty state (no applicable in this phase) | — |
 | General API error | Något gick fel. Försök igen eller ladda om sidan. |
 
-No destructive actions in this phase. The "Klona" action creates a new ticket (non-destructive). No confirmation dialogs required.
+No destructive actions in this phase. The "Klona ärende" action creates a new ticket (non-destructive). No confirmation dialogs required.
 
 ---
 
