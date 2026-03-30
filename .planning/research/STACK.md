@@ -1,307 +1,275 @@
-# Technology Stack — KB Expansion (v1.2)
+# Technology Stack — Dashboard, Search & Polish (v1.4)
 
 **Project:** IT Ticket System
-**Milestone scope:** Knowledge Base expansion — article versioning/history, tags, related articles, templates, ratings/feedback, rich media embedding, table of contents, article export
+**Milestone scope:** Dashboard overview (aging tickets, reminders, today summary), global Cmd+K command palette (tickets, KB, contacts, navigation, actions), UI polish (dark mode toggle, responsive layout, loading states, micro-interactions)
 **Researched:** 2026-03-29
-**Overall confidence:** HIGH (npm registry verified for all new packages; existing stack facts from package.json)
+**Overall confidence:** HIGH (package.json verified; existing infrastructure audited directly)
 
 ---
 
 ## Existing Stack (do not change)
 
-React 18.3.1 + Vite 7 + Express 4.21.2 + better-sqlite3 11.7.0 + TypeScript 5.8.3 + Tiptap 3.20.x + shadcn/Radix UI + Tailwind CSS + Framer Motion.
+React 18.3.1 + Vite 7 + Express 4.21.2 + better-sqlite3 11.7.0 + TypeScript 5.8.3 + Tiptap 3.20.x + shadcn/Radix UI + Tailwind CSS 3.4.17 + Framer Motion 12.38.0 + recharts 2.15.4.
 
 All new libraries must slot into this stack without replacing anything already installed.
 
 ---
 
+## Critical Pre-Research Findings
+
+Direct inspection of the codebase reveals three capabilities already in place that directly affect this milestone:
+
+**1. cmdk is already installed** — `cmdk ^1.1.1` is in `package.json`. No new dependency needed for the command palette primitive. The `shadcn/ui` `<Command>` component wraps cmdk and is the correct integration path.
+
+**2. Dark mode infrastructure already exists** — `src/lib/appearance.ts` implements `applyMode(mode: "light" | "dark")` via CSS class manipulation on `documentElement`. `src/index.css` has both `.dark` and `.light` CSS variable blocks fully defined. `tailwind.config.ts` has `darkMode: ["class"]`. `next-themes ^0.3.0` is already installed. The system defaults to dark and has three named color themes (default/midnight/graphite). The "dark mode" feature for this milestone means wiring the existing toggle UI into a persistent user preference, not building dark mode from scratch.
+
+**3. Framer Motion is already installed** — `framer-motion ^12.38.0` is in `package.json`. Note: the upstream project was renamed to `motion` in 2025 (import from `motion/react`), but `framer-motion` still works and the codebase already uses it. Do NOT migrate to the `motion` package — it would break existing imports without any functional benefit for this milestone.
+
+---
+
 ## Feature Coverage Map
 
-| Feature | New Backend Dep | New Frontend Dep | DB Schema Change |
-|---------|----------------|------------------|-----------------|
-| Article versioning/history | none | none | `kb_article_versions` table |
-| Tags | none | none | `kb_tags`, `kb_article_tags` tables |
-| Related articles | none | none | `kb_article_relations` table |
-| Article templates | none | none | `kb_article_templates` table |
-| Ratings/feedback | none | none | `kb_article_ratings` table |
-| Rich media (YouTube embed) | none | `@tiptap/extension-youtube` | none |
-| Syntax-highlighted code blocks | none | `@tiptap/extension-code-block-lowlight` + `lowlight` | none |
-| Table of contents | none | `@tiptap/extension-table-of-contents` | none |
-| Article export (Markdown) | none | `turndown` (already installed) | none |
-| Heading anchor IDs | none | (included in ToC extension) | none |
-| Slug generation | `slugify` (server) | none | `slug` column on `kb_articles` |
+| Feature | New Backend Dep | New Frontend Dep | Config/Schema Change |
+|---------|----------------|------------------|---------------------|
+| Dashboard aging tickets widget | none | none | New `/api/dashboard/summary` SQL endpoint |
+| Dashboard reminders widget | none | none | Reuses existing `/api/tickets` with `has_reminder` filter |
+| Dashboard "today" summary | none | none | New SQL aggregation on `tickets.created_at` |
+| Cmd+K command palette | none | **none** (cmdk already installed) | New `CommandPalette` component |
+| Global search (tickets + KB + contacts) | none | none | Reuse existing search endpoints |
+| Dark mode toggle (persistent) | none | none | Wire `applyMode` + `saveModeTheme` to Settings UI |
+| Responsive layout (mobile/tablet) | none | none | Tailwind responsive classes (`sm:`, `md:`, `lg:`) |
+| Skeleton loading states | none | none | shadcn `<Skeleton>` (already in shadcn) |
+| Micro-interactions (hover, transitions) | none | none | Framer Motion already installed |
+| Staggered list entry animations | none | none | Framer Motion `AnimatePresence` + `staggerChildren` |
+
+**Total new packages: 0**
+
+All features for this milestone are achievable with the existing dependency set.
 
 ---
 
 ## New Frontend Dependencies
 
-### @tiptap/extension-youtube `^3.21.0`
+### None Required
 
-**Why:** Adds a YouTube/Vimeo embed node to the Tiptap editor. Renders as a responsive iframe. The existing Tiptap installation is at 3.20.x — the 3.21.x version is a drop-in compatible minor. Match the version constraint to the already-installed `^3.x` packages.
+Every library needed for this milestone is already installed:
 
-**Install:**
-```bash
-npm install @tiptap/extension-youtube@^3.21.0
-```
+| Capability | Library | Status |
+|-----------|---------|--------|
+| Command palette primitive | `cmdk ^1.1.1` | Already installed |
+| Command palette UI wrapper | `shadcn <Command>` component | Already available via shadcn |
+| Dark mode state management | `next-themes ^0.3.0` | Already installed |
+| Dark mode CSS | `.dark` / `.light` classes in `index.css` | Already defined |
+| Micro-interactions | `framer-motion ^12.38.0` | Already installed |
+| Skeleton loading | shadcn `<Skeleton>` component | Already available via shadcn |
+| Responsive layout | `tailwindcss ^3.4.17` breakpoints | Already installed |
+| Dashboard charts | `recharts ^2.15.4` | Already installed |
+| Date calculations | `date-fns ^3.6.0` | Already installed |
 
-**Integration point:** Register in the editor's `extensions` array alongside the existing extensions. Requires no backend changes — the iframe HTML is stored as part of article content.
-
-**Confidence:** HIGH — version verified from npm registry; peer dep requires `@tiptap/core ^3.21.0`.
-
----
-
-### @tiptap/extension-code-block-lowlight `^3.21.0` + lowlight `^3.3.0`
-
-**Why:** Replaces the basic `CodeBlock` from starter-kit with syntax-highlighted code blocks. `lowlight` is a highlight.js wrapper that runs in Node and browser — no DOM dependency. The combination is the standard Tiptap approach for syntax highlighting.
-
-**Note:** `@tiptap/extension-code-block` is already included in `@tiptap/starter-kit`. The lowlight extension overrides it — configure starter-kit to exclude `CodeBlock` when adding this extension.
-
-**Install:**
-```bash
-npm install @tiptap/extension-code-block-lowlight@^3.21.0 lowlight@^3.3.0
-```
-
-**Integration point:** Add to editor extensions, import language grammars selectively (e.g., `common` preset from lowlight) to avoid bundle size bloat. Use `lowlight.registerAll(common)` to get ~30 common languages. For a KB in an IT system, `bash`, `typescript`, `javascript`, `sql`, `yaml`, `json`, `powershell` are the relevant subset — register individually for a smaller bundle.
-
-**Confidence:** HIGH — version verified from npm registry; peer dep constraints confirmed.
-
----
-
-### @tiptap/extension-table-of-contents `^3.21.0`
-
-**Why:** Generates a ToC data structure from headings in the editor document. This is the canonical Tiptap approach — it provides a `getItems()` callback-based API that produces heading hierarchy with generated anchor IDs. Works alongside the existing heading extension already in starter-kit.
-
-**Install:**
-```bash
-npm install @tiptap/extension-table-of-contents@^3.21.0
-```
-
-**Integration point:** Two usage modes:
-1. In the editor — updates a live ToC sidebar as the user writes.
-2. In the article viewer (read-only Tiptap instance) — renders a sticky ToC panel for navigation.
-
-The extension injects `id` attributes on heading nodes automatically. No backend schema changes needed — heading IDs are derived from heading text at render time.
-
-**Confidence:** HIGH — version 3.21.0 verified from npm registry.
+**Confidence:** HIGH — verified directly from `package.json`.
 
 ---
 
 ## New Backend Dependencies
 
-### slugify `^1.6.8`
+### None Required
 
-**Why:** Used to generate URL-safe slugs for KB articles (e.g., `/kb/how-to-reset-vpn` instead of `/kb/articles/uuid`). Handles Swedish characters correctly (`å→a`, `ä→a`, `ö→o`) which is essential given the UI language.
+Dashboard aggregation queries use `better-sqlite3` (already installed) with standard SQL:
 
-**Install location:** Backend (`server/package.json`)
-
-```bash
-cd server && npm install slugify@^1.6.8
-```
-
-**Integration point:** Called in the article CREATE and UPDATE routes. Slug stored in a new `slug TEXT UNIQUE` column on `kb_articles`. Used as an alternative lookup key alongside the UUID `id`. Frontend URLs can optionally use slug for human-readable article links.
-
-**Alternative considered:** `nanoid` (already installed) generates random IDs, not readable slugs. Writing slug generation by hand is feasible but doesn't handle the unicode normalization edge cases. `slugify` is 3KB, no dependencies, correct choice.
-
-**Confidence:** HIGH — version 1.6.8 verified from npm registry.
-
----
-
-## No New Dependency Needed
-
-### Article Versioning / History
-
-**Approach:** Pure SQL solution — `kb_article_versions` table that stores a snapshot row on every UPDATE to `kb_articles`. No versioning library needed.
-
-**Schema:**
 ```sql
-CREATE TABLE kb_article_versions (
-  id TEXT PRIMARY KEY,
-  article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  content TEXT NOT NULL,
-  version_number INTEGER NOT NULL,
-  created_at TEXT NOT NULL
-);
-CREATE INDEX idx_kb_versions_article ON kb_article_versions(article_id, version_number DESC);
+-- Aging tickets: tickets open > N days, grouped by age bucket
+SELECT
+  CASE
+    WHEN julianday('now') - julianday(created_at) > 30 THEN '30+'
+    WHEN julianday('now') - julianday(created_at) > 14 THEN '14-30'
+    WHEN julianday('now') - julianday(created_at) > 7  THEN '7-14'
+    ELSE '0-7'
+  END as age_bucket,
+  COUNT(*) as count
+FROM tickets
+WHERE status NOT IN ('closed', 'resolved')
+GROUP BY age_bucket;
 ```
 
-**Sync:** Trigger on `UPDATE` of `kb_articles` that inserts the OLD row into `kb_article_versions` before the update is applied. Version number is `MAX(version_number) + 1` per article. This is the idiomatic SQLite pattern — no library adds value here.
-
-**Confidence:** HIGH — standard SQL audit-log pattern, no library required.
+No external aggregation library needed. `date-fns` on the frontend handles all date formatting.
 
 ---
 
-### Tags
+## Integration Points
 
-**Approach:** `kb_tags` (id, name, color, slug) + `kb_article_tags` (article_id, tag_id) junction table. No tagging library needed.
+### Command Palette (Cmd+K)
 
-**Note:** The ticket system already has tags implemented as a JSON array column on `tickets`. KB tags should use proper normalized tables (junction table) since tag-based filtering and "articles with tag X" queries are expected. The ticket tag approach was a pragmatic choice for an existing system; KB tags are new and can be done right.
+The `cmdk` library is already installed and used indirectly via shadcn's `<Command>` component (already used in combobox dropdowns throughout the app). The command palette for this milestone requires:
 
-**Confidence:** HIGH — normalized junction table is the correct relational pattern.
+1. A new `<CommandPalette>` component using shadcn's `<CommandDialog>` (wraps `<Command>` in a Radix Dialog)
+2. A global `useEffect` keyboard listener in `App.tsx` (or a custom hook) for `Cmd+K` / `Ctrl+K`
+3. Search handler functions calling existing API endpoints: `/api/tickets`, `/api/kb/articles`, `/api/contacts`
+4. Navigation actions using `react-router-dom`'s `useNavigate` (already installed)
 
----
+**No new library needed.** `cmdk 1.1.1` is the latest stable version as of 2026-03 (last publish ~1 year ago but stable). The shadcn `<Command>` wrapper is the production-ready integration path used by the existing codebase.
 
-### Related Articles
+**Confidence:** HIGH — cmdk version confirmed from npm registry search results; shadcn Command component docs verified.
 
-**Approach:** `kb_article_relations` (article_id, related_article_id, created_at) self-referential junction table. Queries for "related articles" fetch both directions (`article_id = X OR related_article_id = X`). No graph library needed — SQLite handles this easily at the scale of a single-user KB (expected: dozens to low hundreds of articles).
+### Dark Mode Toggle
 
-**Confidence:** HIGH — bidirectional self-join is standard SQL.
+The existing system in `src/lib/appearance.ts` already handles:
+- `applyMode(mode)` — adds `.dark` or `.light` class to `documentElement`
+- `saveModeTheme(mode)` — persists to `localStorage`
+- `getStoredMode()` — reads from `localStorage` with `"dark"` as default
 
----
+The `AppearanceInitializer` in `App.tsx` already calls `applyMode(getStoredMode())` on mount.
 
-### Article Templates
+**What's missing for this milestone:** A visible toggle in the UI (Settings page or header). Wire a `<Switch>` or button to `applyMode` + `saveModeTheme`. That's a UI component task, not a new dependency.
 
-**Approach:** `kb_article_templates` (id, name, content, article_type, created_at) table. Templates are just KB articles without a publication lifecycle — same content format (Tiptap HTML), same title field. When creating a new article from a template, the frontend sends the template's `content` as the initial value to the Tiptap editor. No template engine needed.
+**Note on `next-themes`:** Already installed but currently configured as a passthrough wrapper (`ThemeProvider` in `ThemeProvider.tsx` passes all props to `NextThemesProvider` without configuring `attribute`, `themes`, or `storageKey`). The custom `applyMode` system in `appearance.ts` is doing the actual work. These two systems are currently not conflicting — next-themes is dormant. Do NOT replace `appearance.ts` with next-themes; it would require migrating the multi-theme system (default/midnight/graphite) and is out of scope.
 
-**Confidence:** HIGH — templates are pre-seeded content, not a rendering concern.
+**Confidence:** HIGH — verified from direct code inspection.
 
----
+### Skeleton Loading States
 
-### Ratings / Feedback
+shadcn's `<Skeleton>` component is a zero-dependency shimmer placeholder built with Tailwind `animate-pulse`. It is not yet in the project's `src/components/ui/` directory (it's a shadcn component that must be added via `npx shadcn@latest add skeleton`), but this is a code-generation step, not a new npm dependency.
 
-**Approach:** `kb_article_ratings` (id, article_id, rating INTEGER, comment TEXT, created_at) table. Rating is a 1–5 integer or a binary helpful/not-helpful (0/1). For a single-user system, ratings are self-ratings (the admin rating their own articles for quality tracking) or public reader ratings via the existing share token mechanism. No ratings library needed.
+Usage pattern for dashboard cards:
+```tsx
+// Loading state
+<Skeleton className="h-24 w-full rounded-lg" />
 
-**Note on single-user context:** Since this is a single-admin system, article ratings likely serve as a quality-tracking note rather than crowdsourced feedback. A simple thumbs-up/down (boolean) + optional comment is more useful than a 5-star scale. This is a design decision for the roadmap phase, not a stack decision.
+// Loaded state
+<KPICard ... />
+```
 
-**Confidence:** HIGH — simple integer + optional text, pure SQL.
+The skeleton automatically respects dark/light mode via CSS variables — no extra configuration.
 
----
+**Confidence:** HIGH — shadcn Skeleton component docs verified; Tailwind animate-pulse is in existing config.
 
-### Article Export (Markdown)
+### Micro-Interactions with Framer Motion
 
-**Approach:** `turndown` is already installed in the frontend (`package.json` dependencies, `^7.2.2`). It converts HTML to Markdown. For exporting a KB article as `.md`, call `turndown(article.content)` client-side and trigger a `Blob` download.
+`framer-motion ^12.38.0` is already installed. Patterns to use for this milestone:
 
-**No new dependency needed.**
+**Page/list entry animations:**
+```tsx
+import { motion, AnimatePresence } from "framer-motion";
 
-**Confidence:** HIGH — turndown already in package.json, confirmed.
+// Staggered list items
+<motion.div
+  initial={{ opacity: 0, y: 8 }}
+  animate={{ opacity: 1, y: 0 }}
+  transition={{ delay: index * 0.05, duration: 0.2 }}
+/>
+```
 
----
+**Command palette open/close:**
+```tsx
+<AnimatePresence>
+  {open && (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.96 }}
+      transition={{ duration: 0.15 }}
+    />
+  )}
+</AnimatePresence>
+```
 
-### Table of Contents (read-only viewer)
+**Dashboard widget entrance:**
+```tsx
+const container = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.07 } }
+};
+```
 
-The `@tiptap/extension-table-of-contents` listed above handles both editor and read-only ToC rendering. The article viewer already uses a read-only Tiptap editor instance — simply add the extension there as well.
+**Performance rule:** Animate only `opacity`, `transform` (translate/scale/rotate). Never animate `width`, `height`, `top`, `left`. The existing codebase already follows this pattern (tailwind.config.ts has CSS keyframe animations for `fade-in`, `scale-in`).
 
-**No additional package needed beyond the ToC extension above.**
+**Migration note:** `framer-motion` package is now also available as `motion` (import from `motion/react`). The codebase currently uses `framer-motion` imports. Do NOT migrate — it offers no benefit for this milestone and risks breaking existing animation code.
 
----
+**Confidence:** HIGH — verified from motion.dev upgrade guide and framer-motion npm page.
 
-## Summary: New Dependencies
+### Responsive Layout
 
-### Frontend (`package.json`)
+No new library needed. Tailwind CSS 3.4 breakpoints are already configured:
 
-| Package | Version | Feature | Already Installed? |
-|---------|---------|---------|-------------------|
-| `@tiptap/extension-youtube` | `^3.21.0` | Rich media (YouTube embed) | No |
-| `@tiptap/extension-code-block-lowlight` | `^3.21.0` | Syntax-highlighted code blocks | No |
-| `lowlight` | `^3.3.0` | Required by code-block-lowlight | No |
-| `@tiptap/extension-table-of-contents` | `^3.21.0` | Table of contents | No |
+| Breakpoint | Min-width | Use case |
+|-----------|-----------|---------|
+| (none) | 0px | Mobile — base styles, single column |
+| `sm:` | 640px | Large mobile / small tablet |
+| `md:` | 768px | Tablet — two columns |
+| `lg:` | 1024px | Desktop — full sidebar layout |
+| `xl:` | 1280px | Wide desktop |
 
-### Backend (`server/package.json`)
+The existing `tailwind.config.ts` has a custom `2xl` screen at `1400px`. The sidebar component is already built with responsive behavior in mind.
 
-| Package | Version | Feature | Already Installed? |
-|---------|---------|---------|-------------------|
-| `slugify` | `^1.6.8` | URL-safe slugs for article URLs | No |
+**What needs work:** Dashboard cards (`KPICard`) need `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` patterns. The command palette dialog already uses Radix Dialog which is mobile-friendly. The sidebar may need a mobile collapse pattern.
 
-**Total new packages: 5** (4 frontend, 1 backend)
+**Confidence:** HIGH — Tailwind v3 docs, existing tailwind.config.ts verified.
+
+### Dashboard Aggregation Endpoint
+
+New backend route `/api/dashboard/summary` returning:
+- Aging bucket counts (open tickets grouped by age: 0-7d, 7-14d, 14-30d, 30d+)
+- Active reminders count (tickets with `reminder_at` in the next 24h)
+- "Today" summary (tickets created today, tickets closed today, open critical count)
+
+Implementation uses `better-sqlite3` synchronous queries — no async driver, no ORM, same pattern as `/api/reports/summary`. Single endpoint, multiple result objects in one JSON response.
+
+**Confidence:** HIGH — same pattern as the existing working `/api/reports/summary` endpoint.
 
 ---
 
 ## What NOT to Add
 
-| Library | Avoid because |
-|---------|--------------|
-| `@tiptap/extension-heading` | Already in `@tiptap/starter-kit` |
-| `highlight.js` | `lowlight` wraps it; do not install separately |
-| `marked` / `remark` | `turndown` (already installed) handles the only needed conversion (HTML→MD); the reverse is not needed |
-| `gray-matter` | Front-matter parsing for markdown exports — unnecessary; plain .md files without front-matter are sufficient |
-| `diff` / `jsdiff` | Version diff display — implement client-side with a simple string comparison or omit diff view; a "restore this version" action is more useful than a line-diff UI for a KB |
-| `js-yaml` | Not needed; no YAML in KB content |
-| `@uiw/react-md-editor` | Would replace Tiptap — rejected; Tiptap is already deeply integrated |
-| `react-quill` / `quill` | Alternative rich text editor — rejected; Tiptap is the existing choice |
-| `meilisearch` / `typesense` | External search service — violates "no new databases" constraint; FTS5 already handles search |
-| `sanitize-html` | `dompurify` already installed on frontend; `stripHtml()` regex already implemented in `kb.ts` for FTS indexing |
-| `@types/slugify` | `slugify` ships its own TypeScript types since v1.6.x |
-| `react-syntax-highlighter` | Frontend syntax highlighting library — unnecessary; lowlight inside Tiptap handles this in the editor; for read-only display use the same Tiptap read-only editor |
+| Library | Why Not |
+|---------|---------|
+| `kbar` | Alternative command palette — rejected; cmdk already installed and is the shadcn-native choice |
+| `react-loading-skeleton` | External skeleton library — rejected; shadcn `<Skeleton>` covers all needs with zero new dependencies |
+| `@tanstack/react-virtual` | Virtual scrolling for command palette — rejected; command palette lists are short (< 50 items shown at a time); cmdk handles its own filtering |
+| `fuse.js` / `minisearch` | Client-side fuzzy search — rejected; command palette searches against the backend API (which has FTS5); no client-side search index needed |
+| `motion` (new package) | Framer Motion rename — rejected; `framer-motion` works and migrating breaks existing imports with zero benefit |
+| `react-use` | Utility hooks — rejected; project uses custom hooks; `react-use` is heavy for the one or two hooks that would be used |
+| `zustand` / `jotai` | State management — rejected; command palette state (`open: boolean`, `query: string`) is local component state; no global state needed |
+| `@radix-ui/react-command` | Radix command primitive — not real; shadcn Command component already wraps cmdk which is the correct primitive |
+| `react-hotkeys-hook` | Keyboard shortcut management — rejected; a single `useEffect` with a `keydown` listener is sufficient for one shortcut (Cmd+K); this library adds 3KB for one use case |
+| `next-themes` (version upgrade) | Already at `^0.3.0`; upgrading to `0.4.x` offers no benefit; the custom `appearance.ts` system does the actual work |
+| `dayjs` | Date library — rejected; `date-fns ^3.6.0` already installed |
+| `recharts` additions | Already at `^2.15.4`; no new chart types needed for dashboard (KPI cards + optional sparklines use existing `LineChart`) |
 
 ---
 
-## DB Schema Additions (no new libraries)
+## Summary: New Dependencies
 
-All new tables added via migration scripts following the existing `server/src/db/` pattern:
+**Frontend:** 0 new packages
+
+**Backend:** 0 new packages
+
+**shadcn component additions (code generation, not npm installs):**
+- `npx shadcn@latest add skeleton` — adds `src/components/ui/skeleton.tsx` (Tailwind-only, no npm dep)
+- `npx shadcn@latest add command` — if not already added; verify `src/components/ui/command.tsx` exists
+
+---
+
+## DB Schema Additions
+
+No new tables. The dashboard endpoint queries existing tables:
 
 ```sql
--- Article versioning
-CREATE TABLE kb_article_versions (
-  id TEXT PRIMARY KEY,
-  article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
-  title TEXT NOT NULL,
-  content TEXT NOT NULL,
-  version_number INTEGER NOT NULL DEFAULT 1,
-  created_at TEXT NOT NULL
-);
-
--- Tags (normalized)
-CREATE TABLE kb_tags (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  color TEXT,
-  slug TEXT UNIQUE,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE kb_article_tags (
-  article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
-  tag_id TEXT NOT NULL REFERENCES kb_tags(id) ON DELETE CASCADE,
-  PRIMARY KEY (article_id, tag_id)
-);
-
--- Related articles (bidirectional)
-CREATE TABLE kb_article_relations (
-  article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
-  related_article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
-  created_at TEXT NOT NULL,
-  PRIMARY KEY (article_id, related_article_id),
-  CHECK (article_id != related_article_id)
-);
-
--- Article templates
-CREATE TABLE kb_article_templates (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  content TEXT NOT NULL DEFAULT '',
-  article_type TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
--- Ratings/feedback
-CREATE TABLE kb_article_ratings (
-  id TEXT PRIMARY KEY,
-  article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
-  helpful INTEGER NOT NULL CHECK (helpful IN (0, 1)),
-  comment TEXT,
-  created_at TEXT NOT NULL
-);
-
--- Slug column on kb_articles
-ALTER TABLE kb_articles ADD COLUMN slug TEXT UNIQUE;
+-- tickets: status, created_at, priority, reminder_at — all existing columns
+-- No new indexes needed at single-user scale
+-- The composite index (status, closed_at DESC) from the archive already helps aging queries
 ```
-
----
-
-## Integration Notes
-
-**FTS5 re-indexing:** If `slug` or any other new column is added to `kb_articles`, no FTS5 changes are needed — the FTS virtual table only indexes `title` and `content` (with HTML stripped). Tags are stored in a separate junction table and do not need FTS indexing.
-
-**Version trigger:** The SQLite trigger to snapshot article content on update should be added in the same migration that creates `kb_article_versions`. The trigger captures `OLD.title` and `OLD.content` into the versions table before the UPDATE commits.
-
-**Tiptap version alignment:** All new Tiptap extensions are pinned to `^3.21.0`. The existing extensions in package.json are at `^3.20.0`. Updating the existing constraints to `^3.21.0` is safe — Tiptap follows semver within major version, and 3.21.0 is a minor release. Alternatively, keep `^3.20.0` for existing and `^3.21.0` for new; npm will resolve to a single 3.21.x instance due to `^` range compatibility.
 
 ---
 
 ## Sources
 
-- npm registry: `@tiptap/extension-youtube@3.21.0`, `@tiptap/extension-code-block-lowlight@3.21.0`, `@tiptap/extension-table-of-contents@3.21.0`, `lowlight@3.3.0`, `slugify@1.6.8` — versions verified via `curl https://registry.npmjs.org/{package}/latest` (HIGH confidence)
-- Existing `package.json` and `server/package.json` — confirmed installed packages (HIGH confidence)
-- `server/src/routes/kb.ts` and `server/src/db/add-kb-tables.ts` — current KB schema and implementation (HIGH confidence)
-- SQLite trigger pattern for audit logging: standard SQL pattern, no external reference needed (HIGH confidence)
+- `package.json` — confirmed installed packages (HIGH confidence, direct file read)
+- `server/package.json` — confirmed backend packages (HIGH confidence, direct file read)
+- `src/lib/appearance.ts` — confirmed existing dark/light mode system (HIGH confidence, direct file read)
+- `src/index.css` — confirmed `.dark` and `.light` CSS classes fully defined (HIGH confidence, direct file read)
+- `tailwind.config.ts` — confirmed `darkMode: ["class"]` and breakpoints (HIGH confidence, direct file read)
+- `src/pages/Dashboard.tsx` — confirmed existing dashboard with `recharts`, `date-fns`, `useTickets` (HIGH confidence, direct file read)
+- cmdk npm registry — version 1.1.1 latest stable (MEDIUM confidence, WebSearch)
+- next-themes 0.4.6 latest — Vite React compatible (MEDIUM confidence, WebSearch)
+- shadcn Command component docs — cmdk integration pattern (HIGH confidence, WebFetch)
+- motion.dev upgrade guide — framer-motion → motion/react migration is optional (HIGH confidence, WebSearch)
+- Tailwind CSS v3 responsive docs — breakpoint values (HIGH confidence, known stable)

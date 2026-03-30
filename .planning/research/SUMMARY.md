@@ -1,7 +1,7 @@
 # Project Research Summary
 
-**Project:** IT Ticket System — Knowledge Base Expansion (v1.2)
-**Domain:** Internal IT knowledge base — single-user, SQLite-backed, Tiptap rich text
+**Project:** IT Ticket System — Dashboard, Search & Polish (v1.4)
+**Domain:** Internal single-user IT helpdesk — React + shadcn + Framer Motion stack
 **Researched:** 2026-03-29
 **Confidence:** HIGH
 
@@ -9,11 +9,11 @@
 
 ## Executive Summary
 
-This milestone extends an already-functional KB module with eight capability areas: article versioning/history, tags, related articles, article templates, ratings/feedback, rich media embedding, table of contents, and article export. Research confirms that the existing stack (React 18 + Vite 7 + Express 4 + better-sqlite3 + Tiptap 3.20 + Tailwind + shadcn) handles all of these natively — only 5 new packages are needed (4 Tiptap extensions + `slugify`), and the rest is pure schema additions and application logic. No new databases, no new services, no architectural pivots.
+This milestone (v1.4) is a polish and productivity sprint on a mature internal IT ticket system. The core product works; the goal is to make it feel professional — a real dashboard with aging visibility and daily rhythm data, a proper command palette replacing an inline search dropdown, a complete light/dark mode toggle, and responsive polish. All of these are achievable without adding a single npm package. Every library required (cmdk, Framer Motion, next-themes, recharts, date-fns, Tailwind breakpoints, shadcn Skeleton) is already installed and verified in package.json.
 
-The recommended approach is additive: every new feature slots into the established migration pattern (`initializeDatabase()` guards in `connection.ts`), all new routes append to the existing `kb.ts` router, and all frontend components mount into existing pages. The build order is driven by dependency and risk — low-risk additive features first, pure-frontend features second, the one feature that modifies a tested write path (versioning) last.
+The recommended approach is to build in four loosely coupled phases with hard ordering constraints: dark mode CSS completeness first (purely additive, zero regression risk), dashboard overview second (new backend endpoint plus parallel client hooks), command palette refactor third (most complex, refactors existing GlobalSearch logic), and responsive plus loading polish last (depends on final component shapes). The architecture is well-understood from direct codebase inspection — no architectural guesswork is needed.
 
-The dominant risk is correctness at two integration seams: FTS5 sync (the contentless virtual table must not be altered and the version snapshot must be inside the same transaction as the article update) and the ToC rendering path (headings must be extracted from the rendered DOM, not by regex over stored HTML). Both risks have clear, verified prevention patterns already documented in the codebase.
+The two highest-consequence risks are: (1) the `.light` CSS variable block in `index.css` is incomplete and will produce broken light-mode UI unless the full token set is audited and patched before the toggle is exposed; and (2) the dashboard's existing `useTickets({ limit: 1000 })` client-side aggregation must not be extended to power aging/reminders — a dedicated `/api/tickets/dashboard-overview` SQL endpoint is required to avoid unbounded fetch growth and silently incorrect counts. Both risks have known solutions fully specified in the research.
 
 ---
 
@@ -21,190 +21,140 @@ The dominant risk is correctness at two integration seams: FTS5 sync (the conten
 
 ### Recommended Stack
 
-The existing stack requires minimal extension. Four Tiptap 3.21.x extensions cover the rich content needs (YouTube embed, syntax-highlighted code blocks, table of contents, and heading anchors). One backend utility (`slugify@1.6.8`) handles URL-safe slug generation with correct Swedish character normalization. Every other capability — versioning, tags, relations, templates, feedback, export — is implemented with pure SQL schema additions and application logic. `turndown` for Markdown export is already installed.
+Zero new npm dependencies. The entire milestone is buildable with the existing stack: cmdk 1.1.1 (already installed) for the command palette primitive via shadcn's `CommandDialog`, Framer Motion 12.38.0 (already installed) for animations, recharts 2.15.4 for dashboard charts, date-fns 3.6.0 for date formatting, Tailwind CSS 3.4 breakpoints for responsive layout, and shadcn's `Skeleton` component (added via `npx shadcn@latest add skeleton` — a code generation step, not an npm install). This is verified directly from package.json, not assumed.
 
-**New dependencies (5 total):**
-- `@tiptap/extension-youtube@^3.21.0` — YouTube/Vimeo embed node in editor — only Tiptap-native approach
-- `@tiptap/extension-code-block-lowlight@^3.21.0` + `lowlight@^3.3.0` — syntax-highlighted code blocks — replaces starter-kit's plain CodeBlock; register only `bash`, `typescript`, `javascript`, `sql`, `yaml`, `json`, `powershell` to avoid bundle bloat
-- `@tiptap/extension-table-of-contents@^3.21.0` — live ToC in editor; DOM `querySelectorAll` for read-only view
-- `slugify@^1.6.8` (backend) — URL-safe slugs with unicode normalization including Swedish characters
+**Core technologies:**
+- `cmdk ^1.1.1` + shadcn `CommandDialog`: command palette modal — already installed; `CommandDialog` already exists in `src/components/ui/command.tsx` but is currently unused
+- `framer-motion ^12.38.0`: micro-interactions and stagger animations — already installed but underused; CSS keyframe animations handle most existing cases; Framer Motion reserved for gestures and exit animations
+- `better-sqlite3 11.7.0`: new `/api/tickets/dashboard-overview` endpoint — same synchronous SQL pattern as the existing `/api/reports/summary` endpoint
+- `next-themes ^0.3.0`: already installed but dormant; custom `applyMode()` in `appearance.ts` is the active dark mode driver — do NOT activate next-themes as the class driver alongside it
+- Tailwind CSS 3.4 breakpoints (`sm:` 640px, `md:` 768px, `lg:` 1024px): responsive layout fixes — no config changes needed
 
-**Explicitly avoid:** `diff`/`jsdiff`, `react-syntax-highlighter`, `marked`, `meilisearch`, `sanitize-html` (DOMPurify already installed), any alternative Tiptap/editor library.
+**shadcn code-generation steps (not npm installs):**
+- `npx shadcn@latest add skeleton` — adds `src/components/ui/skeleton.tsx`
+- Verify `src/components/ui/command.tsx` exists (it does — CommandDialog is confirmed present)
 
 ### Expected Features
 
-Research drew a clear line between table stakes, differentiators, and explicit anti-features for this single-user system.
-
 **Must have (table stakes):**
-- Tags on articles — cross-cutting labels beyond flat categories; normalized junction table (`kb_tags` + `kb_article_tags`)
-- Draft/published status — prevents half-written articles appearing in search
-- Article view count — passive quality signal; enables "popular articles" surface
-- "Recently updated" section on KB home — no backend change needed
-- Table of contents — standard expectation for long how-to guides; pure frontend
-- Print article — copy existing Reports `@media print` pattern; ~30 minutes
+- Aging tickets panel on dashboard — open tickets without recent updates are invisible in the current stats grid; standard in all mature helpdesks
+- "Today at a glance" summary — daily created/closed/resolved counts; every helpdesk dashboard surfaces this
+- Reminders widget on dashboard — `ticket_reminders` table exists with data; dashboard is the natural home for upcoming reminders
+- Command palette as modal (Cmd+K) — current GlobalSearch is an inline dropdown; modal overlay is the established UX pattern (Linear, Notion, GitHub); KB articles must be included in results
+- Navigation shortcuts in palette — zero-effort to add, trains muscle memory, expected in any command palette
+- Dark mode toggle in nav header — currently buried in Settings; one-click toggle is the norm in polished tools
+- Light mode fully styled — `.light` CSS class exists but token coverage is incomplete; light mode must actually work across all components
+- Loading skeleton screens — blank states during load feel like bugs; skeletons communicate loading clearly
 
 **Should have (differentiators):**
-- Staleness detection (`last_reviewed_at` column + "mark reviewed" button + stale filter)
-- Article templates — hard-coded Tiptap content scaffolds applied client-side; no template CRUD needed initially
-- "See Also" cross-references — manual related-article links via bidirectional junction table
-- Popular articles surface — trivial once view_count exists; one query + one section
-- Keyboard shortcuts (`Ctrl+K` global search modal) — high polish-to-effort ratio
-- "Convert ticket to KB article" shortcut — pre-fills form from ticket data via URL params
+- Staggered page-load animations on dashboard KPI cards — Framer Motion is already installed; one well-done stagger beats scattered micro-interactions
+- Toast and hover micro-interactions — `whileTap`/`whileHover` on key interactive elements; high polish-to-effort ratio
+- Responsive mobile layout — bottom nav plus sidebar drawer on mobile < 768px; vaul is already installed
+- Keyboard shortcut hints — `<kbd>` elements on search bar and empty states; visible shortcut education
+- Dark mode action accessible from Cmd+K — "Toggle light/dark mode" action in the palette idle state
 
-**Defer indefinitely:**
-- Article versioning/revision history — FEATURES.md marks this as anti-feature for single-user system; modeled in ARCHITECTURE.md for teams that want it — treat as optional phase
-- Hierarchical sub-categories — flat categories + tags cover organizational needs completely
-- User ratings from audience — no audience; use view_count as passive quality signal
-- AI-generated summaries — external API dependency with cost and privacy concerns
-
-> **Scope conflict resolved:** FEATURES.md marks versioning as anti-feature #1. STACK.md, ARCHITECTURE.md, and PITFALLS.md model it in full detail. Roadmapper should treat Phase 5 (versioning) as optional — include if revision history is desired, exclude if simplicity is preferred. Both modes are safe given the research available.
-
-> **Second scope conflict resolved:** ARCHITECTURE.md models category hierarchy (`parent_id`); FEATURES.md lists it as anti-feature. Category hierarchy is excluded from this milestone — flat categories + tags are sufficient.
+**Defer to v2+:**
+- Cmd+K ticket actions (clone, mark resolved) — requires two-step selection UX; complex for a single-user tool
+- Responsive Kanban for mobile — medium complexity, low usage frequency on mobile
+- AI summaries, real-time push, PWA offline — explicitly out of scope per PROJECT.md
 
 ### Architecture Approach
 
-All new features follow the established KB architecture: tables created via `tableExists()`/`columnExists()` guards in `connection.ts`, routes appended to `server/src/routes/kb.ts`, migrations never standalone. The article detail page extends its existing `Promise.all` fetch to include related articles and feedback. Version history loads lazily on panel expand only. The single modification to an existing write path is the `PUT /articles/:id` transaction, which gains a version snapshot insert as step 1 (before the FTS delete), keeping full atomicity.
+The existing architecture is component-per-page with React Query hooks per data source and an `ApiClient` class in `src/lib/api.ts`. No global state management beyond localStorage and React Query cache. For v1.4 the approach is strictly additive: a new `useDashboardOverview` hook calling a new dedicated backend endpoint, a new `CommandPalette` component replacing `GlobalSearch`, CSS variable additions to `index.css`, and Tailwind responsive classes on existing layout components. No architectural pattern changes are needed.
 
-**Major components:**
-
-1. **DB schema additions** — 5 new tables (`kb_tags`, `kb_article_tags`, `kb_article_relations`, `kb_article_templates`, `kb_article_feedback`) + new columns on `kb_articles` (`status`, `view_count`, `last_reviewed_at`, `slug`); optional 6th table `kb_article_versions` if versioning phase is included
-2. **`kb.ts` route extensions** — relation CRUD, template CRUD, feedback GET/POST, tag filtering — all appended to existing router; no new router files
-3. **Frontend page enhancements** — `KBArticleDetail.tsx` gains ToC sidebar, related articles panel, feedback widget; `KBArticleForm.tsx` gains template picker, tag input, relation picker; `KnowledgeBase.tsx` gains recently-updated strip, popular articles strip, tag filter, stale articles filter
-4. **New standalone components** — `KBTableOfContents.tsx`, `KBRelatedArticles.tsx`, `KBTemplatePicker.tsx`; `KBVersionHistory.tsx` if versioning included
-5. **Tiptap extension additions** — YouTube, code-block-lowlight, table-of-contents extensions registered in `RichTextEditor.tsx`
+**Major components and changes:**
+1. `GET /api/tickets/dashboard-overview` (NEW backend route) — single SQL endpoint returning aging tickets, upcoming reminders, and today-summary counts; must be placed above the `/:id` route in `tickets.ts` to avoid ID match conflict
+2. `useDashboardOverview.ts` (NEW hook) + `AgingTicketsPanel`, `UpcomingRemindersPanel`, `TodaySummaryPanel` (NEW components) — mount in `Dashboard.tsx` alongside existing KPI grid; 5-minute React Query stale time
+3. `CommandPalette.tsx` (NEW component using `CommandDialog`) — replaces inline `GlobalSearch` dropdown; mounts in `Layout.tsx`; searches tickets + KB articles in parallel with a shared 250ms debounce timer
+4. `index.css` `.light` block (MODIFIED) — complete all missing CSS variable tokens (`--primary`, `--primary-foreground`, `--accent`, `--ring`, `--sidebar-primary`, `--background-gradient`, etc.)
+5. `Layout.tsx` (MODIFIED) — dark mode toggle button in `BottomSection`, command palette trigger replaces GlobalSearch render
+6. `index.html` (MODIFIED) — blocking `<script>` before the React bundle applies the stored mode class synchronously to prevent FOUC
 
 ### Critical Pitfalls
 
-1. **FTS5 virtual table cannot be ALTERed** — Do not add columns to `kb_articles_fts`. For new searchable fields (e.g. tags), append to `content_plain` at insert time: `stripHtml(content) + ' ' + tags.join(' ')`. Any migration containing `ALTER TABLE kb_articles_fts` will fail with a hard SQLite error. Applies to any phase touching tags or FTS filtering.
+1. **Incomplete `.light` CSS token block** — the `.light` override in `index.css` covers only ~12 of 40+ variables. Primary buttons, sidebar active states, and the `body::before` gradient will look broken in light mode. Audit and complete ALL tokens before building the toggle UI — this is a prerequisite, not a follow-up.
 
-2. **Version save must be inside the article update transaction** — The `updateArticleAndFts` transaction wraps FTS delete + article UPDATE + FTS insert. The version snapshot insert must be step 1 inside this same transaction. Any insert outside the transaction risks FTS out-of-sync state on crash. Verify correctness with a forced crash test before marking versioning complete.
+2. **Dark mode system conflict (`applyMode` vs `next-themes`)** — both systems are present in the codebase. If `next-themes` is activated with `attribute="class"`, it fights with `AppearanceInitializer` over `document.documentElement.classList`, causing FOUC and toggle reversion. Use `applyMode`/`saveModeTheme` from `appearance.ts` exclusively; keep `next-themes` dormant.
 
-3. **ToC must use DOM query, not regex over stored HTML** — `/<h[23][^>]*>(.*?)<\/h[23]>/gi` fails on headings with nested marks (`<h2><strong>Title</strong></h2>` — captured text includes `<strong>` tags). After `HtmlRenderer` renders content into the DOM, use `containerRef.current.querySelectorAll('h2, h3, h4')` to get clean `textContent`. `HtmlRenderer` uses `dangerouslySetInnerHTML` — there is no Tiptap editor instance in the read view, so `@tiptap/extension-table-of-contents` cannot be used there.
+3. **Dashboard 1000-ticket client-side aggregation must not be extended** — `useTickets({ limit: 1000 })` grows unboundedly with ticket count. Aging tickets computed client-side will silently miss tickets beyond position 1000. All new dashboard aggregations must go through the dedicated `/api/tickets/dashboard-overview` SQL endpoint.
 
-4. **Related articles: enforce canonical pair ordering** — Use `CHECK(article_a < article_b)` on the junction table to prevent duplicate `(A,B)` and `(B,A)` rows. All inserts must sort IDs lexicographically. All reads use `WHERE article_a = ? OR article_b = ?`. All deletes must find the relation regardless of which ID was the "source."
+4. **Command palette double-listener leak** — registering `document.addEventListener('keydown', ...)` inside a component that could remount causes double-fire (palette opens then immediately closes). Register once at `App.tsx` level with proper `useEffect` cleanup. Always call `e.preventDefault()` to block Firefox address bar focus on Ctrl+K.
 
-5. **Version restore must go through `updateArticleAndFts` transaction** — Restoring an old version must be treated identically to a save: run the same `updateArticleAndFts` transaction with the restored content. A raw `UPDATE kb_articles` without the FTS step leaves the search index pointing at the wrong content.
+5. **Framer Motion `layout` prop on dashboard cards causes layout thrash** — `layout`/`layoutId` triggers FLIP measurement on every data update; combined with recharts SVG redraws this will produce visible jank. Use `initial`/`animate` (opacity + transform only) for entrance animations; never use the `layout` prop on KPICard or stat panels.
 
 ---
 
 ## Implications for Roadmap
 
-Based on combined research, a 4-phase structure (+ 1 optional phase) optimizes for value delivery, dependency satisfaction, and risk sequencing.
+The dependency graph from combined research strongly suggests four phases. The ordering is driven by: (1) CSS-only dark mode work has zero breaking-change risk and should be verified before React features land on top of it; (2) dashboard panels are self-contained and validate the new backend SQL endpoint pattern with lower complexity than the search refactor; (3) command palette refactors existing GlobalSearch functionality and should come after dashboard to avoid dual disruption; (4) responsive and loading polish requires all final component shapes to be in place.
 
-### Phase 1: Core Article Enhancements (Foundational)
+### Phase 1: Dark Mode Foundation
 
-**Rationale:** All items are additive, require only column migrations (no new tables except tags), and deliver immediate visible value. Draft status and view count are prerequisites for later features (popular articles surface, quality filtering). Tags require a junction table but are table stakes. Print and recently-updated are near-zero effort. None of these touch existing write paths.
+**Rationale:** Purely additive CSS changes with zero regression risk. Validates the theming system before any React code changes land. If dark mode CSS is incomplete when React code arrives, every subsequent feature will have light-mode rendering bugs that are expensive to debug retroactively.
 
-**Delivers:** A KB that feels complete for daily use — articles have lifecycle status, quantified popularity, cross-cutting labels, and print capability.
+**Delivers:** Working light mode across all existing components; dark mode toggle button in nav header (`BottomSection` in `Layout.tsx`); blocking `<script>` in `index.html` to prevent FOUC; `prose-invert` fixed in `HtmlRenderer`; recharts chart colors responsive to mode switch via `getComputedStyle` or mode-keyed remount.
 
-**Addresses:**
-- Print button on article detail (copy Reports `@media print` pattern)
-- "Recently updated" section on KB home (no backend, slice of existing `updated_at DESC` data)
-- Draft/published status (`status` column, filter in list + FTS, toggle in form)
-- Article view count (`view_count` column, increment on GET/:id, display on detail)
-- Tags on articles + tag filter on KB list (`kb_tags` + `kb_article_tags` junction table, tag input component)
+**Addresses features:** Light mode fully styled, dark mode toggle in nav header, dark mode accessible from Cmd+K (toggle action added to palette in Phase 3).
 
-**Schema changes:** `status` column, `view_count` column, `slug` column on `kb_articles`; `kb_tags` + `kb_article_tags` tables
-
-**Pitfalls to avoid:** If tag text is appended to FTS indexing, append to `content_plain` only — do not alter `kb_articles_fts`. Draft articles must be excluded from `kb_articles_fts` inserts (filter `WHERE status = 'published'` in the FTS sync path).
-
-**Research flag:** Standard patterns — skip `/gsd:research-phase`.
+**Avoids pitfalls:** Incomplete `.light` token block (Pitfall 2), dual mode system conflict (Pitfall 1), FOUC on hard reload (Pitfall 8), `HtmlRenderer` `prose-invert` hardcode (Pitfall 10), recharts colors frozen at mount (Pitfall 13), `body::before` gradient wrong in light mode (Pitfall 16).
 
 ---
 
-### Phase 2: Article Detail and Authoring Experience
+### Phase 2: Dashboard Overview
 
-**Rationale:** These features operate on the article detail or form views without touching the article list or FTS. ToC is pure frontend. Templates are fully isolated from the article save path. Staleness detection adds one column and one button. No risk to existing write paths.
+**Rationale:** Self-contained feature — new backend endpoint plus new frontend panels. No cross-dependencies with CommandPalette or Layout restructuring. Validates the dedicated SQL aggregation pattern that pitfalls research strongly recommends over extending the existing 1000-ticket client fetch.
 
-**Delivers:** Long articles become navigable; new articles start from structure; outdated articles are surfaced for review.
+**Delivers:** Aging tickets panel, upcoming reminders panel, "today at a glance" summary row; new `GET /api/tickets/dashboard-overview` backend route; `useDashboardOverview` hook; skeleton loading states on all new panels.
 
-**Addresses:**
-- Table of contents (DOM `querySelectorAll` after render; `KBTableOfContents.tsx` sticky sidebar; `@tiptap/extension-table-of-contents` in editor for live preview only)
-- Article templates (hard-coded templates, `KBTemplatePicker.tsx` modal in new-article mode, client-side `editor.commands.setContent()` — no server-side string interpolation)
-- Staleness detection (`last_reviewed_at` column, "mark reviewed" button, stale badge on article list card, stale filter)
+**Addresses features:** Aging tickets, reminders widget, today summary, loading skeletons (new panels).
 
-**Stack additions:** `@tiptap/extension-table-of-contents@^3.21.0` (editor side only)
+**Avoids pitfalls:** 1000-ticket client-side aggregation growth (Pitfall 3), aging count missing tickets beyond limit (Pitfall 15), dashboard fetch waterfall (Pitfall 3).
 
-**Pitfalls to avoid:** ToC must use `querySelectorAll` on rendered DOM — not regex on stored HTML. Template application must use `editor.commands.setContent()` client-side — never string-interpolate user values into HTML on the server (XSS risk). Applying a template to an article with existing content must show a confirmation dialog.
-
-**Research flag:** Standard patterns — skip `/gsd:research-phase`.
+**Uses:** `better-sqlite3` synchronous SQL (same pattern as existing `/api/reports/summary`), React Query parallel hooks, shadcn `Skeleton` component.
 
 ---
 
-### Phase 3: Discovery and Cross-Referencing
+### Phase 3: Command Palette Refactor
 
-**Rationale:** Popular articles depends on `view_count` from Phase 1. "See Also" relations require a new junction table but zero modification to existing routes. Keyboard shortcuts are pure frontend. "Convert ticket to KB article" touches the ticket detail page read-only (URL params only). This phase turns the KB from a list of isolated articles into a connected, discoverable system.
+**Rationale:** Most complex change — refactors existing `GlobalSearch` functionality into `CommandPalette` using the already-present `CommandDialog`. Deliberately last among feature phases so GlobalSearch continues working undisturbed during Phases 1 and 2. KB article search and navigation shortcuts are bundled here since they require the modal to exist first.
 
-**Delivers:** Users can find related content, discover the most-used articles, and convert resolved tickets into KB articles with one click.
+**Delivers:** Full command palette modal (Cmd+K) with tickets + KB articles + contacts + navigation shortcuts; retired inline GlobalSearch dropdown; updated `Layout.tsx` header with palette trigger; parallel debounced search with a shared 250ms timer; dark mode toggle action in palette idle state.
 
-**Addresses:**
-- Popular articles surface (one query `ORDER BY view_count DESC LIMIT 5`, one section on KB home)
-- "See Also" cross-references (`kb_article_relations` junction table, `KBRelatedArticles.tsx` panel, article picker reuses existing KB search API)
-- Keyboard shortcuts (`Ctrl+K` global search modal, `useEffect` keydown listeners)
-- "Convert ticket to KB article" shortcut (URL params `?fromTicket=:id` in `KBArticleForm.tsx`, button on ticket detail page)
+**Addresses features:** Command palette as modal, KB articles in Cmd+K, navigation shortcuts, dark mode action in palette, keyboard shortcut hints.
 
-**Schema changes:** `kb_article_relations` junction table with `CHECK(article_a < article_b)` canonical ordering constraint
+**Avoids pitfalls:** Double-listener leak (Pitfall 4), multi-source search race conditions (Pitfall 5), navigation timing conflict with close animation (Pitfall 9), input losing focus on results update (Pitfall 14).
 
-**Pitfalls to avoid:** Related article junction table must enforce canonical pair ordering (critical pitfall #4). Single JOIN query for "related articles" — avoid N+1 per article. Show category badge and article type alongside each related article title for context.
-
-**Research flag:** Standard patterns — skip `/gsd:research-phase`.
+**Implements:** `CommandPalette.tsx` using `CommandDialog` from `ui/command.tsx`; `api.getKbArticles()` already present in `api.ts`; `useNavigate` from react-router-dom already installed.
 
 ---
 
-### Phase 4: Rich Media and Export (Editor Enhancements)
+### Phase 4: Responsive and Animation Polish
 
-**Rationale:** These features extend the Tiptap editor itself. Grouped together because they all touch `RichTextEditor.tsx` and require the Tiptap 3.21.x extension npm installs. Article export uses the already-installed `turndown` — client-side only. YouTube embed and syntax highlighting are independent editor additions with no schema changes.
+**Rationale:** Polish work that depends on all feature components being in their final shape. Responsive audit touches `TicketList`, `KBArticleDetail`, `Reports`, and the new dashboard panels — all of which must be final before the audit. Animation additions (stagger on KPI grid, micro-interactions) are additive overlays with no dependencies beyond Framer Motion.
 
-**Delivers:** Authors can embed YouTube videos, write syntax-highlighted code blocks, and export articles as Markdown files. All visible in both editor and read-only view via the shared Tiptap renderer.
+**Delivers:** Mobile-responsive layout (bottom nav + sidebar drawer at < 768px); `TicketTable` mobile overflow fixes; KBArticleDetail single-column on mobile; staggered page-load animations on dashboard KPI grid; `whileTap`/`whileHover` micro-interactions on key interactive elements; comprehensive skeleton screens across Dashboard, TicketList, and KB list.
 
-**Addresses:**
-- Rich media embedding (YouTube/Vimeo via `@tiptap/extension-youtube`)
-- Syntax-highlighted code blocks (`@tiptap/extension-code-block-lowlight` + `lowlight`)
-- Article export as Markdown (client-side `turndown(article.content)` + `Blob` download — no backend change)
+**Addresses features:** Responsive mobile layout, stagger animations, toast micro-interactions, full loading state coverage, keyboard shortcut hint badges.
 
-**Stack additions:** `@tiptap/extension-youtube@^3.21.0`, `@tiptap/extension-code-block-lowlight@^3.21.0`, `lowlight@^3.3.0`, `slugify@^1.6.8` (backend, for slug column on `kb_articles`)
-
-**Pitfalls to avoid:** Disable starter-kit's `CodeBlock` when adding `extension-code-block-lowlight` — they conflict. Register only the relevant language subset from lowlight (not `common` preset) to control bundle size. Verify Tiptap 3.21.x extension compatibility after npm install — all existing extensions are `^3.20.x`, npm will resolve to 3.21.x single instance.
-
-**Research flag:** Standard patterns — skip `/gsd:research-phase`.
-
----
-
-### Phase 5: Article Versioning (Optional — Modifies Write Path)
-
-**Rationale:** Versioning is the only feature that modifies an existing production-tested write path (`PUT /articles/:id`). Placing it last ensures all other features are battle-tested before the transaction is extended. FEATURES.md explicitly marks versioning as an anti-feature for a single-user system. Include this phase only if revision history is desired by the user; the milestone is complete without it.
-
-**Delivers:** Every article save creates a recoverable snapshot; users can view any past version and restore with one click.
-
-**Addresses:**
-- Article versioning/history (`kb_article_versions` table; version list/get/restore endpoints; `KBVersionHistory.tsx` lazy-loaded collapsible panel in `KBArticleDetail.tsx`)
-
-**Schema changes:** `kb_article_versions` table; extends `updateArticleAndFts` transaction in `PUT /articles/:id`
-
-**Pitfalls to avoid:** Version insert must be step 1 inside the same `db.transaction()` as FTS sync (critical pitfall #2). Version restore must call `updateArticleAndFts` — not a raw UPDATE (critical pitfall #5). Version list endpoint must not include `content` — load lazily on panel expand only. Show only 10 most recent versions by default; include "load more." Warn before deleting an article that has versions (CASCADE will destroy history).
-
-**Research flag:** Needs careful implementation review — this is the highest-risk integration point in the milestone. Verify transaction atomicity with a forced crash test before marking done.
+**Avoids pitfalls:** Responsive sidebar clipping from `overflow-hidden` ancestor (Pitfall 6), `layout` prop layout thrash (Pitfall 7), sidebar collapsed state lost across navigation (Pitfall 11), bespoke skeleton shimmer per component instead of using `ui/skeleton.tsx` (Pitfall 12).
 
 ---
 
 ### Phase Ordering Rationale
 
-- Phase 1 before Phase 3: `view_count` is a hard dependency for "popular articles"
-- Phase 2 before Phase 5: client-side confirmation guard in template apply mitigates "overwrote real content" without requiring versioning first; templates ship safely without versioning as a safety net
-- Phase 4 grouped separately: batching all Tiptap 3.21.x extension installs minimizes npm install and compatibility verification cycles
-- Phase 5 last: only write-path modification in the milestone; all other features must be working and tested before `PUT /articles/:id` is touched
-- Phases 1-4 can be reordered by product priority without breaking dependencies; Phase 5 must remain last if included
+- CSS-only dark mode work first eliminates the largest cross-cutting concern before feature code lands on top of it
+- Dashboard panels and command palette have no dependencies on each other; dashboard goes first because it introduces the new backend endpoint pattern with lower complexity than the GlobalSearch refactor
+- Responsive polish last because it requires knowing the final shape of all new components (dashboard panels, command palette trigger in Layout header)
+- All four phases are buildable without new npm dependencies — verified from direct package.json inspection
 
 ### Research Flags
 
-Phases with standard, well-documented patterns — skip `/gsd:research-phase`:
-- **Phase 1** — column migrations, junction table, filter logic; all patterns proven in existing codebase
-- **Phase 2** — Tiptap ToC extension documented; DOM `querySelectorAll` is standard; template picker is modal + state pre-fill
-- **Phase 3** — junction table + query patterns established in codebase; keyboard shortcut hooks are standard React
-- **Phase 4** — Tiptap extension registration is mechanical; `turndown` API is trivial
+All phases have well-documented patterns from direct codebase inspection. No phase requires `/gsd:research-phase`.
 
-Phase needing careful implementation review:
-- **Phase 5 (Versioning)** — modifies existing write path; transaction boundary correctness is non-trivial; FTS sync on restore is easy to forget; worth a dedicated implementation checklist and forced crash test
+- **Phase 1 (Dark Mode):** All implementation details fully specified in ARCHITECTURE.md and PITFALLS.md. Token list to add is enumerated in Pitfall 2. Blocking script is a 5-line snippet in Pitfall 8.
+- **Phase 2 (Dashboard):** SQL queries written in full in ARCHITECTURE.md. Component boundaries fully mapped. Hook pattern mirrors existing `useTickets`.
+- **Phase 3 (CommandPalette):** `CommandDialog` already exists in `ui/command.tsx`. Data flow fully specified in ARCHITECTURE.md. `api.getKbArticles` confirmed present in `api.ts`.
+- **Phase 4 (Polish):** Tailwind breakpoints and Framer Motion patterns are well-established. Responsive fixes are audit-and-patch, not design decisions.
 
 ---
 
@@ -212,39 +162,45 @@ Phase needing careful implementation review:
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | All 5 new packages version-verified via npm registry; existing stack confirmed from `package.json`; no version conflicts identified |
-| Features | HIGH | Existing feature inventory from direct codebase read of all KB source files; table stakes from established KB products (Confluence, Notion, Zendesk Guide); anti-features backed by explicit PROJECT.md single-user constraint |
-| Architecture | HIGH | All patterns confirmed from direct source analysis of `kb.ts`, `connection.ts`, all KB pages and components; no inference required |
-| Pitfalls | HIGH | FTS5 mechanics from SQLite official docs; transaction patterns from better-sqlite3 docs; ToC and category pitfalls from codebase inspection; versioning pitfalls from direct transaction source read |
+| Stack | HIGH | Verified directly from package.json and server/package.json — zero ambiguity; 0 new packages required |
+| Features | HIGH | Direct codebase read of GlobalSearch, Dashboard, Layout, Settings; domain patterns from Freshdesk/Zendesk/Linear/Notion/GitHub well-established |
+| Architecture | HIGH | Direct analysis of all affected source files; component boundaries, data flow, and SQL queries fully specified — no inference required |
+| Pitfalls | HIGH (codebase-specific) / MEDIUM (pattern-based) | CSS token gaps and dual-mode conflict verified by direct code inspection; Framer Motion layout thrash and command palette listener leak are pattern-based warnings not yet triggered in this codebase |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Tiptap 3.21 vs 3.20 compatibility:** New extensions pin to `^3.21.0`; existing packages are `^3.20.x`. npm will resolve to a single 3.21.x instance via semver range. Confirm no breaking changes during Phase 4 install. Low risk — Tiptap follows semver within major version.
+- **Reminders API endpoint:** FEATURES.md notes the `/api/reminders` endpoint needs verification ("verify endpoint exists"). During Phase 2 implementation, confirm whether `GET /api/reminders` is a live route in `server/src/routes/`. If absent, the reminders panel requires a new backend route — low effort, same SQL pattern as the aging query, but must not be assumed to exist.
 
-- **Ratings vs feedback scope:** FEATURES.md explicitly excludes ratings/feedback as "user ratings are meaningless for single-user." ARCHITECTURE.md models a `kb_article_feedback` table. Resolution: implement feedback as internal quality-tracking (thumbs up/down + optional note, authenticated admin only), not as audience ratings. This is consistent with the single-user constraint. Roadmapper should include `kb_article_feedback` as part of Phase 3 if quality-tracking is desired.
+- **Recharts color update on mode switch:** PITFALLS.md recommends either reading CSS variables via `getComputedStyle` on mode change or keying charts on mode string for forced remount. The correct approach should be tested empirically during Phase 1 since recharts version-specific behavior on CSS variable updates is not fully verified.
 
-- **ToC in read-only vs editor contexts:** `@tiptap/extension-table-of-contents` works only in a Tiptap editor instance. `HtmlRenderer` uses `dangerouslySetInnerHTML` — not a Tiptap editor — so the extension cannot be used there. ToC for the article read view must use the DOM `querySelectorAll` approach. Both can coexist: extension in editor for live preview, DOM query in detail view for display. Implementation must account for both contexts.
+- **Responsive breakpoint specifics:** FEATURES.md rates responsive layout confidence as MEDIUM — "actual breakpoint behavior requires live browser testing." The architectural plan is correct but specific column-hiding and overflow decisions may need adjustment after testing at 375px viewport width.
 
 ---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `server/src/routes/kb.ts` — existing endpoints, FTS5 sync pattern, transaction structure
-- `server/src/db/connection.ts` — `initializeDatabase()` migration pattern, `tableExists()`/`columnExists()` guards
-- `server/src/db/add-kb-tables.ts`, `add-kb-fts5-and-type.ts` — existing schema
-- `src/pages/KBArticleDetail.tsx`, `KBArticleForm.tsx`, `KnowledgeBase.tsx` — existing frontend structure
-- `src/components/ui/rich-text-editor.tsx` — Tiptap extensions, heading levels confirmed at h2/h3
-- `package.json`, `server/package.json` — installed packages, confirmed versions
-- `.planning/PROJECT.md` — single-user constraint, out-of-scope list
-- npm registry — `@tiptap/extension-youtube@3.21.0`, `@tiptap/extension-code-block-lowlight@3.21.0`, `@tiptap/extension-table-of-contents@3.21.0`, `lowlight@3.3.0`, `slugify@1.6.8` versions verified
+- `package.json`, `server/package.json` — installed package versions, confirmed zero new dependencies needed
+- `src/lib/appearance.ts`, `src/index.css` — dark mode system architecture and CSS variable coverage gaps
+- `src/components/GlobalSearch.tsx`, `src/components/ui/command.tsx` — command palette refactor targets; CommandDialog confirmed present but unused
+- `src/pages/Dashboard.tsx`, `src/components/KPICard.tsx` — existing dashboard data flow and 1000-ticket fetch anti-pattern
+- `src/components/Layout.tsx`, `src/components/ThemeProvider.tsx`, `src/App.tsx` — mount points and AppearanceInitializer
+- `server/src/routes/tickets.ts`, `server/src/routes/reports.ts` — existing backend route patterns
+- `server/src/db/connection.ts` — ticket_reminders schema confirmed
+- `src/lib/api.ts` — getKbArticles method confirmed present
+- `tailwind.config.ts` — darkMode: ["class"] strategy, breakpoints, custom screens confirmed
 
 ### Secondary (MEDIUM confidence)
-- Confluence, Notion, Zendesk Guide, GitBook feature sets — KB table stakes classification
-- SQLite FTS5 docs (sqlite.org/fts5.html) — contentless mode, virtual table ALTER restriction
-- better-sqlite3 transaction API (GitHub docs) — transaction boundary patterns
+- shadcn/ui Command component docs — CommandDialog integration pattern
+- cmdk npm registry — version 1.1.1 latest stable
+- motion.dev upgrade guide — framer-motion to motion/react migration is optional (do not migrate)
+- Helpdesk dashboard patterns (Freshdesk, Zendesk, ManageEngine) — aging and today-summary feature set validation
+- BrowserStack 2025 breakpoint guide — responsive breakpoint values
+
+### Tertiary (LOW confidence)
+- None — all implementation decisions are grounded in direct codebase inspection or HIGH/MEDIUM sources
 
 ---
 *Research completed: 2026-03-29*
