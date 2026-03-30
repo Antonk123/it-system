@@ -114,4 +114,4 @@ Plans:
 | 9. Discoverability & Workflow — Cross-refs, Popular, Shortcuts | v1.2 | 2/2 | Complete | 2026-03-29 |
 | 10. KB Cleanup | v1.3 | 2/2 | Complete    | 2026-03-29 |
 | 11. Form Simplification | v1.3 | 2/2 | Complete   | 2026-03-30 |
-| 12. Quick Capture | v1.3 | 2/2 | Complete   | 2026-03-30 |
+| 12. Quick Capture | v1.3 | 2/2 | Complete    | 2026-03-30 |
