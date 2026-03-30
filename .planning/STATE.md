@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Streamline & Declutter
-status: Ready to execute
-stopped_at: Completed 11-01-PLAN.md
-last_updated: "2026-03-30T07:27:31.699Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 11-02-PLAN.md
+last_updated: "2026-03-30T07:48:02.864Z"
 progress:
   total_phases: 3
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 4
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -45,6 +45,7 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 10-kb-cleanup]: ensureDefaultTemplatesRemoved nulls FK refs before DELETE to avoid constraint errors on existing tickets
 - [Phase 11-form-simplification]: CategoryCombobox uses 'none' sentinel value for Ingen kategori option — consistent with existing TicketForm logic
 - [Phase 11-form-simplification]: TemplateCombobox renders Rensa mall outside the Popover as a plain button below the trigger
+- [Phase 11-form-simplification]: Detaljer/Bilagor sections always open in edit mode (trigger hidden) — avoids extra clicks in most-used workflow
 
 ### Pending Todos
 
@@ -56,6 +57,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-30T07:27:31.697Z
-Stopped at: Completed 11-01-PLAN.md
+Last session: 2026-03-30T07:48:02.861Z
+Stopped at: Completed 11-02-PLAN.md
 Resume file: None
