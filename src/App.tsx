@@ -25,6 +25,7 @@ import KBArticleForm from "./pages/KBArticleForm";
 import SharedKBArticle from "./pages/SharedKBArticle";
 import Recurring from "./pages/Recurring";
 import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
+import { QuickCaptureFAB } from "@/components/QuickCaptureFAB";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -125,6 +126,7 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <AppRoutes />
+            <QuickCaptureFAB />
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
