@@ -9,8 +9,8 @@ Requirements for Streamline & Declutter milestone. Each maps to roadmap phases.
 
 ### Quick Capture
 
-- [ ] **QCAP-01**: User can create a ticket with just a title — priority, category, and tags default automatically
-- [ ] **QCAP-02**: Public form skips name/email when used by the logged-in user, acting as a quick-add
+- [x] **QCAP-01**: User can create a ticket with just a title — priority, category, and tags default automatically
+- [x] **QCAP-02**: Public form skips name/email when used by the logged-in user, acting as a quick-add
 - [x] **QCAP-03**: User can clone an existing ticket as a new one with title, description, category, and template fields pre-filled
 
 ### Form Simplification
@@ -53,8 +53,8 @@ None deferred — all identified features scoped into v1.3.
 | FORM-02 | Phase 11 | Complete |
 | FORM-03 | Phase 11 | Complete |
 | FORM-04 | Phase 11 | Complete |
-| QCAP-01 | Phase 12 | Pending |
-| QCAP-02 | Phase 12 | Pending |
+| QCAP-01 | Phase 12 | Complete |
+| QCAP-02 | Phase 12 | Complete |
 | QCAP-03 | Phase 12 | Complete |
 
 **Coverage:**
