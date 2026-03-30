@@ -92,8 +92,12 @@ Plans:
   1. User can submit a new ticket by entering only a title — priority, category, and tags are auto-defaulted without user input
   2. Logged-in user visiting the public form sees no name/email fields and creates the ticket immediately
   3. User can open any existing ticket and clone it as a new ticket with title, description, category, and template fields pre-filled
-**Plans**: TBD
+**Plans**: 2 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 12-01-PLAN.md — QuickCaptureFAB component and public form auth detection
+- [ ] 12-02-PLAN.md — Ticket cloning from detail page with form pre-fill
 
 ## Progress
 
@@ -110,4 +114,4 @@ Plans:
 | 9. Discoverability & Workflow — Cross-refs, Popular, Shortcuts | v1.2 | 2/2 | Complete | 2026-03-29 |
 | 10. KB Cleanup | v1.3 | 2/2 | Complete    | 2026-03-29 |
 | 11. Form Simplification | v1.3 | 2/2 | Complete   | 2026-03-30 |
-| 12. Quick Capture | v1.3 | 0/TBD | Not started | - |
+| 12. Quick Capture | v1.3 | 0/2 | Not started | - |
