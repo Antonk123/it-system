@@ -17,8 +17,8 @@ Requirements for Streamline & Declutter milestone. Each maps to roadmap phases.
 
 - [ ] **FORM-01**: Ticket create/edit form uses collapsible sections (basics, details, template fields) — only expand what's needed
 - [ ] **FORM-02**: Ticket edit view hides empty optional fields (notes, solution, custom fields) until user clicks to add them
-- [ ] **FORM-03**: Template picker is a lightweight dropdown on the create form instead of a separate flow
-- [ ] **FORM-04**: All dropdowns (category, priority, assignee, template, tags) are searchable/filterable
+- [x] **FORM-03**: Template picker is a lightweight dropdown on the create form instead of a separate flow
+- [x] **FORM-04**: All dropdowns (category, priority, assignee, template, tags) are searchable/filterable
 
 ### Cleanup
 
@@ -51,8 +51,8 @@ None deferred — all identified features scoped into v1.3.
 | CLEAN-05 | Phase 10 | Complete |
 | FORM-01 | Phase 11 | Pending |
 | FORM-02 | Phase 11 | Pending |
-| FORM-03 | Phase 11 | Pending |
-| FORM-04 | Phase 11 | Pending |
+| FORM-03 | Phase 11 | Complete |
+| FORM-04 | Phase 11 | Complete |
 | QCAP-01 | Phase 12 | Pending |
 | QCAP-02 | Phase 12 | Pending |
 | QCAP-03 | Phase 12 | Pending |

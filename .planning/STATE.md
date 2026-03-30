@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Streamline & Declutter
-status: Ready to plan
-stopped_at: Phase 11 UI-SPEC approved
-last_updated: "2026-03-30T07:06:54.760Z"
+status: Ready to execute
+stopped_at: Completed 11-01-PLAN.md
+last_updated: "2026-03-30T07:27:31.699Z"
 progress:
   total_phases: 3
   completed_phases: 1
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 4
+  completed_plans: 3
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30 after v1.3 milestone start)
 
 **Core value:** Every ticket gets tracked, resolved, and documented — nothing falls through the cracks and solutions are reusable.
-**Current focus:** Phase 10 — kb-cleanup
+**Current focus:** Phase 11 — form-simplification
 
 ## Current Position
 
-Phase: 11
-Plan: Not started
+Phase: 11 (form-simplification) — EXECUTING
+Plan: 2 of 2
 
 ## Performance Metrics
 
@@ -43,6 +43,8 @@ All decisions logged in PROJECT.md Key Decisions table.
 
 - [Phase 10-kb-cleanup]: Deleted tokenRefresh.ts — Axios interceptor never fired (api.ts uses fetch). 401-retry wired directly into ApiClient.request() with rolling refresh tokens.
 - [Phase 10-kb-cleanup]: ensureDefaultTemplatesRemoved nulls FK refs before DELETE to avoid constraint errors on existing tickets
+- [Phase 11-form-simplification]: CategoryCombobox uses 'none' sentinel value for Ingen kategori option — consistent with existing TicketForm logic
+- [Phase 11-form-simplification]: TemplateCombobox renders Rensa mall outside the Popover as a plain button below the trigger
 
 ### Pending Todos
 
@@ -54,6 +56,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-30T07:06:54.753Z
-Stopped at: Phase 11 UI-SPEC approved
-Resume file: .planning/phases/11-form-simplification/11-UI-SPEC.md
+Last session: 2026-03-30T07:27:31.697Z
+Stopped at: Completed 11-01-PLAN.md
+Resume file: None
