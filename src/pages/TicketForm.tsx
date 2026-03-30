@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Loader2, PlusCircle, Pencil, LayoutTemplate } from 'lucide-react';
+import { ArrowLeft, Loader2, PlusCircle, Pencil, ChevronDown } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { useCategories } from '@/hooks/useCategories';
@@ -12,6 +12,8 @@ import { Layout } from '@/components/Layout';
 import { FileUpload } from '@/components/FileUpload';
 import { TicketChecklist } from '@/components/TicketChecklist';
 import { UserCombobox } from '@/components/UserCombobox';
+import { CategoryCombobox } from '@/components/CategoryCombobox';
+import { TemplateCombobox } from '@/components/TemplateCombobox';
 import { DynamicFieldsForm } from '@/components/DynamicFieldsForm';
 import { CustomFieldInput, api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -19,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Label } from '@/components/ui/label';
 import { migrateContent } from '@/lib/contentMigration';
+import { cn } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -27,7 +30,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { TicketPriority, TicketStatus, Template } from '@/types/ticket';
 import { toast } from 'sonner';
 import { ticketInsertSchema, ticketUpdateSchema } from '@/lib/validations';
@@ -40,12 +43,12 @@ const TicketForm = () => {
   const { users } = useUsers();
   const { categories, addCategory } = useCategories();
   const { templates } = useTemplates();
-  const { 
-    attachments, 
-    isUploading, 
-    fetchAttachments, 
-    uploadAttachment, 
-    deleteAttachment 
+  const {
+    attachments,
+    isUploading,
+    fetchAttachments,
+    uploadAttachment,
+    deleteAttachment
   } = useTicketAttachments();
   const {
     items: checklistItems,
@@ -81,14 +84,19 @@ const TicketForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [customFieldValues, setCustomFieldValues] = useState<CustomFieldInput[]>([]);
   const [editInitialFieldValues, setEditInitialFieldValues] = useState<CustomFieldInput[]>([]);
   const [isLoadingTemplate, setIsLoadingTemplate] = useState(false);
+
+  // Progressive disclosure state (create form)
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [attachmentsOpen, setAttachmentsOpen] = useState(false);
+
+  // Hidden-until-clicked fields (edit form)
+  const [showSolution, setShowSolution] = useState(false);
+  const [showNotes, setShowNotes] = useState(false);
 
   // Stable callback for DynamicFieldsForm to prevent unnecessary re-renders
   const handleCustomFieldsChange = useCallback((values: CustomFieldInput[]) => {
@@ -107,6 +115,9 @@ const TicketForm = () => {
         notes: existingTicket.notes ? migrateContent(existingTicket.notes) : '',
         solution: existingTicket.solution ? migrateContent(existingTicket.solution) : '',
       });
+      // Show fields that already have content (Pitfall 2: existing content must always be visible)
+      setShowSolution(!!existingTicket.solution);
+      setShowNotes(!!(existingTicket.notes));
     }
   }, [existingTicket]);
 
@@ -239,6 +250,19 @@ const TicketForm = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges, isSubmitting]);
 
+  // Badge counts for collapsible sections
+  const detailsBadgeCount = useMemo(() => {
+    let count = 0;
+    if (formData.priority !== 'medium') count++;
+    return count;
+  }, [formData.priority]);
+
+  const attachmentsBadgeCount = useMemo(() => {
+    const fileCount = (attachments?.length || 0) + pendingFiles.length;
+    const checkCount = checklistItems.length + pendingChecklistItems.length;
+    return fileCount + checkCount;
+  }, [attachments, pendingFiles, checklistItems, pendingChecklistItems]);
+
   const handleFilesSelect = (files: File[]) => {
     setPendingFiles((prev) => [...prev, ...files]);
   };
@@ -267,18 +291,11 @@ const TicketForm = () => {
     setPendingChecklistItems(prev => prev.filter(item => item.id !== id));
   };
 
-  const handleAddCategory = async () => {
-    if (!newCategoryName.trim()) {
-      toast.error('Ange ett kategorinamn');
-      return;
-    }
-    setIsAddingCategory(true);
-    const created = await addCategory(newCategoryName.trim());
-    setIsAddingCategory(false);
+  const handleAddCategory = async (label: string) => {
+    const created = await addCategory(label);
     if (created) {
       setFormData((prev) => ({ ...prev, category: created.id }));
       setErrors((prev) => { const p = { ...prev }; delete p['category']; return p; });
-      setNewCategoryName('');
       toast.success('Kategori tillagd');
     }
   };
@@ -408,71 +425,15 @@ const TicketForm = () => {
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              className="gap-2"
-              onClick={handleNavigateBack}
-              disabled={isSaving}
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Tillbaka
-            </Button>
-
-            {!isEditing && (
-              <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button type="button" variant="outline" className="gap-2">
-                    <LayoutTemplate className="w-4 h-4" />
-                    Skapa från mall
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Välj ärendemall</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-2">
-                    {templates.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Inga mallar tillgängliga. Skapa mallar i Inställningar.
-                      </p>
-                    ) : (
-                      templates.map((template) => (
-                        <Button
-                          key={template.id}
-                          variant="outline"
-                          className="w-full justify-start"
-                          onClick={() => {
-                            const hasFields = template.fields && template.fields.length > 0;
-                            setSelectedTemplate(template);
-                            // Don't reset customFieldValues - let DynamicFieldsForm initialize it
-                            setFormData({
-                              ...formData,
-                              title: template.titleTemplate,
-                              description: hasFields ? '' : template.descriptionTemplate,
-                              priority: template.priority,
-                              category: template.category || 'none',
-                              notes: hasFields ? '' : (template.notesTemplate || ''),
-                              solution: hasFields ? '' : (template.solutionTemplate || ''),
-                            });
-                            setTemplateDialogOpen(false);
-                            toast.success(`Mall "${template.name}" laddad`);
-                          }}
-                        >
-                          <div className="text-left">
-                            <div className="font-medium">{template.name}</div>
-                            {template.description && (
-                              <div className="text-xs text-muted-foreground">{template.description}</div>
-                            )}
-                          </div>
-                        </Button>
-                      ))
-                    )}
-                  </div>
-                </DialogContent>
-              </Dialog>
-            )}
-          </div>
+          <Button
+            variant="ghost"
+            className="gap-2"
+            onClick={handleNavigateBack}
+            disabled={isSaving}
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Tillbaka
+          </Button>
 
           {/* Save status indicator */}
           {isSaving && (
@@ -500,17 +461,53 @@ const TicketForm = () => {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="title">Titel *</Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => { setFormData({ ...formData, title: e.target.value }); setErrors(prev => { const p = { ...prev }; delete p['title']; return p; }); }}
-                  placeholder="Kort beskrivning av problemet"
-                  required
-                />
+
+              {/* Titel + Mall row */}
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-end">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Titel *</Label>
+                  <Input
+                    id="title"
+                    value={formData.title}
+                    onChange={(e) => { setFormData({ ...formData, title: e.target.value }); setErrors(prev => { const p = { ...prev }; delete p['title']; return p; }); }}
+                    placeholder="Kort beskrivning av problemet"
+                    required
+                  />
+                </div>
+                {!isEditing && (
+                  <div className="space-y-2 sm:w-[240px]">
+                    <Label>Mall</Label>
+                    <TemplateCombobox
+                      templates={templates}
+                      selectedTemplate={selectedTemplate}
+                      onSelect={(template) => {
+                        const hasFields = template.fields && template.fields.length > 0;
+                        setSelectedTemplate(template);
+                        setFormData({
+                          ...formData,
+                          title: template.titleTemplate,
+                          description: hasFields ? '' : template.descriptionTemplate,
+                          priority: template.priority,
+                          category: template.category || 'none',
+                          notes: hasFields ? '' : (template.notesTemplate || ''),
+                          solution: hasFields ? '' : (template.solutionTemplate || ''),
+                        });
+                        toast.success(`Mall "${template.name}" laddad`);
+                      }}
+                      onClear={() => {
+                        if (isEditing && existingTicket && !formData.description) {
+                          setFormData(prev => ({ ...prev, description: existingTicket.description }));
+                        }
+                        setSelectedTemplate(null);
+                        setCustomFieldValues([]);
+                        setEditInitialFieldValues([]);
+                      }}
+                    />
+                  </div>
+                )}
               </div>
 
+              {/* Beskrivning / DynamicFieldsForm */}
               {isLoadingTemplate ? (
                 <div className="border border-dashed border-muted p-4 rounded text-center text-sm text-muted-foreground">
                   Laddar mallfält...
@@ -572,11 +569,21 @@ const TicketForm = () => {
                 </div>
               )}
 
-              <div className="border-t border-border/60 pt-5">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">Detaljer</p>
-              </div>
-
+              {/* Kategori + Beställare row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Kategori</Label>
+                  <CategoryCombobox
+                    categories={categories}
+                    value={formData.category}
+                    onValueChange={(v) => {
+                      setFormData({ ...formData, category: v });
+                      setErrors(prev => { const p = { ...prev }; delete p['category']; return p; });
+                    }}
+                    onAddCategory={handleAddCategory}
+                  />
+                  {errors.category && <p className="text-sm text-destructive mt-1">{errors.category}</p>}
+                </div>
                 <div className="space-y-2">
                   <Label>Beställare *</Label>
                   <UserCombobox
@@ -592,160 +599,236 @@ const TicketForm = () => {
                   )}
                   {errors.requesterId && <p className="text-sm text-destructive mt-1">{errors.requesterId}</p>}
                 </div>
-
-                <div className="space-y-2">
-                  <Label>Prioritet</Label>
-                  <Select 
-                    value={formData.priority} 
-                    onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Låg</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">Hög</SelectItem>
-                      <SelectItem value="critical">Kritisk</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Kategori</Label>
-                  <Select
-                    value={formData.category}
-                    onValueChange={(v) => {
-                      setFormData({ ...formData, category: v });
-                      setErrors(prev => { const p = { ...prev }; delete p['category']; return p; });
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Välj kategori" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Ingen kategori</SelectItem>
-                      {categories.map(cat => (
-                        <SelectItem
-                          key={cat.id}
-                          value={cat.id}
-                          className="data-[highlighted]:bg-primary/20 data-[highlighted]:text-foreground data-[state=checked]:bg-primary/10"
+              {/* Detaljer collapsible — collapsed in create mode, always open in edit mode */}
+              {isEditing ? (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Prioritet</Label>
+                      <Select
+                        value={formData.priority}
+                        onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="low">Låg</SelectItem>
+                          <SelectItem value="medium">Medium</SelectItem>
+                          <SelectItem value="high">Hög</SelectItem>
+                          <SelectItem value="critical">Kritisk</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select
+                        value={formData.status}
+                        onValueChange={(v) => { setFormData({ ...formData, status: v as TicketStatus }); setErrors(prev => { const p = { ...prev }; delete p['status']; return p; }); }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="open">Öppen</SelectItem>
+                          <SelectItem value="in-progress">Pågående</SelectItem>
+                          <SelectItem value="waiting">Väntar</SelectItem>
+                          <SelectItem value="resolved">Löst</SelectItem>
+                          <SelectItem value="closed">Stängd</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-card px-4 h-11 text-sm font-semibold hover:bg-accent/10 transition-colors">
+                    <span>Detaljer</span>
+                    <div className="flex items-center gap-2">
+                      {detailsBadgeCount > 0 && (
+                        <span className="text-xs text-muted-foreground">{detailsBadgeCount} valt</span>
+                      )}
+                      <ChevronDown className={cn('h-4 w-4 transition-transform duration-200', detailsOpen && 'rotate-180')} />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+                    <div className="space-y-4 pt-4">
+                      <div className="space-y-2">
+                        <Label>Prioritet</Label>
+                        <Select
+                          value={formData.priority}
+                          onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
                         >
-                          {cat.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Ny kategori..."
-                      value={newCategoryName}
-                      onChange={(e) => { setNewCategoryName(e.target.value); setErrors(prev => { const p = { ...prev }; delete p['category']; return p; }); }}
-                      onKeyDown={(e) => e.key === 'Enter' && !isAddingCategory && handleAddCategory()}
-                      disabled={isAddingCategory}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleAddCategory}
-                      disabled={isAddingCategory}
-                      className="shrink-0"
-                    >
-                      Lägg till
-                    </Button>
-                    {errors.category && <p className="text-sm text-destructive mt-1">{errors.category}</p>}
-                  </div>
-                </div>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="low">Låg</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="high">Hög</SelectItem>
+                            <SelectItem value="critical">Kritisk</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
 
-                {isEditing && (
+              {/* Bilagor & Checklista collapsible — collapsed in create mode, always open in edit mode */}
+              {isEditing ? (
+                <div className="space-y-4">
+                  {/* File Attachments */}
                   <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select 
-                      value={formData.status} 
-                      onValueChange={(v) => { setFormData({ ...formData, status: v as TicketStatus }); setErrors(prev => { const p = { ...prev }; delete p['status']; return p; }); }}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="open">Öppen</SelectItem>
-                        <SelectItem value="in-progress">Pågående</SelectItem>
-                        <SelectItem value="waiting">Väntar</SelectItem>
-                        <SelectItem value="resolved">Löst</SelectItem>
-                        <SelectItem value="closed">Stängd</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <Label>Bilagor</Label>
+                    <FileUpload
+                      attachments={attachments}
+                      pendingFiles={pendingFiles}
+                      onFilesSelect={handleFilesSelect}
+                      onRemovePending={handleRemovePending}
+                      onRemoveAttachment={handleRemoveAttachment}
+                      isUploading={isUploading}
+                      disabled={isSubmitting}
+                    />
                   </div>
-                )}
-              </div>
 
-              {/* File Attachments */}
-              <div className="space-y-2">
-                <Label>Bilagor</Label>
-                <FileUpload
-                  attachments={attachments}
-                  pendingFiles={pendingFiles}
-                  onFilesSelect={handleFilesSelect}
-                  onRemovePending={handleRemovePending}
-                  onRemoveAttachment={handleRemoveAttachment}
-                  isUploading={isUploading}
-                  disabled={isSubmitting}
-                />
-              </div>
-
-              {/* Checklist */}
-              <div className="space-y-2">
-                <Label>Checklista / Att göra</Label>
-                <div className="border rounded-lg p-4">
-                  <TicketChecklist
-                    items={checklistItems}
-                    pendingItems={pendingChecklistItems}
-                    onToggle={(itemId, completed) => updateChecklistItem(itemId, { completed })}
-                    onDelete={deleteChecklistItem}
-                    onAdd={(label, parentId) => id ? addChecklistItem(id, label, { parent_id: parentId }) : undefined}
-                    onUpdate={(itemId, updates) => updateChecklistItem(itemId, updates)}
-                    onPendingAdd={handleAddPendingChecklist}
-                    onPendingDelete={handleDeletePendingChecklist}
-                    templates={checklistTemplates}
-                    onApplyTemplate={(template) => {
-                      // In create mode: add as pending items (flat)
-                      if (!isEditing) {
-                        template.items
-                          .filter(i => !i.parent_label)
-                          .forEach(i => handleAddPendingChecklist(i.label));
-                      }
-                    }}
-                  />
+                  {/* Checklist */}
+                  <div className="space-y-2">
+                    <Label>Checklista / Att göra</Label>
+                    <div className="border rounded-lg p-4">
+                      <TicketChecklist
+                        items={checklistItems}
+                        pendingItems={pendingChecklistItems}
+                        onToggle={(itemId, completed) => updateChecklistItem(itemId, { completed })}
+                        onDelete={deleteChecklistItem}
+                        onAdd={(label, parentId) => id ? addChecklistItem(id, label, { parent_id: parentId }) : undefined}
+                        onUpdate={(itemId, updates) => updateChecklistItem(itemId, updates)}
+                        onPendingAdd={handleAddPendingChecklist}
+                        onPendingDelete={handleDeletePendingChecklist}
+                        templates={checklistTemplates}
+                        onApplyTemplate={(template) => {
+                          // In create mode: add as pending items (flat)
+                          if (!isEditing) {
+                            template.items
+                              .filter(i => !i.parent_label)
+                              .forEach(i => handleAddPendingChecklist(i.label));
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <Collapsible open={attachmentsOpen} onOpenChange={setAttachmentsOpen}>
+                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-card px-4 h-11 text-sm font-semibold hover:bg-accent/10 transition-colors">
+                    <span>Bilagor & Checklista</span>
+                    <div className="flex items-center gap-2">
+                      {attachmentsBadgeCount > 0 && (
+                        <span className="text-xs text-muted-foreground">{attachmentsBadgeCount} valt</span>
+                      )}
+                      <ChevronDown className={cn('h-4 w-4 transition-transform duration-200', attachmentsOpen && 'rotate-180')} />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+                    <div className="space-y-4 pt-4">
+                      {/* File Attachments */}
+                      <div className="space-y-2">
+                        <Label>Bilagor</Label>
+                        <FileUpload
+                          attachments={attachments}
+                          pendingFiles={pendingFiles}
+                          onFilesSelect={handleFilesSelect}
+                          onRemovePending={handleRemovePending}
+                          onRemoveAttachment={handleRemoveAttachment}
+                          isUploading={isUploading}
+                          disabled={isSubmitting}
+                        />
+                      </div>
 
+                      {/* Checklist */}
+                      <div className="space-y-2">
+                        <Label>Checklista / Att göra</Label>
+                        <div className="border rounded-lg p-4">
+                          <TicketChecklist
+                            items={checklistItems}
+                            pendingItems={pendingChecklistItems}
+                            onToggle={(itemId, completed) => updateChecklistItem(itemId, { completed })}
+                            onDelete={deleteChecklistItem}
+                            onAdd={(label, parentId) => id ? addChecklistItem(id, label, { parent_id: parentId }) : undefined}
+                            onUpdate={(itemId, updates) => updateChecklistItem(itemId, updates)}
+                            onPendingAdd={handleAddPendingChecklist}
+                            onPendingDelete={handleDeletePendingChecklist}
+                            templates={checklistTemplates}
+                            onApplyTemplate={(template) => {
+                              // In create mode: add as pending items (flat)
+                              if (!isEditing) {
+                                template.items
+                                  .filter(i => !i.parent_label)
+                                  .forEach(i => handleAddPendingChecklist(i.label));
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
+
+              {/* Edit form: Handläggning section with hidden-until-clicked fields */}
               {isEditing && (
                 <>
                   <div className="border-t border-border/60 pt-5">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">Handläggning</p>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="solution">Lösning</Label>
-                    <RichTextEditor
-                      value={formData.solution}
-                      onChange={(html) => setFormData({ ...formData, solution: html })}
-                      placeholder="Dokumentera hur problemet löstes..."
-                      minHeight="250px"
-                    />
-                  </div>
+                  {showSolution ? (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                      <Label htmlFor="solution">Lösning</Label>
+                      <RichTextEditor
+                        value={formData.solution}
+                        onChange={(html) => setFormData({ ...formData, solution: html })}
+                        placeholder="Dokumentera hur problemet löstes..."
+                        minHeight="250px"
+                      />
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowSolution(true)}
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      + Lösning
+                    </Button>
+                  )}
 
-                  <div className="space-y-2">
-                    <Label htmlFor="notes">Interna anteckningar</Label>
-                    <RichTextEditor
-                      value={formData.notes}
-                      onChange={(html) => setFormData({ ...formData, notes: html })}
-                      placeholder="Lägg till interna anteckningar..."
-                      minHeight="100px"
-                    />
-                  </div>
+                  {showNotes ? (
+                    <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                      <Label htmlFor="notes">Interna anteckningar</Label>
+                      <RichTextEditor
+                        value={formData.notes}
+                        onChange={(html) => setFormData({ ...formData, notes: html })}
+                        placeholder="Lägg till interna anteckningar..."
+                        minHeight="100px"
+                      />
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => setShowNotes(true)}
+                    >
+                      <PlusCircle className="mr-2 h-4 w-4" />
+                      + Interna anteckningar
+                    </Button>
+                  )}
                 </>
               )}
 
