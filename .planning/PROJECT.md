@@ -56,20 +56,22 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - ✓ Ticket-to-KB article creation with pre-filled title and type — Phase 9
 - ✓ Dead KB features removed (view counter, recently updated, popular articles, unused templates) — Phase 10
 - ✓ Silent token refresh with rolling refresh tokens and 15m access tokens — Phase 10
+- ✓ Collapsible form sections with progressive disclosure — Phase 11
+- ✓ Searchable combobox dropdowns (category, template) — Phase 11
+- ✓ Quick capture FAB (title-only ticket creation) — Phase 12
+- ✓ Public form auth detection (skip name/email when logged in) — Phase 12
+- ✓ Ticket cloning with pre-filled fields — Phase 12
 
 ### Active
 
-## Current Milestone: v1.3 Streamline & Declutter
+## Current Milestone: v1.4 Dashboard, Search & Polish
 
-**Goal:** Make ticket creation instant, editing lightweight, and the whole UI feel fast by removing noise and simplifying workflows.
+**Goal:** Ge systemet en komplett översiktsvy, snabb global sökning med navigation, och en polerad upplevelse med dark mode, responsiv design och micro-interactions.
 
 **Target features:**
-- ~~Quick capture~~ — Done (Phase 12): FAB for title-only creation, auth detection on public form, ticket cloning (QCAP-01/02/03)
-- ~~Clone ticket~~ — Done (Phase 12): clone button in TicketDetail, pre-fill via location.state.cloneData in TicketForm
-- Simplified forms — collapsible sections, hide empty fields, progressive disclosure
-- ~~Remove dead weight~~ — Done (Phase 10): KB view counter, "Senast uppdaterade", popular articles, unused templates removed
-- ~~Silent token refresh~~ — Done (Phase 10): rolling refresh tokens, 15m access tokens, no spurious login screens
-- Leaner template flow — keep hardware template, streamline the picker
+- Dashboard-översikt — åldrande tickets, påminnelser, "vad hände idag"-sammanfattning
+- Global sökning (Cmd+K) — sök tickets, KB-artiklar, kontakter + navigera till sidor och köra actions
+- UI-polish — dark mode, responsiv design (mobil/tablet), loading states och micro-interactions
 
 ### Out of Scope
 
@@ -145,4 +147,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-30 after Phase 12 (quick-capture) completion*
+*Last updated: 2026-03-30 after v1.4 milestone start*
