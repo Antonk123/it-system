@@ -64,8 +64,8 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 **Goal:** Make ticket creation instant, editing lightweight, and the whole UI feel fast by removing noise and simplifying workflows.
 
 **Target features:**
-- Quick capture — minimal ticket creation (title + go), no name/email friction on public form
-- Clone ticket — duplicate a past ticket as a new one (repeat hardware orders)
+- ~~Quick capture~~ — Done (Phase 12): FAB for title-only creation, auth detection on public form, ticket cloning (QCAP-01/02/03)
+- ~~Clone ticket~~ — Done (Phase 12): clone button in TicketDetail, pre-fill via location.state.cloneData in TicketForm
 - Simplified forms — collapsible sections, hide empty fields, progressive disclosure
 - ~~Remove dead weight~~ — Done (Phase 10): KB view counter, "Senast uppdaterade", popular articles, unused templates removed
 - ~~Silent token refresh~~ — Done (Phase 10): rolling refresh tokens, 15m access tokens, no spurious login screens
@@ -145,4 +145,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-30 after Phase 10 (kb-cleanup) completion*
+*Last updated: 2026-03-30 after Phase 12 (quick-capture) completion*
