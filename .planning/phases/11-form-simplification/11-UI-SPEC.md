@@ -54,11 +54,11 @@ Source: `tailwind.config.ts` (fontFamily), `src/index.css` (CSS custom propertie
 | Role | Size | Weight | Line Height |
 |------|------|--------|-------------|
 | Body | 14px | 400 (regular) | 1.5 |
-| Label | 14px | 500 (medium) | 1.2 |
+| Label | 14px | 400 (regular) | 1.2 |
 | Heading (section title) | 16px | 600 (semibold) | 1.2 |
-| Display (page title) | 20px | 700 (bold) | 1.1 |
+| Display (page title) | 20px | 600 (semibold) | 1.1 |
 
-Weights in use: 400 (body text, placeholder text) and 600 (labels, section headings, button text). 500 used only for combobox selected-value display and sub-labels.
+Weights in use: 400 (body text, placeholder text, labels, combobox selected-value display) and 600 (section headings, button text, page title).
 
 ---
 
