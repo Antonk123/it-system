@@ -833,14 +833,14 @@ class ApiClient {
     return this.request<LinkedTicketRow[]>(`/kb/articles/${articleId}/tickets`);
   }
 
-  async createKbArticle(data: { title: string; content: string; category_id?: string | null; article_type?: string | null; tags?: string[]; status?: 'draft' | 'published' }) {
+  async createKbArticle(data: { title: string; content: string; category_id?: string | null; article_type?: string | null; tag_ids?: string[]; status?: 'draft' | 'published' }) {
     return this.request<KbArticleRow>('/kb/articles', {
       method: 'POST',
       body: data,
     });
   }
 
-  async updateKbArticle(id: string, data: { title: string; content: string; category_id?: string | null; article_type?: string | null; tags?: string[]; status?: 'draft' | 'published' }) {
+  async updateKbArticle(id: string, data: { title: string; content: string; category_id?: string | null; article_type?: string | null; tag_ids?: string[]; status?: 'draft' | 'published' }) {
     return this.request<KbArticleRow>(`/kb/articles/${id}`, {
       method: 'PUT',
       body: data,
@@ -1181,7 +1181,7 @@ export interface KbArticleRow {
   category_color: string | null;
   article_type?: string | null;
   status: 'draft' | 'published';
-  tags: string[];
+  tags: { id: string; name: string; color: string }[];
   snippet?: string | null;
   created_at: string;
   updated_at: string;

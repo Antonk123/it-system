@@ -32,11 +32,14 @@ export const HtmlRenderer = ({ content, className }: HtmlRendererProps) => {
       'blockquote',
       // Tables
       'table', 'thead', 'tbody', 'tr', 'th', 'td',
+      // Images
+      'img',
     ],
     ALLOWED_ATTR: [
       'href', 'target', 'rel',
       'class', 'style',
       'colspan', 'rowspan', 'align',
+      'src', 'alt', 'title', 'width', 'height',
     ],
     ALLOW_DATA_ATTR: false,
     ADD_ATTR: ['target', 'rel'],
@@ -57,6 +60,7 @@ export const HtmlRenderer = ({ content, className }: HtmlRendererProps) => {
         "prose-li:marker:text-foreground prose-li:text-base",
         "prose-blockquote:border-l-primary prose-blockquote:text-foreground",
         "prose-strong:text-foreground prose-strong:font-bold",
+        "prose-img:rounded-lg prose-img:border prose-img:border-border prose-img:shadow-sm prose-img:my-4",
         "prose-table:border prose-table:border-border",
         "prose-th:bg-muted prose-th:border prose-th:border-border prose-th:p-2",
         "prose-td:border prose-td:border-border prose-td:p-2",

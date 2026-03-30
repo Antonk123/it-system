@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Loader2, X, Link2 } from 'lucide-react';
+import { ArrowLeft, Loader2, X, Link2, Tag } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { api, KbCategoryRow, KbArticleRow, LinkedArticleRow } from '@/lib/api';
+import { useTags } from '@/hooks/useTags';
+import { TagMultiSelect } from '@/components/TagMultiSelect';
 import {
   Command,
   CommandEmpty,
@@ -53,8 +55,8 @@ const KBArticleForm = () => {
   const [articleType, setArticleType] = useState<string>(
     () => searchParams.get('article_type') ?? 'none'
   );
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState('');
+  const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
+  const { tags: availableTags } = useTags();
   const [status, setStatus] = useState<'draft' | 'published'>('published');
   const [categories, setCategories] = useState<KbCategoryRow[]>([]);
   const [isLoading, setIsLoading] = useState(isEditing);
@@ -93,7 +95,7 @@ const KBArticleForm = () => {
         setContent(article.content);
         setCategoryId(article.category_id ?? 'none');
         setArticleType(article.article_type || 'none');
-        setTags(article.tags || []);
+        setSelectedTagIds((article.tags || []).map(t => t.id));
         setStatus(article.status || 'published');
         // Also fetch cross-refs and all articles for the picker
         api.getKbArticleLinks(id).then(setCrossRefs).catch(() => {});
@@ -149,24 +151,6 @@ const KBArticleForm = () => {
     }
   };
 
-  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' || e.key === ',') {
-      e.preventDefault();
-      const tag = tagInput.trim().toLowerCase();
-      if (tag && !tags.includes(tag)) {
-        setTags(prev => [...prev, tag]);
-      }
-      setTagInput('');
-    }
-    if (e.key === 'Backspace' && tagInput === '' && tags.length > 0) {
-      setTags(prev => prev.slice(0, -1));
-    }
-  };
-
-  const removeTag = (tagToRemove: string) => {
-    setTags(prev => prev.filter(t => t !== tagToRemove));
-  };
-
   const validate = () => {
     const newErrors: { title?: string } = {};
     if (!title.trim()) newErrors.title = 'Titel krävs';
@@ -184,7 +168,7 @@ const KBArticleForm = () => {
         content,
         category_id: categoryId === 'none' ? null : categoryId,
         article_type: articleType === 'none' ? null : articleType,
-        tags,
+        tag_ids: selectedTagIds,
         status,
       };
       if (isEditing && id) {
@@ -328,24 +312,25 @@ const KBArticleForm = () => {
           </div>
 
           <div className="space-y-2">
-            <Label>Taggar</Label>
-            <div className="flex flex-wrap gap-1.5 min-h-[2.5rem] rounded-md border border-input bg-background px-3 py-2">
-              {tags.map(tag => (
-                <Badge key={tag} variant="secondary" className="gap-1">
-                  {tag}
-                  <button type="button" onClick={() => removeTag(tag)} className="ml-0.5 hover:text-destructive">
-                    <X className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-              <input
-                type="text"
-                value={tagInput}
-                onChange={e => setTagInput(e.target.value)}
-                onKeyDown={handleTagKeyDown}
-                placeholder={tags.length === 0 ? "Skriv tagg och tryck Enter..." : ""}
-                className="flex-1 min-w-[120px] bg-transparent outline-none text-sm"
-              />
+            <Label className="flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-muted-foreground" />
+              Taggar
+            </Label>
+            <div className="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] rounded-md border border-input bg-background px-3 py-2">
+              {selectedTagIds.map(tagId => {
+                const tag = availableTags.find(t => t.id === tagId);
+                if (!tag) return null;
+                return (
+                  <Badge key={tagId} variant="secondary" className="gap-1" style={{ backgroundColor: tag.color + '22', color: tag.color, borderColor: tag.color + '44' }}>
+                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                    {tag.name}
+                    <button type="button" onClick={() => setSelectedTagIds(prev => prev.filter(id => id !== tagId))} className="ml-0.5 hover:opacity-70">
+                      <X className="h-3 w-3" />
+                    </button>
+                  </Badge>
+                );
+              })}
+              <TagMultiSelect selectedTagIds={selectedTagIds} onChange={setSelectedTagIds} />
             </div>
           </div>
 

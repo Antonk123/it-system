@@ -322,7 +322,10 @@ const KBArticleDetail = () => {
           {article.tags && article.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
               {article.tags.map(tag => (
-                <Badge key={tag} variant="secondary">{tag}</Badge>
+                <Badge key={tag.id} variant="secondary" className="gap-1" style={{ backgroundColor: tag.color + '22', color: tag.color, borderColor: tag.color + '44' }}>
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                  {tag.name}
+                </Badge>
               ))}
             </div>
           )}

@@ -62,6 +62,8 @@ interface KbCategoryRow {
   created_at: string;
 }
 
+interface KbTagRow { id: string; name: string; color: string; }
+
 interface KbArticleRow {
   id: string;
   title: string;
@@ -71,10 +73,24 @@ interface KbArticleRow {
   category_color?: string | null;
   article_type?: string | null;
   status: 'draft' | 'published';
-  tags?: string[];
+  tags?: KbTagRow[];
   snippet?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+function getTagsForArticles(articleIds: string[]): Map<string, KbTagRow[]> {
+  const map = new Map<string, KbTagRow[]>();
+  if (articleIds.length === 0) return map;
+  const placeholders = articleIds.map(() => '?').join(',');
+  const rows = db.prepare(
+    `SELECT kat.article_id, t.id, t.name, t.color FROM kb_article_tags kat JOIN tags t ON t.id = kat.tag_id WHERE kat.article_id IN (${placeholders}) ORDER BY t.name ASC`
+  ).all(...articleIds) as (KbTagRow & { article_id: string })[];
+  for (const row of rows) {
+    if (!map.has(row.article_id)) map.set(row.article_id, []);
+    map.get(row.article_id)!.push({ id: row.id, name: row.name, color: row.color });
+  }
+  return map;
 }
 
 // ─── Categories ───────────────────────────────────────────────────────────────
@@ -153,17 +169,15 @@ router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
     const { search, category_id, article_type, tag, stale } = req.query as Record<string, string>;
     const trimmedSearch = search?.trim();
 
-    let rawArticles: (KbArticleRow & { tags_csv?: string | null })[];
+    let rawArticles: KbArticleRow[];
 
     if (trimmedSearch) {
-      // FTS5 search: sanitize input to avoid injection via double-quoting
       const safeQuery = '"' + trimmedSearch.replace(/"/g, '""') + '"';
       rawArticles = db.prepare(`
         SELECT
           a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.last_reviewed_at, a.created_at, a.updated_at,
           c.name as category_name, c.color as category_color,
-          snippet(kb_articles_fts, 1, '<mark>', '</mark>', '...', 25) AS snippet,
-          (SELECT GROUP_CONCAT(kat.tag, ',') FROM kb_article_tags kat WHERE kat.article_id = a.id ORDER BY kat.tag) as tags_csv
+          snippet(kb_articles_fts, 1, '<mark>', '</mark>', '...', 25) AS snippet
         FROM kb_articles_fts fts
         JOIN kb_articles a ON a.rowid = fts.rowid
         LEFT JOIN kb_categories c ON a.category_id = c.id
@@ -171,33 +185,28 @@ router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
           AND a.status = 'published'
           AND (@category_id IS NULL OR a.category_id = @category_id)
           AND (@article_type IS NULL OR a.article_type = @article_type)
-          AND (@tag IS NULL OR EXISTS (SELECT 1 FROM kb_article_tags WHERE article_id = a.id AND tag = @tag))
+          AND (@tag IS NULL OR EXISTS (SELECT 1 FROM kb_article_tags WHERE article_id = a.id AND tag_id = @tag))
           AND (@stale IS NULL OR (julianday('now') - julianday(COALESCE(a.last_reviewed_at, a.created_at))) > 90)
         ORDER BY rank
-      `).all({ search: safeQuery, category_id: category_id || null, article_type: article_type || null, tag: tag || null, stale: stale || null }) as (KbArticleRow & { tags_csv?: string | null })[];
+      `).all({ search: safeQuery, category_id: category_id || null, article_type: article_type || null, tag: tag || null, stale: stale || null }) as KbArticleRow[];
     } else {
-      // No search: standard query with status, tag, article_type filter support
       rawArticles = db.prepare(`
         SELECT
           a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.last_reviewed_at, a.created_at, a.updated_at,
-          c.name as category_name, c.color as category_color,
-          (SELECT GROUP_CONCAT(kat.tag, ',') FROM kb_article_tags kat WHERE kat.article_id = a.id ORDER BY kat.tag) as tags_csv
+          c.name as category_name, c.color as category_color
         FROM kb_articles a
         LEFT JOIN kb_categories c ON a.category_id = c.id
         WHERE a.status = 'published'
           AND (@category_id IS NULL OR a.category_id = @category_id)
           AND (@article_type IS NULL OR a.article_type = @article_type)
-          AND (@tag IS NULL OR EXISTS (SELECT 1 FROM kb_article_tags WHERE article_id = a.id AND tag = @tag))
+          AND (@tag IS NULL OR EXISTS (SELECT 1 FROM kb_article_tags WHERE article_id = a.id AND tag_id = @tag))
           AND (@stale IS NULL OR (julianday('now') - julianday(COALESCE(a.last_reviewed_at, a.created_at))) > 90)
         ORDER BY a.updated_at DESC
-      `).all({ category_id: category_id || null, article_type: article_type || null, tag: tag || null, stale: stale || null }) as (KbArticleRow & { tags_csv?: string | null })[];
+      `).all({ category_id: category_id || null, article_type: article_type || null, tag: tag || null, stale: stale || null }) as KbArticleRow[];
     }
 
-    const articles = rawArticles.map((a) => ({
-      ...a,
-      tags: a.tags_csv ? a.tags_csv.split(',') : [],
-      tags_csv: undefined,
-    }));
+    const tagsByArticle = getTagsForArticles(rawArticles.map(a => a.id));
+    const articles = rawArticles.map(a => ({ ...a, tags: tagsByArticle.get(a.id) || [] }));
 
     res.json(articles);
   } catch (error) {
@@ -220,10 +229,8 @@ router.get('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     if (!article) return res.status(404).json({ error: 'Article not found' });
 
-    // Fetch tags
-    const tags = (db.prepare('SELECT tag FROM kb_article_tags WHERE article_id = ? ORDER BY tag ASC').all(req.params.id) as { tag: string }[]).map((r) => r.tag);
-
-    res.json({ ...article, tags });
+    const tagMap = getTagsForArticles([req.params.id]);
+    res.json({ ...article, tags: tagMap.get(req.params.id) || [] });
   } catch (error) {
     console.error('Error fetching KB article:', error);
     res.status(500).json({ error: 'Failed to fetch KB article' });
@@ -249,7 +256,7 @@ router.get('/articles/:id/tickets', authenticate, (req: AuthRequest, res: Respon
 
 // POST /api/kb/articles
 router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
-  const { title, content = '', category_id, article_type, tags, status } = req.body;
+  const { title, content = '', category_id, article_type, tag_ids, status } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'Title is required' });
   }
@@ -265,12 +272,10 @@ router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
       const row = db.prepare('SELECT rowid FROM kb_articles WHERE id = ?').get(articleId) as { rowid: number };
       db.prepare('INSERT INTO kb_articles_fts(rowid, title, content_plain) VALUES (?,?,?)')
         .run(row.rowid, articleTitle, stripHtml(articleContent));
-      // Insert tags
-      if (Array.isArray(tags) && tags.length > 0) {
-        const insertTag = db.prepare('INSERT OR IGNORE INTO kb_article_tags (id, article_id, tag) VALUES (?, ?, ?)');
-        for (const t of tags) {
-          const trimmed = String(t).trim().toLowerCase();
-          if (trimmed) insertTag.run(uuidv4(), articleId, trimmed);
+      if (Array.isArray(tag_ids) && tag_ids.length > 0) {
+        const insertTag = db.prepare('INSERT OR IGNORE INTO kb_article_tags (id, article_id, tag_id) VALUES (?, ?, ?)');
+        for (const tagId of tag_ids) {
+          if (typeof tagId === 'string' && tagId.trim()) insertTag.run(uuidv4(), articleId, tagId);
         }
       }
     });
@@ -285,9 +290,8 @@ router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
       WHERE a.id = ?
     `).get(id) as KbArticleRow;
 
-    const articleTags = (db.prepare('SELECT tag FROM kb_article_tags WHERE article_id = ? ORDER BY tag ASC').all(id) as { tag: string }[]).map((r) => r.tag);
-
-    res.status(201).json({ ...article, tags: articleTags });
+    const tagMap = getTagsForArticles([id]);
+    res.status(201).json({ ...article, tags: tagMap.get(id) || [] });
   } catch (error) {
     console.error('Error creating KB article:', error);
     res.status(500).json({ error: 'Failed to create KB article' });
@@ -296,7 +300,7 @@ router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
 
 // PUT /api/kb/articles/:id
 router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
-  const { title, content, category_id, article_type, tags, status } = req.body;
+  const { title, content, category_id, article_type, tag_ids, status } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'Title is required' });
   }
@@ -310,7 +314,6 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
     const articleStatus: 'draft' | 'published' = status === 'draft' ? 'draft' : 'published';
 
     const updateArticleAndFts = db.transaction((aid: string, articleTitle: string, articleContent: string, categoryId: string | null, articleTypeVal: string | null, articleStatusVal: string, timestamp: string) => {
-      // For contentless FTS5 (content=''), DELETE is not supported — use auxiliary delete command with old values
       db.prepare("INSERT INTO kb_articles_fts(kb_articles_fts, rowid, title, content_plain) VALUES('delete', ?, ?, ?)")
         .run(existing!.rowid, existing!.title, stripHtml(existing!.content));
       db.prepare(
@@ -318,13 +321,11 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
       ).run(articleTitle, articleContent, categoryId, articleTypeVal, articleStatusVal, timestamp, aid);
       db.prepare('INSERT INTO kb_articles_fts(rowid, title, content_plain) VALUES (?,?,?)')
         .run(existing!.rowid, articleTitle, stripHtml(articleContent));
-      // Replace tags atomically
       db.prepare('DELETE FROM kb_article_tags WHERE article_id = ?').run(aid);
-      if (Array.isArray(tags) && tags.length > 0) {
-        const insertTag = db.prepare('INSERT OR IGNORE INTO kb_article_tags (id, article_id, tag) VALUES (?, ?, ?)');
-        for (const t of tags) {
-          const trimmed = String(t).trim().toLowerCase();
-          if (trimmed) insertTag.run(uuidv4(), aid, trimmed);
+      if (Array.isArray(tag_ids) && tag_ids.length > 0) {
+        const insertTag = db.prepare('INSERT OR IGNORE INTO kb_article_tags (id, article_id, tag_id) VALUES (?, ?, ?)');
+        for (const tagId of tag_ids) {
+          if (typeof tagId === 'string' && tagId.trim()) insertTag.run(uuidv4(), aid, tagId);
         }
       }
     });
@@ -339,9 +340,8 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
       WHERE a.id = ?
     `).get(articleId) as KbArticleRow;
 
-    const articleTags = (db.prepare('SELECT tag FROM kb_article_tags WHERE article_id = ? ORDER BY tag ASC').all(articleId) as { tag: string }[]).map((r) => r.tag);
-
-    res.json({ ...article, tags: articleTags });
+    const tagMap = getTagsForArticles([articleId]);
+    res.json({ ...article, tags: tagMap.get(articleId) || [] });
   } catch (error) {
     console.error('Error updating KB article:', error);
     res.status(500).json({ error: 'Failed to update KB article' });
@@ -576,9 +576,8 @@ router.get('/public/:token', (_req: Request, res: Response) => {
 
     if (!article) return res.status(404).json({ error: 'Article not found' });
 
-    const tags = (db.prepare('SELECT tag FROM kb_article_tags WHERE article_id = ? ORDER BY tag ASC').all(share.article_id) as { tag: string }[]).map((r) => r.tag);
-
-    res.json({ ...article, tags });
+    const tagMap = getTagsForArticles([share.article_id]);
+    res.json({ ...article, tags: tagMap.get(share.article_id) || [] });
   } catch (error) {
     console.error('Error fetching public KB article:', error);
     res.status(500).json({ error: 'Failed to fetch article' });

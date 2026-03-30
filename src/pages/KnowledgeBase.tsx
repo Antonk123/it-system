@@ -103,9 +103,9 @@ const KnowledgeBase = () => {
   }, []);
 
   const availableTags = useMemo(() => {
-    const tagSet = new Set<string>();
-    articles.forEach(a => a.tags?.forEach(t => tagSet.add(t)));
-    return Array.from(tagSet).sort();
+    const tagMap = new Map<string, { id: string; name: string; color: string }>();
+    articles.forEach(a => a.tags?.forEach(t => tagMap.set(t.id, t)));
+    return Array.from(tagMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [articles]);
 
   const hasActiveFilters = search || categoryFilter !== 'all' || typeFilter !== 'all' || tagFilter !== 'all' || staleFilter;
@@ -340,7 +340,12 @@ const KnowledgeBase = () => {
             <SelectContent>
               <SelectItem value="all">Alla taggar</SelectItem>
               {availableTags.map(tag => (
-                <SelectItem key={tag} value={tag}>{tag}</SelectItem>
+                <SelectItem key={tag.id} value={tag.id}>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: tag.color }} />
+                    {tag.name}
+                  </span>
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>

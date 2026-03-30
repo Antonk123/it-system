@@ -334,14 +334,16 @@ export const RichTextEditor = ({
   };
 
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    // Reset input so same file can be re-selected
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    // Reset input so same files can be re-selected
     e.target.value = '';
     setImageUploading(true);
     try {
-      const { url } = await api.uploadKbImage(file);
-      editor.chain().focus().setImage({ src: url }).run();
+      for (const file of files) {
+        const { url } = await api.uploadKbImage(file);
+        editor.chain().focus().setImage({ src: url }).run();
+      }
     } catch (err) {
       console.error('KB image upload failed:', err);
     } finally {
@@ -697,6 +699,7 @@ export const RichTextEditor = ({
       <input
         type="file"
         accept="image/*"
+        multiple
         className="sr-only"
         ref={imageInputRef}
         onChange={handleImageFileChange}

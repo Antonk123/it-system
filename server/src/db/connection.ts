@@ -412,18 +412,50 @@ const ensureKbV2Columns = () => {
 
 const ensureKbArticleTagsTable = () => {
   if (tableExists('kb_article_tags')) return;
+  // Fresh install: create with tag_id FK from the start
   db.exec(`
     CREATE TABLE IF NOT EXISTS kb_article_tags (
       id TEXT PRIMARY KEY,
       article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
-      tag TEXT NOT NULL,
+      tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(article_id, tag)
+      UNIQUE(article_id, tag_id)
     );
     CREATE INDEX IF NOT EXISTS idx_kb_article_tags_article ON kb_article_tags(article_id);
-    CREATE INDEX IF NOT EXISTS idx_kb_article_tags_tag ON kb_article_tags(tag);
+    CREATE INDEX IF NOT EXISTS idx_kb_article_tags_tag ON kb_article_tags(tag_id);
   `);
   console.log('Created table: kb_article_tags');
+};
+
+const ensureKbArticleTagsUseSharedTags = () => {
+  if (!tableExists('kb_article_tags')) return;
+  if (columnExists('kb_article_tags', 'tag_id')) return;
+
+  const existingTextTags = db.prepare('SELECT DISTINCT tag FROM kb_article_tags').all() as { tag: string }[];
+  const findTag = db.prepare('SELECT id FROM tags WHERE LOWER(name) = LOWER(?)');
+  const createTag = db.prepare('INSERT INTO tags (id, name, color, created_at) VALUES (?, ?, ?, ?)');
+  const tagNameToId = new Map<string, string>();
+  const now = new Date().toISOString();
+  for (const { tag } of existingTextTags) {
+    const existing = findTag.get(tag) as { id: string } | undefined;
+    if (existing) {
+      tagNameToId.set(tag, existing.id);
+    } else {
+      const newId = randomUUID();
+      createTag.run(newId, tag, '#3b82f6', now);
+      tagNameToId.set(tag, newId);
+    }
+  }
+
+  db.exec('ALTER TABLE kb_article_tags ADD COLUMN tag_id TEXT REFERENCES tags(id) ON DELETE CASCADE;');
+
+  const updateStmt = db.prepare('UPDATE kb_article_tags SET tag_id = ? WHERE tag = ?');
+  for (const [tagText, tagId] of tagNameToId.entries()) {
+    updateStmt.run(tagId, tagText);
+  }
+
+  db.exec('CREATE INDEX IF NOT EXISTS idx_kb_article_tags_tag_id ON kb_article_tags(tag_id);');
+  console.log(`Migrated kb_article_tags to shared tags (${existingTextTags.length} unique tags)`);
 };
 
 const ensureKbArticleLinksTable = () => {
@@ -515,6 +547,7 @@ export function initializeDatabase() {
   ensureKbFts5AndType();
   ensureKbV2Columns();
   ensureKbArticleTagsTable();
+  ensureKbArticleTagsUseSharedTags();
   ensureKbReviewColumn();
   ensureRecurringTemplatesTable();
   ensureKbArticleLinksTable();
