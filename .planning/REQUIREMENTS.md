@@ -53,26 +53,26 @@ None deferred — all identified features scoped into v1.4.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DASH-01 | — | Pending |
-| DASH-02 | — | Pending |
-| DASH-03 | — | Pending |
-| CMD-01 | — | Pending |
-| CMD-02 | — | Pending |
-| CMD-03 | — | Pending |
-| CMD-04 | — | Pending |
-| THEME-01 | — | Pending |
-| THEME-02 | — | Pending |
-| THEME-03 | — | Pending |
-| RESP-01 | — | Pending |
-| RESP-02 | — | Pending |
-| ANIM-01 | — | Pending |
-| ANIM-02 | — | Pending |
+| THEME-01 | Phase 13 | Pending |
+| THEME-02 | Phase 13 | Pending |
+| THEME-03 | Phase 13 | Pending |
+| DASH-01 | Phase 14 | Pending |
+| DASH-02 | Phase 14 | Pending |
+| DASH-03 | Phase 14 | Pending |
+| CMD-01 | Phase 15 | Pending |
+| CMD-02 | Phase 15 | Pending |
+| CMD-03 | Phase 15 | Pending |
+| CMD-04 | Phase 15 | Pending |
+| RESP-01 | Phase 16 | Pending |
+| RESP-02 | Phase 16 | Pending |
+| ANIM-01 | Phase 16 | Pending |
+| ANIM-02 | Phase 16 | Pending |
 
 **Coverage:**
 - v1.4 requirements: 14 total
-- Mapped to phases: 0
-- Unmapped: 14 ⚠️
+- Mapped to phases: 14
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-03-30*
-*Last updated: 2026-03-30 after v1.4 milestone definition*
+*Last updated: 2026-03-30 after v1.4 roadmap creation*
