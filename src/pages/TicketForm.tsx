@@ -214,6 +214,66 @@ const TicketForm = () => {
     };
   }, [isEditing, id]);
 
+  // Clone pre-fill: populate form from cloneData passed via location.state
+  useEffect(() => {
+    const cloneData = location.state?.cloneData;
+    if (!cloneData || isEditing) return;
+
+    setFormData(prev => ({
+      ...prev,
+      title: cloneData.title || '',
+      description: cloneData.description || '',
+      priority: cloneData.priority || 'medium',
+      category: cloneData.category || 'none',
+    }));
+
+    // If source ticket had a template, load it so DynamicFieldsForm renders
+    if (cloneData.templateId) {
+      setIsLoadingTemplate(true);
+      api.getTemplate(cloneData.templateId)
+        .then((freshTemplate) => {
+          if (freshTemplate?.fields?.length > 0) {
+            // Map server response shape to Template interface (camelCase)
+            const mapped: Template = {
+              id: freshTemplate.id,
+              name: freshTemplate.name,
+              description: freshTemplate.description,
+              type: freshTemplate.template_type || 'dynamic',
+              titleTemplate: freshTemplate.title_template,
+              descriptionTemplate: freshTemplate.description_template,
+              priority: freshTemplate.priority as Template['priority'],
+              category: freshTemplate.category_id,
+              notesTemplate: freshTemplate.notes_template,
+              solutionTemplate: freshTemplate.solution_template,
+              position: freshTemplate.position,
+              createdBy: freshTemplate.created_by,
+              createdAt: new Date(freshTemplate.created_at),
+              updatedAt: new Date(freshTemplate.updated_at),
+              fields: freshTemplate.fields,
+            };
+            setSelectedTemplate(mapped);
+            // Pre-fill template field values from cloned ticket
+            if (cloneData.customFieldValues?.length) {
+              const mappedFieldValues: CustomFieldInput[] = cloneData.customFieldValues.map(
+                (fv: { field_name: string; field_label: string; field_value: string }) => ({
+                  fieldName: fv.field_name,
+                  fieldLabel: fv.field_label,
+                  fieldValue: fv.field_value,
+                })
+              );
+              setEditInitialFieldValues(mappedFieldValues);
+            }
+          }
+        })
+        .catch(() => {
+          // Template may have been deleted — silently skip template fields
+        })
+        .finally(() => {
+          setIsLoadingTemplate(false);
+        });
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps — intentionally run once on mount
+
   // Track unsaved changes
   useEffect(() => {
     if (existingTicket) {
@@ -517,7 +577,7 @@ const TicketForm = () => {
                   <DynamicFieldsForm
                     fields={selectedTemplate.fields}
                     onValuesChange={handleCustomFieldsChange}
-                    initialValues={isEditing && editInitialFieldValues.length > 0 ? editInitialFieldValues : undefined}
+                    initialValues={editInitialFieldValues.length > 0 ? editInitialFieldValues : undefined}
                   />
 
                   {/* Ytterligare information section */}
