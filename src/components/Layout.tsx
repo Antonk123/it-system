@@ -1,6 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { GlobalSearch } from '@/components/GlobalSearch';
@@ -10,6 +10,8 @@ import { useCategories } from '@/hooks/useCategories';
 import { useTags } from '@/hooks/useTags';
 import { useAuth } from '@/contexts/AuthContext';
 import { QuickCaptureFAB } from '@/components/QuickCaptureFAB';
+import { applyMode, getStoredMode, saveModeTheme, ModeTheme } from '@/lib/appearance';
+import { dispatchModeChange } from '@/hooks/useMode';
 
 interface LayoutProps {
   children: ReactNode;
@@ -187,6 +189,16 @@ export const Layout = ({
   const { tags } = useTags();
   const { signOut, user } = useAuth();
 
+  const [mode, setMode] = useState<ModeTheme>(getStoredMode);
+
+  const handleModeToggle = () => {
+    const next: ModeTheme = mode === 'dark' ? 'light' : 'dark';
+    setMode(next);
+    applyMode(next);
+    saveModeTheme(next);
+    dispatchModeChange(next);
+  };
+
   const handleLogout = async () => {
     await signOut();
   };
@@ -258,12 +270,20 @@ export const Layout = ({
           <div className="flex-1">
             <GlobalSearch tickets={tickets} users={users} categories={categories} tags={tags} />
           </div>
+          <Button variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">
+            {mode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </Button>
         </div>
 
         {/* Desktop header with search */}
         <div className="hidden lg:block sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 shadow-sm">
-          <div className="max-w-md">
-            <GlobalSearch tickets={tickets} users={users} categories={categories} tags={tags} />
+          <div className="flex items-center justify-between">
+            <div className="max-w-md flex-1">
+              <GlobalSearch tickets={tickets} users={users} categories={categories} tags={tags} />
+            </div>
+            <Button variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">
+              {mode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+            </Button>
           </div>
         </div>
 
