@@ -156,7 +156,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 15-01-PLAN.md — Build CommandPalette component, search hook, and recently-viewed utility
+- [x] 15-01-PLAN.md — Build CommandPalette component, search hook, and recently-viewed utility
 - [ ] 15-02-PLAN.md — Wire palette into Layout, remove GlobalSearch, add KB recently-viewed tracking
 **UI hint**: yes
 
@@ -194,5 +194,5 @@ Plans:
 | 12. Quick Capture | v1.3 | 2/2 | Complete | 2026-03-30 |
 | 13. Dark Mode Foundation | v1.4 | 1/2 | Complete    | 2026-03-31 |
 | 14. Dashboard Overview | v1.4 | 2/2 | Complete    | 2026-03-31 |
-| 15. Command Palette | v1.4 | 0/? | Not started | - |
+| 15. Command Palette | v1.4 | 1/2 | In Progress|  |
 | 16. Responsive & Animation Polish | v1.4 | 0/? | Not started | - |

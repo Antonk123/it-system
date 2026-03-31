@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Dashboard, Search & Polish
-status: Ready to plan
-stopped_at: Phase 15 context gathered
-last_updated: "2026-03-31T10:38:21.708Z"
+status: Ready to execute
+stopped_at: Completed 15-01-PLAN.md
+last_updated: "2026-03-31T10:53:59.081Z"
 progress:
   total_phases: 7
   completed_phases: 5
-  total_plans: 10
-  completed_plans: 10
+  total_plans: 12
+  completed_plans: 11
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30 after v1.4 milestone start)
 
 **Core value:** Every ticket gets tracked, resolved, and documented — nothing falls through the cracks and solutions are reusable.
-**Current focus:** Phase 14 — dashboard-overview
+**Current focus:** Phase 15 — command-palette
 
 ## Current Position
 
-Phase: 15
-Plan: Not started
+Phase: 15 (command-palette) — EXECUTING
+Plan: 2 of 2
 
 Progress: ░░░░░░░░░░░░░░░░░░░░ 0/4 phases
 
@@ -64,6 +64,9 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 14-dashboard-overview]: Panel components are purely presentational — hooks called at Dashboard page level, data passed as props
 - [Phase 14-dashboard-overview]: subLabel uses div not p to allow ReactNode children (Skeleton is a div)
 - [Phase 14-dashboard-overview]: Panel components are purely presentational — hooks called at Dashboard page level, data passed as props
+- [Phase 15-command-palette]: PaginatedResponse defined inline in useCommandPaletteSearch.ts — not exported from api.ts
+- [Phase 15-command-palette]: Recently viewed items merged and sorted by visitedAt across ticket and KB sources
+- [Phase 15-command-palette]: Theme toggle keeps palette open — user may chain actions after toggling
 
 ### Research Flags for v1.4
 
@@ -84,6 +87,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-31T10:38:21.704Z
-Stopped at: Phase 15 context gathered
-Resume file: .planning/phases/15-command-palette/15-CONTEXT.md
+Last session: 2026-03-31T10:53:59.078Z
+Stopped at: Completed 15-01-PLAN.md
+Resume file: None

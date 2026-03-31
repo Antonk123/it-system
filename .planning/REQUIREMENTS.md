@@ -15,10 +15,10 @@ Requirements for Dashboard, Search & Polish milestone.
 
 ### Command Palette
 
-- [ ] **CMD-01**: Användaren kan öppna en Cmd+K/Ctrl+K modal som söker tickets och KB-artiklar
-- [ ] **CMD-02**: Command paletten visar navigeringsalternativ (Dashboard, KB, Arkiv etc.)
-- [ ] **CMD-03**: Command paletten har quick actions (skapa ticket, byt tema)
-- [ ] **CMD-04**: Command paletten visar senast besökta tickets/artiklar
+- [x] **CMD-01**: Användaren kan öppna en Cmd+K/Ctrl+K modal som söker tickets och KB-artiklar
+- [x] **CMD-02**: Command paletten visar navigeringsalternativ (Dashboard, KB, Arkiv etc.)
+- [x] **CMD-03**: Command paletten har quick actions (skapa ticket, byt tema)
+- [x] **CMD-04**: Command paletten visar senast besökta tickets/artiklar
 
 ### Dark Mode
 
@@ -59,10 +59,10 @@ None deferred — all identified features scoped into v1.4.
 | DASH-01 | Phase 14 | Complete |
 | DASH-02 | Phase 14 | Complete |
 | DASH-03 | Phase 14 | Complete |
-| CMD-01 | Phase 15 | Pending |
-| CMD-02 | Phase 15 | Pending |
-| CMD-03 | Phase 15 | Pending |
-| CMD-04 | Phase 15 | Pending |
+| CMD-01 | Phase 15 | Complete |
+| CMD-02 | Phase 15 | Complete |
+| CMD-03 | Phase 15 | Complete |
+| CMD-04 | Phase 15 | Complete |
 | RESP-01 | Phase 16 | Pending |
 | RESP-02 | Phase 16 | Pending |
 | ANIM-01 | Phase 16 | Pending |
