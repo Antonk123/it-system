@@ -13,6 +13,7 @@ import { useTicketComments } from '@/hooks/useTicketComments';
 import { useTicketLinks } from '@/hooks/useTicketLinks';
 import { useTicketHistory } from '@/hooks/useTicketHistory';
 import { useTicketReminders } from '@/hooks/useTicketReminders';
+import { addRecentlyViewedTicket } from '@/lib/recentlyViewed';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { migrateContent } from '@/lib/contentMigration';
 import { TicketChecklist } from '@/components/TicketChecklist';
@@ -149,22 +150,11 @@ const TicketDetail = () => {
     }).catch(() => {});
   }, [id]);
 
-  // Track recently viewed tickets in localStorage
+  // Track recently viewed tickets
   useEffect(() => {
-    if (!id) return;
-    try {
-      const stored = localStorage.getItem('recently_viewed_tickets') || '[]';
-      const recentIds: string[] = JSON.parse(stored);
-
-      // Add current ID to front, remove duplicates, limit to 10
-      const updated = [id, ...recentIds.filter(rid => rid !== id)].slice(0, 10);
-
-      // Save back to localStorage
-      localStorage.setItem('recently_viewed_tickets', JSON.stringify(updated));
-    } catch {
-      // Silently fail if localStorage is unavailable
-    }
-  }, [id]);
+    if (!ticket?.id || !ticket?.title) return;
+    addRecentlyViewedTicket(ticket.id, ticket.title);
+  }, [ticket?.id, ticket?.title]);
 
   if (ticketsLoading) {
     return (

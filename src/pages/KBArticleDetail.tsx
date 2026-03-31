@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { api, KbArticleRow, LinkedTicketRow, LinkedArticleRow } from '@/lib/api';
+import { addRecentlyViewedKB } from '@/lib/recentlyViewed';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
@@ -57,6 +58,9 @@ const KBArticleDetail = () => {
           api.getArticleLinkedTickets(id),
         ]);
         setArticle(data);
+        if (data?.id && data?.title) {
+          addRecentlyViewedKB(String(data.id), data.title);
+        }
         setShareToken(shareData.share_token);
         setLinkedTickets(ticketsData);
         api.getKbArticleLinks(id).then(setCrossRefs).catch(() => {});

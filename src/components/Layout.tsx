@@ -1,13 +1,9 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { GlobalSearch } from '@/components/GlobalSearch';
-import { useTickets } from '@/hooks/useTickets';
-import { useUsers } from '@/hooks/useUsers';
-import { useCategories } from '@/hooks/useCategories';
-import { useTags } from '@/hooks/useTags';
+import { CommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/AuthContext';
 import { QuickCaptureFAB } from '@/components/QuickCaptureFAB';
 import { applyMode, getStoredMode, saveModeTheme, ModeTheme } from '@/lib/appearance';
@@ -183,11 +179,19 @@ export const Layout = ({
 
   const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile toggle
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // Desktop collapse
-  const { tickets } = useTickets({ page: 1, limit: 100, status: 'all' });
-  const { users } = useUsers();
-  const { categories } = useCategories();
-  const { tags } = useTags();
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const { signOut, user } = useAuth();
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setPaletteOpen(prev => !prev);
+      }
+    };
+    document.addEventListener('keydown', down);
+    return () => document.removeEventListener('keydown', down);
+  }, []);
 
   const [mode, setMode] = useState<ModeTheme>(getStoredMode);
 
@@ -268,7 +272,14 @@ export const Layout = ({
             <Menu className="w-6 h-6" />
           </button>
           <div className="flex-1">
-            <GlobalSearch tickets={tickets} users={users} categories={categories} tags={tags} />
+            <button
+              onClick={() => setPaletteOpen(true)}
+              className="flex w-full items-center gap-2 px-3 py-2 rounded-lg border border-border/50 text-muted-foreground text-sm hover:bg-muted/50 transition-colors"
+            >
+              <Search className="w-4 h-4" />
+              <span>Sök...</span>
+              <kbd className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded">Ctrl+K</kbd>
+            </button>
           </div>
           <Button variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">
             {mode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
@@ -279,7 +290,16 @@ export const Layout = ({
         <div className="hidden lg:block sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="max-w-md flex-1">
-              <GlobalSearch tickets={tickets} users={users} categories={categories} tags={tags} />
+              <button
+                onClick={() => setPaletteOpen(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 text-muted-foreground text-sm hover:bg-muted/50 transition-colors w-72"
+              >
+                <Search className="w-4 h-4" />
+                <span>Sök ärenden, artiklar, sidor...</span>
+                <kbd className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono">
+                  {navigator.platform?.includes('Mac') ? '⌘K' : 'Ctrl+K'}
+                </kbd>
+              </button>
             </div>
             <Button variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">
               {mode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
@@ -296,5 +316,7 @@ export const Layout = ({
         "left-4 lg:transition-[left] lg:duration-300",
         sidebarCollapsed ? "lg:left-20" : "lg:left-[17rem]"
       )} />
+
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
     </div>;
 };
