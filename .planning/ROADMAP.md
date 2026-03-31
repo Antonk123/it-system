@@ -125,7 +125,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 13-01-PLAN.md — Per-theme light CSS token sets, FOUC prevention script, and useMode hook
+- [x] 13-01-PLAN.md — Per-theme light CSS token sets, FOUC prevention script, and useMode hook
 - [ ] 13-02-PLAN.md — Nav toggle button, chart remount, and Daylight theme cleanup
 
 ### Phase 14: Dashboard Overview
@@ -180,7 +180,7 @@ Plans:
 | 10. KB Cleanup | v1.3 | 2/2 | Complete | 2026-03-29 |
 | 11. Form Simplification | v1.3 | 2/2 | Complete | 2026-03-30 |
 | 12. Quick Capture | v1.3 | 2/2 | Complete | 2026-03-30 |
-| 13. Dark Mode Foundation | v1.4 | 0/2 | Not started | - |
+| 13. Dark Mode Foundation | v1.4 | 1/2 | In Progress|  |
 | 14. Dashboard Overview | v1.4 | 0/? | Not started | - |
 | 15. Command Palette | v1.4 | 0/? | Not started | - |
 | 16. Responsive & Animation Polish | v1.4 | 0/? | Not started | - |

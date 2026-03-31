@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Dashboard, Search & Polish
-status: Ready to plan
-stopped_at: Phase 13 context gathered
-last_updated: "2026-03-30T20:12:48.011Z"
+status: Ready to execute
+stopped_at: Completed 13-dark-mode-foundation plan 01 (light CSS tokens, FOUC script, useMode hook)
+last_updated: "2026-03-31T05:02:51.609Z"
 progress:
   total_phases: 7
   completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 8
+  completed_plans: 7
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30 after v1.4 milestone start)
 
 **Core value:** Every ticket gets tracked, resolved, and documented — nothing falls through the cracks and solutions are reusable.
-**Current focus:** Phase 13 — Dark Mode Foundation
+**Current focus:** Phase 13 — dark-mode-foundation
 
 ## Current Position
 
-Phase: 13 — Dark Mode Foundation (not started)
-Plan: —
+Phase: 13 (dark-mode-foundation) — EXECUTING
+Plan: 2 of 2
 
 Progress: ░░░░░░░░░░░░░░░░░░░░ 0/4 phases
 
@@ -53,6 +53,8 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 12-quick-capture]: DynamicFieldsForm initialValues condition works in both edit and clone modes (removed isEditing guard)
 - [Phase 12-quick-capture]: description:' ' (single space) satisfies server non-empty description constraint in quick-capture flow
 - [Phase 12-quick-capture]: Logged-in public form uses api.createTicket not api.submitPublicTicket — public endpoint requires name/email and does contact lookup
+- [Phase 13-dark-mode-foundation]: Per-theme light blocks use .light .theme-X compound selectors (0,2,0 specificity) to beat standalone .theme-X and preserve per-theme accent colors in light mode
+- [Phase 13-dark-mode-foundation]: dispatchModeChange exported from useMode.ts so Plan 02 toggle can fire same-tab reactivity without re-implementing event dispatch
 
 ### Research Flags for v1.4
 
@@ -73,6 +75,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-30T20:12:48.008Z
-Stopped at: Phase 13 context gathered
-Resume file: .planning/phases/13-dark-mode-foundation/13-CONTEXT.md
+Last session: 2026-03-31T05:02:51.605Z
+Stopped at: Completed 13-dark-mode-foundation plan 01 (light CSS tokens, FOUC script, useMode hook)
+Resume file: None
