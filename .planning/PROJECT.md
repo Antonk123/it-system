@@ -61,6 +61,7 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - ✓ Quick capture FAB (title-only ticket creation) — Phase 12
 - ✓ Public form auth detection (skip name/email when logged in) — Phase 12
 - ✓ Ticket cloning with pre-filled fields — Phase 12
+- ✓ Per-theme light/dark mode with FOUC prevention and nav toggle — Phase 13
 
 ### Active
 
@@ -147,4 +148,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-30 after v1.4 milestone start*
+*Last updated: 2026-03-31 after Phase 13 completion*
