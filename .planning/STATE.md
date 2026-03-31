@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Dashboard, Search & Polish
 status: Ready to execute
-stopped_at: Completed 13-dark-mode-foundation plan 01 (light CSS tokens, FOUC script, useMode hook)
-last_updated: "2026-03-31T05:02:51.609Z"
+stopped_at: Completed 13-dark-mode-foundation plan 02 — awaiting human-verify checkpoint (Task 3)
+last_updated: "2026-03-31T05:25:00Z"
 progress:
   total_phases: 7
   completed_phases: 3
   total_plans: 8
-  completed_plans: 7
+  completed_plans: 8
 ---
 
 # Project State
@@ -23,8 +23,8 @@ See: .planning/PROJECT.md (updated 2026-03-30 after v1.4 milestone start)
 
 ## Current Position
 
-Phase: 13 (dark-mode-foundation) — EXECUTING
-Plan: 2 of 2
+Phase: 13 (dark-mode-foundation) — CHECKPOINT (human-verify pending)
+Plan: 2 of 2 — code tasks done, awaiting visual verification
 
 Progress: ░░░░░░░░░░░░░░░░░░░░ 0/4 phases
 
@@ -55,6 +55,9 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 12-quick-capture]: Logged-in public form uses api.createTicket not api.submitPublicTicket — public endpoint requires name/email and does contact lookup
 - [Phase 13-dark-mode-foundation]: Per-theme light blocks use .light .theme-X compound selectors (0,2,0 specificity) to beat standalone .theme-X and preserve per-theme accent colors in light mode
 - [Phase 13-dark-mode-foundation]: dispatchModeChange exported from useMode.ts so Plan 02 toggle can fire same-tab reactivity without re-implementing event dispatch
+- [Phase 13-dark-mode-foundation]: Toggle placed in nav header (not sidebar) — always visible regardless of sidebar collapsed/open state
+- [Phase 13-dark-mode-foundation]: key={mode} on ResponsiveContainer forces recharts remount and CSS var re-read on mode toggle
+- [Phase 13-dark-mode-foundation]: Daylight migration in AppearanceInitializer handles existing users who had theme-daylight stored in localStorage
 
 ### Research Flags for v1.4
 
@@ -75,6 +78,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-31T05:02:51.605Z
-Stopped at: Completed 13-dark-mode-foundation plan 01 (light CSS tokens, FOUC script, useMode hook)
+Last session: 2026-03-31T05:25:00Z
+Stopped at: 13-02 Tasks 1+2 done — awaiting human-verify checkpoint (Task 3: visual verification of dark/light mode across 4 themes)
 Resume file: None

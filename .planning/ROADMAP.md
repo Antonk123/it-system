@@ -58,7 +58,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 
 **Milestone Goal:** Give the system a complete overview, fast global search with navigation, and a polished experience with dark mode, responsive design, and micro-interactions.
 
-- [ ] **Phase 13: Dark Mode Foundation** — Complete CSS token coverage, theme toggle in nav, and FOUC prevention
+- [x] **Phase 13: Dark Mode Foundation** — Complete CSS token coverage, theme toggle in nav, and FOUC prevention (human-verify pending)
 - [ ] **Phase 14: Dashboard Overview** — Aging tickets panel, today summary, and upcoming reminders widget
 - [ ] **Phase 15: Command Palette** — Cmd+K modal with ticket/KB search, navigation shortcuts, and quick actions
 - [ ] **Phase 16: Responsive & Animation Polish** — Mobile layout, skeleton loading states, and page-load animations
@@ -126,7 +126,7 @@ Plans:
 
 Plans:
 - [x] 13-01-PLAN.md — Per-theme light CSS token sets, FOUC prevention script, and useMode hook
-- [ ] 13-02-PLAN.md — Nav toggle button, chart remount, and Daylight theme cleanup
+- [x] 13-02-PLAN.md — Nav toggle button, chart remount, and Daylight theme cleanup
 
 ### Phase 14: Dashboard Overview
 **Goal**: The dashboard surfaces the information a user needs to understand their current workload — aging open tickets, what happened today, and reminders coming up

@@ -23,7 +23,7 @@ Requirements for Dashboard, Search & Polish milestone.
 ### Dark Mode
 
 - [x] **THEME-01**: Alla CSS-tokens i .light-blocket är kompletta (inga dark-fallbacks i light mode)
-- [ ] **THEME-02**: Synlig tema-toggle i header-navigationen
+- [x] **THEME-02**: Synlig tema-toggle i header-navigationen
 - [x] **THEME-03**: Ingen FOUC vid sidladdning (blocking script i index.html)
 
 ### Responsiv Design
@@ -54,7 +54,7 @@ None deferred — all identified features scoped into v1.4.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | THEME-01 | Phase 13 | Complete |
-| THEME-02 | Phase 13 | Pending |
+| THEME-02 | Phase 13 | Complete |
 | THEME-03 | Phase 13 | Complete |
 | DASH-01 | Phase 14 | Pending |
 | DASH-02 | Phase 14 | Pending |
