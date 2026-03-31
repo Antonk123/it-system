@@ -137,8 +137,12 @@ Plans:
   2. User sees today's counts — tickets created, resolved, and closed since midnight — at a glance on the dashboard
   3. User sees upcoming reminders with the ticket title and scheduled time, ordered by proximity
   4. All three panels display skeleton loading states while their data is fetching
-**Plans**: TBD
+**Plans**: 2 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 14-01-PLAN.md — Backend API endpoints and React Query hooks for dashboard data
+- [ ] 14-02-PLAN.md — Frontend panels, KPI sub-labels, and Dashboard.tsx wiring
 
 ### Phase 15: Command Palette
 **Goal**: Users can open a Cmd+K modal to search tickets and KB articles, navigate to any page, and run common actions without touching the mouse
@@ -181,6 +185,6 @@ Plans:
 | 11. Form Simplification | v1.3 | 2/2 | Complete | 2026-03-30 |
 | 12. Quick Capture | v1.3 | 2/2 | Complete | 2026-03-30 |
 | 13. Dark Mode Foundation | v1.4 | 1/2 | Complete    | 2026-03-31 |
-| 14. Dashboard Overview | v1.4 | 0/? | Not started | - |
+| 14. Dashboard Overview | v1.4 | 0/2 | Not started | - |
 | 15. Command Palette | v1.4 | 0/? | Not started | - |
 | 16. Responsive & Animation Polish | v1.4 | 0/? | Not started | - |
