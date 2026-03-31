@@ -841,6 +841,97 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
   }
 });
 
+// Dashboard overview interfaces
+interface AgingTicketRow {
+  id: string;
+  title: string;
+  priority: string;
+  status: string;
+  requester_name: string | null;
+  age_days: number;
+}
+
+interface TodayCountsRow {
+  created_today: number;
+  resolved_today: number;
+  closed_today: number;
+}
+
+interface UpcomingReminderRow {
+  id: string;
+  ticket_id: string;
+  reminder_time: string;
+  message: string | null;
+  ticket_title: string;
+  ticket_status: string;
+  ticket_priority: string;
+}
+
+// GET /dashboard-overview — aging tickets + today counts
+router.get('/dashboard-overview', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const agingTickets = db.prepare(`
+      SELECT
+        t.id,
+        t.title,
+        t.priority,
+        t.status,
+        c.name as requester_name,
+        CAST(julianday('now') - julianday(
+          MAX(t.updated_at, COALESCE(
+            (SELECT MAX(tc.created_at) FROM ticket_comments tc WHERE tc.ticket_id = t.id AND tc.deleted_at IS NULL),
+            t.updated_at
+          ))
+        ) AS INTEGER) as age_days
+      FROM tickets t
+      LEFT JOIN contacts c ON t.requester_id = c.id
+      WHERE t.status IN ('open', 'in-progress', 'waiting')
+      ORDER BY age_days DESC
+      LIMIT 6
+    `).all() as AgingTicketRow[];
+
+    const todayCounts = db.prepare(`
+      SELECT
+        SUM(CASE WHEN date(created_at) = date('now') THEN 1 ELSE 0 END) as created_today,
+        SUM(CASE WHEN date(resolved_at) = date('now') THEN 1 ELSE 0 END) as resolved_today,
+        SUM(CASE WHEN date(closed_at) = date('now') THEN 1 ELSE 0 END) as closed_today
+      FROM tickets
+    `).get() as TodayCountsRow;
+
+    res.json({ agingTickets, todayCounts });
+  } catch (error) {
+    console.error('Error fetching dashboard overview:', error);
+    res.status(500).json({ error: 'Failed to fetch dashboard overview' });
+  }
+});
+
+// GET /upcoming-reminders — unsent reminders ordered by proximity
+router.get('/upcoming-reminders', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const reminders = db.prepare(`
+      SELECT
+        tr.id,
+        tr.ticket_id,
+        tr.reminder_time,
+        tr.message,
+        t.title as ticket_title,
+        t.status as ticket_status,
+        t.priority as ticket_priority
+      FROM ticket_reminders tr
+      JOIN tickets t ON tr.ticket_id = t.id
+      WHERE tr.sent = 0
+        AND tr.reminder_time > ?
+      ORDER BY tr.reminder_time ASC
+      LIMIT 6
+    `).all(new Date().toISOString()) as UpcomingReminderRow[];
+
+    res.json(reminders);
+  } catch (error) {
+    console.error('Error fetching upcoming reminders:', error);
+    res.status(500).json({ error: 'Failed to fetch upcoming reminders' });
+  }
+});
+
 // Get single ticket
 router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
