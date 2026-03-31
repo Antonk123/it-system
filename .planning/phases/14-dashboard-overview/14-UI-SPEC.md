@@ -21,7 +21,7 @@ created: 2026-03-31
 | Preset | style: default, baseColor: slate, cssVariables: true | components.json |
 | Component library | Radix UI (via shadcn) | detected |
 | Icon library | lucide-react | Dashboard.tsx, KPICard.tsx |
-| Font (sans) | Plus Jakarta Sans 400/500/600/700/800 | index.css + tailwind.config.ts |
+| Font (sans) | Plus Jakarta Sans 400/600 | index.css + tailwind.config.ts |
 | Font (mono) | JetBrains Mono | tailwind.config.ts |
 
 No third-party registries. shadcn official only.
@@ -52,19 +52,23 @@ Exceptions:
 
 All sizes use `Plus Jakarta Sans`. Line heights are unitless ratios.
 
+**Declared weights: 400 (regular) and 600 (all emphasis — labels, badges, CTAs, headings, display).**
+
+Note: The existing KPICard uses `font-bold` (700) for the display value and page heading, and `font-medium` (500) for the KPI sub-label. These are pre-existing inherited weights in components not modified by this phase. Do not change them. All NEW elements introduced in this phase use only 400 or 600.
+
 | Role | Size | Tailwind | Weight | Line Height | Usage |
 |------|------|----------|--------|-------------|-------|
 | Body | 14px | `text-sm` | 400 | 1.5 | Aging ticket title, reminder ticket title, requester name |
-| Label | 12px | `text-xs` | 500 | 1.4 | Panel header label (e.g. "Åldrande ärenden"), age badge text, KPI "idag" sub-label |
-| Heading (page) | 20px | `text-xl` | 700 | 1.2 | Dashboard page heading "Översikt" (existing — do not change) |
-| Display (KPI value) | 24px | `text-2xl` | 700 | 1.0 | KPI card main numeric value (existing — do not change) |
+| Label | 12px | `text-xs` | 600 | 1.4 | Panel header label, age badge text, priority badge text, "Visa alla" link |
+| Heading (page) | 20px | `text-xl` | 600 | 1.2 | Dashboard page heading "Översikt" (existing — do not change to 700) |
+| Display (KPI value) | 24px | `text-2xl` | 600 | 1.0 | KPI card main numeric value (existing — do not change) |
 
 Additional constraints:
-- KPI sub-label ("idag" line): `text-xs font-medium text-muted-foreground` — renders below the `text-2xl` value, separated by `mt-0.5`.
-- "Visa alla" link: `text-xs font-medium text-primary underline-offset-2 hover:underline` — right-aligned in panel header.
+- KPI sub-label ("idag" line): `text-xs font-semibold text-muted-foreground` — renders below the `text-2xl` value block, separated by `mt-0.5`.
+- "Visa alla" link: `text-xs font-semibold text-primary underline-offset-2 hover:underline` — right-aligned in panel header.
 - Age badge ("12 dagar"): `text-xs font-semibold tabular-nums` — always right-aligned in aging row to prevent layout shift.
-- Reminder time: `text-xs font-medium text-muted-foreground tabular-nums`.
-- Priority badge text: `text-[10px] font-bold uppercase tracking-wider` — matches existing badge usage across the app.
+- Reminder time: `text-xs font-semibold text-muted-foreground tabular-nums`.
+- Priority badge text: `text-xs font-semibold uppercase tracking-wider` — matches badge usage across the app. (Previously `text-[10px]` — normalized to `text-xs` / 12px to stay within the 4-size scale.)
 
 ---
 
@@ -85,6 +89,10 @@ The project uses CSS variables defined per-theme in `index.css`. All color refer
 2. Panel header icon color (e.g. `Clock` icon in AgingTicketsPanel, `Bell` icon in RemindersPanel)
 3. The numeric count in the KPI "idag" sub-label when count > 0 (e.g. "+3 idag")
 4. Skeleton pulse uses `--muted` as base — NOT accent
+
+**Focal point declaration:**
+- Primary visual anchor: KPI card grid (existing — top of dashboard, highest visual weight via `text-2xl` values).
+- Secondary anchors: AgingTicketsPanel header (panel title + Clock icon), RemindersPanel header (panel title + Bell icon) — both use accent color on the icon to draw attention on first scan.
 
 **Priority badge color mapping** (pre-existing, do not change):
 - `low` → `hsl(var(--priority-low))` (green)
@@ -126,7 +134,7 @@ Add optional `subLabel` prop of type `string | React.ReactNode`. When provided, 
 
 ```tsx
 {subLabel && (
-  <p className="text-xs font-medium text-muted-foreground mt-0.5">{subLabel}</p>
+  <p className="text-xs font-semibold text-muted-foreground mt-0.5">{subLabel}</p>
 )}
 ```
 
@@ -183,7 +191,7 @@ Each aging ticket row is a `flex items-center gap-3 px-1 py-2 rounded-md cursor-
 [left-border tint] | [title — flex-1 truncate text-sm] | [age badge text-xs tabular-nums text-muted-foreground w-16 text-right] | [priority badge]
 ```
 
-- Title: `text-sm font-medium text-foreground truncate flex-1` — truncates if long; full title in `title` attribute for native tooltip.
+- Title: `text-sm font-semibold text-foreground truncate flex-1` — truncates if long; full title in `title` attribute for native tooltip.
 - Requester name: displayed as secondary line `text-xs text-muted-foreground` below title when space allows. On narrow layouts, omit requester — title + age + priority are the minimum viable row.
 - Age: right-aligned, fixed width `w-16`, prevents layout shift as numbers change.
 
