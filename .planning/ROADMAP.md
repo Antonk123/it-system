@@ -59,7 +59,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 **Milestone Goal:** Give the system a complete overview, fast global search with navigation, and a polished experience with dark mode, responsive design, and micro-interactions.
 
 - [x] **Phase 13: Dark Mode Foundation** — Complete CSS token coverage, theme toggle in nav, and FOUC prevention (human-verify pending)
-- [ ] **Phase 14: Dashboard Overview** — Aging tickets panel, today summary, and upcoming reminders widget
+- [x] **Phase 14: Dashboard Overview** — Aging tickets panel, today summary, and upcoming reminders widget (completed 2026-03-31)
 - [ ] **Phase 15: Command Palette** — Cmd+K modal with ticket/KB search, navigation shortcuts, and quick actions
 - [ ] **Phase 16: Responsive & Animation Polish** — Mobile layout, skeleton loading states, and page-load animations
 
@@ -142,7 +142,7 @@ Plans:
 
 Plans:
 - [x] 14-01-PLAN.md — Backend API endpoints and React Query hooks for dashboard data
-- [ ] 14-02-PLAN.md — Frontend panels, KPI sub-labels, and Dashboard.tsx wiring
+- [x] 14-02-PLAN.md — Frontend panels, KPI sub-labels, and Dashboard.tsx wiring
 
 ### Phase 15: Command Palette
 **Goal**: Users can open a Cmd+K modal to search tickets and KB articles, navigate to any page, and run common actions without touching the mouse
@@ -185,6 +185,6 @@ Plans:
 | 11. Form Simplification | v1.3 | 2/2 | Complete | 2026-03-30 |
 | 12. Quick Capture | v1.3 | 2/2 | Complete | 2026-03-30 |
 | 13. Dark Mode Foundation | v1.4 | 1/2 | Complete    | 2026-03-31 |
-| 14. Dashboard Overview | v1.4 | 1/2 | In Progress|  |
+| 14. Dashboard Overview | v1.4 | 2/2 | Complete   | 2026-03-31 |
 | 15. Command Palette | v1.4 | 0/? | Not started | - |
 | 16. Responsive & Animation Polish | v1.4 | 0/? | Not started | - |

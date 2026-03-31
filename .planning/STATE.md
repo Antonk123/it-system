@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Dashboard, Search & Polish
 status: Ready to execute
-stopped_at: Completed 14-dashboard-overview-01-PLAN.md
-last_updated: "2026-03-31T06:06:29.554Z"
+stopped_at: "Checkpoint 14-02-Task3: awaiting human-verify of dashboard overview panels"
+last_updated: "2026-03-31T06:10:29.131Z"
 progress:
   total_phases: 7
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 10
-  completed_plans: 9
+  completed_plans: 10
 ---
 
 # Project State
@@ -60,6 +60,8 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 13-dark-mode-foundation]: Daylight migration in AppearanceInitializer handles existing users who had theme-daylight stored in localStorage
 - [Phase 14-dashboard-overview]: Routes placed ABOVE /:id in tickets.ts to avoid Express param match conflict
 - [Phase 14-dashboard-overview]: LIMIT 6 on dashboard queries so frontend can detect > 5 for Visa alla link
+- [Phase 14-dashboard-overview]: subLabel uses div not p to allow ReactNode children (Skeleton is a div)
+- [Phase 14-dashboard-overview]: Panel components are purely presentational — hooks called at Dashboard page level, data passed as props
 
 ### Research Flags for v1.4
 
@@ -80,6 +82,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-31T06:06:29.551Z
-Stopped at: Completed 14-dashboard-overview-01-PLAN.md
+Last session: 2026-03-31T06:10:25.300Z
+Stopped at: Checkpoint 14-02-Task3: awaiting human-verify of dashboard overview panels
 Resume file: None
