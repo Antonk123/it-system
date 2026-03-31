@@ -371,37 +371,42 @@
     --search-input-bg: 198 7% 11%;
   }
 
-  /* Daylight - Light mode, Jira/ServiceNow-inspired */
-  .theme-daylight {
+  /* Per-theme light variants — D-01/D-03 */
+
+  /* Slate Light — blue accent */
+  .light .theme-default {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
-    --background: 220 20% 98%;
-    --background-gradient: linear-gradient(135deg, hsl(220, 20%, 98%) 0%, hsl(215, 18%, 97%) 100%);
-    --foreground: 220 25% 12%;
+    --background: 210 18% 98%;
+    --background-gradient: linear-gradient(135deg, hsl(210, 18%, 98%) 0%, hsl(215, 16%, 96%) 100%);
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 25% 12%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 12%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 221 83% 53%;
+    --primary: 214 100% 50%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 220 15% 93%;
-    --secondary-foreground: 220 20% 25%;
+    --secondary-foreground: 222 47% 20%;
 
     --muted: 220 14% 93%;
     --muted-foreground: 220 12% 48%;
 
-    --accent: 240 55% 55%;
+    --accent: 199 85% 48%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 55%;
+    --destructive: 0 70% 50%;
     --destructive-foreground: 0 0% 100%;
+
+    --success: 142 60% 35%;
+    --success-foreground: 0 0% 100%;
 
     --border: 220 15% 86%;
     --input: 220 15% 91%;
-    --ring: 221 83% 53%;
+    --ring: 214 100% 50%;
 
     --radius: 0.625rem;
 
@@ -419,21 +424,21 @@
     --priority-critical: 0 84% 60%;
 
     /* Sidebar */
-    --sidebar-background: 220 25% 96%;
-    --sidebar-foreground: 220 25% 12%;
-    --sidebar-primary: 221 83% 53%;
+    --sidebar-background: 220 20% 96%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 214 100% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 20% 92%;
-    --sidebar-accent-foreground: 220 25% 12%;
+    --sidebar-accent: 220 15% 92%;
+    --sidebar-accent-foreground: 222 47% 11%;
     --sidebar-border: 220 15% 88%;
-    --sidebar-ring: 221 83% 53%;
+    --sidebar-ring: 214 100% 50%;
 
-    /* Chart colors - clean blues */
-    --chart-1: 221 83% 53%;
-    --chart-2: 240 55% 55%;
-    --chart-3: 199 75% 50%;
-    --chart-4: 214 70% 60%;
-    --chart-5: 250 60% 65%;
+    /* Chart colors - blue spectrum */
+    --chart-1: 214 100% 50%;
+    --chart-2: 199 85% 48%;
+    --chart-3: 221 70% 60%;
+    --chart-4: 187 70% 45%;
+    --chart-5: 235 65% 55%;
 
     /* Light subtle shadows */
     --shadow-2xs: 0 1px 2px 0px hsl(220 15% 50% / 0.08);
@@ -448,14 +453,284 @@
     --spacing: 0.25rem;
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 221 83% 45%;
-    --search-glow-accent-vivid: 240 55% 55%;
-    --search-glow-primary-dark: 221 75% 35%;
-    --search-glow-accent-dark: 240 50% 40%;
-    --search-glow-primary-bright: 221 80% 70%;
-    --search-glow-accent-bright: 240 52% 72%;
+    --search-glow-primary-deep: 214 100% 45%;
+    --search-glow-accent-vivid: 199 85% 48%;
+    --search-glow-primary-dark: 214 90% 35%;
+    --search-glow-accent-dark: 199 75% 35%;
+    --search-glow-primary-bright: 214 85% 70%;
+    --search-glow-accent-bright: 199 75% 70%;
     --search-glow-base: 220 15% 92%;
     --search-input-bg: 220 15% 90%;
+  }
+
+  /* Midnight Light — indigo accent */
+  .light .theme-midnight {
+    --app-font-family: 'Plus Jakarta Sans', sans-serif;
+    --background: 230 25% 97%;
+    --background-gradient: linear-gradient(135deg, hsl(230, 25%, 97%) 0%, hsl(235, 20%, 95%) 100%);
+    --foreground: 234 40% 13%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 234 40% 13%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 234 40% 13%;
+
+    --primary: 243 75% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 232 20% 93%;
+    --secondary-foreground: 234 40% 20%;
+
+    --muted: 232 18% 93%;
+    --muted-foreground: 225 14% 48%;
+
+    --accent: 196 72% 48%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 60% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 232 18% 86%;
+    --input: 232 18% 91%;
+    --ring: 243 75% 55%;
+
+    --radius: 0.5rem;
+
+    /* Custom ticket status colors */
+    --status-open: 217 91% 50%;
+    --status-in-progress: 45 93% 47%;
+    --status-waiting: 195 70% 45%;
+    --status-resolved: 142 71% 45%;
+    --status-closed: 215 16% 47%;
+
+    /* Priority colors */
+    --priority-low: 142 71% 45%;
+    --priority-medium: 45 93% 47%;
+    --priority-high: 25 95% 53%;
+    --priority-critical: 0 84% 60%;
+
+    /* Sidebar */
+    --sidebar-background: 232 22% 96%;
+    --sidebar-foreground: 234 40% 13%;
+    --sidebar-primary: 243 75% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 232 18% 92%;
+    --sidebar-accent-foreground: 234 40% 13%;
+    --sidebar-border: 232 18% 88%;
+    --sidebar-ring: 243 75% 55%;
+
+    /* Chart colors - indigo spectrum */
+    --chart-1: 243 75% 55%;
+    --chart-2: 196 72% 48%;
+    --chart-3: 258 60% 58%;
+    --chart-4: 210 65% 52%;
+    --chart-5: 228 55% 62%;
+
+    /* Light subtle shadows */
+    --shadow-2xs: 0 1px 2px 0px hsl(232 20% 50% / 0.08);
+    --shadow-xs: 0 1px 3px 0px hsl(232 20% 50% / 0.1);
+    --shadow-sm: 0 2px 4px -1px hsl(232 20% 50% / 0.12), 0 1px 2px 0px hsl(232 20% 50% / 0.08);
+    --shadow: 0 4px 6px -1px hsl(232 20% 50% / 0.12), 0 2px 4px -1px hsl(232 20% 50% / 0.08);
+    --shadow-md: 0 6px 12px -2px hsl(232 20% 50% / 0.15), 0 3px 6px -1px hsl(232 20% 50% / 0.1);
+    --shadow-lg: 0 10px 20px -3px hsl(232 20% 50% / 0.18), 0 4px 8px -2px hsl(232 20% 50% / 0.12);
+    --shadow-xl: 0 20px 30px -5px hsl(232 20% 50% / 0.2), 0 8px 12px -3px hsl(232 20% 50% / 0.15);
+    --shadow-2xl: 0 30px 50px -10px hsl(232 20% 50% / 0.25), 0 12px 20px -5px hsl(232 20% 50% / 0.18);
+    --tracking-normal: 0em;
+    --spacing: 0.25rem;
+
+    /* Animated search glow colors */
+    --search-glow-primary-deep: 243 75% 48%;
+    --search-glow-accent-vivid: 196 72% 48%;
+    --search-glow-primary-dark: 243 68% 35%;
+    --search-glow-accent-dark: 196 65% 35%;
+    --search-glow-primary-bright: 243 68% 72%;
+    --search-glow-accent-bright: 196 65% 68%;
+    --search-glow-base: 232 18% 92%;
+    --search-input-bg: 232 18% 90%;
+  }
+
+  /* Graphite Light — amber accent */
+  .light .theme-graphite {
+    --app-font-family: 'Plus Jakarta Sans', sans-serif;
+    --background: 220 12% 97%;
+    --background-gradient: linear-gradient(135deg, hsl(220, 12%, 97%) 0%, hsl(215, 10%, 95%) 100%);
+    --foreground: 220 14% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 14% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 14% 12%;
+
+    --primary: 38 92% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 218 10% 93%;
+    --secondary-foreground: 220 14% 20%;
+
+    --muted: 218 10% 93%;
+    --muted-foreground: 218 8% 48%;
+
+    --accent: 32 85% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 60% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 218 10% 86%;
+    --input: 218 10% 91%;
+    --ring: 38 92% 45%;
+
+    --radius: 0.5rem;
+
+    /* Custom ticket status colors */
+    --status-open: 217 91% 50%;
+    --status-in-progress: 45 93% 47%;
+    --status-waiting: 195 70% 45%;
+    --status-resolved: 142 71% 45%;
+    --status-closed: 215 16% 47%;
+
+    /* Priority colors */
+    --priority-low: 142 71% 45%;
+    --priority-medium: 45 93% 47%;
+    --priority-high: 25 95% 53%;
+    --priority-critical: 0 84% 60%;
+
+    /* Sidebar */
+    --sidebar-background: 218 12% 96%;
+    --sidebar-foreground: 220 14% 12%;
+    --sidebar-primary: 38 92% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 218 10% 92%;
+    --sidebar-accent-foreground: 220 14% 12%;
+    --sidebar-border: 218 10% 88%;
+    --sidebar-ring: 38 92% 45%;
+
+    /* Chart colors - amber/warm spectrum */
+    --chart-1: 38 92% 45%;
+    --chart-2: 25 80% 45%;
+    --chart-3: 48 88% 50%;
+    --chart-4: 15 75% 45%;
+    --chart-5: 50 70% 55%;
+
+    /* Light subtle shadows */
+    --shadow-2xs: 0 1px 2px 0px hsl(218 10% 50% / 0.08);
+    --shadow-xs: 0 1px 3px 0px hsl(218 10% 50% / 0.1);
+    --shadow-sm: 0 2px 4px -1px hsl(218 10% 50% / 0.12), 0 1px 2px 0px hsl(218 10% 50% / 0.08);
+    --shadow: 0 4px 6px -1px hsl(218 10% 50% / 0.12), 0 2px 4px -1px hsl(218 10% 50% / 0.08);
+    --shadow-md: 0 6px 12px -2px hsl(218 10% 50% / 0.15), 0 3px 6px -1px hsl(218 10% 50% / 0.1);
+    --shadow-lg: 0 10px 20px -3px hsl(218 10% 50% / 0.18), 0 4px 8px -2px hsl(218 10% 50% / 0.12);
+    --shadow-xl: 0 20px 30px -5px hsl(218 10% 50% / 0.2), 0 8px 12px -3px hsl(218 10% 50% / 0.15);
+    --shadow-2xl: 0 30px 50px -10px hsl(218 10% 50% / 0.25), 0 12px 20px -5px hsl(218 10% 50% / 0.18);
+    --tracking-normal: 0em;
+    --spacing: 0.25rem;
+
+    /* Animated search glow colors */
+    --search-glow-primary-deep: 38 92% 38%;
+    --search-glow-accent-vivid: 32 85% 42%;
+    --search-glow-primary-dark: 38 85% 28%;
+    --search-glow-accent-dark: 32 78% 28%;
+    --search-glow-primary-bright: 38 88% 62%;
+    --search-glow-accent-bright: 32 80% 60%;
+    --search-glow-base: 218 10% 92%;
+    --search-input-bg: 218 10% 90%;
+  }
+
+  /* Stone Light — emerald accent */
+  .light .theme-stone {
+    --app-font-family: 'Plus Jakarta Sans', sans-serif;
+    --background: 200 8% 97%;
+    --background-gradient: linear-gradient(135deg, hsl(200, 8%, 97%) 0%, hsl(195, 6%, 95%) 100%);
+    --foreground: 200 10% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 200 10% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 200 10% 12%;
+
+    --primary: 160 55% 38%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 196 6% 93%;
+    --secondary-foreground: 200 10% 20%;
+
+    --muted: 196 6% 93%;
+    --muted-foreground: 195 6% 48%;
+
+    --accent: 152 45% 35%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 142 60% 35%;
+    --success-foreground: 0 0% 100%;
+
+    --border: 196 6% 86%;
+    --input: 196 6% 91%;
+    --ring: 160 55% 38%;
+
+    --radius: 0.75rem;
+
+    /* Custom ticket status colors */
+    --status-open: 217 91% 50%;
+    --status-in-progress: 45 93% 47%;
+    --status-waiting: 195 70% 45%;
+    --status-resolved: 142 71% 45%;
+    --status-closed: 215 16% 47%;
+
+    /* Priority colors */
+    --priority-low: 142 71% 45%;
+    --priority-medium: 45 93% 47%;
+    --priority-high: 25 95% 53%;
+    --priority-critical: 0 84% 60%;
+
+    /* Sidebar */
+    --sidebar-background: 198 8% 96%;
+    --sidebar-foreground: 200 10% 12%;
+    --sidebar-primary: 160 55% 38%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 196 6% 92%;
+    --sidebar-accent-foreground: 200 10% 12%;
+    --sidebar-border: 196 6% 88%;
+    --sidebar-ring: 160 55% 38%;
+
+    /* Chart colors - emerald spectrum */
+    --chart-1: 160 55% 38%;
+    --chart-2: 152 45% 35%;
+    --chart-3: 168 50% 44%;
+    --chart-4: 142 40% 38%;
+    --chart-5: 175 48% 46%;
+
+    /* Light subtle shadows */
+    --shadow-2xs: 0 1px 2px 0px hsl(196 6% 50% / 0.08);
+    --shadow-xs: 0 1px 3px 0px hsl(196 6% 50% / 0.1);
+    --shadow-sm: 0 2px 4px -1px hsl(196 6% 50% / 0.12), 0 1px 2px 0px hsl(196 6% 50% / 0.08);
+    --shadow: 0 4px 6px -1px hsl(196 6% 50% / 0.12), 0 2px 4px -1px hsl(196 6% 50% / 0.08);
+    --shadow-md: 0 6px 12px -2px hsl(196 6% 50% / 0.15), 0 3px 6px -1px hsl(196 6% 50% / 0.1);
+    --shadow-lg: 0 10px 20px -3px hsl(196 6% 50% / 0.18), 0 4px 8px -2px hsl(196 6% 50% / 0.12);
+    --shadow-xl: 0 20px 30px -5px hsl(196 6% 50% / 0.2), 0 8px 12px -3px hsl(196 6% 50% / 0.15);
+    --shadow-2xl: 0 30px 50px -10px hsl(196 6% 50% / 0.25), 0 12px 20px -5px hsl(196 6% 50% / 0.18);
+    --tracking-normal: 0em;
+    --spacing: 0.25rem;
+
+    /* Animated search glow colors */
+    --search-glow-primary-deep: 160 55% 30%;
+    --search-glow-accent-vivid: 152 45% 35%;
+    --search-glow-primary-dark: 160 50% 22%;
+    --search-glow-accent-dark: 152 42% 24%;
+    --search-glow-primary-bright: 160 50% 55%;
+    --search-glow-accent-bright: 152 42% 52%;
+    --search-glow-base: 196 6% 92%;
+    --search-input-bg: 196 6% 90%;
   }
 
   .font-jakarta {
@@ -515,64 +790,6 @@
     --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
   }
 
-  /* Light mode */
-  .light {
-    --background: 0 0% 100%;        /* Pure white */
-    --foreground: 222 47% 11%;       /* Almost black */
-
-    --card: 0 0% 98%;                /* Very light gray */
-    --card-foreground: 222 47% 11%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 222 47% 11%;
-
-    --muted: 220 14% 96%;
-    --muted-foreground: 215 16% 47%;
-
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-
-    /* Custom ticket status colors (same as dark) */
-    --status-open: 217 91% 50%;
-    --status-in-progress: 45 93% 47%;
-    --status-waiting: 195 70% 45%;
-    --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 47%;
-
-    /* Priority colors (same as dark) */
-    --priority-low: 142 71% 45%;
-    --priority-medium: 45 93% 47%;
-    --priority-high: 25 95% 53%;
-    --priority-critical: 0 84% 60%;
-
-    /* Sidebar */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 222 47% 11%;
-    --sidebar-border: 220 13% 91%;
-
-    /* Charts */
-    --chart-1: 30 97% 72%;
-    --chart-2: 45 96% 64%;
-    --chart-3: 48 96% 76%;
-    --chart-4: 27 95% 60%;
-    --chart-5: 0 0% 45%;
-
-    /* Shadows (lighter for light mode) */
-    --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.03);
-    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-    --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.07), 0 1px 2px -1px hsl(0 0% 0% / 0.07);
-    --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.07), 0 1px 2px -1px hsl(0 0% 0% / 0.07);
-    --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.07), 0 2px 4px -1px hsl(0 0% 0% / 0.07);
-    --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.07), 0 4px 6px -1px hsl(0 0% 0% / 0.07);
-    --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.08), 0 8px 10px -1px hsl(0 0% 0% / 0.08);
-    --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.15);
-  }
 }
 
 @layer base {
