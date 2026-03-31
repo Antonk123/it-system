@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useMode } from '@/hooks/useMode';
 import { differenceInDays } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, ComposedChart, Line } from 'recharts';
 import { Layout } from '@/components/Layout';
@@ -151,6 +152,7 @@ const Reports = () => {
   const { users } = useUsers();
   const { tags } = useTags();
   const isMobile = useIsMobile();
+  const mode = useMode();
   const [selectedUserId, setSelectedUserId] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
@@ -770,7 +772,7 @@ const Reports = () => {
                       Ingen ärendedata tillgänglig
                     </div>
                   ) : (
-                    <ResponsiveContainer width="100%" height={isMobile ? 180 : 200}>
+                    <ResponsiveContainer key={mode} width="100%" height={isMobile ? 180 : 200}>
                       <BarChart data={ticketsByPriority} margin={chartMargins}>
                         <defs>
                           {COLORS.map((color, index) => (
@@ -817,7 +819,7 @@ const Reports = () => {
                     Inga kategorier
                   </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height={Math.max(200, summary.byCategory.length * 40)}>
+                  <ResponsiveContainer key={mode} width="100%" height={Math.max(200, summary.byCategory.length * 40)}>
                     <BarChart
                       layout="vertical"
                       data={summary.byCategory}
@@ -861,7 +863,7 @@ const Reports = () => {
                     Ingen trenddata tillgänglig
                   </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height={300}>
+                  <ResponsiveContainer key={mode} width="100%" height={300}>
                     <ComposedChart data={summary.trend} margin={{ left: 20, right: 20, top: 5, bottom: 5 }}>
                       <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                       <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
@@ -969,7 +971,7 @@ const Reports = () => {
                       Ingen ärendedata tillgänglig
                     </div>
                   ) : (
-                    <ResponsiveContainer width="100%" height={chartHeight}>
+                    <ResponsiveContainer key={mode} width="100%" height={chartHeight}>
                       <BarChart data={requesterAnalytics} layout="vertical" margin={chartMargins}>
                         <defs>
                           {Object.entries(REQUESTER_STATUS_COLORS).map(([status, color]) => (

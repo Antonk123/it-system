@@ -49,7 +49,6 @@ const themeOptions = [
   { value: 'theme-midnight', label: 'Midnight' },
   { value: 'theme-graphite', label: 'Graphite' },
   { value: 'theme-stone', label: 'Stone' },
-  { value: 'theme-daylight', label: 'Daylight' },
 ] as const;
 
 // Memoized list item components for better performance

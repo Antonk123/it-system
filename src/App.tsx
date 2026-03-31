@@ -44,6 +44,13 @@ const AppearanceInitializer = () => {
   useEffect(() => {
     applyFontTheme(getStoredFontTheme());
     applyMode(getStoredMode());
+    // Migrate users who had daylight selected — fall back to default
+    const storedTheme = localStorage.getItem('theme');
+    if (storedTheme === 'theme-daylight') {
+      localStorage.setItem('theme', 'theme-default');
+      document.documentElement.classList.remove('theme-daylight');
+      document.documentElement.classList.add('theme-default');
+    }
   }, []);
 
   return null;
@@ -116,7 +123,7 @@ const App = () => (
       attribute="class"
       defaultTheme="theme-default"
       enableSystem={false}
-      themes={["theme-default", "theme-midnight", "theme-graphite", "theme-stone", "theme-daylight"]}
+      themes={["theme-default", "theme-midnight", "theme-graphite", "theme-stone"]}
     >
       <AppearanceInitializer />
       <TooltipProvider>
