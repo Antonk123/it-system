@@ -22,6 +22,7 @@ interface KPICardProps {
   className?: string;
   animationDelay?: number;
   onClick?: () => void;
+  subLabel?: string | ReactNode;
 }
 
 export const KPICard = ({
@@ -36,6 +37,7 @@ export const KPICard = ({
   className,
   animationDelay = 0,
   onClick,
+  subLabel,
 }: KPICardProps) => {
   const TrendIcon = trend?.direction === 'up' ? TrendingUp : TrendingDown;
   const trendColor = trend
@@ -84,6 +86,9 @@ export const KPICard = ({
                 className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"
               />
             </div>
+            {subLabel != null && (
+              <div className="text-xs font-semibold text-muted-foreground mt-0.5">{subLabel}</div>
+            )}
           </div>
 
           {sparklineData && sparklineData.length > 0 && (
