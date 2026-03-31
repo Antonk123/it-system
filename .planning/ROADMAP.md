@@ -121,8 +121,12 @@ Plans:
   2. Light mode renders all components correctly — no broken button colors, sidebar states, or gradient backgrounds
   3. Reloading the page in either mode shows the correct theme immediately without any flash of the other mode
   4. Recharts charts update their colors when the mode is switched without requiring a page reload
-**Plans**: TBD
+**Plans**: 2 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 13-01-PLAN.md — Per-theme light CSS token sets, FOUC prevention script, and useMode hook
+- [ ] 13-02-PLAN.md — Nav toggle button, chart remount, and Daylight theme cleanup
 
 ### Phase 14: Dashboard Overview
 **Goal**: The dashboard surfaces the information a user needs to understand their current workload — aging open tickets, what happened today, and reminders coming up
@@ -176,7 +180,7 @@ Plans:
 | 10. KB Cleanup | v1.3 | 2/2 | Complete | 2026-03-29 |
 | 11. Form Simplification | v1.3 | 2/2 | Complete | 2026-03-30 |
 | 12. Quick Capture | v1.3 | 2/2 | Complete | 2026-03-30 |
-| 13. Dark Mode Foundation | v1.4 | 0/? | Not started | - |
+| 13. Dark Mode Foundation | v1.4 | 0/2 | Not started | - |
 | 14. Dashboard Overview | v1.4 | 0/? | Not started | - |
 | 15. Command Palette | v1.4 | 0/? | Not started | - |
 | 16. Responsive & Animation Polish | v1.4 | 0/? | Not started | - |
