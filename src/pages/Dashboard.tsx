@@ -4,9 +4,14 @@ import { Ticket, Clock, CheckCircle, Archive, AlertTriangle, ArrowRight, PauseCi
 import { subDays, isSameDay, format, startOfDay } from 'date-fns';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
+import { useDashboardOverview } from '@/hooks/useDashboardOverview';
+import { useUpcomingReminders } from '@/hooks/useUpcomingReminders';
 import { Layout } from '@/components/Layout';
 import { KPICard } from '@/components/KPICard';
+import { AgingTicketsPanel } from '@/components/AgingTicketsPanel';
+import { RemindersPanel } from '@/components/RemindersPanel';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ---------------------------------------------------------------------------
 // Dashboard
@@ -16,6 +21,8 @@ const Dashboard = () => {
   const { tickets } = useTickets({ limit: 1000, status: 'all' });
   const { users, getUserById } = useUsers();
   const navigate = useNavigate();
+  const { data: dashboardOverview, isLoading: isOverviewLoading } = useDashboardOverview();
+  const { data: upcomingReminders, isLoading: isRemindersLoading } = useUpcomingReminders();
 
   const stats = useMemo(() => {
     const open = tickets.filter(t => t.status === 'open').length;
@@ -103,6 +110,13 @@ const Dashboard = () => {
             sparklineData={sparklineData.open}
             onClick={() => navigate('/tickets?status=open')}
             animationDelay={0}
+            subLabel={
+              isOverviewLoading
+                ? <Skeleton className="h-3 w-16 mt-1" />
+                : dashboardOverview?.todayCounts.created_today
+                  ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.created_today} idag</span>
+                  : <span>+0 idag</span>
+            }
           />
           <KPICard
             label="Pågående"
@@ -130,6 +144,13 @@ const Dashboard = () => {
             sparklineData={sparklineData.resolved}
             onClick={() => navigate('/tickets?status=resolved')}
             animationDelay={300}
+            subLabel={
+              isOverviewLoading
+                ? <Skeleton className="h-3 w-16 mt-1" />
+                : dashboardOverview?.todayCounts.resolved_today
+                  ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.resolved_today} idag</span>
+                  : <span>+0 idag</span>
+            }
           />
         </div>
 
@@ -143,7 +164,30 @@ const Dashboard = () => {
             sparklineData={sparklineData.closed}
             onClick={() => navigate('/archive')}
             animationDelay={0}
+            subLabel={
+              isOverviewLoading
+                ? <Skeleton className="h-3 w-16 mt-1" />
+                : dashboardOverview?.todayCounts.closed_today
+                  ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.closed_today} idag</span>
+                  : <span>+0 idag</span>
+            }
           />
+        </div>
+
+        {/* Dashboard Panels */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="animate-fade-in" style={{ animationDelay: '0ms' }}>
+            <AgingTicketsPanel
+              tickets={dashboardOverview?.agingTickets}
+              isLoading={isOverviewLoading}
+            />
+          </div>
+          <div className="animate-fade-in" style={{ animationDelay: '100ms' }}>
+            <RemindersPanel
+              reminders={upcomingReminders}
+              isLoading={isRemindersLoading}
+            />
+          </div>
         </div>
 
         {/* Critical Tickets Alert */}
