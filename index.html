@@ -30,6 +30,22 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@Prefabmästarna" />
     <meta name="twitter:image" content="" />
+
+    <!-- FOUC prevention: apply mode and font classes before React hydrates (D-08) -->
+    <script>
+      (function() {
+        try {
+          var mode = localStorage.getItem('app-mode-theme');
+          document.documentElement.classList.add(
+            (mode === 'light' || mode === 'dark') ? mode : 'dark'
+          );
+          var font = localStorage.getItem('app-font-theme');
+          if (font && ['font-jakarta','font-crimson','font-libre','font-jetbrains'].indexOf(font) !== -1) {
+            document.documentElement.classList.add(font);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
 
   <body>
