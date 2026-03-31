@@ -141,7 +141,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 14-01-PLAN.md — Backend API endpoints and React Query hooks for dashboard data
+- [x] 14-01-PLAN.md — Backend API endpoints and React Query hooks for dashboard data
 - [ ] 14-02-PLAN.md — Frontend panels, KPI sub-labels, and Dashboard.tsx wiring
 
 ### Phase 15: Command Palette
@@ -185,6 +185,6 @@ Plans:
 | 11. Form Simplification | v1.3 | 2/2 | Complete | 2026-03-30 |
 | 12. Quick Capture | v1.3 | 2/2 | Complete | 2026-03-30 |
 | 13. Dark Mode Foundation | v1.4 | 1/2 | Complete    | 2026-03-31 |
-| 14. Dashboard Overview | v1.4 | 0/2 | Not started | - |
+| 14. Dashboard Overview | v1.4 | 1/2 | In Progress|  |
 | 15. Command Palette | v1.4 | 0/? | Not started | - |
 | 16. Responsive & Animation Polish | v1.4 | 0/? | Not started | - |

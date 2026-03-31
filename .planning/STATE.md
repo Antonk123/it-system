@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Dashboard, Search & Polish
-status: Ready to plan
-stopped_at: Phase 14 UI-SPEC approved
-last_updated: "2026-03-31T05:43:02.086Z"
+status: Ready to execute
+stopped_at: Completed 14-dashboard-overview-01-PLAN.md
+last_updated: "2026-03-31T06:06:29.554Z"
 progress:
   total_phases: 7
   completed_phases: 4
-  total_plans: 8
-  completed_plans: 8
+  total_plans: 10
+  completed_plans: 9
 ---
 
 # Project State
@@ -19,12 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-30 after v1.4 milestone start)
 
 **Core value:** Every ticket gets tracked, resolved, and documented — nothing falls through the cracks and solutions are reusable.
-**Current focus:** Phase 13 — dark-mode-foundation
+**Current focus:** Phase 14 — dashboard-overview
 
 ## Current Position
 
-Phase: 14
-Plan: Not started
+Phase: 14 (dashboard-overview) — EXECUTING
+Plan: 2 of 2
 
 Progress: ░░░░░░░░░░░░░░░░░░░░ 0/4 phases
 
@@ -58,6 +58,8 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 13-dark-mode-foundation]: Toggle placed in nav header (not sidebar) — always visible regardless of sidebar collapsed/open state
 - [Phase 13-dark-mode-foundation]: key={mode} on ResponsiveContainer forces recharts remount and CSS var re-read on mode toggle
 - [Phase 13-dark-mode-foundation]: Daylight migration in AppearanceInitializer handles existing users who had theme-daylight stored in localStorage
+- [Phase 14-dashboard-overview]: Routes placed ABOVE /:id in tickets.ts to avoid Express param match conflict
+- [Phase 14-dashboard-overview]: LIMIT 6 on dashboard queries so frontend can detect > 5 for Visa alla link
 
 ### Research Flags for v1.4
 
@@ -78,6 +80,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-31T05:43:02.083Z
-Stopped at: Phase 14 UI-SPEC approved
-Resume file: .planning/phases/14-dashboard-overview/14-UI-SPEC.md
+Last session: 2026-03-31T06:06:29.551Z
+Stopped at: Completed 14-dashboard-overview-01-PLAN.md
+Resume file: None

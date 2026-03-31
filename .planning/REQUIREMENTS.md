@@ -9,9 +9,9 @@ Requirements for Dashboard, Search & Polish milestone.
 
 ### Dashboard
 
-- [ ] **DASH-01**: Dashboarden visar en widget med åldrande öppna tickets sorterade på ålder
-- [ ] **DASH-02**: Dashboarden visar dagens sammanfattning (skapade/lösta/stängda idag)
-- [ ] **DASH-03**: Dashboarden visar kommande påminnelser som snart triggar
+- [x] **DASH-01**: Dashboarden visar en widget med åldrande öppna tickets sorterade på ålder
+- [x] **DASH-02**: Dashboarden visar dagens sammanfattning (skapade/lösta/stängda idag)
+- [x] **DASH-03**: Dashboarden visar kommande påminnelser som snart triggar
 
 ### Command Palette
 
@@ -56,9 +56,9 @@ None deferred — all identified features scoped into v1.4.
 | THEME-01 | Phase 13 | Complete |
 | THEME-02 | Phase 13 | Complete |
 | THEME-03 | Phase 13 | Complete |
-| DASH-01 | Phase 14 | Pending |
-| DASH-02 | Phase 14 | Pending |
-| DASH-03 | Phase 14 | Pending |
+| DASH-01 | Phase 14 | Complete |
+| DASH-02 | Phase 14 | Complete |
+| DASH-03 | Phase 14 | Complete |
 | CMD-01 | Phase 15 | Pending |
 | CMD-02 | Phase 15 | Pending |
 | CMD-03 | Phase 15 | Pending |
