@@ -60,7 +60,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 
 - [x] **Phase 13: Dark Mode Foundation** — Complete CSS token coverage, theme toggle in nav, and FOUC prevention (human-verify pending)
 - [x] **Phase 14: Dashboard Overview** — Aging tickets panel, today summary, and upcoming reminders widget (completed 2026-03-31)
-- [ ] **Phase 15: Command Palette** — Cmd+K modal with ticket/KB search, navigation shortcuts, and quick actions
+- [x] **Phase 15: Command Palette** — Cmd+K modal with ticket/KB search, navigation shortcuts, and quick actions (completed 2026-03-31)
 - [ ] **Phase 16: Responsive & Animation Polish** — Mobile layout, skeleton loading states, and page-load animations
 
 ## Phase Details
@@ -157,7 +157,7 @@ Plans:
 
 Plans:
 - [x] 15-01-PLAN.md — Build CommandPalette component, search hook, and recently-viewed utility
-- [ ] 15-02-PLAN.md — Wire palette into Layout, remove GlobalSearch, add KB recently-viewed tracking
+- [x] 15-02-PLAN.md — Wire palette into Layout, remove GlobalSearch, add KB recently-viewed tracking
 **UI hint**: yes
 
 ### Phase 16: Responsive & Animation Polish
@@ -172,7 +172,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 15-01-PLAN.md — Build CommandPalette component, search hook, and recently-viewed utility
+- [x] 15-01-PLAN.md — Build CommandPalette component, search hook, and recently-viewed utility
 - [ ] 15-02-PLAN.md — Wire palette into Layout, remove GlobalSearch, add KB recently-viewed tracking
 **UI hint**: yes
 
@@ -194,5 +194,5 @@ Plans:
 | 12. Quick Capture | v1.3 | 2/2 | Complete | 2026-03-30 |
 | 13. Dark Mode Foundation | v1.4 | 1/2 | Complete    | 2026-03-31 |
 | 14. Dashboard Overview | v1.4 | 2/2 | Complete    | 2026-03-31 |
-| 15. Command Palette | v1.4 | 1/2 | In Progress|  |
+| 15. Command Palette | v1.4 | 2/2 | Complete   | 2026-03-31 |
 | 16. Responsive & Animation Polish | v1.4 | 0/? | Not started | - |

@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Dashboard, Search & Polish
-status: Ready to execute
-stopped_at: Completed 15-01-PLAN.md
-last_updated: "2026-03-31T10:53:59.081Z"
+status: Phase complete — ready for verification
+stopped_at: "Completed 15-02-PLAN.md tasks 1-2; checkpoint:human-verify for Task 3 pending"
+last_updated: "2026-03-31T10:57:17.767Z"
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 12
-  completed_plans: 11
+  completed_plans: 12
 ---
 
 # Project State
@@ -67,6 +67,7 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 15-command-palette]: PaginatedResponse defined inline in useCommandPaletteSearch.ts — not exported from api.ts
 - [Phase 15-command-palette]: Recently viewed items merged and sorted by visitedAt across ticket and KB sources
 - [Phase 15-command-palette]: Theme toggle keeps palette open — user may chain actions after toggling
+- [Phase 15]: addRecentlyViewedTicket called on ticket?.id + ticket?.title — waits for ticket data availability
 
 ### Research Flags for v1.4
 
@@ -87,6 +88,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-03-31T10:53:59.078Z
-Stopped at: Completed 15-01-PLAN.md
+Last session: 2026-03-31T10:57:17.763Z
+Stopped at: Completed 15-02-PLAN.md tasks 1-2; checkpoint:human-verify for Task 3 pending
 Resume file: None
