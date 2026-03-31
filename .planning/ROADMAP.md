@@ -153,7 +153,11 @@ Plans:
   2. The palette offers navigation items (Dashboard, KB, Archive, etc.) visible in the idle state and reachable by typing
   3. The palette offers quick actions — create ticket and toggle light/dark mode — accessible from the idle state
   4. The palette shows recently visited tickets and KB articles when opened with an empty query
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 15-01-PLAN.md — Build CommandPalette component, search hook, and recently-viewed utility
+- [ ] 15-02-PLAN.md — Wire palette into Layout, remove GlobalSearch, add KB recently-viewed tracking
 **UI hint**: yes
 
 ### Phase 16: Responsive & Animation Polish
@@ -165,7 +169,11 @@ Plans:
   2. Ticket lists and tables on mobile scroll horizontally or reflow without content being cut off or unreadable
   3. Dashboard panels, ticket list, and KB list all show skeleton placeholders while data loads — no blank or empty states
   4. Dashboard KPI cards and new panels animate in with a staggered entrance on page load
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 15-01-PLAN.md — Build CommandPalette component, search hook, and recently-viewed utility
+- [ ] 15-02-PLAN.md — Wire palette into Layout, remove GlobalSearch, add KB recently-viewed tracking
 **UI hint**: yes
 
 ## Progress
