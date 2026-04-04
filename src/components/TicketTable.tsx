@@ -205,78 +205,38 @@ export const TicketTable = memo(function TicketTable({
   // Mobile: Card layout
   if (isMobile) {
     return (
-      <div className="space-y-4">
-        {tickets.map((ticket, index) => {
-          const progress = getProgress(ticket.id);
-          const saving = !!savingIds[ticket.id];
+      <div className="space-y-2">
+        {tickets.map((ticket) => {
+          const daysAgo = Math.floor((Date.now() - new Date(ticket.createdAt).getTime()) / 86400000);
+          const ageLabel = daysAgo === 0 ? 'Idag' : daysAgo === 1 ? '1 dag sedan' : `${daysAgo} dagar sedan`;
           return (
             <Link
               key={ticket.id}
               to={`/tickets/${ticket.id}`}
               className="block"
             >
-              <div
-                className="ticket-card geo-border p-5 cursor-pointer"
-              >
-                {/* Title with neon glow on hover */}
-                <h3 className="font-semibold text-lg text-foreground transition-all duration-300 line-clamp-2 mb-4 group-hover:neon-glow">
-                  {ticket.title}
-                </h3>
-
-                {/* Status & Priority row */}
-                <div className="flex flex-wrap items-center gap-2 mb-3">
-                  <div className="flex items-center gap-2" onClick={(e) => e.preventDefault()}>
-                    <Select
-                      value={ticket.status}
-                      onValueChange={async (value) => {
-                        if (!onStatusChange) return;
-                        setSavingIds(s => ({ ...s, [ticket.id]: true }));
-                        try {
-                          await onStatusChange(ticket.id, value as TicketStatus);
-                        } catch (error) {
-                          console.error('Status update failed:', error);
-                        } finally {
-                          setSavingIds(s => ({ ...s, [ticket.id]: false }));
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="w-auto h-8 text-xs rounded-lg border-primary/20" disabled={saving}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="open">{statusLabels['open']}</SelectItem>
-                        <SelectItem value="in-progress">{statusLabels['in-progress']}</SelectItem>
-                        <SelectItem value="waiting">{statusLabels['waiting']}</SelectItem>
-                        <SelectItem value="resolved">{statusLabels['resolved']}</SelectItem>
-                        <SelectItem value="closed">{statusLabels['closed']}</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {saving && <Loader2 className="animate-spin h-4 w-4 text-muted-foreground" />}
-                  </div>
-
-                  <div className="floating-tag">
-                    <PriorityBadge priority={ticket.priority} />
-                  </div>
+              <div className="bg-card rounded-lg border border-border p-3 cursor-pointer hover:bg-accent/5 active:bg-accent/10 transition-colors">
+                {/* Row 1: Title + Status badge */}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h3 className="text-sm font-bold text-foreground truncate flex-1">
+                    {ticket.title}
+                  </h3>
+                  <span className={cn(
+                    'shrink-0 text-xs font-bold px-2 py-0.5 rounded-full',
+                    ticket.status === 'open' && 'bg-blue-500/15 text-blue-600',
+                    ticket.status === 'in-progress' && 'bg-yellow-500/15 text-yellow-600',
+                    ticket.status === 'waiting' && 'bg-orange-500/15 text-orange-600',
+                    ticket.status === 'resolved' && 'bg-green-500/15 text-green-600',
+                    ticket.status === 'closed' && 'bg-muted text-muted-foreground',
+                  )}>
+                    {statusLabels[ticket.status]}
+                  </span>
                 </div>
-
-                {/* Requester with accent */}
-                <p className="text-sm text-muted-foreground mb-3 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary/60"></span>
-                  {getUserName(ticket.requesterId)}
-                </p>
-
-                {/* Progress bar with enhanced styling */}
-                {progress && progress.total > 0 && (
-                  <div className="flex items-center gap-3 p-2 rounded-lg bg-background/20">
-                    <Progress
-                      value={Math.round((progress.completed / progress.total) * 100)}
-                      className="h-2 flex-1"
-                    />
-                    <span className="text-xs font-medium text-primary whitespace-nowrap">
-                      {progress.completed}/{progress.total}
-                    </span>
-                  </div>
-                )}
+                {/* Row 2: Priority + Age */}
+                <div className="flex items-center justify-between gap-2">
+                  <PriorityBadge priority={ticket.priority} />
+                  <span className="text-xs text-muted-foreground">{ageLabel}</span>
+                </div>
               </div>
             </Link>
           );

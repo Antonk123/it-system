@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Download, Upload, LayoutGrid, Columns } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { Layout } from '@/components/Layout';
@@ -54,6 +55,8 @@ const TicketList = () => {
     const saved = localStorage.getItem('ticket_view_mode');
     return (saved as 'table' | 'kanban') || 'table';
   });
+
+  const isMobile = useIsMobile();
 
   // Filter views
   const {
@@ -211,34 +214,36 @@ const TicketList = () => {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant={viewMode === 'table' ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setViewMode(viewMode === 'table' ? 'kanban' : 'table')}
-              className="h-8 gap-2"
-            >
-              {viewMode === 'table' ? (
-                <>
-                  <LayoutGrid className="w-4 h-4" />
-                  Kanban
-                </>
-              ) : (
-                <>
-                  <Columns className="w-4 h-4" />
-                  Tabell
-                </>
-              )}
-            </Button>
-            {viewMode === 'table' && (
+            <div className="hidden md:flex items-center gap-2">
               <Button
-                variant="outline"
+                variant={viewMode === 'table' ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setCompactView((prev) => !prev)}
-                className="h-8"
+                onClick={() => setViewMode(viewMode === 'table' ? 'kanban' : 'table')}
+                className="h-8 gap-2"
               >
-                {compactView ? 'Standardvy' : 'Kompakt vy'}
+                {viewMode === 'table' ? (
+                  <>
+                    <LayoutGrid className="w-4 h-4" />
+                    Kanban
+                  </>
+                ) : (
+                  <>
+                    <Columns className="w-4 h-4" />
+                    Tabell
+                  </>
+                )}
               </Button>
-            )}
+              {viewMode === 'table' && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCompactView((prev) => !prev)}
+                  className="h-8"
+                >
+                  {compactView ? 'Standardvy' : 'Kompakt vy'}
+                </Button>
+              )}
+            </div>
             <Button
               variant="outline"
               onClick={handleExport}
@@ -298,7 +303,7 @@ const TicketList = () => {
         ) : (
           <>
             <div className={isLoading ? 'opacity-50 pointer-events-none' : ''}>
-              {viewMode === 'table' ? (
+              {(isMobile ? 'table' : viewMode) === 'table' ? (
                 <>
                   <TicketTable
                     tickets={tickets}

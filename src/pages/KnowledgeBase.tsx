@@ -373,7 +373,7 @@ const KnowledgeBase = () => {
           </div>
         ) : (
           <>
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-2">
               {articles.map((article) => (
                 <button
                   key={article.id}
