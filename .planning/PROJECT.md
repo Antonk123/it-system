@@ -63,6 +63,12 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - ✓ Ticket cloning with pre-filled fields — Phase 12
 - ✓ Per-theme light/dark mode with FOUC prevention and nav toggle — Phase 13
 
+- ✓ Mobile bottom tab bar with responsive navigation — Phase 16
+- ✓ Responsive card reflow for tickets and single-column KB on mobile — Phase 16
+- ✓ Skeleton loading states on all data-fetching pages — Phase 16
+- ✓ Framer Motion page transitions, staggered list reveals, and KPI entrance — Phase 16
+- ✓ prefers-reduced-motion accessibility guard on all animations — Phase 16
+
 ### Active
 
 ## Current Milestone: v1.4 Dashboard, Search & Polish
@@ -148,4 +154,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-31 after Phase 13 completion*
+*Last updated: 2026-04-05 after Phase 16 completion*
