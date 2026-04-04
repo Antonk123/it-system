@@ -33,8 +33,8 @@ Requirements for Dashboard, Search & Polish milestone.
 
 ### Micro-interactions
 
-- [ ] **ANIM-01**: Skeleton loading states visas vid datahämtning istället för tomma sidor
-- [ ] **ANIM-02**: Sidövergångar och staggered list reveals ger en polerad känsla
+- [x] **ANIM-01**: Skeleton loading states visas vid datahämtning istället för tomma sidor
+- [x] **ANIM-02**: Sidövergångar och staggered list reveals ger en polerad känsla
 
 ## Future Requirements
 
@@ -65,8 +65,8 @@ None deferred — all identified features scoped into v1.4.
 | CMD-04 | Phase 15 | Complete |
 | RESP-01 | Phase 16 | Complete |
 | RESP-02 | Phase 16 | Complete |
-| ANIM-01 | Phase 16 | Pending |
-| ANIM-02 | Phase 16 | Pending |
+| ANIM-01 | Phase 16 | Complete |
+| ANIM-02 | Phase 16 | Complete |
 
 **Coverage:**
 - v1.4 requirements: 14 total

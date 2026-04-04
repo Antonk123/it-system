@@ -61,7 +61,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 - [x] **Phase 13: Dark Mode Foundation** — Complete CSS token coverage, theme toggle in nav, and FOUC prevention (human-verify pending)
 - [x] **Phase 14: Dashboard Overview** — Aging tickets panel, today summary, and upcoming reminders widget (completed 2026-03-31)
 - [x] **Phase 15: Command Palette** — Cmd+K modal with ticket/KB search, navigation shortcuts, and quick actions (completed 2026-03-31)
-- [ ] **Phase 16: Responsive & Animation Polish** — Mobile layout, skeleton loading states, and page-load animations
+- [x] **Phase 16: Responsive & Animation Polish** — Mobile layout, skeleton loading states, and page-load animations (completed 2026-04-04)
 
 ## Phase Details
 
@@ -173,7 +173,7 @@ Plans:
 
 Plans:
 - [x] 16-01-PLAN.md — Bottom tab bar, mobile card reflow, KB single-column, Kanban hide
-- [ ] 16-02-PLAN.md — Skeleton loading states, Framer Motion page transitions and staggered reveals
+- [x] 16-02-PLAN.md — Skeleton loading states, Framer Motion page transitions and staggered reveals
 **UI hint**: yes
 
 ## Progress
@@ -195,4 +195,4 @@ Plans:
 | 13. Dark Mode Foundation | v1.4 | 1/2 | Complete    | 2026-03-31 |
 | 14. Dashboard Overview | v1.4 | 2/2 | Complete    | 2026-03-31 |
 | 15. Command Palette | v1.4 | 2/2 | Complete   | 2026-03-31 |
-| 16. Responsive & Animation Polish | v1.4 | 1/2 | In Progress|  |
+| 16. Responsive & Animation Polish | v1.4 | 2/2 | Complete   | 2026-04-04 |

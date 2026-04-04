@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.4
 milestone_name: Dashboard, Search & Polish
-status: Ready to execute
-stopped_at: Completed 16-01-PLAN.md
-last_updated: "2026-04-04T23:29:45.012Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 16-02-PLAN.md
+last_updated: "2026-04-04T23:35:38.000Z"
 progress:
   total_phases: 7
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 14
-  completed_plans: 13
+  completed_plans: 14
 ---
 
 # Project State
@@ -71,6 +71,8 @@ All decisions logged in PROJECT.md Key Decisions table.
 - [Phase 16-responsive-animation-polish]: BottomTabBar uses border-t-2 border-primary active indicator (matches sidebar border-l-2 pattern, different axis)
 - [Phase 16-responsive-animation-polish]: Mobile TicketTable card uses read-only status badge instead of Select — card taps to detail for editing
 - [Phase 16-responsive-animation-polish]: effectiveView = isMobile ? 'table' : viewMode — preserves desktop view preference while forcing list on mobile
+- [Phase 16-responsive-animation-polish]: AnimatePresence placed inside AppRoutes — useLocation requires BrowserRouter context
+- [Phase 16-responsive-animation-polish]: KPICard animationDelay prop removed — parent Dashboard.tsx staggerChildren handles entrance
 
 ### Research Flags for v1.4
 
@@ -91,6 +93,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-04T23:29:45.009Z
-Stopped at: Completed 16-01-PLAN.md
+Last session: 2026-04-04T23:35:37.997Z
+Stopped at: Completed 16-02-PLAN.md
 Resume file: None
