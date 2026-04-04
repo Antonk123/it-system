@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type TocItem = { id: string; text: string; level: number };
 
@@ -178,9 +179,14 @@ const KBArticleDetail = () => {
   if (isLoading) {
     return (
       <Layout>
-        <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-4">
-          <div className="h-8 w-48 bg-muted animate-pulse rounded" />
-          <div className="h-64 bg-muted animate-pulse rounded-lg" />
+        <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-6">
+          <Skeleton className="h-8 w-3/4" />
+          <Skeleton className="h-5 w-48" />
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-4 w-full" />
+            ))}
+          </div>
         </div>
       </Layout>
     );

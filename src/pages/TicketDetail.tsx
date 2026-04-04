@@ -66,6 +66,7 @@ import {
 import { TicketStatus } from '@/types/ticket';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const formatFileSize = (bytes: number | null) => {
   if (!bytes) return '';
@@ -159,8 +160,17 @@ const TicketDetail = () => {
   if (ticketsLoading) {
     return (
       <Layout>
-        <div className="flex items-center justify-center py-16">
-          <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+        <div className="max-w-3xl mx-auto space-y-6">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-2/3" />
+            <div className="flex gap-3">
+              <Skeleton className="h-5 w-20" />
+              <Skeleton className="h-5 w-16" />
+              <Skeleton className="h-5 w-24" />
+            </div>
+          </div>
+          <Skeleton className="h-48 w-full" />
+          <Skeleton className="h-32 w-full" />
         </div>
       </Layout>
     );
