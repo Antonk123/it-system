@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { Ticket, Clock, CheckCircle, Archive, AlertTriangle, ArrowRight, PauseCircle } from 'lucide-react';
 import { subDays, isSameDay, format, startOfDay } from 'date-fns';
@@ -12,6 +13,21 @@ import { AgingTicketsPanel } from '@/components/AgingTicketsPanel';
 import { RemindersPanel } from '@/components/RemindersPanel';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+
+// ---------------------------------------------------------------------------
+// Animation variants
+// ---------------------------------------------------------------------------
+
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const kpiContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
+};
+const kpiItem = {
+  hidden: { opacity: 0, y: 10 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: 'easeOut' } },
+};
 
 // ---------------------------------------------------------------------------
 // Dashboard
@@ -101,94 +117,114 @@ const Dashboard = () => {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <KPICard
-            label="Öppna ärenden"
-            value={stats.open}
-            icon={<Ticket className="w-5 h-5" />}
-            trend={trends.open}
-            sparklineData={sparklineData.open}
-            onClick={() => navigate('/tickets?status=open')}
-            animationDelay={0}
-            subLabel={
-              isOverviewLoading
-                ? <Skeleton className="h-3 w-16 mt-1" />
-                : dashboardOverview?.todayCounts.created_today
-                  ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.created_today} idag</span>
-                  : <span>+0 idag</span>
-            }
-          />
-          <KPICard
-            label="Pågående"
-            value={stats.inProgress}
-            icon={<Clock className="w-5 h-5" />}
-            trend={trends.inProgress}
-            sparklineData={sparklineData.inProgress}
-            onClick={() => navigate('/tickets?status=in-progress')}
-            animationDelay={100}
-          />
-          <KPICard
-            label="Väntar"
-            value={stats.waiting}
-            icon={<PauseCircle className="w-5 h-5" />}
-            trend={trends.waiting}
-            sparklineData={sparklineData.waiting}
-            onClick={() => navigate('/tickets?status=waiting')}
-            animationDelay={200}
-          />
-          <KPICard
-            label="Lösta"
-            value={stats.resolved}
-            icon={<CheckCircle className="w-5 h-5" />}
-            trend={trends.resolved}
-            sparklineData={sparklineData.resolved}
-            onClick={() => navigate('/tickets?status=resolved')}
-            animationDelay={300}
-            subLabel={
-              isOverviewLoading
-                ? <Skeleton className="h-3 w-16 mt-1" />
-                : dashboardOverview?.todayCounts.resolved_today
-                  ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.resolved_today} idag</span>
-                  : <span>+0 idag</span>
-            }
-          />
-        </div>
+        <motion.div
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+          variants={kpiContainer}
+          initial={prefersReducedMotion ? false : 'hidden'}
+          animate={prefersReducedMotion ? false : 'visible'}
+        >
+          <motion.div variants={kpiItem}>
+            <KPICard
+              label="Öppna ärenden"
+              value={stats.open}
+              icon={<Ticket className="w-5 h-5" />}
+              trend={trends.open}
+              sparklineData={sparklineData.open}
+              onClick={() => navigate('/tickets?status=open')}
+              subLabel={
+                isOverviewLoading
+                  ? <Skeleton className="h-3 w-16 mt-1" />
+                  : dashboardOverview?.todayCounts.created_today
+                    ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.created_today} idag</span>
+                    : <span>+0 idag</span>
+              }
+            />
+          </motion.div>
+          <motion.div variants={kpiItem}>
+            <KPICard
+              label="Pågående"
+              value={stats.inProgress}
+              icon={<Clock className="w-5 h-5" />}
+              trend={trends.inProgress}
+              sparklineData={sparklineData.inProgress}
+              onClick={() => navigate('/tickets?status=in-progress')}
+            />
+          </motion.div>
+          <motion.div variants={kpiItem}>
+            <KPICard
+              label="Väntar"
+              value={stats.waiting}
+              icon={<PauseCircle className="w-5 h-5" />}
+              trend={trends.waiting}
+              sparklineData={sparklineData.waiting}
+              onClick={() => navigate('/tickets?status=waiting')}
+            />
+          </motion.div>
+          <motion.div variants={kpiItem}>
+            <KPICard
+              label="Lösta"
+              value={stats.resolved}
+              icon={<CheckCircle className="w-5 h-5" />}
+              trend={trends.resolved}
+              sparklineData={sparklineData.resolved}
+              onClick={() => navigate('/tickets?status=resolved')}
+              subLabel={
+                isOverviewLoading
+                  ? <Skeleton className="h-3 w-16 mt-1" />
+                  : dashboardOverview?.todayCounts.resolved_today
+                    ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.resolved_today} idag</span>
+                    : <span>+0 idag</span>
+              }
+            />
+          </motion.div>
+        </motion.div>
 
         {/* Secondary Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <KPICard
-            label="Arkiverade"
-            value={stats.closed}
-            icon={<Archive className="w-5 h-5" />}
-            trend={trends.closed}
-            sparklineData={sparklineData.closed}
-            onClick={() => navigate('/archive')}
-            animationDelay={0}
-            subLabel={
-              isOverviewLoading
-                ? <Skeleton className="h-3 w-16 mt-1" />
-                : dashboardOverview?.todayCounts.closed_today
-                  ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.closed_today} idag</span>
-                  : <span>+0 idag</span>
-            }
-          />
-        </div>
+        <motion.div
+          className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+          variants={kpiContainer}
+          initial={prefersReducedMotion ? false : 'hidden'}
+          animate={prefersReducedMotion ? false : 'visible'}
+        >
+          <motion.div variants={kpiItem}>
+            <KPICard
+              label="Arkiverade"
+              value={stats.closed}
+              icon={<Archive className="w-5 h-5" />}
+              trend={trends.closed}
+              sparklineData={sparklineData.closed}
+              onClick={() => navigate('/archive')}
+              subLabel={
+                isOverviewLoading
+                  ? <Skeleton className="h-3 w-16 mt-1" />
+                  : dashboardOverview?.todayCounts.closed_today
+                    ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.closed_today} idag</span>
+                    : <span>+0 idag</span>
+              }
+            />
+          </motion.div>
+        </motion.div>
 
         {/* Dashboard Panels */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="animate-fade-in" style={{ animationDelay: '0ms' }}>
+        <motion.div
+          className="grid grid-cols-1 lg:grid-cols-2 gap-4"
+          variants={kpiContainer}
+          initial={prefersReducedMotion ? false : 'hidden'}
+          animate={prefersReducedMotion ? false : 'visible'}
+        >
+          <motion.div variants={kpiItem}>
             <AgingTicketsPanel
               tickets={dashboardOverview?.agingTickets}
               isLoading={isOverviewLoading}
             />
-          </div>
-          <div className="animate-fade-in" style={{ animationDelay: '100ms' }}>
+          </motion.div>
+          <motion.div variants={kpiItem}>
             <RemindersPanel
               reminders={upcomingReminders}
               isLoading={isRemindersLoading}
             />
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
 
         {/* Critical Tickets Alert */}
         {stats.critical > 0 && (

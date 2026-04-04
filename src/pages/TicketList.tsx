@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Download, Upload, LayoutGrid, Columns } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -17,6 +18,17 @@ import { Button } from '@/components/ui/button';
 import { TicketStatus, TicketPriority } from '@/types/ticket';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const listContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.05 } },
+};
+const listItem = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: 'easeOut' } },
+};
 
 const statusLabels: Record<TicketStatus, string> = {
   'open': 'Öppen',
@@ -293,9 +305,17 @@ const TicketList = () => {
           searchPlaceholder="Sök ärenden..."
         />
 
-        {/* Loading state */}
+        {/* Loading state / content with crossfade */}
+        <AnimatePresence mode="wait">
         {isLoading && tickets.length === 0 ? (
-          isMobile ? (
+          <motion.div
+            key="skeleton"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+          {isMobile ? (
             <div className="space-y-2">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="bg-card rounded-lg border border-border p-3 space-y-2">
@@ -321,9 +341,15 @@ const TicketList = () => {
                 </div>
               ))}
             </div>
-          )
+          )}
+          </motion.div>
         ) : (
-          <>
+          <motion.div
+            key="content"
+            initial={prefersReducedMotion ? false : 'hidden'}
+            animate={prefersReducedMotion ? false : 'visible'}
+            variants={listContainer}
+          >
             <div className={isLoading ? 'opacity-50 pointer-events-none' : ''}>
               {(isMobile ? 'table' : viewMode) === 'table' ? (
                 <>
@@ -361,8 +387,9 @@ const TicketList = () => {
                 />
               )}
             </div>
-          </>
+          </motion.div>
         )}
+        </AnimatePresence>
       </div>
     </Layout>
   );

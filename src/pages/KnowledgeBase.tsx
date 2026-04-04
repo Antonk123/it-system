@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle } from 'lucide-react';
 import { Layout } from '@/components/Layout';
@@ -23,6 +24,17 @@ import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+
+const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const listContainer = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.05 } },
+};
+const listItem = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: 'easeOut' } },
+};
 
 const TYPE_LABELS: Record<string, string> = {
   'how-to': 'Instruktion',
@@ -357,8 +369,16 @@ const KnowledgeBase = () => {
         </div>
 
         {/* Articles list */}
+        <AnimatePresence mode="wait">
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <motion.div
+            key="skeleton"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
+          >
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="bg-card rounded-lg border border-border p-4 space-y-2">
                 <Skeleton className="h-5 w-full" />
@@ -368,22 +388,34 @@ const KnowledgeBase = () => {
                 </div>
               </div>
             ))}
-          </div>
+          </motion.div>
         ) : articles.length === 0 ? (
-          <div className="text-center py-16 text-muted-foreground">
+          <motion.div
+            key="empty"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="text-center py-16 text-muted-foreground"
+          >
             <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">
               {search || categoryFilter !== 'all' || typeFilter !== 'all' || tagFilter !== 'all'
                 ? 'Inga artiklar matchar sökningen'
                 : 'Inga artiklar ännu — skapa din första!'}
             </p>
-          </div>
+          </motion.div>
         ) : (
-          <>
-            <div className="grid grid-cols-1 gap-2">
-              {articles.map((article) => (
+          <motion.div
+            key="content"
+            initial={prefersReducedMotion ? false : 'hidden'}
+            animate={prefersReducedMotion ? false : 'visible'}
+            variants={listContainer}
+            className="grid grid-cols-1 gap-2"
+          >
+            {articles.map((article) => (
+              <motion.div key={article.id} variants={listItem}>
                 <button
-                  key={article.id}
                   onClick={() => navigate(`/kb/${article.id}`)}
                   className={cn(
                     'w-full text-left p-4 rounded-lg border border-border bg-card',
@@ -434,10 +466,11 @@ const KnowledgeBase = () => {
                     </div>
                   </div>
                 </button>
-              ))}
-            </div>
-          </>
+              </motion.div>
+            ))}
+          </motion.div>
         )}
+        </AnimatePresence>
       </div>
     </Layout>
   );

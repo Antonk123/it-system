@@ -3,7 +3,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { AnimatePresence } from "framer-motion";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { useEffect } from "react";
 import Index from "./pages/Index";
@@ -92,30 +93,35 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-const AppRoutes = () => (
-  <Routes>
-    <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-    <Route path="/reset-password" element={<ResetPassword />} />
-    <Route path="/submit-ticket" element={<PublicTicketForm />} />
-    <Route path="/shared/:token" element={<SharedTicket />} />
-    <Route path="/kb/shared/:token" element={<SharedKBArticle />} />
-    <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-    <Route path="/tickets" element={<ProtectedRoute><TicketList /></ProtectedRoute>} />
-    <Route path="/tickets/new" element={<ProtectedRoute><TicketForm /></ProtectedRoute>} />
-    <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetail /></ProtectedRoute>} />
-    <Route path="/tickets/:id/edit" element={<ProtectedRoute><TicketForm /></ProtectedRoute>} />
-    <Route path="/recurring" element={<ProtectedRoute><Recurring /></ProtectedRoute>} />
-    <Route path="/archive" element={<ProtectedRoute><Archive /></ProtectedRoute>} />
-    <Route path="/users" element={<ProtectedRoute><UserList /></ProtectedRoute>} />
-    <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-    <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-    <Route path="/kb" element={<ProtectedRoute><KnowledgeBase /></ProtectedRoute>} />
-    <Route path="/kb/new" element={<ProtectedRoute><KBArticleForm /></ProtectedRoute>} />
-    <Route path="/kb/:id" element={<ProtectedRoute><KBArticleDetail /></ProtectedRoute>} />
-    <Route path="/kb/:id/edit" element={<ProtectedRoute><KBArticleForm /></ProtectedRoute>} />
-    <Route path="*" element={<NotFound />} />
-  </Routes>
-);
+const AppRoutes = () => {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/submit-ticket" element={<PublicTicketForm />} />
+        <Route path="/shared/:token" element={<SharedTicket />} />
+        <Route path="/kb/shared/:token" element={<SharedKBArticle />} />
+        <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+        <Route path="/tickets" element={<ProtectedRoute><TicketList /></ProtectedRoute>} />
+        <Route path="/tickets/new" element={<ProtectedRoute><TicketForm /></ProtectedRoute>} />
+        <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetail /></ProtectedRoute>} />
+        <Route path="/tickets/:id/edit" element={<ProtectedRoute><TicketForm /></ProtectedRoute>} />
+        <Route path="/recurring" element={<ProtectedRoute><Recurring /></ProtectedRoute>} />
+        <Route path="/archive" element={<ProtectedRoute><Archive /></ProtectedRoute>} />
+        <Route path="/users" element={<ProtectedRoute><UserList /></ProtectedRoute>} />
+        <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        <Route path="/kb" element={<ProtectedRoute><KnowledgeBase /></ProtectedRoute>} />
+        <Route path="/kb/new" element={<ProtectedRoute><KBArticleForm /></ProtectedRoute>} />
+        <Route path="/kb/:id" element={<ProtectedRoute><KBArticleDetail /></ProtectedRoute>} />
+        <Route path="/kb/:id/edit" element={<ProtectedRoute><KBArticleForm /></ProtectedRoute>} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </AnimatePresence>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

@@ -20,7 +20,6 @@ interface KPICardProps {
   };
   gradient?: string;
   className?: string;
-  animationDelay?: number;
   onClick?: () => void;
   subLabel?: string | ReactNode;
 }
@@ -35,7 +34,6 @@ export const KPICard = ({
   sparklineData,
   trend,
   className,
-  animationDelay = 0,
   onClick,
   subLabel,
 }: KPICardProps) => {
@@ -47,11 +45,7 @@ export const KPICard = ({
     : '';
 
   return (
-    <div
-      className="animate-fade-in"
-      style={{ animationDelay: `${animationDelay}ms` }}
-    >
-      <Card
+    <Card
         className={cn(
           'relative overflow-hidden transition-all duration-300 hover:-translate-y-1',
           'hover:shadow-2xl hover:shadow-primary/20',
@@ -105,6 +99,5 @@ export const KPICard = ({
         {/* Decorative gradient overlay */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50 pointer-events-none" />
       </Card>
-    </div>
   );
 };
