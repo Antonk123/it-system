@@ -172,7 +172,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 16-01-PLAN.md — Bottom tab bar, mobile card reflow, KB single-column, Kanban hide
+- [x] 16-01-PLAN.md — Bottom tab bar, mobile card reflow, KB single-column, Kanban hide
 - [ ] 16-02-PLAN.md — Skeleton loading states, Framer Motion page transitions and staggered reveals
 **UI hint**: yes
 
@@ -195,4 +195,4 @@ Plans:
 | 13. Dark Mode Foundation | v1.4 | 1/2 | Complete    | 2026-03-31 |
 | 14. Dashboard Overview | v1.4 | 2/2 | Complete    | 2026-03-31 |
 | 15. Command Palette | v1.4 | 2/2 | Complete   | 2026-03-31 |
-| 16. Responsive & Animation Polish | v1.4 | 0/2 | Not started | - |
+| 16. Responsive & Animation Polish | v1.4 | 1/2 | In Progress|  |

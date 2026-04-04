@@ -28,8 +28,8 @@ Requirements for Dashboard, Search & Polish milestone.
 
 ### Responsiv Design
 
-- [ ] **RESP-01**: Layout anpassas för mobil med bottom navigation på små skärmar
-- [ ] **RESP-02**: Tabeller och listor är läsbara och scrollbara på mobil
+- [x] **RESP-01**: Layout anpassas för mobil med bottom navigation på små skärmar
+- [x] **RESP-02**: Tabeller och listor är läsbara och scrollbara på mobil
 
 ### Micro-interactions
 
@@ -63,8 +63,8 @@ None deferred — all identified features scoped into v1.4.
 | CMD-02 | Phase 15 | Complete |
 | CMD-03 | Phase 15 | Complete |
 | CMD-04 | Phase 15 | Complete |
-| RESP-01 | Phase 16 | Pending |
-| RESP-02 | Phase 16 | Pending |
+| RESP-01 | Phase 16 | Complete |
+| RESP-02 | Phase 16 | Complete |
 | ANIM-01 | Phase 16 | Pending |
 | ANIM-02 | Phase 16 | Pending |
 
