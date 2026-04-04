@@ -22,7 +22,7 @@ created: 2026-04-05
 | Preset | default, baseColor: slate, cssVariables: true | components.json |
 | Component library | Radix UI (via shadcn) | components.json |
 | Icon library | lucide-react ^0.462.0 | package.json |
-| Font (sans) | Plus Jakarta Sans 400/500/600/700/800 | tailwind.config.ts / index.css |
+| Font (sans) | Plus Jakarta Sans 400/700 | tailwind.config.ts / index.css |
 | Font (serif) | Crimson Pro (KB article body) | tailwind.config.ts |
 | Font (mono) | JetBrains Mono (code blocks) | tailwind.config.ts |
 | Animation library | Framer Motion v12.38 | CONTEXT.md D-10 |
@@ -52,18 +52,20 @@ Exceptions:
 
 ## Typography
 
+Two weights only: 400 (regular) and 700 (bold).
+
 | Role | Size | Weight | Line Height | Usage |
 |------|------|--------|-------------|-------|
 | Body | 14px (text-sm) | 400 (regular) | 1.5 | Default prose, ticket descriptions, KB body |
-| Label | 12px (text-xs) | 600 (semibold) | 1.4 | Badge labels, meta info, panel headers, tab bar labels |
+| Label | 12px (text-xs) | 700 (bold) | 1.4 | Badge labels, meta info, panel headers, tab bar labels |
 | Heading | 20px (text-xl) | 700 (bold) | 1.2 | Page headings (Dashboard "Översikt", TicketList title) |
 | Display | 24px (text-2xl) | 700 (bold) | 1.1 | KPI card numbers (AnimatedNumber output) |
 
 Notes (from codebase scan):
-- KPI card value: `text-2xl font-bold` — already matches Display row above
-- KPI card label: `text-xs font-medium uppercase tracking-wider` — Label row, uppercase variant
-- Panel row title: `text-sm font-semibold` — Body size at 600 weight (within 2-weight rule: 400 + semibold/700 tolerated at sm for list items)
-- Bottom tab bar labels: `text-xs font-semibold` — Label row
+- KPI card value: `text-2xl font-bold` — matches Display row above
+- KPI card label: `text-xs font-bold uppercase tracking-wider` — Label row, uppercase variant
+- Panel row title: `text-sm font-bold` — Body size at bold weight
+- Bottom tab bar labels: `text-xs font-bold` — Label row
 
 ---
 
@@ -206,7 +208,7 @@ Same stagger container pattern as list reveal above. Stagger delay: 0.07s per ca
 - **Active state:** icon + label rendered in `text-primary` (accent color). Active indicator: 2px top border in `bg-primary` above the active tab item (pill/bar at top edge of the item, not below)
 - **Inactive state:** icon + label in `text-muted-foreground`
 - **Touch target:** each item is `flex-1 min-h-[44px] flex flex-col items-center justify-center gap-0.5`
-- **Label:** `text-xs font-semibold` — visible always (not hidden), 10px label below icon
+- **Label:** `text-xs font-bold` — visible always (not hidden), 10px label below icon
 - **Icon size:** 20px (w-5 h-5)
 - **Safe area:** add `pb-safe` or `padding-bottom: env(safe-area-inset-bottom)` for iOS home indicator clearance
 
@@ -217,9 +219,9 @@ Same stagger container pattern as list reveal above. Stagger delay: 0.07s per ca
 Each ticket row on mobile renders as a card (`bg-card rounded-lg border border-border p-3`).
 
 Fields shown (in order):
-1. Title — `text-sm font-semibold text-foreground truncate` (single line, truncated)
+1. Title — `text-sm font-bold text-foreground truncate` (single line, truncated)
 2. Status badge — existing shadcn Badge variant, on the same row as title right-aligned
-3. Priority indicator — colored dot + `text-xs font-semibold text-muted-foreground` label
+3. Priority indicator — colored dot + `text-xs font-bold text-muted-foreground` label
 4. Age — `text-xs text-muted-foreground` (e.g. "3 dagar sedan")
 
 Tap target: entire card is tappable, navigates to ticket detail. Use `cursor-pointer` and `hover:bg-accent/5 active:bg-accent/10 transition-colors`.
