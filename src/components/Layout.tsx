@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/AuthContext';
 import { QuickCaptureFAB } from '@/components/QuickCaptureFAB';
+import { BottomTabBar } from '@/components/BottomTabBar';
 import { applyMode, getStoredMode, saveModeTheme, ModeTheme } from '@/lib/appearance';
 import { dispatchModeChange } from '@/hooks/useMode';
 
@@ -307,16 +308,19 @@ export const Layout = ({
           </div>
         </div>
 
-        <div className="p-5 lg:p-6 relative z-10">
+        <div className="p-5 pb-20 md:pb-5 lg:p-6 relative z-10">
           {children}
         </div>
       </main>
 
       <QuickCaptureFAB className={cn(
         "left-4 lg:transition-[left] lg:duration-300",
+        "bottom-[72px] md:bottom-6",
         sidebarCollapsed ? "lg:left-20" : "lg:left-[17rem]"
       )} />
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
+
+      <BottomTabBar />
     </div>;
 };
