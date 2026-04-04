@@ -54,7 +54,7 @@ Full details: `.planning/milestones/v1.3-ROADMAP.md`
 
 </details>
 
-### 🚧 v1.4 Dashboard, Search & Polish (In Progress)
+### v1.4 Dashboard, Search & Polish (In Progress)
 
 **Milestone Goal:** Give the system a complete overview, fast global search with navigation, and a polished experience with dark mode, responsive design, and micro-interactions.
 
@@ -172,8 +172,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [x] 15-01-PLAN.md — Build CommandPalette component, search hook, and recently-viewed utility
-- [ ] 15-02-PLAN.md — Wire palette into Layout, remove GlobalSearch, add KB recently-viewed tracking
+- [ ] 16-01-PLAN.md — Bottom tab bar, mobile card reflow, KB single-column, Kanban hide
+- [ ] 16-02-PLAN.md — Skeleton loading states, Framer Motion page transitions and staggered reveals
 **UI hint**: yes
 
 ## Progress
@@ -195,4 +195,4 @@ Plans:
 | 13. Dark Mode Foundation | v1.4 | 1/2 | Complete    | 2026-03-31 |
 | 14. Dashboard Overview | v1.4 | 2/2 | Complete    | 2026-03-31 |
 | 15. Command Palette | v1.4 | 2/2 | Complete   | 2026-03-31 |
-| 16. Responsive & Animation Polish | v1.4 | 0/? | Not started | - |
+| 16. Responsive & Animation Polish | v1.4 | 0/2 | Not started | - |
