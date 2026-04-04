@@ -195,4 +195,4 @@ Plans:
 | 13. Dark Mode Foundation | v1.4 | 1/2 | Complete    | 2026-03-31 |
 | 14. Dashboard Overview | v1.4 | 2/2 | Complete    | 2026-03-31 |
 | 15. Command Palette | v1.4 | 2/2 | Complete   | 2026-03-31 |
-| 16. Responsive & Animation Polish | v1.4 | 2/2 | Complete   | 2026-04-04 |
+| 16. Responsive & Animation Polish | v1.4 | 2/2 | Complete    | 2026-04-04 |
