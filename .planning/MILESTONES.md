@@ -1,5 +1,21 @@
 # Milestones
 
+## v1.4 Dashboard, Search & Polish (Shipped: 2026-04-05)
+
+**Phases completed:** 7 phases, 14 plans, 23 tasks
+
+**Key accomplishments:**
+
+- 4 complete per-theme light token sets in index.css with full coverage (primary, accent, ring, sidebar, chart, shadows, search-glow), FOUC-blocking script in index.html, and reactive useMode hook
+- Two Express aggregation routes and two React Query hooks for aging tickets, today counts, and upcoming reminders — the data foundation for Plan 02 panel rendering.
+- AgingTicketsPanel and RemindersPanel components with Swedish copy, severity tints, skeleton states, and KPI card idag sub-labels wired to useDashboardOverview and useUpcomingReminders hooks
+- CommandDialog modal with debounced ticket+KB search, merged recently-viewed history, navigation group, and quick actions including theme toggle
+- One-liner:
+- Bottom tab bar with 4 tabs, mobile ticket cards with age display, single-column KB list, and Kanban toggle hidden on mobile
+- TicketList.tsx
+
+---
+
 ## v1.2 Knowledge Base Expansion (Shipped: 2026-03-29)
 
 **Phases completed:** 3 phases, 6 plans, 7 tasks
