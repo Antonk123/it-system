@@ -1,188 +1,223 @@
-# Feature Landscape: Dashboard, Search & Polish (v1.4)
+# Feature Research: v1.5 Productivity & Insights
 
-**Domain:** Internal IT ticket system — single-user, existing React + shadcn + Framer Motion stack
-**Researched:** 2026-03-29
-**Confidence:** HIGH — direct codebase analysis of all relevant files + domain knowledge of mature helpdesk and internal tools
-
----
-
-## What Already Exists (Baseline)
-
-Do not rebuild these. They are fully implemented and are the foundation for the new features.
-
-| Existing Feature | Implementation |
-|-----------------|----------------|
-| Dashboard KPI cards with sparklines and trends | `Dashboard.tsx`, `KPICard.tsx`, `SparklineChart.tsx` |
-| Dashboard queue cards from saved filter views | `Dashboard.tsx`, `useFilterViews`, localStorage-backed |
-| Global search bar (inline in nav header) with Cmd+K | `GlobalSearch.tsx` — searches tickets + users, debounced, backend-powered |
-| Search shows: quick actions, recent tickets, popular tags/categories | `GlobalSearch.tsx` — client-side enrichment on idle state |
-| Theme system: 5 themes (Slate, Midnight, Graphite, Stone, Daylight) | `index.css` class-based CSS vars, next-themes, Settings.tsx |
-| Light/dark mode toggle (per-theme mode classes: `.light`, `.dark`) | Settings.tsx, `applyMode()`, localStorage persistence |
-| Framer Motion already installed | `package.json` — `framer-motion@^12.38.0` |
-| cmdk already installed | `package.json` — `cmdk@^1.1.1`, used in `Command*` components |
-| next-themes already installed | `package.json` — `next-themes@^0.3.0`, ThemeProvider wrapping App |
-| Responsive sidebar with collapse/expand | `Layout.tsx` — open/closed state, icon-only collapsed mode |
-| Critical tickets alert banner on dashboard | `Dashboard.tsx` — destructive alert for critical+non-closed |
+**Domain:** Internal IT ticket system — single-user, existing React + Express + SQLite + PWA stack
+**Researched:** 2026-04-05
+**Confidence:** HIGH — domain patterns verified against Freshdesk, Zendesk, Atera, and MDN/web-push-libs documentation
 
 ---
 
-## Table Stakes
+## What Already Exists (Baseline — Do Not Rebuild)
 
-Features users expect from a mature helpdesk overview. Missing = dashboard feels unfinished.
-
-| Feature | Why Expected | Complexity | Dependency on Existing | Notes |
-|---------|-------------|------------|------------------------|-------|
-| **Aging tickets section on dashboard** | Standard in Freshdesk, Zendesk, ManageEngine. Tickets open for 3+ days without update are invisible in the current stats grid. Without aging visibility, SLA drift is silent. | Medium | Needs `updated_at` filtering (already on ticket model). Backend query or client-side sort by `updatedAt ASC` where status != closed. | Show top 5-10 oldest-untouched open/in-progress tickets. "No update in X days" label. Click navigates to ticket. No new schema — filter existing data. |
-| **"Today at a glance" summary on dashboard** | Helpdesk dashboards universally show daily activity: created today, closed today, resolved today. Gives the single user a daily work rhythm anchor. | Low | `created_at`, `resolved_at`, `closed_at` all exist on tickets. Pure client-side filtering by today's date using existing ticket data. | 3-4 inline stat chips above or below KPI grid. "3 created · 1 resolved · 2 closed today." Compact, not another KPI card row. |
-| **Reminders / due-today widget on dashboard** | `ReminderList.tsx` exists and reminders exist in the DB. A dashboard widget showing upcoming/overdue reminders is a natural home for this data. | Low-Medium | `reminders` table already exists. `GET /api/reminders` already exists (check if it does). Reuse `ReminderList` component or a compact variant. | Show top 3-5 upcoming reminders with ticket link. Compact card on dashboard. "Due today" badge for reminders due today. |
-| **Command palette as modal (not inline)** | The current GlobalSearch is an inline search bar in the nav header. Standard Cmd+K UX (Linear, Notion, Vercel, GitHub) is a full-screen modal overlay, not inline. The inline approach limits keyboard navigation, result density, and action scope. | Medium | `cmdk` is already installed and `Command*` components from shadcn are already used inside `GlobalSearch.tsx`. Refactor: keep inline input as trigger, open Dialog/modal on focus/Cmd+K. | Use `CommandDialog` from shadcn (wraps `cmdk` in Radix Dialog). Existing search logic (debounce, backend fetch, recent tickets, popular tags) moves into the modal. |
-| **Cmd+K includes KB articles in results** | The current global search only searches tickets and users. KB articles have their own FTS5 search API (`GET /api/kb/articles?search=`). Users expect cross-content search from a command palette. | Medium | KB search API already exists. Add parallel fetch to existing search flow. Add a "KB Artiklar" result group in the command list. | Run ticket search and KB search in parallel. Show top 5 KB results. Navigate to `/kb/:id` on select. |
-| **Cmd+K includes navigation shortcuts** | Command palettes in Linear, Vercel, GitHub always include "Go to [page]" actions. These are zero-effort to add and train muscle memory. | Very Low | Pure frontend. Hard-coded list of nav items already in `Layout.tsx`. Add as a "Navigation" group when search is empty. | Items: "Gå till Alla ärenden", "Gå till KB", "Gå till Rapporter", "Nytt ärende" etc. Show in idle state. |
-| **Dark mode accessible from Cmd+K** | Power users expect settings-level actions in the command palette. "Byt till ljust läge" / "Byt till mörkt läge" as an action. | Very Low | `useTheme()` from next-themes is already available. Add as action in command palette. | Single item: "Växla ljust/mörkt läge". Calls `setTheme()` + `applyMode()` same as Settings.tsx does. |
-| **Loading states (skeleton screens)** | The dashboard, ticket list, and KB list all show blank/empty states while data loads. Skeleton screens communicate "loading" instead of "empty", prevent layout shift, and feel faster. | Low-Medium | Framer Motion already installed for animation. React Query (`@tanstack/react-query`) already installed — `isLoading` flag available on all hooks. | Add skeleton variants for: KPI cards (rectangle shimmer), ticket list rows (row shimmer), KB article list (row shimmer). Use CSS shimmer animation, no new library. |
-| **Light mode fully styled** | The `.light` and `.dark` mode classes exist in `index.css`, but the light mode (`theme-daylight`) may have incomplete coverage across all components. A fully working light mode is table stakes for UI polish. | Medium | Light mode CSS vars already defined for `theme-daylight`. Audit coverage on all pages and components — fix any color tokens that don't respond to `.light` class. | Systematic audit pass: Dashboard, TicketList, Archive, KB, Reports, Settings, Recurring. Fix any hardcoded dark values. No new libraries needed. |
-
----
-
-## Differentiators
-
-Features that make this internal tool feel genuinely polished beyond basic functionality.
-
-| Feature | Value Proposition | Complexity | Dependencies | Notes |
-|---------|-------------------|------------|--------------|-------|
-| **Cmd+K actions: clone ticket, mark resolved** | Real command palette power comes from actions, not just navigation. "Clone ticket #123" or "Mark #123 as resolved" without opening the ticket detail page. | Medium-High | Existing clone logic in `TicketDetail.tsx`. Existing status update API. In command palette, show recent/active tickets as actionable items with action sub-commands. | Requires two-step selection UX: select ticket → select action. More complex than navigation but high UX value. Defer to Phase 2 if scoping is tight. |
-| **Staggered page-load animations** | The dashboard and ticket list currently have no entry animations. A well-orchestrated stagger on KPI cards and list rows (fade + slide-up, 50ms delay each) makes the app feel responsive and alive. | Low | Framer Motion already installed at v12. Wrap cards/rows in `motion.div` with `variants` and `staggerChildren`. | One well-done stagger beats scattered micro-interactions. Focus: Dashboard KPI cards stagger, ticket list rows on first load. Use `AnimatePresence` for unmount. |
-| **Toast confirmation micro-interactions** | Status changes, ticket creates, and comment submits already use `toast()` from Sonner. Add brief scale/glow animations on the interactive elements (status badge, submit button) at the moment of action. | Low | Framer Motion. Existing Sonner toast. Add `whileTap={{ scale: 0.97 }}` and `whileHover={{ scale: 1.02 }}` on key interactive cards. | Very high polish-to-effort ratio. Apply sparingly: KPI cards, status badge on update, quick-capture FAB. |
-| **Responsive mobile layout** | The sidebar collapses but does not become a bottom nav or drawer on mobile. On screens < 768px, a bottom navigation bar is the expected mobile pattern for internal tools (ServiceNow mobile, Jira mobile). | Medium | `Layout.tsx`. No new dependencies — Radix Sheet/vaul already installed for drawers. | Bottom nav with 4 key items (Dashboard, Tickets, KB, New Ticket). Hamburger triggers a slide-over drawer for full nav. Requires breakpoint-aware layout switch in `Layout.tsx`. |
-| **Responsive ticket list / kanban** | Kanban view does not work on mobile (columns overflow). List view works but the table columns are too wide. At mobile, Kanban should collapse to a single-column status-filtered view. | Medium | `KanbanView.tsx`, `TicketTable.tsx`. Pure CSS + conditional render. | Hide column headers on mobile, stack cards vertically. Show status selector to switch "active column" view. |
-| **Dark mode toggle in nav header** | The current mode toggle is buried in Settings. A one-click toggle in the nav header (sun/moon icon) is standard in all polished tools. | Very Low | `useTheme()` hook, `applyMode()` function. Add icon button to `Layout.tsx` header. | 1 icon button, 5 lines of code. Highest polish-to-effort ratio of any feature in this milestone. |
-| **Keyboard shortcut hints visible in UI** | Show keyboard shortcut hints inline on hover or in the command palette header area. E.g., "⌘K to search", "/ to focus KB search". Trains users on available shortcuts. | Very Low | Existing shortcuts already implemented: Cmd+K in `GlobalSearch.tsx`, `/` for KB search in `KnowledgeBase.tsx`. Add visual badges. | Add `<kbd>` elements next to the search bar and in empty states. CSS-styled keyboard key appearance. |
+| Existing Feature | Relevant to v1.5 |
+|-----------------|-----------------|
+| Tickets with status, priority, categories, tags, custom fields | Time tracking attaches to tickets |
+| KB articles with FTS5 search, `GET /api/kb/articles?search=` endpoint | KB sidebar search reuses this API |
+| Command palette (Cmd+K), recently-viewed via localStorage | KB sidebar uses same FTS5 backend |
+| Reminders system with node-cron scheduler | Push notifications fire from same triggers |
+| Email notifications via nodemailer/SMTP | Push replaces / augments email reminders |
+| Reports page with SQL GROUP BY analytics | Time report data feeds existing Reports page |
+| SQLite database at `/app/data/database.sqlite` | Backup downloads this file |
+| File uploads at `/app/data/uploads/` | Backup zips attachments alongside DB |
+| vite-plugin-pwa 0.20.5 with Workbox service worker | Push requires service worker — already registered |
+| `node-cron` scheduler already running in-process | Push dispatch runs from same scheduler |
 
 ---
 
-## Anti-Features
+## Feature Landscape
 
-Explicitly do not build these in v1.4.
+### Table Stakes (Users Expect These)
 
-| Anti-Feature | Why Avoid | What to Do Instead |
-|-------------|-----------|-------------------|
-| **AI-powered summaries / smart inbox** | External API dependency, cost, privacy. The single-user context makes "smart routing" meaningless. | Dashboard aging sort gives the same "what needs attention?" signal without AI. |
-| **Custom dashboard widget builder (drag/drop)** | Queue cards already provide user-defined dashboard widgets via saved filter views. A full drag-drop widget canvas (like Grafana) is massive complexity for one user. | The existing queue card system + the new aging/reminders sections is sufficient. |
-| **Real-time push / WebSocket updates** | Single-user tool. No race conditions, no need to push updates from other sessions. SQLite in-process doesn't support concurrent writes cleanly anyway. | React Query's `refetchInterval` (already in use) is sufficient for live counts. |
-| **PWA offline mode** | Already out of scope per PROJECT.md. Offline support requires service workers, cache strategies, and sync conflict resolution. | Docker deployment with reliable LAN access is the deployment model. |
-| **Multi-theme animated transitions** | Animating between themes (fade to black then reveal new theme) is a design distraction that adds complexity with no productivity value. | Instant theme switch (current behavior) is correct. |
-| **Command palette history / frecency** | Storing and ranking command history (like Raycast) adds state management complexity. For a single-user tool with <10 actions, the quick-actions list is always the same. | Show hard-coded "Snabbåtgärder" group. Recent tickets already show last 3 visited. |
-| **Notification bell / inbox feed** | Ticket status changes + reminders are the only "notifications" in a single-user system. Adding a notification feed duplicates information already visible on the dashboard. | Dashboard reminders widget + existing email notifications are sufficient. |
-| **Per-component dark mode toggle** | Some tools let individual components toggle their own color mode. This adds CSS complexity with no UX benefit. | One global mode toggle in the nav header is the correct pattern. |
+Features expected from mature ticketing tools. Missing = feature feels unfinished or broken.
+
+| Feature | Why Expected | Complexity | Notes |
+|---------|--------------|------------|-------|
+| **Manual time entry on ticket** | Every helpdesk with time tracking (Freshdesk, Atera, Jira Service Desk) has a "Log Time" panel on the ticket detail page. Manual entry is the baseline: enter hours + minutes, optional note, save. | MEDIUM | New `time_logs` table (ticket_id, duration_minutes, note, logged_at). New `POST /api/tickets/:id/time-logs` + `GET`. No new schema complexity — straightforward join. |
+| **Total time summary on ticket detail** | Once time is logged, the ticket must show a "Total time spent: 2h 30m" summary. Missing this makes logging feel pointless. | LOW | Pure client-side sum of all `time_logs.duration_minutes` for the ticket. Display as formatted "Xh Ym" in ticket metadata row. |
+| **Time log list on ticket (who logged, when, note)** | Freshdesk and Atera both show a log list under the ticket. Even for single-user, seeing "Logged 45m on 2026-03-15: Set up printer" is essential for audit trails. | LOW | List from `GET /api/tickets/:id/time-logs`. Render as a card section in ticket detail, below comments. |
+| **Delete time log entry** | Users make mistakes. Without delete, incorrect entries pollute the total. Every tool provides delete on log entries. | LOW | `DELETE /api/time-logs/:id`. Soft delete or hard delete — hard delete is sufficient for single-user. |
+| **Time summary in Reports** | Time tracking without reporting is useless. Standard pattern: total hours by category, top 5 tickets by time, average resolution time. | MEDIUM | New `/api/reports/time` endpoint with GROUP BY queries. Add a "Tid" tab to existing Reports page (already has 4 tabs). Uses recharts (already installed). |
+| **Browser push notification delivery** | Once the user subscribes, push notifications must actually fire and arrive in the OS notification center — on desktop (Chrome/Firefox) and on mobile (iOS 16.4+ via PWA home screen). | HIGH | Requires: VAPID key pair, `push_subscriptions` table in SQLite, `web-push` npm package on backend, service worker `push` event handler. Most complex part of PWA push. |
+| **Notification permission opt-in prompt** | Browsers require explicit permission for push. The UI must have a clear "Enable notifications" button that triggers `Notification.requestPermission()` and `pushManager.subscribe()`. | LOW | Settings page already exists. Add a "Notifieringar" section with enable/disable toggle. Must be triggered by user gesture (browser requirement). |
+| **Reminder fires push notification** | The existing reminder scheduler (node-cron) must dispatch push notifications when reminders are due. This is the primary use case — being notified of a ticket reminder without the app open. | MEDIUM | Hook into existing `checkReminders()` cron job. When reminder triggers, call `webpush.sendNotification()` to all stored subscriptions. |
+| **Backup download button** | Admin tools universally offer a "download backup" button. A single-user self-hosted system that can't be backed up by the user is fragile. Downloadable zip = data ownership. | MEDIUM | `GET /api/admin/backup` endpoint: copy SQLite to temp file (safe read), zip with file uploads directory, stream to browser as `.zip`. Uses `archiver` or `adm-zip` npm package. |
+| **Backup includes attachments** | A DB-only backup is incomplete — ticket attachments (files in `/app/data/uploads/`) must be included. Users expect a self-contained archive. | LOW-MEDIUM | Bundle `/app/data/uploads/` into the same zip alongside the SQLite file. Depends on backup endpoint above. |
+| **KB search inside ticket detail view** | Zendesk, Freshdesk, and Linear all embed a KB/article search panel in the ticket sidebar. Without it, finding the right KB article requires navigating away, losing ticket context. | MEDIUM | New collapsible sidebar section in `TicketDetail.tsx`. Reuses `GET /api/kb/articles?search=` endpoint. Shows top 5 results with "Link to ticket" action. |
+| **Link KB article from ticket detail** | Searching KB is only half the value. The user must be able to link an article to the ticket without leaving the ticket view. The existing `ticket_kb_links` table and link API already exist. | LOW | Reuses `POST /api/tickets/:id/kb-links` (already exists from v1.2 work). In the KB sidebar search results, show a "Link article" button per result. |
+
+---
+
+### Differentiators (Competitive Advantage)
+
+Features beyond the baseline that improve this specific single-user workflow.
+
+| Feature | Value Proposition | Complexity | Notes |
+|---------|-------------------|------------|-------|
+| **Timer (start/stop) on ticket** | Freshdesk and Atera offer a live timer on ticket detail. For an IT technician actively working a ticket, clicking "Start" and "Stop" is faster than mentally tracking time and entering it later. | MEDIUM | Client-side timer using `Date.now()`. On "Stop", open a pre-filled "Log time" dialog with computed duration. No backend timer state — only the final log entry is persisted. |
+| **Aging ticket push notifications** | Beyond reminders, proactively notify when a ticket has had no update in N days (configurable threshold). This catches silently-stalled tickets that don't have explicit reminders. | MEDIUM | Add aging push check to existing cron job or a new daily cron. Query tickets where `updated_at < NOW() - interval` and status != closed. Send push per stalled ticket. |
+| **Time breakdown chart in Reports** | A bar chart showing hours spent per category or per week gives meaningful insight into where time goes. More actionable than raw total counts. | LOW-MEDIUM | New recharts BarChart in the "Tid" tab. Data from `/api/reports/time`. Already have recharts, chart pattern established in Reports. |
+| **Notification click navigates to ticket** | When user clicks the push notification, the PWA should open and navigate directly to the relevant ticket. This requires passing the ticket URL in the notification payload. | LOW | In the service worker `notificationclick` handler, call `clients.openWindow('/tickets/:id')`. Include `ticketId` in the push payload JSON. |
+| **KB sidebar shows already-linked articles** | In addition to search results, the KB sidebar should show articles already linked to this ticket — so the user knows what's already documented without re-searching. | LOW | `GET /api/tickets/:id/kb-links` already exists (v1.2). Render linked articles as a separate section above the search box in the sidebar panel. |
+| **Quick time entry via chip buttons** | Common time values (15 min, 30 min, 1 hour, 2 hours) as quick-select chips avoid typing duration for common work intervals. | LOW | Pure frontend addition to the time log form. Clicking a chip sets the duration field value. No backend change. |
+
+---
+
+### Anti-Features (Commonly Requested, Often Problematic)
+
+| Anti-Feature | Why Requested | Why Problematic | Alternative |
+|-------------|---------------|-----------------|-------------|
+| **Live timer persisted to backend** | Feels more "accurate" — timer state survives page refresh | Requires websocket or polling to sync timer state; adds complexity and race conditions for zero gain in single-user context | Client-side timer in React state; show pre-filled duration on Stop |
+| **Billable/non-billable time distinction** | Standard in Freshdesk and Harvest for billing clients | This is a single-user internal IT tool, not a client billing system. Billable flag adds a field and UI that has no use case here. | Single duration + optional note field is sufficient |
+| **Background sync for offline time logs** | Sounding robust — log time even when offline | Service worker background sync is complex, adds conflict resolution edge cases, and the app requires LAN access to the Docker server anyway | Require connectivity for time log submission |
+| **Push notification scheduling UI (full calendar)** | Users want fine-grained control over when notifications arrive | For this system, reminders already have `remind_at` timestamps. A separate notification schedule editor duplicates the reminder system. | Push fires from existing reminder triggers — no new scheduling UI |
+| **Third-party push service (Firebase FCM)** | Easier setup tutorial availability | Introduces external dependency, tracking, and potential for service changes. VAPID is the standard, works without any external service, and the `web-push` library handles it fully. | VAPID-only with `web-push` npm package |
+| **Scheduled automatic cloud backup** | Feels safer than manual download | Requires external storage integration (S3, SFTP, etc.) — massive scope creep. Single-user tool on a home Proxmox server can use a VM-level backup strategy. | Manual download button is sufficient; OS/VM snapshot for disaster recovery |
+| **Restore from backup via UI** | Paired with backup, restore seems natural | Restore on a live running system is dangerous — must stop the container, replace the DB file, restart. Restoring through the UI risks corrupting an in-use SQLite file. | Document: stop container, replace `/app/data/database.sqlite`, restart. Too risky to automate. |
+| **Full KB article rendering in ticket sidebar** | Show article content inline without navigating away | Full article rendering duplicates KB detail page in a narrow sidebar, creating readability issues and Tiptap render overhead | Show title + excerpt (first 200 chars) in sidebar; "Öppna artikel" link for full read |
 
 ---
 
 ## Feature Dependencies
 
 ```
-dashboard aging section
-  └── uses ticket.updatedAt (already on model)
-  └── client-side sort, no new API needed
+Time tracking:
+  time_logs table (new)
+      └── Manual time entry form (TicketDetail.tsx)
+              └── Total time summary (TicketDetail.tsx) — sum from log list
+              └── Time log list (TicketDetail.tsx) — GET /api/tickets/:id/time-logs
+              └── Delete log entry
+      └── Timer widget (client-side only)
+              └── Pre-fills manual entry form on Stop
+      └── Reports "Tid" tab
+              └── /api/reports/time endpoint (new)
+              └── recharts BarChart (existing library)
 
-"today at a glance" summary
-  └── uses ticket.createdAt, ticket.resolvedAt, ticket.closedAt (all exist)
-  └── pure client-side, no new API
+PWA push notifications:
+  VAPID key generation (one-time setup)
+      └── push_subscriptions table (new: endpoint, p256dh, auth)
+      └── /api/push/subscribe endpoint (new: saves subscription)
+      └── /api/push/unsubscribe endpoint (new: removes subscription)
+      └── web-push npm package (new server dependency)
+      └── Service worker push event handler (extends existing sw)
+              └── Notification display + click handler
+      └── Settings UI opt-in button
+      └── Reminder cron dispatch (extends existing checkReminders)
+      └── Aging ticket cron dispatch (optional, extends existing cron)
 
-reminders widget on dashboard
-  └── GET /api/reminders must return upcoming reminders (verify endpoint exists)
-  └── reuse ReminderList.tsx or extract compact variant
+Backup & export:
+  GET /api/admin/backup (new endpoint)
+      └── better-sqlite3 backup() API (safe copy without locking)
+      └── archiver or adm-zip npm package (new dependency)
+      └── Streams DB + /app/data/uploads/ as zip
+      └── Settings page "Backup" button (new UI section)
 
-command palette as modal (Cmd+K refactor)
-  └── cmdk already installed
-  └── CommandDialog from shadcn already available (wraps Radix Dialog)
-  └── existing search logic in GlobalSearch.tsx moves into modal
-
-KB articles in Cmd+K search
-  └── GET /api/kb/articles?search= already exists
-  └── requires command palette modal (above)
-  └── parallel fetch in existing debounced search handler
-
-navigation shortcuts in Cmd+K
-  └── requires command palette modal (above)
-  └── nav items already defined in Layout.tsx
-
-dark mode toggle in nav header
-  └── useTheme() hook, applyMode() function (both in Settings.tsx already)
-  └── no new API or schema
-
-light mode audit and fix
-  └── .light and .dark CSS classes already defined in index.css
-  └── systematic component-by-component audit
-
-loading states / skeleton screens
-  └── isLoading from React Query hooks (already in use across app)
-  └── Framer Motion for shimmer animation
-  └── applied to Dashboard KPIs, TicketList rows, KB list rows
-
-stagger animations on page load
-  └── framer-motion already installed
-  └── applied to Dashboard.tsx KPICard grid
-  └── applied to TicketList.tsx list rows
-
-responsive mobile layout
-  └── vaul already installed (slide-over drawer)
-  └── Layout.tsx restructure — breakpoint-aware render
-  └── bottom nav on mobile < 768px
-
-actions in Cmd+K (clone, status change)
-  └── requires command palette modal (above)
-  └── requires two-step selection UX
-  └── depends on existing clone/status-update API
+KB sidebar in ticket detail:
+  GET /api/kb/articles?search= (already exists — reuse)
+  GET /api/tickets/:id/kb-links (already exists v1.2 — reuse)
+  POST /api/tickets/:id/kb-links (already exists v1.2 — reuse)
+      └── New collapsible sidebar panel in TicketDetail.tsx
+              └── Linked articles section (from existing API)
+              └── Search box → results list → Link button
 ```
 
----
+### Dependency Notes
 
-## MVP Recommendation for v1.4
-
-Build in this order, optimizing for highest value and lowest risk of regression:
-
-**Phase 1 — High value, very low complexity:**
-1. Dark mode toggle in nav header (1 icon button in Layout.tsx, ~30 min)
-2. Navigation shortcuts in Cmd+K (hard-coded list, idle state, ~1 hour — requires modal first)
-3. "Today at a glance" summary row on dashboard (client-side date filter, ~1.5 hours)
-4. Keyboard shortcut hints visible in UI (`<kbd>` badges, ~30 min)
-
-**Phase 2 — Core dashboard and command palette upgrade:**
-5. Command palette refactored to modal (`CommandDialog`, ~3 hours — migrate existing GlobalSearch logic)
-6. KB articles in Cmd+K search (parallel fetch, new result group, ~2 hours — after modal)
-7. Aging tickets section on dashboard (sort by updatedAt, top-N list, ~2 hours)
-8. Reminders widget on dashboard (reuse/adapt ReminderList, ~2 hours — verify API first)
-
-**Phase 3 — Polish and responsive:**
-9. Loading states / skeleton screens (shimmer for KPI cards + list rows, ~3 hours)
-10. Light mode audit and fix (systematic token audit, ~3 hours)
-11. Stagger animations on page load (Framer Motion on Dashboard KPI grid, ~1.5 hours)
-12. Responsive mobile layout — bottom nav + sidebar drawer (Layout.tsx restructure, ~4 hours)
-
-**Defer (high complexity, limited single-user value):**
-13. Cmd+K ticket actions (clone, status change) — complex two-step UX, worth a separate phase
-14. Responsive Kanban for mobile — medium complexity, low usage frequency
+- **Time reports require time_logs data**: No data = charts show empty state. Build time logging before time reports.
+- **Push notifications require service worker**: vite-plugin-pwa already registers a Workbox service worker — the push event handler must be added to a custom SW or via Workbox `injectManifest` mode. Verify current SW configuration before assuming it supports custom push handlers (HIGH confidence concern — Workbox's `generateSW` mode does not support custom event listeners).
+- **KB sidebar is fully independent**: Reuses three existing APIs, touches only `TicketDetail.tsx`. Zero backend changes needed. Can be built first or last.
+- **Backup is fully independent**: New backend endpoint only, new Settings UI button. No schema changes.
 
 ---
 
-## Complexity Matrix
+## MVP Definition for v1.5
 
-| Feature | Schema Changes | Backend Changes | Frontend Changes | Estimated Effort |
-|---------|---------------|-----------------|-----------------|------------------|
-| Dark mode toggle in nav | None | None | 1 button in Layout.tsx | ~30 min |
-| Keyboard shortcut hints | None | None | `<kbd>` elements in SearchBar, KB | ~30 min |
-| "Today at a glance" | None | None | Date filter on existing tickets | ~1.5 hr |
-| Nav shortcuts in Cmd+K | None | None | Hard-coded items in command palette | ~1 hr |
-| Command palette modal | None | None | Refactor GlobalSearch into CommandDialog | ~3 hr |
-| KB articles in Cmd+K | None | None | Parallel KB fetch in search handler | ~2 hr |
-| Aging tickets dashboard | None | None (or add sort param) | New section in Dashboard.tsx | ~2 hr |
-| Reminders widget | None | Verify GET /api/reminders | Compact ReminderList variant | ~2 hr |
-| Loading skeletons | None | None | Shimmer CSS + conditional render | ~3 hr |
-| Light mode audit | None | None | CSS token audit and fix | ~3 hr |
-| Stagger animations | None | None | Framer Motion variants on grid | ~1.5 hr |
-| Responsive mobile layout | None | None | Layout.tsx restructure, bottom nav | ~4 hr |
-| Cmd+K actions (tickets) | None | None | Two-step selection UX | ~5 hr |
-| Responsive Kanban | None | None | KanbanView.tsx conditional layout | ~3 hr |
+### Phase 1 — KB sidebar (independent, low risk)
+
+- [ ] Collapsible KB search panel in ticket detail — reuses existing APIs, no backend changes
+- [ ] Linked articles section in same panel — reuses existing `ticket_kb_links` API
+- [ ] "Link article" action from search results
+
+### Phase 2 — Time tracking core
+
+- [ ] `time_logs` table migration
+- [ ] `POST/GET/DELETE /api/tickets/:id/time-logs` endpoints
+- [ ] Manual time entry form in ticket detail
+- [ ] Total time summary in ticket metadata
+- [ ] Time log list with delete
+
+### Phase 3 — Push notifications
+
+- [ ] VAPID key generation + storage in env
+- [ ] `push_subscriptions` table + subscribe/unsubscribe endpoints
+- [ ] `web-push` integration in cron reminder dispatch
+- [ ] Service worker push + notificationclick handler
+- [ ] Settings opt-in toggle
+
+### Phase 4 — Backup + time reports
+
+- [ ] `GET /api/admin/backup` with zip stream
+- [ ] Settings backup button with progress indication
+- [ ] `/api/reports/time` endpoint
+- [ ] "Tid" tab in Reports page with charts
+
+### Add After Validation (post-v1.5)
+
+- [ ] Timer (start/stop) widget on ticket — enhances time tracking after core is validated
+- [ ] Aging ticket push notifications — extends push after reminders are proven working
+- [ ] Quick time chip buttons — UI polish after data model is confirmed
+
+### Defer (out of scope for v1.5)
+
+- [ ] Restore from backup via UI — too risky to automate
+- [ ] Billable/non-billable time — no use case in single-user IT tool
+- [ ] Third-party push services — VAPID is sufficient
+
+---
+
+## Feature Prioritization Matrix
+
+| Feature | User Value | Implementation Cost | Priority |
+|---------|------------|---------------------|----------|
+| KB sidebar search in ticket detail | HIGH | LOW (reuses existing APIs) | P1 |
+| Manual time entry on ticket | HIGH | MEDIUM (new table + API) | P1 |
+| Time summary on ticket | HIGH | LOW (client-side sum) | P1 |
+| Backup download | HIGH | MEDIUM (zip stream) | P1 |
+| Push: reminder dispatch | HIGH | HIGH (VAPID + SW setup) | P1 |
+| Push: opt-in settings UI | HIGH | LOW (requires backend first) | P1 |
+| Time reports tab | MEDIUM | MEDIUM (new endpoint + chart) | P2 |
+| Timer start/stop | MEDIUM | MEDIUM (client-only, UX polish) | P2 |
+| Push: aging ticket alert | MEDIUM | LOW (extends existing cron) | P2 |
+| Notification click → ticket navigate | LOW | LOW (SW notificationclick) | P2 |
+| Quick time chip buttons | LOW | LOW (pure UI) | P3 |
+| KB sidebar shows linked articles | MEDIUM | LOW (reuses API) | P1 |
+
+**Priority key:**
+- P1: Core v1.5 scope — must ship
+- P2: Should ship if time allows, or follow-on phase
+- P3: Nice-to-have, defer
+
+---
+
+## Key Implementation Risks
+
+### Risk 1: Workbox service worker and custom push event handlers
+**Issue:** `vite-plugin-pwa` in `generateSW` mode generates the service worker automatically and does not allow custom event listeners. Push notification `push` and `notificationclick` events require custom SW code.
+**Mitigation:** Switch vite-plugin-pwa to `injectManifest` mode, which merges a custom `sw.ts` with the generated precache manifest. This is a one-time config change but affects the SW build pipeline.
+**Confidence:** HIGH — this is a documented vite-plugin-pwa constraint.
+
+### Risk 2: iOS PWA push requires home screen installation
+**Issue:** iOS push only works when the PWA is installed via Safari's "Add to Home Screen" AND the user is in the EU (iOS 17.4 DMA change removes standalone PWA support in EU). The system is hosted in Sweden (EU).
+**Mitigation:** For this single-user internal tool deployed on a Proxmox LAN server, the user primarily accesses it from a desktop browser (Chrome/Firefox). iOS push is a bonus, not a requirement. Desktop push is unaffected by the iOS limitation.
+**Confidence:** HIGH — verified via MDN and Apple Developer Forums.
+
+### Risk 3: SQLite backup while process is live
+**Issue:** A naive `fs.copyFile` on an in-use SQLite database can produce a corrupt backup.
+**Mitigation:** `better-sqlite3` exposes a `.backup(destPath)` method that uses the SQLite Online Backup API — produces a consistent snapshot without blocking writes. This is the correct approach.
+**Confidence:** HIGH — documented in better-sqlite3 README.
+
+### Risk 4: Zip of uploads directory during backup
+**Issue:** Large attachments could make the zip operation time out or exhaust memory if done synchronously.
+**Mitigation:** Use streaming zip (`archiver` npm package) and pipe directly to the HTTP response. Do not buffer the entire zip in memory. Set a reasonable timeout on the route.
+**Confidence:** MEDIUM — pattern is well-established but depends on upload directory size.
 
 ---
 
@@ -190,21 +225,32 @@ Build in this order, optimizing for highest value and lowest risk of regression:
 
 | Area | Level | Basis |
 |------|-------|-------|
-| Existing feature inventory | HIGH | Direct codebase read of GlobalSearch.tsx, Dashboard.tsx, Layout.tsx, Settings.tsx, ThemeProvider.tsx, index.css, package.json |
-| Command palette patterns | HIGH | cmdk already installed and used; shadcn Command components already in use; domain patterns from Linear, Vercel, GitHub, Notion are well-established |
-| Dashboard aging / "today" patterns | HIGH | Standard helpdesk patterns from Freshdesk, Zendesk, ManageEngine; ticket model already has all required timestamps |
-| Skeleton screen / loading states | HIGH | React Query isLoading already in use; Framer Motion installed; pattern is well-established in the codebase |
-| Dark mode complexity | HIGH | next-themes + class-based CSS vars fully set up; light/dark classes defined; gap is coverage audit not architecture |
-| Responsive layout | MEDIUM | vaul installed; Layout.tsx structure is clear; actual breakpoint behavior requires live browser testing to confirm |
-| Micro-interaction scope | MEDIUM | Framer Motion installed; specific animations need scoping per component to avoid performance regressions |
+| Time tracking UX patterns | HIGH | Freshdesk, Atera, Jira Service Desk time log UX verified via search + direct documentation reads |
+| PWA push implementation | HIGH | MDN Web Push API docs, web-push-libs/web-push GitHub README, MagicBell PWA guide — consistent across sources |
+| iOS push limitations | HIGH | Apple Developer Forums + multiple 2025 sources confirm iOS 16.4+ requirement and EU DMA impact |
+| Vite-plugin-pwa SW mode requirement | HIGH | Known constraint, multiple community resources confirm generateSW vs injectManifest distinction |
+| SQLite backup via better-sqlite3 | HIGH | better-sqlite3 official README documents `.backup()` method |
+| Backup zip streaming | MEDIUM | archiver npm pattern well-documented; exact behavior under Docker volume mount not verified |
+| KB sidebar UX patterns | HIGH | Zendesk, Freshdesk, Linear sidebar KB integration patterns well-established; existing APIs already match |
+| Existing ticket_kb_links API | HIGH | Confirmed in PROJECT.md — v1.2 shipped `POST /api/tickets/:id/kb-links` |
 
 ---
 
 ## Sources
 
-- Direct codebase: `src/components/GlobalSearch.tsx`, `src/pages/Dashboard.tsx`, `src/components/Layout.tsx`, `src/pages/Settings.tsx`, `src/components/ThemeProvider.tsx`, `src/index.css`, `package.json`
-- Project constraints: `.planning/PROJECT.md` — single-user constraint, out-of-scope list, existing stack
-- Command palette UX patterns: Mobbin command palette glossary, cmdk GitHub (github.com/pacocoursey/cmdk), shadcn/ui Command docs — HIGH confidence
-- Helpdesk dashboard patterns: Geckoboard helpdesk dashboard examples, ManageEngine ticket aging reports, Freshdesk / Zendesk dashboard feature sets — MEDIUM confidence (external, verified against known patterns)
-- Responsive breakpoints: BrowserStack 2025 breakpoint guide, NNGroup responsive design — MEDIUM confidence
-- Skeleton screens: Smashing Magazine skeleton screens React, react-loading-skeleton GitHub — HIGH confidence (established pattern, no new library needed)
+- Freshdesk time tracking documentation: [Track time spent by agents on tickets](https://www.freshworks.com/freshdesk/helpdesk-management/time-tracking/) — HIGH confidence
+- Atera ticket time tracking: [Ticket time tracking – Atera Support](https://support.atera.com/hc/en-us/articles/115000524667-Ticket-time-tracking) — HIGH confidence
+- MDN PWA push notifications: [Re-engageable Notifications Push](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Tutorials/js13kGames/Re-engageable_Notifications_Push) — HIGH confidence
+- web-push npm library: [web-push on GitHub](https://github.com/web-push-libs/web-push) — HIGH confidence
+- MagicBell PWA push guide: [Using Push Notifications in PWAs](https://www.magicbell.com/blog/using-push-notifications-in-pwas) — HIGH confidence
+- iOS PWA limitations: [PWA iOS Limitations 2025](https://brainhub.eu/library/pwa-on-ios) and [PWA iOS Limitations Safari Support 2026](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide) — HIGH confidence
+- iOS push EU DMA impact: [Apple Developer Forums thread 732594](https://developer.apple.com/forums/thread/732594) — HIGH confidence
+- Zendesk KB sidebar pattern: [Best Zendesk sidebar app](https://www.eesel.ai/blog/zendesk-sidebar-app) — MEDIUM confidence
+- Contextual help UX patterns 2026: [Contextual Help UX – Chameleon](https://www.chameleon.io/blog/contextual-help-ux) — MEDIUM confidence
+- SQLite backup strategies: [Backup strategies for SQLite in production](https://oldmoe.blog/2024/04/30/backup-strategies-for-sqlite-in-production/) — MEDIUM confidence
+- Project context: `.planning/PROJECT.md`, `.planning/codebase/STACK.md` — HIGH confidence
+
+---
+
+*Feature research for: IT-Ticket v1.5 — Productivity & Insights*
+*Researched: 2026-04-05*

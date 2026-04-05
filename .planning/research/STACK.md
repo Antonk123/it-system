@@ -1,50 +1,80 @@
-# Technology Stack — Dashboard, Search & Polish (v1.4)
+# Technology Stack — Productivity & Insights (v1.5)
 
 **Project:** IT Ticket System
-**Milestone scope:** Dashboard overview (aging tickets, reminders, today summary), global Cmd+K command palette (tickets, KB, contacts, navigation, actions), UI polish (dark mode toggle, responsive layout, loading states, micro-interactions)
-**Researched:** 2026-03-29
-**Overall confidence:** HIGH (package.json verified; existing infrastructure audited directly)
+**Milestone scope:** Time tracking per ticket, PWA push notifications, database backup/export as zip, KB article search sidebar in ticket detail view
+**Researched:** 2026-04-05
+**Overall confidence:** HIGH (package.json verified; web-push/archiver versions confirmed via npm registry search)
 
 ---
 
 ## Existing Stack (do not change)
 
-React 18.3.1 + Vite 7 + Express 4.21.2 + better-sqlite3 11.7.0 + TypeScript 5.8.3 + Tiptap 3.20.x + shadcn/Radix UI + Tailwind CSS 3.4.17 + Framer Motion 12.38.0 + recharts 2.15.4.
+React 18.3.1 + Vite 7 + Express 4.21.2 + better-sqlite3 11.7.0 + TypeScript 5.8.3 + Tiptap 3.20.x + shadcn/Radix UI + Tailwind CSS 3.4.17 + Framer Motion 12.38.0 + recharts 2.15.4 + vite-plugin-pwa 0.20.5 + workbox-window 7.0.0 + node-cron (3.0.3 server / 4.2.1 frontend).
 
 All new libraries must slot into this stack without replacing anything already installed.
 
 ---
 
-## Critical Pre-Research Findings
+## Feature Coverage Map
 
-Direct inspection of the codebase reveals three capabilities already in place that directly affect this milestone:
+| Feature | New Backend Dep | New Frontend Dep | Schema/Config Change |
+|---------|----------------|------------------|---------------------|
+| Time tracking per ticket | none | none | New `time_entries` table; new `/api/tickets/:id/time` routes |
+| PWA push notifications | **`web-push ^3.6.7`** | none (service worker already in place) | New `push_subscriptions` table; VAPID key env vars; sw.ts push handler |
+| Backup & export as zip | **`archiver ^7.0.1`** + **`@types/archiver ^6.0.3`** | none | New `/api/admin/backup` route |
+| KB sidebar in ticket detail | none | none | Reuse existing `/api/kb/articles` FTS5 search endpoint |
 
-**1. cmdk is already installed** — `cmdk ^1.1.1` is in `package.json`. No new dependency needed for the command palette primitive. The `shadcn/ui` `<Command>` component wraps cmdk and is the correct integration path.
-
-**2. Dark mode infrastructure already exists** — `src/lib/appearance.ts` implements `applyMode(mode: "light" | "dark")` via CSS class manipulation on `documentElement`. `src/index.css` has both `.dark` and `.light` CSS variable blocks fully defined. `tailwind.config.ts` has `darkMode: ["class"]`. `next-themes ^0.3.0` is already installed. The system defaults to dark and has three named color themes (default/midnight/graphite). The "dark mode" feature for this milestone means wiring the existing toggle UI into a persistent user preference, not building dark mode from scratch.
-
-**3. Framer Motion is already installed** — `framer-motion ^12.38.0` is in `package.json`. Note: the upstream project was renamed to `motion` in 2025 (import from `motion/react`), but `framer-motion` still works and the codebase already uses it. Do NOT migrate to the `motion` package — it would break existing imports without any functional benefit for this milestone.
+**Total new npm packages: 3** (2 server + 1 server dev types)
 
 ---
 
-## Feature Coverage Map
+## New Backend Dependencies
 
-| Feature | New Backend Dep | New Frontend Dep | Config/Schema Change |
-|---------|----------------|------------------|---------------------|
-| Dashboard aging tickets widget | none | none | New `/api/dashboard/summary` SQL endpoint |
-| Dashboard reminders widget | none | none | Reuses existing `/api/tickets` with `has_reminder` filter |
-| Dashboard "today" summary | none | none | New SQL aggregation on `tickets.created_at` |
-| Cmd+K command palette | none | **none** (cmdk already installed) | New `CommandPalette` component |
-| Global search (tickets + KB + contacts) | none | none | Reuse existing search endpoints |
-| Dark mode toggle (persistent) | none | none | Wire `applyMode` + `saveModeTheme` to Settings UI |
-| Responsive layout (mobile/tablet) | none | none | Tailwind responsive classes (`sm:`, `md:`, `lg:`) |
-| Skeleton loading states | none | none | shadcn `<Skeleton>` (already in shadcn) |
-| Micro-interactions (hover, transitions) | none | none | Framer Motion already installed |
-| Staggered list entry animations | none | none | Framer Motion `AnimatePresence` + `staggerChildren` |
+### 1. web-push ^3.6.7
 
-**Total new packages: 0**
+**Purpose:** Generates VAPID key pairs, encrypts payloads, and delivers push notifications to browser push services (Chrome, Firefox, Edge, Safari 16.4+). The server sends notifications; the browser's push service delivers them.
 
-All features for this milestone are achievable with the existing dependency set.
+**Why web-push:** It is the canonical Node.js VAPID/Web Push library (web-push-libs org, used by MDN examples and Google web.dev docs). No viable maintained alternative exists for self-hosted push without a cloud intermediary. The library is stable at 3.6.7 — last published ~2 years ago but the Web Push protocol is a finalized RFC (RFC 8030 + RFC 8291 + RFC 8292); no protocol changes are pending.
+
+**Integration points:**
+- Call `webpush.generateVAPIDKeys()` once to generate key pair; store in `.env` as `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`
+- Call `webpush.setVapidDetails('mailto:admin@prefabmastarna.se', publicKey, privateKey)` at server startup
+- Store push subscriptions (endpoint + keys) in a new `push_subscriptions` SQLite table
+- Trigger `webpush.sendNotification(subscription, JSON.stringify(payload))` from the existing node-cron scheduler (reminders, aging tickets)
+- Expose `GET /api/push/vapid-public-key` (returns public key for client subscription) and `POST /api/push/subscribe` (saves subscription)
+
+**TypeScript:** `@types/web-push ^3.6.4` available on npm. Install alongside.
+
+**Confidence:** HIGH — npm registry confirmed version 3.6.7; web.dev official docs verified API pattern; RFC-stable protocol.
+
+---
+
+### 2. archiver ^7.0.1
+
+**Purpose:** Streams a ZIP archive of the SQLite database file + uploads directory to the HTTP response without buffering the entire archive in memory. The `archiver` package is the standard streaming zip library for Node.js.
+
+**Why archiver:** 6,274+ downstream projects on npm, maintained under the archiverjs org, Express streaming pattern is well-documented. The alternative (`jszip`) buffers the entire archive in memory — unsuitable for potentially large uploads directories. `archiver` pipes directly to `res`, keeping memory usage flat regardless of archive size.
+
+**Integration points:**
+- New route `GET /api/admin/backup` (protected by JWT middleware)
+- Use `better-sqlite3`'s built-in `.backup(destPath)` async method to write a point-in-time snapshot to a temp file, then add that temp file to the archive (avoids file locking issues with the live DB file)
+- Pipe uploads directory (`/data/uploads`) and the DB snapshot file into the archive
+- Set response headers: `Content-Disposition: attachment; filename="backup-YYYY-MM-DD.zip"`, `Content-Type: application/zip`
+- Clean up temp DB snapshot after archive finalizes
+
+```typescript
+// Sketch — actual implementation in phase plan
+const archive = archiver('zip', { zlib: { level: 6 } });
+res.attachment(`backup-${date}.zip`);
+archive.pipe(res);
+archive.file(dbSnapshotPath, { name: 'tickets.db' });
+archive.directory(uploadsDir, 'uploads');
+await archive.finalize();
+```
+
+**TypeScript:** `@types/archiver ^6.0.3` covers the 7.x API. Install as devDependency.
+
+**Confidence:** HIGH — npm registry confirmed version 7.0.1; streaming Express pattern verified from multiple sources.
 
 ---
 
@@ -52,224 +82,188 @@ All features for this milestone are achievable with the existing dependency set.
 
 ### None Required
 
-Every library needed for this milestone is already installed:
-
 | Capability | Library | Status |
 |-----------|---------|--------|
-| Command palette primitive | `cmdk ^1.1.1` | Already installed |
-| Command palette UI wrapper | `shadcn <Command>` component | Already available via shadcn |
-| Dark mode state management | `next-themes ^0.3.0` | Already installed |
-| Dark mode CSS | `.dark` / `.light` classes in `index.css` | Already defined |
-| Micro-interactions | `framer-motion ^12.38.0` | Already installed |
-| Skeleton loading | shadcn `<Skeleton>` component | Already available via shadcn |
-| Responsive layout | `tailwindcss ^3.4.17` breakpoints | Already installed |
-| Dashboard charts | `recharts ^2.15.4` | Already installed |
-| Date calculations | `date-fns ^3.6.0` | Already installed |
+| KB search in ticket detail | Existing `/api/kb/articles?search=` FTS5 endpoint | Already works |
+| Inline KB panel UI | shadcn `<Sheet>` or `<Popover>` component | Already available via shadcn |
+| Push subscription (client) | Browser `PushManager` API (native) | No npm package needed |
+| Push permission UI | shadcn `<Button>` + `<Alert>` | Already available |
+| Time entry UI | shadcn `<Dialog>`, `<Input>`, `<Table>` | Already available |
+| Time entry duration display | `date-fns ^3.6.0` | Already installed |
 
-**Confidence:** HIGH — verified directly from `package.json`.
+**Confidence:** HIGH — verified from package.json + browser Web Push API is native with no npm wrapper needed.
 
 ---
 
-## New Backend Dependencies
+## Service Worker Changes (not an npm install)
 
-### None Required
+The existing vite-plugin-pwa is configured with `strategies: 'generateSW'` (assumed from the existing setup). Push notification handling requires custom service worker code, which means switching to `strategies: 'injectManifest'` or using the `workbox.importScripts` option.
 
-Dashboard aggregation queries use `better-sqlite3` (already installed) with standard SQL:
+**Recommended approach: switch to `injectManifest`** so `src/sw.ts` can be written in TypeScript with full control over the `push` event listener.
+
+**TypeScript configuration required** (add to `tsconfig.json`):
+```json
+{
+  "lib": ["ES2020", "WebWorker"]
+}
+```
+
+**sw.ts additions needed:**
+```typescript
+declare let self: ServiceWorkerGlobalScope;
+
+self.addEventListener('push', (event) => {
+  const data = event.data?.json();
+  event.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: '/icons/icon-192x192.png',
+      badge: '/icons/badge-72x72.png',
+      data: { url: data.url }
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(clients.openWindow(event.notification.data.url));
+});
+```
+
+**Confidence:** MEDIUM — vite-plugin-pwa injectManifest docs verified; push event pattern is standard Web Push API (MDN).
+
+---
+
+## New DB Schema
+
+### time_entries table
 
 ```sql
--- Aging tickets: tickets open > N days, grouped by age bucket
-SELECT
-  CASE
-    WHEN julianday('now') - julianday(created_at) > 30 THEN '30+'
-    WHEN julianday('now') - julianday(created_at) > 14 THEN '14-30'
-    WHEN julianday('now') - julianday(created_at) > 7  THEN '7-14'
-    ELSE '0-7'
-  END as age_bucket,
-  COUNT(*) as count
-FROM tickets
-WHERE status NOT IN ('closed', 'resolved')
-GROUP BY age_bucket;
+CREATE TABLE IF NOT EXISTS time_entries (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id INTEGER NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  started_at TEXT NOT NULL,          -- ISO-8601 UTC
+  ended_at   TEXT,                   -- NULL = timer still running
+  duration_seconds INTEGER,          -- computed on stop; allows manual entry without start/stop
+  notes      TEXT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_time_entries_ticket ON time_entries(ticket_id);
 ```
 
-No external aggregation library needed. `date-fns` on the frontend handles all date formatting.
+**Reasoning:** `duration_seconds` stored explicitly (not derived) so manual entries (e.g. "I spent 2 hours yesterday") work without requiring start/end times. `started_at` + `ended_at` support a live timer. ISO-8601 text is consistent with the rest of the schema.
+
+### push_subscriptions table
+
+```sql
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  endpoint  TEXT NOT NULL UNIQUE,
+  p256dh    TEXT NOT NULL,
+  auth      TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
+**Reasoning:** `endpoint` is the unique identifier for a browser's push subscription. At single-user scale, this table will have at most 2-3 rows (one per device/browser). The endpoint + p256dh + auth triple is exactly what `web-push` requires to encrypt and deliver.
 
 ---
 
-## Integration Points
+## New API Routes
 
-### Command Palette (Cmd+K)
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/api/push/vapid-public-key` | Returns VAPID public key for client to subscribe |
+| POST | `/api/push/subscribe` | Save or update push subscription from browser |
+| DELETE | `/api/push/subscribe` | Remove subscription (unsubscribe) |
+| GET | `/api/tickets/:id/time` | List time entries for a ticket |
+| POST | `/api/tickets/:id/time` | Create time entry (manual or start timer) |
+| PATCH | `/api/tickets/:id/time/:entryId` | Update entry (stop timer, edit notes/duration) |
+| DELETE | `/api/tickets/:id/time/:entryId` | Delete time entry |
+| GET | `/api/admin/backup` | Stream ZIP backup of DB + uploads |
 
-The `cmdk` library is already installed and used indirectly via shadcn's `<Command>` component (already used in combobox dropdowns throughout the app). The command palette for this milestone requires:
+---
 
-1. A new `<CommandPalette>` component using shadcn's `<CommandDialog>` (wraps `<Command>` in a Radix Dialog)
-2. A global `useEffect` keyboard listener in `App.tsx` (or a custom hook) for `Cmd+K` / `Ctrl+K`
-3. Search handler functions calling existing API endpoints: `/api/tickets`, `/api/kb/articles`, `/api/contacts`
-4. Navigation actions using `react-router-dom`'s `useNavigate` (already installed)
+## Installation
 
-**No new library needed.** `cmdk 1.1.1` is the latest stable version as of 2026-03 (last publish ~1 year ago but stable). The shadcn `<Command>` wrapper is the production-ready integration path used by the existing codebase.
-
-**Confidence:** HIGH — cmdk version confirmed from npm registry search results; shadcn Command component docs verified.
-
-### Dark Mode Toggle
-
-The existing system in `src/lib/appearance.ts` already handles:
-- `applyMode(mode)` — adds `.dark` or `.light` class to `documentElement`
-- `saveModeTheme(mode)` — persists to `localStorage`
-- `getStoredMode()` — reads from `localStorage` with `"dark"` as default
-
-The `AppearanceInitializer` in `App.tsx` already calls `applyMode(getStoredMode())` on mount.
-
-**What's missing for this milestone:** A visible toggle in the UI (Settings page or header). Wire a `<Switch>` or button to `applyMode` + `saveModeTheme`. That's a UI component task, not a new dependency.
-
-**Note on `next-themes`:** Already installed but currently configured as a passthrough wrapper (`ThemeProvider` in `ThemeProvider.tsx` passes all props to `NextThemesProvider` without configuring `attribute`, `themes`, or `storageKey`). The custom `applyMode` system in `appearance.ts` is doing the actual work. These two systems are currently not conflicting — next-themes is dormant. Do NOT replace `appearance.ts` with next-themes; it would require migrating the multi-theme system (default/midnight/graphite) and is out of scope.
-
-**Confidence:** HIGH — verified from direct code inspection.
-
-### Skeleton Loading States
-
-shadcn's `<Skeleton>` component is a zero-dependency shimmer placeholder built with Tailwind `animate-pulse`. It is not yet in the project's `src/components/ui/` directory (it's a shadcn component that must be added via `npx shadcn@latest add skeleton`), but this is a code-generation step, not a new npm dependency.
-
-Usage pattern for dashboard cards:
-```tsx
-// Loading state
-<Skeleton className="h-24 w-full rounded-lg" />
-
-// Loaded state
-<KPICard ... />
+```bash
+# Server — new runtime dependencies
+cd server
+npm install web-push@^3.6.7
+npm install -D @types/web-push@^3.6.4 @types/archiver@^6.0.3
+npm install archiver@^7.0.1
 ```
 
-The skeleton automatically respects dark/light mode via CSS variables — no extra configuration.
-
-**Confidence:** HIGH — shadcn Skeleton component docs verified; Tailwind animate-pulse is in existing config.
-
-### Micro-Interactions with Framer Motion
-
-`framer-motion ^12.38.0` is already installed. Patterns to use for this milestone:
-
-**Page/list entry animations:**
-```tsx
-import { motion, AnimatePresence } from "framer-motion";
-
-// Staggered list items
-<motion.div
-  initial={{ opacity: 0, y: 8 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ delay: index * 0.05, duration: 0.2 }}
-/>
+```bash
+# VAPID key generation (run once, store in .env)
+node -e "const wp = require('web-push'); console.log(wp.generateVAPIDKeys())"
 ```
 
-**Command palette open/close:**
-```tsx
-<AnimatePresence>
-  {open && (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.96 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.96 }}
-      transition={{ duration: 0.15 }}
-    />
-  )}
-</AnimatePresence>
+Add to `server/.env`:
+```
+VAPID_PUBLIC_KEY=<generated>
+VAPID_PRIVATE_KEY=<generated>
+VAPID_SUBJECT=mailto:admin@prefabmastarna.se
 ```
 
-**Dashboard widget entrance:**
-```tsx
-const container = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.07 } }
-};
-```
+---
 
-**Performance rule:** Animate only `opacity`, `transform` (translate/scale/rotate). Never animate `width`, `height`, `top`, `left`. The existing codebase already follows this pattern (tailwind.config.ts has CSS keyframe animations for `fade-in`, `scale-in`).
+## Alternatives Considered
 
-**Migration note:** `framer-motion` package is now also available as `motion` (import from `motion/react`). The codebase currently uses `framer-motion` imports. Do NOT migrate — it offers no benefit for this milestone and risks breaking existing animation code.
-
-**Confidence:** HIGH — verified from motion.dev upgrade guide and framer-motion npm page.
-
-### Responsive Layout
-
-No new library needed. Tailwind CSS 3.4 breakpoints are already configured:
-
-| Breakpoint | Min-width | Use case |
-|-----------|-----------|---------|
-| (none) | 0px | Mobile — base styles, single column |
-| `sm:` | 640px | Large mobile / small tablet |
-| `md:` | 768px | Tablet — two columns |
-| `lg:` | 1024px | Desktop — full sidebar layout |
-| `xl:` | 1280px | Wide desktop |
-
-The existing `tailwind.config.ts` has a custom `2xl` screen at `1400px`. The sidebar component is already built with responsive behavior in mind.
-
-**What needs work:** Dashboard cards (`KPICard`) need `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4` patterns. The command palette dialog already uses Radix Dialog which is mobile-friendly. The sidebar may need a mobile collapse pattern.
-
-**Confidence:** HIGH — Tailwind v3 docs, existing tailwind.config.ts verified.
-
-### Dashboard Aggregation Endpoint
-
-New backend route `/api/dashboard/summary` returning:
-- Aging bucket counts (open tickets grouped by age: 0-7d, 7-14d, 14-30d, 30d+)
-- Active reminders count (tickets with `reminder_at` in the next 24h)
-- "Today" summary (tickets created today, tickets closed today, open critical count)
-
-Implementation uses `better-sqlite3` synchronous queries — no async driver, no ORM, same pattern as `/api/reports/summary`. Single endpoint, multiple result objects in one JSON response.
-
-**Confidence:** HIGH — same pattern as the existing working `/api/reports/summary` endpoint.
+| Category | Recommended | Alternative | Why Not |
+|----------|-------------|-------------|---------|
+| Push notifications | `web-push` (self-hosted VAPID) | Firebase FCM / OneSignal | External dependency, requires cloud account, overkill for single-user internal tool |
+| Push notifications | `web-push` | `ntfy` (self-hosted push server) | Additional Docker container; web-push integrates directly into Express; no extra ops |
+| Zip generation | `archiver` (streaming) | `jszip` | jszip buffers entire archive in memory; unsuitable for large uploads dirs |
+| Zip generation | `archiver` | `adm-zip` | adm-zip also memory-based; archiver streams |
+| DB backup | `better-sqlite3 .backup()` + archiver | `sqlite3` CLI via `child_process` | better-sqlite3's built-in async backup API is already available; no shell exec needed |
+| Time tracking state | Local `useState` timer | Server-side timer | Single-user; browser timer is simpler; duration is committed to DB on stop |
+| KB sidebar UI | shadcn `<Sheet>` (slide-in panel) | Inline expand below ticket fields | Sheet keeps ticket fields visible; standard pattern for contextual panels |
 
 ---
 
 ## What NOT to Add
 
-| Library | Why Not |
-|---------|---------|
-| `kbar` | Alternative command palette — rejected; cmdk already installed and is the shadcn-native choice |
-| `react-loading-skeleton` | External skeleton library — rejected; shadcn `<Skeleton>` covers all needs with zero new dependencies |
-| `@tanstack/react-virtual` | Virtual scrolling for command palette — rejected; command palette lists are short (< 50 items shown at a time); cmdk handles its own filtering |
-| `fuse.js` / `minisearch` | Client-side fuzzy search — rejected; command palette searches against the backend API (which has FTS5); no client-side search index needed |
-| `motion` (new package) | Framer Motion rename — rejected; `framer-motion` works and migrating breaks existing imports with zero benefit |
-| `react-use` | Utility hooks — rejected; project uses custom hooks; `react-use` is heavy for the one or two hooks that would be used |
-| `zustand` / `jotai` | State management — rejected; command palette state (`open: boolean`, `query: string`) is local component state; no global state needed |
-| `@radix-ui/react-command` | Radix command primitive — not real; shadcn Command component already wraps cmdk which is the correct primitive |
-| `react-hotkeys-hook` | Keyboard shortcut management — rejected; a single `useEffect` with a `keydown` listener is sufficient for one shortcut (Cmd+K); this library adds 3KB for one use case |
-| `next-themes` (version upgrade) | Already at `^0.3.0`; upgrading to `0.4.x` offers no benefit; the custom `appearance.ts` system does the actual work |
-| `dayjs` | Date library — rejected; `date-fns ^3.6.0` already installed |
-| `recharts` additions | Already at `^2.15.4`; no new chart types needed for dashboard (KPI cards + optional sparklines use existing `LineChart`) |
+| Avoid | Why | Use Instead |
+|-------|-----|-------------|
+| Firebase FCM | Cloud dependency, account required, overkill for single-user | `web-push` with VAPID |
+| `push.js` | Unmaintained wrapper over Notification API; doesn't handle service worker push | Native `PushManager` API + `web-push` on server |
+| `jszip` | Buffers entire ZIP in memory | `archiver` with streaming |
+| `adm-zip` | Also memory-based, no streaming support | `archiver` |
+| `multer` additions | Backup endpoint reads files from filesystem, not uploading | Use `fs` + `archiver` directly |
+| `react-stopwatch` / timer libraries | Single start/stop timer per ticket — trivial with `useState` + `setInterval` + `date-fns` | Implement inline in component |
+| `workbox-recipes` | New workbox package | Use `workbox-window` (already installed) for client-side SW registration |
+| `socket.io` | Real-time timer sync — single-user, single tab assumed | Not needed |
 
 ---
 
-## Summary: New Dependencies
+## Version Compatibility
 
-**Frontend:** 0 new packages
-
-**Backend:** 0 new packages
-
-**shadcn component additions (code generation, not npm installs):**
-- `npx shadcn@latest add skeleton` — adds `src/components/ui/skeleton.tsx` (Tailwind-only, no npm dep)
-- `npx shadcn@latest add command` — if not already added; verify `src/components/ui/command.tsx` exists
-
----
-
-## DB Schema Additions
-
-No new tables. The dashboard endpoint queries existing tables:
-
-```sql
--- tickets: status, created_at, priority, reminder_at — all existing columns
--- No new indexes needed at single-user scale
--- The composite index (status, closed_at DESC) from the archive already helps aging queries
-```
+| Package | Compatible With | Notes |
+|---------|-----------------|-------|
+| `web-push ^3.6.7` | Node.js 14+ | Works with TypeScript via `@types/web-push ^3.6.4` |
+| `archiver ^7.0.1` | Node.js 14+ | `@types/archiver ^6.0.3` covers the 7.x API |
+| `better-sqlite3 ^11.7.0 .backup()` | Existing version | `.backup()` is a built-in method — no version change needed |
+| `vite-plugin-pwa ^0.20.5` | injectManifest strategy | Switch from generateSW; requires `src/sw.ts` custom service worker file |
+| `workbox-window ^7.0.0` | Already installed | Used by vite-plugin-pwa for SW registration; no change |
 
 ---
 
 ## Sources
 
-- `package.json` — confirmed installed packages (HIGH confidence, direct file read)
-- `server/package.json` — confirmed backend packages (HIGH confidence, direct file read)
-- `src/lib/appearance.ts` — confirmed existing dark/light mode system (HIGH confidence, direct file read)
-- `src/index.css` — confirmed `.dark` and `.light` CSS classes fully defined (HIGH confidence, direct file read)
-- `tailwind.config.ts` — confirmed `darkMode: ["class"]` and breakpoints (HIGH confidence, direct file read)
-- `src/pages/Dashboard.tsx` — confirmed existing dashboard with `recharts`, `date-fns`, `useTickets` (HIGH confidence, direct file read)
-- cmdk npm registry — version 1.1.1 latest stable (MEDIUM confidence, WebSearch)
-- next-themes 0.4.6 latest — Vite React compatible (MEDIUM confidence, WebSearch)
-- shadcn Command component docs — cmdk integration pattern (HIGH confidence, WebFetch)
-- motion.dev upgrade guide — framer-motion → motion/react migration is optional (HIGH confidence, WebSearch)
-- Tailwind CSS v3 responsive docs — breakpoint values (HIGH confidence, known stable)
+- `package.json` — confirmed existing frontend packages (HIGH confidence, direct file read)
+- `server/package.json` — confirmed existing backend packages (HIGH confidence, direct file read)
+- npm registry search — `web-push` 3.6.7 latest stable (HIGH confidence, WebSearch + npm registry)
+- npm registry search — `archiver` 7.0.1 latest stable (HIGH confidence, WebSearch + npm registry)
+- [web-push GitHub (web-push-libs)](https://github.com/web-push-libs/web-push) — API surface: `generateVAPIDKeys`, `setVapidDetails`, `sendNotification` (HIGH confidence, WebFetch)
+- [better-sqlite3 API docs](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/api.md) — `.backup(destination)` returns Promise, live backup without connection close (HIGH confidence, WebFetch)
+- [vite-pwa injectManifest guide](https://vite-pwa-org.netlify.app/guide/inject-manifest.html) — `strategies: 'injectManifest'` + `WebWorker` lib in tsconfig (MEDIUM confidence, WebFetch)
+- [web.dev push notifications guide](https://web.dev/articles/codelab-notifications-push-server) — subscription storage pattern; `push` event handler (HIGH confidence)
+- [Pushpad — PushSubscription storage](https://pushpad.xyz/blog/web-push-notifications-store-the-subscription-in-the-backend-database) — `endpoint`, `p256dh`, `auth` schema (MEDIUM confidence, WebSearch)
+- archiver Express streaming pattern — `archive.pipe(res)` + `archive.directory()` + `archive.finalize()` (HIGH confidence, multiple sources)
+
+---
+
+*Stack research for: IT Ticket System v1.5 Productivity & Insights*
+*Researched: 2026-04-05*

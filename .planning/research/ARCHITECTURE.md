@@ -1,437 +1,532 @@
-# Architecture Patterns
+# Architecture Research
 
-**Domain:** IT Ticket System — v1.4 Dashboard, Search & Polish
-**Researched:** 2026-03-29
-**Confidence:** HIGH (direct codebase analysis)
+**Domain:** IT Ticket System — v1.5 Productivity & Insights
+**Researched:** 2026-04-05
+**Confidence:** HIGH (direct codebase analysis + verified library documentation)
 
 ---
 
-## Existing Architecture Baseline
+## Standard Architecture
 
-Before mapping new features, what currently exists matters because every change must slot into established patterns.
-
-### Frontend Structure
+### System Overview
 
 ```
+┌─────────────────────────────────────────────────────────────────────┐
+│  React 18 Frontend (nginx/Vite)                                      │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐               │
+│  │ TicketDetail │  │   Reports    │  │   Settings   │               │
+│  │  + TimeLog   │  │  + TimeTab   │  │  + Backup UI │               │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘               │
+│         │                 │                  │                       │
+│  ┌──────┴─────────────────┴──────────────────┴──────────────────┐   │
+│  │  api.ts (ApiClient)  ·  React Query hooks  ·  usePushNotif   │   │
+│  └──────────────────────────────────┬─────────────────────────── ┘  │
+│  Service Worker (Workbox +                                           │
+│  custom push handler)               │                               │
+└────────────────────────────────────┼────────────────────────────────┘
+                                      │  HTTP / Fetch
+┌─────────────────────────────────────┼────────────────────────────────┐
+│  Express Backend (Node.js)          │                                 │
+│  ┌──────────────┐  ┌───────────────┐  ┌─────────────┐  ┌──────────┐ │
+│  │ /api/time-   │  │  /api/push    │  │  /api/      │  │ /api/kb  │ │
+│  │  logs        │  │  (sub/send)   │  │  backup     │  │  (exist) │ │
+│  └──────┬───────┘  └───────┬───────┘  └──────┬──────┘  └──────────┘ │
+│         │                  │                  │                       │
+│  ┌──────┴──────────────────┴──────────────────┴──────────────────┐   │
+│  │  better-sqlite3 (WAL mode)  ·  node-cron scheduler            │   │
+│  └────────────────────────────────────────────────────────────────┘  │
+│                                                                        │
+│  /data/database.sqlite   /data/uploads/                               │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### Component Responsibilities
+
+| Component | Responsibility | New or Modified |
+|-----------|----------------|-----------------|
+| `ticket_time_logs` table | Store start/stop time entries per ticket | NEW |
+| `push_subscriptions` table | Store browser push subscription objects | NEW |
+| `/api/time-logs` routes | CRUD for time entries | NEW |
+| `/api/push` routes | Subscribe/unsubscribe/send | NEW |
+| `/api/backup` route | Stream zip of DB + uploads | NEW |
+| `TimeLogSection.tsx` | Log/display time on ticket detail | NEW |
+| `KBSidebarSearch.tsx` | Inline KB search panel in ticket detail | NEW |
+| `usePushNotifications.ts` | Register SW push, manage permission | NEW |
+| `useTimeLogs.ts` | React Query CRUD for time entries | NEW |
+| Service worker (`sw.ts`) | Handle `push` event, show notification | MODIFIED |
+| `vite.config.ts` | Switch to `injectManifest` strategy | MODIFIED |
+| `TicketDetail.tsx` | Mount TimeLogSection + KBSidebarSearch | MODIFIED |
+| `Reports.tsx` | Add time analytics tab | MODIFIED |
+| `connection.ts` | Add new table migrations | MODIFIED |
+| `reminderScheduler.ts` | Trigger push in addition to email | MODIFIED |
+
+---
+
+## Recommended Project Structure
+
+```
+server/src/
+├── routes/
+│   ├── time-logs.ts        # NEW — time tracking CRUD
+│   └── push.ts             # NEW — push subscription management + send
+├── lib/
+│   ├── pushNotifications.ts  # NEW — web-push wrapper, sendPushToAll()
+│   └── reminderScheduler.ts  # MODIFIED — call pushNotifications after email
+
 src/
-  pages/
-    Dashboard.tsx          — KPI cards, sparklines, critical ticket alert
-    TicketList.tsx         — paginated list, UnifiedFilterBar, kanban/list toggle
-    Archive.tsx            — closed tickets, same filter parity
-    Reports.tsx            — recharts analytics, 4-tab layout
-    KnowledgeBase.tsx      — KB article list, category manager
-    KBArticleDetail.tsx    — article detail, ToC, linked tickets, Se även
-    ...
-  components/
-    Layout.tsx             — sidebar, mobile header, desktop header w/ GlobalSearch
-    GlobalSearch.tsx       — Command palette embedded in header (inline dropdown)
-    KPICard.tsx            — metric card with AnimatedNumber + SparklineChart
-    ThemeProvider.tsx      — wraps next-themes NextThemesProvider
-    QuickCaptureFAB.tsx    — floating action button, sidebar-aware positioning
-    ...
-  lib/
-    api.ts                 — ApiClient class, fetch-based, CSRF, JWT, all methods
-    appearance.ts          — font theme + light/dark mode utilities (localStorage)
-  hooks/
-    useTickets.ts          — tickets query hook
-    useTicketReminders.ts  — reminder CRUD per ticket
-    useFilterViews.ts      — saved filter views (localStorage-backed)
-    ...
-  index.css                — CSS custom properties per theme (.theme-default, .theme-midnight etc.)
-                             plus .dark and .light mode variable sets
-  App.tsx                  — ThemeProvider wraps all routes, AppearanceInitializer runs at mount
+├── components/
+│   ├── TimeLogSection.tsx  # NEW — time entry log on ticket detail
+│   └── KBSidebarSearch.tsx # NEW — inline KB search panel (replaces/extends KBLinksSection)
+├── hooks/
+│   ├── useTimeLogs.ts      # NEW — React Query wrapper for /api/time-logs
+│   └── usePushNotifications.ts  # NEW — permission, subscribe, unsubscribe
+├── pages/
+│   └── Settings.tsx        # MODIFIED — add Backup section + Push notification opt-in
+└── sw.ts                   # NEW (custom service worker, replaces generated SW)
 ```
-
-### Theme and Dark Mode — Current State
-
-The system has **two orthogonal theme axes already in place:**
-
-1. **Color theme** — 5 themes (`.theme-default`, `.theme-midnight`, `.theme-graphite`, `.theme-stone`, `.theme-daylight`), managed via `next-themes` `ThemeProvider` in App.tsx. Each theme defines full HSL CSS variable sets in `index.css`.
-
-2. **Light/Dark mode** — `.dark` and `.light` CSS classes in `index.css`, applied via `applyMode()` in `appearance.ts` to `document.documentElement`. Stored in `localStorage`. Applied at mount via `AppearanceInitializer` in `App.tsx`.
-
-**Critical gap for v1.4:** The `.dark` and `.light` CSS variable sets in `index.css` are incomplete. They only override a subset of variables (background, foreground, card, sidebar basics), not the full theme palette. The 5 named themes (`.theme-default` etc.) are dark-coded by default. A proper light mode requires either completing the `.light` overrides or creating paired light variants of each theme. The existing `applyMode()` plumbing is already wired — only the CSS variable completeness is missing.
-
-**No `dark:` Tailwind variant is used structurally** (only 32 occurrences, concentrated in `ImportDialog.tsx` and `HtmlRenderer.tsx`). The design system uses CSS custom properties exclusively — this is the correct pattern to continue.
-
-### Global Search — Current State
-
-`GlobalSearch.tsx` is an **inline dropdown component** embedded in `Layout.tsx` (both mobile header and desktop header positions). It:
-- Opens on Ctrl+K / Cmd+K keyboard shortcut
-- Renders a custom Command dropdown using `cmdk` primitives (`CommandList`, `CommandGroup`, `CommandItem`, `CommandSeparator` from `src/components/ui/command.tsx`)
-- Searches tickets via `GET /api/tickets?search=&status=all` with 250ms debounce
-- Shows quick actions, recent tickets (localStorage), popular tags, popular categories when idle
-- Searches users client-side from passed `users` prop
-- Does NOT search KB articles
-
-**`CommandDialog` component exists** in `src/components/ui/command.tsx` (wraps `@radix-ui/react-dialog` + `Command`) but is NOT currently used — `GlobalSearch.tsx` implements its own dropdown manually.
-
-### Dashboard — Current State
-
-`Dashboard.tsx` fetches `useTickets({ limit: 1000, status: 'all' })` and derives:
-- Status counts (open, in-progress, waiting, resolved, closed)
-- 7-day trend percentages (client-side calculation from ticket timestamps)
-- Sparkline data (client-side, last 7 days by day)
-- Critical ticket count and list
-
-Uses `KPICard` with `AnimatedNumber` and `SparklineChart`. No backend-specific dashboard endpoint — everything aggregated client-side from a bulk ticket fetch.
-
-**No aging tickets panel, no upcoming reminders widget, no "what happened today" summary.**
-
-### Reminder Architecture
-
-`ticket_reminders` table: `id, ticket_id, user_id, reminder_time TEXT, message, sent INTEGER, sent_at`. Indexed on `reminder_time` and `sent`. Reminders are per-ticket and only fetched on the ticket detail page via `useTicketReminders(ticketId)`. There is no global "upcoming reminders" endpoint.
-
-### Animation and Motion — Current State
-
-`framer-motion@^12.38.0` is installed. Usage is sparse — components use CSS `animate-fade-in` class (defined in `index.css`) with `animation-delay` inline style. `KPICard` uses this staggered CSS pattern. No `motion.*` components found in pages or most components.
 
 ---
 
-## New Feature Architecture: Dashboard Overview
+## Architectural Patterns
 
-### What to Add
+### Pattern 1: Time Tracking — Log-Entry Model
 
-The dashboard needs three new data panels:
-1. **Aging tickets** — open/in-progress tickets older than N days, sorted by age
-2. **Upcoming reminders** — reminders with `reminder_time` in the next X days that are not sent
-3. **"What happened today"** — tickets created, updated, resolved, or closed today
+**What:** Each time entry is a discrete row with `started_at` and optionally `stopped_at`. Duration is computed as `(stopped_at - started_at)` in seconds. A `NULL` `stopped_at` means a timer is currently running.
 
-### Backend: New Endpoint
+**When to use:** Simpler than storing a running timer in application state — the database is the source of truth for active timers. Survives page reloads and multiple sessions.
 
-Add `GET /api/tickets/dashboard-overview` to `server/src/routes/tickets.ts`.
+**Trade-offs:** Requires one extra query to detect "active timer" for a ticket (WHERE stopped_at IS NULL). Suits single-user: no locking concerns.
 
-**Why a dedicated endpoint:** Client-side aggregation on `useTickets({ limit: 1000 })` is the current pattern but fetches too much data. For aging and reminders, targeted SQL with JOINs is cleaner and faster than transferring 1000 rows.
-
+**Schema:**
+```sql
+CREATE TABLE ticket_time_logs (
+  id          TEXT PRIMARY KEY,
+  ticket_id   TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  started_at  TEXT NOT NULL,           -- ISO-8601 UTC
+  stopped_at  TEXT,                    -- NULL = timer running
+  note        TEXT,                    -- optional label
+  duration_s  INTEGER GENERATED ALWAYS AS (
+    CASE WHEN stopped_at IS NOT NULL
+    THEN CAST((julianday(stopped_at) - julianday(started_at)) * 86400 AS INTEGER)
+    ELSE NULL END
+  ) VIRTUAL,
+  created_at  TEXT DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_time_logs_ticket ON ticket_time_logs(ticket_id);
+CREATE INDEX idx_time_logs_started ON ticket_time_logs(started_at);
 ```
-GET /api/tickets/dashboard-overview
-Response:
-{
-  aging: [{ id, title, status, priority, created_at, category_id, age_days }],   // top 10 oldest non-closed
-  reminders: [{ id, ticket_id, ticket_title, reminder_time, message }],           // next 5 upcoming, sent=0
-  today: {
-    created: number,
-    updated: number,
-    resolved: number,
-    closed: number
+
+Note: SQLite generated columns (VIRTUAL) require SQLite 3.31+. The Docker base image ships a recent enough SQLite. If unsure, compute duration in the SELECT query instead — `CAST((julianday(stopped_at) - julianday(started_at)) * 86400 AS INTEGER) as duration_s` — and omit the GENERATED ALWAYS clause entirely. This is safer and is the recommended approach.
+
+**API endpoints:**
+```
+POST   /api/time-logs          — start timer { ticket_id, note? }
+PATCH  /api/time-logs/:id/stop — stop timer (sets stopped_at = now)
+PATCH  /api/time-logs/:id      — edit note
+DELETE /api/time-logs/:id      — delete entry
+GET    /api/tickets/:id/time-logs — all entries for a ticket
+GET    /api/time-logs/summary  — aggregate per ticket (for Reports tab)
+```
+
+**Frontend hook:**
+```typescript
+// useTimeLogs.ts
+const { logs, totalSeconds, isRunning, start, stop, deleteLog } = useTimeLogs(ticketId);
+```
+
+`isRunning` = `logs.some(l => l.stopped_at === null)`. The active entry's `id` is known so `stop()` can PATCH it directly.
+
+### Pattern 2: PWA Push Notifications — VAPID + Custom Service Worker
+
+**What:** The browser Push API requires a service worker to handle push events. `vite-plugin-pwa` with `generateSW` strategy does not support custom push handlers. Switch to `injectManifest` strategy to use a hand-written `sw.ts` that handles both Workbox precaching and push events.
+
+**When to use:** Any time the backend needs to proactively alert the user about reminders or aging tickets — even when the app tab is not in focus.
+
+**Trade-offs:** `injectManifest` requires maintaining a custom SW file. More setup than `generateSW`, but only ~30 lines extra for the push handler. No ongoing complexity.
+
+**Two-table approach — single subscriber model:**
+
+Since this is a single-user system, one push subscription is expected at a time. Store the browser's `PushSubscription` JSON in a table:
+
+```sql
+CREATE TABLE push_subscriptions (
+  id           TEXT PRIMARY KEY,
+  endpoint     TEXT NOT NULL UNIQUE,
+  p256dh       TEXT NOT NULL,
+  auth         TEXT NOT NULL,
+  user_agent   TEXT,
+  created_at   TEXT DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+VAPID keys are stored as environment variables (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`) and generated once at setup.
+
+**Backend send helper (`lib/pushNotifications.ts`):**
+```typescript
+import webpush from 'web-push';
+
+webpush.setVapidDetails(
+  'mailto:' + process.env.VAPID_SUBJECT,
+  process.env.VAPID_PUBLIC_KEY!,
+  process.env.VAPID_PRIVATE_KEY!
+);
+
+export async function sendPushToAll(payload: { title: string; body: string; url?: string }) {
+  const subs = db.prepare('SELECT * FROM push_subscriptions').all();
+  for (const sub of subs) {
+    const subscription = { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } };
+    await webpush.sendNotification(subscription, JSON.stringify(payload))
+      .catch(err => {
+        if (err.statusCode === 410) {
+          // Subscription expired — remove it
+          db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint);
+        }
+      });
   }
 }
 ```
 
-SQL for aging: `SELECT id, title, status, priority, created_at, category_id, CAST((julianday('now') - julianday(created_at)) AS INTEGER) as age_days FROM tickets WHERE status NOT IN ('closed', 'resolved') ORDER BY created_at ASC LIMIT 10`
+**Custom service worker (`src/sw.ts`):**
+```typescript
+import { precacheAndRoute } from 'workbox-precaching';
 
-SQL for reminders: `SELECT tr.id, tr.ticket_id, t.title as ticket_title, tr.reminder_time, tr.message FROM ticket_reminders tr JOIN tickets t ON t.id = tr.ticket_id WHERE tr.sent = 0 AND tr.reminder_time >= datetime('now') ORDER BY tr.reminder_time ASC LIMIT 5`
+declare const self: ServiceWorkerGlobalScope;
 
-SQL for today: 4 COUNT queries with `date(field) = date('now')` — one per event type.
+// Workbox injects the manifest here at build time
+precacheAndRoute(self.__WB_MANIFEST);
 
-**Route placement:** Add above the `/:id` route in `tickets.ts` to avoid the ID route matching `dashboard-overview` as a ticket ID. This is the critical placement constraint.
+self.addEventListener('push', (event) => {
+  const data = event.data?.json() ?? {};
+  event.waitUntil(
+    self.registration.showNotification(data.title ?? 'IT-Ticket', {
+      body: data.body,
+      icon: '/icons/icon-192x192.png',
+      data: { url: data.url ?? '/' },
+    })
+  );
+});
 
-### Frontend: New Hook and Components
-
-**New hook:** `useDashboardOverview()` in `src/hooks/useDashboardOverview.ts`
-- Calls `GET /api/tickets/dashboard-overview`
-- Returns `{ aging, reminders, today, isLoading }`
-- Refreshes every 5 minutes (staleTime: 5 * 60 * 1000 via react-query, or manual interval)
-
-**Dashboard.tsx modifications:**
-- Replace `useTickets({ limit: 1000, status: 'all' })` with the existing KPI data source (keep for trend/sparklines) PLUS `useDashboardOverview()` for the new panels
-- OR: move the existing client-side KPI stats to use `GET /api/reports/summary` (already exists) and free up the bulk fetch
-
-**New panel components (inline in Dashboard.tsx or extracted):**
-- `AgingTicketsPanel` — table/list of oldest open tickets with age badge, links to ticket detail
-- `UpcomingRemindersPanel` — list of upcoming reminders with time and ticket link
-- `TodaySummaryPanel` — 4 small stat chips: created/updated/resolved/closed today
-
-**Component boundaries:**
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(clients.openWindow(event.notification.data.url));
+});
 ```
-Dashboard.tsx
-  useDashboardOverview() → GET /api/tickets/dashboard-overview
-  KPICard grid (existing, keep useTickets for sparklines OR switch to /reports/summary)
-  AgingTicketsPanel      — new, inline or extracted component
-  UpcomingRemindersPanel — new, inline or extracted component
-  TodaySummaryPanel      — new, small stat row
+
+**vite.config.ts change:**
+```typescript
+VitePWA({
+  strategies: 'injectManifest',  // was: not set (defaults to generateSW)
+  srcDir: 'src',
+  filename: 'sw.ts',
+  // rest of manifest/workbox config unchanged
+})
+```
+
+**Frontend hook (`usePushNotifications.ts`):**
+```typescript
+// Calls Notification.requestPermission(), subscribes via pushManager.subscribe()
+// POSTs subscription to /api/push/subscribe
+// Stores "subscribed" state in localStorage so the UI reflects current state
+```
+
+**Triggering push from scheduler:** In `reminderScheduler.ts`, after sending email (or instead of it when SMTP is not configured), call `sendPushToAll()` with the reminder's ticket title. Same for aging-ticket alerts — add a new daily cron check.
+
+**API endpoints:**
+```
+GET    /api/push/vapid-public-key   — returns VAPID_PUBLIC_KEY for subscription
+POST   /api/push/subscribe          — saves PushSubscription to DB
+DELETE /api/push/unsubscribe        — removes subscription by endpoint
+POST   /api/push/test               — sends a test notification (dev/settings use)
+```
+
+### Pattern 3: Backup & Export — Streaming Zip
+
+**What:** On demand, the backend creates a zip containing:
+1. The SQLite database file (using `db.backup()` to a temp path, then add to zip)
+2. The uploads directory
+
+Stream the zip directly in the HTTP response. No temp file needed for the zip — `archiver` pipes to `res`.
+
+**When to use:** Simple, zero-dependency on external services. SQLite's `backup()` API creates a consistent snapshot even while the DB is being written.
+
+**Trade-offs:** Blocking for the duration of the backup copy. On a small DB (< 50MB) this is under a second. No restore UI needed for v1.5 — download only.
+
+**better-sqlite3 backup API:**
+```typescript
+// db.backup(destPath) returns a Promise
+// The same connection can still handle queries during backup
+await db.backup(tmpDbPath);
+```
+
+This produces a clean, consistent DB file (WAL checkpointed into the backup) even during live writes.
+
+**Implementation (`routes/backup.ts`):**
+```typescript
+import archiver from 'archiver';
+import { db } from '../db/connection.js';
+
+router.get('/download', authenticate, async (req, res) => {
+  const tmpDbPath = `/tmp/backup-${Date.now()}.sqlite`;
+  await db.backup(tmpDbPath);
+
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="it-ticket-backup-${dateStr}.zip"`);
+
+  const archive = archiver('zip', { zlib: { level: 6 } });
+  archive.pipe(res);
+  archive.file(tmpDbPath, { name: 'database.sqlite' });
+  archive.directory(UPLOAD_DIR, 'uploads');
+  await archive.finalize();
+
+  // Cleanup tmp file after stream ends
+  res.on('finish', () => fs.unlink(tmpDbPath, () => {}));
+});
+```
+
+**Frontend:** A single Button in Settings that calls `window.location.href = '/api/backup/download'` (or uses a fetch with blob download). No React Query cache needed — it is a file download, not a data query.
+
+**Install:** `npm install archiver` + `npm install -D @types/archiver` on the server.
+
+### Pattern 4: KB Sidebar Search from Ticket View
+
+**What:** An enhanced version of the existing `KBLinksSection` component that adds FTS5-powered live search within the ticket detail panel. Currently `KBLinksSection` fetches all articles on popover open and filters client-side. The upgrade adds a debounced call to `/api/kb/articles?search=` (already wired for FTS5) for better relevance.
+
+**When to use:** The existing `KBLinksSection` component already handles article linking. No new backend work is needed — FTS5 search already exists at `GET /api/kb/articles?search=`. The change is purely frontend: upgrade the search input in `KBLinksSection` to call the API rather than filtering the in-memory article list.
+
+**Trade-offs:** Small migration — the existing component structure is reused. The popover becomes API-driven rather than loading all articles upfront, which is better for large KB collections.
+
+**What changes in `KBLinksSection.tsx`:**
+```typescript
+// Current: load all articles on open, filter client-side
+// New: debounced fetch to /api/kb/articles?search=<query>&status=published&limit=20
+// on each keystroke in the CommandInput
+
+const { data: searchResults, isLoading } = useQuery({
+  queryKey: ['kb-search', searchQuery],
+  queryFn: () => api.getKbArticles({ search: searchQuery, status: 'published', limit: 20 }),
+  enabled: searchQuery.length > 0,
+  staleTime: 30_000,
+});
+```
+
+The "already linked" filter still runs client-side: `searchResults?.filter(a => !linked.some(l => l.id === a.id))`.
+
+An idle state (empty query) shows a brief prompt: "Sök KB-artiklar..." with no results list, reducing the perceived latency vs. the current "load all" approach.
+
+---
+
+## Data Flow
+
+### Time Tracking: Start/Stop Timer
+
+```
+User clicks "Starta timer" in TimeLogSection
+  → POST /api/time-logs { ticket_id }
+  → INSERT ticket_time_logs (started_at = now, stopped_at = NULL)
+  → React Query invalidates ['time-logs', ticketId]
+  → TimeLogSection re-renders with active entry shown
+
+User clicks "Stoppa"
+  → PATCH /api/time-logs/:id/stop
+  → UPDATE ticket_time_logs SET stopped_at = now WHERE id = ?
+  → React Query invalidates
+  → Entry shows elapsed time
+```
+
+### Push Notification: Reminder Fires
+
+```
+reminderScheduler cron (every minute)
+  → Finds due reminders (sent = 0, reminder_time <= now)
+  → For each: sendEmail() (if SMTP configured)
+            + sendPushToAll({ title, body, url: /tickets/:id })
+  → Marks reminder sent = 1
+  → Browser receives push even if app tab is closed
+  → SW shows OS notification
+  → User clicks → app opens at /tickets/:id
+```
+
+### Backup Download
+
+```
+User clicks "Ladda ner backup" in Settings
+  → GET /api/backup/download (streaming response)
+  → db.backup('/tmp/backup-XXX.sqlite')  [async, non-blocking for other queries]
+  → archiver streams zip: database.sqlite + uploads/
+  → Browser receives zip download
+  → tmp file cleaned up
+```
+
+### KB Sidebar Search
+
+```
+User types in KB search in TicketDetail sidebar
+  → 300ms debounce fires
+  → GET /api/kb/articles?search=<query>&status=published&limit=20
+  → FTS5 returns ranked results with <mark> snippets
+  → Results shown in popover (minus already-linked articles)
+  → User selects → POST to /api/tickets/:id/kb-links (existing endpoint)
 ```
 
 ---
 
-## New Feature Architecture: Command Palette (Cmd+K)
+## Scaling Considerations
 
-### What to Change
+This is a single-user system. Scaling is not a concern. The table below documents "what breaks if load unexpectedly increases" for reference only.
 
-The existing `GlobalSearch.tsx` is an inline header dropdown. The v1.4 goal is a **full command palette** — a modal-style overlay triggered by Cmd+K, with keyboard navigation across tickets, KB articles, contacts, and navigation actions.
-
-**`CommandDialog` is already implemented** in `src/components/ui/command.tsx`. The upgrade path is:
-
-1. **Refactor `GlobalSearch.tsx`** from inline dropdown to using `CommandDialog` (which renders via `@radix-ui/react-dialog`) — OR — create a new `CommandPalette.tsx` component that uses `CommandDialog` and retire the current inline dropdown search in the header
-
-2. **Add KB article search** to the results — call `GET /api/kb/articles?search=` in parallel with ticket search. The `api.getKbArticles({ search })` method already exists in `api.ts`.
-
-3. **Add navigation commands** — static list of page destinations (Tickets, Archive, Reports, KB, Settings etc.) filtered by search term. No backend needed.
-
-4. **Upgrade the header** — replace the inline search input that opens a dropdown with a styled trigger button showing `⌘K` hint, which opens the `CommandDialog` modal.
-
-### Integration Points
-
-**`Layout.tsx`** is the mount point. Currently renders `<GlobalSearch tickets={...} users={...} categories={...} tags={...} />`. After refactor, render `<CommandPalette ... />` instead, or keep the header search as a thin trigger.
-
-**Data passed to CommandPalette:**
-- `tickets` — from `useTickets({ page: 1, limit: 100, status: 'all' })` already in Layout.tsx
-- `users` — from `useUsers()` already in Layout.tsx
-- `categories` — from `useCategories()` already in Layout.tsx
-- `tags` — from `useTags()` already in Layout.tsx
-- KB search — fetched on-demand inside CommandPalette when query exceeds 2 chars (same as ticket backend search pattern)
-
-**Keyboard shortcut:** Already wired — `document.addEventListener('keydown', ...)` checking `e.key === 'k' && (e.metaKey || e.ctrlKey)`. Keep this, but change it to open the `CommandDialog` (set `open` state) instead of focusing the inline input.
-
-**Result sections in palette:**
-```
-[idle state]
-  Quick Actions (static: Nytt ärende, Inställningar, KB ny artikel...)
-  Recently Viewed Tickets (from localStorage 'recently_viewed_tickets')
-  Popular Tags
-  Popular Categories
-
-[search state — query > 1 char]
-  Tickets (from /api/tickets?search=, debounced 250ms)
-  KB Artiklar (from /api/kb/articles?search=, debounced 250ms, parallel)
-  Kontakter (client-side from users prop)
-  Sidor (static nav items filtered by label match)
-```
-
-### Modified vs New
-
-| Item | New or Modified |
-|------|----------------|
-| `CommandPalette.tsx` | NEW — replaces GlobalSearch or wraps it |
-| `GlobalSearch.tsx` | MODIFIED — either refactored to use CommandDialog, or replaced |
-| `Layout.tsx` | MODIFIED — replace GlobalSearch render with CommandPalette trigger |
-| `api.ts` | NO CHANGE — `getKbArticles({ search })` already exists |
-| Backend | NO CHANGE — existing `/api/kb/articles?search=` and `/api/tickets?search=` sufficient |
+| Scale | Architecture Adjustments |
+|-------|--------------------------|
+| 1 user (current) | Everything in single process is fine |
+| 10 concurrent users | WAL mode handles concurrent reads; backup endpoint needs timeout guard |
+| 100+ users | Move backup to background job, store subscriptions per-user, web-push batching |
 
 ---
 
-## New Feature Architecture: UI Polish
+## Anti-Patterns
 
-### Dark Mode — What Actually Needs Work
+### Anti-Pattern 1: Using generateSW Strategy for Push Notifications
 
-The `.dark` and `.light` CSS classes in `index.css` exist but are incomplete. They override only ~12 variables each. The per-theme definitions (`.theme-default`, `.theme-midnight`, etc.) define 40+ variables but are dark-only by default.
+**What people do:** Try to add a `customSW` option to the `generateSW` config, or inject push handlers via `additionalManifestEntries`.
 
-**Approach:** Complete the `.light` class in `index.css` to override all necessary CSS variables to light-appropriate values. The `applyMode()` / `getStoredMode()` plumbing in `appearance.ts` and `AppearanceInitializer` in `App.tsx` is already correct. No React code changes needed — pure CSS variable additions to `index.css`.
+**Why it's wrong:** `generateSW` generates the entire service worker — you cannot add arbitrary event listeners. The only supported way to add `push` event handlers is `injectManifest` with your own `sw.ts`.
 
-**Pattern to follow:** All theming works through CSS custom properties. Never add `dark:` Tailwind variants — use the existing CSS variable approach exclusively. Components use `bg-background`, `text-foreground`, etc. which resolve through the CSS vars.
+**Do this instead:** Switch `strategies: 'injectManifest'`, create `src/sw.ts` with `precacheAndRoute(self.__WB_MANIFEST)` at the top, then add push handlers below it.
 
-**Toggle UI:** A mode toggle button (sun/moon icon) needs to be added to the UI. Best placement is `BottomSection` in `Layout.tsx` alongside the logout button, calling `applyMode()` + `saveModeTheme()` from `appearance.ts`.
+### Anti-Pattern 2: Computing Duration Client-Side
 
-### Responsive Design — Current Gaps
+**What people do:** Store only `started_at`, compute elapsed time in React with `setInterval` updating state every second.
 
-The layout already has mobile support:
-- Sidebar is `fixed`, slides in on mobile with hamburger toggle
-- Mobile header shows hamburger + search
-- Dashboard grid uses `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`
+**Why it's wrong:** Creates a "timer that disappears on page reload." The single-user app may be refreshed while a timer runs. The DB-as-source-of-truth approach (NULL stopped_at = running) survives any client reset.
 
-**Gaps to address:**
-- `TicketTable.tsx` / `TicketList.tsx` — table likely needs horizontal scroll or column hiding on mobile
-- `KBArticleDetail.tsx` two-column layout (ToC + content) should collapse to single column on mobile
-- `Reports.tsx` — chart widths may not adapt to small screens
-- New dashboard panels need `sm:` / `md:` responsive grid rules
+**Do this instead:** The timer display can use client-side `Date.now() - started_at` for the UI counter — that is fine. But `started_at` must be persisted immediately on start, not held in component state.
 
-**Approach:** Audit each page for overflow issues at `sm` (640px) breakpoint. Use `overflow-x-auto` on tables, `hidden sm:table-cell` for secondary columns, `flex-col sm:flex-row` for panel layouts.
+### Anti-Pattern 3: Zipping the Live SQLite File Directly
 
-### Loading States — Current State and Gaps
+**What people do:** Add `database.sqlite` to the archiver directly by path while the DB is in use.
 
-`Skeleton` component exists at `src/components/ui/skeleton.tsx`. Usage is sparse — 52 occurrences of "loading/skeleton/spinner" but concentrated in specific components.
+**Why it's wrong:** With WAL mode, the live `.sqlite` file may be in an inconsistent state mid-write. WAL journal is not included in the zip.
 
-**Dashboard loading:** Currently `useTickets` loading state shows nothing — the KPI grid just renders with `value={0}`. A skeleton grid during initial load is the right fix.
+**Do this instead:** Always call `db.backup(tmpPath)` first. `better-sqlite3`'s backup API performs an online backup that checkpoints WAL and produces a clean, self-contained file.
 
-**Pattern to establish:**
-```tsx
-// Consistent loading pattern for all data-dependent pages:
-if (isLoading) {
-  return <PageSkeleton />  // component-specific skeleton
-}
-```
+### Anti-Pattern 4: Fetching All KB Articles for the Sidebar
 
-**New dashboard panels** must implement skeleton loading — `AgingTicketsPanel` and `UpcomingRemindersPanel` should show `Skeleton` rows while `useDashboardOverview()` resolves.
+**What people do:** Keep the current `api.getKbArticles()` call (no search param) when the popover opens, then filter client-side.
 
-### Micro-interactions — Current State and Additions
+**Why it's wrong:** As the KB grows, this loads hundreds of articles on every popover open. FTS5 search with a 20-result limit is faster and produces ranked, relevant results.
 
-**Existing patterns:**
-- `animate-fade-in` CSS class with `animationDelay` for staggered reveals (KPICard)
-- `transition-all duration-300 hover:-translate-y-1` on KPICard hover
-- `backdrop-blur-xl` on sticky headers
-- Sidebar transitions (`transition-all duration-300`)
-- `AnimatedNumber` component for counting up values
+**Do this instead:** Only call `getKbArticles({ search: query })` when the user has typed at least 1 character. Show an empty/prompt state when idle.
 
-**`framer-motion@^12.38.0` is installed but underused.** CSS animations cover most existing cases. For v1.4, reserved for:
-- CommandPalette overlay entrance (scale + fade via `motion.div` or CSS `@keyframes`)
-- New dashboard panels stagger entrance (extend the existing `animate-fade-in` pattern with delays)
-- Loading-to-content transition for new widgets
+### Anti-Pattern 5: Storing VAPID Keys in the DB
 
-**Rule:** Prefer CSS-only animations (`@keyframes` in `index.css`, Tailwind `animate-*` classes) for simple cases. Use Framer Motion only for gestures or exit animations where CSS falls short (e.g., dismiss/close transitions on panels).
+**What people do:** Generate VAPID keys at first run and store them in a settings table.
+
+**Why it's wrong:** VAPID keys must survive DB restores. A backup restore would wipe the keys, invalidating all existing push subscriptions permanently.
+
+**Do this instead:** Store VAPID keys as Docker environment variables (`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`). Generate them once via `npx web-push generate-vapid-keys` and document them in the deployment guide. They persist across DB restores because they live in environment config, not the database.
 
 ---
 
-## Component Boundaries Summary
+## Integration Points
 
-| Component | Type | Communicates With |
-|-----------|------|-------------------|
-| `Dashboard.tsx` | MODIFIED page | `useDashboardOverview`, `useTickets` (existing), new panel components |
-| `useDashboardOverview.ts` | NEW hook | `GET /api/tickets/dashboard-overview` |
-| `AgingTicketsPanel.tsx` | NEW component | Mounts in `Dashboard.tsx`, data from `useDashboardOverview` |
-| `UpcomingRemindersPanel.tsx` | NEW component | Mounts in `Dashboard.tsx`, data from `useDashboardOverview` |
-| `TodaySummaryPanel.tsx` | NEW component (small) | Mounts in `Dashboard.tsx`, data from `useDashboardOverview` |
-| `tickets.ts` (backend) | MODIFIED route | New `GET /dashboard-overview` sub-route above `/:id` |
-| `CommandPalette.tsx` | NEW component | Mounts in `Layout.tsx`, uses `CommandDialog` from `ui/command.tsx`, calls `api.getKbArticles` and `api.getTickets` |
-| `Layout.tsx` | MODIFIED | Replace `GlobalSearch` with `CommandPalette`, add dark mode toggle in `BottomSection` |
-| `GlobalSearch.tsx` | RETIRED or REFACTORED | Functionality merged into `CommandPalette.tsx` |
-| `index.css` | MODIFIED | Complete `.light` CSS variable set, add missing dark mode variable completeness |
-| `appearance.ts` | NO CHANGE | Already correct — mode toggle logic exists |
+### New vs Modified — Explicit List
 
----
+| Item | Status | Why |
+|------|--------|-----|
+| `ticket_time_logs` table | NEW | New domain — no existing schema |
+| `push_subscriptions` table | NEW | Stores browser PushSubscription |
+| `server/src/routes/time-logs.ts` | NEW | CRUD for time entries |
+| `server/src/routes/push.ts` | NEW | Push subscription management |
+| `server/src/routes/backup.ts` | NEW | Zip download endpoint |
+| `server/src/lib/pushNotifications.ts` | NEW | web-push wrapper |
+| `src/components/TimeLogSection.tsx` | NEW | Timer UI in ticket detail |
+| `src/components/KBSidebarSearch.tsx` | NEW or `KBLinksSection` refactor | API-driven search |
+| `src/hooks/useTimeLogs.ts` | NEW | React Query for time entries |
+| `src/hooks/usePushNotifications.ts` | NEW | Push registration |
+| `src/sw.ts` | NEW | Custom SW with push handler |
+| `vite.config.ts` | MODIFIED — strategy only | `injectManifest` switch |
+| `server/src/index.ts` | MODIFIED | Register new routes |
+| `server/src/db/connection.ts` | MODIFIED | New `ensure*` migrations |
+| `server/src/lib/reminderScheduler.ts` | MODIFIED | Add push call after email |
+| `src/pages/TicketDetail.tsx` | MODIFIED | Add TimeLogSection, upgrade KB panel |
+| `src/pages/Reports.tsx` | MODIFIED | Add time analytics tab |
+| `src/pages/Settings.tsx` | MODIFIED | Push opt-in UI + backup button |
+| `src/lib/api.ts` | MODIFIED | New methods for time-logs, push, backup |
 
-## Data Flow Changes
+### Internal Boundaries
 
-### Dashboard Page Load — Extended
-
-**Current:**
-```
-Dashboard mounts
-  → useTickets({ limit: 1000, status: 'all' }) — fetches all tickets
-  → useMemo derives stats, trends, sparklines client-side
-```
-
-**New:**
-```
-Dashboard mounts
-  → useTickets({ limit: 1000, status: 'all' })  — keep for sparklines and trends
-  → useDashboardOverview()                        — NEW parallel fetch
-      → GET /api/tickets/dashboard-overview
-          → aging: SQL query (oldest open/in-progress, limit 10)
-          → reminders: SQL query (upcoming unsent, limit 5, JOIN tickets)
-          → today: 4 COUNT queries
-      → returns { aging, reminders, today }
-  → Render KPI grid (existing) + 3 new panels in parallel
-```
-
-### Command Palette Flow — Refactored
-
-**Current:**
-```
-User types in GlobalSearch input (in Layout header)
-  → Debounced GET /api/tickets?search=&status=all&limit=20
-  → Results shown in inline dropdown below input
-  → Cmd+K focuses the input
-```
-
-**New:**
-```
-User presses Cmd+K anywhere
-  → CommandPalette opens as CommandDialog (modal overlay, z-index above sidebar)
-  → [idle] Shows quick actions, recent tickets (localStorage), popular tags/categories
-  → [typing > 1 char] Debounced parallel:
-      → GET /api/tickets?search=&status=all&limit=20
-      → GET /api/kb/articles?search=&limit=10
-      → Client-side filter on users prop
-      → Static nav items label match
-  → User selects item → navigate(path) → dialog closes
-```
-
-### Dark Mode Toggle Flow
-
-**Current:** `applyMode()` called once at mount via `AppearanceInitializer`. No UI toggle.
-
-**New:**
-```
-User clicks mode toggle (in Layout BottomSection)
-  → Reads current mode from localStorage
-  → Calls applyMode(newMode) — adds/removes .dark/.light on documentElement
-  → Calls saveModeTheme(newMode) — persists to localStorage
-  → CSS vars on documentElement update → all components re-render via CSS cascade
-  → No React state involved — pure DOM class manipulation
-```
+| Boundary | Communication | Notes |
+|----------|---------------|-------|
+| `reminderScheduler` → `pushNotifications` | Direct function call | Same process, no IPC needed |
+| Frontend SW ↔ Backend | Push API via browser's push service (e.g., FCM) | VAPID signed, not direct HTTP |
+| `backup.ts` → `archiver` → `res` | Node.js stream pipe | No buffering in memory |
+| `KBLinksSection` → `/api/kb/articles` | Existing HTTP endpoint | No backend changes needed |
 
 ---
 
 ## Build Order
 
-Dependencies drive this order. Dark mode CSS work is standalone. Dashboard and CommandPalette share no dependencies.
+Dependencies drive this order. Each feature is independently buildable with no cross-dependencies except that push notifications require the `sw.ts` change to `vite.config.ts` to land first.
 
-### Phase 1 — Dark Mode CSS (no React changes)
+### Phase 1 — Time Tracking (DB + backend + UI)
 
-Complete the `.light` CSS variable set in `index.css`. All 5 themes need light-appropriate overrides. Test by manually adding `.light` to `documentElement`. Add the toggle button in `Layout.tsx` `BottomSection` after CSS is verified.
+1. Add migration in `connection.ts` — create `ticket_time_logs` table
+2. Create `server/src/routes/time-logs.ts` — start, stop, list, delete, summary endpoints
+3. Register route in `server/src/index.ts`
+4. Create `src/hooks/useTimeLogs.ts`
+5. Create `src/components/TimeLogSection.tsx`
+6. Mount `TimeLogSection` in `TicketDetail.tsx`
+7. Add time analytics tab to `Reports.tsx` using `/api/time-logs/summary`
 
-**Why first:** No risk, no breaking changes, validates the theming system before adding new features. Purely additive CSS.
+**Why first:** Self-contained, no dependency on other v1.5 features. Validates the new pattern before touching the service worker.
 
-### Phase 2 — Dashboard Overview (new backend endpoint + new frontend panels)
+### Phase 2 — Backup & Export (backend only + one Settings button)
 
-1. Add `GET /api/tickets/dashboard-overview` to `server/src/routes/tickets.ts` (above `/:id` route)
-2. Create `useDashboardOverview.ts` hook
-3. Create `AgingTicketsPanel`, `UpcomingRemindersPanel`, `TodaySummaryPanel` components
-4. Update `Dashboard.tsx` to call `useDashboardOverview` and render the new panels
-5. Add skeleton loading states to new panels using `Skeleton` component
+1. Install `archiver` on backend
+2. Create `server/src/routes/backup.ts`
+3. Register route in `server/src/index.ts`
+4. Add backup section to `Settings.tsx` (button + last-backup note)
 
-**Why before CommandPalette:** Self-contained feature, no cross-dependencies. Validates the new backend endpoint pattern before refactoring the complex search.
+**Why second:** Purely backend + one UI button. Zero risk to frontend architecture. Short phase.
 
-### Phase 3 — Command Palette Refactor
+### Phase 3 — KB Sidebar Search (frontend only)
 
-1. Create `CommandPalette.tsx` using `CommandDialog` from `ui/command.tsx`
-2. Port existing GlobalSearch logic (recent tickets, popular tags/categories, quick actions) into CommandPalette
-3. Add KB article search leg (parallel debounced fetch)
-4. Add navigation commands (static list)
-5. Update `Layout.tsx` to mount `CommandPalette` and replace GlobalSearch header trigger
-6. Update Cmd+K handler to open the dialog instead of focusing input
+1. Refactor `KBLinksSection.tsx` — replace bulk-fetch with debounced API search
+2. Add `api.searchKbArticles()` method to `api.ts` if not already parameterized correctly
+3. Verify `GET /api/kb/articles?search=&status=published` returns FTS5 results (already works)
 
-**Why last:** Most complex change — refactors existing functionality. Building it last avoids disrupting dashboard and dark mode work. GlobalSearch continues working until step 5.
+**Why third:** No backend changes needed. Isolated to one component file.
 
-### Phase 4 — Responsive and Loading Polish
+### Phase 4 — PWA Push Notifications (SW + backend + frontend)
 
-1. Audit `TicketList.tsx` / `TicketTable.tsx` for mobile overflow — add `overflow-x-auto` and responsive column hiding
-2. Add skeleton grids to Dashboard (existing KPI section) and new panels
-3. Add loading indicators to Reports charts
-4. Review KB article detail two-column ToC layout on mobile
-5. Add micro-interaction touches (stagger delays to new dashboard panels)
+1. Create `src/sw.ts` with `precacheAndRoute` + push handler
+2. Switch `vite.config.ts` to `strategies: 'injectManifest'` — test that offline caching still works
+3. Install `web-push` on backend, generate VAPID keys, add to env
+4. Add migration for `push_subscriptions` table
+5. Create `server/src/routes/push.ts`
+6. Create `server/src/lib/pushNotifications.ts`
+7. Modify `reminderScheduler.ts` to call `sendPushToAll()`
+8. Create `src/hooks/usePushNotifications.ts`
+9. Add push opt-in section to `Settings.tsx` (request permission, show status)
+10. Register push route in `server/src/index.ts`
 
-**Why last:** Polish work that depends on all features being in place. Nothing blocks other phases.
-
----
-
-## Anti-Patterns to Avoid
-
-### Adding `dark:` Tailwind Variants
-
-The design system uses CSS custom properties exclusively. Adding `dark:` variants in component files fragments the theming into two systems. All dark mode work belongs in `index.css` as CSS variable overrides under `.dark` or `.light`.
-
-### A Second Dashboard API Endpoint for KPI Counts
-
-The existing `GET /api/reports/summary` already provides status counts. Creating a third source of truth for ticket counts (alongside client-side derivation in Dashboard.tsx and reports) creates sync problems. Use `/reports/summary` for KPI cards if moving off the bulk fetch; use the new `/dashboard-overview` only for aging, reminders, and today-summary.
-
-### Mounting CommandPalette Inside Layout's Header DOM
-
-The CommandDialog uses a Radix Dialog portal that renders outside the component tree. Mounting the trigger anywhere in Layout is fine — the dialog renders at the document body level. Don't try to contain it or set overflow constraints on the header.
-
-### Loading KB Search on Every Keystroke Without Debounce
-
-KB search (FTS5) and ticket search both run SQL. The existing 250ms debounce is the right pattern. In CommandPalette, share a single debounce timer for both parallel fetch calls — don't create separate debounces that fire at different times.
-
-### Replacing `useTickets` in Dashboard with a New Fetch
-
-The existing `useTickets({ limit: 1000 })` in Dashboard.tsx is used for sparklines and trend calculations that require per-ticket timestamps. The new `useDashboardOverview` adds to it, not replaces it. If the bulk fetch becomes a performance concern, that's a separate optimization task — don't conflate it with this feature.
-
-### Storing "Today" Summary State in Component State
-
-The "what happened today" counts come from the backend endpoint. Don't derive them client-side in the Dashboard with `useMemo` over `useTickets` — the bulk fetch misses tickets created in the current session that aren't in the cached result yet.
+**Why last:** Most cross-cutting change (SW, vite config, backend lib, scheduler). Best done after simpler features are proven. Switching the SW strategy has the highest risk of disrupting existing offline behavior — doing it last limits blast radius.
 
 ---
 
 ## Sources
 
-- Direct analysis of `src/pages/Dashboard.tsx` — existing data flow (HIGH confidence)
-- Direct analysis of `src/components/GlobalSearch.tsx` — current search architecture (HIGH confidence)
-- Direct analysis of `src/components/Layout.tsx` — component mount points, header structure (HIGH confidence)
-- Direct analysis of `src/components/ThemeProvider.tsx` + `src/lib/appearance.ts` + `src/index.css` — theme and dark mode system (HIGH confidence)
-- Direct analysis of `src/components/ui/command.tsx` — CommandDialog availability (HIGH confidence)
-- Direct analysis of `server/src/routes/tickets.ts` — countOnly param, reminder routes, route ordering (HIGH confidence)
-- Direct analysis of `server/src/routes/reports.ts` — existing summary endpoint (HIGH confidence)
-- Direct analysis of `server/src/db/connection.ts` — ticket_reminders schema (HIGH confidence)
-- Direct analysis of `src/lib/api.ts` — getKbArticles method exists, ApiClient pattern (HIGH confidence)
-- Direct analysis of `package.json` — framer-motion@^12.38.0, cmdk@^1.1.1 confirmed (HIGH confidence)
+- Direct analysis of `server/src/db/connection.ts` — migration pattern for new tables (HIGH confidence)
+- Direct analysis of `server/src/index.ts` — route registration pattern (HIGH confidence)
+- Direct analysis of `server/src/lib/reminderScheduler.ts` — scheduler pattern for push trigger (HIGH confidence)
+- Direct analysis of `src/components/KBLinksSection.tsx` — existing KB search pattern to upgrade (HIGH confidence)
+- Direct analysis of `vite.config.ts` — current `generateSW` strategy confirmed (HIGH confidence)
+- Direct analysis of `server/src/db/schema.sql` — existing table conventions (HIGH confidence)
+- [better-sqlite3 backup() API](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/api.md) — confirmed async backup with WAL safety (HIGH confidence)
+- [web-push npm](https://github.com/web-push-libs/web-push) — VAPID key generation, subscription schema, sendNotification API (HIGH confidence)
+- [vite-plugin-pwa injectManifest](https://vite-pwa-org.netlify.app/guide/) — confirmed `strategies: 'injectManifest'` required for custom push handler (MEDIUM confidence — GitHub issue discussion, not official docs)
+- [MDN Push API](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Tutorials/js13kGames/Re-engageable_Notifications_Push) — PushSubscription object structure, push event handler (HIGH confidence)
+
+---
+
+*Architecture research for: IT Ticket System v1.5 — Time Tracking, Push Notifications, Backup, KB Search*
+*Researched: 2026-04-05*

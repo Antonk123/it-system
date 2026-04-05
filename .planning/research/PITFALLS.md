@@ -1,352 +1,454 @@
-# Domain Pitfalls
+# Pitfalls Research
 
-**Domain:** Dashboard overview, command palette (Cmd+K), dark mode toggle, responsive design, loading states, micro-interactions — added to existing React 18 + Tailwind + shadcn IT ticket system
-**Researched:** 2026-03-29
-**Confidence:** HIGH for codebase-specific analysis (direct inspection). MEDIUM for command palette patterns (WebSearch + codebase). MEDIUM for responsive retrofit patterns (WebSearch).
+**Domain:** Time tracking, PWA push notifications, SQLite backup/export, KB sidebar search — added to existing Express + SQLite (better-sqlite3) + React PWA IT ticket system.
+**Researched:** 2026-04-05
+**Confidence:** HIGH for codebase-specific analysis (direct inspection). HIGH for SQLite backup (official docs + better-sqlite3 docs). MEDIUM for push notifications (WebSearch + official MDN + web-push npm). MEDIUM for time tracking schema (WebSearch + domain knowledge).
 
 ---
 
 ## Critical Pitfalls
 
-### Pitfall 1: Dark Mode Toggle Conflicts With the Existing `.light`/`.dark` Class System
+### Pitfall 1: Push Notifications Require `injectManifest` Strategy — the Current `generateSW` Config Cannot Handle Custom Push Events
 
 **What goes wrong:**
-The codebase already has a custom mode system (`src/lib/appearance.ts`) that manages `.light` and `.dark` classes on `document.documentElement` via `applyMode()`, persisted in localStorage under `"app-mode-theme"`. The app also has `ThemeProvider` wrapping the app via `next-themes`. If a developer adds `next-themes` as the active dark mode driver (setting `attribute="class"`, `defaultTheme="dark"` on the `ThemeProvider`), it will conflict with the existing `applyMode()` calls in `AppearanceInitializer`. Both systems fight over the same `classList` on `<html>`. The result is flash-of-wrong-theme on load, or one system overwriting the other mid-session.
+The current `vite.config.ts` uses `VitePWA({ registerType: 'autoUpdate' })` with the default `generateSW` strategy. Workbox auto-generates the service worker and controls it entirely. The `push` event listener (required to receive and display push notifications) CANNOT be added to a `generateSW`-managed service worker without switching to `injectManifest`. If a developer tries to add a `public/sw.js` alongside the generated service worker, the browser registers two service workers for the same scope, causing conflicts and unpredictable cache behavior.
 
 **Why it happens:**
-`ThemeProvider` is already imported from `next-themes` and present in `App.tsx`. The instinct is to wire it up fully for the dark mode toggle. But `AppearanceInitializer` in the same file already calls `applyMode(getStoredMode())` on mount, which directly manipulates `document.documentElement.classList`.
+The existing PWA setup works for offline caching and auto-update, which `generateSW` handles well. Developers extend it for push by adding a custom file, not realising the strategy must change.
 
 **Consequences:**
-- FOUC (flash of unstyled/wrong-theme content) on page load
-- Toggle works once then reverts when `AppearanceInitializer` runs again
-- Two localStorage keys in use: `next-themes` uses `"theme"`, the custom system uses `"app-mode-theme"` — they can drift out of sync
+- Two service worker files registered — one wins, the push handler in the other is never called
+- `self.addEventListener('push', ...)` silently does nothing because it is in the ignored worker
+- Debugging is opaque: notifications appear to be sent but never arrive
 
-**Prevention:**
-Pick one system and commit to it. The existing `applyMode`/`getStoredMode` system in `appearance.ts` is already correct and sufficient. Do NOT activate `next-themes` as the class driver. Instead, expose a toggle that calls `applyMode` + `saveModeTheme` directly. The toggle reads `getStoredMode()` for the current state and calls `applyMode('light'|'dark')` on change. Keep `next-themes` present in `App.tsx` but do not set its `attribute` prop to `"class"` if `AppearanceInitializer` is also active — or remove `AppearanceInitializer` entirely and let `next-themes` own the class.
-
-**Detection:**
-- On page load: flash where the page briefly shows the wrong mode before settling
-- After toggling: mode persists to localStorage but reverts on next navigation
-- Check: does `document.documentElement.classList` contain both `"light"` and `"dark"` simultaneously?
-
-**Phase to address:** Light/dark mode toggle phase.
-
----
-
-### Pitfall 2: The `.light` CSS Variables Override Is Incomplete — Several Tokens Are Missing
-
-**What goes wrong:**
-The `.light` block in `index.css` (lines 519-575) does not define `--primary`, `--primary-foreground`, `--accent`, `--accent-foreground`, `--ring`, `--sidebar-primary`, `--sidebar-accent`, `--sidebar-primary-foreground`, `--background-gradient`, or any of the named theme color tokens. When the user switches to light mode, these tokens fall through to the values set in `:root` / `.theme-default`, which are dark-mode values (e.g., `--background: 222 47% 6%` — a very dark blue). Light-mode cards will have dark backgrounds even though the base `--background` is white.
-
-**Why it happens:**
-The `.light` block was added as a partial override, not a complete theme. It overrides surface tokens (`--background`, `--card`, `--muted`) but not accent or primary tokens.
-
-**Consequences:**
-- Primary buttons in light mode will have dark-mode primary color with poor contrast against a light background
-- The `body::before` mesh gradient uses `hsla(var(--primary), 0.12)` — if `--primary` is the dark-mode value, the gradient looks wrong in light mode
-- Sidebar primary color wrong — nav active state color invisible or clashing
-
-**Prevention:**
-Before implementing the toggle UI, audit the `.light` block and add every token that differs between dark and light. At minimum: `--primary`, `--primary-foreground`, `--accent`, `--accent-foreground`, `--ring`, `--sidebar-primary`, `--sidebar-primary-foreground`, `--sidebar-accent`, `--sidebar-accent-foreground`, `--background-gradient`. Cross-reference against each of the 4 dark theme blocks (`theme-default`, `theme-midnight`, `theme-graphite`, `theme-stone`) to understand what values are needed.
-
-**Detection:**
-Switch to light mode and check: primary buttons, sidebar active nav item, KPICard accent colors, StatusBadge colors. Any component using `bg-primary` or `text-accent` that looks wrong in light mode is a missing token.
-
-**Phase to address:** Light/dark mode toggle phase — before building the toggle, complete the token audit.
-
----
-
-### Pitfall 3: Dashboard Fetches All 1000 Tickets Client-Side for Every Aggregation
-
-**What goes wrong:**
-The existing `Dashboard.tsx` calls `useTickets({ limit: 1000, status: 'all' })` to load all tickets, then computes all KPIs (`stats`, `trends`, `sparklineData`, `criticalTickets`) in `useMemo` on the client. The new dashboard milestone adds aging ticket analysis, reminders, and "what happened today" — if these features also pull from the same `useTickets` call (or add their own), the dashboard will:
-1. Fetch 1000+ tickets on every load (growing unboundedly as tickets accumulate)
-2. Run multiple expensive `useMemo` computations serially in the render phase
-3. Show a blank or loading dashboard while all tickets load before any stat is visible
-
-**Why it happens:**
-The existing pattern works fine at low ticket counts and is already in place. The new features logically extend it. Adding reminders with `useReminders()` and an aging hook creates multiple independent fetch waterfalls on page mount.
-
-**Consequences:**
-- Dashboard feels slow as ticket count grows to 500+
-- `limit: 1000` will eventually return incomplete data (tickets beyond 1000 are invisible to all dashboard aggregations)
-- Multiple `useEffect` / query hooks fire on mount, staggering their waterfalls
-
-**Prevention:**
-Add a dedicated `/api/dashboard/summary` endpoint that returns pre-aggregated data in a single SQL query: open count, in-progress count, critical count, aging tickets (created >X days ago, still open), today's closed/created count, upcoming reminders. Do NOT expand the client-side aggregation pattern. The dashboard should fetch one small summary JSON object, not 1000 ticket records.
-
-For reminders and recent activity: add them as separate lightweight endpoints (`GET /api/reminders?upcoming=true&limit=5`, `GET /api/tickets?created_today=true&limit=5`) fetched in parallel with `Promise.all` or parallel `useQuery` calls — not sequentially.
-
-**Detection:**
-Open browser DevTools Network tab on the Dashboard page. If you see a request for `GET /api/tickets?limit=1000`, the anti-pattern is active. Watch for requests that start only after the previous one finishes (sequential waterfall).
-
-**Phase to address:** Dashboard overview phase.
-
----
-
-### Pitfall 4: Command Palette Registered as Global `keydown` Listener Inside a Component That Mounts/Unmounts
-
-**What goes wrong:**
-The `GlobalSearch` component is rendered inside `Layout.tsx`. If `GlobalSearch` registers `document.addEventListener('keydown', handler)` to catch `Cmd+K`, and if Layout ever conditionally renders or unmounts `GlobalSearch`, the listener may leak (double-registered on remount) or disappear (removed on unmount before user expects). Additionally, `Ctrl+K` in Firefox focuses the browser's address bar — the handler must call `e.preventDefault()` before that default fires.
-
-The existing `GlobalSearch.tsx` has no keyboard listener as of inspection — the Cmd+K trigger needs to be added. The risk is registering it in a component rather than at the root app level.
-
-**Why it happens:**
-The command palette is implemented as a component, so the keyboard listener gets placed in a `useEffect` inside that component. This is fine only if the component never unmounts. Since `Layout` renders on every authenticated page, `GlobalSearch` stays mounted — but any refactor that lifts or moves it breaks the listener.
-
-**Consequences:**
-- Double-registered listeners: toggle opens and immediately re-opens (two handlers fire)
-- Platform divergence: `Cmd+K` on macOS, `Ctrl+K` on Windows/Linux — need both. `Ctrl+K` conflicts with Firefox address bar.
-- `e.preventDefault()` missing: browser native action fires before palette opens
-
-**Prevention:**
-Register the global `keydown` listener once, at the `App.tsx` level or in a `useCommandPalette` context that is never unmounted. Use the `cmdk` library's built-in `CommandDialog` component (from shadcn's `Command`) which handles portal rendering and focus trapping automatically. Pass `open` / `onOpenChange` state from the global context. Check both `e.metaKey` (macOS) and `e.ctrlKey` (Windows/Linux):
+**How to avoid:**
+Switch `vite.config.ts` to `strategies: 'injectManifest'` and point `srcDir` + `filename` at a custom service worker file (e.g. `src/sw.ts`). The custom file must call `precacheAndRoute(self.__WB_MANIFEST)` to keep the pre-cache manifest Workbox injects. Push event handling is added to this same file. The existing `workbox.runtimeCaching` config moves into the custom file as `registerRoute(...)` calls.
 
 ```typescript
-useEffect(() => {
-  const handler = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-      e.preventDefault();
-      setOpen(prev => !prev);
-    }
-  };
-  document.addEventListener('keydown', handler);
-  return () => document.removeEventListener('keydown', handler);
-}, []);
+// vite.config.ts
+VitePWA({
+  strategies: 'injectManifest',
+  srcDir: 'src',
+  filename: 'sw.ts',
+  // ... rest of config
+})
 ```
 
-**Detection:**
-Open the app, press Cmd+K twice in quick succession. If the palette opens and immediately closes, there are two listeners. Check in Firefox: does `Ctrl+K` focus the address bar instead of the palette?
+**Warning signs:**
+- `service-worker.js` (auto-generated) and a separate `sw.js` both appear in DevTools > Application > Service Workers
+- Push messages sent from backend return 201 but no notification appears in browser
+- DevTools console shows: `importScripts` error or two active service worker registrations
 
-**Phase to address:** Command palette phase.
-
----
-
-### Pitfall 5: Command Palette Search Fires API Calls on Every Keystroke Without Debounce
-
-**What goes wrong:**
-The existing `GlobalSearch.tsx` already has a debounce pattern (`debounceRef`) for search. But the new command palette needs to search across tickets, KB articles, and contacts simultaneously. If these are three separate `fetch` calls triggered on each debounced keystroke, a fast typist generates N×3 requests. Worse: if the KB article search uses the FTS5 endpoint (`/api/kb/articles?search=`) while ticket search uses a different endpoint, each with different response shapes, the results assembly code becomes complex and fragile.
-
-**Why it happens:**
-Extending `GlobalSearch` with KB and contact results means adding new `useState` / `useEffect` pairs or new query calls per result type. The temptation is to copy the existing pattern three times.
-
-**Consequences:**
-- Race conditions: older response arrives after newer one, showing stale results
-- Noticeable lag if three round-trips complete sequentially
-- Complexity in state management: three loading booleans, three error states, three result arrays
-
-**Prevention:**
-Add a single `/api/search?q=&types=tickets,kb,contacts` endpoint that runs all three searches in parallel (SQLite can handle concurrent reads via WAL mode) and returns a unified response shape. The client makes one debounced request, gets one structured response. This is simpler than coordinating three async calls client-side.
-
-If adding a unified endpoint is deferred, use `Promise.all` to fire all three requests in parallel client-side and wait for all to settle — not three sequential `await` calls.
-
-**Detection:**
-Type a 5-character search term in the palette. In DevTools Network tab, count the number of requests fired. More than one per debounce interval indicates parallel uncoordinated requests.
-
-**Phase to address:** Command palette phase.
+**Phase to address:** PWA push notifications phase — before writing any push subscription code, switch strategy first.
 
 ---
 
-### Pitfall 6: Responsive Retrofit Breaks the Collapsible Sidebar on Mobile
+### Pitfall 2: Push Subscriptions Are Lost on Server Restart if Stored in Memory
 
 **What goes wrong:**
-The current `Layout.tsx` has two sidebar states: `sidebarOpen` (mobile toggle, default `false`) and `sidebarCollapsed` (desktop collapse, default `false`). The mobile toggle is controlled by a `Menu`/`X` button that appears conditionally. The desktop collapse button is `hidden lg:flex`. If a responsive pass adds `overflow-hidden` to the main content area (common when trying to prevent horizontal scroll), it can clip the sidebar overlay on mobile. Alternatively, if `min-w-0` is missing from the main content flex child, adding responsive padding can cause horizontal overflow that breaks the layout.
+The push subscription object (`endpoint`, `p256dh`, `auth`) returned by `pushManager.subscribe()` on the client must be stored persistently on the server. If it is stored in a module-level variable (e.g., `let subscription = null` in the route handler file), it disappears on every Docker container restart. The client's service worker still holds the subscription, but the server has lost the endpoint — push messages can never be sent until the client re-subscribes. Since the app is single-user and the subscription is only created when the user clicks "Enable notifications", a lost subscription means silently broken push until the user manually re-enables.
 
 **Why it happens:**
-Responsive fixes are applied piecemeal — a class is added to fix one breakpoint and inadvertently breaks another. The sidebar overlay (`fixed` positioned) is particularly fragile because `overflow-hidden` on any ancestor clips `position: fixed` children in some browsers.
+In demo tutorials, subscriptions are stored in memory to keep the example simple. This pattern gets copy-pasted into production code.
 
 **Consequences:**
-- Mobile sidebar cannot overlay the content (gets clipped)
-- Horizontal scrollbar appears on mobile due to a too-wide flex child
-- Desktop sidebar collapse animation breaks because width transition collides with new responsive classes
+- Notifications stop working after every Docker rebuild or container restart
+- No error — the server simply has no endpoint to send to
+- The user does not know they need to re-subscribe
 
-**Prevention:**
-Before adding responsive classes, document the current layout structure: which elements are `flex`, which are `fixed`, what scroll containers exist. The outermost `div` in `Layout.tsx` is `min-h-screen flex bg-background relative overflow-hidden` — the `overflow-hidden` is already there. Adding it again on a child is redundant and can cause stacking context issues. Add `min-w-0` to the main content flex child to prevent it from overflowing its container. Never add `overflow-hidden` to the sidebar overlay ancestor.
+**How to avoid:**
+Store the subscription in SQLite immediately when received. A simple table is sufficient:
 
-**Detection:**
-On mobile viewport (375px wide): open the mobile sidebar. If the sidebar is clipped or does not appear as an overlay, an ancestor has `overflow-hidden`. In desktop narrow view (900px): confirm the sidebar collapse button still animates and the content area does not overflow.
+```sql
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id TEXT PRIMARY KEY,
+  endpoint TEXT UNIQUE NOT NULL,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+```
 
-**Phase to address:** Responsive design phase.
+On subscribe: upsert by endpoint. On unsubscribe (410 from push service): delete by endpoint. On server startup: read all stored subscriptions and use them for sending.
+
+**Warning signs:**
+- Notifications work immediately after enabling but stop after the next `docker restart`
+- No `push_subscriptions` table in the database schema
+- Push endpoint stored in `process.env` or a module-level variable
+
+**Phase to address:** PWA push notifications phase — storage must be designed before the subscribe endpoint is implemented.
 
 ---
 
-### Pitfall 7: Framer Motion `layout` Prop on Dashboard Cards Causes Expensive Layout Thrash
+### Pitfall 3: VAPID Private Key Regenerated on Every Startup Invalidates All Existing Subscriptions
 
 **What goes wrong:**
-Adding `layout` or `layoutId` to Framer Motion components on the dashboard (KPICard, stat cards) triggers FLIP layout animations whenever the DOM reflows. On the dashboard, a data fetch completing changes card values — if cards have `layout` prop, every data update triggers a full layout measurement cycle across all cards. On slower hardware, this manifests as jank after the initial fetch resolves and numbers animate in.
+VAPID keys (`publicKey` + `privateKey`) must remain constant for the lifetime of the application. A browser subscription is bound to the VAPID public key. If the private key changes (e.g., because it is generated in code at startup with `webpush.generateVAPIDKeys()` instead of being loaded from an environment variable), all existing subscriptions become invalid. The push service returns `410 Gone` for every delivery attempt, and the server silently fails to notify. Users must re-subscribe.
 
 **Why it happens:**
-`layout` prop is appealing for "smooth reordering" but is applied broadly without understanding its cost. Dashboard cards are not reordering — they are just updating numeric values.
+Tutorials generate keys for demonstration. Developers run the generation code in the app startup path instead of a one-time setup script.
 
 **Consequences:**
-- Layout measurement runs on every `useTickets` refetch
-- Combined with the animated sparkline charts (recharts redraws SVG on data change), the dashboard can drop frames during data updates
-- `animate-pulse` decorative blobs in `Layout.tsx` create continuous compositing load; layout animations on top of these amplify the GPU cost
+- All subscriptions invalidated on every server restart
+- 410 errors from the push service for every stored endpoint
+- Silent failure — no notification, no error shown to the user
 
-**Prevention:**
-Use `animate` with `initial` props for entrance animations (opacity + translateY) rather than `layout`. Number value animations should use `AnimatedNumber` component (already exists in the codebase) not `layout` transitions. Reserve `layoutId` only for shared element transitions between pages (e.g., a ticket card expanding to detail view) where the visual benefit justifies the cost.
+**How to avoid:**
+Generate VAPID keys once using `npx web-push generate-vapid-keys`. Store them in the `.env` file as `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`. Load them at startup via `process.env`. Never generate them in running application code. Add a startup check that throws if either variable is missing:
 
-For micro-interactions: animate `opacity` and `transform` properties only. These run on the compositor thread and do not trigger layout. Avoid animating `height`, `width`, `top`, `left`, `margin`, or `padding` directly.
+```typescript
+if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) {
+  throw new Error('VAPID keys not configured — set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in .env');
+}
+```
 
-**Detection:**
-Open Chrome DevTools Performance tab, record a 3-second dashboard load. Look for "Layout" entries in the flame chart. More than 2-3 layout events during a single render cycle indicates `layout` prop is causing thrash.
+**Warning signs:**
+- VAPID keys generated inside `index.ts` or any route file
+- `webpush.generateVAPIDKeys()` called anywhere other than a standalone setup script
+- Push worked once, then stopped after a rebuild
 
-**Phase to address:** Micro-interactions phase.
+**Phase to address:** PWA push notifications phase — VAPID key generation must happen before any push code is written.
+
+---
+
+### Pitfall 4: iOS Safari Push Requires the App to Be Installed as a Home Screen PWA
+
+**What goes wrong:**
+Web push on iOS (Safari) only works when the user has explicitly "Add to Home Screen". Push permission cannot be requested in a browser tab on iOS — `Notification.requestPermission()` returns "denied" without prompting. If the permission UI is shown unconditionally (on any browser), it will silently fail or error on iOS in a tab context, and the user has no way to fix it without knowing they must install the PWA first.
+
+**Why it happens:**
+The developer tests on desktop Chrome/Firefox where push works in any tab, then assumes it works universally. The system is single-user, and the user likely accesses the app from a desktop anyway — but the pitfall is in assuming the code path is safe on all browsers.
+
+**Consequences:**
+- "Enable notifications" button shows on iOS Safari tab but the permission request fails silently
+- User believes notifications are enabled but they are not
+- No error message, just a broken state
+
+**How to avoid:**
+Check `window.navigator.standalone` (or the `display-mode: standalone` media query) before showing the notification permission UI. On iOS in a browser tab (non-standalone), show a message instead: "Install this app to your Home Screen to enable notifications." On all other browsers, proceed normally. Additionally check `'Notification' in window` and `'PushManager' in window` as capability guards.
+
+```typescript
+const isPWAInstalled = window.matchMedia('(display-mode: standalone)').matches
+  || (navigator as any).standalone === true;
+const pushSupported = 'PushManager' in window && 'Notification' in window;
+```
+
+**Warning signs:**
+- No `display-mode` or `standalone` check before calling `Notification.requestPermission()`
+- "Enable notifications" is shown on all browsers without a capability guard
+- Testing only done on desktop Chrome
+
+**Phase to address:** PWA push notifications phase — browser capability detection before any permission prompt.
+
+---
+
+### Pitfall 5: Permission Denied Is Permanent — Prompting Too Early Blocks Push Forever
+
+**What goes wrong:**
+Once a user clicks "Block" on the browser's native notification permission prompt, `Notification.permission` becomes `"denied"`. The browser will never show the prompt again for that origin — `Notification.requestPermission()` returns `"denied"` immediately without displaying any UI. For a single-user system this is especially painful: there is no way to recover programmatically. The user must manually reset the permission in browser settings.
+
+**Why it happens:**
+The permission prompt is triggered on page load or on the first visit, before the user understands why notifications are needed. The user dismisses it defensively.
+
+**Consequences:**
+- Push notifications permanently disabled for that browser/origin combination
+- No programmatic recovery — must guide user to browser settings (`chrome://settings/content/notifications`)
+- Single-user system means the admin is the only user: one mis-click breaks the feature entirely
+
+**How to avoid:**
+Never call `Notification.requestPermission()` on page load. Show a custom in-app prompt first (a card or banner explaining what notifications are for). Only trigger the native browser permission dialog after the user explicitly clicks "Enable push notifications." Check current permission state before prompting:
+
+```typescript
+if (Notification.permission === 'denied') {
+  // Show "Notifications are blocked. Reset in browser settings." message
+  // Link to settings if possible
+  return;
+}
+if (Notification.permission === 'default') {
+  // Show custom pre-prompt UI
+}
+```
+
+**Warning signs:**
+- `Notification.requestPermission()` called in a `useEffect` on component mount
+- No check of `Notification.permission` before requesting
+- No "you've blocked notifications" recovery message
+
+**Phase to address:** PWA push notifications phase — UX flow designed before implementation.
+
+---
+
+### Pitfall 6: SQLite Backup via `cp` or `fs.copyFile` Is Not Transactionally Safe in WAL Mode
+
+**What goes wrong:**
+Copying the SQLite database file (`database.sqlite`) with `fs.copyFile()` while the server is running produces a corrupt or inconsistent backup. In WAL mode (which this codebase uses: `db.pragma('journal_mode = WAL')`), writes go to `database.sqlite-wal` first. A raw file copy may capture the main file in one state and miss the WAL file changes, or capture both files in a state where the WAL has been partially checkpointed — producing a backup that is internally inconsistent.
+
+**Why it happens:**
+`fs.copyFile` is the obvious first approach. SQLite WAL mode makes this dangerous in a way that is not immediately obvious — the backup may appear to work (file is created, size looks right) but can fail to open or return corrupted data on restore.
+
+**Consequences:**
+- Backup appears successful but is corrupt
+- Restore from backup produces SQLite error: "file is not a database" or "disk image is malformed"
+- Data loss on restore attempt after production incident
+
+**How to avoid:**
+Use `better-sqlite3`'s built-in `.backup()` method, which wraps the SQLite Online Backup API. This is transactionally safe with a live WAL-mode database:
+
+```typescript
+await db.backup('/path/to/backup.sqlite');
+```
+
+Alternatively, use `VACUUM INTO '/path/to/backup.sqlite'` which creates a compact, consistent snapshot from a single transaction. For the zip export feature, use `.backup()` to write a temp file, then add the temp file to the zip archive, then delete the temp file.
+
+**Warning signs:**
+- Backup code uses `fs.copyFile`, `fs.createReadStream`, or shell `cp` on the `.sqlite` file
+- No use of `db.backup()` or `VACUUM INTO` in the backup route
+- WAL mode is enabled (it is in this codebase) but backup does not use the backup API
+
+**Phase to address:** Backup & export phase — must be the first design decision made for that feature.
+
+---
+
+### Pitfall 7: Zip Archive Built In-Memory for Large Attachment Directories Causes Node OOM
+
+**What goes wrong:**
+The backup feature needs to zip the SQLite database file plus all uploaded attachments (stored in `data/uploads/`). If the archiver builds the entire zip in memory before streaming it to the response, and if the uploads directory contains many large files (images, documents), Node.js runs out of heap memory. The `archiver` npm library supports streaming but requires explicit use of `pipe()` to the Express response — if `archive.finalize()` is called and then `archive.toBuffer()` is awaited, the entire zip is buffered.
+
+**Why it happens:**
+Tutorial code for `archiver` shows `archive.pipe(outputStream)` but developers targeting a download response sometimes buffer first to set `Content-Length` header, accidentally loading the entire archive into memory.
+
+**Consequences:**
+- `FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory`
+- Server process crashes inside Docker container; Portainer shows the container restarting
+- The single backend instance serves all routes — a crash affects the entire system
+
+**How to avoid:**
+Stream the archive directly to the Express response without buffering. Skip `Content-Length` (use `Transfer-Encoding: chunked` instead):
+
+```typescript
+res.setHeader('Content-Type', 'application/zip');
+res.setHeader('Content-Disposition', `attachment; filename="backup-${Date.now()}.zip"`);
+const archive = archiver('zip', { zlib: { level: 6 } });
+archive.pipe(res);
+archive.file('/path/to/backup.sqlite', { name: 'database.sqlite' });
+archive.directory('/path/to/uploads/', 'uploads');
+archive.finalize();
+```
+
+Never call `archive.toBuffer()` or accumulate the output before sending.
+
+**Warning signs:**
+- `archive.toBuffer()` or similar buffering methods in the backup route
+- Memory usage spikes to several GB when downloading backup
+- `Content-Length` header is set on the backup response (requires full buffer to compute)
+
+**Phase to address:** Backup & export phase.
+
+---
+
+### Pitfall 8: Time Tracking Timer State Not Closed When Ticket Is Resolved or Closed
+
+**What goes wrong:**
+A time tracking entry stores a `started_at` timestamp. When the user forgets to stop the timer and closes or resolves the ticket, the entry remains open (`stopped_at IS NULL`). If the reports aggregate `SUM(COALESCE(stopped_at, CURRENT_TIMESTAMP) - started_at)` to estimate running timers, a session that was started months ago and never stopped inflates the time total by an enormous amount. This produces reports showing "2,340 hours on one ticket."
+
+**Why it happens:**
+The "stop timer on ticket close" side effect is easy to forget when closing tickets via API calls. The ticket close endpoint does not know about time tracking; the time tracking module does not know about ticket state changes.
+
+**Consequences:**
+- Wildly inflated time totals in reports
+- Single report query returns incorrect aggregates that look plausible but aren't
+- No error — the data is valid SQL; only the business logic is wrong
+
+**How to avoid:**
+In the ticket update endpoint (where status changes to `resolved` or `closed`), add logic to close any open time tracking sessions for that ticket:
+
+```typescript
+// When ticket status changes to resolved or closed:
+db.prepare(`
+  UPDATE time_entries
+  SET stopped_at = CURRENT_TIMESTAMP
+  WHERE ticket_id = ? AND stopped_at IS NULL
+`).run(ticketId);
+```
+
+Make this part of the same database transaction as the ticket status update.
+
+**Warning signs:**
+- Ticket close/resolve endpoint does not reference `time_entries` table
+- Reports show implausible time values (hundreds of hours on a single ticket)
+- `stopped_at IS NULL` rows exist in `time_entries` for closed tickets
+
+**Phase to address:** Time tracking phase — handle in the ticket update route, not just the time tracking route.
+
+---
+
+### Pitfall 9: Time Tracking Report Aggregation Double-Counts Open Sessions
+
+**What goes wrong:**
+A common pattern for reporting "total time spent" on a ticket is:
+
+```sql
+SELECT SUM(
+  CAST((julianday(COALESCE(stopped_at, datetime('now'))) - julianday(started_at)) * 86400 AS INTEGER)
+) AS total_seconds
+FROM time_entries WHERE ticket_id = ?
+```
+
+This correctly handles both completed and open sessions. However, if the same ticket has two open sessions (e.g., the user navigated away while one was running and started another), the COALESCE substitution counts both open sessions from their respective start times, double-counting the overlapping time. Reported total appears larger than actual time spent.
+
+**Why it happens:**
+The UI allows starting a timer on a ticket. If the user opens the ticket on two browser tabs (or if the "start timer" button fires twice due to double-click), two open sessions are created. The backend does not enforce a "one open session per ticket" constraint.
+
+**Consequences:**
+- Time report shows more time than was actually spent
+- No error or warning — the SQL is valid
+
+**How to avoid:**
+Enforce at the database level: only one open session per ticket is allowed at a time. Before inserting a new time entry, close any existing open session for that ticket, OR add a partial unique index:
+
+```sql
+CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_open
+ON time_entries(ticket_id)
+WHERE stopped_at IS NULL;
+```
+
+This makes it a constraint error to have two open sessions for the same ticket — the backend returns a 409 and the client handles it gracefully.
+
+**Warning signs:**
+- No unique constraint on `(ticket_id) WHERE stopped_at IS NULL`
+- "Start timer" button has no loading state, allowing double-clicks
+- Report totals are inconsistent when checked manually
+
+**Phase to address:** Time tracking phase — schema design before building the start/stop API.
 
 ---
 
 ## Moderate Pitfalls
 
-### Pitfall 8: Dark Mode Toggle Flashes Wrong Mode on Hard Reload
+### Pitfall 10: KB Sidebar Search in Ticket Detail Re-fetches on Every Keystroke Without Debounce
 
 **What goes wrong:**
-`AppearanceInitializer` runs `applyMode(getStoredMode())` inside a `useEffect`, which fires after the browser has already painted the page. Between the initial paint (using whatever CSS the browser applies before JavaScript runs) and the `useEffect` call, the user sees a flash of the wrong mode — typically the `:root` dark theme briefly before the `.light` class is added.
+The existing KB search on the Knowledge Base page (`/api/kb/articles?search=`) uses FTS5. Adding the same search to a sidebar panel in the ticket detail view (`TicketDetail.tsx`) requires a debounced input. Without debounce, every keystroke fires a separate API call. With fast typing, multiple requests are in-flight simultaneously; the older responses can arrive after newer ones, causing the displayed results to flicker between stale and current results (classic race condition).
 
-**Prevention:**
-Move the mode application to a blocking `<script>` tag in `index.html` (before the React bundle loads) that reads localStorage and adds the appropriate class synchronously:
+**Why it happens:**
+The KB search is already implemented and working. Adding it to the sidebar feels like a simple `<input onChange=...>` that calls `fetch`. The debounce step is skipped because it "works" in testing.
 
-```html
-<script>
-  (function() {
-    var mode = localStorage.getItem('app-mode-theme') || 'dark';
-    document.documentElement.classList.add(mode);
-  })();
-</script>
-```
+**Consequences:**
+- API called on every keystroke (10+ calls for a short search term)
+- Results flicker — a 3-letter query result briefly replaces a 5-letter query result
+- FTS5 query for each keystroke adds minor but real DB load for every key press
 
-This runs before the first paint. The `applyMode` call in `AppearanceInitializer` becomes a no-op (class already applied) rather than a late correction.
+**How to avoid:**
+Use the existing `useCommandPaletteSearch` hook pattern as a reference — it already has debounce wired up. For the KB sidebar, add a `useKBSearch` hook with 300ms debounce and React Query caching. Keep the query key stable so repeated identical searches hit the cache.
 
-**Phase to address:** Light/dark mode toggle phase.
+**Phase to address:** KB sidebar search phase.
 
 ---
 
-### Pitfall 9: Command Palette Actions That Modify State Must Handle Navigation Timing
+### Pitfall 11: KB Article Link Created From Sidebar Does Not Update the "Linked Articles" Section Without a Refetch
 
 **What goes wrong:**
-Command palette "actions" (e.g., "Close selected ticket", "Create new ticket", "Mark as resolved") need to close the palette, run the action, and potentially navigate. If `navigate('/tickets/new')` is called while the palette's close animation is running, React may batch the state update (closing palette) with the navigation, causing the palette to remain briefly visible on the new page, or the Radix Dialog's focus trap to fight with the new page's focus management.
+The ticket detail view has a "linked articles" panel (or will, after the KB sidebar feature). When the user selects a KB article from the sidebar search and clicks "link to ticket", the backend creates the association. But the ticket detail's linked articles section is controlled by a separate React Query cache entry — it does not automatically refetch after the sidebar mutation succeeds. The user sees the sidebar confirm the link, but the linked articles panel still shows the old list until a page refresh.
 
-**Prevention:**
-Always close the palette before triggering navigation or mutations. Use a small `setTimeout(0)` if needed to let the close animation complete before navigation. With shadcn's `CommandDialog`, use `onOpenChange(false)` then navigate in the callback:
+**Why it happens:**
+Two separate queries are on the same page. Mutations in one part of the component tree need to invalidate the cache entry used by another part. Without explicit `queryClient.invalidateQueries(...)` after the link mutation, the stale data persists.
+
+**Consequences:**
+- UX appears broken: "I just linked this article but it's not showing"
+- User refreshes the page, sees it correctly — assumes it was a transient bug
+
+**How to avoid:**
+After a successful link mutation, call `queryClient.invalidateQueries({ queryKey: ['ticket', ticketId, 'kb-links'] })` (or whatever key the linked articles panel uses). Pattern is already established in the codebase via `useTicketLinks.ts`.
+
+**Phase to address:** KB sidebar search phase — check existing invalidation patterns before building.
+
+---
+
+### Pitfall 12: Backup Route Has No Auth Guard, Exposing Database Download to Unauthenticated Requests
+
+**What goes wrong:**
+A new `/api/backup/download` route that streams the SQLite database and uploads as a zip is a sensitive endpoint. If the `authenticate` middleware is not applied (easy to miss when adding a new route file and forgetting to import + apply middleware), the endpoint is publicly accessible. Anyone who knows the URL can download the entire database, including all tickets, contacts, KB articles, and JWT secrets.
+
+**Why it happens:**
+New route files are wired up in `server/src/index.ts`. The pattern requires importing the route file and calling `app.use('/api/backup', backupRoutes)`. The `authenticate` middleware must be applied inside the route file or at registration. If it is missing from the route file and the developer does not notice, the endpoint is open.
+
+**Consequences:**
+- Full database download accessible without authentication
+- Contacts, tickets, KB content, and (if stored) SMTP credentials leaked
+
+**How to avoid:**
+Apply `authenticate` as the first middleware on all backup routes. Use the existing pattern from `routes/tickets.ts` — `router.get('/', authenticate, handler)`. Add a note in the route file header: `// ALL routes in this file require authentication`.
+
+Also: never store VAPID private key, SMTP password, or JWT secret in the database — keep them in environment variables only.
+
+**Warning signs:**
+- `curl http://localhost:3001/api/backup/download` returns a zip without requiring a JWT token
+- Route file imports `Router` but not `authenticate`
+- No `authenticate` in the router method calls
+
+**Phase to address:** Backup & export phase — auth must be verified before the endpoint is wired.
+
+---
+
+### Pitfall 13: Push Notification Fired for Already-Dismissed Reminders
+
+**What goes wrong:**
+The reminder scheduler already runs every minute via node-cron, checking `ticket_reminders` for entries where `sent = 0 AND reminder_time <= NOW()`. It marks them `sent = 1` and sends an email. Adding push notifications to the same scheduler path is straightforward — but if the push send fails (subscriber expired, 410 response) and the `sent = 1` update is not committed transactionally with the push attempt, the reminder can fire again on the next cron tick. Alternatively, if the email sends but push throws an exception that is uncaught, subsequent cron runs skip the `sent = 1` update and send both email and push repeatedly.
+
+**Why it happens:**
+Error handling in cron schedulers is often incomplete. A thrown exception inside the scheduler body stops the current cron tick but does not prevent the next one from seeing the same unprocessed row.
+
+**Consequences:**
+- User receives multiple email + push notifications for the same reminder
+- Annoying in practice since this is a single-user system and the user is also the developer
+
+**How to avoid:**
+Mark `sent = 1` before attempting to send, inside a transaction. If the send fails, log the error but do not revert — accept the "at most once" delivery semantics rather than "at least once" spam:
 
 ```typescript
-const runAction = (action: () => void) => {
-  setOpen(false);
-  // Use a microtask to let the close animation start
-  requestAnimationFrame(() => action());
-};
+const markSent = db.prepare('UPDATE ticket_reminders SET sent = 1, sent_at = CURRENT_TIMESTAMP WHERE id = ?');
+// Mark first, then attempt delivery
+markSent.run(reminder.id);
+try {
+  await sendPushNotification(reminder);
+} catch (err) {
+  console.error('Push failed for reminder', reminder.id, err);
+  // Already marked sent — will not retry
+}
 ```
 
-**Phase to address:** Command palette phase.
+**Phase to address:** PWA push notifications phase — when integrating push into the existing reminder scheduler.
 
 ---
 
-### Pitfall 10: HtmlRenderer Component Has Hardcoded Dark-Mode Colors in `prose` Classes
+### Pitfall 14: Time Entry `started_at` / `stopped_at` Stored as TEXT Causes Subtle Sort and Duration Bugs
 
 **What goes wrong:**
-`HtmlRenderer.tsx` renders KB article content using Tailwind's `@tailwindcss/typography` `prose` classes. The `prose` class applies opinionated light-mode text colors. In dark mode, `prose-invert` is needed. In light mode, `prose` (without invert) is correct. If the component hardcodes `prose prose-invert`, it looks correct in the existing dark-only app but breaks in light mode (inverted colors on a light background = poor contrast or invisible text).
+The existing schema stores all timestamps as `TEXT DEFAULT CURRENT_TIMESTAMP` (ISO 8601 strings, e.g. `"2026-04-05T10:23:00.000Z"`). SQLite's `julianday()` and `strftime()` functions work correctly with ISO 8601 strings. However, if timestamps are stored with inconsistent timezone offset strings (some with `+00:00`, some with `Z`, some without timezone), duration calculations produce wrong results. `julianday('2026-04-05T10:23:00Z')` differs from `julianday('2026-04-05T10:23:00')` by 0 seconds, but `julianday('2026-04-05T12:23:00+02:00')` introduces an offset.
 
-**Prevention:**
-Make `prose` class conditional on current mode:
+**Why it happens:**
+The frontend sends timestamps from `new Date().toISOString()` (always UTC `Z` format). The backend may use `CURRENT_TIMESTAMP` (which is UTC without `Z`). If both sources write to `time_entries`, the mix of formats can cause 0.something second errors or hour-level errors in duration reports.
 
-```typescript
-<div className={cn("prose max-w-none", mode === 'dark' ? 'prose-invert' : '')}>
-```
+**How to avoid:**
+Use `datetime('now')` on the backend for all server-written timestamps (consistent with existing schema). For client-sent timestamps (e.g. "timer started at this moment on the client"), always convert to UTC and strip timezone offset before storing: `new Date(clientTimestamp).toISOString()`.
 
-Or use Tailwind's dark variant: `className="prose max-w-none dark:prose-invert"`. The second approach requires `darkMode: ["class"]` in tailwind config — which is already set.
+Audit: the existing schema uses `TEXT DEFAULT CURRENT_TIMESTAMP` everywhere. Match this convention for `time_entries` — do not use `REAL` or `INTEGER` epoch seconds, which would be a new convention in an otherwise consistent codebase.
 
-**Phase to address:** Light/dark mode toggle phase.
-
----
-
-### Pitfall 11: Responsive Sidebar Does Not Persist Collapsed State Across Navigation
-
-**What goes wrong:**
-`sidebarCollapsed` in `Layout.tsx` is local component state (`useState(false)`). Since `Layout` wraps every page, navigating between pages does not unmount `Layout` (React Router keeps it mounted). This means the collapsed state survives navigation in normal use. However, if a developer lifts the sidebar state into a context or moves it for the responsive work, they may accidentally change this — and the sidebar will reset to expanded on every navigation, which is annoying on mobile.
-
-**Prevention:**
-Keep sidebar state in `Layout` component state (or lift to a context that persists for the session). Do not persist sidebar collapsed state to localStorage — it's a session preference, not a long-term setting. The mobile `sidebarOpen` state should always reset to `false` on navigation (the current `onClick` handlers on nav items correctly call `setSidebarOpen(false)`).
-
-**Phase to address:** Responsive design phase.
+**Phase to address:** Time tracking phase — schema review before creating the migration.
 
 ---
 
-### Pitfall 12: Loading Skeletons Built From Scratch Rather Than Using shadcn Skeleton
+## Technical Debt Patterns
 
-**What goes wrong:**
-Adding loading states to the dashboard and command palette results in bespoke shimmer/skeleton markup per component. Each developer or implementation session produces different pulse animations, different heights, different colors — creating visual inconsistency. The codebase already has shadcn UI installed, which includes a `Skeleton` component.
-
-**Prevention:**
-Use `src/components/ui/skeleton.tsx` (part of shadcn) for all loading placeholders. The component uses `animate-pulse bg-muted` which respects the current theme tokens (including light/dark mode). Wrap dashboard sections in a conditional: if data is loading, render skeleton rows matching the expected layout dimensions; when data arrives, animate in with Framer Motion `initial={{ opacity: 0 }} animate={{ opacity: 1 }}` — not a layout animation.
-
-**Phase to address:** Loading states phase.
-
----
-
-### Pitfall 13: Recharts Charts in Dashboard Do Not Respond to Light Mode
-
-**What goes wrong:**
-The existing recharts charts (sparklines, reports charts) use hardcoded colors or Tailwind CSS variable references that work in dark mode. Recharts does not read CSS variables natively — colors passed to `<Line stroke="hsl(var(--primary))" />` require the browser to resolve the CSS variable at render time. In some recharts versions, the color is read once at mount and not updated when the CSS variable changes. Switching to light mode after a chart has mounted leaves the chart with its dark-mode color palette.
-
-**Prevention:**
-Read the CSS variable value in JavaScript at render time using `getComputedStyle(document.documentElement).getPropertyValue('--primary')`. Re-read when the mode changes. Alternatively, define chart colors directly in recharts props as hex values that work across both modes (e.g., use the same status colors that are identical in `.light` and `.dark` blocks). The status and priority colors in `index.css` are already defined identically in both modes — use those for charts rather than `--primary`/`--accent`.
-
-**Phase to address:** Light/dark mode toggle phase.
-
----
-
-## Minor Pitfalls
-
-### Pitfall 14: Command Palette Search Input Loses Focus When Results Update
-
-**What goes wrong:**
-If search results update triggers a component re-render that unmounts and remounts the input (e.g., a key change on the `Command` component), the input loses focus mid-typing.
-
-**Prevention:**
-Never change the `key` prop on the `Command` or `CommandInput` component while the palette is open. Keep search state (`search`, `results`) in the same component that owns the `Command` so results updating does not cause the input to re-mount.
-
-**Phase to address:** Command palette phase.
-
----
-
-### Pitfall 15: Dashboard "Aging Tickets" Calculation Done Client-Side on 1000 Ticket Fetch
-
-**What goes wrong:**
-Aging tickets (open tickets older than N days) computed via `tickets.filter(t => t.status === 'open' && daysSince(t.createdAt) > 30)` on the client-side 1000-ticket result will miss tickets beyond position 1000 in the dataset, producing a silently wrong "aging" count.
-
-**Prevention:**
-Compute aging ticket counts server-side: `SELECT COUNT(*) FROM tickets WHERE status = 'open' AND created_at < datetime('now', '-30 days')`. Include this in the `/api/dashboard/summary` endpoint alongside the other aggregations.
-
-**Phase to address:** Dashboard overview phase.
-
----
-
-### Pitfall 16: `body::before` Mesh Gradient Visible in Light Mode With Wrong Colors
-
-**What goes wrong:**
-`index.css` has a `body::before` pseudo-element that creates a mesh gradient using `hsla(var(--primary), 0.12)` and `hsla(var(--accent), 0.10)`. In the current dark themes, this creates a subtle atmospheric effect. If `--primary` in light mode maps to a saturated blue at high lightness, the pseudo-element mesh gradient will be very visible and clash with the white background.
-
-**Prevention:**
-Test `body::before` in light mode before shipping the toggle. If it clashes, add a `.light body::before` rule that reduces opacity further or sets different gradient stops. A safe default: reduce to `0.04` opacity in `.light`.
-
-**Phase to address:** Light/dark mode toggle phase.
-
----
-
-## Phase-Specific Warnings
-
-| Phase Topic | Likely Pitfall | Mitigation |
-|-------------|---------------|------------|
-| Dashboard overview | 1000-ticket client-side fetch growing unbounded | Add `/api/dashboard/summary` SQL endpoint |
-| Dashboard aging tickets | Client-side filter misses tickets beyond limit | Server-side SQL `created_at < datetime('now', '-30 days')` |
-| Command palette keyboard shortcut | Dual `applyMode` / `next-themes` system conflict | Register listener once at App level; `e.preventDefault()` on Ctrl/Cmd+K |
-| Command palette multi-source search | Three parallel fetches with race conditions | Single `/api/search?q=` endpoint returning unified results |
-| Dark mode toggle | `.light` CSS token block incomplete | Audit and complete all missing tokens before building toggle UI |
-| Dark mode toggle | FOUC on hard reload | Blocking `<script>` in `index.html` before React bundle |
-| Dark mode + recharts | Chart colors not updating on mode switch | Use JS `getComputedStyle` to read CSS vars, or use mode-invariant hex colors |
-| Dark mode + HtmlRenderer | `prose-invert` hardcoded for dark only | Use `dark:prose-invert` Tailwind variant |
-| Responsive sidebar | `overflow-hidden` on ancestor clips fixed overlay | Add `min-w-0` to flex children; never add `overflow-hidden` to sidebar parent |
-| Micro-interactions | `layout` prop on KPICards causes layout thrash | Use `initial`/`animate` opacity+transform only; no `layout` prop on cards |
-| Loading states | Bespoke skeleton per component | Use existing `ui/skeleton.tsx` with shadcn tokens |
+| Shortcut | Immediate Benefit | Long-term Cost | When Acceptable |
+|----------|-------------------|----------------|-----------------|
+| Store push subscriptions in memory | Simpler code, no DB migration | Lost on every restart, silently broken push | Never |
+| Generate VAPID keys in startup code | No manual setup step | All subscriptions invalidated on every restart | Never |
+| Skip `injectManifest` strategy change | Faster to implement push | Push event listener never fires; broken feature | Never |
+| Use `fs.copyFile` for SQLite backup | Simple one-liner | Corrupt backup in WAL mode, no warning | Never |
+| No "close open timer on ticket close" side effect | Simpler close endpoint | Inflated time reports with no data to fix them | Never |
+| Skip debounce on KB sidebar search | Faster to code | Race conditions in result display, extra DB load | Never for live search |
+| Buffer entire zip in memory for backup | Simpler streaming code | OOM crash on large upload directories | Never in Docker with limited heap |
 
 ---
 
@@ -354,12 +456,13 @@ Test `body::before` in light mode before shipping the toggle. If it clashes, add
 
 | Integration | Common Mistake | Correct Approach |
 |-------------|----------------|------------------|
-| `next-themes` + custom `applyMode` | Both active simultaneously, fighting over `document.documentElement.classList` | Pick one system; the existing `applyMode` in `appearance.ts` is sufficient without activating `next-themes` class driver |
-| Command palette + React Router | `navigate()` called while Radix Dialog close animation runs | Close palette, then `requestAnimationFrame(() => navigate(...))` |
-| Framer Motion + recharts on dashboard | `layout` prop triggers layout measurement after every recharts SVG redraw | No `layout` prop on chart-containing cards; use `AnimatedNumber` for value changes |
-| Responsive + sidebar `fixed` overlay | `overflow-hidden` on main content clips `position: fixed` sidebar | Never set `overflow-hidden` on a `position: fixed` child's ancestor |
-| Dark mode + `@tailwindcss/typography` prose | `prose` class applies light-mode styles that clash in dark mode | Use `dark:prose-invert` variant which respects the `.dark` class strategy already configured |
-| FTS5 search + command palette | Command palette search hits same FTS5 endpoint as KB search bar, doubling request load | Deduplicate with shared React Query cache key or unified search endpoint |
+| `vite-plugin-pwa` + push events | Adding push listener to `generateSW` worker or a separate `public/sw.js` | Switch to `injectManifest` strategy; push listener lives in the single injected SW file |
+| `web-push` npm + VAPID | Calling `generateVAPIDKeys()` in app startup | Generate once with `npx web-push generate-vapid-keys`, store in `.env`, load via `process.env` |
+| Push + existing reminder scheduler | Sending push in cron without error boundary | Mark `sent=1` before sending; catch push errors without reverting sent flag |
+| `better-sqlite3` `.backup()` + archiver | Backing up live `.sqlite` file directly into zip | Use `db.backup(tmpFile)` to get a safe snapshot, then add tmpFile to archive, then delete tmpFile |
+| archiver + Express response | Buffering archive before sending (`toBuffer()`) | Pipe archive directly to `res` stream; omit `Content-Length` |
+| KB sidebar search + React Query | Linking KB article does not refresh linked articles panel | Call `queryClient.invalidateQueries` on the ticket's KB links query key after link mutation |
+| Time tracking + ticket status update | Timer left open when ticket closes | Add `UPDATE time_entries SET stopped_at = NOW() WHERE ticket_id = ? AND stopped_at IS NULL` inside ticket close transaction |
 
 ---
 
@@ -367,11 +470,11 @@ Test `body::before` in light mode before shipping the toggle. If it clashes, add
 
 | Trap | Symptoms | Prevention | When It Breaks |
 |------|----------|------------|----------------|
-| Dashboard fetches 1000 tickets for client-side aggregation | Slow initial load, growing with ticket count | Dedicated `/api/dashboard/summary` SQL endpoint | ~500+ tickets |
-| Framer Motion `layout` prop on dashboard cards | Jank after data fetch, Layout events in Performance flame chart | `initial`/`animate` only, no `layout` prop | Immediately with 5+ cards and recharts |
-| Command palette three-request waterfall | Noticeable delay between keystroke and results | Unified `/api/search` endpoint or `Promise.all` | Always visible on slow connections |
-| Ambient `animate-pulse` blobs in Layout + micro-animations | Continuous GPU compositing, battery drain on mobile | Remove or reduce blur on decorative blobs for mobile | Mobile devices immediately |
-| Recharts SVG redraw on every `useMemo` recompute | Chart flickers on unrelated state changes | Memoize chart data arrays with stable dependencies | When parent re-renders frequently |
+| KB sidebar search fires on every keystroke | 10+ API calls per search, flickering results | 300ms debounce on search input | Immediately in fast typing |
+| Backup zip buffered in memory | Memory spike, possible OOM crash | Stream archiver directly to Express response | When uploads directory exceeds ~500 MB |
+| Time report aggregates all entries without index | Slow report query as entry count grows | Index `time_entries(ticket_id)` and `time_entries(started_at)` | Thousands of entries |
+| Push to stale subscriptions (410) not cleaned up | Growing table of dead endpoints, failed pushes logged on every notification | Handle 410 response: delete subscription from DB | After browser reinstall, PWA uninstall |
+| SQLite backup blocks writes | `db.backup()` can pause writes briefly on a hot database | Run backup during low-activity periods or use async backup API | During heavy use (unlikely for single-user) |
 
 ---
 
@@ -379,28 +482,44 @@ Test `body::before` in light mode before shipping the toggle. If it clashes, add
 
 | Mistake | Risk | Prevention |
 |---------|------|------------|
-| Command palette exposes ticket titles/descriptions without authentication check | Not applicable — palette only renders inside authenticated `Layout` | Confirm palette is inside auth-guarded routes, not rendered on `/public/*` paths |
-| Dashboard summary endpoint lacks authentication | Aggregated counts exposed unauthenticated | Apply `authenticate` middleware to `/api/dashboard/summary` same as all other API routes |
-| Search endpoint returns full ticket content | Over-fetching sensitive data for display | Summary search results should return title + status + ID only; full content loaded on navigate |
+| Backup endpoint without `authenticate` middleware | Full DB download by anyone with the URL | Apply `authenticate` as first middleware on all backup routes |
+| VAPID private key in source code or Docker image | Key can be extracted from image; all subscriptions can be spoofed | Store in `.env` only, never commit, add to `.gitignore` |
+| Push payload contains full ticket content | Sensitive ticket data in notification payload (visible in notification center) | Send only ticket ID + title in push payload; load full content when user taps notification |
+| Backup zip includes `.env` file | Credentials in backup download | Explicitly include only `database.sqlite` and `uploads/` in archive; never include the server source directory |
+| Time entries accessible without auth | Time data leaked | Apply `authenticate` to all time tracking routes |
+
+---
+
+## UX Pitfalls
+
+| Pitfall | User Impact | Better Approach |
+|---------|-------------|-----------------|
+| Push permission requested on page load | User clicks "Block" defensively; notifications permanently disabled | Show custom pre-prompt explaining what notifications do; only call `requestPermission()` on explicit user action |
+| No "notifications are blocked" recovery message | User thinks they enabled notifications but nothing happens | Check `Notification.permission === 'denied'` and show a message with browser settings link |
+| KB sidebar search replaces ticket detail content | Confusing context switch — user loses place in ticket | Sidebar panel floats alongside ticket content; does not replace it |
+| Timer running indicator not visible | User forgets timer is running; it runs for days | Show persistent "timer running" badge on ticket list row and ticket detail header |
+| Backup download has no progress indicator | Large zip takes time; user thinks nothing happened | Show "Preparing backup..." loading state; disable button while in progress |
+| Time entry manual input without bounds checking | User enters "99999 hours" manually, corrupting reports | Validate duration: max 24h per entry; negative durations rejected |
 
 ---
 
 ## "Looks Done But Isn't" Checklist
 
-- [ ] **Dark mode:** `.light` block in `index.css` has ALL tokens including `--primary`, `--accent`, `--ring`, `--background-gradient`, `--sidebar-primary`
-- [ ] **Dark mode:** `body::before` mesh gradient is tested in light mode — opacity reduced if needed
-- [ ] **Dark mode:** `HtmlRenderer` uses `dark:prose-invert` not hardcoded `prose-invert`
-- [ ] **Dark mode:** Recharts chart colors update when mode is toggled (not frozen from mount)
-- [ ] **Dark mode:** No FOUC — blocking `<script>` in `index.html` applies mode class before bundle loads
-- [ ] **Dashboard:** `GET /api/tickets?limit=1000` does NOT appear in DevTools on dashboard load
-- [ ] **Dashboard:** Aging ticket count is computed server-side, not filtered from the 1000-ticket client array
-- [ ] **Command palette:** Pressing Cmd+K in Firefox does NOT focus the browser address bar
-- [ ] **Command palette:** Pressing Cmd+K twice quickly does not open-close-open in a single frame (no double listener)
-- [ ] **Command palette:** Navigating from palette closes it before navigation starts
-- [ ] **Responsive:** Mobile sidebar overlay is not clipped by parent `overflow-hidden`
-- [ ] **Responsive:** Horizontal scroll does not appear at 375px viewport width
-- [ ] **Micro-interactions:** No `layout` prop on KPICard or dashboard stat cards
-- [ ] **Loading states:** All skeletons use `ui/skeleton.tsx`, not bespoke shimmer divs
+- [ ] **Push — strategy:** `vite.config.ts` uses `strategies: 'injectManifest'`, not `generateSW`, and a custom SW file exists
+- [ ] **Push — VAPID:** Keys loaded from `process.env`, not generated in code; startup throws if missing
+- [ ] **Push — subscriptions:** `push_subscriptions` table exists in DB schema; subscriptions survive container restart
+- [ ] **Push — 410 cleanup:** Push route handles 410/404 responses from push service by deleting the stale subscription
+- [ ] **Push — iOS guard:** Permission UI checks `Notification.permission !== 'denied'` and `'PushManager' in window` before showing
+- [ ] **Push — permission timing:** `Notification.requestPermission()` only called after explicit user action, not on mount
+- [ ] **Backup — method:** Backup uses `db.backup(tmpFile)` or `VACUUM INTO`, not `fs.copyFile`
+- [ ] **Backup — streaming:** Zip archive is piped directly to `res`; no `.toBuffer()` call
+- [ ] **Backup — auth:** `GET /api/backup/download` returns 401 without a valid JWT token
+- [ ] **Backup — contents:** Zip includes only `database.sqlite` + `uploads/`; no `.env`, no source files
+- [ ] **Time tracking — open timer:** Closing/resolving a ticket closes any open time entries for that ticket
+- [ ] **Time tracking — constraint:** DB has a partial unique index preventing two open sessions per ticket
+- [ ] **Time tracking — reports:** No row with `stopped_at IS NULL` on a closed ticket inflates report totals
+- [ ] **KB sidebar — debounce:** Search input has 300ms debounce before firing API call
+- [ ] **KB sidebar — invalidation:** Linking an article from the sidebar triggers refetch of the linked articles panel
 
 ---
 
@@ -408,24 +527,50 @@ Test `body::before` in light mode before shipping the toggle. If it clashes, add
 
 | Pitfall | Recovery Cost | Recovery Steps |
 |---------|---------------|----------------|
-| Two mode systems fighting, stored in different localStorage keys | LOW | Add migration in `AppearanceInitializer`: read both keys, prefer the custom `app-mode-theme`, remove the `next-themes` key |
-| FOUC persists after blocking script added | LOW | Verify the `<script>` tag is before `<div id="root">` in `index.html` and before any CSS `<link>` tags |
-| Recharts charts show dark colors after light mode switch | LOW | Force recharts re-mount on mode change by keying on mode string: `<Chart key={mode} ...>` — acceptable since charts re-fetch data on visible anyway |
-| 1000-ticket client aggregation deployed, now slow | MEDIUM | Add `/api/dashboard/summary` endpoint and migrate Dashboard.tsx off `useTickets({ limit: 1000 })` — does not require DB migration |
-| Command palette double-listener leak | LOW | Add cleanup: verify `useEffect` return function removes the listener; check React StrictMode double-invoke (expected in dev, not production) |
+| Push subscriptions lost (in-memory) | LOW | Add `push_subscriptions` table; user re-enables notifications once |
+| VAPID keys changed, all subscriptions invalid | LOW | Regenerate keys into `.env`; all users re-subscribe (single user: one re-enable click) |
+| Corrupt backup from `fs.copyFile` | HIGH | No recovery from the backup; migrate to `db.backup()` immediately; rely on Docker volume as primary data store |
+| OOM crash during backup streaming | LOW | Switch to streaming pipe; no data loss (backup route only reads) |
+| Inflated time totals from open sessions on closed tickets | MEDIUM | SQL cleanup: `UPDATE time_entries SET stopped_at = closed_at FROM tickets WHERE ticket_id = tickets.id AND stopped_at IS NULL AND tickets.status IN ('closed','resolved')`; add the side effect going forward |
+| Push notifications spam from cron re-firing | LOW | Mark `sent = 1` before send; existing duplicate rows: manually update `sent = 1` via DB |
+| KB sidebar race condition (stale results) | LOW | Add debounce + React Query; stale results self-correct on next stable input |
+
+---
+
+## Pitfall-to-Phase Mapping
+
+| Pitfall | Prevention Phase | Verification |
+|---------|------------------|--------------|
+| Wrong PWA strategy (`generateSW` vs `injectManifest`) | PWA push notifications — first task | DevTools > Application > Service Workers shows one registered SW |
+| Push subscription not persisted | PWA push notifications — subscription storage | `push_subscriptions` table exists; restart container, verify push still works |
+| VAPID key regeneration | PWA push notifications — VAPID setup | `process.env.VAPID_PUBLIC_KEY` loaded; no `generateVAPIDKeys()` in app code |
+| iOS Safari push without Home Screen install | PWA push notifications — capability detection | On iOS Safari tab: "Install to Home Screen" message shown instead of permission prompt |
+| Notification permission denied permanently | PWA push notifications — UX flow | No `requestPermission()` on page load; custom pre-prompt shown first |
+| Corrupt backup via `fs.copyFile` | Backup & export — backup method selection | Restore the backup into a fresh DB; verify row counts match original |
+| OOM crash from buffered zip | Backup & export — streaming implementation | Download backup with 50 MB uploads; memory usage stays flat |
+| Unauthenticated backup endpoint | Backup & export — auth guard | `curl` without token returns 401 |
+| Open timer on closed ticket | Time tracking — status change side effect | Close a ticket with running timer; verify `stopped_at` is set on the entry |
+| Overlapping open sessions | Time tracking — schema design | Attempting to start a second timer on same ticket returns error |
+| KB search race condition | KB sidebar search — debounce implementation | Type quickly; only results for the final input state are shown |
+| Stale linked articles after sidebar link | KB sidebar search — cache invalidation | Link article from sidebar; linked articles panel updates without page refresh |
+| Push spam from cron re-fire | PWA push notifications — scheduler integration | Trigger reminder twice; only one notification received |
 
 ---
 
 ## Sources
 
-- Codebase inspection: `src/lib/appearance.ts`, `src/index.css` (.light/.dark blocks), `src/components/ThemeProvider.tsx`, `src/App.tsx` (AppearanceInitializer), `src/pages/Dashboard.tsx` (1000-ticket fetch), `src/components/GlobalSearch.tsx` (existing debounce pattern), `src/components/Layout.tsx` (sidebar structure), `tailwind.config.ts` (darkMode: ["class"])
-- Tailwind CSS dark mode (class strategy): https://tailwindcss.com/docs/dark-mode (HIGH confidence)
-- shadcn/ui dark mode: https://ui.shadcn.com/docs/dark-mode (HIGH confidence)
-- shadcn/ui theming (CSS variable format): https://ui.shadcn.com/docs/theming (HIGH confidence)
-- Framer Motion layout animations: https://motion.dev/docs/react-layout-animations (MEDIUM confidence — verified conceptually via WebSearch)
-- TanStack Query request waterfalls: https://tanstack.com/query/v5/docs/react/guides/request-waterfalls (MEDIUM confidence)
-- cmdk keyboard shortcut conflicts: WebSearch — browser address bar conflict with Ctrl+K is documented behavior (MEDIUM confidence)
+- [Demystifying Web Push Notifications](https://pqvst.com/2023/11/21/web-push-notifications/) — VAPID requirements, service worker debugging, subscription persistence (MEDIUM confidence)
+- [Push Notifications in Safari iOS Progressive Web Apps](https://iwritecodesometimes.net/2024/04/23/push-notifications-in-safari-progressive-web-apps/) — iOS Home Screen requirement (MEDIUM confidence)
+- [vite-plugin-pwa: Advanced (injectManifest)](https://vite-pwa-org.netlify.app/guide/inject-manifest) — strategy switch requirement (HIGH confidence)
+- [web-push npm](https://github.com/web-push-libs/web-push) — VAPID setup, subscription object structure (HIGH confidence)
+- [Notification.requestPermission() — MDN](https://developer.mozilla.org/en-US/docs/Web/API/Notification/requestPermission_static) — permission state permanence (HIGH confidence)
+- [SQLite Backup API](https://sqlite.org/backup.html) — online backup safety with WAL mode (HIGH confidence)
+- [Backup strategies for SQLite in production](https://oldmoe.blog/2024/04/30/backup-strategies-for-sqlite-in-production/) — VACUUM INTO vs cp pitfalls (MEDIUM confidence)
+- [better-sqlite3 `.backup()`](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/api.md#backupdestination-options---promise) — async backup API (HIGH confidence — official docs)
+- [archiver memory issues](https://github.com/archiverjs/node-archiver/issues/422) — memory usage with large file sets (MEDIUM confidence)
+- [Web Push Store subscription in backend](https://pushpad.xyz/blog/web-push-notifications-store-the-subscription-in-the-backend-database) — subscription persistence pattern (MEDIUM confidence)
+- Codebase inspection: `vite.config.ts` (current `generateSW` strategy), `server/src/db/connection.ts` (WAL mode enabled), `server/src/lib/reminderScheduler.ts` (existing scheduler pattern), `server/src/routes/kb.ts` (FTS5 search implementation), `server/src/db/schema.sql` (ticket table structure)
 
 ---
-*Pitfalls research for: Dashboard overview, command palette (Cmd+K), dark mode toggle, responsive design, loading states, micro-interactions — on existing React 18 + Tailwind + shadcn IT ticket system*
-*Researched: 2026-03-29*
+*Pitfalls research for: Time tracking, PWA push notifications, backup/export, KB sidebar search — v1.5 features on existing Express + SQLite + React system*
+*Researched: 2026-04-05*

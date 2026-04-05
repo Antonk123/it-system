@@ -1,19 +1,19 @@
 # Project Research Summary
 
-**Project:** IT Ticket System — Dashboard, Search & Polish (v1.4)
-**Domain:** Internal single-user IT helpdesk — React + shadcn + Framer Motion stack
-**Researched:** 2026-03-29
+**Project:** IT-Ticket System — v1.5 Productivity & Insights
+**Domain:** Single-user internal IT helpdesk — time tracking, PWA push notifications, backup/export, KB sidebar search
+**Researched:** 2026-04-05
 **Confidence:** HIGH
 
 ---
 
 ## Executive Summary
 
-This milestone (v1.4) is a polish and productivity sprint on a mature internal IT ticket system. The core product works; the goal is to make it feel professional — a real dashboard with aging visibility and daily rhythm data, a proper command palette replacing an inline search dropdown, a complete light/dark mode toggle, and responsive polish. All of these are achievable without adding a single npm package. Every library required (cmdk, Framer Motion, next-themes, recharts, date-fns, Tailwind breakpoints, shadcn Skeleton) is already installed and verified in package.json.
+IT-Ticket v1.5 extends a mature, stable React + Express + SQLite + PWA stack with four distinct productivity features. The existing codebase provides strong foundations: FTS5 KB search, a node-cron reminder scheduler, an active PWA service worker, and a `better-sqlite3` connection with WAL mode already enabled. Each v1.5 feature slots cleanly into this foundation with minimal new dependencies — only `web-push` and `archiver` need to be added server-side; all frontend capabilities are satisfied by the existing stack.
 
-The recommended approach is to build in four loosely coupled phases with hard ordering constraints: dark mode CSS completeness first (purely additive, zero regression risk), dashboard overview second (new backend endpoint plus parallel client hooks), command palette refactor third (most complex, refactors existing GlobalSearch logic), and responsive plus loading polish last (depends on final component shapes). The architecture is well-understood from direct codebase inspection — no architectural guesswork is needed.
+The recommended build order — time tracking first, then backup, then KB sidebar, then push notifications — is a risk-ranking strategy. Time tracking and backup are self-contained and validate the new patterns (schema migrations, route registration, React Query hooks) without touching the service worker. KB sidebar is purely frontend and can be built in isolation. Push notifications are deliberately last because they require the most cross-cutting change: switching `vite-plugin-pwa` from `generateSW` to `injectManifest` strategy, which carries the highest risk of disrupting existing offline caching if done carelessly.
 
-The two highest-consequence risks are: (1) the `.light` CSS variable block in `index.css` is incomplete and will produce broken light-mode UI unless the full token set is audited and patched before the toggle is exposed; and (2) the dashboard's existing `useTickets({ limit: 1000 })` client-side aggregation must not be extended to power aging/reminders — a dedicated `/api/tickets/dashboard-overview` SQL endpoint is required to avoid unbounded fetch growth and silently incorrect counts. Both risks have known solutions fully specified in the research.
+The single highest-risk item across all research is the PWA service worker strategy switch. If `vite.config.ts` is not switched to `injectManifest` before any push code is written, the push event listener will never fire — silently. Additionally, VAPID keys must be generated once and stored in environment variables before any push code lands; keys generated at runtime invalidate all subscriptions on every server restart. These two items are non-negotiable prerequisites for the push phase and must be treated as phase preconditions, not implementation steps.
 
 ---
 
@@ -21,140 +21,184 @@ The two highest-consequence risks are: (1) the `.light` CSS variable block in `i
 
 ### Recommended Stack
 
-Zero new npm dependencies. The entire milestone is buildable with the existing stack: cmdk 1.1.1 (already installed) for the command palette primitive via shadcn's `CommandDialog`, Framer Motion 12.38.0 (already installed) for animations, recharts 2.15.4 for dashboard charts, date-fns 3.6.0 for date formatting, Tailwind CSS 3.4 breakpoints for responsive layout, and shadcn's `Skeleton` component (added via `npx shadcn@latest add skeleton` — a code generation step, not an npm install). This is verified directly from package.json, not assumed.
+The existing stack requires only two new runtime server packages to cover all v1.5 features. No frontend packages are needed — all UI components, the date library, and PWA service worker infrastructure are already installed and verified in `package.json`.
 
-**Core technologies:**
-- `cmdk ^1.1.1` + shadcn `CommandDialog`: command palette modal — already installed; `CommandDialog` already exists in `src/components/ui/command.tsx` but is currently unused
-- `framer-motion ^12.38.0`: micro-interactions and stagger animations — already installed but underused; CSS keyframe animations handle most existing cases; Framer Motion reserved for gestures and exit animations
-- `better-sqlite3 11.7.0`: new `/api/tickets/dashboard-overview` endpoint — same synchronous SQL pattern as the existing `/api/reports/summary` endpoint
-- `next-themes ^0.3.0`: already installed but dormant; custom `applyMode()` in `appearance.ts` is the active dark mode driver — do NOT activate next-themes as the class driver alongside it
-- Tailwind CSS 3.4 breakpoints (`sm:` 640px, `md:` 768px, `lg:` 1024px): responsive layout fixes — no config changes needed
+**New dependencies (server only):**
+- `web-push ^3.6.7`: VAPID key generation, payload encryption, push delivery — canonical RFC-compliant Node.js library; no cloud intermediary required; stable protocol (RFC 8030/8291/8292)
+- `archiver ^7.0.1`: Streaming ZIP archive piped directly to Express response; avoids memory buffering; supports SQLite snapshot + uploads directory in one archive
+- `@types/web-push ^3.6.4` + `@types/archiver ^6.0.3`: TypeScript types (devDependencies only)
 
-**shadcn code-generation steps (not npm installs):**
-- `npx shadcn@latest add skeleton` — adds `src/components/ui/skeleton.tsx`
-- Verify `src/components/ui/command.tsx` exists (it does — CommandDialog is confirmed present)
+**Service worker change (not an npm install):** `vite.config.ts` must switch from default `generateSW` to `strategies: 'injectManifest'` with a custom `src/sw.ts`. This is mandatory for push — `generateSW` does not support custom event listeners.
+
+**New DB tables:** `ticket_time_logs` (time entries per ticket with start/stop timestamps) and `push_subscriptions` (browser push subscription endpoint + keys). Both follow existing schema conventions (ISO-8601 TEXT timestamps, integer PKs, CASCADE deletes on ticket deletion).
+
+See `.planning/research/STACK.md` for full version compatibility matrix, DB schema DDL, and installation commands.
 
 ### Expected Features
 
-**Must have (table stakes):**
-- Aging tickets panel on dashboard — open tickets without recent updates are invisible in the current stats grid; standard in all mature helpdesks
-- "Today at a glance" summary — daily created/closed/resolved counts; every helpdesk dashboard surfaces this
-- Reminders widget on dashboard — `ticket_reminders` table exists with data; dashboard is the natural home for upcoming reminders
-- Command palette as modal (Cmd+K) — current GlobalSearch is an inline dropdown; modal overlay is the established UX pattern (Linear, Notion, GitHub); KB articles must be included in results
-- Navigation shortcuts in palette — zero-effort to add, trains muscle memory, expected in any command palette
-- Dark mode toggle in nav header — currently buried in Settings; one-click toggle is the norm in polished tools
-- Light mode fully styled — `.light` CSS class exists but token coverage is incomplete; light mode must actually work across all components
-- Loading skeleton screens — blank states during load feel like bugs; skeletons communicate loading clearly
+**Must have (table stakes) — v1.5 core scope:**
+- Manual time entry on ticket (log hours + optional note)
+- Total time summary on ticket detail (client-side sum)
+- Time log list with delete on ticket detail
+- Time analytics tab in Reports (GROUP BY category/week, recharts bar chart)
+- Browser push notification delivery via VAPID (OS notification center, desktop Chrome/Firefox/Edge)
+- Notification permission opt-in UI in Settings (user-gesture triggered — never on page load)
+- Reminder cron dispatches push notification (extends existing `checkReminders` scheduler)
+- Backup download button (streams DB + uploads as ZIP from Settings page)
+- Backup includes file attachments from `/app/data/uploads/`
+- KB search panel in ticket detail (collapsible sidebar, FTS5, existing API reused)
+- Link KB article to ticket from sidebar (existing `POST /api/tickets/:id/kb-links` reused)
 
-**Should have (differentiators):**
-- Staggered page-load animations on dashboard KPI cards — Framer Motion is already installed; one well-done stagger beats scattered micro-interactions
-- Toast and hover micro-interactions — `whileTap`/`whileHover` on key interactive elements; high polish-to-effort ratio
-- Responsive mobile layout — bottom nav plus sidebar drawer on mobile < 768px; vaul is already installed
-- Keyboard shortcut hints — `<kbd>` elements on search bar and empty states; visible shortcut education
-- Dark mode action accessible from Cmd+K — "Toggle light/dark mode" action in the palette idle state
+**Should have (v1.5 stretch or immediate follow-on):**
+- Timer start/stop widget on ticket (client-side; persists `started_at` to DB on Start, writes full entry on Stop)
+- Aging ticket push notifications (extends existing cron — alerts on tickets with no update in N days)
+- Notification click navigates directly to relevant ticket URL (SW `notificationclick` handler)
+- KB sidebar shows already-linked articles above search box (existing GET endpoint)
+- Quick time entry chip buttons (15m, 30m, 1h, 2h — pure frontend)
 
-**Defer to v2+:**
-- Cmd+K ticket actions (clone, mark resolved) — requires two-step selection UX; complex for a single-user tool
-- Responsive Kanban for mobile — medium complexity, low usage frequency on mobile
-- AI summaries, real-time push, PWA offline — explicitly out of scope per PROJECT.md
+**Defer (out of scope — v2+ or never):**
+- Restore from backup via UI — too risky with a live SQLite connection; document manual procedure instead
+- Billable/non-billable time — no client billing use case in single-user IT tool
+- Third-party push services (Firebase FCM, OneSignal) — VAPID self-hosted is sufficient
+- Live timer state persisted to backend — client-side timer with DB write on start is sufficient
+- Scheduled automatic cloud backup — VM-level snapshots cover disaster recovery
+
+See `.planning/research/FEATURES.md` for full dependency tree, prioritization matrix, and anti-features.
 
 ### Architecture Approach
 
-The existing architecture is component-per-page with React Query hooks per data source and an `ApiClient` class in `src/lib/api.ts`. No global state management beyond localStorage and React Query cache. For v1.4 the approach is strictly additive: a new `useDashboardOverview` hook calling a new dedicated backend endpoint, a new `CommandPalette` component replacing `GlobalSearch`, CSS variable additions to `index.css`, and Tailwind responsive classes on existing layout components. No architectural pattern changes are needed.
+The architecture follows an additive pattern — new features extend the existing Express/SQLite/React foundation without replacing anything. Each feature maps to a small cluster of new files (one route file, one hook, one component) plus targeted modifications to existing files (scheduler, ticket detail page, settings page, vite config). The most significant structural change is the service worker strategy switch, which affects the entire PWA offline experience and must be validated in isolation before push features layer on top.
 
-**Major components and changes:**
-1. `GET /api/tickets/dashboard-overview` (NEW backend route) — single SQL endpoint returning aging tickets, upcoming reminders, and today-summary counts; must be placed above the `/:id` route in `tickets.ts` to avoid ID match conflict
-2. `useDashboardOverview.ts` (NEW hook) + `AgingTicketsPanel`, `UpcomingRemindersPanel`, `TodaySummaryPanel` (NEW components) — mount in `Dashboard.tsx` alongside existing KPI grid; 5-minute React Query stale time
-3. `CommandPalette.tsx` (NEW component using `CommandDialog`) — replaces inline `GlobalSearch` dropdown; mounts in `Layout.tsx`; searches tickets + KB articles in parallel with a shared 250ms debounce timer
-4. `index.css` `.light` block (MODIFIED) — complete all missing CSS variable tokens (`--primary`, `--primary-foreground`, `--accent`, `--ring`, `--sidebar-primary`, `--background-gradient`, etc.)
-5. `Layout.tsx` (MODIFIED) — dark mode toggle button in `BottomSection`, command palette trigger replaces GlobalSearch render
-6. `index.html` (MODIFIED) — blocking `<script>` before the React bundle applies the stored mode class synchronously to prevent FOUC
+**Major new components:**
+1. `server/src/routes/time-logs.ts` — CRUD for time entries; start/stop timer; summary aggregation for reports
+2. `server/src/routes/backup.ts` — streams ZIP of DB snapshot + uploads; `authenticate` middleware required
+3. `server/src/routes/push.ts` + `server/src/lib/pushNotifications.ts` — VAPID push subscription management and `sendPushToAll()` helper
+4. `src/components/TimeLogSection.tsx` — timer widget + time log list in ticket detail
+5. `src/components/KBSidebarSearch.tsx` — debounced FTS5 search panel in ticket detail (refactors existing `KBLinksSection`)
+6. `src/sw.ts` — custom service worker replacing Workbox auto-generated SW; handles precache + push events
+
+**Key patterns to follow:**
+- Time tracking uses a log-entry model: `started_at` persisted immediately on Start; `stopped_at` written on Stop; `NULL stopped_at` = running. A partial unique index `ON ticket_time_logs(ticket_id) WHERE stopped_at IS NULL` enforces one active timer per ticket.
+- Push subscriptions are upserted by `endpoint`; 410 responses from the push service trigger automatic deletion.
+- Backup uses `db.backup(tmpFile)` (SQLite Online Backup API) to produce a WAL-consistent snapshot, then streams via `archiver` — never a direct `fs.copyFile` of the live DB file.
+- KB sidebar upgrades the existing `KBLinksSection` from bulk-fetch-then-filter to debounced API-driven FTS5 search with a 300ms debounce.
+
+See `.planning/research/ARCHITECTURE.md` for full component inventory, data flow diagrams, code sketches, and anti-patterns.
 
 ### Critical Pitfalls
 
-1. **Incomplete `.light` CSS token block** — the `.light` override in `index.css` covers only ~12 of 40+ variables. Primary buttons, sidebar active states, and the `body::before` gradient will look broken in light mode. Audit and complete ALL tokens before building the toggle UI — this is a prerequisite, not a follow-up.
+1. **`generateSW` cannot handle push events — service worker strategy switch is mandatory.** Switch `vite.config.ts` to `strategies: 'injectManifest'` as the very first task of the push phase. Create `src/sw.ts` with `precacheAndRoute(self.__WB_MANIFEST)` + push handlers. Verify offline caching still works before adding any push subscription code. Doing this last (after push code) means two service workers fighting for scope.
 
-2. **Dark mode system conflict (`applyMode` vs `next-themes`)** — both systems are present in the codebase. If `next-themes` is activated with `attribute="class"`, it fights with `AppearanceInitializer` over `document.documentElement.classList`, causing FOUC and toggle reversion. Use `applyMode`/`saveModeTheme` from `appearance.ts` exclusively; keep `next-themes` dormant.
+2. **VAPID keys generated at runtime invalidate all subscriptions on every restart.** Generate once with `npx web-push generate-vapid-keys`; store in `.env` as `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`. Add a startup guard that throws if either variable is missing. Never call `generateVAPIDKeys()` in application code.
 
-3. **Dashboard 1000-ticket client-side aggregation must not be extended** — `useTickets({ limit: 1000 })` grows unboundedly with ticket count. Aging tickets computed client-side will silently miss tickets beyond position 1000. All new dashboard aggregations must go through the dedicated `/api/tickets/dashboard-overview` SQL endpoint.
+3. **Push subscriptions stored in memory are lost on container restart.** All `PushSubscription` objects must be upserted into the `push_subscriptions` SQLite table immediately on receipt. Upsert by endpoint; delete on 410 from push service.
 
-4. **Command palette double-listener leak** — registering `document.addEventListener('keydown', ...)` inside a component that could remount causes double-fire (palette opens then immediately closes). Register once at `App.tsx` level with proper `useEffect` cleanup. Always call `e.preventDefault()` to block Firefox address bar focus on Ctrl+K.
+4. **`fs.copyFile` on a live WAL-mode SQLite database produces corrupt backups.** Always use `db.backup(tmpPath)` (better-sqlite3's built-in Online Backup API). The live `.sqlite` file may be mid-write at copy time; WAL journal state is not captured.
 
-5. **Framer Motion `layout` prop on dashboard cards causes layout thrash** — `layout`/`layoutId` triggers FLIP measurement on every data update; combined with recharts SVG redraws this will produce visible jank. Use `initial`/`animate` (opacity + transform only) for entrance animations; never use the `layout` prop on KPICard or stat panels.
+5. **Open timer left running when a ticket is closed inflates time reports.** The ticket update endpoint (status → resolved/closed) must close open time entries for that ticket inside the same transaction: `UPDATE time_entries SET stopped_at = CURRENT_TIMESTAMP WHERE ticket_id = ? AND stopped_at IS NULL`.
+
+6. **Notification permission prompt on page load gets permanently blocked.** Never call `Notification.requestPermission()` on mount. Show a custom in-app pre-prompt in Settings first. Check `Notification.permission` state; if `'denied'`, show recovery instructions (link to browser settings).
+
+7. **Backup route without auth guard exposes full DB download publicly.** Apply `authenticate` middleware as the first handler on all backup routes. Verify with unauthenticated `curl` (expect 401) before marking the phase complete.
+
+See `.planning/research/PITFALLS.md` for full checklist, recovery strategies, and phase-to-pitfall mapping.
 
 ---
 
 ## Implications for Roadmap
 
-The dependency graph from combined research strongly suggests four phases. The ordering is driven by: (1) CSS-only dark mode work has zero breaking-change risk and should be verified before React features land on top of it; (2) dashboard panels are self-contained and validate the new backend SQL endpoint pattern with lower complexity than the search refactor; (3) command palette refactors existing GlobalSearch functionality and should come after dashboard to avoid dual disruption; (4) responsive and loading polish requires all final component shapes to be in place.
+Based on combined research, the recommended phase structure follows dependency-first, risk-last ordering. Each phase is independently deployable and testable in production.
 
-### Phase 1: Dark Mode Foundation
+### Phase 1: Time Tracking
 
-**Rationale:** Purely additive CSS changes with zero regression risk. Validates the theming system before any React code changes land. If dark mode CSS is incomplete when React code arrives, every subsequent feature will have light-mode rendering bugs that are expensive to debug retroactively.
+**Rationale:** Fully self-contained — new DB table, new API routes, new React components. No service worker changes, no new environment variables, no external libraries required. Validates the schema migration pattern, React Query hook pattern, and ticket detail extension before any riskier changes.
 
-**Delivers:** Working light mode across all existing components; dark mode toggle button in nav header (`BottomSection` in `Layout.tsx`); blocking `<script>` in `index.html` to prevent FOUC; `prose-invert` fixed in `HtmlRenderer`; recharts chart colors responsive to mode switch via `getComputedStyle` or mode-keyed remount.
+**Delivers:** Manual time entry form, start/stop timer widget, time log list with delete, total time summary on ticket detail, time analytics tab in Reports with recharts bar chart.
 
-**Addresses features:** Light mode fully styled, dark mode toggle in nav header, dark mode accessible from Cmd+K (toggle action added to palette in Phase 3).
+**Features addressed:** Manual time entry (P1), total time summary (P1), time log list + delete (P1), time reports tab (P2), timer start/stop widget (P2), quick chip buttons (P3).
 
-**Avoids pitfalls:** Incomplete `.light` token block (Pitfall 2), dual mode system conflict (Pitfall 1), FOUC on hard reload (Pitfall 8), `HtmlRenderer` `prose-invert` hardcode (Pitfall 10), recharts colors frozen at mount (Pitfall 13), `body::before` gradient wrong in light mode (Pitfall 16).
+**Pitfalls to avoid:**
+- Partial unique index on `(ticket_id) WHERE stopped_at IS NULL` — prevents double-timer and corrupted aggregates
+- `stopped_at` auto-closed on ticket resolve/close — prevents inflated report totals
+- All timestamps use `datetime('now')` convention — consistent with existing schema
+- Time entry bounds validation (max 24h per entry) — prevents garbage data
 
----
-
-### Phase 2: Dashboard Overview
-
-**Rationale:** Self-contained feature — new backend endpoint plus new frontend panels. No cross-dependencies with CommandPalette or Layout restructuring. Validates the dedicated SQL aggregation pattern that pitfalls research strongly recommends over extending the existing 1000-ticket client fetch.
-
-**Delivers:** Aging tickets panel, upcoming reminders panel, "today at a glance" summary row; new `GET /api/tickets/dashboard-overview` backend route; `useDashboardOverview` hook; skeleton loading states on all new panels.
-
-**Addresses features:** Aging tickets, reminders widget, today summary, loading skeletons (new panels).
-
-**Avoids pitfalls:** 1000-ticket client-side aggregation growth (Pitfall 3), aging count missing tickets beyond limit (Pitfall 15), dashboard fetch waterfall (Pitfall 3).
-
-**Uses:** `better-sqlite3` synchronous SQL (same pattern as existing `/api/reports/summary`), React Query parallel hooks, shadcn `Skeleton` component.
+**Research flag:** Standard patterns — no deeper research needed.
 
 ---
 
-### Phase 3: Command Palette Refactor
+### Phase 2: Backup & Export
 
-**Rationale:** Most complex change — refactors existing `GlobalSearch` functionality into `CommandPalette` using the already-present `CommandDialog`. Deliberately last among feature phases so GlobalSearch continues working undisturbed during Phases 1 and 2. KB article search and navigation shortcuts are bundled here since they require the modal to exist first.
+**Rationale:** Purely backend (one new route file) + one Settings UI button. Zero frontend architecture risk. Short phase delivering high user value (data ownership) with minimal blast radius.
 
-**Delivers:** Full command palette modal (Cmd+K) with tickets + KB articles + contacts + navigation shortcuts; retired inline GlobalSearch dropdown; updated `Layout.tsx` header with palette trigger; parallel debounced search with a shared 250ms timer; dark mode toggle action in palette idle state.
+**Delivers:** `GET /api/backup/download` streaming ZIP (DB snapshot + uploads), Settings page backup button with loading state and progress indication.
 
-**Addresses features:** Command palette as modal, KB articles in Cmd+K, navigation shortcuts, dark mode action in palette, keyboard shortcut hints.
+**Features addressed:** Backup download button (P1), backup includes attachments (P1).
 
-**Avoids pitfalls:** Double-listener leak (Pitfall 4), multi-source search race conditions (Pitfall 5), navigation timing conflict with close animation (Pitfall 9), input losing focus on results update (Pitfall 14).
+**Pitfalls to avoid:**
+- `db.backup(tmpFile)` not `fs.copyFile` — WAL-safe snapshot mandatory
+- `archiver.pipe(res)` not `archive.toBuffer()` — streaming to avoid OOM
+- `authenticate` middleware on all backup routes — verify with unauthenticated curl
+- ZIP contains only `database.sqlite` + `uploads/` — never include `.env` or source files
 
-**Implements:** `CommandPalette.tsx` using `CommandDialog` from `ui/command.tsx`; `api.getKbArticles()` already present in `api.ts`; `useNavigate` from react-router-dom already installed.
+**Research flag:** Standard patterns — no deeper research needed.
 
 ---
 
-### Phase 4: Responsive and Animation Polish
+### Phase 3: KB Sidebar Search
 
-**Rationale:** Polish work that depends on all feature components being in their final shape. Responsive audit touches `TicketList`, `KBArticleDetail`, `Reports`, and the new dashboard panels — all of which must be final before the audit. Animation additions (stagger on KPI grid, micro-interactions) are additive overlays with no dependencies beyond Framer Motion.
+**Rationale:** Purely frontend change to a single component (`KBLinksSection.tsx` refactor to API-driven search). Reuses three existing backend APIs with zero backend changes. Can be built and shipped in isolation with no risk to server, scheduler, or service worker.
 
-**Delivers:** Mobile-responsive layout (bottom nav + sidebar drawer at < 768px); `TicketTable` mobile overflow fixes; KBArticleDetail single-column on mobile; staggered page-load animations on dashboard KPI grid; `whileTap`/`whileHover` micro-interactions on key interactive elements; comprehensive skeleton screens across Dashboard, TicketList, and KB list.
+**Delivers:** Debounced FTS5 search panel in ticket detail sidebar, linked articles section above search, "Link article" action from results, idle state showing pre-linked articles.
 
-**Addresses features:** Responsive mobile layout, stagger animations, toast micro-interactions, full loading state coverage, keyboard shortcut hint badges.
+**Features addressed:** KB search in ticket detail (P1), link KB article from sidebar (P1), KB sidebar shows linked articles (P1).
 
-**Avoids pitfalls:** Responsive sidebar clipping from `overflow-hidden` ancestor (Pitfall 6), `layout` prop layout thrash (Pitfall 7), sidebar collapsed state lost across navigation (Pitfall 11), bespoke skeleton shimmer per component instead of using `ui/skeleton.tsx` (Pitfall 12).
+**Pitfalls to avoid:**
+- 300ms debounce before firing API call — prevents keystroke-per-request and race condition in results
+- `queryClient.invalidateQueries` after link mutation — linked articles panel updates without page refresh
+- Show `title + excerpt` only (not full Tiptap render) — prevents narrow-sidebar readability issues
+- Only call API when query length > 0 — avoids loading entire KB on every open
+
+**Research flag:** Standard patterns — no deeper research needed.
+
+---
+
+### Phase 4: PWA Push Notifications
+
+**Rationale:** Most cross-cutting change in v1.5. Requires modifying `vite.config.ts` (service worker strategy), creating a custom `src/sw.ts`, installing a new backend library, adding environment variables, a new DB table, and modifying the existing reminder scheduler. Done last so all simpler features are stable in production before the PWA infrastructure is touched.
+
+**Delivers:** VAPID-based push notifications to OS notification center (desktop Chrome/Firefox/Edge; iOS requires PWA home screen install); push fires from existing reminder scheduler; push opt-in/opt-out in Settings; aging-ticket notifications (extends same cron).
+
+**Features addressed:** Push notification delivery (P1), permission opt-in UI (P1), reminder fires push (P1), notification click navigates to ticket (P2), aging ticket alerts (P2).
+
+**Pitfalls to avoid (treat as phase preconditions — do before writing any push code):**
+- Switch `vite.config.ts` to `injectManifest` FIRST; verify offline caching regression before adding push handler
+- Generate VAPID keys once via CLI; store in `.env`; add startup guard for missing keys
+- Upsert `push_subscriptions` to SQLite immediately on subscribe; handle 410 by deleting stale row
+- iOS capability guard — show "Install to Home Screen" message instead of permission prompt in a browser tab
+- Permission prompt only on explicit user action in Settings — check `Notification.permission` state first
+- Mark reminder `sent = 1` before attempting push (not after) — prevents re-fire on cron error
+
+**Research flag:** Needs a focused validation step — the `injectManifest` strategy switch must be tested in the actual Docker production build (nginx serving the `dist/`) before push subscription code lands. Workbox precache manifest injection behaves differently in production vs. Vite dev server. Verify offline caching still works after the switch.
 
 ---
 
 ### Phase Ordering Rationale
 
-- CSS-only dark mode work first eliminates the largest cross-cutting concern before feature code lands on top of it
-- Dashboard panels and command palette have no dependencies on each other; dashboard goes first because it introduces the new backend endpoint pattern with lower complexity than the GlobalSearch refactor
-- Responsive polish last because it requires knowing the final shape of all new components (dashboard panels, command palette trigger in Layout header)
-- All four phases are buildable without new npm dependencies — verified from direct package.json inspection
+- **Time tracking first:** No external dependencies, no SW changes. Establishes the migration + route + hook patterns used in subsequent phases. Independently releasable.
+- **Backup second:** Adds the only other non-push backend dependency (`archiver`). Short, isolated, high value. Can be released to production independently.
+- **KB sidebar third:** Zero backend risk. Purely a UX improvement to one component. Can be validated in production before the push phase begins.
+- **Push last:** Highest risk due to SW strategy change. All other features are in production and stable before this change lands. If the SW switch causes a regression, the scope of impact is limited to push/PWA — time tracking, backup, and KB sidebar are unaffected.
 
 ### Research Flags
 
-All phases have well-documented patterns from direct codebase inspection. No phase requires `/gsd:research-phase`.
+**Needs care during implementation:**
+- **Phase 4 (Push Notifications):** `injectManifest` strategy switch must be tested in the Docker/nginx production build, not only local Vite dev server. Verify offline cache after strategy switch before writing push handler code.
 
-- **Phase 1 (Dark Mode):** All implementation details fully specified in ARCHITECTURE.md and PITFALLS.md. Token list to add is enumerated in Pitfall 2. Blocking script is a 5-line snippet in Pitfall 8.
-- **Phase 2 (Dashboard):** SQL queries written in full in ARCHITECTURE.md. Component boundaries fully mapped. Hook pattern mirrors existing `useTickets`.
-- **Phase 3 (CommandPalette):** `CommandDialog` already exists in `ui/command.tsx`. Data flow fully specified in ARCHITECTURE.md. `api.getKbArticles` confirmed present in `api.ts`.
-- **Phase 4 (Polish):** Tailwind breakpoints and Framer Motion patterns are well-established. Responsive fixes are audit-and-patch, not design decisions.
+**Standard patterns (no additional research needed):**
+- **Phase 1 (Time Tracking):** Well-established log-entry model. React Query CRUD pattern already in use throughout codebase.
+- **Phase 2 (Backup):** Streaming zip via `archiver` is documented and verified. `better-sqlite3.backup()` is official API.
+- **Phase 3 (KB Sidebar):** Refactors existing component with existing APIs. Debounce + cache invalidation patterns already present in codebase.
 
 ---
 
@@ -162,46 +206,52 @@ All phases have well-documented patterns from direct codebase inspection. No pha
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | Verified directly from package.json and server/package.json — zero ambiguity; 0 new packages required |
-| Features | HIGH | Direct codebase read of GlobalSearch, Dashboard, Layout, Settings; domain patterns from Freshdesk/Zendesk/Linear/Notion/GitHub well-established |
-| Architecture | HIGH | Direct analysis of all affected source files; component boundaries, data flow, and SQL queries fully specified — no inference required |
-| Pitfalls | HIGH (codebase-specific) / MEDIUM (pattern-based) | CSS token gaps and dual-mode conflict verified by direct code inspection; Framer Motion layout thrash and command palette listener leak are pattern-based warnings not yet triggered in this codebase |
+| Stack | HIGH | All package versions confirmed via npm registry; existing stack confirmed via direct `package.json` read; 0 ambiguous dependencies |
+| Features | HIGH | UX patterns verified against Freshdesk, Atera, Zendesk, MDN; existing API inventory confirmed in PROJECT.md and codebase inspection |
+| Architecture | HIGH | Direct codebase inspection of existing routes, schema, scheduler, vite config, and KBLinksSection component; code sketches verified against actual file patterns |
+| Pitfalls | HIGH (codebase-specific) / MEDIUM (push edge cases) | SQLite backup and VAPID pitfalls from official docs; iOS push behavior from Apple Developer Forums; `injectManifest` from vite-plugin-pwa docs (some community discussion) |
 
 **Overall confidence:** HIGH
 
 ### Gaps to Address
 
-- **Reminders API endpoint:** FEATURES.md notes the `/api/reminders` endpoint needs verification ("verify endpoint exists"). During Phase 2 implementation, confirm whether `GET /api/reminders` is a live route in `server/src/routes/`. If absent, the reminders panel requires a new backend route — low effort, same SQL pattern as the aging query, but must not be assumed to exist.
+- **`injectManifest` Docker build behavior:** The strategy switch is documented, but the exact Workbox manifest injection behavior inside the Docker multi-stage build (nginx serving `dist/`) needs a smoke test immediately after the switch in Phase 4. Risk is low but the regression is silent if missed.
 
-- **Recharts color update on mode switch:** PITFALLS.md recommends either reading CSS variables via `getComputedStyle` on mode change or keying charts on mode string for forced remount. The correct approach should be tested empirically during Phase 1 since recharts version-specific behavior on CSS variable updates is not fully verified.
+- **Upload directory size in production:** The streaming backup pattern handles any size safely. The Docker container's `/tmp` partition must have space for the SQLite snapshot temp file — negligible for this system but worth a one-line log during backup phase implementation.
 
-- **Responsive breakpoint specifics:** FEATURES.md rates responsive layout confidence as MEDIUM — "actual breakpoint behavior requires live browser testing." The architectural plan is correct but specific column-hiding and overflow decisions may need adjustment after testing at 375px viewport width.
+- **iOS push non-requirement:** The system is accessed primarily from desktop Chrome/Firefox. iOS push (requires Home Screen install) is explicitly a non-requirement for v1.5. The iOS capability guard in the permission UI is still required to avoid silent failures if the user accesses from iOS Safari.
 
 ---
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- `package.json`, `server/package.json` — installed package versions, confirmed zero new dependencies needed
-- `src/lib/appearance.ts`, `src/index.css` — dark mode system architecture and CSS variable coverage gaps
-- `src/components/GlobalSearch.tsx`, `src/components/ui/command.tsx` — command palette refactor targets; CommandDialog confirmed present but unused
-- `src/pages/Dashboard.tsx`, `src/components/KPICard.tsx` — existing dashboard data flow and 1000-ticket fetch anti-pattern
-- `src/components/Layout.tsx`, `src/components/ThemeProvider.tsx`, `src/App.tsx` — mount points and AppearanceInitializer
-- `server/src/routes/tickets.ts`, `server/src/routes/reports.ts` — existing backend route patterns
-- `server/src/db/connection.ts` — ticket_reminders schema confirmed
-- `src/lib/api.ts` — getKbArticles method confirmed present
-- `tailwind.config.ts` — darkMode: ["class"] strategy, breakpoints, custom screens confirmed
+- `package.json` + `server/package.json` — confirmed existing stack versions
+- `server/src/db/connection.ts` — WAL mode enabled, migration pattern confirmed
+- `server/src/lib/reminderScheduler.ts` — existing cron scheduler pattern for push integration
+- `src/components/KBLinksSection.tsx` — existing KB component to refactor for API-driven search
+- `vite.config.ts` — confirmed `generateSW` strategy (must change in Phase 4)
+- `server/src/db/schema.sql` — timestamp and naming conventions for new tables
+- [better-sqlite3 backup() API](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/api.md) — online backup, WAL safety
+- [web-push npm (web-push-libs)](https://github.com/web-push-libs/web-push) — VAPID keys, sendNotification API
+- [MDN Web Push API](https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Tutorials/js13kGames/Re-engageable_Notifications_Push) — PushSubscription structure, push event handler
+- [Notification.requestPermission() — MDN](https://developer.mozilla.org/en-US/docs/Web/API/Notification/requestPermission_static) — permission state permanence
+- [SQLite Backup API](https://sqlite.org/backup.html) — WAL-safe online backup rationale
 
 ### Secondary (MEDIUM confidence)
-- shadcn/ui Command component docs — CommandDialog integration pattern
-- cmdk npm registry — version 1.1.1 latest stable
-- motion.dev upgrade guide — framer-motion to motion/react migration is optional (do not migrate)
-- Helpdesk dashboard patterns (Freshdesk, Zendesk, ManageEngine) — aging and today-summary feature set validation
-- BrowserStack 2025 breakpoint guide — responsive breakpoint values
+- [vite-plugin-pwa injectManifest guide](https://vite-pwa-org.netlify.app/guide/inject-manifest.html) — strategy switch config and custom SW file requirements
+- [web.dev push notifications codelab](https://web.dev/articles/codelab-notifications-push-server) — subscription storage pattern
+- [Pushpad — PushSubscription backend storage](https://pushpad.xyz/blog/web-push-notifications-store-the-subscription-in-the-backend-database) — endpoint/p256dh/auth schema rationale
+- [Backup strategies for SQLite in production](https://oldmoe.blog/2024/04/30/backup-strategies-for-sqlite-in-production/) — VACUUM INTO vs cp pitfalls
+- archiver npm streaming pattern — `archive.pipe(res)` + `archive.finalize()` (multiple sources)
+- Freshdesk, Atera time tracking docs — log-entry UX patterns
+- MagicBell PWA push guide — subscription lifecycle, iOS limitations
+- [iOS PWA limitations (2025/2026)](https://www.magicbell.com/blog/pwa-ios-limitations-safari-support-complete-guide) — Home Screen install requirement, EU DMA impact
 
-### Tertiary (LOW confidence)
-- None — all implementation decisions are grounded in direct codebase inspection or HIGH/MEDIUM sources
+### Tertiary (LOW confidence — needs validation)
+- iOS push EU DMA impact (Apple Developer Forums thread 732594) — relevant only if user accesses from iOS; desktop is primary
+- Push notification payload size limits — not researched; title + body + ticket URL is well within standard 4 KB limit
 
 ---
-*Research completed: 2026-03-29*
+*Research completed: 2026-04-05*
 *Ready for roadmap: yes*
