@@ -18,15 +18,15 @@ Requirements for milestone v1.5: Productivity & Insights.
 
 ### Push-notiser
 
-- [ ] **PUSH-01**: User can enable/disable push notifications from settings
-- [ ] **PUSH-02**: User receives push notification when a reminder triggers
-- [ ] **PUSH-03**: User receives push notification when a ticket has had no activity in N days
-- [ ] **PUSH-04**: User can click a push notification to navigate to the relevant ticket
+- [x] **PUSH-01**: User can enable/disable push notifications from settings
+- [x] **PUSH-02**: User receives push notification when a reminder triggers
+- [x] **PUSH-03**: User receives push notification when a ticket has had no activity in N days
+- [x] **PUSH-04**: User can click a push notification to navigate to the relevant ticket
 
 ### Backup & Export
 
-- [ ] **BKUP-01**: User can download a zip containing the SQLite database and uploaded files
-- [ ] **BKUP-02**: Backup uses safe SQLite snapshot (not raw file copy)
+- [x] **BKUP-01**: User can download a zip containing the SQLite database and uploaded files
+- [x] **BKUP-02**: Backup uses safe SQLite snapshot (not raw file copy)
 
 ### KB från ärendevyn
 
@@ -66,12 +66,12 @@ Requirements for milestone v1.5: Productivity & Insights.
 | TIME-04 | Phase 18 | Complete |
 | TIME-05 | Phase 18 | Complete |
 | TIME-06 | Phase 18 | Complete |
-| PUSH-01 | Phase 20 | Pending |
-| PUSH-02 | Phase 20 | Pending |
-| PUSH-03 | Phase 20 | Pending |
-| PUSH-04 | Phase 20 | Pending |
-| BKUP-01 | Phase 19 | Pending |
-| BKUP-02 | Phase 19 | Pending |
+| PUSH-01 | Phase 20 | Complete |
+| PUSH-02 | Phase 20 | Complete |
+| PUSH-03 | Phase 20 | Complete |
+| PUSH-04 | Phase 20 | Complete |
+| BKUP-01 | Phase 19 | Complete |
+| BKUP-02 | Phase 19 | Complete |
 | KBSB-01 | Phase 17 | Complete |
 | KBSB-02 | Phase 17 | Complete |
 | KBSB-03 | Phase 17 | Complete |
