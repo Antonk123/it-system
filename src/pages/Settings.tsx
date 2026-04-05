@@ -35,7 +35,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Users, Mail, Shield, Loader2, ArrowUp, ArrowDown, Palette, Type, Wrench, ListChecks, CornerDownRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Users, Mail, Shield, Loader2, ArrowUp, ArrowDown, Palette, Type, Wrench, ListChecks, CornerDownRight, HardDriveDownload } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -227,6 +227,7 @@ const Settings = () => {
     tags: false,
     templates: false,
     checklistTemplates: false,
+    backup: false,
   });
 
   // Tag state
@@ -237,11 +238,41 @@ const Settings = () => {
   const [editingTagColor, setEditingTagColor] = useState('');
   const [deleteTagId, setDeleteTagId] = useState<string | null>(null);
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
+  const [backupLoading, setBackupLoading] = useState(false);
 
   const TAG_COLORS = [
     '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
     '#3b82f6', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6',
   ];
+
+  const handleBackup = useCallback(async () => {
+    setBackupLoading(true);
+    try {
+      const token = localStorage.getItem('auth_token');
+      const baseUrl = import.meta.env.VITE_API_URL || '/api';
+      const response = await fetch(`${baseUrl}/backup`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error('Backup failed');
+      const blob = await response.blob();
+      const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const filename = `it-ticket-backup-${dateStr}.zip`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Backup skapad — ${filename} (${sizeMB} MB)`);
+    } catch {
+      toast.error('Backup misslyckades. Kontrollera servern och försök igen.');
+    } finally {
+      setBackupLoading(false);
+    }
+  }, []);
 
   const handleAddCategory = useCallback(() => {
     if (!newCategoryName.trim()) {
@@ -1078,6 +1109,41 @@ const Settings = () => {
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+        {/* Backup & Export Section */}
+        <Collapsible open={sectionsOpen.backup} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, backup: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <HardDriveDownload className="w-5 h-5" />
+                  Backup &amp; Export
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.backup ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Ladda ned en komplett kopia av databasen och uppladdade filer som en ZIP-fil.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  ZIP-filen innehåller en WAL-säker ögonblicksbild av databasen samt alla uppladdade filer. Spara filen på en säker plats.
+                </p>
+                <Button
+                  onClick={handleBackup}
+                  disabled={backupLoading}
+                >
+                  {backupLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <HardDriveDownload className="w-4 h-4 mr-2" />
+                  )}
+                  {backupLoading ? 'Genererar backup...' : 'Ladda ned backup'}
+                </Button>
               </CardContent>
             </CollapsibleContent>
           </Card>
