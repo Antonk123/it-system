@@ -12,6 +12,9 @@ services:
       - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
       - DB_PATH=/app/data/database.sqlite
       - UPLOAD_DIR=/app/data/uploads
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-}
     logging:
       driver: "json-file"
       options:
