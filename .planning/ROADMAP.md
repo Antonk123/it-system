@@ -86,7 +86,9 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
   1. User can open a KB search panel from ticket detail and search articles by keyword using FTS5
   2. User can link a KB article to the ticket directly from a search result in the panel
   3. User can see already-linked KB articles listed in the sidebar panel before typing a query
-**Plans**: TBD
+**Plans:** 1 plan
+Plans:
+- [ ] 17-01-PLAN.md — Refactor KBLinksSection: React Query + FTS5 search + linked articles display
 **UI hint**: yes
 
 ### Phase 18: Time Tracking
@@ -142,7 +144,7 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 | 14. Dashboard Overview | v1.4 | 2/2 | Complete | 2026-03-31 |
 | 15. Command Palette | v1.4 | 2/2 | Complete | 2026-03-31 |
 | 16. Responsive & Animation Polish | v1.4 | 2/2 | Complete | 2026-04-04 |
-| 17. KB Sidebar Search | v1.5 | 0/? | Not started | - |
+| 17. KB Sidebar Search | v1.5 | 0/1 | Not started | - |
 | 18. Time Tracking | v1.5 | 0/? | Not started | - |
 | 19. Backup & Export | v1.5 | 0/? | Not started | - |
 | 20. PWA Push Notifications | v1.5 | 0/? | Not started | - |
