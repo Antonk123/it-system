@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { FilterView } from '@/types/filterView';
 import { TicketStatus, TicketPriority } from '@/types/ticket';
 import { SearchBar } from '@/components/SearchBar';
@@ -15,7 +16,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCategories } from '@/hooks/useCategories';
-import { Settings2 } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Settings2, SlidersHorizontal } from 'lucide-react';
 
 interface UnifiedFilterBarProps {
   // Current filter values (from URL params in parent)
@@ -70,6 +72,8 @@ export function UnifiedFilterBar({
   searchPlaceholder = 'Sök ärenden...',
 }: UnifiedFilterBarProps) {
   const { categories } = useCategories();
+  const isMobile = useIsMobile();
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Helper to get priority label
   const getPriorityLabel = (value: string) => {
@@ -108,117 +112,160 @@ export function UnifiedFilterBar({
     }
   };
 
+  // Count active filters (excluding search) for mobile badge
+  const activeFilterCount = [
+    !hideStatus && selectedStatuses.length > 0,
+    priorityFilter !== 'all',
+    categoryFilter !== 'all',
+    selectedTagIds.length > 0,
+    checklistFilter !== '' && checklistFilter !== 'all',
+    dateFrom !== '',
+    dateTo !== '',
+  ].filter(Boolean).length;
+
+  const filterControls = (
+    <>
+      {/* 2. Status — hidden on Archive */}
+      {!hideStatus && (
+        <StatusMultiSelect
+          selectedStatuses={selectedStatuses}
+          onChange={(statuses) => onChange({ status: statuses })}
+        />
+      )}
+
+      {/* 3. Priority Select */}
+      <Select
+        value={priorityFilter}
+        onValueChange={(value) => onChange({ priority: value })}
+      >
+        <SelectTrigger className="w-full md:w-[160px]">
+          <span className="flex items-center gap-1">
+            <span className="text-muted-foreground">Prioritet:</span>
+            <span>{getPriorityLabel(priorityFilter)}</span>
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Alla</SelectItem>
+          <SelectItem value="low">Låg</SelectItem>
+          <SelectItem value="medium">Medium</SelectItem>
+          <SelectItem value="high">Hög</SelectItem>
+          <SelectItem value="critical">Kritisk</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {/* 4. Category Select */}
+      <Select
+        value={categoryFilter}
+        onValueChange={(value) => onChange({ category: value })}
+      >
+        <SelectTrigger className="w-full md:w-[170px]">
+          <span className="flex items-center gap-1">
+            <span className="text-muted-foreground">Kategori:</span>
+            <span>{getCategoryLabel(categoryFilter)}</span>
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Alla</SelectItem>
+          {categories.map((cat) => (
+            <SelectItem key={cat.id} value={cat.id}>
+              {cat.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* 5. Tags */}
+      <TagMultiSelect
+        selectedTagIds={selectedTagIds}
+        onChange={(tagIds) => onChange({ tags: tagIds })}
+      />
+
+      {/* 6. Checklist Select */}
+      <Select
+        value={checklistFilter || 'all'}
+        onValueChange={(value) => onChange({ checklist: value === 'all' ? '' : value })}
+      >
+        <SelectTrigger className="w-full md:w-[210px]">
+          <span className="flex items-center gap-1">
+            <span className="text-muted-foreground">Checklista:</span>
+            <span>{getChecklistLabel(checklistFilter || 'all')}</span>
+          </span>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Alla</SelectItem>
+          <SelectItem value="has_checklist">Med checklista</SelectItem>
+          <SelectItem value="no_checklist">Utan checklista</SelectItem>
+        </SelectContent>
+      </Select>
+
+      {/* 7. Date Range Popover */}
+      <DateRangePopover
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        dateField={dateField}
+        hideDateFieldSelector={hideDateFieldSelector}
+        onChange={onChange}
+      />
+
+      {/* 8. Filter View Selector + Manage button */}
+      <FilterViewSelector
+        views={views}
+        activeViewId={activeViewId}
+        onSelectView={handleSelectViewById}
+      />
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-10 w-10"
+        onClick={onManageViews}
+        title="Hantera vyer"
+      >
+        <Settings2 className="w-4 h-4" />
+      </Button>
+    </>
+  );
+
   return (
     <div className="space-y-2">
-      {/* Filter control row */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* 1. Search */}
-        <div className="flex-1 min-w-[200px]">
+      {/* Search + mobile filter toggle */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 min-w-0">
           <SearchBar
             value={search}
             onChange={(value) => onChange({ search: value })}
             placeholder={searchPlaceholder}
           />
         </div>
-
-        {/* 2. Status — hidden on Archive */}
-        {!hideStatus && (
-          <StatusMultiSelect
-            selectedStatuses={selectedStatuses}
-            onChange={(statuses) => onChange({ status: statuses })}
-          />
+        {isMobile && (
+          <Button
+            variant={filtersOpen ? 'secondary' : 'outline'}
+            size="icon"
+            className="h-10 w-10 shrink-0 relative"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            title="Filter"
+          >
+            <SlidersHorizontal className="w-4 h-4" />
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </Button>
         )}
-
-        {/* 3. Priority Select */}
-        <Select
-          value={priorityFilter}
-          onValueChange={(value) => onChange({ priority: value })}
-        >
-          <SelectTrigger className="w-[160px]">
-            <span className="flex items-center gap-1">
-              <span className="text-muted-foreground">Prioritet:</span>
-              <span>{getPriorityLabel(priorityFilter)}</span>
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Alla</SelectItem>
-            <SelectItem value="low">Låg</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="high">Hög</SelectItem>
-            <SelectItem value="critical">Kritisk</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* 4. Category Select */}
-        <Select
-          value={categoryFilter}
-          onValueChange={(value) => onChange({ category: value })}
-        >
-          <SelectTrigger className="w-[170px]">
-            <span className="flex items-center gap-1">
-              <span className="text-muted-foreground">Kategori:</span>
-              <span>{getCategoryLabel(categoryFilter)}</span>
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Alla</SelectItem>
-            {categories.map((cat) => (
-              <SelectItem key={cat.id} value={cat.id}>
-                {cat.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        {/* 5. Tags */}
-        <TagMultiSelect
-          selectedTagIds={selectedTagIds}
-          onChange={(tagIds) => onChange({ tags: tagIds })}
-        />
-
-        {/* 6. Checklist Select */}
-        <Select
-          value={checklistFilter || 'all'}
-          onValueChange={(value) => onChange({ checklist: value === 'all' ? '' : value })}
-        >
-          <SelectTrigger className="w-[210px]">
-            <span className="flex items-center gap-1">
-              <span className="text-muted-foreground">Checklista:</span>
-              <span>{getChecklistLabel(checklistFilter || 'all')}</span>
-            </span>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Alla</SelectItem>
-            <SelectItem value="has_checklist">Med checklista</SelectItem>
-            <SelectItem value="no_checklist">Utan checklista</SelectItem>
-          </SelectContent>
-        </Select>
-
-        {/* 7. Date Range Popover */}
-        <DateRangePopover
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-          dateField={dateField}
-          hideDateFieldSelector={hideDateFieldSelector}
-          onChange={onChange}
-        />
-
-        {/* 8. Filter View Selector + Manage button */}
-        <FilterViewSelector
-          views={views}
-          activeViewId={activeViewId}
-          onSelectView={handleSelectViewById}
-        />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-10 w-10"
-          onClick={onManageViews}
-          title="Hantera vyer"
-        >
-          <Settings2 className="w-4 h-4" />
-        </Button>
       </div>
+
+      {/* Filter controls — always visible on desktop, collapsible on mobile */}
+      {isMobile ? (
+        filtersOpen && (
+          <div className="flex flex-col gap-2 animate-in slide-in-from-top-2 duration-200">
+            {filterControls}
+          </div>
+        )
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          {filterControls}
+        </div>
+      )}
 
       {/* Chip row */}
       <ActiveFilterChips
