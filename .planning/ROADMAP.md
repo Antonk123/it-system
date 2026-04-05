@@ -72,7 +72,7 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 **Milestone Goal:** Ge insikt i tidsatgang, proaktiva notifieringar, datasakerhet via backup, och snabbare kunskapsatkomst under arendearbete.
 
 - [x] **Phase 17: KB Sidebar Search** - Search and link KB articles directly from ticket detail (completed 2026-04-05)
-- [ ] **Phase 18: Time Tracking** - Log time on tickets with per-ticket summary and Reports analytics
+- [x] **Phase 18: Time Tracking** - Log time on tickets with per-ticket summary and Reports analytics (completed 2026-04-05)
 - [ ] **Phase 19: Backup & Export** - Download database and uploaded files as a ZIP from Settings
 - [ ] **Phase 20: PWA Push Notifications** - Browser push notifications for reminders and aging tickets
 
@@ -101,11 +101,11 @@ Plans:
   3. User can delete a time log entry from the ticket detail
   4. User can see the total time spent on a ticket summarised in the ticket detail
   5. User can view a "Tid" tab in Reports showing time breakdown by category and top tickets by time spent
-**Plans:** 1/3 plans executed
+**Plans:** 3/3 plans complete
 Plans:
 - [x] 18-01-PLAN.md — Backend foundation: DB table, CRUD routes, reports endpoint, types, API client, duration parser, React Query hook
-- [ ] 18-02-PLAN.md — TimeSection sidebar component + TicketDetail integration
-- [ ] 18-03-PLAN.md — Reports Tid tab: TimeSummaryTab component with bar chart and top tickets table
+- [x] 18-02-PLAN.md — TimeSection sidebar component + TicketDetail integration
+- [x] 18-03-PLAN.md — Reports Tid tab: TimeSummaryTab component with bar chart and top tickets table
 **UI hint**: yes
 
 ### Phase 19: Backup & Export
@@ -149,6 +149,6 @@ Plans:
 | 15. Command Palette | v1.4 | 2/2 | Complete | 2026-03-31 |
 | 16. Responsive & Animation Polish | v1.4 | 2/2 | Complete | 2026-04-04 |
 | 17. KB Sidebar Search | v1.5 | 1/1 | Complete    | 2026-04-05 |
-| 18. Time Tracking | v1.5 | 1/3 | In Progress|  |
+| 18. Time Tracking | v1.5 | 3/3 | Complete   | 2026-04-05 |
 | 19. Backup & Export | v1.5 | 0/? | Not started | - |
 | 20. PWA Push Notifications | v1.5 | 0/? | Not started | - |
