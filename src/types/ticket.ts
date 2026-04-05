@@ -219,3 +219,10 @@ export interface TagRow {
   color: string;
   created_at: string;
 }
+
+export interface TimeEntryRow {
+  id: string;
+  duration_minutes: number;
+  note: string | null;
+  created_at: string;
+}
