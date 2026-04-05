@@ -476,7 +476,7 @@ export default router;
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Runtime caching in custom SW**
    - What we know: Existing generateSW config has `runtimeCaching` for `/api` (NetworkFirst, 24h). This is lost on injectManifest switch.
