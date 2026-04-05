@@ -128,7 +128,10 @@ Plans:
   2. User receives a push notification in the OS notification center when a reminder triggers
   3. User receives a push notification when a ticket has had no activity in N days
   4. User can click a push notification and be navigated directly to the relevant ticket in the app
-**Plans**: TBD
+**Plans:** 2 plans
+Plans:
+- [ ] 20-01-PLAN.md — Backend push infrastructure + custom service worker + injectManifest switch + nginx
+- [ ] 20-02-PLAN.md — Scheduler integration (reminder push + aging push) + Settings UI toggle
 
 ## Progress
 
