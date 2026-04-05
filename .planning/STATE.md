@@ -1,32 +1,34 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.4
-milestone_name: Dashboard, Search & Polish
-status: v1.4 milestone complete
-stopped_at: Completed 16-02-PLAN.md
-last_updated: "2026-04-05T09:03:49.490Z"
+milestone: v1.5
+milestone_name: Productivity & Insights
+status: Defining requirements
+stopped_at: null
+last_updated: "2026-04-05T12:00:00.000Z"
 progress:
-  total_phases: 7
-  completed_phases: 7
-  total_plans: 14
-  completed_plans: 14
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
 # Project State
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-03-30 after v1.4 milestone start)
+See: .planning/PROJECT.md (updated 2026-04-05 after v1.5 milestone start)
 
 **Core value:** Every ticket gets tracked, resolved, and documented — nothing falls through the cracks and solutions are reusable.
-**Current focus:** Phase 16 — responsive-animation-polish
+**Current focus:** Defining requirements for v1.5
 
 ## Current Position
 
-Phase: 16
-Plan: Not started
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-04-05 — Milestone v1.5 started
 
-Progress: ░░░░░░░░░░░░░░░░░░░░ 0/4 phases
+Progress: ░░░░░░░░░░░░░░░░░░░░ 0/0 phases
 
 ## Performance Metrics
 

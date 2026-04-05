@@ -72,7 +72,15 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 
 ### Active
 
-(None — planning next milestone)
+#### Current Milestone: v1.5 Productivity & Insights
+
+**Goal:** Ge insikt i tidsåtgång, proaktiva notifieringar, datasäkerhet via backup, och snabbare kunskapsåtkomst under ärendearbete.
+
+**Target features:**
+- Tidsloggning — enkel tidsspårning per ärende med rapportöversikt
+- PWA push-notiser — webbnotiser för påminnelser och aging-ärenden
+- Backup & export — ladda ner databas + filer som zip via UI
+- KB från ärendevyn — sök och länka KB-artiklar direkt från ärendedetalj
 
 ### Out of Scope
 
@@ -84,6 +92,8 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - Aktivitetstidslinje — hög komplexitet, lågt värde för single-user
 - Swipe-gester — over-engineering för intern tool
 - Smart priority-förslag — AI/heuristik inte motiverat vid nuvarande volym
+- E-postintegration — kräver separat mailbox, vill inte att alla mail blir ärenden
+- SLA/deadline-hantering — inte motiverat för single-user system
 
 ## Context
 
@@ -154,4 +164,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-05 after v1.4 milestone*
+*Last updated: 2026-04-05 after v1.5 milestone start*
