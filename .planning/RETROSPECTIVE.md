@@ -148,6 +148,85 @@
 
 ---
 
+## Milestone: v1.3 — Streamline & Declutter
+
+**Shipped:** 2026-03-30
+**Phases:** 3 | **Plans:** 6
+
+### What Was Built
+
+- Dead KB features removed (view counter, recently updated, popular articles, unused templates)
+- Silent token refresh with rolling refresh tokens and 15-minute access tokens
+- Collapsible form sections with progressive disclosure on ticket create/edit
+- Searchable combobox dropdowns (CategoryCombobox, TemplateCombobox)
+- Quick capture FAB for title-only ticket creation
+- Public form auth detection (skip name/email when logged in)
+- Ticket cloning with pre-filled fields
+
+### What Worked
+
+- **Feature removal as a phase**: Dedicated cleanup phase (10) before building new UI features kept complexity down
+- **Rolling refresh tokens**: Simple security improvement — each refresh generates a new token, old one deleted
+
+### What Was Inefficient
+
+- **No notable issues**: Phases 10-12 were tightly scoped and executed cleanly
+
+### Key Lessons
+
+1. Dedicated cleanup phases before new features reduce code surface area for subsequent work
+
+---
+
+## Milestone: v1.4 — Dashboard, Search & Polish
+
+**Shipped:** 2026-04-05
+**Phases:** 4 | **Plans:** 8
+
+### What Was Built
+
+- Per-theme light/dark mode (4 themes) with FOUC-blocking script and nav toggle
+- Dashboard overview: aging tickets panel, today summary KPIs, upcoming reminders widget
+- Command palette (Cmd+K) with debounced search, navigation, quick actions, recently-viewed
+- Mobile bottom tab bar with responsive ticket card reflow and single-column KB
+- Skeleton loading states on all data-fetching pages
+- Framer Motion page transitions, staggered list reveals, Dashboard KPI entrance
+- Collapsible filter bar on mobile (search visible, filters behind toggle)
+
+### What Worked
+
+- **Integration checker thoroughness**: Cross-phase audit verified all 17 exports properly wired, 5/5 E2E flows complete, caught the orphaned PageTransition.tsx
+- **AnimatePresence at route level**: Wrapping Routes in App.tsx with one AnimatePresence instead of individual PageTransition wrappers was simpler and cleaner
+- **prefers-reduced-motion guard**: Added accessibility guard at module level in all animated components — no runtime cost for users who prefer reduced motion
+- **Bottom tab bar over hamburger**: Direct navigation to 4 tabs is better UX than hidden menu for a small app
+
+### What Was Inefficient
+
+- **Phase 15 missing VERIFICATION.md**: Command palette phase was executed but never verified. Integration checker confirmed all 4 CMD requirements were wired, but formal verification artifact was missing. Caught at milestone audit.
+- **PageTransition.tsx orphaned**: Component created in Phase 16 Plan 02 but never imported — route transitions handled by AnimatePresence in App.tsx instead. Dead code.
+- **Human verification items accumulating**: Phases 13 and 14 have visual testing items that still need browser verification
+
+### Patterns Established
+
+- **Dedicated dashboard SQL endpoints**: Separate aggregation routes (`/dashboard-overview`, `/upcoming-reminders`) instead of overloading paginated ticket queries
+- **cmdk for command palette**: Lightweight, accessible, keyboard-native approach that fits shadcn pattern
+- **Mobile-first collapsible patterns**: Filter bar toggle on mobile, bottom tab bar, card reflow — reusable for future responsive work
+- **Skeleton loading pattern**: Consistent skeleton → content crossfade with AnimatePresence across all pages
+
+### Key Lessons
+
+1. **Always run phase verification** — Phase 15's missing VERIFICATION.md was only caught at milestone audit. Even phases with clean execution need the formal verification step.
+2. **Clean up orphaned code immediately** — PageTransition.tsx was created but superseded by a simpler approach. Should have been removed in the same plan.
+3. **Accumulate human verification into batch sessions** — 4 milestones in and visual testing items keep deferring. Schedule a dedicated UAT session.
+
+### Cost Observations
+
+- Model mix: Opus orchestrator, Sonnet executors/verifiers/checker
+- Sessions: ~6 days (2026-03-31 → 2026-04-05)
+- Notable: 8 plans across 4 phases. Dark mode was the most complex phase (full CSS token audit). Responsive/animation phase executed cleanly with wave-based parallelism.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -157,6 +236,8 @@
 | v1.0 | 1 day | 3 | Initial GSD workflow adoption |
 | v1.1 | 3 days | 3 | Parallel worktree execution, verifier-caught runtime bugs |
 | v1.2 | 1 day | 3 | Incremental schema dependencies, bidirectional link pattern |
+| v1.3 | 1 day | 3 | Dedicated cleanup phase before new features |
+| v1.4 | 6 days | 4 | Dark mode, responsive mobile, animation system |
 
 ### Cumulative Quality
 
@@ -165,6 +246,8 @@
 | v1.0 | 0 | 0% | 0 (window.print() over @react-pdf/renderer) |
 | v1.1 | 0 | 0% | 1 (node-cron for scheduler, localStorage for queues) |
 | v1.2 | 0 | 0% | 0 (all features built on existing stack) |
+| v1.3 | 0 | 0% | 0 (cleanup + UX improvements on existing stack) |
+| v1.4 | 0 | 0% | 1 (framer-motion for animations, cmdk for command palette) |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -173,3 +256,5 @@
 3. Verifiers catch runtime bugs that TypeScript misses with permissive tsconfig — always run verification
 4. SUMMARY frontmatter `requirements_completed` must be enforced — causes audit gaps in every milestone
 5. SUMMARY one-liner extraction broken across all 3 milestones — needs format or tooling fix
+6. Always run phase verification — missing VERIFICATION.md caught only at milestone audit (v1.1 Phase 4, v1.4 Phase 15)
+7. Clean up orphaned code immediately — dead components accumulate if not removed in the same plan that supersedes them
