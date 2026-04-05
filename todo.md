@@ -34,7 +34,6 @@
 
 ### Checklists-förbättringar
 - [ ] Sub-checklists (nested)
-- [ ] Checklist-templates (återanvändbara mallar)
 - [ ] Progress bar på ärendelistan
 - [ ] Deadline per checklist-item
 
@@ -58,7 +57,7 @@
 - [ ] Warranty expiration alerts
 
 ### Backup & Maintenance
-- [ ] Automatisk databas-backup (cron)
+- [ ] Automatisk databas-backup (cron) — manuell backup finns (Phase 19)
 - [ ] Restore från backup
 - [ ] Databas-cleanup (radera gamla stängda ärenden)
 
@@ -76,5 +75,5 @@
 
 ---
 
-*Senast uppdaterad: 2026-03-29*
-*Cleanup: Tog bort implementerade features (KB, filter, automatisering, bulk ops). Flyttade deploy/dev-info till CLAUDE.md.*
+*Senast uppdaterad: 2026-04-05*
+*Cleanup: Tog bort implementerade features (KB, filter, automatisering, bulk ops, checklist-templates). Manuell backup implementerad i Phase 19.*

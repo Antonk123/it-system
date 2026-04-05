@@ -73,7 +73,7 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 
 - [x] **Phase 17: KB Sidebar Search** - Search and link KB articles directly from ticket detail (completed 2026-04-05)
 - [x] **Phase 18: Time Tracking** - Log time on tickets with per-ticket summary and Reports analytics (completed 2026-04-05)
-- [ ] **Phase 19: Backup & Export** - Download database and uploaded files as a ZIP from Settings
+- [x] **Phase 19: Backup & Export** - Download database and uploaded files as a ZIP from Settings (completed 2026-04-05)
 - [ ] **Phase 20: PWA Push Notifications** - Browser push notifications for reminders and aging tickets
 
 ## Phase Details
@@ -115,9 +115,9 @@ Plans:
 **Success Criteria** (what must be TRUE):
   1. User can click a backup button in Settings and receive a ZIP file containing the SQLite database and all uploaded files
   2. The downloaded database file is a WAL-consistent snapshot (not a raw file copy) that can be opened safely in SQLite tools
-**Plans:** 1 plan
+**Plans:** 1/1 plans executed
 Plans:
-- [ ] 19-01-PLAN.md — Backend backup endpoint (WAL-safe SQLite snapshot + uploads ZIP) and Settings UI section
+- [x] 19-01-PLAN.md — Backend backup endpoint (WAL-safe SQLite snapshot + uploads ZIP) and Settings UI section
 
 ### Phase 20: PWA Push Notifications
 **Goal**: Users receive OS-level push notifications for reminders and aging tickets
@@ -152,5 +152,5 @@ Plans:
 | 16. Responsive & Animation Polish | v1.4 | 2/2 | Complete | 2026-04-04 |
 | 17. KB Sidebar Search | v1.5 | 1/1 | Complete    | 2026-04-05 |
 | 18. Time Tracking | v1.5 | 3/3 | Complete    | 2026-04-05 |
-| 19. Backup & Export | v1.5 | 0/1 | Not started | - |
+| 19. Backup & Export | v1.5 | 1/1 | Complete    | 2026-04-05 |
 | 20. PWA Push Notifications | v1.5 | 0/? | Not started | - |
