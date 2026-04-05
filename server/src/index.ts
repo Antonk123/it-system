@@ -9,6 +9,7 @@ import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
 import { startAutoCloseScheduler } from './lib/autoCloseScheduler.js';
 import { startRecurringScheduler } from './lib/recurringScheduler.js';
 import { initWebPush } from './lib/push.js';
+import { startPushScheduler } from './lib/pushScheduler.js';
 import cron from 'node-cron';
 import passport from './config/passport.js';
 
@@ -49,6 +50,7 @@ initializeDatabase();
 const pushReady = initWebPush();
 if (pushReady) {
   console.log('Push notifications enabled (VAPID configured)');
+  startPushScheduler();
 } else {
   console.log('Push notifications disabled (VAPID keys not set)');
 }

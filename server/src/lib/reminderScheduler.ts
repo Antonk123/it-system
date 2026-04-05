@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { db } from '../db/connection.js';
 import { sendTicketReminderEmail } from './email.js';
+import { sendPushToAllSubscriptions } from './push.js';
 
 let schedulerTask: cron.ScheduledTask | null = null;
 
@@ -69,18 +70,29 @@ async function checkAndSendReminders() {
     for (const reminder of dueReminders) {
       console.log(`  Processing reminder ${reminder.id} scheduled for ${reminder.reminder_time}`);
       try {
-        await sendTicketReminderEmail({
-          ticket: {
-            id: reminder.ticket_id,
-            title: reminder.title,
-            description: reminder.description,
-            status: reminder.status,
-            priority: reminder.priority,
-            categoryId: reminder.category_id,
-          },
-          reminderMessage: reminder.message || undefined,
-          userEmail: reminder.user_email,
-          userName: reminder.user_name,
+        // Send email if SMTP is configured
+        if (process.env.SMTP_HOST && process.env.EMAIL_FROM) {
+          await sendTicketReminderEmail({
+            ticket: {
+              id: reminder.ticket_id,
+              title: reminder.title,
+              description: reminder.description,
+              status: reminder.status,
+              priority: reminder.priority,
+              categoryId: reminder.category_id,
+            },
+            reminderMessage: reminder.message || undefined,
+            userEmail: reminder.user_email,
+            userName: reminder.user_name,
+          });
+        }
+
+        // Send push notification
+        await sendPushToAllSubscriptions({
+          type: 'reminder',
+          ticketId: reminder.ticket_id,
+          title: `Påminnelse: ${reminder.title}`,
+          body: reminder.message || `Ärendet "${reminder.title}" har en påminnelse nu.`,
         });
 
         // Mark reminder as sent
