@@ -9,12 +9,12 @@ Requirements for milestone v1.5: Productivity & Insights.
 
 ### Tidsloggning
 
-- [ ] **TIME-01**: User can log time on a ticket (duration in minutes + optional note)
-- [ ] **TIME-02**: User can view list of time logs on a ticket with date and note
-- [ ] **TIME-03**: User can delete a time log entry
-- [ ] **TIME-04**: User can see total time spent on a ticket in ticket detail
-- [ ] **TIME-05**: User can view time breakdown by category in Reports ("Tid" tab)
-- [ ] **TIME-06**: User can view top tickets by time spent in Reports
+- [x] **TIME-01**: User can log time on a ticket (duration in minutes + optional note)
+- [x] **TIME-02**: User can view list of time logs on a ticket with date and note
+- [x] **TIME-03**: User can delete a time log entry
+- [x] **TIME-04**: User can see total time spent on a ticket in ticket detail
+- [x] **TIME-05**: User can view time breakdown by category in Reports ("Tid" tab)
+- [x] **TIME-06**: User can view top tickets by time spent in Reports
 
 ### Push-notiser
 
@@ -60,12 +60,12 @@ Requirements for milestone v1.5: Productivity & Insights.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TIME-01 | Phase 18 | Pending |
-| TIME-02 | Phase 18 | Pending |
-| TIME-03 | Phase 18 | Pending |
-| TIME-04 | Phase 18 | Pending |
-| TIME-05 | Phase 18 | Pending |
-| TIME-06 | Phase 18 | Pending |
+| TIME-01 | Phase 18 | Complete |
+| TIME-02 | Phase 18 | Complete |
+| TIME-03 | Phase 18 | Complete |
+| TIME-04 | Phase 18 | Complete |
+| TIME-05 | Phase 18 | Complete |
+| TIME-06 | Phase 18 | Complete |
 | PUSH-01 | Phase 20 | Pending |
 | PUSH-02 | Phase 20 | Pending |
 | PUSH-03 | Phase 20 | Pending |

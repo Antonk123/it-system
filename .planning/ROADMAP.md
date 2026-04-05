@@ -101,9 +101,9 @@ Plans:
   3. User can delete a time log entry from the ticket detail
   4. User can see the total time spent on a ticket summarised in the ticket detail
   5. User can view a "Tid" tab in Reports showing time breakdown by category and top tickets by time spent
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 Plans:
-- [ ] 18-01-PLAN.md — Backend foundation: DB table, CRUD routes, reports endpoint, types, API client, duration parser, React Query hook
+- [x] 18-01-PLAN.md — Backend foundation: DB table, CRUD routes, reports endpoint, types, API client, duration parser, React Query hook
 - [ ] 18-02-PLAN.md — TimeSection sidebar component + TicketDetail integration
 - [ ] 18-03-PLAN.md — Reports Tid tab: TimeSummaryTab component with bar chart and top tickets table
 **UI hint**: yes
@@ -149,6 +149,6 @@ Plans:
 | 15. Command Palette | v1.4 | 2/2 | Complete | 2026-03-31 |
 | 16. Responsive & Animation Polish | v1.4 | 2/2 | Complete | 2026-04-04 |
 | 17. KB Sidebar Search | v1.5 | 1/1 | Complete    | 2026-04-05 |
-| 18. Time Tracking | v1.5 | 0/3 | Not started | - |
+| 18. Time Tracking | v1.5 | 1/3 | In Progress|  |
 | 19. Backup & Export | v1.5 | 0/? | Not started | - |
 | 20. PWA Push Notifications | v1.5 | 0/? | Not started | - |
