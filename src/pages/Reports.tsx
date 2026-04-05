@@ -18,6 +18,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { KPICard } from '@/components/KPICard';
 import { StatusFlowChart } from '@/components/StatusFlowChart';
 import { TagAnalytics } from '@/components/TagAnalytics';
+import { TimeSummaryTab } from '@/components/TimeSummaryTab';
 import { KPIDetailDialog } from '@/components/KPIDetailDialog';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -618,6 +619,7 @@ const Reports = () => {
             <TabsTrigger value="trend">Trend</TabsTrigger>
             <TabsTrigger value="personer">Personer</TabsTrigger>
             <TabsTrigger value="taggar">Taggar</TabsTrigger>
+            <TabsTrigger value="tid">Tid</TabsTrigger>
           </TabsList>
 
           {/* ── Flik 1: Översikt ── */}
@@ -1017,6 +1019,13 @@ const Reports = () => {
           <TabsContent value="taggar" className="space-y-5 mt-5">
             <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
               <TagAnalytics tickets={tickets} tags={tags} />
+            </div>
+          </TabsContent>
+
+          {/* ── Flik 5: Tid ── */}
+          <TabsContent value="tid" className="space-y-5 mt-5">
+            <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
+              <TimeSummaryTab year={selectedYear} month={selectedMonth} />
             </div>
           </TabsContent>
         </Tabs>
