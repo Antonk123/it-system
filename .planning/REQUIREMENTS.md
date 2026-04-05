@@ -30,9 +30,9 @@ Requirements for milestone v1.5: Productivity & Insights.
 
 ### KB från ärendevyn
 
-- [ ] **KBSB-01**: User can search KB articles from a sidebar panel in ticket detail
-- [ ] **KBSB-02**: User can link a KB article to the ticket from search results
-- [ ] **KBSB-03**: User can see already-linked KB articles in the sidebar panel
+- [x] **KBSB-01**: User can search KB articles from a sidebar panel in ticket detail
+- [x] **KBSB-02**: User can link a KB article to the ticket from search results
+- [x] **KBSB-03**: User can see already-linked KB articles in the sidebar panel
 
 ## Future Requirements
 
@@ -72,9 +72,9 @@ Requirements for milestone v1.5: Productivity & Insights.
 | PUSH-04 | Phase 20 | Pending |
 | BKUP-01 | Phase 19 | Pending |
 | BKUP-02 | Phase 19 | Pending |
-| KBSB-01 | Phase 17 | Pending |
-| KBSB-02 | Phase 17 | Pending |
-| KBSB-03 | Phase 17 | Pending |
+| KBSB-01 | Phase 17 | Complete |
+| KBSB-02 | Phase 17 | Complete |
+| KBSB-03 | Phase 17 | Complete |
 
 **Coverage:**
 - v1.5 requirements: 15 total
