@@ -20,6 +20,7 @@ import { TicketChecklist } from '@/components/TicketChecklist';
 import { TicketComments } from '@/components/TicketComments';
 import { TicketLinks } from '@/components/TicketLinks';
 import { KBLinksSection } from '@/components/KBLinksSection';
+import TimeSection from '@/components/TimeSection';
 import { TicketActivity } from '@/components/TicketActivity';
 import { ReminderDialog } from '@/components/ReminderDialog';
 import { ReminderList } from '@/components/ReminderList';
@@ -611,6 +612,11 @@ const TicketDetail = () => {
             {/* Linked KB Articles */}
             <div className="pt-4 border-t">
               <KBLinksSection ticketId={ticket.id} ticketTitle={ticket.title} />
+            </div>
+
+            {/* Tid — Time Tracking */}
+            <div className="pt-4 border-t">
+              <TimeSection ticketId={ticket.id} />
             </div>
 
             {/* Linked Tickets */}
