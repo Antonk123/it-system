@@ -77,7 +77,7 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 **Goal:** Ge insikt i tidsåtgång, proaktiva notifieringar, datasäkerhet via backup, och snabbare kunskapsåtkomst under ärendearbete.
 
 **Target features:**
-- Tidsloggning — enkel tidsspårning per ärende med rapportöversikt
+- ✓ Tidsloggning — enkel tidsspårning per ärende med rapportöversikt (Phase 18)
 - PWA push-notiser — webbnotiser för påminnelser och aging-ärenden
 - Backup & export — ladda ner databas + filer som zip via UI
 - ✓ KB från ärendevyn — sök och länka KB-artiklar direkt från ärendedetalj (Phase 17)
