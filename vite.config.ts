@@ -21,11 +21,14 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       includeAssets: ['favicon.png', 'robots.txt', 'icons/*.png'],
       manifest: {
         name: 'IT-Ticket System',
         short_name: 'IT-Ticket',
-        description: 'IT ärendehantering & asset management',
+        description: 'IT arendehantering & asset management',
         theme_color: '#ff9e4d',
         background_color: '#0f0f14',
         display: 'standalone',
@@ -46,26 +49,10 @@ export default defineConfig(({ mode }) => ({
           }
         ]
       },
-      workbox: {
+      injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB (default is 2 MB)
-        runtimeCaching: [
-          {
-            urlPattern: /^https?:\/\/.*\/api\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 // 24 hours
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          }
-        ]
-      }
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+      },
     })
   ].filter(Boolean),
   resolve: {
