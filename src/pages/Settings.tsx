@@ -35,7 +35,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Users, Mail, Shield, Loader2, ArrowUp, ArrowDown, Palette, Type, Wrench, ListChecks, CornerDownRight, HardDriveDownload } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Users, Mail, Shield, Loader2, ArrowUp, ArrowDown, Palette, Type, Wrench, ListChecks, CornerDownRight, HardDriveDownload, Bell } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -43,6 +43,7 @@ import { sv } from 'date-fns/locale';
 import { FONT_OPTIONS, FontTheme, applyFontTheme, getStoredFontTheme, isFontTheme, saveFontTheme, ModeTheme, applyMode, getStoredMode, saveModeTheme } from '@/lib/appearance';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { api } from '@/lib/api';
 
 const themeOptions = [
   { value: 'theme-default', label: 'Slate' },
@@ -228,6 +229,7 @@ const Settings = () => {
     templates: false,
     checklistTemplates: false,
     backup: false,
+    notifications: false,
   });
 
   // Tag state
@@ -239,6 +241,11 @@ const Settings = () => {
   const [deleteTagId, setDeleteTagId] = useState<string | null>(null);
   const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
   const [backupLoading, setBackupLoading] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBlocked, setPushBlocked] = useState(false);
+  const [pushUnsupported, setPushUnsupported] = useState(false);
+  const [iosNotInstalled, setIosNotInstalled] = useState(false);
 
   const TAG_COLORS = [
     '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
@@ -271,6 +278,86 @@ const Settings = () => {
       toast.error('Backup misslyckades. Kontrollera servern och försök igen.');
     } finally {
       setBackupLoading(false);
+    }
+  }, []);
+
+  // Detect push notification support and current permission state on mount
+  useEffect(() => {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+      setPushUnsupported(true);
+      return;
+    }
+
+    // Detect iOS non-standalone mode (PWA push only works when installed)
+    const isIos = /iPhone|iPad/.test(navigator.userAgent);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    if (isIos && !isStandalone) {
+      setIosNotInstalled(true);
+    }
+
+    // Check current permission state (read-only, no prompt)
+    if (Notification.permission === 'denied') {
+      setPushBlocked(true);
+      return;
+    }
+
+    // Check if already subscribed
+    navigator.serviceWorker.ready.then((reg) => {
+      reg.pushManager.getSubscription().then((sub) => {
+        if (sub) setPushEnabled(true);
+      });
+    });
+  }, []);
+
+  const handlePushToggle = useCallback(async (checked: boolean) => {
+    setPushLoading(true);
+    try {
+      if (checked) {
+        // Enable: request permission, subscribe, POST to backend
+        const permission = await Notification.requestPermission();
+        if (permission === 'denied') {
+          setPushBlocked(true);
+          toast.error('Webbläsaren blockerade notiser. Tillåt notiser i webbläsarens inställningar.');
+          return;
+        }
+        if (permission !== 'granted') {
+          return; // User dismissed the prompt
+        }
+
+        const reg = await navigator.serviceWorker.ready;
+        const { vapidPublicKey } = await api.getPushVapidKey();
+
+        // Convert VAPID key from URL-safe base64 to Uint8Array
+        const padding = '='.repeat((4 - (vapidPublicKey.length % 4)) % 4);
+        const base64 = (vapidPublicKey + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const rawData = atob(base64);
+        const applicationServerKey = Uint8Array.from([...rawData].map((c) => c.charCodeAt(0)));
+
+        const subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey,
+        });
+
+        await api.subscribePush(subscription.toJSON());
+        setPushEnabled(true);
+        toast.success('Push-notiser aktiverade');
+      } else {
+        // Disable: unsubscribe from browser, DELETE from backend
+        const reg = await navigator.serviceWorker.ready;
+        const subscription = await reg.pushManager.getSubscription();
+        if (subscription) {
+          const endpoint = subscription.endpoint;
+          await subscription.unsubscribe();
+          await api.unsubscribePush(endpoint);
+        }
+        setPushEnabled(false);
+        toast.success('Push-notiser avaktiverade');
+      }
+    } catch (error) {
+      console.error('Push toggle error:', error);
+      toast.error('Kunde inte aktivera notiser. Försök igen.');
+    } finally {
+      setPushLoading(false);
     }
   }, []);
 
@@ -1144,6 +1231,62 @@ const Settings = () => {
                   )}
                   {backupLoading ? 'Genererar backup...' : 'Ladda ned backup'}
                 </Button>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        {/* Notifikationer Section */}
+        <Collapsible open={sectionsOpen.notifications} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, notifications: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="w-5 h-5" />
+                  Notifikationer
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.notifications ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Ta emot push-notiser för påminnelser och inaktiva ärenden direkt i webbläsaren.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+                {/* iOS non-standalone callout */}
+                {iosNotInstalled && (
+                  <div className="rounded-md p-3 text-sm" style={{ backgroundColor: 'hsl(45 93% 47% / 0.15)' }}>
+                    Push-notiser fungerar bara när appen är installerad. Lägg till appen på hemskärmen för att aktivera.
+                  </div>
+                )}
+
+                {/* Browser blocked callout */}
+                {pushBlocked && (
+                  <div className="rounded-md bg-destructive/20 p-3 text-sm">
+                    Notiser är blockerade i webbläsaren. Gå till webbläsarens inställningar och tillåt notiser för den här sidan.
+                  </div>
+                )}
+
+                {/* Toggle row */}
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label htmlFor="push-toggle">Push-notiser</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {pushBlocked ? 'Blockerade i webbläsaren' :
+                       pushUnsupported ? 'Stöds inte i den här webbläsaren' :
+                       pushEnabled ? 'Aktiverade' : 'Avaktiverade'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {pushLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    <Switch
+                      id="push-toggle"
+                      checked={pushEnabled}
+                      onCheckedChange={handlePushToggle}
+                      disabled={pushLoading || pushBlocked || pushUnsupported || iosNotInstalled}
+                    />
+                  </div>
+                </div>
               </CardContent>
             </CollapsibleContent>
           </Card>

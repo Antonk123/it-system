@@ -998,6 +998,19 @@ class ApiClient {
       topTickets: { id: string; title: string; total_minutes: number }[];
     }>(`/reports/time-summary?year=${year}&month=${month}`);
   }
+
+  // Push notification subscription
+  async getPushVapidKey(): Promise<{ vapidPublicKey: string }> {
+    return this.request('/push/vapid-public-key');
+  }
+
+  async subscribePush(subscription: PushSubscriptionJSON): Promise<{ ok: boolean }> {
+    return this.request('/push/subscribe', { method: 'POST', body: subscription });
+  }
+
+  async unsubscribePush(endpoint: string): Promise<{ ok: boolean }> {
+    return this.request('/push/unsubscribe', { method: 'DELETE', body: { endpoint } });
+  }
 }
 
 // Types
