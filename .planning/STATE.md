@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-04-05 after v1.5 milestone start)
 Phase: 17 of 20 (KB Sidebar Search)
 Plan: — (not yet planned)
 Status: Ready to plan
-Last activity: 2026-04-05 — v1.5 roadmap created (Phases 17-20)
+Last activity: 2026-04-05 — Phase 17 context gathered
 
 Progress: ░░░░░░░░░░░░░░░░░░░░ 0/4 phases (v1.5)
 
@@ -70,5 +70,5 @@ None.
 ## Session Continuity
 
 Last session: 2026-04-05
-Stopped at: v1.5 roadmap written — Phases 17-20 defined, ready to plan Phase 17
+Stopped at: Phase 17 context gathered — ready to plan
 Resume file: None
