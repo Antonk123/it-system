@@ -30,6 +30,7 @@ import kbRoutes from './routes/kb.js';
 import reportsRoutes from './routes/reports.js';
 import recurringRoutes from './routes/recurring.js';
 import timeEntryRoutes from './routes/time-entries.js';
+import backupRoutes from './routes/backup.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -186,6 +187,7 @@ app.use('/api/kb', kbRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/recurring', recurringRoutes);
 app.use('/api/time-entries', timeEntryRoutes);
+app.use('/api/backup', backupRoutes);
 
 // Error handling
 // HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client
