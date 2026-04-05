@@ -80,7 +80,7 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - Tidsloggning — enkel tidsspårning per ärende med rapportöversikt
 - PWA push-notiser — webbnotiser för påminnelser och aging-ärenden
 - Backup & export — ladda ner databas + filer som zip via UI
-- KB från ärendevyn — sök och länka KB-artiklar direkt från ärendedetalj
+- ✓ KB från ärendevyn — sök och länka KB-artiklar direkt från ärendedetalj (Phase 17)
 
 ### Out of Scope
 
