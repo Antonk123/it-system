@@ -177,4 +177,51 @@ router.get('/summary', authenticate, (req: AuthRequest, res) => {
   });
 });
 
+router.get('/time-summary', authenticate, (req: AuthRequest, res) => {
+  const { year, month } = req.query as { year?: string; month?: string };
+
+  const filterConditions: string[] = [];
+  const filterParams: (string)[] = [];
+
+  if (year && year !== 'all') {
+    filterConditions.push("strftime('%Y', te.created_at) = ?");
+    filterParams.push(year);
+  }
+
+  if (month && month !== 'all') {
+    const monthNum = parseInt(month, 10);
+    const paddedMonth = String(monthNum + 1).padStart(2, '0');
+    filterConditions.push("strftime('%m', te.created_at) = ?");
+    filterParams.push(paddedMonth);
+  }
+
+  const where = filterConditions.length > 0
+    ? `WHERE ${filterConditions.join(' AND ')}`
+    : '';
+
+  const byCategory = db.prepare(`
+    SELECT COALESCE(c.label, 'Okategoriserad') as category,
+           COALESCE(SUM(te.duration_minutes), 0) as total_minutes
+    FROM time_entries te
+    JOIN tickets t ON te.ticket_id = t.id
+    LEFT JOIN categories c ON t.category_id = c.id
+    ${where}
+    GROUP BY t.category_id
+    ORDER BY total_minutes DESC
+  `).all(...filterParams) as { category: string; total_minutes: number }[];
+
+  const topTickets = db.prepare(`
+    SELECT t.id, t.title,
+           COALESCE(SUM(te.duration_minutes), 0) as total_minutes
+    FROM time_entries te
+    JOIN tickets t ON te.ticket_id = t.id
+    ${where}
+    GROUP BY te.ticket_id
+    ORDER BY total_minutes DESC
+    LIMIT 10
+  `).all(...filterParams) as { id: string; title: string; total_minutes: number }[];
+
+  res.json({ byCategory, topTickets });
+});
+
 export default router;

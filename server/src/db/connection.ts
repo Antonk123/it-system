@@ -37,6 +37,7 @@ const VALID_TABLE_NAMES = new Set([
   'ticket_checklists', 'checklist_templates', 'checklist_template_items',
   'kb_articles', 'kb_articles_fts', 'kb_categories', 'kb_article_tags', 'kb_article_links', 'kb_article_shares',
   'recurring_templates', 'recurring_ticket_history', 'filter_views',
+  'time_entries',
 ]);
 
 const columnExists = (tableName: string, columnName: string) => {
@@ -458,6 +459,22 @@ const ensureKbArticleTagsUseSharedTags = () => {
   console.log(`Migrated kb_article_tags to shared tags (${existingTextTags.length} unique tags)`);
 };
 
+const ensureTimeEntriesTable = () => {
+  if (tableExists('time_entries')) return;
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS time_entries (
+      id TEXT PRIMARY KEY,
+      ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+      duration_minutes INTEGER NOT NULL CHECK(duration_minutes > 0),
+      note TEXT CHECK(note IS NULL OR length(note) <= 500),
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_time_entries_ticket ON time_entries(ticket_id)').run();
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_time_entries_created ON time_entries(created_at DESC)').run();
+  console.log('Created missing table: time_entries');
+};
+
 const ensureKbArticleLinksTable = () => {
   if (tableExists('kb_article_links')) return;
   db.exec(`
@@ -551,6 +568,7 @@ export function initializeDatabase() {
   ensureKbReviewColumn();
   ensureRecurringTemplatesTable();
   ensureKbArticleLinksTable();
+  ensureTimeEntriesTable();
   db.exec('CREATE INDEX IF NOT EXISTS idx_tickets_closed_at ON tickets(status, closed_at DESC)');
   console.log('Database initialized successfully');
 }
