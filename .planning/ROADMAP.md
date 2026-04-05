@@ -144,7 +144,7 @@ Plans:
 | 14. Dashboard Overview | v1.4 | 2/2 | Complete | 2026-03-31 |
 | 15. Command Palette | v1.4 | 2/2 | Complete | 2026-03-31 |
 | 16. Responsive & Animation Polish | v1.4 | 2/2 | Complete | 2026-04-04 |
-| 17. KB Sidebar Search | v1.5 | 1/1 | Complete   | 2026-04-05 |
+| 17. KB Sidebar Search | v1.5 | 1/1 | Complete    | 2026-04-05 |
 | 18. Time Tracking | v1.5 | 0/? | Not started | - |
 | 19. Backup & Export | v1.5 | 0/? | Not started | - |
 | 20. PWA Push Notifications | v1.5 | 0/? | Not started | - |
