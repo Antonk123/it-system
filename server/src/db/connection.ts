@@ -38,6 +38,7 @@ const VALID_TABLE_NAMES = new Set([
   'kb_articles', 'kb_articles_fts', 'kb_categories', 'kb_article_tags', 'kb_article_links', 'kb_article_shares',
   'recurring_templates', 'recurring_ticket_history', 'filter_views',
   'time_entries',
+  'push_subscriptions',
 ]);
 
 const columnExists = (tableName: string, columnName: string) => {
@@ -543,6 +544,21 @@ const ensureDefaultTemplatesRemoved = () => {
   ).run();
 };
 
+const ensurePushSubscriptionsTable = () => {
+  if (tableExists('push_subscriptions')) return;
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id TEXT PRIMARY KEY,
+      endpoint TEXT UNIQUE NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_push_subscriptions_endpoint ON push_subscriptions(endpoint);
+  `);
+  console.log('Created missing table: push_subscriptions');
+};
+
 export function initializeDatabase() {
   const schemaPath = join(__dirname, 'schema.sql');
   const schema = readFileSync(schemaPath, 'utf-8');
@@ -569,6 +585,7 @@ export function initializeDatabase() {
   ensureRecurringTemplatesTable();
   ensureKbArticleLinksTable();
   ensureTimeEntriesTable();
+  ensurePushSubscriptionsTable();
   db.exec('CREATE INDEX IF NOT EXISTS idx_tickets_closed_at ON tickets(status, closed_at DESC)');
   console.log('Database initialized successfully');
 }

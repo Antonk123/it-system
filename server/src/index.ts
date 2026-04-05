@@ -8,6 +8,7 @@ import { startReminderScheduler } from './lib/reminderScheduler.js';
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
 import { startAutoCloseScheduler } from './lib/autoCloseScheduler.js';
 import { startRecurringScheduler } from './lib/recurringScheduler.js';
+import { initWebPush } from './lib/push.js';
 import cron from 'node-cron';
 import passport from './config/passport.js';
 
@@ -31,6 +32,7 @@ import reportsRoutes from './routes/reports.js';
 import recurringRoutes from './routes/recurring.js';
 import timeEntryRoutes from './routes/time-entries.js';
 import backupRoutes from './routes/backup.js';
+import pushRoutes from './routes/push.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,13 +45,17 @@ app.set('trust proxy', true);
 // Initialize database
 initializeDatabase();
 
-// Start reminder scheduler (only in production or if SMTP is configured)
-if (process.env.SMTP_HOST && process.env.EMAIL_FROM) {
-  startReminderScheduler();
-  console.log('✅ Reminder scheduler enabled (SMTP configured)');
+// Init push notifications (VAPID keys are optional - gracefully disabled if not set)
+const pushReady = initWebPush();
+if (pushReady) {
+  console.log('Push notifications enabled (VAPID configured)');
 } else {
-  console.log('⏭️  Reminder scheduler disabled (SMTP not configured)');
+  console.log('Push notifications disabled (VAPID keys not set)');
 }
+
+// Start reminder scheduler (always enabled - push reminders fire even without SMTP)
+startReminderScheduler();
+console.log('Reminder scheduler enabled');
 
 // Daily cleanup of expired/revoked refresh tokens at 03:00
 cron.schedule('0 3 * * *', () => {
@@ -76,7 +82,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"], // Allow inline styles for React apps
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
+      connectSrc: ["'self'", "https:"],
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -188,6 +194,7 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/recurring', recurringRoutes);
 app.use('/api/time-entries', timeEntryRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/push', pushRoutes);
 
 // Error handling
 // HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client
