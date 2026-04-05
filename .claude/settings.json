@@ -1,0 +1,126 @@
+{
+  "allowedTools": [
+    "Bash(ls*)",
+    "Bash(cat*)",
+    "Bash(head*)",
+    "Bash(tail*)",
+    "Bash(grep*)",
+    "Bash(find*)",
+    "Bash(echo*)",
+    "Bash(pwd)",
+    "Bash(which*)",
+    "Bash(wc*)",
+    "Bash(diff*)",
+    "Bash(sed*)",
+    "Bash(awk*)",
+    "Bash(sort*)",
+    "Bash(uniq*)",
+    "Bash(tr*)",
+    "Bash(cut*)",
+    "Bash(npm run*)",
+    "Bash(npm install*)",
+    "Bash(npm ci*)",
+    "Bash(npx*)",
+    "Bash(node*)",
+    "Bash(tsc*)",
+    "Bash(git status*)",
+    "Bash(git log*)",
+    "Bash(git diff*)",
+    "Bash(git branch*)",
+    "Bash(git show*)",
+    "Bash(git add*)",
+    "Bash(git commit*)",
+    "Bash(git push*)",
+    "Bash(git pull*)",
+    "Bash(git fetch*)",
+    "Bash(git checkout*)",
+    "Bash(git stash*)",
+    "Bash(git merge*)",
+    "Bash(git rebase*)",
+    "Bash(git tag*)",
+    "Bash(docker build*)",
+    "Bash(docker ps*)",
+    "Bash(docker logs*)",
+    "Bash(docker exec*)",
+    "Bash(docker inspect*)",
+    "Bash(docker images*)"
+  ],
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/gsd-check-update.js"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/gsd-session-state.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/gsd-context-monitor.js",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/gsd-phase-boundary.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/gsd-prompt-guard.js",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/gsd-read-guard.js",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/gsd-validate-commit.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node .claude/hooks/gsd-statusline.js"
+  }
+}

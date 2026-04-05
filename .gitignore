@@ -10,8 +10,12 @@ backup/
 TODO.md
 CLAUDE.md
 
-# Claude Code-konfiguration (hela mappen, innehåller lokala inställningar)
-.claude/
+# Claude Code-konfiguration (lokala/personliga inställningar ignoreras)
+.claude/settings.local.json
+.claude/worktrees/
+.claude/agent-memory/
+.claude/session-env/
+.claude/sessions/
 
 # Dev-miljö specifika filer (hot-reload, dev-setup)
 docker-compose.dev.yml
