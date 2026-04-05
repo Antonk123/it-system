@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Productivity & Insights
-status: Ready to execute
-stopped_at: Completed 18-02-PLAN.md
-last_updated: "2026-04-05T16:27:45.184Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 18-03-PLAN.md
+last_updated: "2026-04-05T16:28:03.850Z"
 progress:
   total_phases: 4
   completed_phases: 2
@@ -53,6 +53,7 @@ Most recent decisions (v1.4):
 - [Phase 18-time-tracking]: parseDuration supports Swedish 't' (timme) alongside 'h' for hour notation
 - [Phase 18-time-tracking]: TimeSection placed between KBLinksSection and TicketLinks — chronological sidebar flow
 - [Phase 18-time-tracking]: Total minutes badge hidden when 0 — cleaner UI when no time logged
+- [Phase 18-time-tracking]: Vertical BarChart layout for TimeSummaryTab — category on Y-axis reads better with long names
 
 ### Research Flags for v1.5
 
@@ -70,6 +71,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-05T16:27:45.180Z
-Stopped at: Completed 18-02-PLAN.md
+Last session: 2026-04-05T16:28:03.846Z
+Stopped at: Completed 18-03-PLAN.md
 Resume file: None
