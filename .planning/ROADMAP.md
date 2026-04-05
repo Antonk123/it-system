@@ -74,7 +74,7 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 - [x] **Phase 17: KB Sidebar Search** - Search and link KB articles directly from ticket detail (completed 2026-04-05)
 - [x] **Phase 18: Time Tracking** - Log time on tickets with per-ticket summary and Reports analytics (completed 2026-04-05)
 - [x] **Phase 19: Backup & Export** - Download database and uploaded files as a ZIP from Settings (completed 2026-04-05)
-- [ ] **Phase 20: PWA Push Notifications** - Browser push notifications for reminders and aging tickets
+- [x] **Phase 20: PWA Push Notifications** - Browser push notifications for reminders and aging tickets (completed 2026-04-05)
 
 ## Phase Details
 
@@ -128,10 +128,10 @@ Plans:
   2. User receives a push notification in the OS notification center when a reminder triggers
   3. User receives a push notification when a ticket has had no activity in N days
   4. User can click a push notification and be navigated directly to the relevant ticket in the app
-**Plans:** 2 plans
+**Plans:** 2/2 plans complete
 Plans:
-- [ ] 20-01-PLAN.md — Backend push infrastructure + custom service worker + injectManifest switch + nginx
-- [ ] 20-02-PLAN.md — Scheduler integration (reminder push + aging push) + Settings UI toggle
+- [x] 20-01-PLAN.md — Backend push infrastructure + custom service worker + injectManifest switch + nginx
+- [x] 20-02-PLAN.md — Scheduler integration (reminder push + aging push) + Settings UI toggle
 
 ## Progress
 
@@ -156,4 +156,4 @@ Plans:
 | 17. KB Sidebar Search | v1.5 | 1/1 | Complete    | 2026-04-05 |
 | 18. Time Tracking | v1.5 | 3/3 | Complete    | 2026-04-05 |
 | 19. Backup & Export | v1.5 | 1/1 | Complete    | 2026-04-05 |
-| 20. PWA Push Notifications | v1.5 | 0/? | Not started | - |
+| 20. PWA Push Notifications | v1.5 | 2/2 | Complete    | 2026-04-05 |
