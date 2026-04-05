@@ -60,27 +60,27 @@ Requirements for milestone v1.5: Productivity & Insights.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| TIME-01 | — | Pending |
-| TIME-02 | — | Pending |
-| TIME-03 | — | Pending |
-| TIME-04 | — | Pending |
-| TIME-05 | — | Pending |
-| TIME-06 | — | Pending |
-| PUSH-01 | — | Pending |
-| PUSH-02 | — | Pending |
-| PUSH-03 | — | Pending |
-| PUSH-04 | — | Pending |
-| BKUP-01 | — | Pending |
-| BKUP-02 | — | Pending |
-| KBSB-01 | — | Pending |
-| KBSB-02 | — | Pending |
-| KBSB-03 | — | Pending |
+| TIME-01 | Phase 18 | Pending |
+| TIME-02 | Phase 18 | Pending |
+| TIME-03 | Phase 18 | Pending |
+| TIME-04 | Phase 18 | Pending |
+| TIME-05 | Phase 18 | Pending |
+| TIME-06 | Phase 18 | Pending |
+| PUSH-01 | Phase 20 | Pending |
+| PUSH-02 | Phase 20 | Pending |
+| PUSH-03 | Phase 20 | Pending |
+| PUSH-04 | Phase 20 | Pending |
+| BKUP-01 | Phase 19 | Pending |
+| BKUP-02 | Phase 19 | Pending |
+| KBSB-01 | Phase 17 | Pending |
+| KBSB-02 | Phase 17 | Pending |
+| KBSB-03 | Phase 17 | Pending |
 
 **Coverage:**
 - v1.5 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15 ⚠️
+- Mapped to phases: 15
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-04-05*
-*Last updated: 2026-04-05 after initial definition*
+*Last updated: 2026-04-05 after roadmap creation (v1.5 traceability filled)*
