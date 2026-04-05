@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.5
 milestone_name: Productivity & Insights
-status: Ready to plan
-stopped_at: Phase 19 UI-SPEC approved
-last_updated: "2026-04-05T16:57:36.063Z"
+status: Phase complete — ready for verification
+stopped_at: Phase 20 context gathered (assumptions mode)
+last_updated: "2026-04-05T20:40:34.301Z"
 progress:
   total_phases: 4
-  completed_phases: 2
-  total_plans: 4
-  completed_plans: 4
+  completed_phases: 3
+  total_plans: 5
+  completed_plans: 5
+  percent: 100
 ---
 
 # Project State
@@ -19,12 +20,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-05 after v1.5 milestone start)
 
 **Core value:** Every ticket gets tracked, resolved, and documented — nothing falls through the cracks and solutions are reusable.
-**Current focus:** Phase 18 — time-tracking
+**Current focus:** Phase 19 — backup-export
 
 ## Current Position
 
-Phase: 19
-Plan: Not started
+Phase: 19 (backup-export) — EXECUTING
+Plan: 1 of 1
 
 ## Performance Metrics
 
@@ -54,6 +55,8 @@ Most recent decisions (v1.4):
 - [Phase 18-time-tracking]: TimeSection placed between KBLinksSection and TicketLinks — chronological sidebar flow
 - [Phase 18-time-tracking]: Total minutes badge hidden when 0 — cleaner UI when no time logged
 - [Phase 18-time-tracking]: Vertical BarChart layout for TimeSummaryTab — category on Y-axis reads better with long names
+- [Phase 19-backup-export]: Used db.backup() from better-sqlite3 for WAL-safe SQLite snapshot before ZIP packaging
+- [Phase 19-backup-export]: ZIP internal structure: data/database.sqlite + data/uploads/ mirroring server data/ layout
 
 ### Research Flags for v1.5
 
@@ -71,6 +74,6 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-04-05T16:57:36.053Z
-Stopped at: Phase 19 UI-SPEC approved
-Resume file: .planning/phases/19-backup-export/19-UI-SPEC.md
+Last session: 2026-04-05T20:40:34.292Z
+Stopped at: Phase 20 context gathered (assumptions mode)
+Resume file: .planning/phases/20-pwa-push-notifications/20-CONTEXT.md
