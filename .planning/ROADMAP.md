@@ -7,7 +7,7 @@
 - ✅ **v1.2 Knowledge Base Expansion** — Phases 7-9 (shipped 2026-03-29)
 - ✅ **v1.3 Streamline & Declutter** — Phases 10-12 (shipped 2026-03-30)
 - ✅ **v1.4 Dashboard, Search & Polish** — Phases 13-16 (shipped 2026-04-05)
-- 🚧 **v1.5 Productivity & Insights** — Phases 17-20 (in progress)
+- ✅ **v1.5 Productivity & Insights** — Phases 17-20 (shipped 2026-04-05)
 
 ## Phases
 
@@ -67,71 +67,17 @@ Full details: `.planning/milestones/v1.4-ROADMAP.md`
 
 </details>
 
-### v1.5 Productivity & Insights (In Progress)
+<details>
+<summary>✅ v1.5 Productivity & Insights (Phases 17-20) — SHIPPED 2026-04-05</summary>
 
-**Milestone Goal:** Ge insikt i tidsatgang, proaktiva notifieringar, datasakerhet via backup, och snabbare kunskapsatkomst under arendearbete.
+- [x] Phase 17: KB Sidebar Search (1/1 plans) — completed 2026-04-05
+- [x] Phase 18: Time Tracking (3/3 plans) — completed 2026-04-05
+- [x] Phase 19: Backup & Export (1/1 plans) — completed 2026-04-05
+- [x] Phase 20: PWA Push Notifications (2/2 plans) — completed 2026-04-05
 
-- [x] **Phase 17: KB Sidebar Search** - Search and link KB articles directly from ticket detail (completed 2026-04-05)
-- [x] **Phase 18: Time Tracking** - Log time on tickets with per-ticket summary and Reports analytics (completed 2026-04-05)
-- [x] **Phase 19: Backup & Export** - Download database and uploaded files as a ZIP from Settings (completed 2026-04-05)
-- [x] **Phase 20: PWA Push Notifications** - Browser push notifications for reminders and aging tickets (completed 2026-04-05)
+Full details: `.planning/milestones/v1.5-ROADMAP.md`
 
-## Phase Details
-
-### Phase 17: KB Sidebar Search
-**Goal**: Users can search and link KB articles without leaving the ticket detail view
-**Depends on**: Phase 16
-**Requirements**: KBSB-01, KBSB-02, KBSB-03
-**Success Criteria** (what must be TRUE):
-  1. User can open a KB search panel from ticket detail and search articles by keyword using FTS5
-  2. User can link a KB article to the ticket directly from a search result in the panel
-  3. User can see already-linked KB articles listed in the sidebar panel before typing a query
-**Plans:** 1/1 plans complete
-Plans:
-- [x] 17-01-PLAN.md — Refactor KBLinksSection: React Query + FTS5 search + linked articles display
-**UI hint**: yes
-
-### Phase 18: Time Tracking
-**Goal**: Users can log time spent on tickets and see time analytics in Reports
-**Depends on**: Phase 17
-**Requirements**: TIME-01, TIME-02, TIME-03, TIME-04, TIME-05, TIME-06
-**Success Criteria** (what must be TRUE):
-  1. User can log a time entry on a ticket (duration in minutes with an optional note)
-  2. User can see a list of time logs on a ticket, each showing duration, date, and note
-  3. User can delete a time log entry from the ticket detail
-  4. User can see the total time spent on a ticket summarised in the ticket detail
-  5. User can view a "Tid" tab in Reports showing time breakdown by category and top tickets by time spent
-**Plans:** 3/3 plans complete
-Plans:
-- [x] 18-01-PLAN.md — Backend foundation: DB table, CRUD routes, reports endpoint, types, API client, duration parser, React Query hook
-- [x] 18-02-PLAN.md — TimeSection sidebar component + TicketDetail integration
-- [x] 18-03-PLAN.md — Reports Tid tab: TimeSummaryTab component with bar chart and top tickets table
-**UI hint**: yes
-
-### Phase 19: Backup & Export
-**Goal**: Users can download a safe, complete backup of the system from the Settings page
-**Depends on**: Phase 18
-**Requirements**: BKUP-01, BKUP-02
-**Success Criteria** (what must be TRUE):
-  1. User can click a backup button in Settings and receive a ZIP file containing the SQLite database and all uploaded files
-  2. The downloaded database file is a WAL-consistent snapshot (not a raw file copy) that can be opened safely in SQLite tools
-**Plans:** 1/1 plans executed
-Plans:
-- [x] 19-01-PLAN.md — Backend backup endpoint (WAL-safe SQLite snapshot + uploads ZIP) and Settings UI section
-
-### Phase 20: PWA Push Notifications
-**Goal**: Users receive OS-level push notifications for reminders and aging tickets
-**Depends on**: Phase 19
-**Requirements**: PUSH-01, PUSH-02, PUSH-03, PUSH-04
-**Success Criteria** (what must be TRUE):
-  1. User can enable or disable push notifications from the Settings page (browser permission prompt triggered by explicit user action)
-  2. User receives a push notification in the OS notification center when a reminder triggers
-  3. User receives a push notification when a ticket has had no activity in N days
-  4. User can click a push notification and be navigated directly to the relevant ticket in the app
-**Plans:** 2/2 plans complete
-Plans:
-- [x] 20-01-PLAN.md — Backend push infrastructure + custom service worker + injectManifest switch + nginx
-- [x] 20-02-PLAN.md — Scheduler integration (reminder push + aging push) + Settings UI toggle
+</details>
 
 ## Progress
 
@@ -153,7 +99,7 @@ Plans:
 | 14. Dashboard Overview | v1.4 | 2/2 | Complete | 2026-03-31 |
 | 15. Command Palette | v1.4 | 2/2 | Complete | 2026-03-31 |
 | 16. Responsive & Animation Polish | v1.4 | 2/2 | Complete | 2026-04-04 |
-| 17. KB Sidebar Search | v1.5 | 1/1 | Complete    | 2026-04-05 |
-| 18. Time Tracking | v1.5 | 3/3 | Complete    | 2026-04-05 |
-| 19. Backup & Export | v1.5 | 1/1 | Complete    | 2026-04-05 |
-| 20. PWA Push Notifications | v1.5 | 2/2 | Complete    | 2026-04-05 |
+| 17. KB Sidebar Search | v1.5 | 1/1 | Complete | 2026-04-05 |
+| 18. Time Tracking | v1.5 | 3/3 | Complete | 2026-04-05 |
+| 19. Backup & Export | v1.5 | 1/1 | Complete | 2026-04-05 |
+| 20. PWA Push Notifications | v1.5 | 2/2 | Complete | 2026-04-05 |

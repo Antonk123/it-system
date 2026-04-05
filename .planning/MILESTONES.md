@@ -1,5 +1,20 @@
 # Milestones
 
+## v1.5 Productivity & Insights (Shipped: 2026-04-05)
+
+**Phases completed:** 4 phases, 7 plans, 8 tasks
+
+**Key accomplishments:**
+
+- KB sidebar search: FTS5-powered KB article search and linking directly from ticket detail view
+- Time tracking: duration logging per ticket with Swedish notation support, hover-delete entries, and total time badge
+- Time reports: Tid tab in Reports with vertical bar chart per category and clickable top-10 tickets table
+- Backup & export: WAL-safe SQLite snapshot + uploads bundled as ZIP download from Settings
+- Push infrastructure: VAPID web push backend, custom service worker with injectManifest, graceful degradation
+- Push integration: reminder-triggered push, daily aging-ticket alerts, and Settings UI toggle with permission-on-action
+
+---
+
 ## v1.4 Dashboard, Search & Polish (Shipped: 2026-04-05)
 
 **Phases completed:** 7 phases, 14 plans, 23 tasks

@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An internal IT ticket system for single-user use. Tickets are submitted, tracked, and resolved through a web interface. A knowledge base stores how-to guides and ticket solutions, with full-text search, article type classification, and two-way ticket links. Reports provide focused analytics over the full ticket dataset. An archive gives period-based visibility into closed work with full filter parity. Recurring tickets auto-create on schedule. The dashboard surfaces aging tickets, today's activity, upcoming reminders, and user-defined queue cards. A Cmd+K command palette provides instant search across tickets and KB articles with navigation and quick actions. The UI supports light/dark mode across multiple themes, is fully responsive on mobile with bottom tab navigation, and uses skeleton loading states and Framer Motion animations throughout.
+An internal IT ticket system for single-user use. Tickets are submitted, tracked, and resolved through a web interface. A knowledge base stores how-to guides and ticket solutions, with full-text search, article type classification, and two-way ticket links — searchable and linkable directly from ticket detail. Reports provide focused analytics over the full ticket dataset including time spent per category. An archive gives period-based visibility into closed work with full filter parity. Recurring tickets auto-create on schedule. Time tracking logs duration per ticket with Reports analytics. The dashboard surfaces aging tickets, today's activity, upcoming reminders, and user-defined queue cards. A Cmd+K command palette provides instant search across tickets and KB articles with navigation and quick actions. PWA push notifications alert on due reminders and aging tickets. Database backup is downloadable as a ZIP from Settings. The UI supports light/dark mode across multiple themes, is fully responsive on mobile with bottom tab navigation, and uses skeleton loading states and Framer Motion animations throughout.
 
 ## Core Value
 
@@ -69,18 +69,15 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - ✓ Skeleton loading states on all data-fetching pages — v1.4
 - ✓ Framer Motion page transitions, staggered list reveals, and KPI entrance — v1.4
 - ✓ prefers-reduced-motion accessibility guard on all animations — v1.4
+- ✓ KB sidebar search from ticket detail with FTS5 — v1.5
+- ✓ Time tracking per ticket with duration logging and Reports "Tid" tab — v1.5
+- ✓ WAL-safe database backup & export as ZIP from Settings — v1.5
+- ✓ PWA push notifications for reminders and aging tickets via VAPID — v1.5
+- ✓ Push notification Settings UI toggle with permission-on-action — v1.5
 
 ### Active
 
-#### Current Milestone: v1.5 Productivity & Insights
-
-**Goal:** Ge insikt i tidsåtgång, proaktiva notifieringar, datasäkerhet via backup, och snabbare kunskapsåtkomst under ärendearbete.
-
-**Target features:**
-- ✓ Tidsloggning — enkel tidsspårning per ärende med rapportöversikt (Phase 18)
-- PWA push-notiser — webbnotiser för påminnelser och aging-ärenden
-- Backup & export — ladda ner databas + filer som zip via UI
-- ✓ KB från ärendevyn — sök och länka KB-artiklar direkt från ärendedetalj (Phase 17)
+(No active milestone — use `/gsd-new-milestone` to start next)
 
 ### Out of Scope
 
@@ -111,7 +108,10 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - **Responsive**: Bottom tab bar on mobile (md:hidden), card reflow for ticket lists, single-column KB grid, Kanban hidden on mobile.
 - **Animations**: Framer Motion AnimatePresence for page transitions, staggered list reveals, skeleton-to-content crossfade, prefers-reduced-motion guard.
 - **Theming**: 4 color themes (Slate, Midnight, Graphite, Stone) with light/dark mode. FOUC-blocking script in index.html. Recharts remount on mode toggle.
-- **Shipped**: v1.0 → v1.4, 16 phases, 36 plans across 4 milestones.
+- **Time Tracking**: `time_entries` table with CRUD API at `/api/time-entries`, `parseDuration` supporting Swedish 't' notation, `TimeSummaryTab` in Reports.
+- **Backup**: `GET /api/backup` creates WAL-safe SQLite snapshot + uploads ZIP via `archiver` and `better-sqlite3 .backup()`.
+- **Push Notifications**: VAPID web push via `web-push` npm. `push_subscriptions` table, custom service worker (`src/sw.ts`) with `injectManifest` strategy. Reminder push on trigger, aging push daily at 09:00 via `pushScheduler.ts`.
+- **Shipped**: v1.0 → v1.5, 20 phases, 43 plans across 6 milestones.
 
 ## Constraints
 
@@ -145,6 +145,16 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 | AnimatePresence in App.tsx for route transitions | Single wrapper instead of per-page PageTransition components — simpler, less code | ✓ Good |
 | Bottom tab bar over hamburger menu | Direct navigation without hidden menus — better mobile UX for 4-tab app | ✓ Good |
 | Collapsible filter bar on mobile | Filters rarely used on phone — search stays visible, rest behind toggle | ✓ Good |
+| parseDuration with Swedish 't' notation | Users expect "1t 30m" for 1h30m — locale-friendly input | ✓ Good |
+| time_entries idempotent migration via tableExists guard | Matches existing pattern in initializeDatabase() | ✓ Good |
+| Vertical BarChart for time categories | Category names on Y-axis read better with long Swedish labels | ✓ Good |
+| db.backup() for WAL-safe SQLite snapshot | better-sqlite3's .backup() checkpoints WAL — no corrupt copies | ✓ Good |
+| ZIP structure mirroring data/ directory | data/database.sqlite + data/uploads/ — predictable restore path | ✓ Good |
+| VAPID graceful degradation | initWebPush returns false if keys not set — app runs without push | ✓ Good |
+| injectManifest over generateSW | Custom service worker needed for push event + notificationclick handlers | ✓ Good |
+| Permission-on-action for push | Notification.requestPermission() only on explicit Settings toggle — never on page load | ✓ Good |
+| SMTP conditional guard in reminder scheduler | Push-only path works when SMTP not configured — no hard dependency | ✓ Good |
+| Expired subscription cleanup on 410/404 | Push service returns 410 for expired subs — auto-delete prevents waste | ✓ Good |
 
 ## Evolution
 
@@ -164,4 +174,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-05 after v1.5 milestone start*
+*Last updated: 2026-04-06 after v1.5 milestone*

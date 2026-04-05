@@ -227,6 +227,54 @@
 
 ---
 
+## Milestone: v1.5 — Productivity & Insights
+
+**Shipped:** 2026-04-05
+**Phases:** 4 | **Plans:** 7
+
+### What Was Built
+
+- KB sidebar search: FTS5-powered article search and linking from ticket detail view
+- Time tracking: per-ticket duration logging with Swedish 't' notation, CRUD entries, and total time badge
+- Time reports: Tid tab in Reports with vertical bar chart per category and top-10 tickets table
+- Backup & export: WAL-safe SQLite snapshot + uploads bundled as ZIP download from Settings
+- Push notifications: VAPID web push with custom service worker, injectManifest, reminder + aging-ticket triggers
+- Push Settings UI: toggle with permission-on-action flow, subscribe/unsubscribe lifecycle
+
+### What Worked
+
+- **Audit-first milestone closure**: `/gsd-audit-milestone` confirmed 15/15 requirements satisfied before completion. No surprises.
+- **Graceful degradation pattern**: Push notifications designed to be fully optional — app runs normally without VAPID keys, SMTP, or browser permission. No hard dependencies.
+- **SMTP conditional guard**: Reminder scheduler now only sends email when SMTP is configured, push when VAPID is configured — either or both paths work independently.
+- **WAL-safe backup via better-sqlite3**: `.backup()` checkpoints the WAL before copy — no risk of corrupt database snapshots.
+- **Single-day execution**: All 4 phases (7 plans) completed in one day with clean dependency chain (17→18→19→20).
+
+### What Was Inefficient
+
+- **Human verification items still pending**: Phases 17, 19, and 20 have `human_needed` verification status. Visual/production testing deferred again.
+- **SUMMARY one-liner extraction still inconsistent**: CLI extracted partial/broken accomplishments for MILESTONES.md — required manual cleanup.
+
+### Patterns Established
+
+- **Permission-on-action for browser APIs**: `Notification.requestPermission()` only triggered by explicit user toggle in Settings — never on page load
+- **injectManifest for custom SW**: When service worker needs event handlers (push, notificationclick), injectManifest is the correct strategy over generateSW
+- **Expired subscription cleanup**: 410/404 from push service triggers auto-delete from `push_subscriptions` — prevents wasted push attempts
+- **Swedish locale in duration parser**: `parseDuration` handles 't' (timme) alongside 'h' — locale-friendly input for single-user system
+
+### Key Lessons
+
+1. **SUMMARY one-liner extraction remains broken** — 6th milestone in a row with extraction issues. The MILESTONES.md accomplishments section always needs manual cleanup.
+2. **Human verification batch session overdue** — deferred since v1.0. Schedule a focused browser testing session across all milestones.
+3. **Graceful degradation beats feature flags** — for optional features like push, designing the system to run without them (vs. explicit on/off flags) is simpler and more robust.
+
+### Cost Observations
+
+- Model mix: Opus orchestrator, Sonnet executors
+- Sessions: 1 day (2026-04-05)
+- Notable: 7 plans across 4 phases. Fastest 4-phase milestone — tight scope with clear requirements.
+
+---
+
 ## Cross-Milestone Trends
 
 ### Process Evolution
@@ -238,6 +286,7 @@
 | v1.2 | 1 day | 3 | Incremental schema dependencies, bidirectional link pattern |
 | v1.3 | 1 day | 3 | Dedicated cleanup phase before new features |
 | v1.4 | 6 days | 4 | Dark mode, responsive mobile, animation system |
+| v1.5 | 1 day | 4 | Time tracking, backup, push notifications, KB sidebar |
 
 ### Cumulative Quality
 
@@ -248,6 +297,7 @@
 | v1.2 | 0 | 0% | 0 (all features built on existing stack) |
 | v1.3 | 0 | 0% | 0 (cleanup + UX improvements on existing stack) |
 | v1.4 | 0 | 0% | 1 (framer-motion for animations, cmdk for command palette) |
+| v1.5 | 0 | 0% | 2 (web-push for VAPID notifications, archiver for ZIP backup) |
 
 ### Top Lessons (Verified Across Milestones)
 
@@ -258,3 +308,4 @@
 5. SUMMARY one-liner extraction broken across all 3 milestones — needs format or tooling fix
 6. Always run phase verification — missing VERIFICATION.md caught only at milestone audit (v1.1 Phase 4, v1.4 Phase 15)
 7. Clean up orphaned code immediately — dead components accumulate if not removed in the same plan that supersedes them
+8. Graceful degradation beats feature flags — designing optional features to run without dependencies is simpler than explicit toggles
