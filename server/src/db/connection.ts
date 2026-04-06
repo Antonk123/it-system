@@ -71,8 +71,15 @@ function runMigrations(): void {
   for (const migration of migrations) {
     if (applied.has(migration.id)) continue;
     console.log(`Running migration ${migration.id}: ${migration.name}`);
-    migration.up(db, { tableExists, columnExists });
-    markApplied.run(migration.id, migration.name, new Date().toISOString());
+    try {
+      db.transaction(() => {
+        migration.up(db, { tableExists, columnExists });
+        markApplied.run(migration.id, migration.name, new Date().toISOString());
+      })();
+    } catch (err) {
+      console.error(`Migration ${migration.id} (${migration.name}) failed:`, err);
+      throw err; // Stop startup — don't run further migrations on partial state
+    }
     console.log(`Migration ${migration.id} applied`);
   }
 }
