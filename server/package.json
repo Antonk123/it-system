@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc; cp src/db/schema.sql dist/db/schema.sql",
     "start": "node dist/index.js",
     "init-db": "tsx src/db/init.ts",
     "add-new-user-fields": "tsx src/db/add-new-user-fields.ts",
