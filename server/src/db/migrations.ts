@@ -293,19 +293,25 @@ export const migrations: Migration[] = [
     up: (db, { tableExists, columnExists }) => {
       if (!tableExists('kb_article_tags')) return;
       if (columnExists('kb_article_tags', 'tag_id')) return;
-      const existingTags = db.prepare('SELECT DISTINCT tag FROM kb_article_tags').all() as { tag: string }[];
-      const findTag = db.prepare('SELECT id FROM tags WHERE LOWER(name) = LOWER(?)');
-      const createTag = db.prepare('INSERT INTO tags (id, name, color, created_at) VALUES (?, ?, ?, ?)');
-      const tagNameToId = new Map<string, string>();
-      const now = new Date().toISOString();
-      for (const { tag } of existingTags) {
-        const ex = findTag.get(tag) as { id: string } | undefined;
-        if (ex) { tagNameToId.set(tag, ex.id); }
-        else { const id = randomUUID(); createTag.run(id, tag, '#3b82f6', now); tagNameToId.set(tag, id); }
+      // Only migrate legacy text-tag data if the old 'tag' column exists
+      if (columnExists('kb_article_tags', 'tag')) {
+        const existingTags = db.prepare('SELECT DISTINCT tag FROM kb_article_tags').all() as { tag: string }[];
+        const findTag = db.prepare('SELECT id FROM tags WHERE LOWER(name) = LOWER(?)');
+        const createTag = db.prepare('INSERT INTO tags (id, name, color, created_at) VALUES (?, ?, ?, ?)');
+        const tagNameToId = new Map<string, string>();
+        const now = new Date().toISOString();
+        for (const { tag } of existingTags) {
+          const ex = findTag.get(tag) as { id: string } | undefined;
+          if (ex) { tagNameToId.set(tag, ex.id); }
+          else { const id = randomUUID(); createTag.run(id, tag, '#3b82f6', now); tagNameToId.set(tag, id); }
+        }
+        db.prepare('ALTER TABLE kb_article_tags ADD COLUMN tag_id TEXT REFERENCES tags(id) ON DELETE CASCADE').run();
+        const upd = db.prepare('UPDATE kb_article_tags SET tag_id = ? WHERE tag = ?');
+        for (const [t, id] of tagNameToId.entries()) upd.run(id, t);
+      } else {
+        // No legacy data to migrate — just add the column
+        db.prepare('ALTER TABLE kb_article_tags ADD COLUMN tag_id TEXT REFERENCES tags(id) ON DELETE CASCADE').run();
       }
-      db.prepare('ALTER TABLE kb_article_tags ADD COLUMN tag_id TEXT REFERENCES tags(id) ON DELETE CASCADE').run();
-      const upd = db.prepare('UPDATE kb_article_tags SET tag_id = ? WHERE tag = ?');
-      for (const [t, id] of tagNameToId.entries()) upd.run(id, t);
       db.prepare('CREATE INDEX IF NOT EXISTS idx_kb_article_tags_tag_id ON kb_article_tags(tag_id)').run();
     },
   },
