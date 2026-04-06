@@ -15,8 +15,8 @@ interface RateLimitStore {
 export function createRateLimiter(windowMs: number, max: number) {
   const store: RateLimitStore = {};
 
-  // Cleanup old entries every minute
-  setInterval(() => {
+  // Cleanup old entries every minute — store ref to allow cleanup on shutdown
+  const cleanupInterval = setInterval(() => {
     const now = Date.now();
     Object.keys(store).forEach(key => {
       if (store[key].resetTime < now) {
@@ -24,6 +24,8 @@ export function createRateLimiter(windowMs: number, max: number) {
       }
     });
   }, 60000);
+  // Allow Node to exit without waiting for this interval
+  if (cleanupInterval.unref) cleanupInterval.unref();
 
   return (req: Request, res: Response, next: NextFunction) => {
     const key = req.ip || req.socket.remoteAddress || 'unknown';

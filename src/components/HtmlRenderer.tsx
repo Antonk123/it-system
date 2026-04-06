@@ -1,6 +1,16 @@
 import DOMPurify from 'dompurify';
 import { cn } from '@/lib/utils';
 
+// Block external img src once at module load to prevent tracking pixels
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'IMG') {
+    const src = node.getAttribute('src') || '';
+    if (src && !src.startsWith('/') && !src.startsWith(window.location.origin)) {
+      node.removeAttribute('src');
+    }
+  }
+});
+
 interface HtmlRendererProps {
   content: string;
   className?: string;
@@ -37,7 +47,7 @@ export const HtmlRenderer = ({ content, className }: HtmlRendererProps) => {
     ],
     ALLOWED_ATTR: [
       'href', 'target', 'rel',
-      'class', 'style',
+      'class',
       'colspan', 'rowspan', 'align',
       'src', 'alt', 'title', 'width', 'height',
     ],

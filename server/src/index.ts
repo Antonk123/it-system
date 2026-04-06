@@ -145,7 +145,16 @@ app.use(passport.initialize());
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET || 'csrf-dev-secret-change-in-production',
   // Use the Authorization header as session identifier so each JWT session gets its own CSRF token
-  getSessionIdentifier: (req) => req.headers.authorization ?? '',
+  getSessionIdentifier: (req) => {
+    try {
+      const token = req.headers.authorization?.replace('Bearer ', '');
+      if (!token) return '';
+      const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
+      return payload.sub ?? '';
+    } catch {
+      return '';
+    }
+  },
   cookieName: 'csrf-token',
   cookieOptions: {
     sameSite: 'lax',

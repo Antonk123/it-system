@@ -9,12 +9,20 @@ services:
       - it-ticketing-data:/app/data
     environment:
       - NODE_ENV=production
-      - JWT_SECRET=${JWT_SECRET:-change-this-secret-in-production}
+      - JWT_SECRET=${JWT_SECRET}
       - DB_PATH=/app/data/database.sqlite
       - UPLOAD_DIR=/app/data/uploads
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
       - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
       - VAPID_SUBJECT=${VAPID_SUBJECT:-}
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
+      - SMTP_HOST=${SMTP_HOST:-}
+      - SMTP_PORT=${SMTP_PORT:-}
+      - SMTP_USER=${SMTP_USER:-}
+      - SMTP_PASS=${SMTP_PASS:-}
+      - EMAIL_FROM=${EMAIL_FROM:-}
+      - EMAIL_TO=${EMAIL_TO:-}
+      - APP_BASE_URL=${APP_BASE_URL:-}
     logging:
       driver: "json-file"
       options:

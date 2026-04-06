@@ -654,10 +654,6 @@ router.post('/import/preview', authenticate, upload.single('file'), (req: AuthRe
     const invalid = results.filter(r => !r.valid);
     const duplicates = results.filter(r => r.isDuplicate);
 
-    console.log('Valid tickets:', valid.length);
-    console.log('Invalid tickets:', invalid.length);
-    console.log('======================');
-
     res.json({
       total: rows.length,
       valid: valid.length,
@@ -680,11 +676,6 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
       return res.status(400).json({ error: 'No tickets provided' });
     }
 
-    // DEBUG: Log received tickets
-    console.log('=== IMPORT CONFIRM DEBUG ===');
-    console.log('Received tickets count:', tickets.length);
-    console.log('First ticket:', JSON.stringify(tickets[0], null, 2));
-
     // Get categories and contacts for lookup
     const categories = db.prepare('SELECT id, label FROM categories').all();
     // Case-insensitive category map
@@ -694,10 +685,6 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
     // Case-insensitive contact maps
     const contactByNameMap = new Map(contacts.map((c: any) => [c.name.toLowerCase(), c.id]));
     const contactByEmailMap = new Map(contacts.map((c: any) => [c.email.toLowerCase(), c.id]));
-
-    console.log('Category map keys:', Array.from(categoryMap.keys()));
-    console.log('Contact name map keys:', Array.from(contactByNameMap.keys()));
-    console.log('Contact email map keys:', Array.from(contactByEmailMap.keys()));
 
     const stmt = db.prepare(`
       INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, notes, solution)
@@ -714,24 +701,10 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
       for (const ticket of ticketList) {
         const id = uuidv4(); // Always generate new ID
 
-        // DEBUG: Log ticket being processed
-        console.log('Processing ticket:', {
-          title: ticket.title,
-          category: ticket.category,
-          requester_name: ticket.requester_name,
-          requester_email: ticket.requester_email,
-        });
-
         // Case-insensitive category lookup
         const categoryId = ticket.category && ticket.category.trim()
           ? categoryMap.get(ticket.category.toLowerCase()) || null
           : null;
-
-        console.log('Category lookup:', {
-          input: ticket.category,
-          lowercase: ticket.category?.toLowerCase(),
-          found: categoryId,
-        });
 
         // Try to find or create contact
         let requesterId = null;
@@ -741,18 +714,11 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
                        (ticket.requester_email ? contactByEmailMap.get(ticket.requester_email.toLowerCase()) : null) ||
                        null;
 
-          console.log('Contact lookup:', {
-            name: ticket.requester_name,
-            email: ticket.requester_email,
-            found: requesterId,
-          });
-
           // If contact doesn't exist and we have both name and email, create it
           if (!requesterId && ticket.requester_name && ticket.requester_email) {
             const newContactId = uuidv4();
             contactStmt.run(newContactId, ticket.requester_name.trim(), ticket.requester_email.trim());
             requesterId = newContactId;
-            console.log('Created new contact:', newContactId);
           }
         }
 
@@ -769,7 +735,6 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
           ticket.solution || null
         );
 
-        console.log('Inserted ticket:', id, 'with category:', categoryId, 'and requester:', requesterId);
         created++;
       }
 
@@ -973,11 +938,6 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 router.post('/', authenticate, (req: AuthRequest, res: Response) => {
   const { title, description, status, priority, category_id, requester_id, notes, solution, customFields, template_id } = req.body;
 
-  // Debug logging
-  console.log('🎫 Creating ticket - req.body.template_id:', req.body.template_id);
-  console.log('🎫 Extracted template_id:', template_id);
-  console.log('🎫 customFields.length:', customFields?.length || 0);
-
   if (!title) {
     return res.status(400).json({ error: 'Title is required' });
   }
@@ -1032,7 +992,6 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 
       // Store custom field values if provided
       if (customFields && Array.isArray(customFields) && customFields.length > 0) {
-        console.log(`✅ Saving ${customFields.length} field values for ticket ${id}`);
         const insertFieldStmt = db.prepare(`
           INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
           VALUES (?, ?, ?, ?, ?)
@@ -1544,8 +1503,6 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
     const ticketId = req.params.id;
     const userId = req.user!.id;
 
-    console.log('🔔 Creating reminder:', { ticketId, userId, reminder_time, message });
-
     if (!reminder_time) {
       return res.status(400).json({ error: 'Reminder time is required' });
     }
@@ -1562,18 +1519,12 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
     }
 
     const id = uuidv4();
-    console.log('💾 Inserting reminder with ID:', id);
-
     const insertResult = db.prepare(`
       INSERT INTO ticket_reminders (id, ticket_id, user_id, reminder_time, message)
       VALUES (?, ?, ?, ?, ?)
     `).run(id, ticketId, userId, reminder_time, message || null);
 
-    console.log('✅ Insert result:', insertResult);
-
     const reminder = db.prepare('SELECT * FROM ticket_reminders WHERE id = ?').get(id);
-    console.log('📋 Created reminder:', reminder);
-
     res.status(201).json(reminder);
   } catch (error) {
     console.error('Error creating reminder:', error);

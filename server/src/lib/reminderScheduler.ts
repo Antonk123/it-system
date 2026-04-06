@@ -45,7 +45,6 @@ export function stopReminderScheduler() {
 async function checkAndSendReminders() {
   try {
     const now = new Date().toISOString();
-    console.log(`⏰ Checking for reminders at ${now}`);
 
     // Find all unsent reminders that are due
     const dueReminders = db.prepare(`
@@ -60,15 +59,11 @@ async function checkAndSendReminders() {
       ORDER BY tr.reminder_time ASC
     `).all(now) as DueReminder[];
 
-    if (dueReminders.length === 0) {
-      console.log('  No due reminders found');
-      return;
-    }
+    if (dueReminders.length === 0) return;
 
-    console.log(`📧 Found ${dueReminders.length} due reminder(s) to send`);
+    console.log(`Reminders: sending ${dueReminders.length} due reminder(s)`);
 
     for (const reminder of dueReminders) {
-      console.log(`  Processing reminder ${reminder.id} scheduled for ${reminder.reminder_time}`);
       try {
         // Send email if SMTP is configured
         if (process.env.SMTP_HOST && process.env.EMAIL_FROM) {
@@ -87,22 +82,24 @@ async function checkAndSendReminders() {
           });
         }
 
-        // Send push notification
-        await sendPushToAllSubscriptions({
-          type: 'reminder',
-          ticketId: reminder.ticket_id,
-          title: `Påminnelse: ${reminder.title}`,
-          body: reminder.message || `Ärendet "${reminder.title}" har en påminnelse nu.`,
-        });
-
-        // Mark reminder as sent
+        // Mark as sent after email — push is best-effort and should not cause retry
         db.prepare(`
           UPDATE ticket_reminders
           SET sent = 1, sent_at = ?
           WHERE id = ?
         `).run(new Date().toISOString(), reminder.id);
 
-        console.log(`✅ Sent reminder ${reminder.id} for ticket ${reminder.ticket_id} to ${reminder.user_email}`);
+        // Send push notification (best-effort — failure does not un-send the reminder)
+        sendPushToAllSubscriptions({
+          type: 'reminder',
+          ticketId: reminder.ticket_id,
+          title: `Påminnelse: ${reminder.title}`,
+          body: reminder.message || `Ärendet "${reminder.title}" har en påminnelse nu.`,
+        }).catch((err) => {
+          console.error(`Push notification failed for reminder ${reminder.id}:`, err);
+        });
+
+        console.log(`Reminder ${reminder.id} sent for ticket ${reminder.ticket_id}`);
       } catch (error) {
         console.error(`Failed to send reminder ${reminder.id}:`, error);
         // Don't mark as sent if email failed - will retry on next run

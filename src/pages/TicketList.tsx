@@ -19,8 +19,6 @@ import { TicketStatus, TicketPriority } from '@/types/ticket';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
-const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
 const listContainer = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.05 } },
@@ -39,6 +37,7 @@ const statusLabels: Record<TicketStatus, string> = {
 };
 
 const TicketList = () => {
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();

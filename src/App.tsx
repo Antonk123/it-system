@@ -16,7 +16,6 @@ import UserList from "./pages/UserList";
 import Settings from "./pages/Settings";
 import Reports from "./pages/Reports";
 import Login from "./pages/Login";
-import ResetPassword from "./pages/ResetPassword";
 import PublicTicketForm from "./pages/PublicTicketForm";
 import SharedTicket from "./pages/SharedTicket";
 import NotFound from "./pages/NotFound";
@@ -99,7 +98,6 @@ const AppRoutes = () => {
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
         <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/submit-ticket" element={<PublicTicketForm />} />
         <Route path="/shared/:token" element={<SharedTicket />} />
         <Route path="/kb/shared/:token" element={<SharedKBArticle />} />

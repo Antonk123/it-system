@@ -6,6 +6,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { db } from '../db/connection.js';
+import { stripHtml } from '../lib/htmlUtils.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -41,16 +42,6 @@ const uploadImage = multer({
   },
 });
 
-function stripHtml(html: string): string {
-  return html
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
 
 const router = Router();
 

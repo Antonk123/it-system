@@ -108,9 +108,9 @@ function createTicketFromTemplate(template: RecurringTemplate): void {
 
     // Insert ticket tags
     if (validTagIds.length > 0) {
-      const insertTag = db.prepare('INSERT INTO ticket_tags (ticket_id, tag_id) VALUES (?, ?)');
+      const insertTag = db.prepare('INSERT INTO ticket_tags (id, ticket_id, tag_id) VALUES (?, ?, ?)');
       for (const tagId of validTagIds) {
-        insertTag.run(ticketId, tagId);
+        insertTag.run(uuidv4(), ticketId, tagId);
       }
     }
 
