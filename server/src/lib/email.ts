@@ -351,9 +351,11 @@ export const sendTicketReminderEmail = async (data: {
   userEmail: string;
   userName: string;
 }) => {
-  const config = getEmailConfig();
-  if (!config) {
-    console.warn('Email not configured. Set SMTP_HOST, EMAIL_FROM, and EMAIL_TO to enable email.');
+  const host = process.env.SMTP_HOST;
+  const from = process.env.EMAIL_FROM;
+  const appBaseUrl = process.env.APP_BASE_URL;
+  if (!host || !from) {
+    console.warn('Email not configured. Set SMTP_HOST and EMAIL_FROM to enable reminder emails.');
     return;
   }
 
@@ -364,7 +366,7 @@ export const sendTicketReminderEmail = async (data: {
 
   const { ticket, reminderMessage, userEmail, userName } = data;
   const categoryLabel = getCategoryLabel(ticket.categoryId);
-  const ticketUrl = config.appBaseUrl ? `${config.appBaseUrl.replace(/\/$/, '')}/tickets/${ticket.id}` : null;
+  const ticketUrl = appBaseUrl ? `${appBaseUrl.replace(/\/$/, '')}/tickets/${ticket.id}` : null;
   const statusColor = getStatusColor(ticket.status);
   const priorityColor = getPriorityColor(ticket.priority);
 
@@ -498,7 +500,7 @@ export const sendTicketReminderEmail = async (data: {
     .join('\n');
 
   await transporter.sendMail({
-    from: config.from,
+    from,
     to: userEmail,
     subject,
     text,
