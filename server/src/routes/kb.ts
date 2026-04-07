@@ -220,8 +220,9 @@ router.get('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     if (!article) return res.status(404).json({ error: 'Article not found' });
 
-    const tagMap = getTagsForArticles([req.params.id]);
-    res.json({ ...article, tags: tagMap.get(req.params.id) || [] });
+    const id = req.params.id as string;
+    const tagMap = getTagsForArticles([id]);
+    res.json({ ...article, tags: tagMap.get(id) || [] });
   } catch (error) {
     console.error('Error fetching KB article:', error);
     res.status(500).json({ error: 'Failed to fetch KB article' });
