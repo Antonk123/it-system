@@ -1550,6 +1550,25 @@ router.get('/:id/reminders', authenticate, (req: AuthRequest, res: Response) => 
   }
 });
 
+// DELETE /api/tickets/:id/reminders/sent — Clear all sent reminders for a ticket
+// Must be registered before /:reminderId to avoid Express matching "sent" as a param
+router.delete('/:id/reminders/sent', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const ticketId = req.params.id as string;
+    const userId = req.user!.id;
+
+    const result = db.prepare(`
+      DELETE FROM ticket_reminders
+      WHERE ticket_id = ? AND user_id = ? AND sent = 1
+    `).run(ticketId, userId);
+
+    res.json({ deleted: result.changes });
+  } catch (error) {
+    console.error('Error clearing sent reminders:', error);
+    res.status(500).json({ error: 'Failed to clear sent reminders' });
+  }
+});
+
 // DELETE /api/tickets/:id/reminders/:reminderId - Cancel reminder
 router.delete('/:id/reminders/:reminderId', authenticate, (req: AuthRequest, res: Response) => {
   try {
@@ -1574,24 +1593,6 @@ router.delete('/:id/reminders/:reminderId', authenticate, (req: AuthRequest, res
   } catch (error) {
     console.error('Error deleting reminder:', error);
     res.status(500).json({ error: 'Failed to delete reminder' });
-  }
-});
-
-// DELETE /api/tickets/:id/reminders/sent — Clear all sent reminders for a ticket
-router.delete('/:id/reminders/sent', authenticate, (req: AuthRequest, res: Response) => {
-  try {
-    const ticketId = req.params.id as string;
-    const userId = req.user!.id;
-
-    const result = db.prepare(`
-      DELETE FROM ticket_reminders
-      WHERE ticket_id = ? AND user_id = ? AND sent = 1
-    `).run(ticketId, userId);
-
-    res.json({ deleted: result.changes });
-  } catch (error) {
-    console.error('Error clearing sent reminders:', error);
-    res.status(500).json({ error: 'Failed to clear sent reminders' });
   }
 });
 
