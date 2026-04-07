@@ -1577,4 +1577,22 @@ router.delete('/:id/reminders/:reminderId', authenticate, (req: AuthRequest, res
   }
 });
 
+// DELETE /api/tickets/:id/reminders/sent — Clear all sent reminders for a ticket
+router.delete('/:id/reminders/sent', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const ticketId = req.params.id as string;
+    const userId = req.user!.id;
+
+    const result = db.prepare(`
+      DELETE FROM ticket_reminders
+      WHERE ticket_id = ? AND user_id = ? AND sent = 1
+    `).run(ticketId, userId);
+
+    res.json({ deleted: result.changes });
+  } catch (error) {
+    console.error('Error clearing sent reminders:', error);
+    res.status(500).json({ error: 'Failed to clear sent reminders' });
+  }
+});
+
 export default router;

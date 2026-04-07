@@ -55,11 +55,23 @@ export function useTicketReminders(ticketId: string) {
     }
   }, [ticketId, fetchReminders]);
 
+  const clearSentReminders = useCallback(async () => {
+    try {
+      const result = await api.clearSentReminders(ticketId);
+      toast.success(`${result.deleted} skickade påminnelser rensade`);
+      await fetchReminders();
+    } catch (error) {
+      console.error('Error clearing sent reminders:', error);
+      toast.error('Kunde inte rensa påminnelser');
+    }
+  }, [ticketId, fetchReminders]);
+
   return {
     reminders,
     isLoading,
     fetchReminders,
     createReminder,
     deleteReminder,
+    clearSentReminders,
   };
 }

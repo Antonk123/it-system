@@ -399,6 +399,12 @@ class ApiClient {
     });
   }
 
+  async clearSentReminders(ticketId: string) {
+    return this.request<{ deleted: number }>(`/tickets/${ticketId}/reminders/sent`, {
+      method: 'DELETE',
+    });
+  }
+
   // Categories
   async getCategories() {
     return this.request<CategoryRow[]>('/categories');

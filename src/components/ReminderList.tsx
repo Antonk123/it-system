@@ -8,18 +8,29 @@ import { TicketReminder } from '@/hooks/useTicketReminders';
 interface ReminderListProps {
   reminders: TicketReminder[];
   onDeleteReminder: (reminderId: string) => Promise<void>;
+  onClearSent?: () => Promise<void>;
 }
 
-export function ReminderList({ reminders, onDeleteReminder }: ReminderListProps) {
+export function ReminderList({ reminders, onDeleteReminder, onClearSent }: ReminderListProps) {
   if (reminders.length === 0) return null;
+
+  const hasSent = reminders.some((r) => r.sent === 1);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Bell className="h-5 w-5" />
-          Påminnelser
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2">
+            <Bell className="h-5 w-5" />
+            Påminnelser
+          </CardTitle>
+          {hasSent && onClearSent && (
+            <Button variant="ghost" size="sm" onClick={onClearSent} className="text-muted-foreground text-xs">
+              <Trash2 className="h-3.5 w-3.5 mr-1" />
+              Rensa skickade
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">

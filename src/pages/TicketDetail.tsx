@@ -96,7 +96,7 @@ const TicketDetail = () => {
   const { comments, isLoading: commentsLoading, addComment, updateComment, deleteComment } = useTicketComments(id || '');
   const { links, isLoading: linksLoading, addLink, deleteLink } = useTicketLinks(id || '');
   const { history, isLoading: historyLoading } = useTicketHistory(id || '');
-  const { reminders, fetchReminders, createReminder, deleteReminder } = useTicketReminders(id || '');
+  const { reminders, fetchReminders, createReminder, deleteReminder, clearSentReminders } = useTicketReminders(id || '');
   const {
     isLoading: isShareLoading,
     shareUrl,
@@ -476,6 +476,7 @@ const TicketDetail = () => {
                 <ReminderList
                   reminders={reminders}
                   onDeleteReminder={deleteReminder}
+                  onClearSent={clearSentReminders}
                 />
               </div>
             )}
