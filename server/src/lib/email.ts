@@ -31,17 +31,21 @@ const getEmailConfig = () => {
 };
 
 const createTransporter = () => {
-  const config = getEmailConfig();
-  if (!config) {
+  const host = process.env.SMTP_HOST;
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+
+  if (!host) {
     return null;
   }
 
   return nodemailer.createTransport({
-    host: config.host,
-    port: config.port,
-    secure: config.port === 465,
-    requireTLS: config.port === 587,
-    auth: config.user && config.pass ? { user: config.user, pass: config.pass } : undefined,
+    host,
+    port,
+    secure: port === 465,
+    requireTLS: port === 587,
+    auth: user && pass ? { user, pass } : undefined,
     tls: { ciphers: 'TLSv1.2' },
   });
 };
