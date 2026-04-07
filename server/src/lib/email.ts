@@ -121,71 +121,75 @@ const markdownToEmailHtml = (text: string): string => {
 
 const buildEmailShell = (content: string, footerNote: string): string => `
 <!DOCTYPE html>
-<html lang="sv" style="color-scheme: dark;">
+<html lang="sv" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <!-- Tell email clients this is intentionally dark — don't auto-invert -->
   <meta name="color-scheme" content="dark">
   <meta name="supported-color-schemes" content="dark">
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    /* Prevent Apple Mail / Outlook dark mode from auto-inverting */
-    :root { color-scheme: dark; }
-    /* Outlook-specific reset */
-    body { margin: 0 !important; padding: 0 !important; }
-  </style>
-</head>
-<!--[if mso]>
-<noscript>
+  <!--[if mso]>
   <xml>
     <o:OfficeDocumentSettings>
       <o:PixelsPerInch>96</o:PixelsPerInch>
+      <o:AllowPNG/>
     </o:OfficeDocumentSettings>
   </xml>
-</noscript>
-<![endif]-->
-<body style="margin: 0; padding: 0; background-color: #060d1a; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #060d1a;">
+  <![endif]-->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style type="text/css">
+    :root { color-scheme: dark; }
+    body, #bodyTable { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+    img { border: 0; line-height: 100%; outline: none; text-decoration: none; }
+    /* Outlook dark mode: signal this email is dark, don't invert */
+    [data-ogsc] .dark-bg { background-color: #0b1629 !important; }
+    [data-ogsc] .outer-bg { background-color: #060d1a !important; }
+    [data-ogsc] .body-text { color: #c8d9ee !important; }
+    [data-ogsc] .muted-text { color: #4a6080 !important; }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; background-color: #060d1a; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif;" bgcolor="#060d1a">
+  <table id="bodyTable" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#060d1a" style="background-color: #060d1a;">
     <tr>
-      <td align="center" style="padding: 40px 20px;">
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; width: 100%;">
+      <td align="center" style="padding: 32px 16px;" bgcolor="#060d1a">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width: 600px; max-width: 600px;">
 
           <!-- Top brand bar -->
           <tr>
-            <td style="padding-bottom: 20px;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+            <td style="padding-bottom: 16px;" bgcolor="#060d1a">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 <tr>
                   <td>
-                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; font-weight: 700; color: #3b9eff; letter-spacing: 0.08em; text-transform: uppercase;">Prefabmästarna</span>
-                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; font-weight: 400; color: #4a6080; margin-left: 6px; letter-spacing: 0.08em; text-transform: uppercase;">IT-System</span>
+                    <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: 700; color: #3b9eff; letter-spacing: 0.08em; text-transform: uppercase; mso-line-height-rule: exactly;">PREFABM&#196;STARNA</span>
+                    <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: 400; color: #4a6080; letter-spacing: 0.08em; text-transform: uppercase; mso-line-height-rule: exactly;">&#160;IT-SYSTEM</span>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- Main card -->
+          <!-- Main card — border via nested table trick for Outlook -->
           <tr>
-            <td style="background-color: #0b1629; border-radius: 12px; border: 1px solid #162438; overflow: hidden;">
-              <!-- Blue accent line at top -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+            <td bgcolor="#162438" style="background-color: #162438; padding: 1px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#0b1629" style="background-color: #0b1629;">
+
+                <!-- Blue accent bar (solid for Outlook, gradient via VML) -->
                 <tr>
-                  <td style="height: 3px; background: linear-gradient(90deg, #1d6fdb 0%, #3b9eff 50%, #22d3ee 100%); border-radius: 12px 12px 0 0; font-size: 0; line-height: 0;">&nbsp;</td>
+                  <td height="3" bgcolor="#1d6fdb" style="background-color: #1d6fdb; height: 3px; font-size: 0; line-height: 0; mso-line-height-rule: exactly;">
+                    <!--[if mso]>&nbsp;<![endif]-->
+                  </td>
                 </tr>
-              </table>
 
-              ${content}
+                ${content}
 
-              <!-- Footer -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <!-- Footer -->
                 <tr>
-                  <td style="padding: 20px 36px 24px; border-top: 1px solid #111f35;">
-                    <p style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; color: #2e4a6a; font-size: 12px; line-height: 1.6; text-align: center;">
+                  <td bgcolor="#0b1629" style="background-color: #0b1629; padding: 18px 36px 22px; border-top: 1px solid #111f35;">
+                    <p style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #2e4a6a; font-size: 11px; line-height: 1.6; text-align: center; mso-line-height-rule: exactly;">
                       ${footerNote}
                     </p>
                   </td>
                 </tr>
+
               </table>
             </td>
           </tr>
@@ -200,8 +204,8 @@ const buildEmailShell = (content: string, footerNote: string): string => `
 
 const buildInfoRow = (label: string, value: string): string => `
 <tr>
-  <td style="padding: 10px 0; border-bottom: 1px solid #111f35; font-family: 'Plus Jakarta Sans', sans-serif; color: #4a6080; font-size: 13px; font-weight: 500; width: 40%;">${label}</td>
-  <td style="padding: 10px 0; border-bottom: 1px solid #111f35; font-family: 'Plus Jakarta Sans', sans-serif; color: #c8d9ee; font-size: 13px; text-align: right;">${value}</td>
+  <td style="padding: 10px 0; border-bottom: 1px solid #111f35; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #4a6080; font-size: 13px; font-weight: 500; width: 40%; mso-line-height-rule: exactly;">${label}</td>
+  <td style="padding: 10px 0; border-bottom: 1px solid #111f35; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #c8d9ee; font-size: 13px; text-align: right; mso-line-height-rule: exactly;">${value}</td>
 </tr>
 `;
 
@@ -213,11 +217,11 @@ const formatTicketHtml = (payload: TicketEmailPayload, subject: string, appBaseU
 
   const content = `
     <!-- Header -->
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
       <tr>
-        <td style="padding: 32px 36px 24px;">
-          <p style="margin: 0 0 12px 0; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700; color: #3b9eff; text-transform: uppercase; letter-spacing: 0.1em;">Nytt ärende</p>
-          <h1 style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; color: #e0ecff; font-size: 22px; font-weight: 700; line-height: 1.3;">
+        <td bgcolor="#0b1629" style="background-color: #0b1629; padding: 32px 36px 24px;">
+          <p style="margin: 0 0 12px 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 11px; font-weight: 700; color: #3b9eff; text-transform: uppercase; letter-spacing: 0.1em; mso-line-height-rule: exactly;">Nytt &#228;rende</p>
+          <h1 style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #e0ecff; font-size: 22px; font-weight: 700; line-height: 1.3; mso-line-height-rule: exactly;">
             ${escapeHtml(subject)}
           </h1>
         </td>
@@ -225,56 +229,70 @@ const formatTicketHtml = (payload: TicketEmailPayload, subject: string, appBaseU
     </table>
 
     <!-- Divider -->
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-      <tr><td style="height: 1px; background-color: #111f35; font-size: 0;">&nbsp;</td></tr>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+      <tr><td bgcolor="#111f35" height="1" style="background-color: #111f35; height: 1px; font-size: 0; line-height: 0; mso-line-height-rule: exactly;">&nbsp;</td></tr>
     </table>
 
     <!-- Content -->
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
       <tr>
-        <td style="padding: 28px 36px;">
+        <td bgcolor="#0b1629" style="background-color: #0b1629; padding: 28px 36px;">
 
-          <!-- Badges -->
-          <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
+          <!-- Badges — table cells instead of spans (Outlook ignores inline-block on spans) -->
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
             <tr>
-              <td>
-                <span style="display: inline-block; padding: 5px 12px; background-color: ${statusColor.bg}; color: ${statusColor.text}; border: 1px solid ${statusColor.border}; border-radius: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 600; margin-right: 8px; letter-spacing: 0.02em;">
-                  ${getStatusLabel(payload.status)}
-                </span>
-                <span style="display: inline-block; padding: 5px 12px; background-color: ${priorityColor.bg}; color: ${priorityColor.text}; border: 1px solid ${priorityColor.border}; border-radius: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.02em;">
-                  ${getPriorityLabel(payload.priority)}
-                </span>
+              <td bgcolor="${statusColor.bg}" style="background-color: ${statusColor.bg}; padding: 5px 14px; border: 1px solid ${statusColor.border};">
+                <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: 700; color: ${statusColor.text}; white-space: nowrap; mso-line-height-rule: exactly;">${getStatusLabel(payload.status)}</span>
+              </td>
+              <td width="8" style="width: 8px; font-size: 0;">&nbsp;</td>
+              <td bgcolor="${priorityColor.bg}" style="background-color: ${priorityColor.bg}; padding: 5px 14px; border: 1px solid ${priorityColor.border};">
+                <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: 700; color: ${priorityColor.text}; white-space: nowrap; mso-line-height-rule: exactly;">${getPriorityLabel(payload.priority)}</span>
               </td>
             </tr>
           </table>
 
           <!-- Info Grid -->
           ${(categoryLabel || payload.requesterName || payload.requesterEmail) ? `
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
             ${categoryLabel ? buildInfoRow('Kategori', escapeHtml(categoryLabel)) : ''}
-            ${payload.requesterName ? buildInfoRow('Beställare', escapeHtml(payload.requesterName)) : ''}
+            ${payload.requesterName ? buildInfoRow('Best&#228;llare', escapeHtml(payload.requesterName)) : ''}
             ${payload.requesterEmail ? buildInfoRow('E-post', `<a href="mailto:${escapeHtml(payload.requesterEmail)}" style="color: #3b9eff; text-decoration: none;">${escapeHtml(payload.requesterEmail)}</a>`) : ''}
           </table>
           ` : ''}
 
           <!-- Description label -->
-          <p style="margin: 0 0 10px 0; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700; color: #4a6080; text-transform: uppercase; letter-spacing: 0.1em;">Beskrivning</p>
+          <p style="margin: 0 0 10px 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 11px; font-weight: 700; color: #4a6080; text-transform: uppercase; letter-spacing: 0.1em; mso-line-height-rule: exactly;">Beskrivning</p>
 
-          <!-- Description block -->
-          <div style="padding: 16px 18px; background-color: #071020; border-left: 3px solid #1d6fdb; border-radius: 6px; margin-bottom: 32px;">
-            <p style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; color: #90afd1; font-size: 14px; line-height: 1.7;">
-              ${markdownToEmailHtml(payload.description)}
-            </p>
-          </div>
-
-          <!-- CTA Button -->
-          ${ticketUrl ? `
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <!-- Description block — table-based for Outlook (no div backgrounds) -->
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 32px;">
             <tr>
-              <td align="center">
-                <a href="${ticketUrl}" style="display: inline-block; padding: 13px 36px; background-color: #1d6fdb; color: #ffffff; text-decoration: none; border-radius: 8px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.02em;">
-                  Visa ärende
+              <td bgcolor="#1d6fdb" width="3" style="background-color: #1d6fdb; width: 3px; font-size: 0;">&nbsp;</td>
+              <td bgcolor="#071020" style="background-color: #071020; padding: 14px 16px;">
+                <p style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #90afd1; font-size: 14px; line-height: 1.7; mso-line-height-rule: exactly;">
+                  ${markdownToEmailHtml(payload.description)}
+                </p>
+              </td>
+            </tr>
+          </table>
+
+          <!-- CTA Button — MSO-safe with VML fallback -->
+          ${ticketUrl ? `
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+            <tr>
+              <td align="center" style="padding-bottom: 4px;">
+                <!--[if mso]>
+                <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+                  href="${ticketUrl}" style="height:44px;v-text-anchor:middle;width:180px;" arcsize="18%"
+                  fillcolor="#1d6fdb" strokecolor="#1d6fdb">
+                  <w:anchorlock/>
+                  <center style="color:#ffffff;font-family:'Segoe UI',Arial,sans-serif;font-size:14px;font-weight:bold;">Visa &#228;rende</center>
+                </v:roundrect>
+                <![endif]-->
+                <!--[if !mso]><!-->
+                <a href="${ticketUrl}" style="display: inline-block; padding: 13px 36px; background-color: #1d6fdb; color: #ffffff; text-decoration: none; border-radius: 8px; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.02em; mso-hide: all;">
+                  Visa &#228;rende
                 </a>
+                <!--<![endif]-->
               </td>
             </tr>
           </table>
@@ -285,7 +303,7 @@ const formatTicketHtml = (payload: TicketEmailPayload, subject: string, appBaseU
     </table>
   `;
 
-  return buildEmailShell(content, 'Automatisk notifiering från IT-ärendesystemet &mdash; svara inte på detta mail.');
+  return buildEmailShell(content, 'Automatisk notifiering fr&#229;n IT-&#228;rendesystemet &mdash; svara inte p&#229; detta mail.');
 };
 
 const sendEmail = async (subject: string, payload: TicketEmailPayload) => {
@@ -361,17 +379,17 @@ export const sendTicketReminderEmail = async (data: {
 
   const reminderContent = `
     <!-- Header -->
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
       <tr>
-        <td style="padding: 32px 36px 24px;">
-          <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom: 14px;">
+        <td bgcolor="#0b1629" style="background-color: #0b1629; padding: 32px 36px 24px;">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 14px;">
             <tr>
-              <td style="background-color: #2d1f00; border: 1px solid #d97706; border-radius: 20px; padding: 4px 14px;">
-                <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.1em;">Paminnelse</span>
+              <td bgcolor="#2d1f00" style="background-color: #2d1f00; padding: 4px 14px; border: 1px solid #d97706;">
+                <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 11px; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.1em; mso-line-height-rule: exactly;">P&#197;MINNELSE</span>
               </td>
             </tr>
           </table>
-          <h1 style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; color: #e0ecff; font-size: 22px; font-weight: 700; line-height: 1.3;">
+          <h1 style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #e0ecff; font-size: 22px; font-weight: 700; line-height: 1.3; mso-line-height-rule: exactly;">
             ${escapeHtml(ticket.title)}
           </h1>
         </td>
@@ -379,21 +397,22 @@ export const sendTicketReminderEmail = async (data: {
     </table>
 
     <!-- Divider -->
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-      <tr><td style="height: 1px; background-color: #111f35; font-size: 0;">&nbsp;</td></tr>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+      <tr><td bgcolor="#111f35" height="1" style="background-color: #111f35; height: 1px; font-size: 0; line-height: 0; mso-line-height-rule: exactly;">&nbsp;</td></tr>
     </table>
 
     <!-- Content -->
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
       <tr>
-        <td style="padding: 28px 36px;">
+        <td bgcolor="#0b1629" style="background-color: #0b1629; padding: 28px 36px;">
 
           ${reminderMessage ? `
-          <!-- Reminder callout -->
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
+          <!-- Reminder callout — table-based for Outlook -->
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
             <tr>
-              <td style="padding: 14px 18px; background-color: #1a1200; border-left: 3px solid #d97706; border-radius: 6px;">
-                <p style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; color: #fbbf24; font-size: 14px; line-height: 1.6; font-weight: 500;">
+              <td bgcolor="#d97706" width="3" style="background-color: #d97706; width: 3px; font-size: 0;">&nbsp;</td>
+              <td bgcolor="#1a1200" style="background-color: #1a1200; padding: 14px 16px;">
+                <p style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #fbbf24; font-size: 14px; line-height: 1.6; font-weight: 500; mso-line-height-rule: exactly;">
                   ${escapeHtml(reminderMessage)}
                 </p>
               </td>
@@ -402,45 +421,59 @@ export const sendTicketReminderEmail = async (data: {
           ` : ''}
 
           <!-- Badges -->
-          <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
+          <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
             <tr>
-              <td>
-                <span style="display: inline-block; padding: 5px 12px; background-color: ${statusColor.bg}; color: ${statusColor.text}; border: 1px solid ${statusColor.border}; border-radius: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 600; margin-right: 8px; letter-spacing: 0.02em;">
-                  ${getStatusLabel(ticket.status)}
-                </span>
-                <span style="display: inline-block; padding: 5px 12px; background-color: ${priorityColor.bg}; color: ${priorityColor.text}; border: 1px solid ${priorityColor.border}; border-radius: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.02em;">
-                  ${getPriorityLabel(ticket.priority)}
-                </span>
+              <td bgcolor="${statusColor.bg}" style="background-color: ${statusColor.bg}; padding: 5px 14px; border: 1px solid ${statusColor.border};">
+                <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: 700; color: ${statusColor.text}; white-space: nowrap; mso-line-height-rule: exactly;">${getStatusLabel(ticket.status)}</span>
+              </td>
+              <td width="8" style="width: 8px; font-size: 0;">&nbsp;</td>
+              <td bgcolor="${priorityColor.bg}" style="background-color: ${priorityColor.bg}; padding: 5px 14px; border: 1px solid ${priorityColor.border};">
+                <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: 700; color: ${priorityColor.text}; white-space: nowrap; mso-line-height-rule: exactly;">${getPriorityLabel(ticket.priority)}</span>
               </td>
             </tr>
           </table>
 
           <!-- Info Grid -->
           ${(categoryLabel || ticket.requesterName) ? `
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
             ${categoryLabel ? buildInfoRow('Kategori', escapeHtml(categoryLabel)) : ''}
-            ${ticket.requesterName ? buildInfoRow('Beställare', escapeHtml(ticket.requesterName)) : ''}
+            ${ticket.requesterName ? buildInfoRow('Best&#228;llare', escapeHtml(ticket.requesterName)) : ''}
           </table>
           ` : ''}
 
           <!-- Description label -->
-          <p style="margin: 0 0 10px 0; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700; color: #4a6080; text-transform: uppercase; letter-spacing: 0.1em;">Beskrivning</p>
+          <p style="margin: 0 0 10px 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 11px; font-weight: 700; color: #4a6080; text-transform: uppercase; letter-spacing: 0.1em; mso-line-height-rule: exactly;">Beskrivning</p>
 
-          <!-- Description block -->
-          <div style="padding: 16px 18px; background-color: #071020; border-left: 3px solid #1d6fdb; border-radius: 6px; margin-bottom: 32px;">
-            <p style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; color: #90afd1; font-size: 14px; line-height: 1.7;">
-              ${markdownToEmailHtml(ticket.description)}
-            </p>
-          </div>
-
-          <!-- CTA Button -->
-          ${ticketUrl ? `
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+          <!-- Description block — table-based for Outlook -->
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 32px;">
             <tr>
-              <td align="center">
-                <a href="${ticketUrl}" style="display: inline-block; padding: 13px 36px; background-color: #1d6fdb; color: #ffffff; text-decoration: none; border-radius: 8px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.02em;">
-                  Visa ärende
+              <td bgcolor="#1d6fdb" width="3" style="background-color: #1d6fdb; width: 3px; font-size: 0;">&nbsp;</td>
+              <td bgcolor="#071020" style="background-color: #071020; padding: 14px 16px;">
+                <p style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #90afd1; font-size: 14px; line-height: 1.7; mso-line-height-rule: exactly;">
+                  ${markdownToEmailHtml(ticket.description)}
+                </p>
+              </td>
+            </tr>
+          </table>
+
+          <!-- CTA Button — MSO-safe with VML fallback -->
+          ${ticketUrl ? `
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+            <tr>
+              <td align="center" style="padding-bottom: 4px;">
+                <!--[if mso]>
+                <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
+                  href="${ticketUrl}" style="height:44px;v-text-anchor:middle;width:180px;" arcsize="18%"
+                  fillcolor="#1d6fdb" strokecolor="#1d6fdb">
+                  <w:anchorlock/>
+                  <center style="color:#ffffff;font-family:'Segoe UI',Arial,sans-serif;font-size:14px;font-weight:bold;">Visa &#228;rende</center>
+                </v:roundrect>
+                <![endif]-->
+                <!--[if !mso]><!-->
+                <a href="${ticketUrl}" style="display: inline-block; padding: 13px 36px; background-color: #1d6fdb; color: #ffffff; text-decoration: none; border-radius: 8px; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.02em; mso-hide: all;">
+                  Visa &#228;rende
                 </a>
+                <!--<![endif]-->
               </td>
             </tr>
           </table>
@@ -451,7 +484,7 @@ export const sendTicketReminderEmail = async (data: {
     </table>
   `;
 
-  const html = buildEmailShell(reminderContent, 'Automatisk p&aring;minnelse fr&aring;n IT-&auml;rendesystemet &mdash; svara inte p&aring; detta mail.');
+  const html = buildEmailShell(reminderContent, 'Automatisk p&#229;minnelse fr&#229;n IT-&#228;rendesystemet &mdash; svara inte p&#229; detta mail.');
 
   const text = [
     `⏰ PÅMINNELSE: ${ticket.title}`,
