@@ -50,25 +50,25 @@ const getCategoryLabel = (categoryId: string | null) => {
   return row?.label || null;
 };
 
-const getStatusColor = (status: string): { bg: string; text: string } => {
-  const colors: Record<string, { bg: string; text: string }> = {
-    open: { bg: '#3b82f6', text: '#ffffff' },
-    'in-progress': { bg: '#f59e0b', text: '#ffffff' },
-    waiting: { bg: '#6366f1', text: '#ffffff' },
-    resolved: { bg: '#10b981', text: '#ffffff' },
-    closed: { bg: '#6b7280', text: '#ffffff' },
+const getStatusColor = (status: string): { bg: string; text: string; border: string } => {
+  const colors: Record<string, { bg: string; text: string; border: string }> = {
+    open:         { bg: '#0d2d5e', text: '#60a5fa', border: '#1d4ed8' },
+    'in-progress':{ bg: '#2d1f00', text: '#fbbf24', border: '#d97706' },
+    waiting:      { bg: '#0a2a30', text: '#22d3ee', border: '#0891b2' },
+    resolved:     { bg: '#052e16', text: '#34d399', border: '#059669' },
+    closed:       { bg: '#1a1f2e', text: '#94a3b8', border: '#475569' },
   };
-  return colors[status] || { bg: '#6b7280', text: '#ffffff' };
+  return colors[status] || { bg: '#1a1f2e', text: '#94a3b8', border: '#475569' };
 };
 
-const getPriorityColor = (priority: string): { bg: string; text: string } => {
-  const colors: Record<string, { bg: string; text: string }> = {
-    low: { bg: '#e5e7eb', text: '#374151' },
-    medium: { bg: '#fef3c7', text: '#92400e' },
-    high: { bg: '#fecaca', text: '#991b1b' },
-    urgent: { bg: '#dc2626', text: '#ffffff' },
+const getPriorityColor = (priority: string): { bg: string; text: string; border: string } => {
+  const colors: Record<string, { bg: string; text: string; border: string }> = {
+    low:    { bg: '#052e16', text: '#34d399', border: '#059669' },
+    medium: { bg: '#2d1f00', text: '#fbbf24', border: '#d97706' },
+    high:   { bg: '#2d1200', text: '#fb923c', border: '#ea580c' },
+    urgent: { bg: '#2d0000', text: '#f87171', border: '#dc2626' },
   };
-  return colors[priority] || { bg: '#e5e7eb', text: '#374151' };
+  return colors[priority] || { bg: '#1a1f2e', text: '#94a3b8', border: '#475569' };
 };
 
 const getStatusLabel = (status: string): string => {
@@ -119,115 +119,56 @@ const markdownToEmailHtml = (text: string): string => {
     .replace(/\n/g, '<br>');
 };
 
-const formatTicketHtml = (payload: TicketEmailPayload, subject: string, appBaseUrl?: string) => {
-  const categoryLabel = getCategoryLabel(payload.categoryId);
-  const ticketUrl = appBaseUrl ? `${appBaseUrl.replace(/\/$/, '')}/tickets/${payload.id}` : null;
-  const statusColor = getStatusColor(payload.status);
-  const priorityColor = getPriorityColor(payload.priority);
-
-  return `
+const buildEmailShell = (content: string, footerNote: string): string => `
 <!DOCTYPE html>
 <html lang="sv">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f3f4f6;">
+<body style="margin: 0; padding: 0; background-color: #060d1a; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #060d1a;">
     <tr>
       <td align="center" style="padding: 40px 20px;">
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px;">
+        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="max-width: 600px; width: 100%;">
 
-          <!-- Header -->
+          <!-- Top brand bar -->
           <tr>
-            <td style="background-color: #f3f4f6; padding: 30px 40px; border-radius: 8px 8px 0 0;">
+            <td style="padding-bottom: 20px;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
                   <td>
-                    <h1 style="margin: 0; color: #111827; font-size: 24px; font-weight: 600; line-height: 1.3;">
-                      ${escapeHtml(subject)}
-                    </h1>
+                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; font-weight: 700; color: #3b9eff; letter-spacing: 0.08em; text-transform: uppercase;">Prefabmästarna</span>
+                    <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 13px; font-weight: 400; color: #4a6080; margin-left: 6px; letter-spacing: 0.08em; text-transform: uppercase;">IT-System</span>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- Content -->
+          <!-- Main card -->
           <tr>
-            <td style="padding: 40px;">
-
-              <!-- Badges -->
-              <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom: 24px;">
-                <tr>
-                  <td>
-                    <span style="display: inline-block; padding: 6px 12px; background-color: ${statusColor.bg}; color: ${statusColor.text}; border-radius: 6px; font-size: 13px; font-weight: 500; margin-right: 8px;">
-                      ${getStatusLabel(payload.status)}
-                    </span>
-                    <span style="display: inline-block; padding: 6px 12px; background-color: ${priorityColor.bg}; color: ${priorityColor.text}; border-radius: 6px; font-size: 13px; font-weight: 500;">
-                      ${getPriorityLabel(payload.priority)}
-                    </span>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Info Grid -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px; background-color: #f9fafb; border-radius: 8px; padding: 20px;">
-                ${categoryLabel ? `
-                <tr>
-                  <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Kategori</td>
-                  <td style="padding: 8px 0; color: #111827; font-size: 14px; text-align: right;">${escapeHtml(categoryLabel)}</td>
-                </tr>
-                ` : ''}
-                ${payload.requesterName ? `
-                <tr>
-                  <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Beställare</td>
-                  <td style="padding: 8px 0; color: #111827; font-size: 14px; text-align: right;">${escapeHtml(payload.requesterName)}</td>
-                </tr>
-                ` : ''}
-                ${payload.requesterEmail ? `
-                <tr>
-                  <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 500;">E-post</td>
-                  <td style="padding: 8px 0; color: #111827; font-size: 14px; text-align: right;">
-                    <a href="mailto:${escapeHtml(payload.requesterEmail)}" style="color: #667eea; text-decoration: none;">${escapeHtml(payload.requesterEmail)}</a>
-                  </td>
-                </tr>
-                ` : ''}
-              </table>
-
-              <!-- Description -->
-              <div style="margin-bottom: 32px;">
-                <h3 style="margin: 0 0 12px 0; color: #374151; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
-                  Beskrivning
-                </h3>
-                <div style="padding: 16px; background-color: #f9fafb; border-left: 4px solid #667eea; border-radius: 4px; color: #374151; font-size: 14px; line-height: 1.6;">
-                  ${markdownToEmailHtml(payload.description)}
-                </div>
-              </div>
-
-              <!-- CTA Button -->
-              ${ticketUrl ? `
+            <td style="background-color: #0b1629; border-radius: 12px; border: 1px solid #162438; overflow: hidden;">
+              <!-- Blue accent line at top -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
                 <tr>
-                  <td align="center" style="padding: 12px 0;">
-                    <a href="${ticketUrl}" style="display: inline-block; padding: 14px 32px; background-color: #667eea; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: 600; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); mso-padding-alt: 0; text-align: center;">
-                      <span style="color: #ffffff; text-decoration: none;">Öppna</span>
-                    </a>
+                  <td style="height: 3px; background: linear-gradient(90deg, #1d6fdb 0%, #3b9eff 50%, #22d3ee 100%); border-radius: 12px 12px 0 0; font-size: 0; line-height: 0;">&nbsp;</td>
+                </tr>
+              </table>
+
+              ${content}
+
+              <!-- Footer -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                <tr>
+                  <td style="padding: 20px 36px 24px; border-top: 1px solid #111f35;">
+                    <p style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; color: #2e4a6a; font-size: 12px; line-height: 1.6; text-align: center;">
+                      ${footerNote}
+                    </p>
                   </td>
                 </tr>
               </table>
-              ` : ''}
-
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="padding: 24px 40px; background-color: #f9fafb; border-radius: 0 0 8px 8px; border-top: 1px solid #e5e7eb;">
-              <p style="margin: 0; color: #6b7280; font-size: 12px; line-height: 1.5; text-align: center;">
-                Detta är en automatisk notifiering från IT-ärendesystemet.<br>
-                Svara inte på detta mail.
-              </p>
             </td>
           </tr>
 
@@ -237,7 +178,96 @@ const formatTicketHtml = (payload: TicketEmailPayload, subject: string, appBaseU
   </table>
 </body>
 </html>
+`;
+
+const buildInfoRow = (label: string, value: string): string => `
+<tr>
+  <td style="padding: 10px 0; border-bottom: 1px solid #111f35; font-family: 'Plus Jakarta Sans', sans-serif; color: #4a6080; font-size: 13px; font-weight: 500; width: 40%;">${label}</td>
+  <td style="padding: 10px 0; border-bottom: 1px solid #111f35; font-family: 'Plus Jakarta Sans', sans-serif; color: #c8d9ee; font-size: 13px; text-align: right;">${value}</td>
+</tr>
+`;
+
+const formatTicketHtml = (payload: TicketEmailPayload, subject: string, appBaseUrl?: string) => {
+  const categoryLabel = getCategoryLabel(payload.categoryId);
+  const ticketUrl = appBaseUrl ? `${appBaseUrl.replace(/\/$/, '')}/tickets/${payload.id}` : null;
+  const statusColor = getStatusColor(payload.status);
+  const priorityColor = getPriorityColor(payload.priority);
+
+  const content = `
+    <!-- Header -->
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td style="padding: 32px 36px 24px;">
+          <p style="margin: 0 0 12px 0; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700; color: #3b9eff; text-transform: uppercase; letter-spacing: 0.1em;">Nytt ärende</p>
+          <h1 style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; color: #e0ecff; font-size: 22px; font-weight: 700; line-height: 1.3;">
+            ${escapeHtml(subject)}
+          </h1>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Divider -->
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr><td style="height: 1px; background-color: #111f35; font-size: 0;">&nbsp;</td></tr>
+    </table>
+
+    <!-- Content -->
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td style="padding: 28px 36px;">
+
+          <!-- Badges -->
+          <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
+            <tr>
+              <td>
+                <span style="display: inline-block; padding: 5px 12px; background-color: ${statusColor.bg}; color: ${statusColor.text}; border: 1px solid ${statusColor.border}; border-radius: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 600; margin-right: 8px; letter-spacing: 0.02em;">
+                  ${getStatusLabel(payload.status)}
+                </span>
+                <span style="display: inline-block; padding: 5px 12px; background-color: ${priorityColor.bg}; color: ${priorityColor.text}; border: 1px solid ${priorityColor.border}; border-radius: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.02em;">
+                  ${getPriorityLabel(payload.priority)}
+                </span>
+              </td>
+            </tr>
+          </table>
+
+          <!-- Info Grid -->
+          ${(categoryLabel || payload.requesterName || payload.requesterEmail) ? `
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
+            ${categoryLabel ? buildInfoRow('Kategori', escapeHtml(categoryLabel)) : ''}
+            ${payload.requesterName ? buildInfoRow('Beställare', escapeHtml(payload.requesterName)) : ''}
+            ${payload.requesterEmail ? buildInfoRow('E-post', `<a href="mailto:${escapeHtml(payload.requesterEmail)}" style="color: #3b9eff; text-decoration: none;">${escapeHtml(payload.requesterEmail)}</a>`) : ''}
+          </table>
+          ` : ''}
+
+          <!-- Description label -->
+          <p style="margin: 0 0 10px 0; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700; color: #4a6080; text-transform: uppercase; letter-spacing: 0.1em;">Beskrivning</p>
+
+          <!-- Description block -->
+          <div style="padding: 16px 18px; background-color: #071020; border-left: 3px solid #1d6fdb; border-radius: 6px; margin-bottom: 32px;">
+            <p style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; color: #90afd1; font-size: 14px; line-height: 1.7;">
+              ${markdownToEmailHtml(payload.description)}
+            </p>
+          </div>
+
+          <!-- CTA Button -->
+          ${ticketUrl ? `
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+            <tr>
+              <td align="center">
+                <a href="${ticketUrl}" style="display: inline-block; padding: 13px 36px; background-color: #1d6fdb; color: #ffffff; text-decoration: none; border-radius: 8px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.02em;">
+                  Visa ärende
+                </a>
+              </td>
+            </tr>
+          </table>
+          ` : ''}
+
+        </td>
+      </tr>
+    </table>
   `;
+
+  return buildEmailShell(content, 'Automatisk notifiering från IT-ärendesystemet &mdash; svara inte på detta mail.');
 };
 
 const sendEmail = async (subject: string, payload: TicketEmailPayload) => {
@@ -311,123 +341,99 @@ export const sendTicketReminderEmail = async (data: {
 
   const subject = `Påminnelse: ${ticket.title}`;
 
-  const html = `
-<!DOCTYPE html>
-<html lang="sv">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f3f4f6;">
-    <tr>
-      <td align="center" style="padding: 40px 20px;">
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px;">
+  const reminderContent = `
+    <!-- Header -->
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td style="padding: 32px 36px 24px;">
+          <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom: 14px;">
+            <tr>
+              <td style="background-color: #2d1f00; border: 1px solid #d97706; border-radius: 20px; padding: 4px 14px;">
+                <span style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.1em;">Paminnelse</span>
+              </td>
+            </tr>
+          </table>
+          <h1 style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; color: #e0ecff; font-size: 22px; font-weight: 700; line-height: 1.3;">
+            ${escapeHtml(ticket.title)}
+          </h1>
+        </td>
+      </tr>
+    </table>
 
-          <!-- Header -->
-          <tr>
-            <td style="background-color: #f3f4f6; padding: 30px 40px; border-radius: 8px 8px 0 0;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                <tr>
-                  <td>
-                    <div style="display: inline-block; padding: 8px 16px; background-color: #f59e0b; color: #ffffff; border-radius: 6px; font-size: 13px; font-weight: 600; margin-bottom: 16px;">
-                      ⏰ PÅMINNELSE
-                    </div>
-                    <h1 style="margin: 0; color: #111827; font-size: 24px; font-weight: 600; line-height: 1.3;">
-                      ${escapeHtml(ticket.title)}
-                    </h1>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
+    <!-- Divider -->
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr><td style="height: 1px; background-color: #111f35; font-size: 0;">&nbsp;</td></tr>
+    </table>
 
-          <!-- Content -->
-          <tr>
-            <td style="padding: 40px;">
+    <!-- Content -->
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+      <tr>
+        <td style="padding: 28px 36px;">
 
-              ${reminderMessage ? `
-              <!-- Reminder Message -->
-              <div style="margin-bottom: 24px; padding: 16px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
-                <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.6; font-weight: 500;">
+          ${reminderMessage ? `
+          <!-- Reminder callout -->
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
+            <tr>
+              <td style="padding: 14px 18px; background-color: #1a1200; border-left: 3px solid #d97706; border-radius: 6px;">
+                <p style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; color: #fbbf24; font-size: 14px; line-height: 1.6; font-weight: 500;">
                   ${escapeHtml(reminderMessage)}
                 </p>
-              </div>
-              ` : ''}
+              </td>
+            </tr>
+          </table>
+          ` : ''}
 
-              <!-- Badges -->
-              <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom: 24px;">
-                <tr>
-                  <td>
-                    <span style="display: inline-block; padding: 6px 12px; background-color: ${statusColor.bg}; color: ${statusColor.text}; border-radius: 6px; font-size: 13px; font-weight: 500; margin-right: 8px;">
-                      ${getStatusLabel(ticket.status)}
-                    </span>
-                    <span style="display: inline-block; padding: 6px 12px; background-color: ${priorityColor.bg}; color: ${priorityColor.text}; border-radius: 6px; font-size: 13px; font-weight: 500;">
-                      ${getPriorityLabel(ticket.priority)}
-                    </span>
-                  </td>
-                </tr>
-              </table>
+          <!-- Badges -->
+          <table role="presentation" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
+            <tr>
+              <td>
+                <span style="display: inline-block; padding: 5px 12px; background-color: ${statusColor.bg}; color: ${statusColor.text}; border: 1px solid ${statusColor.border}; border-radius: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 600; margin-right: 8px; letter-spacing: 0.02em;">
+                  ${getStatusLabel(ticket.status)}
+                </span>
+                <span style="display: inline-block; padding: 5px 12px; background-color: ${priorityColor.bg}; color: ${priorityColor.text}; border: 1px solid ${priorityColor.border}; border-radius: 20px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0.02em;">
+                  ${getPriorityLabel(ticket.priority)}
+                </span>
+              </td>
+            </tr>
+          </table>
 
-              <!-- Info Grid -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 24px; background-color: #f9fafb; border-radius: 8px; padding: 20px;">
-                ${categoryLabel ? `
-                <tr>
-                  <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Kategori</td>
-                  <td style="padding: 8px 0; color: #111827; font-size: 14px; text-align: right;">${escapeHtml(categoryLabel)}</td>
-                </tr>
-                ` : ''}
-                ${ticket.requesterName ? `
-                <tr>
-                  <td style="padding: 8px 0; color: #6b7280; font-size: 14px; font-weight: 500;">Beställare</td>
-                  <td style="padding: 8px 0; color: #111827; font-size: 14px; text-align: right;">${escapeHtml(ticket.requesterName)}</td>
-                </tr>
-                ` : ''}
-              </table>
+          <!-- Info Grid -->
+          ${(categoryLabel || ticket.requesterName) ? `
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin-bottom: 28px;">
+            ${categoryLabel ? buildInfoRow('Kategori', escapeHtml(categoryLabel)) : ''}
+            ${ticket.requesterName ? buildInfoRow('Beställare', escapeHtml(ticket.requesterName)) : ''}
+          </table>
+          ` : ''}
 
-              <!-- Description -->
-              <div style="margin-bottom: 32px;">
-                <h3 style="margin: 0 0 12px 0; color: #374151; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">
-                  Beskrivning
-                </h3>
-                <div style="padding: 16px; background-color: #f9fafb; border-left: 4px solid #667eea; border-radius: 4px; color: #374151; font-size: 14px; line-height: 1.6;">
-                  ${markdownToEmailHtml(ticket.description)}
-                </div>
-              </div>
+          <!-- Description label -->
+          <p style="margin: 0 0 10px 0; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 11px; font-weight: 700; color: #4a6080; text-transform: uppercase; letter-spacing: 0.1em;">Beskrivning</p>
 
-              <!-- CTA Button -->
-              ${ticketUrl ? `
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
-                <tr>
-                  <td align="center" style="padding: 12px 0;">
-                    <a href="${ticketUrl}" style="display: inline-block; padding: 14px 32px; background-color: #667eea; color: #ffffff !important; text-decoration: none; border-radius: 8px; font-size: 15px; font-weight: 600; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4); mso-padding-alt: 0; text-align: center;">
-                      <span style="color: #ffffff; text-decoration: none;">Visa ärende</span>
-                    </a>
-                  </td>
-                </tr>
-              </table>
-              ` : ''}
+          <!-- Description block -->
+          <div style="padding: 16px 18px; background-color: #071020; border-left: 3px solid #1d6fdb; border-radius: 6px; margin-bottom: 32px;">
+            <p style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; color: #90afd1; font-size: 14px; line-height: 1.7;">
+              ${markdownToEmailHtml(ticket.description)}
+            </p>
+          </div>
 
-            </td>
-          </tr>
+          <!-- CTA Button -->
+          ${ticketUrl ? `
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+            <tr>
+              <td align="center">
+                <a href="${ticketUrl}" style="display: inline-block; padding: 13px 36px; background-color: #1d6fdb; color: #ffffff; text-decoration: none; border-radius: 8px; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 14px; font-weight: 700; letter-spacing: 0.02em;">
+                  Visa ärende
+                </a>
+              </td>
+            </tr>
+          </table>
+          ` : ''}
 
-          <!-- Footer -->
-          <tr>
-            <td style="padding: 24px 40px; background-color: #f9fafb; border-radius: 0 0 8px 8px; border-top: 1px solid #e5e7eb;">
-              <p style="margin: 0; color: #6b7280; font-size: 12px; line-height: 1.5; text-align: center;">
-                Detta är en automatisk påminnelse från IT-ärendesystemet.<br>
-                Svara inte på detta mail.
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
+        </td>
+      </tr>
+    </table>
   `;
+
+  const html = buildEmailShell(reminderContent, 'Automatisk p&aring;minnelse fr&aring;n IT-&auml;rendesystemet &mdash; svara inte p&aring; detta mail.');
 
   const text = [
     `⏰ PÅMINNELSE: ${ticket.title}`,
