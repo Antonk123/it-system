@@ -121,12 +121,30 @@ const markdownToEmailHtml = (text: string): string => {
 
 const buildEmailShell = (content: string, footerNote: string): string => `
 <!DOCTYPE html>
-<html lang="sv">
+<html lang="sv" style="color-scheme: dark;">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Tell email clients this is intentionally dark — don't auto-invert -->
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* Prevent Apple Mail / Outlook dark mode from auto-inverting */
+    :root { color-scheme: dark; }
+    /* Outlook-specific reset */
+    body { margin: 0 !important; padding: 0 !important; }
+  </style>
 </head>
+<!--[if mso]>
+<noscript>
+  <xml>
+    <o:OfficeDocumentSettings>
+      <o:PixelsPerInch>96</o:PixelsPerInch>
+    </o:OfficeDocumentSettings>
+  </xml>
+</noscript>
+<![endif]-->
 <body style="margin: 0; padding: 0; background-color: #060d1a; font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #060d1a;">
     <tr>
