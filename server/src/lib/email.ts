@@ -58,25 +58,25 @@ const getCategoryLabel = (categoryId: string | null) => {
   return row?.label || null;
 };
 
-const getStatusColor = (status: string): { bg: string; text: string } => {
-  const colors: Record<string, { bg: string; text: string }> = {
-    open:          { bg: '#dbeafe', text: '#1e40af' },
-    'in-progress': { bg: '#fef9c3', text: '#854d0e' },
-    waiting:       { bg: '#e0f2fe', text: '#075985' },
-    resolved:      { bg: '#dcfce7', text: '#166534' },
-    closed:        { bg: '#f1f5f9', text: '#475569' },
+const getStatusStyle = (status: string): { bg: string; text: string; dot: string } => {
+  const styles: Record<string, { bg: string; text: string; dot: string }> = {
+    open:          { bg: '#eff6ff', text: '#1e40af', dot: '#3b82f6' },
+    'in-progress': { bg: '#fefce8', text: '#854d0e', dot: '#eab308' },
+    waiting:       { bg: '#f0f9ff', text: '#075985', dot: '#0ea5e9' },
+    resolved:      { bg: '#f0fdf4', text: '#166534', dot: '#22c55e' },
+    closed:        { bg: '#f8fafc', text: '#64748b', dot: '#94a3b8' },
   };
-  return colors[status] || { bg: '#f1f5f9', text: '#475569' };
+  return styles[status] || { bg: '#f8fafc', text: '#64748b', dot: '#94a3b8' };
 };
 
-const getPriorityColor = (priority: string): { bg: string; text: string } => {
-  const colors: Record<string, { bg: string; text: string }> = {
-    low:    { bg: '#dcfce7', text: '#166534' },
-    medium: { bg: '#fef9c3', text: '#854d0e' },
-    high:   { bg: '#fed7aa', text: '#9a3412' },
-    urgent: { bg: '#fecaca', text: '#991b1b' },
+const getPriorityStyle = (priority: string): { bg: string; text: string; dot: string } => {
+  const styles: Record<string, { bg: string; text: string; dot: string }> = {
+    low:    { bg: '#f0fdf4', text: '#166534', dot: '#22c55e' },
+    medium: { bg: '#fefce8', text: '#854d0e', dot: '#eab308' },
+    high:   { bg: '#fff7ed', text: '#9a3412', dot: '#f97316' },
+    urgent: { bg: '#fef2f2', text: '#991b1b', dot: '#ef4444' },
   };
-  return colors[priority] || { bg: '#f1f5f9', text: '#475569' };
+  return styles[priority] || { bg: '#f8fafc', text: '#64748b', dot: '#94a3b8' };
 };
 
 const getStatusLabel = (status: string): string => {
@@ -127,24 +127,21 @@ const markdownToEmailHtml = (text: string): string => {
     .replace(/\n/g, '<br>');
 };
 
-// ── Shared font stacks ─────────────────────────────────────────────
-const FONT = `'Source Sans 3', 'Segoe UI', Helvetica, Arial, sans-serif`;
-const FONT_MONO = `'SF Mono', 'Cascadia Code', Consolas, monospace`;
-
 // ── Design tokens ───────────────────────────────────────────────────
+const F = `'Segoe UI', -apple-system, Helvetica, Arial, sans-serif`;
+const FM = `'SF Mono', 'Cascadia Code', Consolas, monospace`;
+
 const T = {
-  bg:        '#f1f5f9',   // slate-100
-  card:      '#ffffff',
-  border:    '#e2e8f0',   // slate-200
-  borderAlt: '#cbd5e1',   // slate-300
-  text:      '#0f172a',   // slate-900
-  textSec:   '#475569',   // slate-600
-  textMuted: '#94a3b8',   // slate-400
-  accent:    '#0369a1',   // sky-800 — deeper, more authoritative blue
-  accentLt:  '#e0f2fe',   // sky-100
-  surface:   '#f8fafc',   // slate-50
-  btnBg:     '#0f172a',   // slate-900 — dark, confident CTA
-  btnText:   '#ffffff',
+  bg:       '#eef2f7',
+  card:     '#ffffff',
+  text:     '#1a1a2e',
+  textSec:  '#4a5568',
+  textMut:  '#a0aec0',
+  accent:   '#2563eb',
+  surface:  '#f7f8fb',
+  btnBg:    '#1a1a2e',
+  btnText:  '#ffffff',
+  line:     '#edf0f5',
 };
 
 // ── Shell ───────────────────────────────────────────────────────────
@@ -169,52 +166,41 @@ const buildEmailShell = (content: string, footerNote: string): string => `
     td { font-family: 'Segoe UI', Helvetica, Arial, sans-serif; }
   </style>
   <![endif]-->
-  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet">
   <style type="text/css">
     :root { color-scheme: light; }
     body, #bodyTable { margin: 0 !important; padding: 0 !important; width: 100% !important; -webkit-text-size-adjust: 100%; }
     img { border: 0; line-height: 100%; outline: none; text-decoration: none; }
-    a { color: ${T.accent}; }
   </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: ${T.bg}; font-family: ${FONT}; -webkit-text-size-adjust: 100%;" bgcolor="${T.bg}">
+<body style="margin: 0; padding: 0; background-color: ${T.bg}; font-family: ${F}; -webkit-text-size-adjust: 100%;" bgcolor="${T.bg}">
   <table id="bodyTable" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="${T.bg}" style="background-color: ${T.bg};">
     <tr>
-      <td align="center" style="padding: 40px 16px;" bgcolor="${T.bg}">
+      <td align="center" style="padding: 36px 16px;" bgcolor="${T.bg}">
 
-        <!-- Brand mark -->
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width: 600px; max-width: 600px;">
+        <!-- Brand -->
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" border="0" style="width: 560px; max-width: 560px;">
           <tr>
-            <td style="padding: 0 0 20px 4px;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-                <tr>
-                  <td bgcolor="${T.accent}" width="8" height="8" style="width: 8px; height: 8px; font-size: 0; line-height: 0; background-color: ${T.accent};">&nbsp;</td>
-                  <td width="10" style="width: 10px; font-size: 0;">&nbsp;</td>
-                  <td style="font-family: ${FONT}; font-size: 13px; font-weight: 700; color: ${T.text}; letter-spacing: 0.06em; text-transform: uppercase; mso-line-height-rule: exactly;">Prefabm&#228;starna</td>
-                  <td width="6" style="width: 6px; font-size: 0;">&nbsp;</td>
-                  <td style="font-family: ${FONT}; font-size: 13px; font-weight: 400; color: ${T.textMuted}; letter-spacing: 0.06em; text-transform: uppercase; mso-line-height-rule: exactly;">IT</td>
-                </tr>
-              </table>
+            <td style="padding: 0 0 14px 2px;">
+              <span style="font-family: ${F}; font-size: 13px; font-weight: 700; color: ${T.text}; letter-spacing: 0.03em; mso-line-height-rule: exactly;">Prefabm&#228;starna</span>
+              <span style="font-family: ${F}; font-size: 13px; font-weight: 400; color: ${T.textMut}; mso-line-height-rule: exactly;"> &middot; IT</span>
             </td>
           </tr>
         </table>
 
         <!-- Card -->
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width: 600px; max-width: 600px;">
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" border="0" style="width: 560px; max-width: 560px;">
           <tr>
-            <td bgcolor="${T.border}" style="background-color: ${T.border}; padding: 1px;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="${T.card}" style="background-color: ${T.card};">
-                ${content}
-              </table>
+            <td bgcolor="${T.card}" style="background-color: ${T.card};">
+              ${content}
             </td>
           </tr>
         </table>
 
         <!-- Footer -->
-        <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width: 600px; max-width: 600px;">
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" border="0" style="width: 560px; max-width: 560px;">
           <tr>
-            <td style="padding: 20px 4px 0;">
-              <p style="margin: 0; font-family: ${FONT}; color: ${T.textMuted}; font-size: 11px; line-height: 1.6; mso-line-height-rule: exactly;">
+            <td style="padding: 16px 2px 0;">
+              <p style="margin: 0; font-family: ${F}; color: ${T.textMut}; font-size: 11px; line-height: 1.5; mso-line-height-rule: exactly;">
                 ${footerNote}
               </p>
             </td>
@@ -230,32 +216,38 @@ const buildEmailShell = (content: string, footerNote: string): string => `
 
 // ── Reusable fragments ──────────────────────────────────────────────
 
-const buildBadge = (label: string, color: { bg: string; text: string }): string => `
-<td bgcolor="${color.bg}" style="background-color: ${color.bg}; padding: 4px 12px; mso-line-height-rule: exactly;">
-  <span style="font-family: ${FONT}; font-size: 11px; font-weight: 700; color: ${color.text}; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; mso-line-height-rule: exactly;">${label}</span>
+const buildBadge = (label: string, style: { bg: string; text: string; dot: string }): string => `
+<td style="padding-right: 12px;">
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0">
+    <tr>
+      <td bgcolor="${style.dot}" width="6" height="6" style="width: 6px; height: 6px; font-size: 0; line-height: 0; background-color: ${style.dot};">&nbsp;</td>
+      <td width="6" style="width: 6px; font-size: 0;">&nbsp;</td>
+      <td style="font-family: ${F}; font-size: 12px; font-weight: 600; color: ${style.text}; white-space: nowrap; mso-line-height-rule: exactly;">${label}</td>
+    </tr>
+  </table>
 </td>`;
 
 const buildInfoRow = (label: string, value: string): string => `
 <tr>
-  <td style="padding: 9px 0; border-bottom: 1px solid ${T.border}; font-family: ${FONT}; color: ${T.textMuted}; font-size: 13px; font-weight: 400; width: 35%; mso-line-height-rule: exactly;">${label}</td>
-  <td style="padding: 9px 0; border-bottom: 1px solid ${T.border}; font-family: ${FONT}; color: ${T.text}; font-size: 13px; font-weight: 600; text-align: right; mso-line-height-rule: exactly;">${value}</td>
+  <td style="padding: 8px 0; border-bottom: 1px solid ${T.line}; font-family: ${F}; color: ${T.textMut}; font-size: 13px; font-weight: 400; width: 35%; mso-line-height-rule: exactly;">${label}</td>
+  <td style="padding: 8px 0; border-bottom: 1px solid ${T.line}; font-family: ${F}; color: ${T.text}; font-size: 13px; font-weight: 600; text-align: right; mso-line-height-rule: exactly;">${value}</td>
 </tr>
 `;
 
 const buildCta = (url: string, label: string): string => `
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+<table role="presentation" cellspacing="0" cellpadding="0" border="0">
   <tr>
-    <td align="left" style="padding-top: 8px;">
+    <td>
       <!--[if mso]>
       <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word"
-        href="${url}" style="height:44px;v-text-anchor:middle;width:160px;" arcsize="12%"
+        href="${url}" style="height:40px;v-text-anchor:middle;width:150px;" arcsize="10%"
         fillcolor="${T.btnBg}" strokecolor="${T.btnBg}">
         <w:anchorlock/>
-        <center style="color:${T.btnText};font-family:'Segoe UI',Arial,sans-serif;font-size:13px;font-weight:bold;">${label}</center>
+        <center style="color:${T.btnText};font-family:'Segoe UI',Arial,sans-serif;font-size:13px;font-weight:600;">${label} &rarr;</center>
       </v:roundrect>
       <![endif]-->
       <!--[if !mso]><!-->
-      <a href="${url}" style="display: inline-block; padding: 12px 28px; background-color: ${T.btnBg}; color: ${T.btnText}; text-decoration: none; border-radius: 6px; font-family: ${FONT}; font-size: 13px; font-weight: 700; letter-spacing: 0.02em; mso-hide: all;">
+      <a href="${url}" style="display: inline-block; padding: 10px 24px; background-color: ${T.btnBg}; color: ${T.btnText}; text-decoration: none; border-radius: 5px; font-family: ${F}; font-size: 13px; font-weight: 600; mso-hide: all;">
         ${label} &rarr;
       </a>
       <!--<![endif]-->
@@ -263,87 +255,109 @@ const buildCta = (url: string, label: string): string => `
   </tr>
 </table>`;
 
+// ── Content builders ────────────────────────────────────────────────
+
+const buildTicketContent = (opts: {
+  typeLabel: string;
+  typeLabelBg?: string;
+  typeLabelColor?: string;
+  title: string;
+  shortId: string;
+  statusLabel: string;
+  statusStyle: { bg: string; text: string; dot: string };
+  priorityLabel: string;
+  priorityStyle: { bg: string; text: string; dot: string };
+  callout?: { text: string; borderColor: string; bg: string; color: string };
+  infoRows: string;
+  description: string;
+  ctaUrl: string | null;
+}): string => `
+  <!-- Header -->
+  <tr>
+    <td style="padding: 32px 36px 0;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 6px;">
+        <tr>
+          <td style="font-family: ${F}; font-size: 11px; font-weight: 700; color: ${opts.typeLabelColor || T.accent}; text-transform: uppercase; letter-spacing: 0.06em; mso-line-height-rule: exactly;">${opts.typeLabel}</td>
+          <td align="right" style="font-family: ${FM}; font-size: 11px; color: ${T.textMut}; mso-line-height-rule: exactly;">${opts.shortId}</td>
+        </tr>
+      </table>
+      <h1 style="margin: 0 0 16px 0; font-family: ${F}; color: ${T.text}; font-size: 21px; font-weight: 700; line-height: 1.3; mso-line-height-rule: exactly;">
+        ${opts.title}
+      </h1>
+      <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
+        <tr>
+          ${buildBadge(opts.statusLabel, opts.statusStyle)}
+          ${buildBadge(opts.priorityLabel, opts.priorityStyle)}
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Body -->
+  <tr>
+    <td style="padding: 0 36px 32px;">
+
+      ${opts.callout ? `
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 20px;">
+        <tr>
+          <td bgcolor="${opts.callout.bg}" style="background-color: ${opts.callout.bg}; padding: 12px 16px; border-left: 3px solid ${opts.callout.borderColor};">
+            <p style="margin: 0; font-family: ${F}; color: ${opts.callout.color}; font-size: 14px; line-height: 1.5; font-weight: 600; mso-line-height-rule: exactly;">
+              ${opts.callout.text}
+            </p>
+          </td>
+        </tr>
+      </table>
+      ` : ''}
+
+      ${opts.infoRows ? `
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 20px;">
+        ${opts.infoRows}
+      </table>
+      ` : ''}
+
+      <p style="margin: 0 0 6px 0; font-family: ${F}; font-size: 11px; font-weight: 600; color: ${T.textMut}; text-transform: uppercase; letter-spacing: 0.05em; mso-line-height-rule: exactly;">Beskrivning</p>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
+        <tr>
+          <td bgcolor="${T.surface}" style="background-color: ${T.surface}; padding: 14px 16px; border-left: 3px solid ${T.accent};">
+            <p style="margin: 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.65; mso-line-height-rule: exactly;">
+              ${opts.description}
+            </p>
+          </td>
+        </tr>
+      </table>
+
+      ${opts.ctaUrl ? buildCta(opts.ctaUrl, 'Visa &#228;rende') : ''}
+
+    </td>
+  </tr>
+`;
+
 // ── Ticket email (created / closed) ────────────────────────────────
 
 const formatTicketHtml = (payload: TicketEmailPayload, headerLabel: string, appBaseUrl?: string) => {
   const categoryLabel = getCategoryLabel(payload.categoryId);
   const ticketUrl = appBaseUrl ? `${appBaseUrl.replace(/\/$/, '')}/tickets/${payload.id}` : null;
-  const statusColor = getStatusColor(payload.status);
-  const priorityColor = getPriorityColor(payload.priority);
   const shortId = payload.id.slice(0, 8).toUpperCase();
 
-  const content = `
-    <!-- Header section -->
-    <tr>
-      <td bgcolor="${T.card}" style="background-color: ${T.card}; padding: 36px 40px 28px;">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-          <tr>
-            <td>
-              <!-- Type label + ID -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 16px;">
-                <tr>
-                  <td style="font-family: ${FONT}; font-size: 12px; font-weight: 700; color: ${T.accent}; text-transform: uppercase; letter-spacing: 0.08em; mso-line-height-rule: exactly;">${headerLabel}</td>
-                  <td align="right" style="font-family: ${FONT_MONO}; font-size: 11px; color: ${T.textMuted}; mso-line-height-rule: exactly;">#${shortId}</td>
-                </tr>
-              </table>
+  let infoRows = '';
+  if (categoryLabel) infoRows += buildInfoRow('Kategori', escapeHtml(categoryLabel));
+  if (payload.requesterName) infoRows += buildInfoRow('Best&#228;llare', escapeHtml(payload.requesterName));
+  if (payload.requesterEmail) infoRows += buildInfoRow('E-post', `<a href="mailto:${escapeHtml(payload.requesterEmail)}" style="color: ${T.accent}; text-decoration: none;">${escapeHtml(payload.requesterEmail)}</a>`);
 
-              <!-- Title -->
-              <h1 style="margin: 0 0 20px 0; font-family: ${FONT}; color: ${T.text}; font-size: 24px; font-weight: 700; line-height: 1.25; mso-line-height-rule: exactly;">
-                ${escapeHtml(payload.title)}
-              </h1>
+  const content = buildTicketContent({
+    typeLabel: headerLabel,
+    title: escapeHtml(payload.title),
+    shortId: `#${shortId}`,
+    statusLabel: getStatusLabel(payload.status),
+    statusStyle: getStatusStyle(payload.status),
+    priorityLabel: getPriorityLabel(payload.priority),
+    priorityStyle: getPriorityStyle(payload.priority),
+    infoRows,
+    description: markdownToEmailHtml(payload.description),
+    ctaUrl: ticketUrl,
+  });
 
-              <!-- Badges -->
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-                <tr>
-                  ${buildBadge(getStatusLabel(payload.status), statusColor)}
-                  <td width="6" style="width: 6px; font-size: 0;">&nbsp;</td>
-                  ${buildBadge(getPriorityLabel(payload.priority), priorityColor)}
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- Divider -->
-    <tr><td bgcolor="${T.border}" height="1" style="height: 1px; font-size: 0; line-height: 0;">&nbsp;</td></tr>
-
-    <!-- Body -->
-    <tr>
-      <td bgcolor="${T.card}" style="background-color: ${T.card}; padding: 28px 40px 36px;">
-
-        <!-- Info rows -->
-        ${(categoryLabel || payload.requesterName || payload.requesterEmail) ? `
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
-          ${categoryLabel ? buildInfoRow('Kategori', escapeHtml(categoryLabel)) : ''}
-          ${payload.requesterName ? buildInfoRow('Best&#228;llare', escapeHtml(payload.requesterName)) : ''}
-          ${payload.requesterEmail ? buildInfoRow('E-post', `<a href="mailto:${escapeHtml(payload.requesterEmail)}" style="color: ${T.accent}; text-decoration: none; font-weight: 600;">${escapeHtml(payload.requesterEmail)}</a>`) : ''}
-        </table>
-        ` : ''}
-
-        <!-- Description -->
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 32px;">
-          <tr>
-            <td style="font-family: ${FONT}; font-size: 11px; font-weight: 700; color: ${T.textMuted}; text-transform: uppercase; letter-spacing: 0.08em; padding-bottom: 10px; mso-line-height-rule: exactly;">Beskrivning</td>
-          </tr>
-          <tr>
-            <td bgcolor="${T.surface}" style="background-color: ${T.surface}; padding: 16px 18px; border-left: 3px solid ${T.accent};">
-              <p style="margin: 0; font-family: ${FONT}; color: ${T.textSec}; font-size: 14px; line-height: 1.7; mso-line-height-rule: exactly;">
-                ${markdownToEmailHtml(payload.description)}
-              </p>
-            </td>
-          </tr>
-        </table>
-
-        <!-- CTA -->
-        ${ticketUrl ? buildCta(ticketUrl, 'Visa &#228;rende') : ''}
-
-      </td>
-    </tr>
-  `;
-
-  return buildEmailShell(content, 'Automatiskt meddelande fr&#229;n IT-&#228;rendesystemet &bull; Svara inte p&#229; detta mail');
+  return buildEmailShell(content, 'Automatiskt meddelande fr&#229;n IT-&#228;rendesystemet &middot; Svara inte p&#229; detta mail');
 };
 
 // ── Send helpers ────────────────────────────────────────────────────
@@ -360,7 +374,8 @@ const sendEmail = async (subject: string, payload: TicketEmailPayload) => {
     return;
   }
 
-  const html = formatTicketHtml(payload, subject.includes('st&#228;ngt') || subject.includes('stängt') ? '&#196;rende st&#228;ngt' : 'Nytt &#228;rende', config.appBaseUrl);
+  const isClosing = subject.includes('stängt');
+  const html = formatTicketHtml(payload, isClosing ? '&#196;rende st&#228;ngt' : 'Nytt &#228;rende', config.appBaseUrl);
   const text = [
     subject,
     `Titel: ${payload.title}`,
@@ -418,104 +433,35 @@ export const sendTicketReminderEmail = async (data: {
   const { ticket, reminderMessage, userEmail, userName } = data;
   const categoryLabel = getCategoryLabel(ticket.categoryId);
   const ticketUrl = appBaseUrl ? `${appBaseUrl.replace(/\/$/, '')}/tickets/${ticket.id}` : null;
-  const statusColor = getStatusColor(ticket.status);
-  const priorityColor = getPriorityColor(ticket.priority);
   const shortId = ticket.id.slice(0, 8).toUpperCase();
 
   const subject = `Påminnelse: ${ticket.title}`;
 
-  const reminderContent = `
-    <!-- Header -->
-    <tr>
-      <td bgcolor="${T.card}" style="background-color: ${T.card}; padding: 36px 40px 28px;">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-          <tr>
-            <td>
-              <!-- Type label + ID -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 16px;">
-                <tr>
-                  <td>
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-                      <tr>
-                        <td bgcolor="#fef9c3" style="background-color: #fef9c3; padding: 3px 10px; mso-line-height-rule: exactly;">
-                          <span style="font-family: ${FONT}; font-size: 11px; font-weight: 700; color: #854d0e; text-transform: uppercase; letter-spacing: 0.08em;">P&#229;minnelse</span>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                  <td align="right" style="font-family: ${FONT_MONO}; font-size: 11px; color: ${T.textMuted}; mso-line-height-rule: exactly;">#${shortId}</td>
-                </tr>
-              </table>
+  let infoRows = '';
+  if (categoryLabel) infoRows += buildInfoRow('Kategori', escapeHtml(categoryLabel));
+  if (ticket.requesterName) infoRows += buildInfoRow('Best&#228;llare', escapeHtml(ticket.requesterName));
 
-              <!-- Title -->
-              <h1 style="margin: 0 0 20px 0; font-family: ${FONT}; color: ${T.text}; font-size: 24px; font-weight: 700; line-height: 1.25; mso-line-height-rule: exactly;">
-                ${escapeHtml(ticket.title)}
-              </h1>
+  const reminderContent = buildTicketContent({
+    typeLabel: 'P&#229;minnelse',
+    typeLabelColor: '#b45309',
+    title: escapeHtml(ticket.title),
+    shortId: `#${shortId}`,
+    statusLabel: getStatusLabel(ticket.status),
+    statusStyle: getStatusStyle(ticket.status),
+    priorityLabel: getPriorityLabel(ticket.priority),
+    priorityStyle: getPriorityStyle(ticket.priority),
+    callout: reminderMessage ? {
+      text: escapeHtml(reminderMessage),
+      borderColor: '#d97706',
+      bg: '#fffbeb',
+      color: '#78350f',
+    } : undefined,
+    infoRows,
+    description: markdownToEmailHtml(ticket.description),
+    ctaUrl: ticketUrl,
+  });
 
-              <!-- Badges -->
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-                <tr>
-                  ${buildBadge(getStatusLabel(ticket.status), statusColor)}
-                  <td width="6" style="width: 6px; font-size: 0;">&nbsp;</td>
-                  ${buildBadge(getPriorityLabel(ticket.priority), priorityColor)}
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-
-    <!-- Divider -->
-    <tr><td bgcolor="${T.border}" height="1" style="height: 1px; font-size: 0; line-height: 0;">&nbsp;</td></tr>
-
-    <!-- Body -->
-    <tr>
-      <td bgcolor="${T.card}" style="background-color: ${T.card}; padding: 28px 40px 36px;">
-
-        ${reminderMessage ? `
-        <!-- Reminder message callout -->
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
-          <tr>
-            <td bgcolor="#fffbeb" style="background-color: #fffbeb; padding: 14px 18px; border-left: 3px solid #d97706;">
-              <p style="margin: 0; font-family: ${FONT}; color: #78350f; font-size: 14px; line-height: 1.6; font-weight: 600; mso-line-height-rule: exactly;">
-                ${escapeHtml(reminderMessage)}
-              </p>
-            </td>
-          </tr>
-        </table>
-        ` : ''}
-
-        <!-- Info rows -->
-        ${(categoryLabel || ticket.requesterName) ? `
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
-          ${categoryLabel ? buildInfoRow('Kategori', escapeHtml(categoryLabel)) : ''}
-          ${ticket.requesterName ? buildInfoRow('Best&#228;llare', escapeHtml(ticket.requesterName)) : ''}
-        </table>
-        ` : ''}
-
-        <!-- Description -->
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 32px;">
-          <tr>
-            <td style="font-family: ${FONT}; font-size: 11px; font-weight: 700; color: ${T.textMuted}; text-transform: uppercase; letter-spacing: 0.08em; padding-bottom: 10px; mso-line-height-rule: exactly;">Beskrivning</td>
-          </tr>
-          <tr>
-            <td bgcolor="${T.surface}" style="background-color: ${T.surface}; padding: 16px 18px; border-left: 3px solid ${T.accent};">
-              <p style="margin: 0; font-family: ${FONT}; color: ${T.textSec}; font-size: 14px; line-height: 1.7; mso-line-height-rule: exactly;">
-                ${markdownToEmailHtml(ticket.description)}
-              </p>
-            </td>
-          </tr>
-        </table>
-
-        <!-- CTA -->
-        ${ticketUrl ? buildCta(ticketUrl, 'Visa &#228;rende') : ''}
-
-      </td>
-    </tr>
-  `;
-
-  const html = buildEmailShell(reminderContent, 'Automatisk p&#229;minnelse fr&#229;n IT-&#228;rendesystemet &bull; Svara inte p&#229; detta mail');
+  const html = buildEmailShell(reminderContent, 'Automatisk p&#229;minnelse fr&#229;n IT-&#228;rendesystemet &middot; Svara inte p&#229; detta mail');
 
   const text = [
     `PÅMINNELSE: ${ticket.title}`,
