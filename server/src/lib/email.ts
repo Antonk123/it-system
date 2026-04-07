@@ -52,23 +52,23 @@ const getCategoryLabel = (categoryId: string | null) => {
 
 const getStatusColor = (status: string): { bg: string; text: string; border: string } => {
   const colors: Record<string, { bg: string; text: string; border: string }> = {
-    open:         { bg: '#0d2d5e', text: '#60a5fa', border: '#1d4ed8' },
-    'in-progress':{ bg: '#2d1f00', text: '#fbbf24', border: '#d97706' },
-    waiting:      { bg: '#0a2a30', text: '#22d3ee', border: '#0891b2' },
-    resolved:     { bg: '#052e16', text: '#34d399', border: '#059669' },
-    closed:       { bg: '#1a1f2e', text: '#94a3b8', border: '#475569' },
+    open:         { bg: '#dbeafe', text: '#1e40af', border: '#93c5fd' },
+    'in-progress':{ bg: '#fef3c7', text: '#92400e', border: '#fcd34d' },
+    waiting:      { bg: '#e0f2fe', text: '#0c4a6e', border: '#7dd3fc' },
+    resolved:     { bg: '#d1fae5', text: '#065f46', border: '#6ee7b7' },
+    closed:       { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1' },
   };
-  return colors[status] || { bg: '#1a1f2e', text: '#94a3b8', border: '#475569' };
+  return colors[status] || { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1' };
 };
 
 const getPriorityColor = (priority: string): { bg: string; text: string; border: string } => {
   const colors: Record<string, { bg: string; text: string; border: string }> = {
-    low:    { bg: '#052e16', text: '#34d399', border: '#059669' },
-    medium: { bg: '#2d1f00', text: '#fbbf24', border: '#d97706' },
-    high:   { bg: '#2d1200', text: '#fb923c', border: '#ea580c' },
-    urgent: { bg: '#2d0000', text: '#f87171', border: '#dc2626' },
+    low:    { bg: '#d1fae5', text: '#065f46', border: '#6ee7b7' },
+    medium: { bg: '#fef3c7', text: '#92400e', border: '#fcd34d' },
+    high:   { bg: '#ffedd5', text: '#9a3412', border: '#fdba74' },
+    urgent: { bg: '#fee2e2', text: '#991b1b', border: '#fca5a5' },
   };
-  return colors[priority] || { bg: '#1a1f2e', text: '#94a3b8', border: '#475569' };
+  return colors[priority] || { bg: '#f1f5f9', text: '#475569', border: '#cbd5e1' };
 };
 
 const getStatusLabel = (status: string): string => {
@@ -102,7 +102,7 @@ const escapeHtml = (str: string): string =>
 
 const stripHtml = (html: string): string =>
   html
-    .replace(/<[^>]*>/g, '') // Remove all HTML tags
+    .replace(/<[^>]*>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
@@ -111,9 +111,7 @@ const stripHtml = (html: string): string =>
     .replace(/&#039;/g, "'");
 
 const markdownToEmailHtml = (text: string): string => {
-  // Strip any existing HTML tags first
   const cleanText = stripHtml(text);
-  // Then escape and format
   return escapeHtml(cleanText)
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\n/g, '<br>');
@@ -125,8 +123,8 @@ const buildEmailShell = (content: string, footerNote: string): string => `
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="dark">
-  <meta name="supported-color-schemes" content="dark">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
   <!--[if mso]>
   <xml>
     <o:OfficeDocumentSettings>
@@ -137,42 +135,37 @@ const buildEmailShell = (content: string, footerNote: string): string => `
   <![endif]-->
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style type="text/css">
-    :root { color-scheme: dark; }
+    :root { color-scheme: light; }
     body, #bodyTable { margin: 0 !important; padding: 0 !important; width: 100% !important; }
     img { border: 0; line-height: 100%; outline: none; text-decoration: none; }
-    /* Outlook dark mode: signal this email is dark, don't invert */
-    [data-ogsc] .dark-bg { background-color: #0b1629 !important; }
-    [data-ogsc] .outer-bg { background-color: #060d1a !important; }
-    [data-ogsc] .body-text { color: #c8d9ee !important; }
-    [data-ogsc] .muted-text { color: #4a6080 !important; }
   </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #060d1a; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif;" bgcolor="#060d1a">
-  <table id="bodyTable" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#060d1a" style="background-color: #060d1a;">
+<body style="margin: 0; padding: 0; background-color: #f0f4f8; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif;" bgcolor="#f0f4f8">
+  <table id="bodyTable" role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#f0f4f8" style="background-color: #f0f4f8;">
     <tr>
-      <td align="center" style="padding: 32px 16px;" bgcolor="#060d1a">
+      <td align="center" style="padding: 32px 16px;" bgcolor="#f0f4f8">
         <table role="presentation" width="600" cellspacing="0" cellpadding="0" border="0" style="width: 600px; max-width: 600px;">
 
           <!-- Top brand bar -->
           <tr>
-            <td style="padding-bottom: 16px;" bgcolor="#060d1a">
+            <td style="padding-bottom: 16px;" bgcolor="#f0f4f8">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 <tr>
                   <td>
-                    <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: 700; color: #3b9eff; letter-spacing: 0.08em; text-transform: uppercase; mso-line-height-rule: exactly;">PREFABM&#196;STARNA</span>
-                    <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: 400; color: #4a6080; letter-spacing: 0.08em; text-transform: uppercase; mso-line-height-rule: exactly;">&#160;IT-SYSTEM</span>
+                    <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: 700; color: #1d6fdb; letter-spacing: 0.08em; text-transform: uppercase; mso-line-height-rule: exactly;">PREFABM&#196;STARNA</span>
+                    <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 12px; font-weight: 400; color: #94a3b8; letter-spacing: 0.08em; text-transform: uppercase; mso-line-height-rule: exactly;">&#160;IT-SYSTEM</span>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- Main card — border via nested table trick for Outlook -->
+          <!-- Main card -->
           <tr>
-            <td bgcolor="#162438" style="background-color: #162438; padding: 1px;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#0b1629" style="background-color: #0b1629;">
+            <td bgcolor="#e2e8f0" style="background-color: #e2e8f0; padding: 1px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" bgcolor="#ffffff" style="background-color: #ffffff;">
 
-                <!-- Blue accent bar (solid for Outlook, gradient via VML) -->
+                <!-- Blue accent bar -->
                 <tr>
                   <td height="3" bgcolor="#1d6fdb" style="background-color: #1d6fdb; height: 3px; font-size: 0; line-height: 0; mso-line-height-rule: exactly;">
                     <!--[if mso]>&nbsp;<![endif]-->
@@ -183,8 +176,8 @@ const buildEmailShell = (content: string, footerNote: string): string => `
 
                 <!-- Footer -->
                 <tr>
-                  <td bgcolor="#0b1629" style="background-color: #0b1629; padding: 18px 36px 22px; border-top: 1px solid #111f35;">
-                    <p style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #2e4a6a; font-size: 11px; line-height: 1.6; text-align: center; mso-line-height-rule: exactly;">
+                  <td bgcolor="#ffffff" style="background-color: #ffffff; padding: 18px 36px 22px; border-top: 1px solid #e2e8f0;">
+                    <p style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #94a3b8; font-size: 11px; line-height: 1.6; text-align: center; mso-line-height-rule: exactly;">
                       ${footerNote}
                     </p>
                   </td>
@@ -204,8 +197,8 @@ const buildEmailShell = (content: string, footerNote: string): string => `
 
 const buildInfoRow = (label: string, value: string): string => `
 <tr>
-  <td style="padding: 10px 0; border-bottom: 1px solid #111f35; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #4a6080; font-size: 13px; font-weight: 500; width: 40%; mso-line-height-rule: exactly;">${label}</td>
-  <td style="padding: 10px 0; border-bottom: 1px solid #111f35; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #c8d9ee; font-size: 13px; text-align: right; mso-line-height-rule: exactly;">${value}</td>
+  <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #64748b; font-size: 13px; font-weight: 500; width: 40%; mso-line-height-rule: exactly;">${label}</td>
+  <td style="padding: 10px 0; border-bottom: 1px solid #e2e8f0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #1e293b; font-size: 13px; text-align: right; mso-line-height-rule: exactly;">${value}</td>
 </tr>
 `;
 
@@ -219,9 +212,9 @@ const formatTicketHtml = (payload: TicketEmailPayload, subject: string, appBaseU
     <!-- Header -->
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
       <tr>
-        <td bgcolor="#0b1629" style="background-color: #0b1629; padding: 32px 36px 24px;">
-          <p style="margin: 0 0 12px 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 11px; font-weight: 700; color: #3b9eff; text-transform: uppercase; letter-spacing: 0.1em; mso-line-height-rule: exactly;">Nytt &#228;rende</p>
-          <h1 style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #e0ecff; font-size: 22px; font-weight: 700; line-height: 1.3; mso-line-height-rule: exactly;">
+        <td bgcolor="#ffffff" style="background-color: #ffffff; padding: 32px 36px 24px;">
+          <p style="margin: 0 0 12px 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 11px; font-weight: 700; color: #1d6fdb; text-transform: uppercase; letter-spacing: 0.1em; mso-line-height-rule: exactly;">Nytt &#228;rende</p>
+          <h1 style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #0f172a; font-size: 22px; font-weight: 700; line-height: 1.3; mso-line-height-rule: exactly;">
             ${escapeHtml(subject)}
           </h1>
         </td>
@@ -230,15 +223,15 @@ const formatTicketHtml = (payload: TicketEmailPayload, subject: string, appBaseU
 
     <!-- Divider -->
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-      <tr><td bgcolor="#111f35" height="1" style="background-color: #111f35; height: 1px; font-size: 0; line-height: 0; mso-line-height-rule: exactly;">&nbsp;</td></tr>
+      <tr><td bgcolor="#e2e8f0" height="1" style="background-color: #e2e8f0; height: 1px; font-size: 0; line-height: 0; mso-line-height-rule: exactly;">&nbsp;</td></tr>
     </table>
 
     <!-- Content -->
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
       <tr>
-        <td bgcolor="#0b1629" style="background-color: #0b1629; padding: 28px 36px;">
+        <td bgcolor="#ffffff" style="background-color: #ffffff; padding: 28px 36px;">
 
-          <!-- Badges — table cells instead of spans (Outlook ignores inline-block on spans) -->
+          <!-- Badges -->
           <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
             <tr>
               <td bgcolor="${statusColor.bg}" style="background-color: ${statusColor.bg}; padding: 5px 14px; border: 1px solid ${statusColor.border};">
@@ -256,26 +249,26 @@ const formatTicketHtml = (payload: TicketEmailPayload, subject: string, appBaseU
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
             ${categoryLabel ? buildInfoRow('Kategori', escapeHtml(categoryLabel)) : ''}
             ${payload.requesterName ? buildInfoRow('Best&#228;llare', escapeHtml(payload.requesterName)) : ''}
-            ${payload.requesterEmail ? buildInfoRow('E-post', `<a href="mailto:${escapeHtml(payload.requesterEmail)}" style="color: #3b9eff; text-decoration: none;">${escapeHtml(payload.requesterEmail)}</a>`) : ''}
+            ${payload.requesterEmail ? buildInfoRow('E-post', `<a href="mailto:${escapeHtml(payload.requesterEmail)}" style="color: #1d6fdb; text-decoration: none;">${escapeHtml(payload.requesterEmail)}</a>`) : ''}
           </table>
           ` : ''}
 
           <!-- Description label -->
-          <p style="margin: 0 0 10px 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 11px; font-weight: 700; color: #4a6080; text-transform: uppercase; letter-spacing: 0.1em; mso-line-height-rule: exactly;">Beskrivning</p>
+          <p style="margin: 0 0 10px 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; mso-line-height-rule: exactly;">Beskrivning</p>
 
-          <!-- Description block — table-based for Outlook (no div backgrounds) -->
+          <!-- Description block -->
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 32px;">
             <tr>
               <td bgcolor="#1d6fdb" width="3" style="background-color: #1d6fdb; width: 3px; font-size: 0;">&nbsp;</td>
-              <td bgcolor="#071020" style="background-color: #071020; padding: 14px 16px;">
-                <p style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #90afd1; font-size: 14px; line-height: 1.7; mso-line-height-rule: exactly;">
+              <td bgcolor="#f8fafc" style="background-color: #f8fafc; padding: 14px 16px;">
+                <p style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #334155; font-size: 14px; line-height: 1.7; mso-line-height-rule: exactly;">
                   ${markdownToEmailHtml(payload.description)}
                 </p>
               </td>
             </tr>
           </table>
 
-          <!-- CTA Button — MSO-safe with VML fallback -->
+          <!-- CTA Button -->
           ${ticketUrl ? `
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
             <tr>
@@ -381,15 +374,15 @@ export const sendTicketReminderEmail = async (data: {
     <!-- Header -->
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
       <tr>
-        <td bgcolor="#0b1629" style="background-color: #0b1629; padding: 32px 36px 24px;">
+        <td bgcolor="#ffffff" style="background-color: #ffffff; padding: 32px 36px 24px;">
           <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 14px;">
             <tr>
-              <td bgcolor="#2d1f00" style="background-color: #2d1f00; padding: 4px 14px; border: 1px solid #d97706;">
-                <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 11px; font-weight: 700; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.1em; mso-line-height-rule: exactly;">P&#197;MINNELSE</span>
+              <td bgcolor="#fef3c7" style="background-color: #fef3c7; padding: 4px 14px; border: 1px solid #fcd34d;">
+                <span style="font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 11px; font-weight: 700; color: #92400e; text-transform: uppercase; letter-spacing: 0.1em; mso-line-height-rule: exactly;">P&#197;MINNELSE</span>
               </td>
             </tr>
           </table>
-          <h1 style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #e0ecff; font-size: 22px; font-weight: 700; line-height: 1.3; mso-line-height-rule: exactly;">
+          <h1 style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #0f172a; font-size: 22px; font-weight: 700; line-height: 1.3; mso-line-height-rule: exactly;">
             ${escapeHtml(ticket.title)}
           </h1>
         </td>
@@ -398,21 +391,21 @@ export const sendTicketReminderEmail = async (data: {
 
     <!-- Divider -->
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-      <tr><td bgcolor="#111f35" height="1" style="background-color: #111f35; height: 1px; font-size: 0; line-height: 0; mso-line-height-rule: exactly;">&nbsp;</td></tr>
+      <tr><td bgcolor="#e2e8f0" height="1" style="background-color: #e2e8f0; height: 1px; font-size: 0; line-height: 0; mso-line-height-rule: exactly;">&nbsp;</td></tr>
     </table>
 
     <!-- Content -->
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
       <tr>
-        <td bgcolor="#0b1629" style="background-color: #0b1629; padding: 28px 36px;">
+        <td bgcolor="#ffffff" style="background-color: #ffffff; padding: 28px 36px;">
 
           ${reminderMessage ? `
-          <!-- Reminder callout — table-based for Outlook -->
+          <!-- Reminder callout -->
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 28px;">
             <tr>
               <td bgcolor="#d97706" width="3" style="background-color: #d97706; width: 3px; font-size: 0;">&nbsp;</td>
-              <td bgcolor="#1a1200" style="background-color: #1a1200; padding: 14px 16px;">
-                <p style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #fbbf24; font-size: 14px; line-height: 1.6; font-weight: 500; mso-line-height-rule: exactly;">
+              <td bgcolor="#fffbeb" style="background-color: #fffbeb; padding: 14px 16px;">
+                <p style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #78350f; font-size: 14px; line-height: 1.6; font-weight: 500; mso-line-height-rule: exactly;">
                   ${escapeHtml(reminderMessage)}
                 </p>
               </td>
@@ -442,21 +435,21 @@ export const sendTicketReminderEmail = async (data: {
           ` : ''}
 
           <!-- Description label -->
-          <p style="margin: 0 0 10px 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 11px; font-weight: 700; color: #4a6080; text-transform: uppercase; letter-spacing: 0.1em; mso-line-height-rule: exactly;">Beskrivning</p>
+          <p style="margin: 0 0 10px 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.1em; mso-line-height-rule: exactly;">Beskrivning</p>
 
-          <!-- Description block — table-based for Outlook -->
+          <!-- Description block -->
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 32px;">
             <tr>
               <td bgcolor="#1d6fdb" width="3" style="background-color: #1d6fdb; width: 3px; font-size: 0;">&nbsp;</td>
-              <td bgcolor="#071020" style="background-color: #071020; padding: 14px 16px;">
-                <p style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #90afd1; font-size: 14px; line-height: 1.7; mso-line-height-rule: exactly;">
+              <td bgcolor="#f8fafc" style="background-color: #f8fafc; padding: 14px 16px;">
+                <p style="margin: 0; font-family: 'Plus Jakarta Sans', 'Segoe UI', Arial, sans-serif; color: #334155; font-size: 14px; line-height: 1.7; mso-line-height-rule: exactly;">
                   ${markdownToEmailHtml(ticket.description)}
                 </p>
               </td>
             </tr>
           </table>
 
-          <!-- CTA Button — MSO-safe with VML fallback -->
+          <!-- CTA Button -->
           ${ticketUrl ? `
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
             <tr>
