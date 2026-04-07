@@ -196,11 +196,16 @@ const buildEmailShell = (content: string, footerNote: string): string => `
           </tr>
         </table>
 
+        <!-- Spacer between card and footer -->
+        <table role="presentation" width="560" cellspacing="0" cellpadding="0" border="0" style="width: 560px; max-width: 560px;">
+          <tr><td height="24" style="height: 24px; font-size: 0; line-height: 0;">&nbsp;</td></tr>
+        </table>
+
         <!-- Footer -->
         <table role="presentation" width="560" cellspacing="0" cellpadding="0" border="0" style="width: 560px; max-width: 560px;">
           <tr>
-            <td style="padding: 16px 2px 0;">
-              <p style="margin: 0; font-family: ${F}; color: ${T.textMut}; font-size: 11px; line-height: 1.5; mso-line-height-rule: exactly;">
+            <td style="padding: 0 2px; border-top: 1px solid #dde3ea;">
+              <p style="margin: 12px 0 0 0; font-family: ${F}; color: ${T.textMut}; font-size: 11px; line-height: 1.5; mso-line-height-rule: exactly;">
                 ${footerNote}
               </p>
             </td>
@@ -315,7 +320,7 @@ const buildTicketContent = (opts: {
       </table>
       ` : ''}
 
-      <p style="margin: 0 0 6px 0; font-family: ${F}; font-size: 11px; font-weight: 600; color: ${T.textMut}; text-transform: uppercase; letter-spacing: 0.05em; mso-line-height-rule: exactly;">Beskrivning</p>
+      <p style="margin: 0 0 6px 0; font-family: ${F}; font-size: 11px; font-weight: 600; color: ${T.textSec}; letter-spacing: 0.03em; mso-line-height-rule: exactly;">Beskrivning</p>
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 24px;">
         <tr>
           <td bgcolor="${T.surface}" style="background-color: ${T.surface}; padding: 14px 16px; border-left: 3px solid ${T.accent};">
