@@ -51,7 +51,9 @@ const KBArticleForm = () => {
 
   const [title, setTitle] = useState(() => searchParams.get('title') ?? '');
   const [content, setContent] = useState('');
-  const [categoryId, setCategoryId] = useState<string>('none');
+  const [categoryId, setCategoryId] = useState<string>(
+    () => searchParams.get('category') ?? 'none'
+  );
   const [articleType, setArticleType] = useState<string>(
     () => searchParams.get('article_type') ?? 'none'
   );
@@ -61,7 +63,7 @@ const KBArticleForm = () => {
   const [categories, setCategories] = useState<KbCategoryRow[]>([]);
   const [isLoading, setIsLoading] = useState(isEditing);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ title?: string }>({});
+  const [errors, setErrors] = useState<{ title?: string; category?: string }>({});
   const [templateDismissed, setTemplateDismissed] = useState(
     () => !!(searchParams.get('title') || searchParams.get('article_type'))
   );
@@ -152,8 +154,9 @@ const KBArticleForm = () => {
   };
 
   const validate = () => {
-    const newErrors: { title?: string } = {};
+    const newErrors: { title?: string; category?: string } = {};
     if (!title.trim()) newErrors.title = 'Titel krävs';
+    if (!categoryId || categoryId === 'none') newErrors.category = 'Kategori krävs';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -269,11 +272,11 @@ const KBArticleForm = () => {
           <div className="space-y-2">
             <Label htmlFor="category">Kategori</Label>
             <Select value={categoryId} onValueChange={setCategoryId}>
-              <SelectTrigger id="category">
-                <SelectValue placeholder="Välj kategori (valfritt)" />
+              <SelectTrigger id="category" className={errors.category ? 'border-destructive' : ''}>
+                <SelectValue placeholder="Välj kategori" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Ingen kategori</SelectItem>
+                <SelectItem value="none">Välj kategori...</SelectItem>
                 {categories.map((cat) => (
                   <SelectItem key={cat.id} value={cat.id}>
                     {cat.name}
@@ -281,6 +284,7 @@ const KBArticleForm = () => {
                 ))}
               </SelectContent>
             </Select>
+            {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
           </div>
 
           <div className="flex gap-3">
