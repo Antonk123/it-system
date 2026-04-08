@@ -403,4 +403,23 @@ export const migrations: Migration[] = [
       db.prepare('CREATE INDEX IF NOT EXISTS idx_tickets_closed_at ON tickets(status, closed_at DESC)').run();
     },
   },
+  {
+    id: '024',
+    name: 'ensure_kb_articles_have_category',
+    up: (db) => {
+      const orphans = db.prepare('SELECT COUNT(*) as count FROM kb_articles WHERE category_id IS NULL').get() as { count: number };
+      if (orphans.count === 0) return;
+
+      let cat = db.prepare("SELECT id FROM kb_categories WHERE name = 'Övrigt'").get() as { id: string } | undefined;
+      if (!cat) {
+        const id = randomUUID();
+        const now = new Date().toISOString();
+        db.prepare('INSERT INTO kb_categories (id, name, color, position, created_at) VALUES (?, ?, ?, ?, ?)')
+          .run(id, 'Övrigt', '#888888', 999, now);
+        cat = { id };
+      }
+
+      db.prepare('UPDATE kb_articles SET category_id = ? WHERE category_id IS NULL').run(cat.id);
+    },
+  },
 ];
