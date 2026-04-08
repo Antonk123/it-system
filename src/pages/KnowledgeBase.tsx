@@ -109,7 +109,7 @@ const KnowledgeBase = () => {
     }
   }, [search, selectedCategoryId, typeFilter, staleFilter]);
 
-  // Initial load: fetch categories, then set default if needed
+  // Initial load: fetch categories, then set default if needed (run once on mount)
   useEffect(() => {
     fetchCategories().then((cats) => {
       if (cats.length > 0 && !searchParams.get('category') && !searchParams.get('search')) {
@@ -120,7 +120,8 @@ const KnowledgeBase = () => {
         }, { replace: true });
       }
     });
-  }, [fetchCategories, searchParams, setSearchParams]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     setIsLoading(true);
