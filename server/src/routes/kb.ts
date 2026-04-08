@@ -89,9 +89,12 @@ function getTagsForArticles(articleIds: string[]): Map<string, KbTagRow[]> {
 // GET /api/kb/categories
 router.get('/categories', authenticate, (_req: AuthRequest, res: Response) => {
   try {
-    const categories = db.prepare(
-      'SELECT id, name, color, position, created_at FROM kb_categories ORDER BY position ASC, name ASC'
-    ).all() as KbCategoryRow[];
+    const categories = db.prepare(`
+      SELECT c.id, c.name, c.color, c.position, c.created_at,
+        (SELECT COUNT(*) FROM kb_articles a WHERE a.category_id = c.id AND a.status = 'published') AS article_count
+      FROM kb_categories c
+      ORDER BY c.position ASC, c.name ASC
+    `).all() as (KbCategoryRow & { article_count: number })[];
     res.json(categories);
   } catch (error) {
     console.error('Error fetching KB categories:', error);
@@ -252,6 +255,13 @@ router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'Title is required' });
   }
+  if (!category_id || typeof category_id !== 'string') {
+    return res.status(400).json({ error: 'Category is required' });
+  }
+  const categoryExists = db.prepare('SELECT id FROM kb_categories WHERE id = ?').get(category_id);
+  if (!categoryExists) {
+    return res.status(400).json({ error: 'Category not found' });
+  }
   try {
     const id = uuidv4();
     const now = new Date().toISOString();
@@ -295,6 +305,13 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
   const { title, content, category_id, article_type, tag_ids, status } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'Title is required' });
+  }
+  if (!category_id || typeof category_id !== 'string') {
+    return res.status(400).json({ error: 'Category is required' });
+  }
+  const categoryExists = db.prepare('SELECT id FROM kb_categories WHERE id = ?').get(category_id);
+  if (!categoryExists) {
+    return res.status(400).json({ error: 'Category not found' });
   }
   try {
     const existing = db.prepare('SELECT id, title, content, rowid FROM kb_articles WHERE id = ?').get(req.params.id) as { id: string; title: string; content: string; rowid: number } | undefined;
