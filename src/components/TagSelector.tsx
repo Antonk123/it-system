@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Plus, X } from 'lucide-react';
+import { Check, Plus, Search, X } from 'lucide-react';
 import { useTags } from '@/hooks/useTags';
 import { Tag } from '@/types/ticket';
 import { Button } from '@/components/ui/button';
@@ -36,6 +36,7 @@ export function TagSelector({ selectedTagIds = [], preloadedTags, onTagsChange, 
   const [isOpen, setIsOpen] = useState(false);
   const [newTagName, setNewTagName] = useState('');
   const [selectedColor, setSelectedColor] = useState(PREDEFINED_COLORS[0]);
+  const [tagSearch, setTagSearch] = useState('');
 
   // Use preloaded tag objects if available (avoids dependency on useTags loading timing)
   // Fall back to filtering from useTags for any IDs not in preloadedTags
@@ -99,7 +100,7 @@ export function TagSelector({ selectedTagIds = [], preloadedTags, onTagsChange, 
       )}
 
       {/* Tag selector popover */}
-      <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <Popover open={isOpen} onOpenChange={(v) => { setIsOpen(v); if (!v) setTagSearch(''); }}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="w-full justify-start">
             <Plus size={16} className="mr-2" />
@@ -112,8 +113,18 @@ export function TagSelector({ selectedTagIds = [], preloadedTags, onTagsChange, 
             {/* Existing tags */}
             <div>
               <p className="text-sm font-semibold mb-2">Tillgängliga taggar</p>
+              <div className="relative mb-2">
+                <Search size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+                <Input
+                  type="text"
+                  placeholder="Sök taggar..."
+                  value={tagSearch}
+                  onChange={(e) => setTagSearch(e.target.value)}
+                  className="text-sm pl-7 h-8"
+                />
+              </div>
               <div className="space-y-2 max-h-40 overflow-y-auto">
-                {tags.map((tag) => (
+                {tags.filter((tag) => tag.name.toLowerCase().includes(tagSearch.toLowerCase())).map((tag) => (
                   <button
                     key={tag.id}
                     type="button"
