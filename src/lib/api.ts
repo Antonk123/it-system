@@ -1217,6 +1217,7 @@ export interface KbCategoryRow {
   name: string;
   color: string | null;
   position: number;
+  article_count: number;
   created_at: string;
 }
 
