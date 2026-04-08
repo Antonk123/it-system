@@ -216,8 +216,12 @@ const KnowledgeBase = () => {
               <button
                 key={cat.id}
                 onClick={() => {
-                  updateParam('category', cat.id);
-                  updateParam('search', null);
+                  setSearchParams((prev) => {
+                    const next = new URLSearchParams(prev);
+                    next.set('category', cat.id);
+                    next.delete('search');
+                    return next;
+                  }, { replace: true });
                 }}
                 className={cn(
                   'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors',
