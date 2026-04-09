@@ -60,4 +60,54 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return undefined;
+          }
+
+          if (id.includes('react') || id.includes('react-dom') || id.includes('react-router') || id.includes('@tanstack/react-query')) {
+            return 'react-vendor';
+          }
+
+          if (id.includes('recharts') || id.includes('chart.js') || id.includes('jspdf') || id.includes('html2canvas') || id.includes('xlsx')) {
+            return 'reporting-vendor';
+          }
+
+          if (id.includes('@radix-ui') || id.includes('lucide-react') || id.includes('class-variance-authority') || id.includes('tailwind-merge') || id.includes('sonner') || id.includes('cmdk') || id.includes('vaul')) {
+            return 'ui-vendor';
+          }
+
+          if (id.includes('framer-motion')) {
+            return 'motion-vendor';
+          }
+
+          if (id.includes('@tiptap') || id.includes('prosemirror')) {
+            return 'editor-vendor';
+          }
+
+          if (id.includes('react-markdown') || id.includes('rehype') || id.includes('remark') || id.includes('dompurify') || id.includes('turndown')) {
+            return 'content-vendor';
+          }
+
+          if (id.includes('react-hook-form') || id.includes('@hookform') || id.includes('zod')) {
+            return 'form-vendor';
+          }
+
+          if (id.includes('@dnd-kit')) {
+            return 'dnd-vendor';
+          }
+
+          if (id.includes('date-fns') || id.includes('react-day-picker')) {
+            return 'date-vendor';
+          }
+
+          return 'vendor';
+        },
+      },
+    },
+  },
 }));

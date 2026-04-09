@@ -26,13 +26,21 @@ De genomförda ändringarna verifierades lokalt med följande resultat.
 | Backend: `npm run build` | Godkänd |
 | Docker-image build | Kunde inte verifieras i sandboxen eftersom Docker inte finns installerat |
 
+## Frontendoptimering: lazy loading och chunk-indelning
+
+Frontendens routing har uppdaterats så att sidkomponenter nu laddas med `lazy()` och en gemensam `Suspense`-fallback. Detta minskar mängden JavaScript som behöver laddas direkt vid första sidvisningen och gör att mer av applikationen kan hämtas först när användaren faktiskt navigerar till respektive vy.
+
+Vite-konfigurationen har samtidigt kompletterats med manuell chunk-indelning för centrala bibliotekskategorier, bland annat React-kärnan, rapporteringsbibliotek, UI-komponenter, editorstacken, markdown/rendering, formulärvalidering, datumhantering och drag-and-drop. Resultatet är att den tidigare generella `vendor`-chunken minskade från cirka **995 kB** till cirka **427 kB**, samtidigt som tunga beroenden nu bryts ut i separata filer som kan cacheas och laddas mer selektivt.
+
+Denna förändring verifierades med godkänd frontendbuild samt fortsatt godkända tester. Lint passerar också fortfarande, men med kvarvarande varningar kopplade främst till React hook-beroenden och snabbuppdateringsregler i vissa UI-komponenter.
+
 ## Kvarvarande tekniska förbättringsområden
 
 Projektet har efter denna insats en betydligt bättre grund, men flera områden bör prioriteras i nästa steg.
 
 | Område | Rekommendation |
 |---|---|
-| Bundle-storlek | Inför code-splitting och lazy loading för att minska huvudbundle |
+| Bundle-storlek | Fortsätt bryta ut kvarvarande tunga delar, särskilt editor- och rapportvyer, och överväg route-nära lazy loading även för större delkomponenter |
 | Hook-varningar | Gå igenom beroendelistor i `useEffect` och `useCallback` |
 | Testtäckning | Lägg till tester för backendlogik, auth och centrala användarflöden |
 | Säkerhet i beroenden | Uppgradera sårbara paket efter en riktad genomgång |
