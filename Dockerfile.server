@@ -1,19 +1,21 @@
-FROM node:20-alpine
-
+FROM node:20-alpine AS build
 WORKDIR /app
 
-# Kopiera package.json och installera dependencies
 COPY server/package*.json ./
-RUN npm install
+RUN npm ci
 
-# Kopiera hela server-katalogen
 COPY server/ .
+RUN npm run build
 
-# Skapa nödvändiga kataloger
+FROM node:20-alpine AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY server/package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+COPY --from=build /app/dist ./dist
 RUN mkdir -p /app/data/uploads
 
-# Exponera port
 EXPOSE 3001
-
-# Kör direkt med tsx (ingen kompilering behövs)
-CMD ["npx", "tsx", "src/index.ts"]
+CMD ["node", "dist/index.js"]

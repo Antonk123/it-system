@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Download, Upload, LayoutGrid, Columns } from 'lucide-react';
@@ -47,11 +47,17 @@ const TicketList = () => {
   const pageSize = Number(searchParams.get('limit')) || 50;
   const search = searchParams.get('search') || '';
   const statusParam = searchParams.get('status') || '';
-  const selectedStatuses: TicketStatus[] = statusParam ? statusParam.split(',').filter(s => s) as TicketStatus[] : [];
+  const selectedStatuses = useMemo<TicketStatus[]>(
+    () => (statusParam ? statusParam.split(',').filter(s => s) as TicketStatus[] : []),
+    [statusParam]
+  );
   const priorityFilter = (searchParams.get('priority') || 'all') as TicketPriority | 'all';
   const categoryFilter = searchParams.get('category') || 'all';
   const tagsFilter = searchParams.get('tags') || '';
-  const selectedTagIds = tagsFilter ? tagsFilter.split(',').filter(id => id.trim()) : [];
+  const selectedTagIds = useMemo(
+    () => (tagsFilter ? tagsFilter.split(',').filter(id => id.trim()) : []),
+    [tagsFilter]
+  );
   const tagMode = (searchParams.get('tagMode') || 'or') as 'or' | 'and';
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';

@@ -75,7 +75,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     return [...tickets, ...kb]
       .sort((a, b) => b.visitedAt - a.visitedAt)
       .slice(0, 5);
-  }, [open]); // recalculate when palette opens
+  }, [open]);
 
   // Filter nav items by search term when searching
   const filteredNavItems = useMemo(() => {

@@ -8,7 +8,7 @@ interface MarkdownRendererProps {
 }
 
 // Regex to detect URLs that aren't already in markdown link syntax
-const urlRegex = /(https?:\/\/[^\s<>\[\]()]+)/g;
+const urlRegex = new RegExp('(https?:\\/\\/[^\\s<>[\\]()]+)', 'g');
 
 // Pre-process content to convert bare URLs to markdown links
 const processUrls = (text: string): string => {

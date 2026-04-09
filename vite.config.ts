@@ -60,4 +60,26 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return undefined;
+          }
+
+          if (id.includes('recharts') || id.includes('chart.js') || id.includes('jspdf') || id.includes('html2canvas') || id.includes('xlsx')) {
+            return 'reporting-vendor';
+          }
+
+          if (id.includes('@tiptap') || id.includes('prosemirror')) {
+            return 'editor-vendor';
+          }
+
+          return 'vendor';
+        },
+      },
+    },
+  },
 }));

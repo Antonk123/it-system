@@ -49,7 +49,7 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
           />
         );
 
-      case 'select':
+      case 'select': {
         const options = field.options ? JSON.parse(field.options) : [];
         return (
           <Select value={value} onValueChange={onChange} required={field.required === 1}>
@@ -65,6 +65,7 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
             </SelectContent>
           </Select>
         );
+      }
 
       case 'checkbox':
         return (
