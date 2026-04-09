@@ -272,7 +272,7 @@ const TicketForm = () => {
           setIsLoadingTemplate(false);
         });
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps — intentionally run once on mount
+  }, []); // intentionally run once on mount
 
   // Track unsaved changes
   useEffect(() => {

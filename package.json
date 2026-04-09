@@ -8,6 +8,7 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
+    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -93,7 +94,7 @@
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react-swc": "^3.11.0",
     "autoprefixer": "^10.4.21",
-    "eslint": "^10.0.1",
+    "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
@@ -103,8 +104,9 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.36.0",
     "vite": "^7.3.1",
-    "vite-plugin-pwa": "^0.20.5",
+    "vitest": "^3.2.4",
+    "vite-plugin-pwa": "^1.2.0",
     "workbox-precaching": "^7.4.0",
-    "workbox-window": "^7.0.0"
+    "workbox-window": "^7.4.0"
   }
 }
