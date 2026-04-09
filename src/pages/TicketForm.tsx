@@ -272,7 +272,7 @@ const TicketForm = () => {
           setIsLoadingTemplate(false);
         });
     }
-  }, []); // intentionally run once on mount
+  }, [isEditing, location.state?.cloneData]);
 
   // Track unsaved changes
   useEffect(() => {

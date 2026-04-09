@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, CustomFieldInput } from '@/lib/api';
 import { Ticket, TicketStatus, TicketPriority } from '@/types/ticket';
@@ -118,7 +118,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
     },
   });
 
-  const tickets = queryData?.tickets || [];
+  const tickets = useMemo(() => queryData?.tickets ?? [], [queryData?.tickets]);
   const pagination = queryData?.pagination || null;
 
   // Add ticket mutation

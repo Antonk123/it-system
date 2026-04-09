@@ -104,7 +104,7 @@ const Archive = () => {
       if (!currentLimit) newParams.set('limit', '10');
       setSearchParams(newParams, { replace: true });
     }
-  }, []); // Run once on mount
+  }, [searchParams, setSearchParams]);
 
   // Clear selection when filters or page changes
   useEffect(() => {
