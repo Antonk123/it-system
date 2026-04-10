@@ -63,3 +63,12 @@ export const loginRateLimiter = createRateLimiter(
   15 * 60 * 1000, // 15 minutes
   5 // max 5 requests
 );
+
+/**
+ * Rate limiter for write endpoints (POST/PUT/DELETE)
+ * 60 requests per minute
+ */
+export const writeRateLimiter = createRateLimiter(
+  60 * 1000, // 1 minute
+  60 // max 60 requests
+);

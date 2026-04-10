@@ -8,10 +8,15 @@ import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail } from '../lib/email.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
+import { writeRateLimiter } from '../middleware/rateLimit.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(__dirname, '../../data/uploads');
+
+// Giltiga enum-värden för status och prioritet
+const VALID_STATUSES = ['open', 'in-progress', 'waiting', 'resolved', 'closed'];
+const VALID_PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
 // Explicit column lists for SELECT optimization (instead of SELECT *)
 // Reduces data transfer by 30-40% by avoiding unnecessary columns
@@ -220,8 +225,6 @@ interface ValidationResult {
 
 function validateTicketRow(row: any, rowIndex: number, categories: any[], existingTicketIds: Set<string>): ValidationResult {
   const errors: string[] = [];
-  const validStatuses = ['open', 'in-progress', 'waiting', 'resolved', 'closed'];
-  const validPriorities = ['low', 'medium', 'high', 'critical'];
 
   // Required fields
   if (!row.title || row.title.trim() === '') {
@@ -233,12 +236,12 @@ function validateTicketRow(row: any, rowIndex: number, categories: any[], existi
   }
 
   // Validate status
-  if (row.status && !validStatuses.includes(row.status)) {
+  if (row.status && !VALID_STATUSES.includes(row.status)) {
     errors.push(`Ogiltig status: ${row.status} (giltiga: open, in-progress, waiting, resolved, closed)`);
   }
 
   // Validate priority
-  if (row.priority && !validPriorities.includes(row.priority)) {
+  if (row.priority && !VALID_PRIORITIES.includes(row.priority)) {
     errors.push(`Ogiltig prioritet: ${row.priority} (giltiga: low, medium, high, critical)`);
   }
 
@@ -957,7 +960,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Create ticket
-router.post('/', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/', writeRateLimiter, authenticate, (req: AuthRequest, res: Response) => {
   const { title, description, status, priority, category_id, requester_id, notes, solution, customFields, template_id } = req.body;
 
   if (!title) {
@@ -966,6 +969,13 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 
   if (!description && (!customFields || customFields.length === 0)) {
     return res.status(400).json({ error: 'Either description or custom fields are required' });
+  }
+
+  if (status !== undefined && !VALID_STATUSES.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status value' });
+  }
+  if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
+    return res.status(400).json({ error: 'Invalid priority value' });
   }
 
   try {
@@ -1088,7 +1098,7 @@ router.get('/:id/history', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Bulk update tickets
-router.put('/bulk', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Response) => {
   const { ids, updates } = req.body;
 
   if (!Array.isArray(ids) || ids.length === 0) {
@@ -1101,13 +1111,10 @@ router.put('/bulk', authenticate, (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: 'At least one field to update is required' });
   }
 
-  const validStatuses = ['open', 'in-progress', 'waiting', 'resolved', 'closed'];
-  const validPriorities = ['low', 'medium', 'high', 'critical'];
-
-  if (status !== undefined && !validStatuses.includes(status)) {
+  if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return res.status(400).json({ error: 'Invalid status value' });
   }
-  if (priority !== undefined && !validPriorities.includes(priority)) {
+  if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
     return res.status(400).json({ error: 'Invalid priority value' });
   }
 
@@ -1173,7 +1180,7 @@ router.put('/bulk', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Bulk delete tickets permanently
-router.post('/bulk-delete', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/bulk-delete', writeRateLimiter, authenticate, (req: AuthRequest, res: Response) => {
   const { ids } = req.body;
 
   if (!Array.isArray(ids) || ids.length === 0) {
@@ -1229,6 +1236,13 @@ router.post('/bulk-delete', authenticate, (req: AuthRequest, res: Response) => {
 // Update ticket
 router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
   const { title, description, status, priority, category_id, requester_id, notes, solution, customFields, template_id, tag_ids } = req.body;
+
+  if (status !== undefined && !VALID_STATUSES.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status value' });
+  }
+  if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
+    return res.status(400).json({ error: 'Invalid priority value' });
+  }
 
   try {
     const existing = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(req.params.id) as TicketRow | undefined;

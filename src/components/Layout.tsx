@@ -148,6 +148,7 @@ const BottomSection = ({ open, user, onLogout, onToggle }: BottomSectionProps) =
       {/* Logout button */}
       <button
         onClick={onLogout}
+        aria-label="Logga ut"
         className={cn(
           "w-full flex items-center gap-2 rounded-md transition-all duration-200",
           "text-muted-foreground hover:text-foreground hover:bg-destructive/10",
@@ -161,6 +162,7 @@ const BottomSection = ({ open, user, onLogout, onToggle }: BottomSectionProps) =
       {/* Desktop only: Toggle button (hidden on mobile) */}
       <button
         onClick={onToggle}
+        aria-label={open ? "Dölj sidofält" : "Visa sidofält"}
         className="hidden lg:flex w-full items-center gap-2 px-3 py-2 rounded-md hover:bg-sidebar-accent transition-colors"
       >
         <ChevronsRight className={cn(
