@@ -443,4 +443,23 @@ export const migrations: Migration[] = [
       db.prepare('UPDATE kb_articles SET category_id = ? WHERE category_id IS NULL').run(cat.id);
     },
   },
+  {
+    id: '026',
+    name: 'create_refresh_tokens_table',
+    up: (db, { tableExists }) => {
+      if (tableExists('refresh_tokens')) return;
+      db.prepare(`CREATE TABLE refresh_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        expires_at TEXT NOT NULL,
+        revoked INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        last_used_at TEXT
+      )`).run();
+      db.prepare('CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id)').run();
+      db.prepare('CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token)').run();
+      db.prepare('CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens(expires_at)').run();
+    },
+  },
 ];
