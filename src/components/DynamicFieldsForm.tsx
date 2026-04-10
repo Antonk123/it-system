@@ -35,9 +35,6 @@ export const DynamicFieldsForm = ({ fields, onValuesChange, initialValues }: Dyn
       fieldValue: fieldValues[field.field_name] || '',
     }));
 
-    // Debug logging
-    console.log('🔄 DynamicFieldsForm calling onValuesChange with', customFields.length, 'fields');
-
     onValuesChange(customFields);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fieldValues, fields]); // Remove onValuesChange from deps to prevent re-runs
