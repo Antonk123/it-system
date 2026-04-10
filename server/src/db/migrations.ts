@@ -405,6 +405,27 @@ export const migrations: Migration[] = [
   },
   {
     id: '024',
+    name: 'ensure_tickets_fts5',
+    up: (db, { tableExists }) => {
+      if (tableExists('tickets_fts')) return;
+      // Contentless FTS5 table -- vi hanterar synk manuellt
+      db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS tickets_fts USING fts5(title, description, notes, solution, content='', tokenize='unicode61')`);
+      // Populera med befintlig data
+      const tickets = db.prepare('SELECT rowid, title, description, notes, solution FROM tickets').all() as {
+        rowid: number; title: string; description: string; notes: string | null; solution: string | null;
+      }[];
+      if (tickets.length > 0) {
+        const stmt = db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)');
+        db.transaction(() => {
+          for (const t of tickets) {
+            stmt.run(t.rowid, t.title, t.description || '', t.notes || '', t.solution || '');
+          }
+        })();
+      }
+    },
+  },
+  {
+    id: '025',
     name: 'ensure_kb_articles_have_category',
     up: (db) => {
       const orphans = db.prepare('SELECT COUNT(*) as count FROM kb_articles WHERE category_id IS NULL').get() as { count: number };

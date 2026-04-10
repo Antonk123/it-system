@@ -430,39 +430,56 @@ function buildWhereClause(filters: TicketQueryParams) {
     }
   }
 
-  // Enhanced search: search in multiple fields
+  // Enhanced search: FTS5 fulltext on ticket content + LIKE fallback for relations
   if (filters.search) {
-    // Escape LIKE special characters (%, _, \) to prevent unintended wildcard matching
-    const escapedSearch = filters.search
-      .replace(/\\/g, '\\\\')  // Escape backslash first
-      .replace(/%/g, '\\%')     // Escape percent
-      .replace(/_/g, '\\_');    // Escape underscore
+    // Escape FTS5 special characters for safe MATCH queries
+    const ftsSearch = filters.search
+      .replace(/["""]/g, '') // ta bort citattecken
+      .replace(/[*^(){}[\]:!]/g, '') // ta bort FTS-operatorer
+      .trim();
 
+    // Escape LIKE special characters for relation field fallback
+    const escapedSearch = filters.search
+      .replace(/\\/g, '\\\\')
+      .replace(/%/g, '\\%')
+      .replace(/_/g, '\\_');
     const pattern = `%${escapedSearch}%`;
 
-    // Build search condition with all searchable fields
-    // Use ESCAPE '\' to handle escaped wildcards and COLLATE NOCASE for case-insensitive search
-    const searchConditions = [
-      "tickets.title LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "tickets.description LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "tickets.notes LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "tickets.solution LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "contacts.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "contacts.email LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "categories.label LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "ticket_comments.content LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "tags.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "ticket_field_values.field_value LIKE ? ESCAPE '\\' COLLATE NOCASE"
-    ];
+    if (ftsSearch) {
+      // FTS5 MATCH for ticket content (title, description, notes, solution)
+      // + LIKE fallback for relation fields (contacts, categories, comments, tags, custom fields)
+      const ftsCondition = `tickets.rowid IN (SELECT rowid FROM tickets_fts WHERE tickets_fts MATCH ?)`;
+      const relationConditions = [
+        "contacts.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "contacts.email LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "categories.label LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "ticket_comments.content LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "tags.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "ticket_field_values.field_value LIKE ? ESCAPE '\\' COLLATE NOCASE"
+      ];
 
-    conditions.push(`(${searchConditions.join(' OR ')})`);
+      conditions.push(`(${ftsCondition} OR ${relationConditions.join(' OR ')})`);
 
-    // Add pattern for each searchable field (10 fields)
-    for (let i = 0; i < 10; i++) {
-      params.push(pattern);
+      // FTS5 MATCH-term (prefix-sökning med *)
+      params.push(ftsSearch.split(/\s+/).map(w => `"${w}"*`).join(' '));
+      // LIKE-parametrar för relationsfält (6 st)
+      for (let i = 0; i < 6; i++) {
+        params.push(pattern);
+      }
+    } else {
+      // Tomt efter sanering -- fallback till enbart LIKE
+      const likeConditions = [
+        "contacts.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "contacts.email LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "categories.label LIKE ? ESCAPE '\\' COLLATE NOCASE",
+      ];
+      conditions.push(`(${likeConditions.join(' OR ')})`);
+      for (let i = 0; i < 3; i++) {
+        params.push(pattern);
+      }
     }
 
-    // Add necessary JOINs for enhanced search
+    // JOINs for relation field search (FTS handles ticket content without JOIN)
     joins = `
       LEFT JOIN contacts ON tickets.requester_id = contacts.id
       LEFT JOIN categories ON tickets.category_id = categories.id
@@ -735,6 +752,11 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
           ticket.solution || null
         );
 
+        // Synka FTS5-index
+        const ftsRow = db.prepare('SELECT rowid FROM tickets WHERE id = ?').get(id) as { rowid: number };
+        db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)')
+          .run(ftsRow.rowid, ticket.title, ticket.description || '', ticket.notes || '', ticket.solution || '');
+
         created++;
       }
 
@@ -1006,6 +1028,11 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       // Log ticket creation in history
       db.prepare('INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)')
         .run(uuidv4(), id, req.user!.id, 'created', null, null);
+
+      // Synka FTS5-index
+      const row = db.prepare('SELECT rowid FROM tickets WHERE id = ?').get(id) as { rowid: number };
+      db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)')
+        .run(row.rowid, title, finalDescription, notes || '', solution || '');
     });
 
     createTransaction();
@@ -1158,7 +1185,9 @@ router.post('/bulk-delete', authenticate, (req: AuthRequest, res: Response) => {
       let deletedCount = 0;
 
       for (const ticketId of ids) {
-        // Fetch attachments before deleting so we can clean up files on disk
+        // Hämta data för FTS-rensning och filbilagor innan radering
+        const ticketForFts = db.prepare('SELECT rowid, title, description, notes, solution FROM tickets WHERE id = ?')
+          .get(ticketId) as { rowid: number; title: string; description: string; notes: string | null; solution: string | null } | undefined;
         const attachments = db.prepare(
           'SELECT file_path FROM ticket_attachments WHERE ticket_id = ?'
         ).all(ticketId) as { file_path: string }[];
@@ -1167,6 +1196,11 @@ router.post('/bulk-delete', authenticate, (req: AuthRequest, res: Response) => {
 
         if (result.changes > 0) {
           deletedCount++;
+          // Rensa FTS5-index
+          if (ticketForFts) {
+            db.prepare("INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution) VALUES('delete', ?, ?, ?, ?, ?)")
+              .run(ticketForFts.rowid, ticketForFts.title, ticketForFts.description, ticketForFts.notes || '', ticketForFts.solution || '');
+          }
           // Clean up attachment files from disk (DB CASCADE handles relation tables)
           for (const attachment of attachments) {
             const filePath = join(UPLOAD_DIR, attachment.file_path);
@@ -1313,6 +1347,19 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
           insertTag.run(uuidv4(), req.params.id, tagId);
         });
       }
+
+      // Synka FTS5-index om sökbara fält ändrades
+      if ('title' in safeUpdates || 'description' in safeUpdates || 'notes' in safeUpdates || 'solution' in safeUpdates) {
+        const existingFts = db.prepare('SELECT rowid FROM tickets WHERE id = ?')
+          .get(req.params.id) as { rowid: number };
+        // Contentless FTS5: delete old entry, insert new
+        db.prepare("INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution) VALUES('delete', ?, ?, ?, ?, ?)")
+          .run(existingFts.rowid, existing.title, existing.description, existing.notes || '', existing.solution || '');
+        const updated = db.prepare('SELECT title, description, notes, solution FROM tickets WHERE id = ?')
+          .get(req.params.id) as { title: string; description: string; notes: string | null; solution: string | null };
+        db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)')
+          .run(existingFts.rowid, updated.title, updated.description, updated.notes || '', updated.solution || '');
+      }
     });
 
     updateTransaction();
@@ -1364,7 +1411,9 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 // Delete ticket
 router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    // Fetch attachments before deleting so we can clean up files on disk
+    // Hämta data för FTS-rensning och filbilagor innan radering
+    const ticketForFts = db.prepare('SELECT rowid, title, description, notes, solution FROM tickets WHERE id = ?')
+      .get(req.params.id) as { rowid: number; title: string; description: string; notes: string | null; solution: string | null } | undefined;
     const attachments = db.prepare(
       'SELECT file_path FROM ticket_attachments WHERE ticket_id = ?'
     ).all(req.params.id) as { file_path: string }[];
@@ -1373,6 +1422,12 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    // Rensa FTS5-index
+    if (ticketForFts) {
+      db.prepare("INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution) VALUES('delete', ?, ?, ?, ?, ?)")
+        .run(ticketForFts.rowid, ticketForFts.title, ticketForFts.description, ticketForFts.notes || '', ticketForFts.solution || '');
     }
 
     // Clean up attachment files from disk (DB relations cascade automatically)

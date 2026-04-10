@@ -39,6 +39,7 @@ const VALID_TABLE_NAMES = new Set([
   'recurring_templates', 'recurring_ticket_history', 'filter_views',
   'time_entries',
   'push_subscriptions',
+  'tickets_fts',
 ]);
 
 const columnExists = (tableName: string, columnName: string) => {
