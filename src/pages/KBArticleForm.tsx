@@ -43,6 +43,8 @@ const ARTICLE_TEMPLATES = [
   },
 ] as const;
 
+const VALID_ARTICLE_TYPES = ['how-to', 'solution'] as const;
+
 const KBArticleForm = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -54,9 +56,10 @@ const KBArticleForm = () => {
   const [categoryId, setCategoryId] = useState<string>(
     () => searchParams.get('category') ?? 'none'
   );
-  const [articleType, setArticleType] = useState<string>(
-    () => searchParams.get('article_type') ?? 'none'
-  );
+  const [articleType, setArticleType] = useState<string>(() => {
+    const param = searchParams.get('article_type');
+    return param && (VALID_ARTICLE_TYPES as readonly string[]).includes(param) ? param : 'none';
+  });
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const { tags: availableTags } = useTags();
   const [status, setStatus] = useState<'draft' | 'published'>('published');

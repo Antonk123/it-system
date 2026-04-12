@@ -36,10 +36,12 @@ const VALID_TABLE_NAMES = new Set([
   'ticket_attachments', 'ticket_comments', 'ticket_history', 'ticket_reminders',
   'ticket_checklists', 'checklist_templates', 'checklist_template_items',
   'kb_articles', 'kb_articles_fts', 'kb_categories', 'kb_article_tags', 'kb_article_links', 'kb_article_shares',
-  'recurring_templates', 'recurring_ticket_history', 'filter_views',
+  'recurring_templates', 'recurring_ticket_history',
   'time_entries',
   'push_subscriptions',
   'tickets_fts',
+  'ticket_kb_links',
+  'refresh_tokens',
 ]);
 
 const columnExists = (tableName: string, columnName: string) => {

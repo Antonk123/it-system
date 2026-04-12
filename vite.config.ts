@@ -11,7 +11,7 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
     proxy: {
       '/api': {
-        target: 'http://it-ticketing-backend-dev:3001',
+        target: 'http://it-ticketing-backend:3001',
         changeOrigin: true,
       },
     },
