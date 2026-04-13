@@ -12,14 +12,20 @@ interface ContactRow {
   name: string;
   email: string;
   phone: string | null;
-  company: string | null;
+  company_id: string | null;
+  company_name: string | null;
   created_at: string;
 }
 
 // Get all contacts
 router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
   try {
-    const contacts = db.prepare('SELECT id, name, email, phone, company, created_at FROM contacts ORDER BY created_at DESC').all() as ContactRow[];
+    const contacts = db.prepare(`
+      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.created_at
+      FROM contacts c
+      LEFT JOIN companies co ON c.company_id = co.id
+      ORDER BY c.created_at DESC
+    `).all() as ContactRow[];
     res.json(contacts);
   } catch (error) {
     console.error('Error fetching contacts:', error);
@@ -90,7 +96,12 @@ function parseCSV(buffer: Buffer): Record<string, string>[] {
 // Export contacts to CSV (must come before /:id route)
 router.get('/export', authenticate, (_req: AuthRequest, res: Response) => {
   try {
-    const contacts = db.prepare('SELECT id, name, email, phone, company, created_at FROM contacts ORDER BY created_at DESC').all() as ContactRow[];
+    const contacts = db.prepare(`
+      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.created_at
+      FROM contacts c
+      LEFT JOIN companies co ON c.company_id = co.id
+      ORDER BY c.created_at DESC
+    `).all() as ContactRow[];
 
     if (contacts.length === 0) {
       return res.status(404).json({ error: 'No contacts to export' });
@@ -106,7 +117,7 @@ router.get('/export', authenticate, (_req: AuthRequest, res: Response) => {
         escapeCSVField(contact.name),
         escapeCSVField(contact.email),
         escapeCSVField(contact.phone || ''),
-        escapeCSVField(contact.company || ''),
+        escapeCSVField(contact.company_name || ''),
         escapeCSVField(contact.created_at),
       ];
       csv += row.join(',') + '\n';
@@ -225,18 +236,30 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
   const errors: string[] = [];
 
   try {
-    const insertStmt = db.prepare('INSERT INTO contacts (id, name, email, phone, company) VALUES (?, ?, ?, ?, ?)');
+    // Load existing companies for name matching
+    const existingCompanies = db.prepare('SELECT id, name FROM companies').all() as { id: string; name: string }[];
+    const companyNameMap = new Map(existingCompanies.map(c => [c.name.toLowerCase(), c.id]));
+    const insertCompanyStmt = db.prepare('INSERT INTO companies (id, name) VALUES (?, ?)');
+
+    const insertStmt = db.prepare('INSERT INTO contacts (id, name, email, phone, company_id) VALUES (?, ?, ?, ?, ?)');
 
     for (const contact of contacts) {
       try {
         const id = uuidv4();
-        insertStmt.run(
-          id,
-          contact.name,
-          contact.email,
-          contact.phone || null,
-          contact.company || null
-        );
+
+        // Match or create company
+        let companyId: string | null = null;
+        if (contact.company && contact.company.trim()) {
+          const normalizedName = contact.company.trim().toLowerCase();
+          companyId = companyNameMap.get(normalizedName) || null;
+          if (!companyId) {
+            companyId = uuidv4();
+            insertCompanyStmt.run(companyId, contact.company.trim());
+            companyNameMap.set(normalizedName, companyId);
+          }
+        }
+
+        insertStmt.run(id, contact.name, contact.email, contact.phone || null, companyId);
         created++;
       } catch (err) {
         failed++;
@@ -254,8 +277,13 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
 // Get single contact
 router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const contact = db.prepare('SELECT id, name, email, phone, company, created_at FROM contacts WHERE id = ?').get(req.params.id) as ContactRow | undefined;
-    
+    const contact = db.prepare(`
+      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.created_at
+      FROM contacts c
+      LEFT JOIN companies co ON c.company_id = co.id
+      WHERE c.id = ?
+    `).get(req.params.id) as ContactRow | undefined;
+
     if (!contact) {
       return res.status(404).json({ error: 'Contact not found' });
     }
@@ -269,7 +297,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
 // Create contact
 router.post('/', authenticate, (req: AuthRequest, res: Response) => {
-  const { name, email, phone, company } = req.body;
+  const { name, email, phone, company_id } = req.body;
 
   if (!name || !email) {
     return res.status(400).json({ error: 'Name and email are required' });
@@ -277,11 +305,16 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 
   try {
     const id = uuidv4();
-    db.prepare('INSERT INTO contacts (id, name, email, phone, company) VALUES (?, ?, ?, ?, ?)').run(
-      id, name, email, phone || null, company || null
+    db.prepare('INSERT INTO contacts (id, name, email, phone, company_id) VALUES (?, ?, ?, ?, ?)').run(
+      id, name, email, phone || null, company_id || null
     );
-    
-    const contact = db.prepare('SELECT id, name, email, phone, company, created_at FROM contacts WHERE id = ?').get(id) as ContactRow;
+
+    const contact = db.prepare(`
+      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.created_at
+      FROM contacts c
+      LEFT JOIN companies co ON c.company_id = co.id
+      WHERE c.id = ?
+    `).get(id) as ContactRow;
     res.status(201).json(contact);
   } catch (error) {
     console.error('Error creating contact:', error);
@@ -291,11 +324,16 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 
 // Update contact
 router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
-  const { name, email, phone, company } = req.body;
+  const { name, email, phone, company_id } = req.body;
 
   try {
-    const existing = db.prepare('SELECT id, name, email, phone, company, created_at FROM contacts WHERE id = ?').get(req.params.id) as ContactRow | undefined;
-    
+    const existing = db.prepare(`
+      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.created_at
+      FROM contacts c
+      LEFT JOIN companies co ON c.company_id = co.id
+      WHERE c.id = ?
+    `).get(req.params.id) as ContactRow | undefined;
+
     if (!existing) {
       return res.status(404).json({ error: 'Contact not found' });
     }
@@ -304,10 +342,10 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (name !== undefined) updates.name = name;
     if (email !== undefined) updates.email = email;
     if (phone !== undefined) updates.phone = phone || null;
-    if (company !== undefined) updates.company = company || null;
+    if (company_id !== undefined) updates.company_id = company_id || null;
 
     // Whitelist of allowed field names to prevent SQL injection
-    const allowedFields = ['name', 'email', 'phone', 'company', 'updated_at'];
+    const allowedFields = ['name', 'email', 'phone', 'company_id', 'updated_at'];
 
     // Filter updates to only include whitelisted fields
     const safeUpdates: Record<string, unknown> = {};
@@ -326,7 +364,12 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       db.prepare(`UPDATE contacts SET ${setClauses} WHERE id = ?`).run(...values, req.params.id);
     }
 
-    const contact = db.prepare('SELECT id, name, email, phone, company, created_at FROM contacts WHERE id = ?').get(req.params.id) as ContactRow;
+    const contact = db.prepare(`
+      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.created_at
+      FROM contacts c
+      LEFT JOIN companies co ON c.company_id = co.id
+      WHERE c.id = ?
+    `).get(req.params.id) as ContactRow;
     res.json(contact);
   } catch (error) {
     console.error('Error updating contact:', error);
