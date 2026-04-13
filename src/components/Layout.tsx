@@ -7,6 +7,7 @@ import { CommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/AuthContext';
 import { QuickCaptureFAB } from '@/components/QuickCaptureFAB';
 import { BottomTabBar } from '@/components/BottomTabBar';
+import { OnboardingWizard } from '@/components/OnboardingWizard';
 import { applyMode, getStoredMode, saveModeTheme, ModeTheme } from '@/lib/appearance';
 import { dispatchModeChange } from '@/hooks/useMode';
 
@@ -336,5 +337,7 @@ export const Layout = ({
       <div data-print-hide>
         <BottomTabBar />
       </div>
+
+      <OnboardingWizard />
     </div>;
 };
