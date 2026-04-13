@@ -1134,8 +1134,21 @@
     min-width: 400px !important;
   }
 
-  /* Force page background white for PDF readability */
-  body, main, .bg-background, [class*="bg-card"] {
+  /* Force light theme variables for print */
+  :root, .dark, .light, [class*="theme-"] {
+    --background: 0 0% 100% !important;
+    --background-gradient: none !important;
+    --foreground: 222 47% 11% !important;
+    --card: 0 0% 100% !important;
+    --card-foreground: 222 47% 11% !important;
+    --muted: 220 14% 93% !important;
+    --muted-foreground: 220 12% 48% !important;
+    --border: 220 13% 85% !important;
+    --primary: 214 100% 50% !important;
+    --primary-foreground: 0 0% 100% !important;
+  }
+
+  body {
     background: white !important;
     color: black !important;
     -webkit-print-color-adjust: exact;
