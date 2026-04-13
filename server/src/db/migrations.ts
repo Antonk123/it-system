@@ -587,4 +587,59 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    id: '032',
+    name: 'create_billing_rates_table',
+    up: (db, { tableExists }) => {
+      if (tableExists('billing_rates')) return;
+      db.prepare(`CREATE TABLE billing_rates (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        rate_per_hour REAL NOT NULL,
+        currency TEXT DEFAULT 'SEK',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(company_id)
+      )`).run();
+      db.prepare('CREATE INDEX idx_billing_rates_company ON billing_rates(company_id)').run();
+    },
+  },
+  {
+    id: '033',
+    name: 'create_invoices_tables',
+    up: (db, { tableExists }) => {
+      if (tableExists('invoices')) return;
+      db.prepare(`CREATE TABLE invoices (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        period_start TEXT NOT NULL,
+        period_end TEXT NOT NULL,
+        status TEXT DEFAULT 'draft' CHECK(status IN ('draft', 'sent', 'paid')),
+        total_hours REAL DEFAULT 0,
+        total_amount REAL DEFAULT 0,
+        currency TEXT DEFAULT 'SEK',
+        pdf_path TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        sent_at TEXT,
+        paid_at TEXT
+      )`).run();
+      db.prepare('CREATE INDEX idx_invoices_company ON invoices(company_id)').run();
+      db.prepare('CREATE INDEX idx_invoices_status ON invoices(status)').run();
+
+      db.prepare(`CREATE TABLE invoice_lines (
+        id TEXT PRIMARY KEY,
+        invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+        ticket_id TEXT REFERENCES tickets(id) ON DELETE SET NULL,
+        time_entry_id TEXT REFERENCES time_entries(id) ON DELETE SET NULL,
+        description TEXT NOT NULL,
+        hours REAL NOT NULL,
+        rate REAL NOT NULL,
+        amount REAL NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`).run();
+      db.prepare('CREATE INDEX idx_invoice_lines_invoice ON invoice_lines(invoice_id)').run();
+      db.prepare('CREATE INDEX idx_invoice_lines_ticket ON invoice_lines(ticket_id)').run();
+      db.prepare('CREATE INDEX idx_invoice_lines_time_entry ON invoice_lines(time_entry_id)').run();
+    },
+  },
 ];
