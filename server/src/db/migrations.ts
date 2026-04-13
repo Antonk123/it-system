@@ -462,4 +462,24 @@ export const migrations: Migration[] = [
       db.prepare('CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens(expires_at)').run();
     },
   },
+  {
+    id: '027',
+    name: 'ensure_tickets_fts5_exists',
+    up: (db, { tableExists }) => {
+      if (tableExists('tickets_fts')) return;
+      // db.exec is better-sqlite3's multi-statement method, not child_process
+      db.prepare(`CREATE VIRTUAL TABLE IF NOT EXISTS tickets_fts USING fts5(title, description, notes, solution, content='', tokenize='unicode61')`).run();
+      const tickets = db.prepare('SELECT rowid, title, description, notes, solution FROM tickets').all() as {
+        rowid: number; title: string; description: string; notes: string | null; solution: string | null;
+      }[];
+      if (tickets.length > 0) {
+        const stmt = db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)');
+        db.transaction(() => {
+          for (const t of tickets) {
+            stmt.run(t.rowid, t.title, t.description || '', t.notes || '', t.solution || '');
+          }
+        })();
+      }
+    },
+  },
 ];
