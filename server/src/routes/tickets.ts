@@ -10,6 +10,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
 import { applySLAToTicket, handleSLAStatusChange } from '../lib/slaHelper.js';
 import { writeRateLimiter } from '../middleware/rateLimit.js';
+import { dispatchWebhook } from '../lib/webhookDispatcher.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1114,6 +1115,9 @@ router.post('/', writeRateLimiter, authenticate, (req: AuthRequest, res: Respons
       console.error('Error sending ticket created email:', error);
     });
 
+    // Dispatch webhook for ticket creation
+    dispatchWebhook('ticket.created', { id: ticket.id, title: ticket.title, status: ticket.status, priority: ticket.priority }).catch(console.error);
+
     res.status(201).json(ticket);
   } catch (error) {
     console.error('Error creating ticket:', error);
@@ -1449,6 +1453,15 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       color: tag.color,
       createdAt: new Date(tag.created_at),
     }));
+
+    // Dispatch webhook for ticket update
+    if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
+      dispatchWebhook('ticket.updated', { id: req.params.id, ...safeUpdates }).catch(console.error);
+
+      if (safeUpdates.status === 'closed') {
+        dispatchWebhook('ticket.closed', { id: req.params.id }).catch(console.error);
+      }
+    }
 
     if (status === 'closed' && existing.status !== 'closed') {
       const requester = ticket.requester_id
