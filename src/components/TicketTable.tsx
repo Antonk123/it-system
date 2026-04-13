@@ -5,6 +5,7 @@ import { memo, useEffect, useState } from 'react';
 import { ArrowUpDown, Loader2, X } from 'lucide-react';
 import { Ticket, User, TicketStatus, TicketPriority } from '@/types/ticket';
 import { PriorityBadge } from './PriorityBadge';
+import { SLABadge } from './SLABadge';
 import { CategoryBadge } from './CategoryBadge';
 import { TagBadges } from './TagBadges';
 import { cn } from '@/lib/utils';
@@ -405,7 +406,18 @@ export const TicketTable = memo(function TicketTable({
                 })()}
               </TableCell>
               <TableCell className={cn(compact && "py-2")}>
-                <PriorityBadge priority={ticket.priority} />
+                <div className="flex flex-col gap-1">
+                  <PriorityBadge priority={ticket.priority} />
+                  {ticket.sla_resolution_deadline && (
+                    <SLABadge
+                      deadline={ticket.sla_resolution_deadline}
+                      met={ticket.sla_resolution_met ?? null}
+                      pausedAt={ticket.sla_paused_at ?? null}
+                      label="SLA:"
+                      className="text-[10px]"
+                    />
+                  )}
+                </div>
               </TableCell>
               <TableCell className={cn(compact && "py-2")} onClick={(e) => e.stopPropagation()}>
                 {onCategoryChange ? (

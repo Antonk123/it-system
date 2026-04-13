@@ -27,6 +27,7 @@ import { ReminderList } from '@/components/ReminderList';
 import { Layout } from '@/components/Layout';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PriorityBadge } from '@/components/PriorityBadge';
+import { SLABadge } from '@/components/SLABadge';
 import { CategoryBadge } from '@/components/CategoryBadge';
 import { TagBadges } from '@/components/TagBadges';
 import { TagSelector } from '@/components/TagSelector';
@@ -380,6 +381,22 @@ const TicketDetail = () => {
                   <CategoryBadge category={ticket.category} />
                   {effectiveTags.length > 0 && (
                     <TagBadges tags={effectiveTags as any} maxDisplay={5} />
+                  )}
+                  {ticket.sla_response_deadline && (
+                    <SLABadge
+                      deadline={ticket.sla_response_deadline}
+                      met={ticket.sla_response_met ?? null}
+                      pausedAt={ticket.sla_paused_at ?? null}
+                      label="Svar:"
+                    />
+                  )}
+                  {ticket.sla_resolution_deadline && (
+                    <SLABadge
+                      deadline={ticket.sla_resolution_deadline}
+                      met={ticket.sla_resolution_met ?? null}
+                      pausedAt={ticket.sla_paused_at ?? null}
+                      label="Lösning:"
+                    />
                   )}
                 </div>
               </div>

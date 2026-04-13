@@ -79,6 +79,12 @@ export interface Ticket {
   templateId?: string;
   fieldValues?: CustomFieldInput[];
   tags?: Tag[];
+  sla_response_deadline?: string | null;
+  sla_resolution_deadline?: string | null;
+  sla_paused_at?: string | null;
+  sla_paused_duration?: number;
+  sla_response_met?: number | null;
+  sla_resolution_met?: number | null;
 }
 
 export interface Comment {

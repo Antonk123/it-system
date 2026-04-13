@@ -93,7 +93,13 @@ export const useTickets = (options?: UseTicketsOptions) => {
           notes: t.notes || undefined,
           solution: t.solution || undefined,
           templateId: t.template_id || undefined,
-          tags: t.tags || [],
+          tags: (t.tags || []) as any,
+          sla_response_deadline: t.sla_response_deadline ?? null,
+          sla_resolution_deadline: t.sla_resolution_deadline ?? null,
+          sla_paused_at: t.sla_paused_at ?? null,
+          sla_paused_duration: t.sla_paused_duration ?? 0,
+          sla_response_met: t.sla_response_met ?? null,
+          sla_resolution_met: t.sla_resolution_met ?? null,
         }));
         return { tickets: mapped, pagination: null };
       } else {
@@ -113,7 +119,13 @@ export const useTickets = (options?: UseTicketsOptions) => {
           notes: t.notes || undefined,
           solution: t.solution || undefined,
           templateId: t.template_id || undefined,
-          tags: t.tags || [],
+          tags: (t.tags || []) as any,
+          sla_response_deadline: t.sla_response_deadline ?? null,
+          sla_resolution_deadline: t.sla_resolution_deadline ?? null,
+          sla_paused_at: t.sla_paused_at ?? null,
+          sla_paused_duration: t.sla_paused_duration ?? 0,
+          sla_response_met: t.sla_response_met ?? null,
+          sla_resolution_met: t.sla_resolution_met ?? null,
         }));
         return { tickets: mapped, pagination: response.pagination };
       }
@@ -220,6 +232,12 @@ export const useTickets = (options?: UseTicketsOptions) => {
         resolvedAt: freshTicket.resolved_at ? new Date(freshTicket.resolved_at) : undefined,
         closedAt: freshTicket.closed_at ? new Date(freshTicket.closed_at) : undefined,
         tags: (freshTicket as any).tags || [],
+        sla_response_deadline: freshTicket.sla_response_deadline ?? null,
+        sla_resolution_deadline: freshTicket.sla_resolution_deadline ?? null,
+        sla_paused_at: freshTicket.sla_paused_at ?? null,
+        sla_paused_duration: freshTicket.sla_paused_duration ?? 0,
+        sla_response_met: freshTicket.sla_response_met ?? null,
+        sla_resolution_met: freshTicket.sla_resolution_met ?? null,
       };
     },
     onMutate: async ({ id, updates, customFields: _cf }) => {

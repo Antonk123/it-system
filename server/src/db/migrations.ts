@@ -553,4 +553,38 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    id: '030',
+    name: 'create_sla_policies_table',
+    up: (db, { tableExists }) => {
+      if (tableExists('sla_policies')) return;
+      db.prepare(`CREATE TABLE sla_policies (
+        id TEXT PRIMARY KEY,
+        company_id TEXT REFERENCES companies(id) ON DELETE CASCADE,
+        priority TEXT NOT NULL CHECK(priority IN ('low', 'medium', 'high', 'critical')),
+        response_time_minutes INTEGER NOT NULL,
+        resolution_time_minutes INTEGER NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(company_id, priority)
+      )`).run();
+      db.prepare('CREATE INDEX idx_sla_policies_company ON sla_policies(company_id)').run();
+    },
+  },
+  {
+    id: '031',
+    name: 'add_sla_columns_to_tickets',
+    up: (db, { columnExists }) => {
+      if (!columnExists('tickets', 'sla_response_deadline')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN sla_response_deadline TEXT').run();
+        db.prepare('ALTER TABLE tickets ADD COLUMN sla_resolution_deadline TEXT').run();
+        db.prepare('ALTER TABLE tickets ADD COLUMN sla_paused_at TEXT').run();
+        db.prepare('ALTER TABLE tickets ADD COLUMN sla_paused_duration INTEGER DEFAULT 0').run();
+        db.prepare('ALTER TABLE tickets ADD COLUMN sla_response_met INTEGER').run();
+        db.prepare('ALTER TABLE tickets ADD COLUMN sla_resolution_met INTEGER').run();
+        db.prepare('CREATE INDEX idx_tickets_sla_response ON tickets(sla_response_deadline)').run();
+        db.prepare('CREATE INDEX idx_tickets_sla_resolution ON tickets(sla_resolution_deadline)').run();
+      }
+    },
+  },
 ];
