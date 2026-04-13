@@ -642,4 +642,52 @@ export const migrations: Migration[] = [
       db.prepare('CREATE INDEX idx_invoice_lines_time_entry ON invoice_lines(time_entry_id)').run();
     },
   },
+  {
+    id: '034',
+    name: 'create_api_keys_table',
+    up: (db, { tableExists }) => {
+      if (tableExists('api_keys')) return;
+      db.prepare(`CREATE TABLE api_keys (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        key_prefix TEXT NOT NULL,
+        key_hash TEXT NOT NULL,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        permissions TEXT DEFAULT '["read"]',
+        last_used_at TEXT,
+        expires_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`).run();
+      db.prepare('CREATE INDEX idx_api_keys_prefix ON api_keys(key_prefix)').run();
+      db.prepare('CREATE INDEX idx_api_keys_user ON api_keys(user_id)').run();
+    },
+  },
+  {
+    id: '035',
+    name: 'create_webhooks_tables',
+    up: (db, { tableExists }) => {
+      if (tableExists('webhooks')) return;
+      db.prepare(`CREATE TABLE webhooks (
+        id TEXT PRIMARY KEY,
+        url TEXT NOT NULL,
+        events TEXT NOT NULL DEFAULT '[]',
+        secret TEXT NOT NULL,
+        active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        last_triggered_at TEXT
+      )`).run();
+
+      db.prepare(`CREATE TABLE webhook_deliveries (
+        id TEXT PRIMARY KEY,
+        webhook_id TEXT NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+        event TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        response_code INTEGER,
+        attempts INTEGER DEFAULT 0,
+        delivered_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`).run();
+      db.prepare('CREATE INDEX idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id)').run();
+    },
+  },
 ];

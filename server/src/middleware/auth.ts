@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
+import { createHash } from 'crypto';
 import passport from 'passport';
+import { db } from '../db/connection.js';
 
 export interface AuthUser {
   id: string;
@@ -16,7 +18,49 @@ declare global {
 
 export type AuthRequest = Request;
 
+/**
+ * Try to authenticate via API key (Bearer itk_live_xxx).
+ * Returns the user if valid, null otherwise.
+ */
+function tryApiKeyAuth(req: Request): AuthUser | null {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer itk_live_')) return null;
+
+  const rawKey = authHeader.substring('Bearer '.length);
+  const prefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
+
+  const row = db.prepare(
+    'SELECT id, key_hash, user_id, expires_at FROM api_keys WHERE key_prefix = ?'
+  ).get(prefix) as { id: string; key_hash: string; user_id: string; expires_at: string | null } | undefined;
+
+  if (!row) return null;
+
+  // Check expiry
+  if (row.expires_at && new Date(row.expires_at) < new Date()) return null;
+
+  // Verify hash
+  const hash = createHash('sha256').update(rawKey).digest('hex');
+  if (hash !== row.key_hash) return null;
+
+  // Look up user
+  const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(row.user_id) as AuthUser | undefined;
+  if (!user) return null;
+
+  // Update last_used_at (fire-and-forget)
+  db.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(new Date().toISOString(), row.id);
+
+  return user;
+}
+
 export const authenticate: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
+  // Try API key auth first
+  const apiKeyUser = tryApiKeyAuth(req);
+  if (apiKeyUser) {
+    req.user = apiKeyUser;
+    return next();
+  }
+
+  // Fall back to JWT auth
   passport.authenticate('jwt', { session: false }, (err: Error | null, user: AuthUser | false) => {
     if (err) {
       return res.status(500).json({ error: 'Authentication error' });
