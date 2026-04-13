@@ -177,17 +177,17 @@ const CompanyList = () => {
                       {company.org_number || '—'}
                     </td>
                     <td className="px-4 py-3 hidden lg:table-cell">
-                      {(company as any).contacts_count ?? 0}
+                      {(company as any).contact_count ?? 0}
                     </td>
                     <td className="px-4 py-3">
-                      {(company as any).open_count > 0 ? (
-                        <Badge variant="secondary">{(company as any).open_count}</Badge>
+                      {(company as any).open_ticket_count > 0 ? (
+                        <Badge variant="secondary">{(company as any).open_ticket_count}</Badge>
                       ) : (
                         <span className="text-muted-foreground">0</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
-                      {(company as any).total_count ?? 0}
+                      {(company as any).total_ticket_count ?? 0}
                     </td>
                     <td
                       className="px-4 py-3"
