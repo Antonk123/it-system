@@ -539,6 +539,24 @@ const TicketDetail = () => {
                   )}
                 </div>
               </div>
+              {(ticket as any).company_name && (
+                <div className="flex items-center gap-3">
+                  <UserIcon className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Företag</p>
+                    <p className="font-medium">{(ticket as any).company_name}</p>
+                  </div>
+                </div>
+              )}
+              {(ticket as any).assigned_to_name && (
+                <div className="flex items-center gap-3">
+                  <UserIcon className="w-5 h-5 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Tilldelad</p>
+                    <p className="font-medium">{(ticket as any).assigned_to_name}</p>
+                  </div>
+                </div>
+              )}
               <div className="flex items-center gap-3">
                 <Calendar className="w-5 h-5 text-muted-foreground" />
                 <div>
