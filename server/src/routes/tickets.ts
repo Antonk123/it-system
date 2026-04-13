@@ -23,8 +23,8 @@ const VALID_PRIORITIES = ['low', 'medium', 'high', 'critical'];
 // Use 'tickets.' prefix for all columns to avoid ambiguity when JOINs are present
 const TICKET_COLUMNS = [
   'tickets.id', 'tickets.title', 'tickets.description', 'tickets.status', 'tickets.priority',
-  'tickets.category_id', 'tickets.requester_id', 'tickets.notes', 'tickets.solution',
-  'tickets.template_id',
+  'tickets.category_id', 'tickets.requester_id', 'tickets.company_id', 'tickets.assigned_to',
+  'tickets.notes', 'tickets.solution', 'tickets.template_id',
   'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at'
 ].join(', ');
 
@@ -280,6 +280,8 @@ interface TicketRow {
   priority: string;
   category_id: string | null;
   requester_id: string | null;
+  company_id: string | null;
+  assigned_to: string | null;
   notes: string | null;
   solution: string | null;
   created_at: string;
@@ -294,6 +296,8 @@ interface TicketQueryParams {
   status?: string;
   priority?: string;
   category?: string;
+  company_id?: string;
+  assigned_to?: string;
   search?: string;
   tags?: string;
   tagMode?: string;
@@ -366,6 +370,18 @@ function buildWhereClause(filters: TicketQueryParams) {
   if (filters.category && filters.category !== 'all') {
     conditions.push('tickets.category_id = ?');
     params.push(filters.category);
+  }
+
+  // Company filter
+  if (filters.company_id && filters.company_id !== 'all') {
+    conditions.push('tickets.company_id = ?');
+    params.push(filters.company_id);
+  }
+
+  // Assignee filter
+  if (filters.assigned_to && filters.assigned_to !== 'all') {
+    conditions.push('tickets.assigned_to = ?');
+    params.push(filters.assigned_to);
   }
 
   // Tag filtering (OR or AND logic for multiple tags)
@@ -838,6 +854,7 @@ interface AgingTicketRow {
   priority: string;
   status: string;
   requester_name: string | null;
+  company_name: string | null;
   age_days: number;
 }
 
@@ -867,6 +884,7 @@ router.get('/dashboard-overview', authenticate, (req: AuthRequest, res: Response
         t.priority,
         t.status,
         c.name as requester_name,
+        comp.name as company_name,
         CAST(julianday('now') - julianday(
           MAX(t.updated_at, COALESCE(
             (SELECT MAX(tc.created_at) FROM ticket_comments tc WHERE tc.ticket_id = t.id AND tc.deleted_at IS NULL),
@@ -875,6 +893,7 @@ router.get('/dashboard-overview', authenticate, (req: AuthRequest, res: Response
         ) AS INTEGER) as age_days
       FROM tickets t
       LEFT JOIN contacts c ON t.requester_id = c.id
+      LEFT JOIN companies comp ON t.company_id = comp.id
       WHERE t.status IN ('open', 'in-progress', 'waiting')
       ORDER BY age_days DESC
       LIMIT 6
@@ -961,7 +980,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
 // Create ticket
 router.post('/', writeRateLimiter, authenticate, (req: AuthRequest, res: Response) => {
-  const { title, description, status, priority, category_id, requester_id, notes, solution, customFields, template_id } = req.body;
+  const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id } = req.body;
 
   if (!title) {
     return res.status(400).json({ error: 'Title is required' });
@@ -980,6 +999,15 @@ router.post('/', writeRateLimiter, authenticate, (req: AuthRequest, res: Respons
 
   try {
     const id = uuidv4();
+
+    // Auto-set company_id from requester if not provided
+    let resolvedCompanyId = company_id || null;
+    if (!resolvedCompanyId && requester_id) {
+      const contact = db.prepare('SELECT company_id FROM contacts WHERE id = ?').get(requester_id) as { company_id: string | null } | undefined;
+      if (contact?.company_id) {
+        resolvedCompanyId = contact.company_id;
+      }
+    }
 
     // When customFields are provided, compose description ONLY from them (ignore incoming description)
     // This prevents duplicates when the frontend also pre-composes a placeholder description
@@ -1007,8 +1035,8 @@ router.post('/', writeRateLimiter, authenticate, (req: AuthRequest, res: Respons
     // Wrap all inserts in a transaction for atomicity
     const createTransaction = db.transaction(() => {
       db.prepare(`
-        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, notes, solution, template_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, template_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         title,
@@ -1017,6 +1045,8 @@ router.post('/', writeRateLimiter, authenticate, (req: AuthRequest, res: Respons
         finalPriority,
         category_id || null,
         requester_id || null,
+        resolvedCompanyId,
+        assigned_to || null,
         notes || null,
         solution || null,
         template_id || null
@@ -1235,7 +1265,7 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, (req: AuthRequest, r
 
 // Update ticket
 router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
-  const { title, description, status, priority, category_id, requester_id, notes, solution, customFields, template_id, tag_ids } = req.body;
+  const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id, tag_ids } = req.body;
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return res.status(400).json({ error: 'Invalid status value' });
@@ -1267,6 +1297,8 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (priority !== undefined) updates.priority = priority;
     if (category_id !== undefined) updates.category_id = category_id || null;
     if (requester_id !== undefined) updates.requester_id = requester_id || null;
+    if (company_id !== undefined) updates.company_id = company_id || null;
+    if (assigned_to !== undefined) updates.assigned_to = assigned_to || null;
     if (notes !== undefined) updates.notes = notes || null;
     if (solution !== undefined) updates.solution = solution || null;
     if (template_id !== undefined) updates.template_id = template_id || null;
@@ -1287,7 +1319,8 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     // Whitelist of allowed field names to prevent SQL injection
     const allowedFields = [
       'title', 'description', 'status', 'priority', 'category_id',
-      'requester_id', 'notes', 'solution', 'resolved_at', 'closed_at', 'updated_at', 'template_id'
+      'requester_id', 'company_id', 'assigned_to',
+      'notes', 'solution', 'resolved_at', 'closed_at', 'updated_at', 'template_id'
     ];
 
     // Filter updates to only include whitelisted fields

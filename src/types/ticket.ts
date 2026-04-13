@@ -66,6 +66,10 @@ export interface Ticket {
   priority: TicketPriority;
   category?: string;
   requesterId: string;
+  companyId?: string | null;
+  companyName?: string | null;
+  assignedTo?: string | null;
+  assignedToName?: string | null;
   createdAt: Date;
   updatedAt: Date;
   resolvedAt?: Date;

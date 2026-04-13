@@ -634,6 +634,35 @@ class ApiClient {
     });
   }
 
+  // Companies
+  async getCompanies() {
+    return this.request<CompanyRow[]>('/companies');
+  }
+
+  async getCompany(id: string) {
+    return this.request<CompanyDetail>(`/companies/${id}`);
+  }
+
+  async createCompany(company: Partial<CompanyRow>) {
+    return this.request<CompanyRow>('/companies', {
+      method: 'POST',
+      body: company,
+    });
+  }
+
+  async updateCompany(id: string, updates: Partial<CompanyRow>) {
+    return this.request<CompanyRow>(`/companies/${id}`, {
+      method: 'PUT',
+      body: updates,
+    });
+  }
+
+  async deleteCompany(id: string) {
+    return this.request<{ message: string }>(`/companies/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Attachments
   async getAttachments(ticketId: string) {
     return this.request<AttachmentRow[]>(`/attachments/ticket/${ticketId}`);
@@ -1034,6 +1063,10 @@ export interface TicketRow {
   priority: string;
   category_id: string | null;
   requester_id: string | null;
+  company_id: string | null;
+  company_name?: string | null;
+  assigned_to: string | null;
+  assigned_to_name?: string | null;
   notes: string | null;
   solution: string | null;
   created_at: string;
@@ -1069,8 +1102,34 @@ export interface ContactRow {
   name: string;
   email: string;
   phone: string | null;
-  company: string | null;
+  company_id: string | null;
+  company_name: string | null;
   created_at: string;
+}
+
+export interface CompanyRow {
+  id: string;
+  name: string;
+  org_number: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  contact_count: number;
+  open_ticket_count: number;
+  total_ticket_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyDetail extends CompanyRow {
+  contacts: Array<{ id: string; name: string; email: string; phone: string | null; created_at: string }>;
+  stats: {
+    total: number;
+    open_count: number;
+    closed_count: number;
+    avg_resolution_days: number | null;
+    total_minutes: number;
+  };
 }
 
 export interface AttachmentRow {

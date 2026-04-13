@@ -26,6 +26,8 @@ const KBArticleDetail = lazy(() => import("./pages/KBArticleDetail"));
 const KBArticleForm = lazy(() => import("./pages/KBArticleForm"));
 const SharedKBArticle = lazy(() => import("./pages/SharedKBArticle"));
 const Recurring = lazy(() => import("./pages/Recurring"));
+const CompanyList = lazy(() => import("./pages/CompanyList"));
+const CompanyDetail = lazy(() => import("./pages/CompanyDetail"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -115,6 +117,8 @@ const AppRoutes = () => {
           <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetail /></ProtectedRoute>} />
           <Route path="/tickets/:id/edit" element={<ProtectedRoute><TicketForm /></ProtectedRoute>} />
           <Route path="/recurring" element={<ProtectedRoute><Recurring /></ProtectedRoute>} />
+          <Route path="/companies" element={<ProtectedRoute><CompanyList /></ProtectedRoute>} />
+          <Route path="/companies/:id" element={<ProtectedRoute><CompanyDetail /></ProtectedRoute>} />
           <Route path="/archive" element={<ProtectedRoute><Archive /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute><UserList /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />

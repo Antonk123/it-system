@@ -1,10 +1,12 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Download, Upload, LayoutGrid, Columns } from 'lucide-react';
+import { Plus, Download, Upload, LayoutGrid, Columns, Building2 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
+import { useCompanies } from '@/hooks/useCompanies';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Layout } from '@/components/Layout';
 import { TicketTable } from '@/components/TicketTable';
 import { KanbanView } from '@/components/KanbanView';
@@ -63,6 +65,7 @@ const TicketList = () => {
   const dateTo = searchParams.get('dateTo') || '';
   const dateField = (searchParams.get('dateField') || 'created_at') as 'created_at' | 'updated_at' | 'closed_at';
   const checklistFilter = searchParams.get('checklist') || '';
+  const companyFilter = searchParams.get('company_id') || 'all';
   const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
   const [compactView, setCompactView] = useState(false);
@@ -109,9 +112,11 @@ const TicketList = () => {
     checklist: checklistFilter,
     sortBy: sortKey,
     sortDir: sortDirection,
+    company_id: companyFilter,
   });
 
   const { users } = useUsers();
+  const { companies } = useCompanies();
 
   // Update URL params
   const updateFilters = useCallback((updates: Record<string, any>) => {
@@ -284,6 +289,29 @@ const TicketList = () => {
               </Button>
             </Link>
           </div>
+        </div>
+
+        {/* Company filter */}
+        <div className="flex items-center gap-2">
+          <Select value={companyFilter} onValueChange={v => {
+            const newParams = new URLSearchParams(searchParams);
+            if (v === 'all') newParams.delete('company_id');
+            else newParams.set('company_id', v);
+            newParams.set('page', '1');
+            setActiveView(null);
+            setSearchParams(newParams);
+          }}>
+            <SelectTrigger className="w-[180px]">
+              <Building2 className="mr-2 h-4 w-4 shrink-0" />
+              <SelectValue placeholder="Alla företag" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alla företag</SelectItem>
+              {companies.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Unified Filter Bar (single row, replaces all legacy filter sections) */}
