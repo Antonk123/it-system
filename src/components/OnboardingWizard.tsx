@@ -112,7 +112,7 @@ export function OnboardingWizard() {
                 <Label htmlFor="ob-company-name">Företagsnamn *</Label>
                 <Input
                   id="ob-company-name"
-                  placeholder="Prefab Mästarna AB"
+                  placeholder="Företagsnamn AB"
                   value={companyName}
                   onChange={e => setCompanyName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleStep1()}
