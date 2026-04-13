@@ -690,4 +690,13 @@ export const migrations: Migration[] = [
       db.prepare('CREATE INDEX idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id)').run();
     },
   },
+  {
+    id: '036',
+    name: 'add_department_to_contacts',
+    up: (db, { columnExists }) => {
+      if (!columnExists('contacts', 'department')) {
+        db.prepare('ALTER TABLE contacts ADD COLUMN department TEXT').run();
+      }
+    },
+  },
 ];

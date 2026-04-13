@@ -1234,6 +1234,7 @@ export interface ContactRow {
   phone: string | null;
   company_id: string | null;
   company_name: string | null;
+  department: string | null;
   created_at: string;
 }
 

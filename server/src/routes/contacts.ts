@@ -14,6 +14,7 @@ interface ContactRow {
   phone: string | null;
   company_id: string | null;
   company_name: string | null;
+  department: string | null;
   created_at: string;
 }
 
@@ -21,7 +22,7 @@ interface ContactRow {
 router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
   try {
     const contacts = db.prepare(`
-      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.created_at
+      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.department, c.created_at
       FROM contacts c
       LEFT JOIN companies co ON c.company_id = co.id
       ORDER BY c.created_at DESC
@@ -97,7 +98,7 @@ function parseCSV(buffer: Buffer): Record<string, string>[] {
 router.get('/export', authenticate, (_req: AuthRequest, res: Response) => {
   try {
     const contacts = db.prepare(`
-      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.created_at
+      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.department, c.created_at
       FROM contacts c
       LEFT JOIN companies co ON c.company_id = co.id
       ORDER BY c.created_at DESC
@@ -278,7 +279,7 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
 router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const contact = db.prepare(`
-      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.created_at
+      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.department, c.created_at
       FROM contacts c
       LEFT JOIN companies co ON c.company_id = co.id
       WHERE c.id = ?
@@ -297,7 +298,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
 // Create contact
 router.post('/', authenticate, (req: AuthRequest, res: Response) => {
-  const { name, email, phone, company_id } = req.body;
+  const { name, email, phone, company_id, department } = req.body;
 
   if (!name || !email) {
     return res.status(400).json({ error: 'Name and email are required' });
@@ -305,12 +306,12 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 
   try {
     const id = uuidv4();
-    db.prepare('INSERT INTO contacts (id, name, email, phone, company_id) VALUES (?, ?, ?, ?, ?)').run(
-      id, name, email, phone || null, company_id || null
+    db.prepare('INSERT INTO contacts (id, name, email, phone, company_id, department) VALUES (?, ?, ?, ?, ?, ?)').run(
+      id, name, email, phone || null, company_id || null, department || null
     );
 
     const contact = db.prepare(`
-      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.created_at
+      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.department, c.created_at
       FROM contacts c
       LEFT JOIN companies co ON c.company_id = co.id
       WHERE c.id = ?
@@ -324,11 +325,11 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 
 // Update contact
 router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
-  const { name, email, phone, company_id } = req.body;
+  const { name, email, phone, company_id, department } = req.body;
 
   try {
     const existing = db.prepare(`
-      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.created_at
+      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.department, c.created_at
       FROM contacts c
       LEFT JOIN companies co ON c.company_id = co.id
       WHERE c.id = ?
@@ -343,9 +344,10 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (email !== undefined) updates.email = email;
     if (phone !== undefined) updates.phone = phone || null;
     if (company_id !== undefined) updates.company_id = company_id || null;
+    if (department !== undefined) updates.department = department || null;
 
     // Whitelist of allowed field names to prevent SQL injection
-    const allowedFields = ['name', 'email', 'phone', 'company_id', 'updated_at'];
+    const allowedFields = ['name', 'email', 'phone', 'company_id', 'department', 'updated_at'];
 
     // Filter updates to only include whitelisted fields
     const safeUpdates: Record<string, unknown> = {};
@@ -365,7 +367,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     }
 
     const contact = db.prepare(`
-      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.created_at
+      SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.department, c.created_at
       FROM contacts c
       LEFT JOIN companies co ON c.company_id = co.id
       WHERE c.id = ?

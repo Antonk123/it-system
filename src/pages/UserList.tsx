@@ -308,6 +308,15 @@ const UserList = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="department">Avdelning</Label>
+                  <Input
+                    id="department"
+                    value={formData.department}
+                    onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                    placeholder="T.ex. Tillverkning - Norsjö"
+                  />
+                </div>
                 <div className="flex justify-end gap-2 pt-4">
                   <Button type="button" variant="outline" onClick={handleDialogClose}>
                     Avbryt
@@ -355,8 +364,11 @@ const UserList = () => {
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground truncate">{user.email}</p>
-                      {((user as any).company_name || user.department) && (
-                        <p className="text-sm text-muted-foreground mt-1">{(user as any).company_name || user.department}</p>
+                      {(user as any).company_name && (
+                        <p className="text-sm text-muted-foreground mt-1">{(user as any).company_name}</p>
+                      )}
+                      {user.department && (
+                        <p className="text-xs text-muted-foreground">{user.department}</p>
                       )}
                       <p className="text-xs text-muted-foreground mt-2">
                         Tillagd {format(user.createdAt, 'd MMM yyyy', { locale: sv })}

@@ -24,7 +24,7 @@ export const useUsers = () => {
         id: u.id,
         name: u.name,
         email: u.email,
-        department: u.company_name || undefined,
+        department: u.department || undefined,
         company_id: u.company_id || undefined,
         company_name: u.company_name || undefined,
         createdAt: new Date(u.created_at),
@@ -44,14 +44,14 @@ export const useUsers = () => {
       const data = await api.createContact({
         name: validation.data.name,
         email: validation.data.email,
-        company: validation.data.department || null,
         company_id: (user as any).company_id || null,
-      });
+        department: validation.data.department || null,
+      } as any);
       return {
         id: data.id,
         name: data.name,
         email: data.email,
-        department: data.company || undefined,
+        department: data.department || undefined,
         createdAt: new Date(data.created_at),
       };
     },
@@ -77,9 +77,9 @@ export const useUsers = () => {
       await api.updateContact(id, {
         name: validation.data.name,
         email: validation.data.email,
-        company: validation.data.department || null,
         company_id: (updates as any).company_id ?? null,
-      });
+        department: validation.data.department || null,
+      } as any);
       return { id, updates };
     },
     onSuccess: ({ id, updates }) => {
