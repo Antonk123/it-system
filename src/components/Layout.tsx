@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search, Building2 } from 'lucide-react';
+import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search, Building2, Receipt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -29,6 +29,10 @@ const navItems = [{
   path: '/reports',
   icon: BarChart3,
   label: 'Rapporter'
+}, {
+  path: '/invoices',
+  icon: Receipt,
+  label: 'Fakturering'
 }, {
   path: '/archive',
   icon: Archive,
