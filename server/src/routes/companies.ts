@@ -67,7 +67,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
     `).get(company.id) as { total: number; open_count: number; closed_count: number; avg_resolution_days: number | null };
 
     const totalMinutes = db.prepare(`
-      SELECT COALESCE(SUM(te.minutes), 0) as total_minutes
+      SELECT COALESCE(SUM(te.duration_minutes), 0) as total_minutes
       FROM time_entries te
       JOIN tickets t ON te.ticket_id = t.id
       WHERE t.company_id = ?
