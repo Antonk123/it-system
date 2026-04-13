@@ -36,6 +36,7 @@ import backupRoutes from './routes/backup.js';
 import pushRoutes from './routes/push.js';
 import companiesRoutes from './routes/companies.js';
 import slaRoutes from './routes/sla.js';
+import billingRoutes from './routes/billing.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -210,6 +211,7 @@ app.use('/api/backup', backupRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/companies', companiesRoutes);
 app.use('/api/sla', slaRoutes);
+app.use('/api/billing', billingRoutes);
 
 // Error handling
 // HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client
