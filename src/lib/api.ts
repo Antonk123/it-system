@@ -1113,6 +1113,53 @@ class ApiClient {
       method: 'DELETE',
     });
   }
+
+  // API Keys
+  async getApiKeys() {
+    return this.request<ApiKeyRow[]>('/api-keys');
+  }
+
+  async createApiKey(data: { name: string; permissions?: string[]; expires_at?: string }) {
+    return this.request<ApiKeyRow>('/api-keys', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async deleteApiKey(id: string) {
+    return this.request<{ message: string }>(`/api-keys/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Webhooks
+  async getWebhooks() {
+    return this.request<WebhookRow[]>('/webhooks');
+  }
+
+  async createWebhook(data: { url: string; events: string[] }) {
+    return this.request<WebhookRow>('/webhooks', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async updateWebhook(id: string, data: { url?: string; events?: string[]; active?: boolean }) {
+    return this.request<WebhookRow>(`/webhooks/${id}`, {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
+  async deleteWebhook(id: string) {
+    return this.request<{ message: string }>(`/webhooks/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getWebhookDeliveries(webhookId: string) {
+    return this.request<WebhookDeliveryRow[]>(`/webhooks/${webhookId}/deliveries`);
+  }
 }
 
 // Types
@@ -1399,6 +1446,38 @@ export interface CustomFieldInput {
   fieldName: string;
   fieldLabel: string;
   fieldValue: string;
+}
+
+export interface ApiKeyRow {
+  id: string;
+  name: string;
+  key?: string; // Only present on creation response
+  key_prefix: string;
+  permissions: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface WebhookRow {
+  id: string;
+  url: string;
+  events: string;
+  secret?: string; // Only present on creation response
+  active: number;
+  created_at: string;
+  last_triggered_at: string | null;
+}
+
+export interface WebhookDeliveryRow {
+  id: string;
+  webhook_id: string;
+  event: string;
+  payload: string;
+  response_code: number | null;
+  attempts: number;
+  delivered_at: string | null;
+  created_at: string;
 }
 
 export interface BillingRateRow {
