@@ -266,7 +266,7 @@ export const Layout = ({
       {/* Main content */}
       <main className="flex-1 min-w-0 relative">
         {/* Mobile header */}
-        <div className="lg:hidden sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 flex items-center gap-4 shadow-sm">
+        <div data-print-hide className="lg:hidden sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 flex items-center gap-4 shadow-sm">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 rounded-lg hover:bg-primary/10 transition-colors"
@@ -290,7 +290,7 @@ export const Layout = ({
         </div>
 
         {/* Desktop header with search */}
-        <div className="hidden lg:block sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 shadow-sm">
+        <div data-print-hide className="hidden lg:block sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="max-w-md flex-1">
               <button
@@ -315,14 +315,18 @@ export const Layout = ({
         </div>
       </main>
 
-      <QuickCaptureFAB className={cn(
-        "left-4 lg:transition-[left] lg:duration-300",
-        "bottom-[72px] md:bottom-6",
-        sidebarCollapsed ? "lg:left-20" : "lg:left-[17rem]"
-      )} />
+      <div data-print-hide>
+        <QuickCaptureFAB className={cn(
+          "left-4 lg:transition-[left] lg:duration-300",
+          "bottom-[72px] md:bottom-6",
+          sidebarCollapsed ? "lg:left-20" : "lg:left-[17rem]"
+        )} />
+      </div>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
 
-      <BottomTabBar />
+      <div data-print-hide>
+        <BottomTabBar />
+      </div>
     </div>;
 };
