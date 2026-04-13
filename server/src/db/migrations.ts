@@ -482,4 +482,75 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    id: '028',
+    name: 'create_companies_table_and_migrate_contacts',
+    up: (db, { tableExists, columnExists }) => {
+      if (!tableExists('companies')) {
+        db.prepare(`CREATE TABLE companies (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          org_number TEXT,
+          email TEXT,
+          phone TEXT,
+          address TEXT,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )`).run();
+        db.prepare('CREATE INDEX idx_companies_name ON companies(name)').run();
+      }
+
+      if (columnExists('contacts', 'company') && !columnExists('contacts', 'company_id')) {
+        const companyNames = db.prepare(
+          "SELECT DISTINCT company FROM contacts WHERE company IS NOT NULL AND TRIM(company) != ''"
+        ).all() as { company: string }[];
+
+        const insertCompany = db.prepare('INSERT INTO companies (id, name) VALUES (?, ?)');
+        const companyMap = new Map<string, string>();
+        for (const row of companyNames) {
+          const id = randomUUID();
+          const normalizedName = row.company.trim();
+          insertCompany.run(id, normalizedName);
+          companyMap.set(normalizedName.toLowerCase(), id);
+        }
+
+        db.prepare('ALTER TABLE contacts ADD COLUMN company_id TEXT REFERENCES companies(id) ON DELETE SET NULL').run();
+        db.prepare('CREATE INDEX idx_contacts_company ON contacts(company_id)').run();
+
+        const updateContact = db.prepare('UPDATE contacts SET company_id = ? WHERE id = ?');
+        const contacts = db.prepare(
+          "SELECT id, company FROM contacts WHERE company IS NOT NULL AND TRIM(company) != ''"
+        ).all() as { id: string; company: string }[];
+
+        for (const contact of contacts) {
+          const companyId = companyMap.get(contact.company.trim().toLowerCase());
+          if (companyId) {
+            updateContact.run(companyId, contact.id);
+          }
+        }
+      }
+    },
+  },
+  {
+    id: '029',
+    name: 'add_company_id_and_assigned_to_on_tickets',
+    up: (db, { columnExists }) => {
+      if (!columnExists('tickets', 'company_id')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN company_id TEXT REFERENCES companies(id) ON DELETE SET NULL').run();
+        db.prepare('CREATE INDEX idx_tickets_company ON tickets(company_id)').run();
+
+        db.prepare(`
+          UPDATE tickets SET company_id = (
+            SELECT c.company_id FROM contacts c WHERE c.id = tickets.requester_id
+          )
+          WHERE requester_id IS NOT NULL
+        `).run();
+      }
+
+      if (!columnExists('tickets', 'assigned_to')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN assigned_to TEXT REFERENCES users(id) ON DELETE SET NULL').run();
+        db.prepare('CREATE INDEX idx_tickets_assigned ON tickets(assigned_to)').run();
+      }
+    },
+  },
 ];
