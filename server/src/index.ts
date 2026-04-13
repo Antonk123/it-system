@@ -34,6 +34,7 @@ import recurringRoutes from './routes/recurring.js';
 import timeEntryRoutes from './routes/time-entries.js';
 import backupRoutes from './routes/backup.js';
 import pushRoutes from './routes/push.js';
+import companiesRoutes from './routes/companies.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -206,6 +207,7 @@ app.use('/api/recurring', recurringRoutes);
 app.use('/api/time-entries', timeEntryRoutes);
 app.use('/api/backup', backupRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/companies', companiesRoutes);
 
 // Error handling
 // HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client
