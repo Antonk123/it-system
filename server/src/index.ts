@@ -39,6 +39,8 @@ import slaRoutes from './routes/sla.js';
 import billingRoutes from './routes/billing.js';
 import apiKeyRoutes from './routes/apiKeys.js';
 import webhookRoutes from './routes/webhooks.js';
+import emailInboundRoutes from './routes/emailInbound.js';
+import { startEmailPolling } from './lib/emailInbound.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -216,6 +218,7 @@ app.use('/api/sla', slaRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/email-inbound', emailInboundRoutes);
 
 // Error handling
 // HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client
@@ -234,4 +237,7 @@ app.use((err: Error & { status?: number; code?: string }, _req: express.Request,
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at http://localhost:${PORT}/api`);
+
+  // Start email-to-ticket polling (non-blocking — logs its own errors)
+  startEmailPolling().catch(console.error);
 });

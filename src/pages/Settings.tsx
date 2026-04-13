@@ -35,7 +35,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Users, Mail, Shield, Loader2, ArrowUp, ArrowDown, Palette, Type, Wrench, ListChecks, CornerDownRight, HardDriveDownload, Bell, Key, Webhook, Copy, Eye, EyeOff, Globe } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Users, Mail, Shield, Loader2, ArrowUp, ArrowDown, Palette, Type, Wrench, ListChecks, CornerDownRight, HardDriveDownload, Bell, Key, Webhook, Copy, Eye, EyeOff, Globe, Inbox } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -272,6 +272,7 @@ const Settings = () => {
     notifications: false,
     apiKeys: false,
     webhooks: false,
+    emailInbound: false,
   });
 
   // Tag state
@@ -288,6 +289,20 @@ const Settings = () => {
   const [pushBlocked, setPushBlocked] = useState(false);
   const [pushUnsupported, setPushUnsupported] = useState(false);
   const [iosNotInstalled, setIosNotInstalled] = useState(false);
+
+  // Email inbound status
+  const [emailInboundStatus, setEmailInboundStatus] = useState<{
+    configured: boolean;
+    active: boolean;
+    host: string | null;
+    user: string | null;
+    polling_interval: number;
+    auto_create_contact: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    api.request('/email-inbound/status').then(setEmailInboundStatus).catch(() => {});
+  }, []);
 
   const TAG_COLORS = [
     '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
@@ -1430,6 +1445,75 @@ const Settings = () => {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        {/* Email Inbound Section */}
+        <Collapsible open={sectionsOpen.emailInbound} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, emailInbound: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <Inbox className="w-5 h-5" />
+                  E-post-ingang
+                  {emailInboundStatus?.configured && (
+                    <Badge variant={emailInboundStatus.active ? 'default' : 'secondary'} className="ml-2">
+                      {emailInboundStatus.active ? 'Aktiv' : 'Konfigurerad'}
+                    </Badge>
+                  )}
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.emailInbound ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Skapa arenden automatiskt fran inkommande e-post via IMAP.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+                {emailInboundStatus?.configured ? (
+                  <div className="space-y-3">
+                    <div className="rounded-md border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">IMAP-server</span>
+                        <span className="text-sm font-mono">{emailInboundStatus.host}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Anvandare</span>
+                        <span className="text-sm font-mono">{emailInboundStatus.user}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Pollningsintervall</span>
+                        <span className="text-sm">{emailInboundStatus.polling_interval}s</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Skapa kontakt automatiskt</span>
+                        <Badge variant={emailInboundStatus.auto_create_contact ? 'default' : 'secondary'}>
+                          {emailInboundStatus.auto_create_contact ? 'Ja' : 'Nej'}
+                        </Badge>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Olästa e-postmeddelanden hamtar och skapar arenden automatiskt. Avsändaren matchas mot befintliga kontakter.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      E-post-ingang ar inte konfigurerad. Ange foljande miljovariabler pa servern:
+                    </p>
+                    <div className="rounded-md border p-3 space-y-1 font-mono text-xs">
+                      <p>IMAP_HOST=imap.example.com</p>
+                      <p>IMAP_PORT=993</p>
+                      <p>IMAP_USER=support@example.com</p>
+                      <p>IMAP_PASS=***</p>
+                      <p>IMAP_SECURE=true</p>
+                      <p>IMAP_POLL_INTERVAL=60</p>
+                      <p>IMAP_AUTO_CREATE_CONTACT=true</p>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </CollapsibleContent>
           </Card>
