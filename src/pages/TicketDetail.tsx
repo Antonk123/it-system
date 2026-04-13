@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Link as LinkIcon, Loader2, ListChecks, Plus } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Link as LinkIcon, Loader2, ListChecks, Plus, Camera } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { useTicketAttachments } from '@/hooks/useTicketAttachments';
@@ -270,6 +270,20 @@ const TicketDetail = () => {
         navigate('/tickets');
       }
     }
+  };
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !ticket) return;
+    try {
+      await api.uploadAttachment(ticket.id, file);
+      fetchAttachments(ticket.id);
+      toast.success('Foto uppladdat');
+    } catch {
+      toast.error('Kunde inte ladda upp foto');
+    }
+    // Reset input so same file can be re-selected
+    e.target.value = '';
   };
 
   return (
@@ -718,6 +732,44 @@ const TicketDetail = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Mobile quick actions — fixed bar above bottom tab bar */}
+      <div className="fixed bottom-14 inset-x-0 md:hidden bg-card border-t p-2 flex gap-2 z-40">
+        <Select value={ticket.status} onValueChange={(s) => handleStatusChange(s as TicketStatus)}>
+          <SelectTrigger className="flex-1 h-10">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(['open', 'in-progress', 'waiting', 'resolved', 'closed'] as TicketStatus[]).map(s => (
+              <SelectItem key={s} value={s}>
+                {({ open: 'Öppen', 'in-progress': 'Pågående', waiting: 'Väntar', resolved: 'Löst', closed: 'Stängd' } as Record<string, string>)[s]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-10"
+          onClick={() => navigate(`/tickets/${ticket.id}/edit`, {
+            state: { from: location.state?.from || location.pathname + location.search, scrollTo: 'time' }
+          })}
+        >
+          <Clock className="h-4 w-4 mr-1" /> Tid
+        </Button>
+        <label className="flex-shrink-0">
+          <Button size="sm" variant="outline" className="h-10 pointer-events-none" asChild>
+            <span><Camera className="h-4 w-4 mr-1" /> Foto</span>
+          </Button>
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={handlePhotoUpload}
+          />
+        </label>
+      </div>
     </Layout>
   );
 };
