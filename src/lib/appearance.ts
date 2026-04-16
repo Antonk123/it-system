@@ -5,6 +5,7 @@ export const FONT_OPTIONS = [
   { value: "font-crimson", label: "Crimson Pro" },
   { value: "font-libre", label: "Libre Caslon" },
   { value: "font-jetbrains", label: "JetBrains Mono" },
+  { value: "font-inter", label: "Inter" },
 ] as const;
 
 export type FontTheme = (typeof FONT_OPTIONS)[number]["value"];
