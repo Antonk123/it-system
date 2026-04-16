@@ -19,7 +19,6 @@ import { useFilterViews } from '@/hooks/useFilterViews';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { SLABadge } from '@/components/SLABadge';
 import { TicketStatus, TicketPriority } from '@/types/ticket';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -449,13 +448,6 @@ const TicketList = () => {
                         <Badge variant="outline" className="text-xs">{statusLabels[ticket.status] ?? ticket.status}</Badge>
                         {ticket.companyName && (
                           <span className="text-xs text-muted-foreground">{ticket.companyName}</span>
-                        )}
-                        {ticket.sla_resolution_deadline && (
-                          <SLABadge
-                            deadline={ticket.sla_resolution_deadline}
-                            met={ticket.sla_resolution_met}
-                            pausedAt={ticket.sla_paused_at}
-                          />
                         )}
                       </div>
                     </div>

@@ -131,14 +131,6 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     }
   }
 
-  // Apply SLA (optional — does not block ticket creation)
-  try {
-    const { applySLAToTicket } = await import('./slaHelper.js');
-    applySLAToTicket(ticketId, companyId, 'medium');
-  } catch {
-    // SLA module may not exist or may throw — safe to ignore
-  }
-
   // Dispatch webhook
   dispatchWebhook('ticket.created', {
     id: ticketId,

@@ -1095,25 +1095,6 @@ class ApiClient {
     });
   }
 
-  // SLA Policies
-  async getSLAPolicies(companyId?: string) {
-    const query = companyId ? `?company_id=${companyId}` : '';
-    return this.request<SLAPolicyRow[]>(`/sla${query}`);
-  }
-
-  async upsertSLAPolicies(companyId: string | null, policies: Array<{ priority: string; response_time_minutes: number; resolution_time_minutes: number }>) {
-    return this.request<SLAPolicyRow[]>('/sla', {
-      method: 'PUT',
-      body: { company_id: companyId, policies },
-    });
-  }
-
-  async deleteSLAPolicy(id: string) {
-    return this.request<{ message: string }>(`/sla/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
   // API Keys
   async getApiKeys() {
     return this.request<ApiKeyRow[]>('/api-keys');
@@ -1190,22 +1171,6 @@ export interface TicketRow {
   template_id?: string | null;
   field_values?: { field_name: string; field_label: string; field_value: string }[];
   tags?: Array<{ id: string; name: string; color: string }>;
-  sla_response_deadline: string | null;
-  sla_resolution_deadline: string | null;
-  sla_paused_at: string | null;
-  sla_paused_duration: number;
-  sla_response_met: number | null;
-  sla_resolution_met: number | null;
-}
-
-export interface SLAPolicyRow {
-  id: string;
-  company_id: string | null;
-  priority: string;
-  response_time_minutes: number;
-  resolution_time_minutes: number;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface TicketHistoryItem {

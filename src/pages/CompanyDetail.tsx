@@ -10,30 +10,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCompanyDetail, useCompanies } from '@/hooks/useCompanies';
-import { useSLAPolicies } from '@/hooks/useSLAPolicies';
 import { useBillingRate } from '@/hooks/useBilling';
-
-const PRIORITIES = ['low', 'medium', 'high', 'critical'] as const;
-const PRIORITY_LABELS: Record<string, string> = {
-  low: 'Låg',
-  medium: 'Medium',
-  high: 'Hög',
-  critical: 'Kritisk',
-};
-
-type SLAFormRow = { response_time_minutes: number; resolution_time_minutes: number };
-type SLAForm = Record<string, SLAFormRow>;
-
-const defaultSLAForm = (): SLAForm =>
-  Object.fromEntries(PRIORITIES.map(p => [p, { response_time_minutes: 240, resolution_time_minutes: 1440 }]));
 
 const CompanyDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { company, isLoading } = useCompanyDetail(id!);
   const { updateCompany } = useCompanies();
-  const { policies, upsertPolicies } = useSLAPolicies(id);
-
   const [rateInput, setRateInput] = useState('');
   const { rate, upsertRate } = useBillingRate(id!);
 
@@ -51,32 +34,6 @@ const CompanyDetail = () => {
     phone: '',
     address: '',
   });
-
-  const [slaForm, setSlaForm] = useState<SLAForm>(defaultSLAForm());
-
-  useEffect(() => {
-    if (policies.length === 0) return;
-    setSlaForm(prev => {
-      const next = { ...prev };
-      for (const p of policies) {
-        next[p.priority] = {
-          response_time_minutes: p.response_time_minutes,
-          resolution_time_minutes: p.resolution_time_minutes,
-        };
-      }
-      return next;
-    });
-  }, [policies]);
-
-  const handleSaveSLA = async () => {
-    if (!id) return;
-    const rows = PRIORITIES.map(p => ({
-      priority: p,
-      response_time_minutes: slaForm[p].response_time_minutes,
-      resolution_time_minutes: slaForm[p].resolution_time_minutes,
-    }));
-    await upsertPolicies(id, rows);
-  };
 
   const openEdit = () => {
     if (!company) return;
@@ -260,53 +217,6 @@ const CompanyDetail = () => {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
-
-        {/* SLA Policy */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Clock className="h-4 w-4" />
-              SLA-policy
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="grid grid-cols-3 gap-3 items-center pb-1 border-b border-border/50">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Prioritet</span>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Svarstid (min)</span>
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Lösningstid (min)</span>
-              </div>
-              {PRIORITIES.map(priority => (
-                <div key={priority} className="grid grid-cols-3 gap-3 items-center">
-                  <Badge variant={priority === 'critical' ? 'destructive' : 'secondary'} className="w-fit">
-                    {PRIORITY_LABELS[priority]}
-                  </Badge>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={slaForm[priority].response_time_minutes}
-                    onChange={e => setSlaForm(prev => ({
-                      ...prev,
-                      [priority]: { ...prev[priority], response_time_minutes: Number(e.target.value) },
-                    }))}
-                    className="h-8 text-sm"
-                  />
-                  <Input
-                    type="number"
-                    min={1}
-                    value={slaForm[priority].resolution_time_minutes}
-                    onChange={e => setSlaForm(prev => ({
-                      ...prev,
-                      [priority]: { ...prev[priority], resolution_time_minutes: Number(e.target.value) },
-                    }))}
-                    className="h-8 text-sm"
-                  />
-                </div>
-              ))}
-              <Button onClick={handleSaveSLA} size="sm" className="mt-2">Spara SLA</Button>
-            </div>
           </CardContent>
         </Card>
 

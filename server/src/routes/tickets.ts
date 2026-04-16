@@ -8,7 +8,6 @@ import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail } from '../lib/email.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
-import { applySLAToTicket, handleSLAStatusChange } from '../lib/slaHelper.js';
 import { writeRateLimiter } from '../middleware/rateLimit.js';
 import { dispatchWebhook } from '../lib/webhookDispatcher.js';
 
@@ -28,9 +27,6 @@ const TICKET_COLUMNS = [
   'tickets.category_id', 'tickets.requester_id', 'tickets.company_id', 'tickets.assigned_to',
   'tickets.notes', 'tickets.solution', 'tickets.template_id',
   'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at',
-  'tickets.sla_response_deadline', 'tickets.sla_resolution_deadline',
-  'tickets.sla_paused_at', 'tickets.sla_paused_duration',
-  'tickets.sla_response_met', 'tickets.sla_resolution_met'
 ].join(', ');
 
 // Multer config for CSV upload
@@ -1082,13 +1078,6 @@ router.post('/', writeRateLimiter, authenticate, (req: AuthRequest, res: Respons
 
     createTransaction();
 
-    // Apply SLA deadlines
-    try {
-      applySLAToTicket(id, resolvedCompanyId, finalPriority);
-    } catch (error) {
-      console.error('SLA application error (non-fatal):', error);
-    }
-
     // Auto-tag based on keyword rules (runs after transaction so tags can be created separately)
     try {
       applyAutoTags(id, title, finalDescription);
@@ -1425,16 +1414,6 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     });
 
     updateTransaction();
-
-    // Handle SLA status changes
-    if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
-      try {
-        const ticketIdStr = String(req.params.id);
-        handleSLAStatusChange(ticketIdStr, existing.status as string, safeUpdates.status as string);
-      } catch (error) {
-        console.error('SLA status change error (non-fatal):', error);
-      }
-    }
 
     const ticket = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(req.params.id) as TicketRow;
 
