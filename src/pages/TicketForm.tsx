@@ -3,6 +3,8 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, PlusCircle, Pencil, ChevronDown } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
+import { useSystemUsers } from '@/hooks/useSystemUsers';
+import { useCompanies } from '@/hooks/useCompanies';
 import { useCategories } from '@/hooks/useCategories';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useTicketAttachments, TicketAttachment } from '@/hooks/useTicketAttachments';
@@ -41,6 +43,8 @@ const TicketForm = () => {
   const location = useLocation();
   const { addTicket, updateTicket, getTicketById } = useTickets();
   const { users } = useUsers();
+  const { users: systemUsers } = useSystemUsers();
+  const { companies } = useCompanies();
   const { categories, addCategory } = useCategories();
   const { templates } = useTemplates();
   const {
@@ -78,7 +82,16 @@ const TicketForm = () => {
     requesterId: '',
     notes: '',
     solution: '',
+    assigned_to: '' as string,
+    company_id: '' as string,
   });
+  const [rawContacts, setRawContacts] = useState<import('@/lib/api').ContactRow[]>([]);
+
+  // Fetch raw contacts once to get company_id for auto-fill
+  useEffect(() => {
+    api.getContacts().then(setRawContacts).catch(() => {});
+  }, []);
+
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingChecklistItems, setPendingChecklistItems] = useState<{ id: string; label: string; completed: boolean }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -114,6 +127,8 @@ const TicketForm = () => {
         requesterId: existingTicket.requesterId,
         notes: existingTicket.notes ? migrateContent(existingTicket.notes) : '',
         solution: existingTicket.solution ? migrateContent(existingTicket.solution) : '',
+        assigned_to: (existingTicket as any).assigned_to || '',
+        company_id: (existingTicket as any).company_id || '',
       });
       // Show fields that already have content (Pitfall 2: existing content must always be visible)
       setShowSolution(!!existingTicket.solution);
@@ -394,7 +409,7 @@ const TicketForm = () => {
 
     try {
       if (isEditing && id) {
-        await updateTicket(id, submitFormData, customFieldValues.length > 0 ? customFieldValues : undefined);
+        await updateTicket(id, { ...submitFormData, assigned_to: formData.assigned_to || undefined, company_id: formData.company_id || undefined } as any, customFieldValues.length > 0 ? customFieldValues : undefined);
 
         // Upload pending files
         for (const file of pendingFiles) {
@@ -415,9 +430,10 @@ const TicketForm = () => {
           navigate('/tickets');
         }
       } else {
+        const extraFields = { assigned_to: formData.assigned_to || undefined, company_id: formData.company_id || undefined };
         const ticketWithTemplate = selectedTemplate
-          ? { ...submitFormData, templateId: selectedTemplate.id }
-          : submitFormData;
+          ? { ...submitFormData, templateId: selectedTemplate.id, ...extraFields }
+          : { ...submitFormData, ...extraFields };
         const newTicket = await addTicket(ticketWithTemplate, customFieldValues.length > 0 ? customFieldValues : undefined);
 
         if (newTicket) {
@@ -649,7 +665,12 @@ const TicketForm = () => {
                   <UserCombobox
                     users={users}
                     value={formData.requesterId}
-                    onValueChange={(v) => { setFormData({ ...formData, requesterId: v }); setErrors(prev => { const p = { ...prev }; delete p['requesterId']; return p; }); }}
+                    onValueChange={(v) => {
+                      const contact = rawContacts.find(c => c.id === v);
+                      const autoCompany = contact?.company_id || '';
+                      setFormData(prev => ({ ...prev, requesterId: v, company_id: autoCompany || prev.company_id }));
+                      setErrors(prev => { const p = { ...prev }; delete p['requesterId']; return p; });
+                    }}
                     placeholder="Välj användare"
                   />
                   {users.length === 0 && (
@@ -658,6 +679,38 @@ const TicketForm = () => {
                     </p>
                   )}
                   {errors.requesterId && <p className="text-sm text-destructive mt-1">{errors.requesterId}</p>}
+                </div>
+              </div>
+
+              {/* Tilldelad + Företag row */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Tilldelad</Label>
+                  <Select value={formData.assigned_to || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, assigned_to: v === 'none' ? '' : v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Ingen tilldelad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Ingen tilldelad</SelectItem>
+                      {systemUsers.map(u => (
+                        <SelectItem key={u.id} value={u.id}>{u.displayName || u.email}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Företag</Label>
+                  <Select value={formData.company_id || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, company_id: v === 'none' ? '' : v }))}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Inget företag" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Inget företag</SelectItem>
+                      {companies.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 

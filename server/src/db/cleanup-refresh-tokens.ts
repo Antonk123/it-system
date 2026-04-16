@@ -19,11 +19,7 @@ export function cleanupRefreshTokens() {
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const revokedResult = db.prepare('DELETE FROM refresh_tokens WHERE revoked = 1 AND created_at < ?').run(sevenDaysAgo.toISOString());
 
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const unusedResult = db.prepare('DELETE FROM refresh_tokens WHERE last_used_at < ? AND revoked = 0').run(thirtyDaysAgo.toISOString());
-
-  const totalDeleted = expiredResult.changes + revokedResult.changes + unusedResult.changes;
+  const totalDeleted = expiredResult.changes + revokedResult.changes;
   console.log(`🧹 Refresh token cleanup: removed ${totalDeleted} tokens (${beforeCount - totalDeleted} remaining)`);
 }
 

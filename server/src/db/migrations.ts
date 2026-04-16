@@ -405,6 +405,27 @@ export const migrations: Migration[] = [
   },
   {
     id: '024',
+    name: 'ensure_tickets_fts5',
+    up: (db, { tableExists }) => {
+      if (tableExists('tickets_fts')) return;
+      // Contentless FTS5 table -- vi hanterar synk manuellt
+      db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS tickets_fts USING fts5(title, description, notes, solution, content='', tokenize='unicode61')`);
+      // Populera med befintlig data
+      const tickets = db.prepare('SELECT rowid, title, description, notes, solution FROM tickets').all() as {
+        rowid: number; title: string; description: string; notes: string | null; solution: string | null;
+      }[];
+      if (tickets.length > 0) {
+        const stmt = db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)');
+        db.transaction(() => {
+          for (const t of tickets) {
+            stmt.run(t.rowid, t.title, t.description || '', t.notes || '', t.solution || '');
+          }
+        })();
+      }
+    },
+  },
+  {
+    id: '025',
     name: 'ensure_kb_articles_have_category',
     up: (db) => {
       const orphans = db.prepare('SELECT COUNT(*) as count FROM kb_articles WHERE category_id IS NULL').get() as { count: number };
@@ -420,6 +441,262 @@ export const migrations: Migration[] = [
       }
 
       db.prepare('UPDATE kb_articles SET category_id = ? WHERE category_id IS NULL').run(cat.id);
+    },
+  },
+  {
+    id: '026',
+    name: 'create_refresh_tokens_table',
+    up: (db, { tableExists }) => {
+      if (tableExists('refresh_tokens')) return;
+      db.prepare(`CREATE TABLE refresh_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        token TEXT NOT NULL UNIQUE,
+        expires_at TEXT NOT NULL,
+        revoked INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        last_used_at TEXT
+      )`).run();
+      db.prepare('CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id)').run();
+      db.prepare('CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token)').run();
+      db.prepare('CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens(expires_at)').run();
+    },
+  },
+  {
+    id: '027',
+    name: 'ensure_tickets_fts5_exists',
+    up: (db, { tableExists }) => {
+      if (tableExists('tickets_fts')) return;
+      // db.exec is better-sqlite3's multi-statement method, not child_process
+      db.prepare(`CREATE VIRTUAL TABLE IF NOT EXISTS tickets_fts USING fts5(title, description, notes, solution, content='', tokenize='unicode61')`).run();
+      const tickets = db.prepare('SELECT rowid, title, description, notes, solution FROM tickets').all() as {
+        rowid: number; title: string; description: string; notes: string | null; solution: string | null;
+      }[];
+      if (tickets.length > 0) {
+        const stmt = db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)');
+        db.transaction(() => {
+          for (const t of tickets) {
+            stmt.run(t.rowid, t.title, t.description || '', t.notes || '', t.solution || '');
+          }
+        })();
+      }
+    },
+  },
+  {
+    id: '028',
+    name: 'create_companies_table_and_migrate_contacts',
+    up: (db, { tableExists, columnExists }) => {
+      if (!tableExists('companies')) {
+        db.prepare(`CREATE TABLE companies (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          org_number TEXT,
+          email TEXT,
+          phone TEXT,
+          address TEXT,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )`).run();
+        db.prepare('CREATE INDEX idx_companies_name ON companies(name)').run();
+      }
+
+      if (columnExists('contacts', 'company') && !columnExists('contacts', 'company_id')) {
+        const companyNames = db.prepare(
+          "SELECT DISTINCT company FROM contacts WHERE company IS NOT NULL AND TRIM(company) != ''"
+        ).all() as { company: string }[];
+
+        const insertCompany = db.prepare('INSERT INTO companies (id, name) VALUES (?, ?)');
+        const companyMap = new Map<string, string>();
+        for (const row of companyNames) {
+          const id = randomUUID();
+          const normalizedName = row.company.trim();
+          insertCompany.run(id, normalizedName);
+          companyMap.set(normalizedName.toLowerCase(), id);
+        }
+
+        db.prepare('ALTER TABLE contacts ADD COLUMN company_id TEXT REFERENCES companies(id) ON DELETE SET NULL').run();
+        db.prepare('CREATE INDEX idx_contacts_company ON contacts(company_id)').run();
+
+        const updateContact = db.prepare('UPDATE contacts SET company_id = ? WHERE id = ?');
+        const contacts = db.prepare(
+          "SELECT id, company FROM contacts WHERE company IS NOT NULL AND TRIM(company) != ''"
+        ).all() as { id: string; company: string }[];
+
+        for (const contact of contacts) {
+          const companyId = companyMap.get(contact.company.trim().toLowerCase());
+          if (companyId) {
+            updateContact.run(companyId, contact.id);
+          }
+        }
+      }
+    },
+  },
+  {
+    id: '029',
+    name: 'add_company_id_and_assigned_to_on_tickets',
+    up: (db, { columnExists }) => {
+      if (!columnExists('tickets', 'company_id')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN company_id TEXT REFERENCES companies(id) ON DELETE SET NULL').run();
+        db.prepare('CREATE INDEX idx_tickets_company ON tickets(company_id)').run();
+
+        db.prepare(`
+          UPDATE tickets SET company_id = (
+            SELECT c.company_id FROM contacts c WHERE c.id = tickets.requester_id
+          )
+          WHERE requester_id IS NOT NULL
+        `).run();
+      }
+
+      if (!columnExists('tickets', 'assigned_to')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN assigned_to TEXT REFERENCES users(id) ON DELETE SET NULL').run();
+        db.prepare('CREATE INDEX idx_tickets_assigned ON tickets(assigned_to)').run();
+      }
+    },
+  },
+  {
+    id: '030',
+    name: 'create_sla_policies_table',
+    up: (db, { tableExists }) => {
+      if (tableExists('sla_policies')) return;
+      db.prepare(`CREATE TABLE sla_policies (
+        id TEXT PRIMARY KEY,
+        company_id TEXT REFERENCES companies(id) ON DELETE CASCADE,
+        priority TEXT NOT NULL CHECK(priority IN ('low', 'medium', 'high', 'critical')),
+        response_time_minutes INTEGER NOT NULL,
+        resolution_time_minutes INTEGER NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(company_id, priority)
+      )`).run();
+      db.prepare('CREATE INDEX idx_sla_policies_company ON sla_policies(company_id)').run();
+    },
+  },
+  {
+    id: '031',
+    name: 'add_sla_columns_to_tickets',
+    up: (db, { columnExists }) => {
+      if (!columnExists('tickets', 'sla_response_deadline')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN sla_response_deadline TEXT').run();
+        db.prepare('ALTER TABLE tickets ADD COLUMN sla_resolution_deadline TEXT').run();
+        db.prepare('ALTER TABLE tickets ADD COLUMN sla_paused_at TEXT').run();
+        db.prepare('ALTER TABLE tickets ADD COLUMN sla_paused_duration INTEGER DEFAULT 0').run();
+        db.prepare('ALTER TABLE tickets ADD COLUMN sla_response_met INTEGER').run();
+        db.prepare('ALTER TABLE tickets ADD COLUMN sla_resolution_met INTEGER').run();
+        db.prepare('CREATE INDEX idx_tickets_sla_response ON tickets(sla_response_deadline)').run();
+        db.prepare('CREATE INDEX idx_tickets_sla_resolution ON tickets(sla_resolution_deadline)').run();
+      }
+    },
+  },
+  {
+    id: '032',
+    name: 'create_billing_rates_table',
+    up: (db, { tableExists }) => {
+      if (tableExists('billing_rates')) return;
+      db.prepare(`CREATE TABLE billing_rates (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        rate_per_hour REAL NOT NULL,
+        currency TEXT DEFAULT 'SEK',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(company_id)
+      )`).run();
+      db.prepare('CREATE INDEX idx_billing_rates_company ON billing_rates(company_id)').run();
+    },
+  },
+  {
+    id: '033',
+    name: 'create_invoices_tables',
+    up: (db, { tableExists }) => {
+      if (tableExists('invoices')) return;
+      db.prepare(`CREATE TABLE invoices (
+        id TEXT PRIMARY KEY,
+        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        period_start TEXT NOT NULL,
+        period_end TEXT NOT NULL,
+        status TEXT DEFAULT 'draft' CHECK(status IN ('draft', 'sent', 'paid')),
+        total_hours REAL DEFAULT 0,
+        total_amount REAL DEFAULT 0,
+        currency TEXT DEFAULT 'SEK',
+        pdf_path TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        sent_at TEXT,
+        paid_at TEXT
+      )`).run();
+      db.prepare('CREATE INDEX idx_invoices_company ON invoices(company_id)').run();
+      db.prepare('CREATE INDEX idx_invoices_status ON invoices(status)').run();
+
+      db.prepare(`CREATE TABLE invoice_lines (
+        id TEXT PRIMARY KEY,
+        invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+        ticket_id TEXT REFERENCES tickets(id) ON DELETE SET NULL,
+        time_entry_id TEXT REFERENCES time_entries(id) ON DELETE SET NULL,
+        description TEXT NOT NULL,
+        hours REAL NOT NULL,
+        rate REAL NOT NULL,
+        amount REAL NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`).run();
+      db.prepare('CREATE INDEX idx_invoice_lines_invoice ON invoice_lines(invoice_id)').run();
+      db.prepare('CREATE INDEX idx_invoice_lines_ticket ON invoice_lines(ticket_id)').run();
+      db.prepare('CREATE INDEX idx_invoice_lines_time_entry ON invoice_lines(time_entry_id)').run();
+    },
+  },
+  {
+    id: '034',
+    name: 'create_api_keys_table',
+    up: (db, { tableExists }) => {
+      if (tableExists('api_keys')) return;
+      db.prepare(`CREATE TABLE api_keys (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        key_prefix TEXT NOT NULL,
+        key_hash TEXT NOT NULL,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        permissions TEXT DEFAULT '["read"]',
+        last_used_at TEXT,
+        expires_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`).run();
+      db.prepare('CREATE INDEX idx_api_keys_prefix ON api_keys(key_prefix)').run();
+      db.prepare('CREATE INDEX idx_api_keys_user ON api_keys(user_id)').run();
+    },
+  },
+  {
+    id: '035',
+    name: 'create_webhooks_tables',
+    up: (db, { tableExists }) => {
+      if (tableExists('webhooks')) return;
+      db.prepare(`CREATE TABLE webhooks (
+        id TEXT PRIMARY KEY,
+        url TEXT NOT NULL,
+        events TEXT NOT NULL DEFAULT '[]',
+        secret TEXT NOT NULL,
+        active INTEGER DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        last_triggered_at TEXT
+      )`).run();
+
+      db.prepare(`CREATE TABLE webhook_deliveries (
+        id TEXT PRIMARY KEY,
+        webhook_id TEXT NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+        event TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        response_code INTEGER,
+        attempts INTEGER DEFAULT 0,
+        delivered_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`).run();
+      db.prepare('CREATE INDEX idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id)').run();
+    },
+  },
+  {
+    id: '036',
+    name: 'add_department_to_contacts',
+    up: (db, { columnExists }) => {
+      if (!columnExists('contacts', 'department')) {
+        db.prepare('ALTER TABLE contacts ADD COLUMN department TEXT').run();
+      }
     },
   },
 ];

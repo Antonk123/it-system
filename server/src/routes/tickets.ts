@@ -8,19 +8,29 @@ import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail } from '../lib/email.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
+import { applySLAToTicket, handleSLAStatusChange } from '../lib/slaHelper.js';
+import { writeRateLimiter } from '../middleware/rateLimit.js';
+import { dispatchWebhook } from '../lib/webhookDispatcher.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(__dirname, '../../data/uploads');
+
+// Giltiga enum-värden för status och prioritet
+const VALID_STATUSES = ['open', 'in-progress', 'waiting', 'resolved', 'closed'];
+const VALID_PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
 // Explicit column lists for SELECT optimization (instead of SELECT *)
 // Reduces data transfer by 30-40% by avoiding unnecessary columns
 // Use 'tickets.' prefix for all columns to avoid ambiguity when JOINs are present
 const TICKET_COLUMNS = [
   'tickets.id', 'tickets.title', 'tickets.description', 'tickets.status', 'tickets.priority',
-  'tickets.category_id', 'tickets.requester_id', 'tickets.notes', 'tickets.solution',
-  'tickets.template_id',
-  'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at'
+  'tickets.category_id', 'tickets.requester_id', 'tickets.company_id', 'tickets.assigned_to',
+  'tickets.notes', 'tickets.solution', 'tickets.template_id',
+  'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at',
+  'tickets.sla_response_deadline', 'tickets.sla_resolution_deadline',
+  'tickets.sla_paused_at', 'tickets.sla_paused_duration',
+  'tickets.sla_response_met', 'tickets.sla_resolution_met'
 ].join(', ');
 
 // Multer config for CSV upload
@@ -220,8 +230,6 @@ interface ValidationResult {
 
 function validateTicketRow(row: any, rowIndex: number, categories: any[], existingTicketIds: Set<string>): ValidationResult {
   const errors: string[] = [];
-  const validStatuses = ['open', 'in-progress', 'waiting', 'resolved', 'closed'];
-  const validPriorities = ['low', 'medium', 'high', 'critical'];
 
   // Required fields
   if (!row.title || row.title.trim() === '') {
@@ -233,12 +241,12 @@ function validateTicketRow(row: any, rowIndex: number, categories: any[], existi
   }
 
   // Validate status
-  if (row.status && !validStatuses.includes(row.status)) {
+  if (row.status && !VALID_STATUSES.includes(row.status)) {
     errors.push(`Ogiltig status: ${row.status} (giltiga: open, in-progress, waiting, resolved, closed)`);
   }
 
   // Validate priority
-  if (row.priority && !validPriorities.includes(row.priority)) {
+  if (row.priority && !VALID_PRIORITIES.includes(row.priority)) {
     errors.push(`Ogiltig prioritet: ${row.priority} (giltiga: low, medium, high, critical)`);
   }
 
@@ -277,6 +285,8 @@ interface TicketRow {
   priority: string;
   category_id: string | null;
   requester_id: string | null;
+  company_id: string | null;
+  assigned_to: string | null;
   notes: string | null;
   solution: string | null;
   created_at: string;
@@ -291,6 +301,8 @@ interface TicketQueryParams {
   status?: string;
   priority?: string;
   category?: string;
+  company_id?: string;
+  assigned_to?: string;
   search?: string;
   tags?: string;
   tagMode?: string;
@@ -365,6 +377,18 @@ function buildWhereClause(filters: TicketQueryParams) {
     params.push(filters.category);
   }
 
+  // Company filter
+  if (filters.company_id && filters.company_id !== 'all') {
+    conditions.push('tickets.company_id = ?');
+    params.push(filters.company_id);
+  }
+
+  // Assignee filter
+  if (filters.assigned_to && filters.assigned_to !== 'all') {
+    conditions.push('tickets.assigned_to = ?');
+    params.push(filters.assigned_to);
+  }
+
   // Tag filtering (OR or AND logic for multiple tags)
   if (filters.tags) {
     const tagIds = filters.tags.split(',').map(id => id.trim()).filter(id => id.length > 0);
@@ -430,39 +454,56 @@ function buildWhereClause(filters: TicketQueryParams) {
     }
   }
 
-  // Enhanced search: search in multiple fields
+  // Enhanced search: FTS5 fulltext on ticket content + LIKE fallback for relations
   if (filters.search) {
-    // Escape LIKE special characters (%, _, \) to prevent unintended wildcard matching
-    const escapedSearch = filters.search
-      .replace(/\\/g, '\\\\')  // Escape backslash first
-      .replace(/%/g, '\\%')     // Escape percent
-      .replace(/_/g, '\\_');    // Escape underscore
+    // Escape FTS5 special characters for safe MATCH queries
+    const ftsSearch = filters.search
+      .replace(/["""]/g, '') // ta bort citattecken
+      .replace(/[*^(){}[\]:!]/g, '') // ta bort FTS-operatorer
+      .trim();
 
+    // Escape LIKE special characters for relation field fallback
+    const escapedSearch = filters.search
+      .replace(/\\/g, '\\\\')
+      .replace(/%/g, '\\%')
+      .replace(/_/g, '\\_');
     const pattern = `%${escapedSearch}%`;
 
-    // Build search condition with all searchable fields
-    // Use ESCAPE '\' to handle escaped wildcards and COLLATE NOCASE for case-insensitive search
-    const searchConditions = [
-      "tickets.title LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "tickets.description LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "tickets.notes LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "tickets.solution LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "contacts.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "contacts.email LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "categories.label LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "ticket_comments.content LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "tags.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
-      "ticket_field_values.field_value LIKE ? ESCAPE '\\' COLLATE NOCASE"
-    ];
+    if (ftsSearch) {
+      // FTS5 MATCH for ticket content (title, description, notes, solution)
+      // + LIKE fallback for relation fields (contacts, categories, comments, tags, custom fields)
+      const ftsCondition = `tickets.rowid IN (SELECT rowid FROM tickets_fts WHERE tickets_fts MATCH ?)`;
+      const relationConditions = [
+        "contacts.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "contacts.email LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "categories.label LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "ticket_comments.content LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "tags.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "ticket_field_values.field_value LIKE ? ESCAPE '\\' COLLATE NOCASE"
+      ];
 
-    conditions.push(`(${searchConditions.join(' OR ')})`);
+      conditions.push(`(${ftsCondition} OR ${relationConditions.join(' OR ')})`);
 
-    // Add pattern for each searchable field (10 fields)
-    for (let i = 0; i < 10; i++) {
-      params.push(pattern);
+      // FTS5 MATCH-term (prefix-sökning med *)
+      params.push(ftsSearch.split(/\s+/).map(w => `"${w}"*`).join(' '));
+      // LIKE-parametrar för relationsfält (6 st)
+      for (let i = 0; i < 6; i++) {
+        params.push(pattern);
+      }
+    } else {
+      // Tomt efter sanering -- fallback till enbart LIKE
+      const likeConditions = [
+        "contacts.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "contacts.email LIKE ? ESCAPE '\\' COLLATE NOCASE",
+        "categories.label LIKE ? ESCAPE '\\' COLLATE NOCASE",
+      ];
+      conditions.push(`(${likeConditions.join(' OR ')})`);
+      for (let i = 0; i < 3; i++) {
+        params.push(pattern);
+      }
     }
 
-    // Add necessary JOINs for enhanced search
+    // JOINs for relation field search (FTS handles ticket content without JOIN)
     joins = `
       LEFT JOIN contacts ON tickets.requester_id = contacts.id
       LEFT JOIN categories ON tickets.category_id = categories.id
@@ -735,6 +776,11 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
           ticket.solution || null
         );
 
+        // Synka FTS5-index
+        const ftsRow = db.prepare('SELECT rowid FROM tickets WHERE id = ?').get(id) as { rowid: number };
+        db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)')
+          .run(ftsRow.rowid, ticket.title, ticket.description || '', ticket.notes || '', ticket.solution || '');
+
         created++;
       }
 
@@ -813,6 +859,7 @@ interface AgingTicketRow {
   priority: string;
   status: string;
   requester_name: string | null;
+  company_name: string | null;
   age_days: number;
 }
 
@@ -842,6 +889,7 @@ router.get('/dashboard-overview', authenticate, (req: AuthRequest, res: Response
         t.priority,
         t.status,
         c.name as requester_name,
+        comp.name as company_name,
         CAST(julianday('now') - julianday(
           MAX(t.updated_at, COALESCE(
             (SELECT MAX(tc.created_at) FROM ticket_comments tc WHERE tc.ticket_id = t.id AND tc.deleted_at IS NULL),
@@ -850,6 +898,7 @@ router.get('/dashboard-overview', authenticate, (req: AuthRequest, res: Response
         ) AS INTEGER) as age_days
       FROM tickets t
       LEFT JOIN contacts c ON t.requester_id = c.id
+      LEFT JOIN companies comp ON t.company_id = comp.id
       WHERE t.status IN ('open', 'in-progress', 'waiting')
       ORDER BY age_days DESC
       LIMIT 6
@@ -935,8 +984,8 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Create ticket
-router.post('/', authenticate, (req: AuthRequest, res: Response) => {
-  const { title, description, status, priority, category_id, requester_id, notes, solution, customFields, template_id } = req.body;
+router.post('/', writeRateLimiter, authenticate, (req: AuthRequest, res: Response) => {
+  const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id } = req.body;
 
   if (!title) {
     return res.status(400).json({ error: 'Title is required' });
@@ -946,8 +995,24 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: 'Either description or custom fields are required' });
   }
 
+  if (status !== undefined && !VALID_STATUSES.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status value' });
+  }
+  if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
+    return res.status(400).json({ error: 'Invalid priority value' });
+  }
+
   try {
     const id = uuidv4();
+
+    // Auto-set company_id from requester if not provided
+    let resolvedCompanyId = company_id || null;
+    if (!resolvedCompanyId && requester_id) {
+      const contact = db.prepare('SELECT company_id FROM contacts WHERE id = ?').get(requester_id) as { company_id: string | null } | undefined;
+      if (contact?.company_id) {
+        resolvedCompanyId = contact.company_id;
+      }
+    }
 
     // When customFields are provided, compose description ONLY from them (ignore incoming description)
     // This prevents duplicates when the frontend also pre-composes a placeholder description
@@ -975,8 +1040,8 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     // Wrap all inserts in a transaction for atomicity
     const createTransaction = db.transaction(() => {
       db.prepare(`
-        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, notes, solution, template_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, template_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         title,
@@ -985,6 +1050,8 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
         finalPriority,
         category_id || null,
         requester_id || null,
+        resolvedCompanyId,
+        assigned_to || null,
         notes || null,
         solution || null,
         template_id || null
@@ -1006,9 +1073,21 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       // Log ticket creation in history
       db.prepare('INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)')
         .run(uuidv4(), id, req.user!.id, 'created', null, null);
+
+      // Synka FTS5-index
+      const row = db.prepare('SELECT rowid FROM tickets WHERE id = ?').get(id) as { rowid: number };
+      db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)')
+        .run(row.rowid, title, finalDescription, notes || '', solution || '');
     });
 
     createTransaction();
+
+    // Apply SLA deadlines
+    try {
+      applySLAToTicket(id, resolvedCompanyId, finalPriority);
+    } catch (error) {
+      console.error('SLA application error (non-fatal):', error);
+    }
 
     // Auto-tag based on keyword rules (runs after transaction so tags can be created separately)
     try {
@@ -1036,6 +1115,9 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       console.error('Error sending ticket created email:', error);
     });
 
+    // Dispatch webhook for ticket creation
+    dispatchWebhook('ticket.created', { id: ticket.id, title: ticket.title, status: ticket.status, priority: ticket.priority }).catch(console.error);
+
     res.status(201).json(ticket);
   } catch (error) {
     console.error('Error creating ticket:', error);
@@ -1061,7 +1143,7 @@ router.get('/:id/history', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Bulk update tickets
-router.put('/bulk', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Response) => {
   const { ids, updates } = req.body;
 
   if (!Array.isArray(ids) || ids.length === 0) {
@@ -1074,13 +1156,10 @@ router.put('/bulk', authenticate, (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: 'At least one field to update is required' });
   }
 
-  const validStatuses = ['open', 'in-progress', 'waiting', 'resolved', 'closed'];
-  const validPriorities = ['low', 'medium', 'high', 'critical'];
-
-  if (status !== undefined && !validStatuses.includes(status)) {
+  if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return res.status(400).json({ error: 'Invalid status value' });
   }
-  if (priority !== undefined && !validPriorities.includes(priority)) {
+  if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
     return res.status(400).json({ error: 'Invalid priority value' });
   }
 
@@ -1146,7 +1225,7 @@ router.put('/bulk', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Bulk delete tickets permanently
-router.post('/bulk-delete', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/bulk-delete', writeRateLimiter, authenticate, (req: AuthRequest, res: Response) => {
   const { ids } = req.body;
 
   if (!Array.isArray(ids) || ids.length === 0) {
@@ -1158,7 +1237,9 @@ router.post('/bulk-delete', authenticate, (req: AuthRequest, res: Response) => {
       let deletedCount = 0;
 
       for (const ticketId of ids) {
-        // Fetch attachments before deleting so we can clean up files on disk
+        // Hämta data för FTS-rensning och filbilagor innan radering
+        const ticketForFts = db.prepare('SELECT rowid, title, description, notes, solution FROM tickets WHERE id = ?')
+          .get(ticketId) as { rowid: number; title: string; description: string; notes: string | null; solution: string | null } | undefined;
         const attachments = db.prepare(
           'SELECT file_path FROM ticket_attachments WHERE ticket_id = ?'
         ).all(ticketId) as { file_path: string }[];
@@ -1167,6 +1248,11 @@ router.post('/bulk-delete', authenticate, (req: AuthRequest, res: Response) => {
 
         if (result.changes > 0) {
           deletedCount++;
+          // Rensa FTS5-index
+          if (ticketForFts) {
+            db.prepare("INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution) VALUES('delete', ?, ?, ?, ?, ?)")
+              .run(ticketForFts.rowid, ticketForFts.title, ticketForFts.description, ticketForFts.notes || '', ticketForFts.solution || '');
+          }
           // Clean up attachment files from disk (DB CASCADE handles relation tables)
           for (const attachment of attachments) {
             const filePath = join(UPLOAD_DIR, attachment.file_path);
@@ -1194,7 +1280,14 @@ router.post('/bulk-delete', authenticate, (req: AuthRequest, res: Response) => {
 
 // Update ticket
 router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
-  const { title, description, status, priority, category_id, requester_id, notes, solution, customFields, template_id, tag_ids } = req.body;
+  const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id, tag_ids } = req.body;
+
+  if (status !== undefined && !VALID_STATUSES.includes(status)) {
+    return res.status(400).json({ error: 'Invalid status value' });
+  }
+  if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
+    return res.status(400).json({ error: 'Invalid priority value' });
+  }
 
   try {
     const existing = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(req.params.id) as TicketRow | undefined;
@@ -1219,6 +1312,8 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (priority !== undefined) updates.priority = priority;
     if (category_id !== undefined) updates.category_id = category_id || null;
     if (requester_id !== undefined) updates.requester_id = requester_id || null;
+    if (company_id !== undefined) updates.company_id = company_id || null;
+    if (assigned_to !== undefined) updates.assigned_to = assigned_to || null;
     if (notes !== undefined) updates.notes = notes || null;
     if (solution !== undefined) updates.solution = solution || null;
     if (template_id !== undefined) updates.template_id = template_id || null;
@@ -1239,7 +1334,8 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     // Whitelist of allowed field names to prevent SQL injection
     const allowedFields = [
       'title', 'description', 'status', 'priority', 'category_id',
-      'requester_id', 'notes', 'solution', 'resolved_at', 'closed_at', 'updated_at', 'template_id'
+      'requester_id', 'company_id', 'assigned_to',
+      'notes', 'solution', 'resolved_at', 'closed_at', 'updated_at', 'template_id'
     ];
 
     // Filter updates to only include whitelisted fields
@@ -1313,9 +1409,32 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
           insertTag.run(uuidv4(), req.params.id, tagId);
         });
       }
+
+      // Synka FTS5-index om sökbara fält ändrades
+      if ('title' in safeUpdates || 'description' in safeUpdates || 'notes' in safeUpdates || 'solution' in safeUpdates) {
+        const existingFts = db.prepare('SELECT rowid FROM tickets WHERE id = ?')
+          .get(req.params.id) as { rowid: number };
+        // Contentless FTS5: delete old entry, insert new
+        db.prepare("INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution) VALUES('delete', ?, ?, ?, ?, ?)")
+          .run(existingFts.rowid, existing.title, existing.description, existing.notes || '', existing.solution || '');
+        const updated = db.prepare('SELECT title, description, notes, solution FROM tickets WHERE id = ?')
+          .get(req.params.id) as { title: string; description: string; notes: string | null; solution: string | null };
+        db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)')
+          .run(existingFts.rowid, updated.title, updated.description, updated.notes || '', updated.solution || '');
+      }
     });
 
     updateTransaction();
+
+    // Handle SLA status changes
+    if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
+      try {
+        const ticketIdStr = String(req.params.id);
+        handleSLAStatusChange(ticketIdStr, existing.status as string, safeUpdates.status as string);
+      } catch (error) {
+        console.error('SLA status change error (non-fatal):', error);
+      }
+    }
 
     const ticket = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(req.params.id) as TicketRow;
 
@@ -1334,6 +1453,15 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       color: tag.color,
       createdAt: new Date(tag.created_at),
     }));
+
+    // Dispatch webhook for ticket update
+    if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
+      dispatchWebhook('ticket.updated', { id: req.params.id, ...safeUpdates }).catch(console.error);
+
+      if (safeUpdates.status === 'closed') {
+        dispatchWebhook('ticket.closed', { id: req.params.id }).catch(console.error);
+      }
+    }
 
     if (status === 'closed' && existing.status !== 'closed') {
       const requester = ticket.requester_id
@@ -1364,7 +1492,9 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 // Delete ticket
 router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    // Fetch attachments before deleting so we can clean up files on disk
+    // Hämta data för FTS-rensning och filbilagor innan radering
+    const ticketForFts = db.prepare('SELECT rowid, title, description, notes, solution FROM tickets WHERE id = ?')
+      .get(req.params.id) as { rowid: number; title: string; description: string; notes: string | null; solution: string | null } | undefined;
     const attachments = db.prepare(
       'SELECT file_path FROM ticket_attachments WHERE ticket_id = ?'
     ).all(req.params.id) as { file_path: string }[];
@@ -1373,6 +1503,12 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    // Rensa FTS5-index
+    if (ticketForFts) {
+      db.prepare("INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution) VALUES('delete', ?, ?, ?, ?, ?)")
+        .run(ticketForFts.rowid, ticketForFts.title, ticketForFts.description, ticketForFts.notes || '', ticketForFts.solution || '');
     }
 
     // Clean up attachment files from disk (DB relations cascade automatically)

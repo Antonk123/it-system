@@ -1,12 +1,13 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search } from 'lucide-react';
+import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search, Building2, Receipt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/AuthContext';
 import { QuickCaptureFAB } from '@/components/QuickCaptureFAB';
 import { BottomTabBar } from '@/components/BottomTabBar';
+import { OnboardingWizard } from '@/components/OnboardingWizard';
 import { applyMode, getStoredMode, saveModeTheme, ModeTheme } from '@/lib/appearance';
 import { dispatchModeChange } from '@/hooks/useMode';
 
@@ -30,9 +31,17 @@ const navItems = [{
   icon: BarChart3,
   label: 'Rapporter'
 }, {
+  path: '/invoices',
+  icon: Receipt,
+  label: 'Fakturering'
+}, {
   path: '/archive',
   icon: Archive,
   label: 'Arkiv'
+}, {
+  path: '/companies',
+  icon: Building2,
+  label: 'Företag'
 }, {
   path: '/users',
   icon: Users,
@@ -148,6 +157,7 @@ const BottomSection = ({ open, user, onLogout, onToggle }: BottomSectionProps) =
       {/* Logout button */}
       <button
         onClick={onLogout}
+        aria-label="Logga ut"
         className={cn(
           "w-full flex items-center gap-2 rounded-md transition-all duration-200",
           "text-muted-foreground hover:text-foreground hover:bg-destructive/10",
@@ -161,6 +171,7 @@ const BottomSection = ({ open, user, onLogout, onToggle }: BottomSectionProps) =
       {/* Desktop only: Toggle button (hidden on mobile) */}
       <button
         onClick={onToggle}
+        aria-label={open ? "Dölj sidofält" : "Visa sidofält"}
         className="hidden lg:flex w-full items-center gap-2 px-3 py-2 rounded-md hover:bg-sidebar-accent transition-colors"
       >
         <ChevronsRight className={cn(
@@ -264,7 +275,7 @@ export const Layout = ({
       {/* Main content */}
       <main className="flex-1 min-w-0 relative">
         {/* Mobile header */}
-        <div className="lg:hidden sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 flex items-center gap-4 shadow-sm">
+        <div data-print-hide className="lg:hidden sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 flex items-center gap-4 shadow-sm">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 rounded-lg hover:bg-primary/10 transition-colors"
@@ -288,7 +299,7 @@ export const Layout = ({
         </div>
 
         {/* Desktop header with search */}
-        <div className="hidden lg:block sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 shadow-sm">
+        <div data-print-hide className="hidden lg:block sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="max-w-md flex-1">
               <button
@@ -313,14 +324,20 @@ export const Layout = ({
         </div>
       </main>
 
-      <QuickCaptureFAB className={cn(
-        "left-4 lg:transition-[left] lg:duration-300",
-        "bottom-[72px] md:bottom-6",
-        sidebarCollapsed ? "lg:left-20" : "lg:left-[17rem]"
-      )} />
+      <div data-print-hide>
+        <QuickCaptureFAB className={cn(
+          "left-4 lg:transition-[left] lg:duration-300",
+          "bottom-[72px] md:bottom-6",
+          sidebarCollapsed ? "lg:left-20" : "lg:left-[17rem]"
+        )} />
+      </div>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
 
-      <BottomTabBar />
+      <div data-print-hide>
+        <BottomTabBar />
+      </div>
+
+      <OnboardingWizard />
     </div>;
 };

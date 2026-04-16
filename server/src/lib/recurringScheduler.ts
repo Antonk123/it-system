@@ -120,6 +120,11 @@ function createTicketFromTemplate(template: RecurringTemplate): void {
       VALUES (?, ?, ?, ?, ?, ?)
     `).run(uuidv4(), ticketId, null, 'created', null, 'recurring:' + template.id);
 
+    // Synka FTS5-index
+    const ftsRow = db.prepare('SELECT rowid FROM tickets WHERE id = ?').get(ticketId) as { rowid: number };
+    db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)')
+      .run(ftsRow.rowid, template.title, template.description, '', '');
+
     // Insert recurring ticket history
     db.prepare(`
       INSERT INTO recurring_ticket_history (id, template_id, ticket_id, created_at)

@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { Plus, Pencil, Trash2, Users as UsersIcon, Ticket, Download, Upload, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useUsers } from '@/hooks/useUsers';
+import { useCompanies } from '@/hooks/useCompanies';
 import { useTickets } from '@/hooks/useTickets';
 import { Layout } from '@/components/Layout';
 import { SearchBar } from '@/components/SearchBar';
@@ -40,16 +41,18 @@ import {
 } from '@/components/ui/sheet';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User } from '@/types/ticket';
 
 const UserList = () => {
   const { users, addUser, updateUser, deleteUser, refetch } = useUsers();
+  const { companies } = useCompanies();
   const { tickets } = useTickets();
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [formData, setFormData] = useState({ name: '', email: '', department: '' });
+  const [formData, setFormData] = useState({ name: '', email: '', department: '', company_id: '' });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -120,19 +123,19 @@ const UserList = () => {
     } else {
       addUser(formData);
     }
-    setFormData({ name: '', email: '', department: '' });
+    setFormData({ name: '', email: '', department: '', company_id: '' });
     setEditingUser(null);
     setIsDialogOpen(false);
   };
 
   const handleEdit = (user: User) => {
     setEditingUser(user);
-    setFormData({ name: user.name, email: user.email, department: user.department || '' });
+    setFormData({ name: user.name, email: user.email, department: user.department || '', company_id: (user as any).company_id || '' });
     setIsDialogOpen(true);
   };
 
   const handleDialogClose = () => {
-    setFormData({ name: '', email: '', department: '' });
+    setFormData({ name: '', email: '', department: '', company_id: '' });
     setEditingUser(null);
     setIsDialogOpen(false);
   };
@@ -292,12 +295,26 @@ const UserList = () => {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label>Företag</Label>
+                  <Select value={formData.company_id || 'none'} onValueChange={(v) => setFormData({ ...formData, company_id: v === 'none' ? '' : v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Inget företag" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Inget företag</SelectItem>
+                      {companies.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="department">Avdelning</Label>
                   <Input
                     id="department"
                     value={formData.department}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                    placeholder="Försäljning, Teknik, etc."
+                    placeholder="T.ex. Tillverkning - Norsjö"
                   />
                 </div>
                 <div className="flex justify-end gap-2 pt-4">
@@ -347,8 +364,11 @@ const UserList = () => {
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground truncate">{user.email}</p>
+                      {(user as any).company_name && (
+                        <p className="text-sm text-muted-foreground mt-1">{(user as any).company_name}</p>
+                      )}
                       {user.department && (
-                        <p className="text-sm text-muted-foreground mt-1">{user.department}</p>
+                        <p className="text-xs text-muted-foreground">{user.department}</p>
                       )}
                       <p className="text-xs text-muted-foreground mt-2">
                         Tillagd {format(user.createdAt, 'd MMM yyyy', { locale: sv })}

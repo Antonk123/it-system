@@ -41,6 +41,13 @@ const TYPE_LABELS: Record<string, string> = {
   'solution': 'Lösning',
 };
 
+function highlightTerms(text: string, query: string): string {
+  if (!query.trim()) return text;
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`(${escaped})`, 'gi');
+  return text.replace(re, '<mark>$1</mark>');
+}
+
 const KnowledgeBase = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -472,16 +479,18 @@ const KnowledgeBase = () => {
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex-1 min-w-0">
                             <p className="font-medium text-foreground truncate">{article.title}</p>
-                            {/* snippet uses dangerouslySetInnerHTML for FTS5 <mark> tags — safe as content comes from SQLite snippet() on stored plain text */}
-                            {article.snippet ? (
-                              <p
-                                className="text-sm text-muted-foreground mt-1 line-clamp-2"
-                                dangerouslySetInnerHTML={{ __html: article.snippet }}
-                              />
-                            ) : article.content ? (
-                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                                {getPreview(article.content)}
-                              </p>
+                            {article.content ? (
+                              isSearching ? (
+                                <p
+                                  className="text-sm text-muted-foreground mt-1 line-clamp-2"
+                                  // Safe: getPreview returns plain text, highlightTerms only adds <mark> with regex-escaped query
+                                  dangerouslySetInnerHTML={{ __html: highlightTerms(getPreview(article.content), search) }}
+                                />
+                              ) : (
+                                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                  {getPreview(article.content)}
+                                </p>
+                              )
                             ) : null}
                           </div>
                           <div className="flex flex-col items-end gap-1.5 shrink-0">

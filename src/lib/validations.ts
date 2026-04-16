@@ -23,6 +23,15 @@ export const contactSchema = z.object({
 
 export const contactUpdateSchema = contactSchema.partial();
 
+// Company validation schemas
+export const companySchema = z.object({
+  name: z.string().trim().min(1, 'Company name is required').max(200, 'Company name must be less than 200 characters'),
+  org_number: z.string().max(20).optional().nullable(),
+  email: z.string().email('Invalid email').optional().nullable().or(z.literal('')),
+  phone: z.string().max(30).optional().nullable(),
+  address: z.string().max(500).optional().nullable(),
+});
+
 // Category validation schemas
 export const categorySchema = z.object({
   label: z.string().trim().min(1, 'Label is required').max(50, 'Label must be less than 50 characters'),

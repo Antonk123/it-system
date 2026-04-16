@@ -46,19 +46,19 @@ interface CommandPaletteProps {
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/tickets', icon: Ticket, label: 'Alla arenden' },
-  { path: '/recurring', icon: RefreshCw, label: 'Aterkommande' },
+  { path: '/tickets', icon: Ticket, label: 'Alla ärenden' },
+  { path: '/recurring', icon: RefreshCw, label: 'Återkommande' },
   { path: '/reports', icon: BarChart3, label: 'Rapporter' },
   { path: '/archive', icon: Archive, label: 'Arkiv' },
   { path: '/users', icon: Users, label: 'Kontakter' },
   { path: '/kb', icon: BookOpen, label: 'Knowledge Base' },
-  { path: '/settings', icon: Settings, label: 'Installningar' },
+  { path: '/settings', icon: Settings, label: 'Inställningar' },
 ];
 
 function TypeBadge({ type }: { type: 'ticket' | 'kb' }) {
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground ml-1 shrink-0">
-      {type === 'ticket' ? 'Arende' : 'KB'}
+      {type === 'ticket' ? 'Ärende' : 'KB'}
     </span>
   );
 }
@@ -104,7 +104,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput
-        placeholder="Sok arenden, artiklar, sidor..."
+        placeholder="Sök ärenden, artiklar, sidor..."
         value={search}
         onValueChange={setSearch}
       />
@@ -115,7 +115,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <>
             {/* Recently visited */}
             {recentItems.length > 0 && (
-              <CommandGroup heading="Senast besokta">
+              <CommandGroup heading="Senast besökta">
                 {recentItems.map(item => (
                   <CommandItem
                     key={`${item.itemType}-${item.id}`}
@@ -149,13 +149,13 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             <CommandSeparator />
 
             {/* Quick actions */}
-            <CommandGroup heading="Snabbatgarder">
+            <CommandGroup heading="Snabbåtgärder">
               <CommandItem
                 onSelect={() => handleSelect('/tickets/new')}
                 className="flex items-center gap-2"
               >
                 <Plus className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span className="flex-1 text-sm">Nytt arende</span>
+                <span className="flex-1 text-sm">Nytt ärende</span>
                 <CommandShortcut>N</CommandShortcut>
               </CommandItem>
               <CommandItem
@@ -183,7 +183,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 className="flex items-center gap-2"
               >
                 <Settings className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span className="flex-1 text-sm">Installningar</span>
+                <span className="flex-1 text-sm">Inställningar</span>
                 <CommandShortcut>S</CommandShortcut>
               </CommandItem>
             </CommandGroup>
@@ -195,7 +195,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           <>
             {/* Loading */}
             {isSearching && results.length === 0 && (
-              <CommandEmpty>Soker...</CommandEmpty>
+              <CommandEmpty>Söker...</CommandEmpty>
             )}
 
             {/* Results */}
@@ -224,7 +224,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
             {/* No results */}
             {!isSearching && results.length === 0 && (
-              <CommandEmpty>Inga resultat for &quot;{search}&quot;</CommandEmpty>
+              <CommandEmpty>Inga resultat för &quot;{search}&quot;</CommandEmpty>
             )}
 
             {/* Filtered nav items during search */}
@@ -251,8 +251,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
       {/* Footer hint bar */}
       <div className="border-t px-3 py-2 text-xs text-muted-foreground flex items-center gap-4">
-        <span>ESC for att stanga</span>
-        <span>Enter for att valja</span>
+        <span>ESC för att stänga</span>
+        <span>Enter för att välja</span>
       </div>
     </CommandDialog>
   );

@@ -137,6 +137,11 @@ router.post('/tickets', (req: Request, res: Response) => {
       VALUES (?, ?, ?, 'open', ?, ?, ?, ?)
     `).run(ticketId, title, finalDescription, ticketPriority, categoryId, contact.id, template_id || null);
 
+    // Synka FTS5-index
+    const ftsRow = db.prepare('SELECT rowid FROM tickets WHERE id = ?').get(ticketId) as { rowid: number };
+    db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)')
+      .run(ftsRow.rowid, title, finalDescription, '', '');
+
     // Store custom field values if provided
     if (customFields && Array.isArray(customFields) && customFields.length > 0) {
       const insertFieldStmt = db.prepare(`

@@ -43,6 +43,7 @@
     "@radix-ui/react-toggle": "^1.1.9",
     "@radix-ui/react-toggle-group": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.7",
+    "@swc/core-linux-x64-gnu": "^1.13.2",
     "@tanstack/react-query": "^5.83.0",
     "@tiptap/extension-color": "^3.20.0",
     "@tiptap/extension-highlight": "^3.20.0",
@@ -86,6 +87,9 @@
     "vaul": "^0.9.9",
     "zod": "^3.25.76"
   },
+  "overrides": {
+    "serialize-javascript": ">=7.0.5"
+  },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
     "@tailwindcss/typography": "^0.5.19",
@@ -104,8 +108,8 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.36.0",
     "vite": "^7.3.1",
-    "vitest": "^3.2.4",
     "vite-plugin-pwa": "^1.2.0",
+    "vitest": "^3.2.4",
     "workbox-precaching": "^7.4.0",
     "workbox-window": "^7.4.0"
   }

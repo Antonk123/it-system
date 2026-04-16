@@ -1291,7 +1291,7 @@
 }
 
 @media print {
-  /* Hide all navigation chrome (per D-14) */
+  /* Hide all navigation chrome */
   nav, header, aside,
   [data-sidebar], [data-print-hide] {
     display: none !important;
@@ -1308,15 +1308,38 @@
     display: none !important;
   }
 
-  /* Ensure charts render at fixed height for print (per D-15) */
+  /* Ensure charts render at fixed size for print */
   .recharts-responsive-container {
     height: 300px !important;
+    width: 100% !important;
+    min-width: 400px !important;
   }
 
-  /* Force page background white for PDF readability */
+  /* Force light theme variables for print */
+  :root, .dark, .light, [class*="theme-"] {
+    --background: 0 0% 100% !important;
+    --background-gradient: none !important;
+    --foreground: 222 47% 11% !important;
+    --card: 0 0% 100% !important;
+    --card-foreground: 222 47% 11% !important;
+    --muted: 220 14% 93% !important;
+    --muted-foreground: 220 12% 48% !important;
+    --border: 220 13% 85% !important;
+    --primary: 214 100% 50% !important;
+    --primary-foreground: 0 0% 100% !important;
+  }
+
   body {
     background: white !important;
     color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Ensure SVG charts print with colors */
+  svg, .recharts-surface {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   /* Cards render with visible borders in print */

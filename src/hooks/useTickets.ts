@@ -20,6 +20,7 @@ interface UseTicketsOptions {
   checklist?: string;
   sortBy?: 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
   sortDir?: 'asc' | 'desc';
+  company_id?: string;
 }
 
 interface PaginationInfo {
@@ -61,6 +62,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
     if (opts.checklist) params.append('checklist', opts.checklist);
     if (opts.sortBy) params.append('sortBy', opts.sortBy);
     if (opts.sortDir) params.append('sortDir', opts.sortDir);
+    if (opts.company_id && opts.company_id !== 'all') params.append('company_id', opts.company_id);
     return params.toString() ? `?${params.toString()}` : '';
   }, []);
 
@@ -91,7 +93,13 @@ export const useTickets = (options?: UseTicketsOptions) => {
           notes: t.notes || undefined,
           solution: t.solution || undefined,
           templateId: t.template_id || undefined,
-          tags: t.tags || [],
+          tags: (t.tags || []) as any,
+          sla_response_deadline: t.sla_response_deadline ?? null,
+          sla_resolution_deadline: t.sla_resolution_deadline ?? null,
+          sla_paused_at: t.sla_paused_at ?? null,
+          sla_paused_duration: t.sla_paused_duration ?? 0,
+          sla_response_met: t.sla_response_met ?? null,
+          sla_resolution_met: t.sla_resolution_met ?? null,
         }));
         return { tickets: mapped, pagination: null };
       } else {
@@ -111,7 +119,13 @@ export const useTickets = (options?: UseTicketsOptions) => {
           notes: t.notes || undefined,
           solution: t.solution || undefined,
           templateId: t.template_id || undefined,
-          tags: t.tags || [],
+          tags: (t.tags || []) as any,
+          sla_response_deadline: t.sla_response_deadline ?? null,
+          sla_resolution_deadline: t.sla_resolution_deadline ?? null,
+          sla_paused_at: t.sla_paused_at ?? null,
+          sla_paused_duration: t.sla_paused_duration ?? 0,
+          sla_response_met: t.sla_response_met ?? null,
+          sla_resolution_met: t.sla_resolution_met ?? null,
         }));
         return { tickets: mapped, pagination: response.pagination };
       }
@@ -123,8 +137,8 @@ export const useTickets = (options?: UseTicketsOptions) => {
 
   // Add ticket mutation
   const addTicketMutation = useMutation({
-    mutationFn: async (ticket: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { customFields?: CustomFieldInput[] }) => {
-      const { customFields, templateId, ...ticketData } = ticket;
+    mutationFn: async (ticket: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { customFields?: CustomFieldInput[]; assigned_to?: string; company_id?: string }) => {
+      const { customFields, templateId, assigned_to, company_id, ...ticketData } = ticket;
       const validation = ticketInsertSchema.safeParse(ticketData);
       if (!validation.success) {
         const errorMsg = getValidationError(validation.error);
@@ -143,6 +157,8 @@ export const useTickets = (options?: UseTicketsOptions) => {
         solution: validation.data.solution || null,
         customFields: customFields,
         template_id: templateId || null,
+        assigned_to: assigned_to || null,
+        company_id: company_id || null,
       });
 
       return {
@@ -189,6 +205,8 @@ export const useTickets = (options?: UseTicketsOptions) => {
       if (validated.requesterId !== undefined) updateData.requester_id = validated.requesterId || null;
       if (validated.notes !== undefined) updateData.notes = validated.notes || null;
       if (validated.solution !== undefined) updateData.solution = validated.solution || null;
+      if ((updates as any).assigned_to !== undefined) updateData.assigned_to = (updates as any).assigned_to || null;
+      if ((updates as any).company_id !== undefined) updateData.company_id = (updates as any).company_id || null;
 
       // Handle tags
       if (tagIds !== undefined || updates.tag_ids !== undefined) {
@@ -214,6 +232,12 @@ export const useTickets = (options?: UseTicketsOptions) => {
         resolvedAt: freshTicket.resolved_at ? new Date(freshTicket.resolved_at) : undefined,
         closedAt: freshTicket.closed_at ? new Date(freshTicket.closed_at) : undefined,
         tags: (freshTicket as any).tags || [],
+        sla_response_deadline: freshTicket.sla_response_deadline ?? null,
+        sla_resolution_deadline: freshTicket.sla_resolution_deadline ?? null,
+        sla_paused_at: freshTicket.sla_paused_at ?? null,
+        sla_paused_duration: freshTicket.sla_paused_duration ?? 0,
+        sla_response_met: freshTicket.sla_response_met ?? null,
+        sla_resolution_met: freshTicket.sla_resolution_met ?? null,
       };
     },
     onMutate: async ({ id, updates, customFields: _cf }) => {
@@ -286,7 +310,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
   });
 
   const addTicket = useCallback(
-    async (ticket: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'>, customFields?: CustomFieldInput[]) => {
+    async (ticket: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { assigned_to?: string; company_id?: string }, customFields?: CustomFieldInput[]) => {
       // Let the mutation handle errors (it shows toast on error)
       // Don't silently swallow errors by returning null
       return await addTicketMutation.mutateAsync({ ...ticket, customFields });

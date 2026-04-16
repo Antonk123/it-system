@@ -20,21 +20,23 @@ export const useUsers = () => {
     queryKey: userKeys.list(),
     queryFn: async () => {
       const data = await api.getContacts();
-      const mapped: User[] = data.map((u) => ({
+      const mapped = data.map((u) => ({
         id: u.id,
         name: u.name,
         email: u.email,
-        department: u.company || undefined,
+        department: u.department || undefined,
+        company_id: u.company_id || undefined,
+        company_name: u.company_name || undefined,
         createdAt: new Date(u.created_at),
       }));
-      return mapped;
+      return mapped as (User & { company_id?: string; company_name?: string })[];
     },
     staleTime: 1000 * 60 * 5, // Users don't change very often, cache for 5 minutes
   });
 
   // Add user mutation
   const addUserMutation = useMutation({
-    mutationFn: async (user: Omit<User, 'id' | 'createdAt'>) => {
+    mutationFn: async (user: Omit<User, 'id' | 'createdAt'> & { company_id?: string }) => {
       const validation = contactSchema.safeParse(user);
       if (!validation.success) {
         throw new Error(getValidationError(validation.error) || 'Invalid contact data');
@@ -42,13 +44,14 @@ export const useUsers = () => {
       const data = await api.createContact({
         name: validation.data.name,
         email: validation.data.email,
-        company: validation.data.department || null,
-      });
+        company_id: (user as any).company_id || null,
+        department: validation.data.department || null,
+      } as any);
       return {
         id: data.id,
         name: data.name,
         email: data.email,
-        department: data.company || undefined,
+        department: data.department || undefined,
         createdAt: new Date(data.created_at),
       };
     },
@@ -66,7 +69,7 @@ export const useUsers = () => {
 
   // Update user mutation
   const updateUserMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<User> }) => {
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<User> & { company_id?: string } }) => {
       const validation = contactUpdateSchema.safeParse(updates);
       if (!validation.success) {
         throw new Error(getValidationError(validation.error) || 'Invalid contact data');
@@ -74,8 +77,9 @@ export const useUsers = () => {
       await api.updateContact(id, {
         name: validation.data.name,
         email: validation.data.email,
-        company: validation.data.department || null,
-      });
+        company_id: (updates as any).company_id ?? null,
+        department: validation.data.department || null,
+      } as any);
       return { id, updates };
     },
     onSuccess: ({ id, updates }) => {
@@ -109,7 +113,7 @@ export const useUsers = () => {
   });
 
   const addUser = useCallback(
-    async (user: Omit<User, 'id' | 'createdAt'>) => {
+    async (user: Omit<User, 'id' | 'createdAt'> & { company_id?: string }) => {
       try {
         return await addUserMutation.mutateAsync(user);
       } catch (error) {

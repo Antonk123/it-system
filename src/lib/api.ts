@@ -634,6 +634,35 @@ class ApiClient {
     });
   }
 
+  // Companies
+  async getCompanies() {
+    return this.request<CompanyRow[]>('/companies');
+  }
+
+  async getCompany(id: string) {
+    return this.request<CompanyDetail>(`/companies/${id}`);
+  }
+
+  async createCompany(company: Partial<CompanyRow>) {
+    return this.request<CompanyRow>('/companies', {
+      method: 'POST',
+      body: company,
+    });
+  }
+
+  async updateCompany(id: string, updates: Partial<CompanyRow>) {
+    return this.request<CompanyRow>(`/companies/${id}`, {
+      method: 'PUT',
+      body: updates,
+    });
+  }
+
+  async deleteCompany(id: string) {
+    return this.request<{ message: string }>(`/companies/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   // Attachments
   async getAttachments(ticketId: string) {
     return this.request<AttachmentRow[]>(`/attachments/ticket/${ticketId}`);
@@ -1017,6 +1046,120 @@ class ApiClient {
   async unsubscribePush(endpoint: string): Promise<{ ok: boolean }> {
     return this.request('/push/unsubscribe', { method: 'DELETE', body: { endpoint } });
   }
+
+  // Billing
+  async getBillingRate(companyId: string) {
+    return this.request<BillingRateRow | null>(`/billing/rates/${companyId}`);
+  }
+
+  async upsertBillingRate(companyId: string, ratePerHour: number, currency?: string) {
+    return this.request<BillingRateRow>(`/billing/rates/${companyId}`, {
+      method: 'PUT',
+      body: { rate_per_hour: ratePerHour, currency: currency || 'SEK' },
+    });
+  }
+
+  async getInvoices(companyId?: string) {
+    const query = companyId ? `?company_id=${companyId}` : '';
+    return this.request<InvoiceRow[]>(`/billing/invoices${query}`);
+  }
+
+  async getInvoice(id: string) {
+    return this.request<InvoiceDetail>(`/billing/invoices/${id}`);
+  }
+
+  async previewInvoice(companyId: string, periodStart: string, periodEnd: string) {
+    return this.request<InvoicePreview>('/billing/invoices/preview', {
+      method: 'POST',
+      body: { company_id: companyId, period_start: periodStart, period_end: periodEnd },
+    });
+  }
+
+  async createInvoice(data: { company_id: string; period_start: string; period_end: string; lines: any[]; total_hours: number; total_amount: number; currency: string }) {
+    return this.request<InvoiceRow>('/billing/invoices', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async updateInvoiceStatus(id: string, status: string) {
+    return this.request<InvoiceRow>(`/billing/invoices/${id}/status`, {
+      method: 'PUT',
+      body: { status },
+    });
+  }
+
+  async deleteInvoice(id: string) {
+    return this.request<{ message: string }>(`/billing/invoices/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // SLA Policies
+  async getSLAPolicies(companyId?: string) {
+    const query = companyId ? `?company_id=${companyId}` : '';
+    return this.request<SLAPolicyRow[]>(`/sla${query}`);
+  }
+
+  async upsertSLAPolicies(companyId: string | null, policies: Array<{ priority: string; response_time_minutes: number; resolution_time_minutes: number }>) {
+    return this.request<SLAPolicyRow[]>('/sla', {
+      method: 'PUT',
+      body: { company_id: companyId, policies },
+    });
+  }
+
+  async deleteSLAPolicy(id: string) {
+    return this.request<{ message: string }>(`/sla/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // API Keys
+  async getApiKeys() {
+    return this.request<ApiKeyRow[]>('/api-keys');
+  }
+
+  async createApiKey(data: { name: string; permissions?: string[]; expires_at?: string }) {
+    return this.request<ApiKeyRow>('/api-keys', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async deleteApiKey(id: string) {
+    return this.request<{ message: string }>(`/api-keys/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Webhooks
+  async getWebhooks() {
+    return this.request<WebhookRow[]>('/webhooks');
+  }
+
+  async createWebhook(data: { url: string; events: string[] }) {
+    return this.request<WebhookRow>('/webhooks', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async updateWebhook(id: string, data: { url?: string; events?: string[]; active?: boolean }) {
+    return this.request<WebhookRow>(`/webhooks/${id}`, {
+      method: 'PUT',
+      body: data,
+    });
+  }
+
+  async deleteWebhook(id: string) {
+    return this.request<{ message: string }>(`/webhooks/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getWebhookDeliveries(webhookId: string) {
+    return this.request<WebhookDeliveryRow[]>(`/webhooks/${webhookId}/deliveries`);
+  }
 }
 
 // Types
@@ -1034,6 +1177,10 @@ export interface TicketRow {
   priority: string;
   category_id: string | null;
   requester_id: string | null;
+  company_id: string | null;
+  company_name?: string | null;
+  assigned_to: string | null;
+  assigned_to_name?: string | null;
   notes: string | null;
   solution: string | null;
   created_at: string;
@@ -1043,6 +1190,22 @@ export interface TicketRow {
   template_id?: string | null;
   field_values?: { field_name: string; field_label: string; field_value: string }[];
   tags?: Array<{ id: string; name: string; color: string }>;
+  sla_response_deadline: string | null;
+  sla_resolution_deadline: string | null;
+  sla_paused_at: string | null;
+  sla_paused_duration: number;
+  sla_response_met: number | null;
+  sla_resolution_met: number | null;
+}
+
+export interface SLAPolicyRow {
+  id: string;
+  company_id: string | null;
+  priority: string;
+  response_time_minutes: number;
+  resolution_time_minutes: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface TicketHistoryItem {
@@ -1069,8 +1232,35 @@ export interface ContactRow {
   name: string;
   email: string;
   phone: string | null;
-  company: string | null;
+  company_id: string | null;
+  company_name: string | null;
+  department: string | null;
   created_at: string;
+}
+
+export interface CompanyRow {
+  id: string;
+  name: string;
+  org_number: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  contact_count: number;
+  open_ticket_count: number;
+  total_ticket_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyDetail extends CompanyRow {
+  contacts: Array<{ id: string; name: string; email: string; phone: string | null; created_at: string }>;
+  stats: {
+    total: number;
+    open_count: number;
+    closed_count: number;
+    avg_resolution_days: number | null;
+    total_minutes: number;
+  };
 }
 
 export interface AttachmentRow {
@@ -1257,6 +1447,88 @@ export interface CustomFieldInput {
   fieldName: string;
   fieldLabel: string;
   fieldValue: string;
+}
+
+export interface ApiKeyRow {
+  id: string;
+  name: string;
+  key?: string; // Only present on creation response
+  key_prefix: string;
+  permissions: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface WebhookRow {
+  id: string;
+  url: string;
+  events: string;
+  secret?: string; // Only present on creation response
+  active: number;
+  created_at: string;
+  last_triggered_at: string | null;
+}
+
+export interface WebhookDeliveryRow {
+  id: string;
+  webhook_id: string;
+  event: string;
+  payload: string;
+  response_code: number | null;
+  attempts: number;
+  delivered_at: string | null;
+  created_at: string;
+}
+
+export interface BillingRateRow {
+  id: string;
+  company_id: string;
+  rate_per_hour: number;
+  currency: string;
+}
+
+export interface InvoiceRow {
+  id: string;
+  company_id: string;
+  company_name?: string;
+  period_start: string;
+  period_end: string;
+  status: string;
+  total_hours: number;
+  total_amount: number;
+  currency: string;
+  created_at: string;
+  sent_at: string | null;
+  paid_at: string | null;
+}
+
+export interface InvoiceLineRow {
+  id: string;
+  ticket_id: string | null;
+  ticket_title?: string;
+  description: string;
+  hours: number;
+  rate: number;
+  amount: number;
+}
+
+export interface InvoiceDetail extends InvoiceRow {
+  org_number?: string;
+  company_email?: string;
+  company_address?: string;
+  lines: InvoiceLineRow[];
+}
+
+export interface InvoicePreview {
+  company_id: string;
+  period_start: string;
+  period_end: string;
+  rate_per_hour: number;
+  currency: string;
+  lines: Array<InvoiceLineRow & { entry_count: number }>;
+  total_hours: number;
+  total_amount: number;
 }
 
 // Export singleton instance
