@@ -50,6 +50,7 @@ const themeOptions = [
   { value: 'theme-midnight', label: 'Midnight' },
   { value: 'theme-graphite', label: 'Graphite' },
   { value: 'theme-stone', label: 'Stone' },
+  { value: 'theme-linear', label: 'Linear' },
 ] as const;
 
 // Memoized list item components for better performance
