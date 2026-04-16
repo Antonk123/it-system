@@ -136,7 +136,7 @@ const App = () => (
       attribute="class"
       defaultTheme="theme-default"
       enableSystem={false}
-      themes={["theme-default", "theme-midnight", "theme-graphite", "theme-stone", "theme-linear"]}
+      themes={["theme-default", "theme-midnight", "theme-graphite", "theme-stone", "theme-linear", "theme-spotify"]}
     >
       <AppearanceInitializer />
       <TooltipProvider>
