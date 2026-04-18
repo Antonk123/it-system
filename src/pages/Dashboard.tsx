@@ -1,16 +1,21 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Ticket, Clock, CheckCircle, Archive, AlertTriangle, ArrowRight, PauseCircle } from 'lucide-react';
+import { Ticket, Clock, CheckCircle, AlertTriangle, ArrowRight, PauseCircle } from 'lucide-react';
 import { subDays, isSameDay, format, startOfDay } from 'date-fns';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useUpcomingReminders } from '@/hooks/useUpcomingReminders';
+import { useActivityFeed } from '@/hooks/useActivityFeed';
+import { useStatusCounts } from '@/hooks/useStatusCounts';
 import { Layout } from '@/components/Layout';
 import { KPICard } from '@/components/KPICard';
 import { AgingTicketsPanel } from '@/components/AgingTicketsPanel';
 import { RemindersPanel } from '@/components/RemindersPanel';
+import { StatusFlowPanel } from '@/components/StatusFlowPanel';
+import { ActivityFeedPanel } from '@/components/ActivityFeedPanel';
+import { TicketQueueTable } from '@/components/TicketQueueTable';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -29,6 +34,23 @@ const kpiItem = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: 'easeOut' } },
 };
 
+const sectionFade = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
+};
+
+// ---------------------------------------------------------------------------
+// Greeting helper
+// ---------------------------------------------------------------------------
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 5) return 'God natt';
+  if (hour < 10) return 'God morgon';
+  if (hour < 13) return 'God förmiddag';
+  if (hour < 18) return 'God eftermiddag';
+  return 'God kväll';
+}
+
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
@@ -39,6 +61,8 @@ const Dashboard = () => {
   const navigate = useNavigate();
   const { data: dashboardOverview, isLoading: isOverviewLoading } = useDashboardOverview();
   const { data: upcomingReminders, isLoading: isRemindersLoading } = useUpcomingReminders();
+  const { data: activityEvents, isLoading: isActivityLoading } = useActivityFeed(15);
+  const { data: statusCounts, isLoading: isStatusLoading } = useStatusCounts();
 
   const stats = useMemo(() => {
     const open = tickets.filter(t => t.status === 'open').length;
@@ -98,25 +122,42 @@ const Dashboard = () => {
       inProgress: generateSparkline(t => t.status === 'in-progress'),
       waiting: generateSparkline(t => t.status === 'waiting'),
       resolved: generateSparkline(t => t.status === 'resolved'),
-      closed: generateSparkline(t => t.status === 'closed'),
     };
   }, [tickets]);
 
-  const criticalTickets = useMemo(() => {
-    return tickets
-      .filter(t => t.priority === 'critical' && t.status !== 'closed')
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  }, [tickets]);
+  const getUserName = (id: string) => {
+    const user = getUserById(id);
+    return user?.name || user?.email;
+  };
 
   return (
     <Layout>
-      <div className="space-y-5">
-        <div>
-          <h1 className="text-xl font-bold text-foreground">Översikt</h1>
-          <p className="text-muted-foreground mt-1">Översikt över dina IT-supportärenden</p>
-        </div>
+      <div className="space-y-6">
+        {/* Page greeting */}
+        <motion.div
+          initial={prefersReducedMotion ? false : { opacity: 0, y: -8 }}
+          animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <h1 className="text-2xl md:text-[30px] font-bold tracking-tight text-foreground">
+            {getGreeting()}, <span className="font-serif italic font-medium text-[hsl(var(--accent))]">Anton</span>.
+          </h1>
+          <p className="text-sm text-muted-foreground mt-1.5">
+            Du har{' '}
+            <span className="font-mono text-xs bg-muted/50 px-1.5 py-0.5 rounded text-foreground">{stats.open}</span>
+            {' '}öppna ärenden och{' '}
+            <span className="font-mono text-xs bg-muted/50 px-1.5 py-0.5 rounded text-foreground">{stats.inProgress}</span>
+            {' '}pågående.
+            {isOverviewLoading
+              ? ''
+              : dashboardOverview?.todayCounts.created_today
+                ? ` +${dashboardOverview.todayCounts.created_today} nya idag.`
+                : ''
+            }
+          </p>
+        </motion.div>
 
-        {/* Stats Grid */}
+        {/* KPI Grid */}
         <motion.div
           className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
           variants={kpiContainer}
@@ -179,56 +220,62 @@ const Dashboard = () => {
           </motion.div>
         </motion.div>
 
-        {/* Secondary Stats */}
-        <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-          variants={kpiContainer}
-          initial={prefersReducedMotion ? false : 'hidden'}
-          animate={prefersReducedMotion ? false : 'visible'}
-        >
-          <motion.div variants={kpiItem}>
-            <KPICard
-              label="Arkiverade"
-              value={stats.closed}
-              icon={<Archive className="w-5 h-5" />}
-              trend={trends.closed}
-              sparklineData={sparklineData.closed}
-              onClick={() => navigate('/archive')}
-              subLabel={
-                isOverviewLoading
-                  ? <Skeleton className="h-3 w-16 mt-1" />
-                  : dashboardOverview?.todayCounts.closed_today
-                    ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.closed_today} idag</span>
-                    : <span>+0 idag</span>
-              }
+        {/* Two-column layout: Ticket queue + Right sidebar */}
+        <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-5">
+          {/* Left: Ticket queue */}
+          <motion.div
+            className="space-y-5"
+            variants={sectionFade}
+            initial={prefersReducedMotion ? false : 'hidden'}
+            animate={prefersReducedMotion ? false : 'visible'}
+            transition={{ delay: 0.15 }}
+          >
+            <TicketQueueTable
+              tickets={tickets}
+              isLoading={tickets.length === 0 && isOverviewLoading}
+              getUserName={getUserName}
             />
-          </motion.div>
-        </motion.div>
 
-        {/* Dashboard Panels */}
-        <motion.div
-          className="grid grid-cols-1 lg:grid-cols-2 gap-4"
-          variants={kpiContainer}
-          initial={prefersReducedMotion ? false : 'hidden'}
-          animate={prefersReducedMotion ? false : 'visible'}
-        >
-          <motion.div variants={kpiItem}>
-            <AgingTicketsPanel
-              tickets={dashboardOverview?.agingTickets}
-              isLoading={isOverviewLoading}
+            {/* Aging + Reminders below the queue */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <AgingTicketsPanel
+                tickets={dashboardOverview?.agingTickets}
+                isLoading={isOverviewLoading}
+              />
+              <RemindersPanel
+                reminders={upcomingReminders}
+                isLoading={isRemindersLoading}
+              />
+            </div>
+          </motion.div>
+
+          {/* Right column: Status flow + Activity */}
+          <motion.div
+            className="space-y-5"
+            variants={sectionFade}
+            initial={prefersReducedMotion ? false : 'hidden'}
+            animate={prefersReducedMotion ? false : 'visible'}
+            transition={{ delay: 0.25 }}
+          >
+            <StatusFlowPanel
+              counts={statusCounts}
+              isLoading={isStatusLoading}
+            />
+            <ActivityFeedPanel
+              events={activityEvents}
+              isLoading={isActivityLoading}
             />
           </motion.div>
-          <motion.div variants={kpiItem}>
-            <RemindersPanel
-              reminders={upcomingReminders}
-              isLoading={isRemindersLoading}
-            />
-          </motion.div>
-        </motion.div>
+        </div>
 
         {/* Critical Tickets Alert */}
         {stats.critical > 0 && (
-          <div className="bg-destructive/10 border border-destructive/30 rounded-lg p-4">
+          <motion.div
+            className="bg-destructive/10 border border-destructive/30 rounded-lg p-4"
+            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.98 }}
+            animate={prefersReducedMotion ? false : { opacity: 1, scale: 1 }}
+            transition={{ delay: 0.3 }}
+          >
             <div className="flex items-center gap-3">
               <AlertTriangle className="w-5 h-5 text-destructive" />
               <div className="flex-1">
@@ -242,7 +289,7 @@ const Dashboard = () => {
                 </Button>
               </Link>
             </div>
-          </div>
+          </motion.div>
         )}
       </div>
     </Layout>

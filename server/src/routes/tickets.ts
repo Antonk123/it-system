@@ -915,6 +915,61 @@ router.get('/dashboard-overview', authenticate, (req: AuthRequest, res: Response
   }
 });
 
+// GET /activity-feed — recent ticket history events for dashboard
+router.get('/activity-feed', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 15, 50);
+    const events = db.prepare(`
+      SELECT
+        th.id,
+        th.ticket_id,
+        th.field_name,
+        th.old_value,
+        th.new_value,
+        th.changed_at,
+        t.title AS ticket_title,
+        COALESCE(u.display_name, u.email) AS user_name
+      FROM ticket_history th
+      LEFT JOIN tickets t ON t.id = th.ticket_id
+      LEFT JOIN users u ON th.user_id = u.id
+      ORDER BY th.changed_at DESC
+      LIMIT ?
+    `).all(limit);
+
+    res.json(events);
+  } catch (error) {
+    console.error('Error fetching activity feed:', error);
+    res.status(500).json({ error: 'Failed to fetch activity feed' });
+  }
+});
+
+// GET /status-counts — count per status for flow visualization
+router.get('/status-counts', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const counts = db.prepare(`
+      SELECT status, COUNT(*) as count
+      FROM tickets
+      WHERE status IN ('open', 'in-progress', 'waiting', 'resolved', 'closed')
+      GROUP BY status
+    `).all() as { status: string; count: number }[];
+
+    const result: Record<string, number> = {
+      open: 0,
+      'in-progress': 0,
+      waiting: 0,
+      resolved: 0,
+      closed: 0,
+    };
+    for (const row of counts) {
+      result[row.status] = row.count;
+    }
+    res.json(result);
+  } catch (error) {
+    console.error('Error fetching status counts:', error);
+    res.status(500).json({ error: 'Failed to fetch status counts' });
+  }
+});
+
 // GET /upcoming-reminders — unsent reminders ordered by proximity
 router.get('/upcoming-reminders', authenticate, (req: AuthRequest, res: Response) => {
   try {
