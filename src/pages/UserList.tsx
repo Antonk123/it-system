@@ -143,7 +143,7 @@ const UserList = () => {
   const handleExport = async () => {
     try {
       await api.exportContacts();
-      toast.success('Användare exporterade till CSV');
+      toast.success('Användare exporterade till Excel');
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Misslyckades att exportera användare');
@@ -237,7 +237,7 @@ const UserList = () => {
               className="gap-2"
             >
               <Download className="w-4 h-4" />
-              Exportera CSV
+              Exportera Excel
             </Button>
             <Button
               variant="outline"

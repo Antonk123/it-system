@@ -4,6 +4,7 @@ import multer from 'multer';
 import { existsSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import * as XLSX from 'xlsx';
 import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail } from '../lib/email.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
@@ -53,47 +54,31 @@ function escapeCSVField(field: any): string {
   return str;
 }
 
-function generateCSV(tickets: any[], categories: any[], contacts: any[]): string {
-  // Create lookup maps for performance
+function generateXLSX(tickets: any[], categories: any[], contacts: any[]): Buffer {
   const categoryMap = new Map(categories.map((c: any) => [c.id, c.label]));
   const contactMap = new Map(contacts.map((c: any) => [c.id, { name: c.name, email: c.email }]));
 
-  // CSV Header with BOM for Excel UTF-8 compatibility
-  const BOM = '\uFEFF';
   const headers = [
     'id', 'title', 'description', 'status', 'priority', 'category',
     'requester_name', 'requester_email', 'notes', 'solution',
     'created_at', 'updated_at', 'resolved_at', 'closed_at'
   ];
 
-  let csv = BOM + headers.join(',') + '\n';
-
-  // Add rows
-  for (const ticket of tickets) {
+  const rows = tickets.map(ticket => {
     const category = ticket.category_id ? categoryMap.get(ticket.category_id) || '' : '';
     const requester = ticket.requester_id ? contactMap.get(ticket.requester_id) : null;
-
-    const row = [
-      escapeCSVField(ticket.id),
-      escapeCSVField(ticket.title),
-      escapeCSVField(ticket.description),
-      escapeCSVField(ticket.status),
-      escapeCSVField(ticket.priority),
-      escapeCSVField(category),
-      escapeCSVField(requester?.name || ''),
-      escapeCSVField(requester?.email || ''),
-      escapeCSVField(ticket.notes),
-      escapeCSVField(ticket.solution),
-      escapeCSVField(ticket.created_at),
-      escapeCSVField(ticket.updated_at),
-      escapeCSVField(ticket.resolved_at),
-      escapeCSVField(ticket.closed_at)
+    return [
+      ticket.id, ticket.title, ticket.description || '', ticket.status, ticket.priority,
+      category, requester?.name || '', requester?.email || '',
+      ticket.notes || '', ticket.solution || '',
+      ticket.created_at, ticket.updated_at, ticket.resolved_at || '', ticket.closed_at || ''
     ];
+  });
 
-    csv += row.join(',') + '\n';
-  }
-
-  return csv;
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Ärenden');
+  return Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
 }
 
 // CSV Import helpers
@@ -832,16 +817,14 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
     // Get all contacts for lookup
     const contacts = db.prepare('SELECT id, name, email FROM contacts').all();
 
-    // Generate CSV
-    const csv = generateCSV(tickets, categories, contacts);
+    const xlsxBuffer = generateXLSX(tickets, categories, contacts);
 
-    // Set headers for file download
     const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `tickets-export-${timestamp}.csv`;
+    const filename = `tickets-export-${timestamp}.xlsx`;
 
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(csv);
+    res.send(xlsxBuffer);
   } catch (error) {
     console.error('Error exporting tickets:', error);
     res.status(500).json({ error: 'Failed to export tickets' });

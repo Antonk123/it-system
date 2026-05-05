@@ -241,7 +241,7 @@ class ApiClient {
 
     // Get filename from Content-Disposition header or use default
     const contentDisposition = response.headers.get('Content-Disposition');
-    let filename = 'tickets-export.csv';
+    let filename = 'tickets-export.xlsx';
     if (contentDisposition) {
       const match = contentDisposition.match(/filename="(.+)"/);
       if (match) filename = match[1];
@@ -583,7 +583,7 @@ class ApiClient {
 
     // Get filename from Content-Disposition header or use default
     const contentDisposition = response.headers.get('Content-Disposition');
-    let filename = 'kontakter-export.csv';
+    let filename = 'kontakter-export.xlsx';
     if (contentDisposition) {
       const match = contentDisposition.match(/filename="(.+)"/);
       if (match) filename = match[1];

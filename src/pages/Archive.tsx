@@ -205,10 +205,11 @@ const Archive = () => {
     }
   }, [selectedIds, refetch]);
 
-  const handleBulkExportCsv = useCallback(() => {
+  const handleBulkExportXlsx = useCallback(async () => {
     const selected = tickets.filter(t => selectedIds.includes(t.id));
     if (selected.length === 0) return;
 
+    const XLSX = await import('xlsx');
     const headers = ['ID', 'Titel', 'Prioritet', 'Kategori', 'Taggar', 'Stängd'];
     const rows = selected.map(t => [
       t.id,
@@ -219,27 +220,22 @@ const Archive = () => {
       t.closedAt || '',
     ]);
 
-    const csvContent = [headers, ...rows]
-      .map(row => row.map(field => {
-        const str = String(field ?? '');
-        if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-          return `"${str.replace(/"/g, '""')}"`;
-        }
-        return str;
-      }).join(','))
-      .join('\n');
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Arkiv');
+    const xlsxData = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([xlsxData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `arkiv-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `arkiv-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
     document.body.appendChild(a);
     a.click();
     URL.revokeObjectURL(url);
     document.body.removeChild(a);
 
-    toast.success(`${selected.length} arenden exporterade till CSV`);
+    toast.success(`${selected.length} ärenden exporterade till Excel`);
   }, [tickets, selectedIds]);
 
   const handleBulkDelete = useCallback(async () => {
@@ -365,7 +361,7 @@ const Archive = () => {
         selectedCount={selectedIds.length}
         onReopen={handleBulkReopen}
         onChangePriority={handleBulkChangePriority}
-        onExportCsv={handleBulkExportCsv}
+        onExportCsv={handleBulkExportXlsx}
         onDeletePermanently={handleBulkDelete}
       />
 

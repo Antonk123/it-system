@@ -214,7 +214,7 @@ const TicketList = () => {
       const queryString = params.toString() ? `?${params.toString()}` : '';
 
       await api.exportTickets(queryString);
-      toast.success('CSV-export lyckades!');
+      toast.success('Excel-export lyckades!');
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Misslyckades att exportera ärenden');

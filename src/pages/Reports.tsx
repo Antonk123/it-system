@@ -513,7 +513,7 @@ const Reports = () => {
           ? `ärenden från ${selectedYear}`
           : `ärenden från ${MONTH_NAMES[parseInt(selectedMonth)]} ${selectedYear}`;
 
-      toast.success(`CSV-export klar: ${filterDesc}`);
+      toast.success(`Excel-export klar: ${filterDesc}`);
     } catch (error) {
       console.error('Export failed:', error);
       toast.error('Kunde inte exportera rapportdata');
@@ -569,7 +569,7 @@ const Reports = () => {
               className="gap-2"
             >
               <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Export CSV</span>
+              <span className="hidden sm:inline">Export Excel</span>
             </Button>
             <Button
               variant="outline"

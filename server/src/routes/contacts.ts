@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import * as XLSX from 'xlsx';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import multer from 'multer';
@@ -108,26 +109,20 @@ router.get('/export', authenticate, (_req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'No contacts to export' });
     }
 
-    // Generate CSV with BOM for Excel UTF-8 compatibility
-    const BOM = '\uFEFF';
     const headers = ['Namn', 'Email', 'Telefon', 'Företag', 'Skapad'];
-    let csv = BOM + headers.join(',') + '\n';
+    const rows = contacts.map(c => [
+      c.name, c.email, c.phone || '', c.company_name || '', c.created_at
+    ]);
 
-    for (const contact of contacts) {
-      const row = [
-        escapeCSVField(contact.name),
-        escapeCSVField(contact.email),
-        escapeCSVField(contact.phone || ''),
-        escapeCSVField(contact.company_name || ''),
-        escapeCSVField(contact.created_at),
-      ];
-      csv += row.join(',') + '\n';
-    }
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Kontakter');
+    const xlsxBuffer = Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
 
     const timestamp = new Date().toISOString().split('T')[0];
-    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="kontakter-${timestamp}.csv"`);
-    res.send(csv);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="kontakter-${timestamp}.xlsx"`);
+    res.send(xlsxBuffer);
   } catch (error) {
     console.error('Error exporting contacts:', error);
     res.status(500).json({ error: 'Failed to export contacts' });
