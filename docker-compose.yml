@@ -24,6 +24,9 @@ services:
       - EMAIL_FROM=${EMAIL_FROM:-}
       - EMAIL_TO=${EMAIL_TO:-}
       - APP_BASE_URL=${APP_BASE_URL:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-}
+      - AI_MODEL_SMART=${AI_MODEL_SMART:-}
     logging:
       driver: "json-file"
       options:

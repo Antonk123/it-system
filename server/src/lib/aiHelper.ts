@@ -1,0 +1,342 @@
+import Anthropic from '@anthropic-ai/sdk';
+import { db } from '../db/connection.js';
+import { v4 as uuidv4 } from 'uuid';
+
+/**
+ * AI-helper för IT-Ticket.
+ *
+ * Tre publika funktioner:
+ *   1. suggestCategory  — klassificering vid ärendeskapande (Haiku, billigt)
+ *   2. draftReply       — utkast på svar baserat på KB-träffar (Sonnet, kvalitet)
+ *   3. summarizeTicket  — sammanfattning av långa ärenden (Sonnet, cachas)
+ *
+ * Designprinciper:
+ *   - Alla funktioner returnerar null vid fel — kärnflödet får ALDRIG blockeras.
+ *   - Token-användning loggas i ai_usage_log för kostnadsuppföljning per installation.
+ *   - Default-modell konfigurerbar via env (AI_MODEL). AI_MODEL_SMART är en
+ *     escape-hatch för att uppgradera draft+summary till en starkare modell.
+ *   - Klienten lazy-initieras — om ANTHROPIC_API_KEY saknas är aiEnabled() false
+ *     och alla funktioner no-op:ar.
+ */
+
+// ─── Klient & konfig ──────────────────────────────────────────────────────────
+
+const apiKey = process.env.ANTHROPIC_API_KEY;
+const client = apiKey ? new Anthropic({ apiKey }) : null;
+
+// Default-modell för alla AI-funktioner. Haiku 4.5 är optimerad för exakt vårt
+// användningsfall: hämta info ur given kontext (KB-artiklar) och presentera
+// den vänligt på svenska. Snabb (oftast <1s), billig (~5x billigare än Sonnet),
+// och tillräcklig kvalitet när KB är välskrivet.
+//
+// Escape-hatch: om du under pilot märker att utkast eller sammanfattningar
+// blir för generiska, sätt AI_MODEL_SMART=claude-sonnet-4-6 för att uppgradera
+// draft + summary till en starkare modell. Kategorisering använder alltid
+// default-modellen — den uppgiften behöver aldrig mer än Haiku.
+const MODEL_DEFAULT = process.env.AI_MODEL || 'claude-haiku-4-5-20251001';
+const MODEL_SMART = process.env.AI_MODEL_SMART || MODEL_DEFAULT;
+
+export const aiEnabled = (): boolean => client !== null;
+
+// ─── Token-logg (för kostnadsuppföljning) ─────────────────────────────────────
+
+interface UsageRecord {
+  feature: 'categorize' | 'draft' | 'summary';
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  ticket_id: string | null;
+  duration_ms: number;
+  ok: boolean;
+}
+
+function logUsage(record: UsageRecord): void {
+  try {
+    db.prepare(`
+      INSERT INTO ai_usage_log (id, feature, model, input_tokens, output_tokens, ticket_id, duration_ms, ok, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `).run(
+      uuidv4(),
+      record.feature,
+      record.model,
+      record.input_tokens,
+      record.output_tokens,
+      record.ticket_id,
+      record.duration_ms,
+      record.ok ? 1 : 0
+    );
+  } catch (err) {
+    // Logging fel ska aldrig bryta huvudflödet
+    console.error('AI usage log failed (non-fatal):', err);
+  }
+}
+
+// Hjälpfunktion: extrahera JSON ur LLM-output även om det finns kringtext
+function extractJson<T>(text: string): T | null {
+  // Greedy match — fångar nestade objekt också
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try {
+    return JSON.parse(match[0]) as T;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Feature 1: AI-kategorisering ─────────────────────────────────────────────
+
+export interface CategorySuggestion {
+  categoryId: string;
+  confidence: number;
+}
+
+/**
+ * Föreslår en kategori för ett ärende baserat på titel + beskrivning.
+ * Returnerar null om: AI är avslagen, API-fel, eller LLM-output ej parserbar.
+ *
+ * Anropet är icke-blockerande — kalla utan await i POST /tickets om du vill
+ * att ärendet ska skapas direkt och kategorisera asynkront.
+ *
+ * Modell: default (Haiku) — ca 200 input + 50 output tokens per anrop ≈ $0,0004.
+ *   $10 i kredit räcker till ~25 000 kategoriseringar.
+ */
+export async function suggestCategory(
+  title: string,
+  description: string,
+  categories: { id: string; label: string }[],
+  ticketId: string | null = null
+): Promise<CategorySuggestion | null> {
+  if (!client || categories.length === 0) return null;
+
+  const start = Date.now();
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let ok = false;
+
+  try {
+    const labels = categories.map(c => `- ${c.label} (id: ${c.id})`).join('\n');
+    const msg = await client.messages.create({
+      model: MODEL_DEFAULT,
+      max_tokens: 100,
+      messages: [{
+        role: 'user',
+        content: `Klassificera detta IT-ärende i en av kategorierna nedan. Svara ENDAST med JSON i formatet: {"categoryId": "<id>", "confidence": 0.0-1.0}. Sätt confidence till 0.5 eller lägre om du är osäker.
+
+Tillgängliga kategorier:
+${labels}
+
+Ärende:
+Titel: ${title}
+Beskrivning: ${description.slice(0, 800)}`
+      }]
+    });
+
+    inputTokens = msg.usage?.input_tokens ?? 0;
+    outputTokens = msg.usage?.output_tokens ?? 0;
+
+    const text = msg.content[0].type === 'text' ? msg.content[0].text : '';
+    const parsed = extractJson<CategorySuggestion>(text);
+
+    // Validera att den föreslagna kategorin finns i listan
+    if (!parsed || !categories.find(c => c.id === parsed.categoryId)) return null;
+    if (typeof parsed.confidence !== 'number') return null;
+
+    ok = true;
+    return parsed;
+  } catch (err) {
+    console.error('AI categorize failed:', err);
+    return null;
+  } finally {
+    logUsage({
+      feature: 'categorize',
+      model: MODEL_DEFAULT,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      ticket_id: ticketId,
+      duration_ms: Date.now() - start,
+      ok,
+    });
+  }
+}
+
+// ─── Feature 2: AI-utkast på svar baserat på KB ───────────────────────────────
+
+/**
+ * Genererar ett svar på ett ärende baserat på relevanta KB-artiklar.
+ * KB-artiklarna förväntas vara förfiltrerade via FTS-sökning (kallaren ansvarar).
+ *
+ * Modell: default (Haiku) — ca 1500 input + 400 output tokens ≈ $0,002 per utkast.
+ *   $10 i kredit räcker till ~5 000 utkast.
+ *   Sätt AI_MODEL_SMART=claude-sonnet-4-6 om du vill uppgradera kvaliteten (~5x dyrare).
+ */
+export async function draftReply(
+  ticket: { title: string; description: string },
+  relevantKbArticles: { title: string; content: string }[],
+  ticketId: string | null = null
+): Promise<string | null> {
+  if (!client) return null;
+
+  const start = Date.now();
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let ok = false;
+
+  try {
+    // Trunkera KB-innehåll så vi inte spränger context-fönstret
+    const kbContext = relevantKbArticles
+      .slice(0, 5)
+      .map((a, i) => `[KB ${i + 1}] ${a.title}\n${a.content.slice(0, 1500)}`)
+      .join('\n\n---\n\n');
+
+    const systemPrompt = `Du är IT-supporten på ett svenskt SMB. Du skriver tydliga, vänliga, professionella svar till medarbetare som rapporterat ett ärende. Använd "du" inte "ni". Var konkret och steg-för-steg om det är en lösning. Avsluta alltid med "Hör av dig om det inte löste problemet, så tar vi det vidare." Skriv ENDAST mejlsvaret — ingen rubrik, ingen signatur, inga rubriker som "Hej" eller "Med vänliga hälsningar" (de läggs till av systemet).`;
+
+    const userPrompt = `KUNSKAPSBAS (relevanta artiklar från ert egna interna underlag):
+${kbContext || '(inga relevanta artiklar hittades — basera svaret på generell IT-praxis)'}
+
+ÄRENDE FRÅN MEDARBETARE:
+Titel: ${ticket.title}
+Beskrivning: ${ticket.description}
+
+Skriv ditt svar nu.`;
+
+    const msg = await client.messages.create({
+      model: MODEL_SMART,
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    inputTokens = msg.usage?.input_tokens ?? 0;
+    outputTokens = msg.usage?.output_tokens ?? 0;
+
+    const text = msg.content[0].type === 'text' ? msg.content[0].text : null;
+    if (!text || text.trim().length < 20) return null;
+
+    ok = true;
+    return text.trim();
+  } catch (err) {
+    console.error('AI draft reply failed:', err);
+    return null;
+  } finally {
+    logUsage({
+      feature: 'draft',
+      model: MODEL_SMART,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      ticket_id: ticketId,
+      duration_ms: Date.now() - start,
+      ok,
+    });
+  }
+}
+
+// ─── Feature 3: AI-sammanfattning av långa ärenden ────────────────────────────
+
+export interface TicketSummary {
+  status: string;
+  blockers: string;
+  lastAction: string;
+}
+
+/**
+ * Sammanfattar ett ärende inklusive tidslinje. Endpoint:n cachar resultatet
+ * i 1 timme via ai_summary_updated_at — kalla bara den här när cache är gammal.
+ *
+ * Modell: default (Haiku) — ca 800 input + 200 output tokens ≈ $0,001 per sammanfattning.
+ *   $10 i kredit räcker till ~10 000 sammanfattningar.
+ *   Haiku är särskilt bra på just sammanfattning — uppgradera bara om ni har
+ *   nischade ärenden där svaren behöver mer abstrakt resonemang.
+ */
+export async function summarizeTicket(
+  ticket: { title: string; description: string },
+  comments: { author: string; content: string; created_at: string }[],
+  ticketId: string | null = null
+): Promise<TicketSummary | null> {
+  if (!client) return null;
+
+  const start = Date.now();
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let ok = false;
+
+  try {
+    // Begränsa antalet kommentarer för att hålla token-kostnaden nere
+    const recent = comments.slice(-20);
+    const timeline = recent
+      .map(c => `[${c.created_at}] ${c.author}: ${c.content.slice(0, 500)}`)
+      .join('\n');
+
+    const msg = await client.messages.create({
+      model: MODEL_SMART,
+      max_tokens: 400,
+      messages: [{
+        role: 'user',
+        content: `Sammanfatta detta IT-ärende. Svara ENDAST med JSON i formatet: {"status": "...", "blockers": "...", "lastAction": "..."}. Allt på svenska, EN konkret mening per fält. Ingen kringtext.
+
+- status: var ärendet står just nu
+- blockers: vad som hindrar progress (eller "Inget" om inget)
+- lastAction: vad som hände senast
+
+Ärende: ${ticket.title}
+Beskrivning: ${ticket.description.slice(0, 800)}
+
+Tidslinje (senaste ${recent.length}):
+${timeline}`
+      }]
+    });
+
+    inputTokens = msg.usage?.input_tokens ?? 0;
+    outputTokens = msg.usage?.output_tokens ?? 0;
+
+    const text = msg.content[0].type === 'text' ? msg.content[0].text : '';
+    const parsed = extractJson<TicketSummary>(text);
+    if (!parsed || !parsed.status || !parsed.lastAction) return null;
+
+    ok = true;
+    return parsed;
+  } catch (err) {
+    console.error('AI summary failed:', err);
+    return null;
+  } finally {
+    logUsage({
+      feature: 'summary',
+      model: MODEL_SMART,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      ticket_id: ticketId,
+      duration_ms: Date.now() - start,
+      ok,
+    });
+  }
+}
+
+// ─── Kostnadsöversikt (helper för admin-panel senare) ─────────────────────────
+
+/**
+ * Returnerar token- och anrop-statistik för senaste N dagarna.
+ * Används av endpoint:en GET /api/ai/usage-stats (lägg till senare i admin-flow).
+ */
+export interface UsageStats {
+  feature: string;
+  total_calls: number;
+  ok_calls: number;
+  total_input_tokens: number;
+  total_output_tokens: number;
+  avg_duration_ms: number;
+}
+
+export function getUsageStats(days = 30): UsageStats[] {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  return db.prepare(`
+    SELECT
+      feature,
+      COUNT(*) as total_calls,
+      SUM(ok) as ok_calls,
+      SUM(input_tokens) as total_input_tokens,
+      SUM(output_tokens) as total_output_tokens,
+      ROUND(AVG(duration_ms)) as avg_duration_ms
+    FROM ai_usage_log
+    WHERE created_at >= ?
+    GROUP BY feature
+  `).all(since) as UsageStats[];
+}

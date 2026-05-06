@@ -11,6 +11,8 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
 import { writeRateLimiter } from '../middleware/rateLimit.js';
 import { dispatchWebhook } from '../lib/webhookDispatcher.js';
+import { aiEnabled, suggestCategory, draftReply, summarizeTicket } from '../lib/aiHelper.js';
+import { stripHtml } from '../lib/htmlUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1123,6 +1125,25 @@ router.post('/', writeRateLimiter, authenticate, (req: AuthRequest, res: Respons
       console.error('Auto-tag error (non-fatal):', error);
     }
 
+    // AI-kategorisering: kör non-blocking så ärendet returneras direkt.
+    // Sparas på ärendet om confidence > 0.6. Användare ser förslaget i UI:t
+    // och kan acceptera eller ignorera.
+    if (aiEnabled() && !category_id) {
+      const allCategories = db.prepare('SELECT id, label FROM categories').all() as { id: string; label: string }[];
+      suggestCategory(title, finalDescription, allCategories, id)
+        .then((suggestion) => {
+          if (suggestion && suggestion.confidence > 0.6) {
+            db.prepare(`
+              UPDATE tickets
+              SET ai_suggested_category_id = ?, ai_suggested_confidence = ?
+              WHERE id = ?
+            `).run(suggestion.categoryId, suggestion.confidence, id);
+            console.log(`🤖 AI-kategori föreslagen för ${id}: ${suggestion.categoryId} (conf ${suggestion.confidence})`);
+          }
+        })
+        .catch((err) => console.error('AI categorize error (non-fatal):', err));
+    }
+
     const ticket = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(id) as TicketRow;
 
     const requester = ticket.requester_id
@@ -1149,6 +1170,145 @@ router.post('/', writeRateLimiter, authenticate, (req: AuthRequest, res: Respons
   } catch (error) {
     console.error('Error creating ticket:', error);
     res.status(500).json({ error: 'Failed to create ticket' });
+  }
+});
+
+// ─── AI-endpoints ─────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/tickets/:id/ai-draft
+ * Genererar ett utkast på svar baserat på ärendets innehåll + relevanta KB-artiklar.
+ * KB-artiklar väljs via FTS-sökning på titel + beskrivning.
+ * Sparar utkastet i ai_draft_response så det kan visas i UI:t.
+ */
+router.post('/:id/ai-draft', writeRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
+  if (!aiEnabled()) {
+    return res.status(503).json({ error: 'AI är inte konfigurerat på denna installation (ANTHROPIC_API_KEY saknas)' });
+  }
+  try {
+    const ticket = db.prepare(`
+      SELECT id, title, description FROM tickets WHERE id = ?
+    `).get(req.params.id) as { id: string; title: string; description: string } | undefined;
+    if (!ticket) return res.status(404).json({ error: 'Ärendet hittades inte' });
+
+    // Sök i KB via FTS — använd både titel och första 200 tecken av beskrivning som query
+    const queryText = `${ticket.title} ${ticket.description.slice(0, 200)}`
+      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+      .split(/\s+/)
+      .filter(w => w.length > 2)
+      .slice(0, 8)
+      .join(' OR ');
+
+    let kbArticles: { title: string; content: string }[] = [];
+    if (queryText) {
+      try {
+        kbArticles = db.prepare(`
+          SELECT a.title, a.content
+          FROM kb_articles_fts fts
+          JOIN kb_articles a ON a.rowid = fts.rowid
+          WHERE kb_articles_fts MATCH ? AND a.status = 'published'
+          ORDER BY rank
+          LIMIT 5
+        `).all(queryText) as { title: string; content: string }[];
+        // Strippa HTML från innehåll innan vi skickar till LLM
+        kbArticles = kbArticles.map(a => ({ title: a.title, content: stripHtml(a.content) }));
+      } catch (err) {
+        // FTS-sökning kan kasta om tokenizering misslyckas — gå vidare utan KB
+        console.warn('KB FTS search failed, continuing without KB context:', err);
+      }
+    }
+
+    const draft = await draftReply(
+      { title: ticket.title, description: ticket.description },
+      kbArticles,
+      ticket.id
+    );
+
+    if (!draft) {
+      return res.status(502).json({ error: 'AI kunde inte generera ett utkast just nu. Försök igen.' });
+    }
+
+    db.prepare(`
+      UPDATE tickets SET ai_draft_response = ?, ai_draft_updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(draft, ticket.id);
+
+    res.json({
+      draft,
+      kbArticlesUsed: kbArticles.length,
+      kbTitles: kbArticles.map(a => a.title),
+    });
+  } catch (error) {
+    console.error('Error generating AI draft:', error);
+    res.status(500).json({ error: 'Kunde inte generera AI-utkast' });
+  }
+});
+
+/**
+ * GET /api/tickets/:id/ai-summary
+ * Returnerar en cachad sammanfattning av ärendet om < 1h gammal, annars genererar ny.
+ * Använd query-param ?force=1 för att tvinga ny sammanfattning.
+ */
+router.get('/:id/ai-summary', authenticate, async (req: AuthRequest, res: Response) => {
+  if (!aiEnabled()) {
+    return res.status(503).json({ error: 'AI är inte konfigurerat på denna installation' });
+  }
+  try {
+    const force = req.query.force === '1';
+    const ticket = db.prepare(`
+      SELECT id, title, description, ai_summary_json, ai_summary_updated_at
+      FROM tickets WHERE id = ?
+    `).get(req.params.id) as {
+      id: string; title: string; description: string;
+      ai_summary_json: string | null; ai_summary_updated_at: string | null;
+    } | undefined;
+    if (!ticket) return res.status(404).json({ error: 'Ärendet hittades inte' });
+
+    // Cache-check: max 1 timme gammal
+    if (!force && ticket.ai_summary_json && ticket.ai_summary_updated_at) {
+      const ageMs = Date.now() - new Date(ticket.ai_summary_updated_at).getTime();
+      if (ageMs < 60 * 60 * 1000) {
+        try {
+          return res.json({ summary: JSON.parse(ticket.ai_summary_json), cached: true, ageMinutes: Math.round(ageMs / 60000) });
+        } catch {
+          // Trasig cache — fall genom till regenerering
+        }
+      }
+    }
+
+    // Hämta senaste 20 kommentarerna med författarnamn
+    const comments = db.prepare(`
+      SELECT COALESCE(u.display_name, u.email, 'System') as author, c.content, c.created_at
+      FROM ticket_comments c
+      LEFT JOIN users u ON c.user_id = u.id
+      WHERE c.ticket_id = ? AND c.deleted_at IS NULL
+      ORDER BY c.created_at ASC
+      LIMIT 50
+    `).all(ticket.id) as { author: string; content: string; created_at: string }[];
+
+    if (comments.length < 3) {
+      return res.json({ summary: null, reason: 'Ärendet har för få kommentarer för att sammanfatta (< 3).' });
+    }
+
+    const summary = await summarizeTicket(
+      { title: ticket.title, description: ticket.description },
+      comments,
+      ticket.id
+    );
+
+    if (!summary) {
+      return res.status(502).json({ error: 'AI kunde inte generera sammanfattning' });
+    }
+
+    db.prepare(`
+      UPDATE tickets SET ai_summary_json = ?, ai_summary_updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `).run(JSON.stringify(summary), ticket.id);
+
+    res.json({ summary, cached: false, ageMinutes: 0 });
+  } catch (error) {
+    console.error('Error generating AI summary:', error);
+    res.status(500).json({ error: 'Kunde inte generera AI-sammanfattning' });
   }
 });
 

@@ -21,6 +21,9 @@ services:
       - SMTP_PASS=${SMTP_PASS:-}
       - EMAIL_FROM=${EMAIL_FROM:-}
       - EMAIL_TO=${EMAIL_TO:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-}
+      - AI_MODEL_SMART=${AI_MODEL_SMART:-}
     logging:
       driver: "json-file"
       options:

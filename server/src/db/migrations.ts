@@ -699,4 +699,47 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    id: '037',
+    name: 'add_ai_columns_and_usage_log',
+    up: (db, { tableExists, columnExists }) => {
+      // AI-relaterade kolumner på tickets
+      if (!columnExists('tickets', 'ai_suggested_category_id')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN ai_suggested_category_id TEXT REFERENCES categories(id) ON DELETE SET NULL').run();
+      }
+      if (!columnExists('tickets', 'ai_suggested_confidence')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN ai_suggested_confidence REAL').run();
+      }
+      if (!columnExists('tickets', 'ai_draft_response')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN ai_draft_response TEXT').run();
+      }
+      if (!columnExists('tickets', 'ai_draft_updated_at')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN ai_draft_updated_at TEXT').run();
+      }
+      if (!columnExists('tickets', 'ai_summary_json')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN ai_summary_json TEXT').run();
+      }
+      if (!columnExists('tickets', 'ai_summary_updated_at')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN ai_summary_updated_at TEXT').run();
+      }
+
+      // Token-logg för kostnadsuppföljning
+      if (!tableExists('ai_usage_log')) {
+        db.prepare(`CREATE TABLE ai_usage_log (
+          id TEXT PRIMARY KEY,
+          feature TEXT NOT NULL CHECK(feature IN ('categorize','draft','summary')),
+          model TEXT NOT NULL,
+          input_tokens INTEGER NOT NULL DEFAULT 0,
+          output_tokens INTEGER NOT NULL DEFAULT 0,
+          ticket_id TEXT REFERENCES tickets(id) ON DELETE SET NULL,
+          duration_ms INTEGER NOT NULL DEFAULT 0,
+          ok INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )`).run();
+        db.prepare('CREATE INDEX idx_ai_usage_log_created ON ai_usage_log(created_at DESC)').run();
+        db.prepare('CREATE INDEX idx_ai_usage_log_feature ON ai_usage_log(feature)').run();
+        db.prepare('CREATE INDEX idx_ai_usage_log_ticket ON ai_usage_log(ticket_id)').run();
+      }
+    },
+  },
 ];
