@@ -79,6 +79,8 @@ export interface Ticket {
   templateId?: string;
   fieldValues?: CustomFieldInput[];
   tags?: Tag[];
+  ai_suggested_category_id?: string | null;
+  ai_suggested_confidence?: number | null;
 }
 
 export interface Comment {

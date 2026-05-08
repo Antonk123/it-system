@@ -338,6 +338,29 @@ class ApiClient {
     return this.request<TicketHistoryItem[]>(`/tickets/${id}/history`);
   }
 
+  async generateAiDraft(ticketId: string) {
+    return this.request<{ draft: string; kbArticlesUsed: number; kbTitles: string[] }>(
+      `/tickets/${ticketId}/ai-draft`,
+      { method: 'POST' }
+    );
+  }
+
+  async getAiSummary(ticketId: string, force = false) {
+    return this.request<{
+      summary: { status: string; blockers: string; lastAction: string } | null;
+      cached?: boolean;
+      ageMinutes?: number;
+      reason?: string;
+    }>(`/tickets/${ticketId}/ai-summary${force ? '?force=1' : ''}`);
+  }
+
+  async dismissAiCategorySuggestion(ticketId: string) {
+    return this.request<TicketRow>(`/tickets/${ticketId}`, {
+      method: 'PUT',
+      body: { ai_suggested_category_id: null },
+    });
+  }
+
   // Ticket Comments
   async getComments(ticketId: string) {
     return this.request(`/comments/ticket/${ticketId}`);
@@ -1171,6 +1194,8 @@ export interface TicketRow {
   template_id?: string | null;
   field_values?: { field_name: string; field_label: string; field_value: string }[];
   tags?: Array<{ id: string; name: string; color: string }>;
+  ai_suggested_category_id?: string | null;
+  ai_suggested_confidence?: number | null;
 }
 
 export interface TicketHistoryItem {

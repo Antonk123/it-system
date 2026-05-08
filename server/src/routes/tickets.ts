@@ -30,6 +30,7 @@ const TICKET_COLUMNS = [
   'tickets.category_id', 'tickets.requester_id', 'tickets.company_id', 'tickets.assigned_to',
   'tickets.notes', 'tickets.solution', 'tickets.template_id',
   'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at',
+  'tickets.ai_suggested_category_id', 'tickets.ai_suggested_confidence',
 ].join(', ');
 
 // Multer config for CSV upload
@@ -1467,7 +1468,7 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, (req: AuthRequest, r
 
 // Update ticket
 router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
-  const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id, tag_ids } = req.body;
+  const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id, tag_ids, ai_suggested_category_id } = req.body;
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return res.status(400).json({ error: 'Invalid status value' });
@@ -1504,6 +1505,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (notes !== undefined) updates.notes = notes || null;
     if (solution !== undefined) updates.solution = solution || null;
     if (template_id !== undefined) updates.template_id = template_id || null;
+    if (ai_suggested_category_id !== undefined) updates.ai_suggested_category_id = ai_suggested_category_id || null;
 
     // Always set updated_at when any field changes
     if (Object.keys(updates).length > 0) {

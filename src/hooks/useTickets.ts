@@ -100,6 +100,8 @@ export const useTickets = (options?: UseTicketsOptions) => {
           sla_paused_duration: t.sla_paused_duration ?? 0,
           sla_response_met: t.sla_response_met ?? null,
           sla_resolution_met: t.sla_resolution_met ?? null,
+          ai_suggested_category_id: t.ai_suggested_category_id ?? null,
+          ai_suggested_confidence: t.ai_suggested_confidence ?? null,
         }));
         return { tickets: mapped, pagination: null };
       } else {
@@ -126,6 +128,8 @@ export const useTickets = (options?: UseTicketsOptions) => {
           sla_paused_duration: t.sla_paused_duration ?? 0,
           sla_response_met: t.sla_response_met ?? null,
           sla_resolution_met: t.sla_resolution_met ?? null,
+          ai_suggested_category_id: t.ai_suggested_category_id ?? null,
+          ai_suggested_confidence: t.ai_suggested_confidence ?? null,
         }));
         return { tickets: mapped, pagination: response.pagination };
       }

@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Link as LinkIcon, Loader2, ListChecks, Plus, Camera } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Link as LinkIcon, Loader2, ListChecks, Plus, Camera, Sparkles, RefreshCw, Check, X } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
+import { useCategories } from '@/hooks/useCategories';
 import { useUsers } from '@/hooks/useUsers';
 import { useTicketAttachments } from '@/hooks/useTicketAttachments';
 import { useTicketChecklists, ChecklistItem } from '@/hooks/useTicketChecklists';
@@ -89,6 +90,7 @@ const TicketDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { getTicketById, updateTicket, deleteTicket, isLoading: ticketsLoading } = useTickets();
+  const { getCategoryLabel } = useCategories();
   const { getUserById } = useUsers();
   const { attachments, fetchAttachments } = useTicketAttachments();
   const { items: checklistItems, fetchChecklists, addChecklistItem, updateChecklistItem, deleteChecklistItem, setItems: setChecklistItems } = useTicketChecklists();
@@ -110,6 +112,9 @@ const TicketDetail = () => {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [pendingTemplateItems, setPendingTemplateItems] = useState<ChecklistItem[]>([]);
+  const [aiCategoryDismissed, setAiCategoryDismissed] = useState(false);
+  const [aiSummary, setAiSummary] = useState<{ status: string; blockers: string; lastAction: string } | null>(null);
+  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
 
   const hasVisibleContent = (html: string | null | undefined): boolean => {
     if (!html) return false;
@@ -151,6 +156,37 @@ const TicketDetail = () => {
       if (detail.tags) setTagsFromAPI(detail.tags);
     }).catch(() => {});
   }, [id]);
+
+  // Fetch AI summary for tickets with enough comments
+  useEffect(() => {
+    if (!id || comments.length < 5) return;
+    setAiSummaryLoading(true);
+    api.getAiSummary(id).then((result) => {
+      if (result.summary) setAiSummary(result.summary);
+    }).catch(() => {}).finally(() => setAiSummaryLoading(false));
+  }, [id, comments.length]);
+
+  const handleRefreshAiSummary = () => {
+    if (!id) return;
+    setAiSummaryLoading(true);
+    api.getAiSummary(id, true).then((result) => {
+      if (result.summary) setAiSummary(result.summary);
+    }).catch(() => {
+      toast.error('Kunde inte uppdatera AI-sammanfattning');
+    }).finally(() => setAiSummaryLoading(false));
+  };
+
+  const handleAcceptAiCategory = () => {
+    if (!ticket?.ai_suggested_category_id) return;
+    updateTicket(ticket.id, { category: ticket.ai_suggested_category_id });
+    toast.success('Kategori accepterad');
+  };
+
+  const handleDismissAiCategory = () => {
+    if (!ticket) return;
+    setAiCategoryDismissed(true);
+    api.dismissAiCategorySuggestion(ticket.id).catch(() => {});
+  };
 
   // Track recently viewed tickets
   useEffect(() => {
@@ -400,6 +436,52 @@ const TicketDetail = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* AI Category Suggestion Banner */}
+            {ticket.ai_suggested_category_id && !ticket.category && !aiCategoryDismissed && (
+              <div className="flex items-center gap-3 p-3 rounded-lg border border-purple-500/30 bg-purple-500/5">
+                <Sparkles className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                <p className="text-sm flex-1">
+                  AI föreslår: <span className="font-medium">{getCategoryLabel(ticket.ai_suggested_category_id)}</span>
+                  {ticket.ai_suggested_confidence && (
+                    <span className="text-muted-foreground ml-1">
+                      ({Math.round(ticket.ai_suggested_confidence * 100)}% säker)
+                    </span>
+                  )}
+                </p>
+                <Button variant="ghost" size="sm" className="gap-1 text-xs h-7" onClick={handleAcceptAiCategory}>
+                  <Check className="w-3 h-3" /> Acceptera
+                </Button>
+                <Button variant="ghost" size="sm" className="gap-1 text-xs h-7 text-muted-foreground" onClick={handleDismissAiCategory}>
+                  <X className="w-3 h-3" /> Ignorera
+                </Button>
+              </div>
+            )}
+
+            {/* AI Summary Box */}
+            {aiSummary && (
+              <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-purple-400 flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3" />
+                    AI-sammanfattning
+                  </span>
+                  <button
+                    onClick={handleRefreshAiSummary}
+                    disabled={aiSummaryLoading}
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${aiSummaryLoading ? 'animate-spin' : ''}`} />
+                    Uppdatera
+                  </button>
+                </div>
+                <div className="grid gap-1.5 text-sm">
+                  <p><span className="text-muted-foreground">Status:</span> {aiSummary.status}</p>
+                  <p><span className="text-muted-foreground">Blockerare:</span> {aiSummary.blockers}</p>
+                  <p><span className="text-muted-foreground">Senaste:</span> {aiSummary.lastAction}</p>
+                </div>
+              </div>
+            )}
+
             {/* Quick Status Change */}
             <div className="space-y-4 p-4 bg-card border border-border rounded-lg">
               <div className="flex items-center gap-4">
@@ -629,6 +711,7 @@ const TicketDetail = () => {
                 </div>
               )}
               <TicketComments
+                ticketId={ticket.id}
                 comments={comments}
                 isLoading={commentsLoading}
                 onAddComment={addComment}
