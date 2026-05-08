@@ -94,13 +94,14 @@ function extractJson<T>(text: string): T | null {
  * Strippar interpunktion, filtrerar bort korta ord, OR:ar de N starkaste orden.
  * Används av både public ai-suggest och tickets ai-draft.
  */
-export function buildKbSearchQuery(text: string, maxTerms = 8): string {
-  return text
+export function buildKbSearchQuery(text: string, maxTerms = 10): string {
+  const words = text
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
-    .filter(w => w.length > 2)
-    .slice(0, maxTerms)
-    .join(' OR ');
+    .filter(w => w.length >= 2);
+
+  const terms = words.slice(0, maxTerms).map(w => `${w}*`);
+  return terms.join(' OR ');
 }
 
 // ─── FLAGGSKEPP: Föreslå lösning till slutanvändare via publika portalen ──────

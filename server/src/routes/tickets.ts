@@ -11,7 +11,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
 import { writeRateLimiter } from '../middleware/rateLimit.js';
 import { dispatchWebhook } from '../lib/webhookDispatcher.js';
-import { aiEnabled, suggestCategory, draftReply, summarizeTicket } from '../lib/aiHelper.js';
+import { aiEnabled, suggestCategory, draftReply, summarizeTicket, buildKbSearchQuery } from '../lib/aiHelper.js';
 import { stripHtml } from '../lib/htmlUtils.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -1192,13 +1192,7 @@ router.post('/:id/ai-draft', writeRateLimiter, authenticate, async (req: AuthReq
     `).get(req.params.id) as { id: string; title: string; description: string } | undefined;
     if (!ticket) return res.status(404).json({ error: 'Ärendet hittades inte' });
 
-    // Sök i KB via FTS — använd både titel och första 200 tecken av beskrivning som query
-    const queryText = `${ticket.title} ${ticket.description.slice(0, 200)}`
-      .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-      .split(/\s+/)
-      .filter(w => w.length > 2)
-      .slice(0, 8)
-      .join(' OR ');
+    const queryText = buildKbSearchQuery(`${ticket.title} ${ticket.description.slice(0, 200)}`);
 
     let kbArticles: { title: string; content: string }[] = [];
     if (queryText) {
