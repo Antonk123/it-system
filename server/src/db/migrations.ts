@@ -766,4 +766,28 @@ export const migrations: Migration[] = [
       db.prepare('CREATE INDEX idx_ai_deflections_created ON ai_deflections(created_at DESC)').run();
     },
   },
+  {
+    id: '039',
+    name: 'fix_ai_usage_log_feature_check',
+    up: (db, { tableExists }) => {
+      if (!tableExists('ai_usage_log')) return;
+      db.prepare(`CREATE TABLE ai_usage_log_new (
+        id TEXT PRIMARY KEY,
+        feature TEXT NOT NULL,
+        model TEXT NOT NULL,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        ticket_id TEXT REFERENCES tickets(id) ON DELETE SET NULL,
+        duration_ms INTEGER NOT NULL DEFAULT 0,
+        ok INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`).run();
+      db.prepare(`INSERT INTO ai_usage_log_new SELECT * FROM ai_usage_log`).run();
+      db.prepare(`DROP TABLE ai_usage_log`).run();
+      db.prepare(`ALTER TABLE ai_usage_log_new RENAME TO ai_usage_log`).run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_ai_usage_log_created ON ai_usage_log(created_at DESC)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_ai_usage_log_feature ON ai_usage_log(feature)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_ai_usage_log_ticket ON ai_usage_log(ticket_id)').run();
+    },
+  },
 ];
