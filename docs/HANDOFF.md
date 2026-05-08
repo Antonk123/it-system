@@ -1,91 +1,101 @@
 # IT-Ticket — Handoff till Claude Code
 
-> Statusöverlämning från Cowork-session, 2026-05-08.
+> Statusöverlämning från Cowork-session, uppdaterad 2026-05-08 (efter pivot).
 > Klistra in detta i Claude Code som kontext när du återupptar arbetet.
+
+---
+
+## ⚠ VIKTIG PRODUKT-PIVOT — läs detta först
+
+En tidigare frontend-implementation placerade en "Föreslå svar (AI)"-knapp vid **interna kommentarer**. Det är fel av två skäl:
+
+1. Interna kommentarer är staff-anteckningar till sig själva — där behövs ingen AI som låtsas vara kundsupport.
+2. AI:n vi byggde är konfigurerad för att skriva svar TILL beställaren, inte FRÅN dig till dig själv.
+
+**Den verkliga produktidén — och det starkaste säljargumentet — är deflection-AI:** När en användare öppnar publika portalen och beskriver sitt problem ska AI:n försöka lösa det direkt baserat på KB:n, INNAN ärendet skapas. Ett exempel: Linnea skriver "Min Outlook startar inte" → AI svarar med en steg-för-steg-lösning från KB → Linnea klickar "Det löste det, tack!" → inget ärende skapas, tid sparad både för henne och IT.
+
+Det är den vinkel som ingen konkurrent har och som faktiskt motiverar AI-stämpeln. Allt annat är sekundärt.
 
 ---
 
 ## Big picture — varför vi gör det här
 
-IT-Ticket har varit ett internt verktyg på Prefabmastarna. Vi har bestämt att packetera det som en kommersiell produkt riktat till **andra ensam-IT-administratörer på svenska SMB:s (5–50 anställda)** — främst tillverkning, fastighetsförvaltning, små handelsbolag.
+IT-Ticket har varit ett internt verktyg på Prefabmastarna. Vi ompackar det som en kommersiell produkt för **andra ensam-IT-administratörer på svenska SMB:s (5–50 anställda)** — främst tillverkning, fastighetsförvaltning, små handelsbolag.
 
 **Affärsmodell: installation-per-kund**, INTE multi-tenant SaaS.
 - Setup: 35 000 SEK engång
 - Månadsavgift: 1 500 SEK/mån (uppdateringar, support, AI-API inkluderat)
 - Mål: 3 pilotkunder Q3 2026 → 105 000 SEK initialt + 4 500 SEK MRR
 
-Detta upplägg undviker den största arkitektoniska blockeringen (att bygga om hela datamodellen för multi-tenancy) och låter oss börja sälja på 1–2 helger.
+**Differentieringen mot Zendesk/Freshdesk:** AI-deflection på publika portalen, svensk språkförståelse, egen Docker-instans hos kunden, ingen per-användare-licens.
 
-**Differentieringen mot Zendesk/Freshdesk:** AI-nativ från grunden, svensk språkförståelse, egen Docker-instans hos kunden, ingen per-användare-licens.
-
-Hela bakgrundsanalysen och den kompletta planen ligger i `docs/PILOT-PLAN.md` — läs den först.
+Hela bakgrundsanalysen och 2-helgers-backlogen ligger i `docs/PILOT-PLAN.md` — läs den först.
 
 ---
 
-## Vad som är gjort (kod ändrad lokalt)
+## AI-funktionerna i prioritetsordning
 
-### Backend, AI-integration
+| # | Funktion | Var | Status backend | Status frontend |
+|---|----------|-----|----------------|-----------------|
+| 1 | **Deflection: AI löser problem före ärende skapas** | Publika portalen | ✅ Klart | ❌ INTE byggd |
+| 2 | Auto-kategorisering av nya ärenden | Bakgrund vid POST /tickets | ✅ Klart | ❌ INTE byggd (banner med "AI föreslår: X · Acceptera · Ignorera") |
+| 3 | Utkast på svar TILL beställaren | Ärendedetalj — staff-only | ✅ Klart | ⚠ Felplacerad (vid intern-kommentar) — flytta till lös-flödet eller ärendets header |
+| 4 | Sammanfattning av långa ärenden | Ärendedetalj — staff-only | ✅ Klart | ❌ INTE byggd (3-radersbox högst upp på ärenden med >5 kommentarer) |
 
-**Ny fil:** `server/src/lib/aiHelper.ts` (327 rader)
-Tre publika async-funktioner med graceful fallback (returnerar `null` om API saknas/felar):
+**OBS:** Funktion 1 är flaggskeppet. Bygg den först. Funktion 3 behöver flyttas. Funktion 2 och 4 kan komma sist.
+
+---
+
+## Vad som finns i kod just nu
+
+### Backend — färdigt och inte committat (uncommitted i din working tree)
+
+**`server/src/lib/aiHelper.ts`** (~470 rader)
+Fyra publika async-funktioner med graceful fallback:
+- `suggestSolutionFromKB()` — **FLAGGSKEPP**: löser problem från publika portalen via KB. Konservativ — säger hellre "vet ej" än hallucinerar.
 - `suggestCategory()` — klassificering av nya ärenden
-- `draftReply()` — utkast på svar baserat på KB-artiklar via FTS-sökning
-- `summarizeTicket()` — sammanfattning av långa ärenden (status / blockerare / senaste händelse)
+- `draftReply()` — utkast på svar TILL beställaren (för staff att granska + skicka)
+- `summarizeTicket()` — sammanfattning av långa ärenden
+Plus hjälpare: `buildKbSearchQuery()`, `getUsageStats()`, `aiEnabled()`.
 
-Inkluderar token-loggning till `ai_usage_log`-tabellen och en `getUsageStats()`-helper för framtida admin-panel.
+**Migrationer:**
+- `037 add_ai_columns_and_usage_log` — AI-kolumner på `tickets` + `ai_usage_log`-tabellen.
+- `038 add_ai_deflections_table` — `ai_deflections` för att räkna sparade ärenden (kritisk för pilotrapportering).
 
-**Migration:** `server/src/db/migrations.ts` — migration `037 add_ai_columns_and_usage_log`.
-Lägger till på `tickets`: `ai_suggested_category_id`, `ai_suggested_confidence`, `ai_draft_response`, `ai_draft_updated_at`, `ai_summary_json`, `ai_summary_updated_at`. Skapar tabellen `ai_usage_log` med index.
+**Routes:**
+- `server/src/routes/tickets.ts` — `suggestCategory` wire-up i POST, plus `POST /:id/ai-draft` och `GET /:id/ai-summary`.
+- `server/src/routes/public.ts` — **NY**: `POST /api/public/ai-suggest`, `PATCH /api/public/ai-suggest/:id`, `GET /api/public/ai-suggest/stats`.
 
-**Routes:** `server/src/routes/tickets.ts`
-- Importer för `aiEnabled`, `suggestCategory`, `draftReply`, `summarizeTicket`, `stripHtml`.
-- Wire-up av `suggestCategory()` i POST `/api/tickets` — kör non-blocking efter `applyAutoTags`, sparar bara om confidence > 0.6.
-- Ny endpoint: `POST /api/tickets/:id/ai-draft` — söker KB via FTS, anropar `draftReply`, sparar utkastet. Skickar tillbaka `{ draft, kbArticlesUsed, kbTitles }`.
-- Ny endpoint: `GET /api/tickets/:id/ai-summary` — returnerar cachad summary om < 1h gammal, annars genererar ny. Stöder `?force=1` för att tvinga regenerering.
+**Dependency:** `server/package.json` — `@anthropic-ai/sdk: ^0.32.1`.
 
-**Dependency:** `server/package.json` — lade till `@anthropic-ai/sdk: ^0.32.1`.
-
-### Konfig
-
-**`docker-compose.yml` + `docker-compose.local.yml`:** Nya env-rader på backend:
-```yaml
-- ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-- AI_MODEL=${AI_MODEL:-}
-- AI_MODEL_SMART=${AI_MODEL_SMART:-}
-```
-
-**`.env.example`** (ny fil): Mall med dokumenterade env-vars.
+**Konfig:** `docker-compose.yml` + `docker-compose.local.yml` har `ANTHROPIC_API_KEY`, `AI_MODEL`, `AI_MODEL_SMART` i environment-blocket. `.env.example` dokumenterar dem.
 
 ### Modellval
 
-**Default-modell för ALLA tre features: Claude Haiku 4.5** (`claude-haiku-4-5-20251001`).
+**Default-modell för ALLA fyra features: Claude Haiku 4.5** (`claude-haiku-4-5-20251001`).
 
-Resonemanget: vårt användningsfall är "extrahera info ur given KB-kontext och presentera vänligt på svenska" — Haiku är optimerad för exakt detta. Snabb (<1s), 5x billigare än Sonnet, tillräcklig kvalitet.
+Vårt användningsfall är "extrahera info ur given KB-kontext och presentera vänligt på svenska" — Haiku är optimerad för det. Snabb (<1s), 5x billigare än Sonnet, tillräcklig kvalitet. Escape-hatch: `AI_MODEL_SMART=claude-sonnet-4-6` uppgraderar `draft` + `summary` (inte categorize/suggest).
 
-Escape-hatch: `AI_MODEL_SMART=claude-sonnet-4-6` uppgraderar bara `draft` + `summary` (inte categorize). Använd om en specifik pilot-kund visar sig ha komplexa ärenden där Haiku-svaren blir för generiska.
-
-Med $10 i kredit täcker vi:
+Med $10 i kredit täcker vi grovt:
 - ~25 000 kategoriseringar
+- ~5 000 deflection-förslag (~$0,002 per anrop)
 - ~5 000 utkast på svar
 - ~10 000 sammanfattningar
-
-### Landningssida
-
-**`docs/landing-page.html`** — single-file HTML med distinkt design (IBM Plex Serif/Sans/Mono, koppar + skogsgrön + crème, ingen lila/Inter). 7 sektioner: hero, AI-features, jämförelse mot Zendesk/Excel-kedjor, pris, installations-timeline, mini-case study, CTA. Kan klistras in i Carrd eller hostas standalone.
 
 ---
 
 ## Vad som ÄR INTE gjort
 
-### 1. Commit + push
+### 1. Commit + push av backend (den viktigaste flaskhalsen)
 
-**Allt ovan ligger uncommitted i working tree.** Cowork-sessionen redigerade filer direkt utan att köra `git add`/`commit`. Påminn dig själv:
+Om Claude CLI redan har committat allt är detta klart — verifiera via `git log`. Annars:
 
 ```bash
 cd /Users/anton/Downloads/Github/it-system
 git add server/src/lib/aiHelper.ts \
         server/src/db/migrations.ts \
         server/src/routes/tickets.ts \
+        server/src/routes/public.ts \
         server/package.json \
         docker-compose.yml \
         docker-compose.local.yml \
@@ -93,74 +103,91 @@ git add server/src/lib/aiHelper.ts \
         docs/PILOT-PLAN.md \
         docs/landing-page.html \
         docs/HANDOFF.md
-git status   # verifiera att bara dessa 10 filer är staged
-git commit -m "feat: add AI helper (categorize, draft, summarize) using Haiku 4.5"
+git status   # verifiera filerna
+git commit -m "feat: AI helper + deflection endpoint (Haiku 4.5 default)"
 git push
 ```
 
-OBS: det finns *andra* otrelaterade ändringar i repot (`.planning/codebase/*`, `claude.md`, otrackade kataloger som `.superpowers/`, `server/data/`, m.fl.). Lämna dem — de är inte från denna session.
+Andra modifierade filer i repot (`.planning/codebase/*`, `claude.md`, otrackade kataloger) ska INTE med — de är från andra sessioner.
 
-### 2. Dev-test
+### 2. Frontend — primärt arbetspaket
 
-Ingenting har testats i dev-miljön (`10.38.195.180:5174`). Kedjan att verifiera:
+Ordna i denna ordning:
 
-1. Push till git (steg ovan)
-2. SSH eller Portainer-pull på dev-servern → `cd /opt/it-system/itticket-main && git pull`
-3. Sätt `ANTHROPIC_API_KEY` i Portainer-stackens environment variables
-4. "Update the stack" → Portainer drar ändringarna, `npm install` kör automatiskt och plockar upp `@anthropic-ai/sdk`
-5. `docker logs it-ticketing-backend-dev -f`
+**A. Deflection-UI på publika portalen (FLAGGSKEPP — bygg först)**
 
-Förvänta i loggen: `npm install` slutar → server startar → `037 add_ai_columns_and_usage_log` körs → vid första nya ärendet `🤖 AI-kategori föreslagen för <id>: ... (conf 0.xx)`.
+I komponenten för publika ärendeformuläret (sannolikt `src/pages/PublicSubmit.tsx` eller liknande):
 
-**Sidnot:** dev-stackens `JWT_SECRET` är hårdkodad i compose-filen (`wfDzB+GjcdaAqkntaf9G86Qlv5FQuk2D`). Inte akut säkerhetsproblem på intern dev, men flytta till env-variabel innan stack-definitionen någonsin delas.
+- När användaren skrivit minst 20 tecken i problembeskrivningen, visa knapp **"🪄 Få hjälp direkt"** under fältet.
+- Klick → POST `/api/public/ai-suggest` med `{ problemText, userEmail }`.
+- Visa svaret i en modal eller ett expanderat avsnitt:
+  - Om `hasSolution=true`: visa `solution` i markdown, lista `kbReferences` med titel, två knappar **"✓ Det löste problemet"** och **"Behöver fortfarande hjälp"**.
+  - Om `hasSolution=false`: visa "Jag hittade ingenting i KB:n som matchar — beskriv ditt problem och skapa ärendet" + en knapp **"Fortsätt till ärende"**.
+- Vid "Det löste problemet": PATCH `/api/public/ai-suggest/:deflectionId` med `{ outcome: 'solved' }`. Visa tackmeddelande, stäng formuläret.
+- Vid "Behöver fortfarande hjälp" eller efter ärendeskapande: PATCH med `{ outcome: 'rejected', ticketId }`. Skicka in ärendet som vanligt.
+- CSRF-token måste skickas via `x-csrf-token`-header — använd samma flöde som befintlig publik ticket-submission.
 
-### 3. Frontend-UI
+Statistiken från `GET /api/public/ai-suggest/stats` (`{shown, solved, rejected, no_solution, deflectionRate}`) blir ovärderlig för pilotrapportering — men den syns inte än, kommer i admin-panelen senare.
 
-Backend är byggd, **frontend är inte rörd**. Tre saker återstår i `src/components/` (troligen `TicketDetail.tsx` eller motsvarande):
+**B. Flytta "Föreslå svar"-knappen från intern-kommentar (BUGGFIX)**
 
-1. **AI-utkast-knapp:** `✨ Föreslå svar (AI)`-knapp på ärendedetalj. Klick → POST `/api/tickets/:id/ai-draft`. Visa resultatet i en redigerbar `<textarea>` med `Använd som svar`-knapp som flyttar texten till kommentarsfältet.
+Knappen ska INTE ligga vid intern-kommentar-fältet. Den genererar ett externt svar till beställaren. Bättre placering — välj en:
+- Som primär CTA på ärendets header, intill statusväljaren ("Föreslå svar till beställaren")
+- Som ett auto-utlöst utkast när status sätts till "Löst"
+- I en separat "Svara"-flik om det finns
 
-2. **AI-kategoriförslag-banner:** Om `ai_suggested_category_id` finns och kategori är tom på ärendet, visa banner: `🤖 AI föreslår: [kategorinamn] (78% säker) · Acceptera · Ignorera`. Acceptera = PUT på ärendet med `category_id`. Ignorera = nullställ förslaget.
+Resultatet ska gå till antingen mejl-utskick eller till `solution`-fältet — INTE till intern-kommentar.
 
-3. **AI-sammanfattning-box:** På ärenden med fler än 5 kommentarer, fetcha `GET /api/tickets/:id/ai-summary` på mount och visa de tre raderna högst upp på detaljsidan: status, blockerare, senaste händelse. Liten "Uppdatera"-länk som anropar med `?force=1`.
+**C. AI-kategoriförslag-banner på ärendet**
 
-Inget av detta är komplicerat — alla tre använder befintliga shadcn-komponenter (Button, Card, Textarea, Alert).
+Om `ai_suggested_category_id` finns och `category_id` saknas, visa banner:
+*"🤖 AI föreslår kategori: [namn] (78 % säker) · Acceptera · Ignorera"*
 
----
+Acceptera = PUT på ärendet med `category_id`. Ignorera = nullställ förslaget i DB:n.
 
-## Föreslagen ordning för Claude Code-session
+**D. AI-sammanfattningsbox**
 
-1. **Verifiera lokal status** — `git status` + läs `docs/PILOT-PLAN.md` om det är längesedan
-2. **Commit + push** AI-backend-arbetet (om inte redan gjort)
-3. **Dev-test** — pulla på 10.38.195.180, verifiera logg, skapa ett ärende, kolla DB att `ai_suggested_category_id` fylls i
-4. **Frontend-integration** — bygg de tre UI-elementen ovan
-5. **Test end-to-end i dev** — skapa ärende, klicka AI-utkast-knapp, acceptera kategori, generera summary
-6. **Merge/deploy till prod** — endast efter dev-validering, per CLAUDE.md-regeln "tested in dev innan push"
-7. **Helg 2-arbetet** (från PILOT-PLAN.md): utöka `setup.sh`, skriv `RUNBOOK.md`, finputsa landningssidan, gör mini-case study
+På ärenden med fler än 5 kommentarer, fetcha `GET /api/tickets/:id/ai-summary` på mount och visa:
+*Status: …* / *Blockerare: …* / *Senaste: …* med en liten "Uppdatera"-länk (anropar `?force=1`).
 
----
+### 3. Dev-test
 
-## Filer att läsa först i Claude Code
+Cyklerna efter respektive frontend-task:
 
-| Prio | Fil | Varför |
-|------|-----|--------|
-| 1 | `docs/PILOT-PLAN.md` | Hela strategin + 2-helgers backlog |
-| 2 | `docs/HANDOFF.md` | (denna fil) |
-| 3 | `server/src/lib/aiHelper.ts` | Förstå AI-kontraktet |
-| 4 | `server/src/routes/tickets.ts` (rader 1130–1310) | Wire-up och nya endpoints |
-| 5 | `docs/landing-page.html` | Säljvinkeln när du tappar fokus |
+1. Pull på dev-server `/opt/it-system/itticket-main`
+2. Sätt `ANTHROPIC_API_KEY` i Portainer-stacken
+3. "Update the stack" → `docker logs it-ticketing-backend-dev -f`
+4. Verifiera migration `037` och `038` körs i loggen
+5. Testa flödet i UI:t
+
+**Testfall för deflection:** Skapa publik ärendeansökan med text *"Min Outlook startar inte och visar fel om certifikat"*. Klicka "Få hjälp direkt". Förvänta att AI svarar med stegen från en relevant KB-artikel (om det finns en) eller säger "hittade inget" om KB är tom.
 
 ---
 
 ## Snabbreferens — viktiga beslut
 
-- **Modell:** Haiku 4.5 default på alla tre features. Escape-hatch via `AI_MODEL_SMART`.
+- **Modell:** Haiku 4.5 default på alla fyra features. Escape-hatch via `AI_MODEL_SMART`.
+- **suggestSolutionFromKB är KONSERVATIV.** Om confidence < 0.4 tvingar koden `hasSolution=false`. Hallucinerade lösningar är värre än ingen lösning.
 - **Multi-tenancy:** skjuts till efter pilot. Per-kund-installation undviker problemet helt.
-- **Tester:** noll testtäckning idag. För pilot räcker manuell verifiering. Börja med tester på AI-helpern + auth-flödet *efter* första pilotkunden.
+- **Tester:** noll testtäckning idag. För pilot räcker manuell verifiering. Börja med tester på AI-helpern + auth efter första pilotkunden.
 - **GDPR:** Anthropic är OK för pilot, måste upp på avtal för större kunder. Logga inga personuppgifter i prompts om möjligt.
-- **AI-utkast får ALDRIG auto-skickas.** Måste alltid godkännas av människa. Tydligt i UI: "AI-utkast — granska innan du skickar."
-- **Kärnflödet får aldrig blockeras av AI-fel** — alla AI-funktioner returnerar `null` vid fel, kategorisering är non-blocking i POST.
+- **AI-utkast får ALDRIG auto-skickas.** Måste alltid godkännas av människa.
+- **Kärnflödet får aldrig blockeras av AI-fel** — alla AI-funktioner returnerar `null` vid fel.
+- **Rate limiting på `/api/public/ai-suggest`** är inte påslaget än. Om portalen exponeras öppet på internet — lägg till IP-baserad rate limit före pilot för att inte bränna API-kredit på spam.
 
 ---
 
-*Slut på handoff. Lycka till med ryket — det är snubblande nära att bli en riktig produkt.*
+## Filer att läsa först i Claude Code-session
+
+| Prio | Fil | Varför |
+|------|-----|--------|
+| 1 | `docs/HANDOFF.md` | (denna fil) |
+| 2 | `docs/PILOT-PLAN.md` | Hela strategin + 2-helgers backlog |
+| 3 | `server/src/lib/aiHelper.ts` | Förstå AI-kontraktet — speciellt `suggestSolutionFromKB` |
+| 4 | `server/src/routes/public.ts` (rader 180+) | De nya deflection-endpoints |
+| 5 | `server/src/routes/tickets.ts` (rader 1130–1310) | Wire-up och staff-AI-endpoints |
+| 6 | `docs/landing-page.html` | Säljvinkeln när du tappar fokus |
+
+---
+
+*Slut på handoff. Lycka till. Kom ihåg: deflection-AI är produkten, allt annat är staff-bekvämlighet.*

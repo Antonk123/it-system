@@ -727,7 +727,7 @@ export const migrations: Migration[] = [
       if (!tableExists('ai_usage_log')) {
         db.prepare(`CREATE TABLE ai_usage_log (
           id TEXT PRIMARY KEY,
-          feature TEXT NOT NULL CHECK(feature IN ('categorize','draft','summary')),
+          feature TEXT NOT NULL CHECK(feature IN ('categorize','draft','summary','suggest')),
           model TEXT NOT NULL,
           input_tokens INTEGER NOT NULL DEFAULT 0,
           output_tokens INTEGER NOT NULL DEFAULT 0,
@@ -740,6 +740,30 @@ export const migrations: Migration[] = [
         db.prepare('CREATE INDEX idx_ai_usage_log_feature ON ai_usage_log(feature)').run();
         db.prepare('CREATE INDEX idx_ai_usage_log_ticket ON ai_usage_log(ticket_id)').run();
       }
+    },
+  },
+  {
+    id: '038',
+    name: 'add_ai_deflections_table',
+    up: (db, { tableExists }) => {
+      // ai_deflections — spårar varje gång publika portalen visade ett AI-förslag
+      // och vad användaren valde efter det. Det här blir guld i pilotrapportering:
+      // "67 % av enkla L1-ärenden löstes utan att de nådde IT".
+      if (tableExists('ai_deflections')) return;
+      db.prepare(`CREATE TABLE ai_deflections (
+        id TEXT PRIMARY KEY,
+        problem_text TEXT NOT NULL,
+        suggestion_text TEXT,
+        kb_article_ids TEXT,
+        confidence REAL,
+        outcome TEXT NOT NULL DEFAULT 'shown' CHECK(outcome IN ('shown','solved','rejected','no_solution')),
+        user_email TEXT,
+        ticket_id TEXT REFERENCES tickets(id) ON DELETE SET NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        resolved_at TEXT
+      )`).run();
+      db.prepare('CREATE INDEX idx_ai_deflections_outcome ON ai_deflections(outcome)').run();
+      db.prepare('CREATE INDEX idx_ai_deflections_created ON ai_deflections(created_at DESC)').run();
     },
   },
 ];

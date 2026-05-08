@@ -5,13 +5,17 @@ import { v4 as uuidv4 } from 'uuid';
 /**
  * AI-helper för IT-Ticket.
  *
- * Tre publika funktioner:
- *   1. suggestCategory  — klassificering vid ärendeskapande (Haiku, billigt)
- *   2. draftReply       — utkast på svar baserat på KB-träffar (Sonnet, kvalitet)
- *   3. summarizeTicket  — sammanfattning av långa ärenden (Sonnet, cachas)
+ * FYRA publika funktioner — i prioritetsordning:
+ *   1. suggestSolutionFromKB — FLAGGSKEPP: hjälper slutanvändare lösa problem
+ *      via publika portalen INNAN ärende skapas. Det här är differentierings-
+ *      funktionen mot Zendesk i Nordic-segmentet.
+ *   2. suggestCategory       — klassificering vid ärendeskapande (intern)
+ *   3. draftReply            — utkast på svar till beställare (intern, för staff)
+ *   4. summarizeTicket       — sammanfattning av långa ärenden (intern)
  *
  * Designprinciper:
  *   - Alla funktioner returnerar null vid fel — kärnflödet får ALDRIG blockeras.
+ *   - suggestSolutionFromKB är KONSERVATIV: säger hellre "vet inte" än hittar på.
  *   - Token-användning loggas i ai_usage_log för kostnadsuppföljning per installation.
  *   - Default-modell konfigurerbar via env (AI_MODEL). AI_MODEL_SMART är en
  *     escape-hatch för att uppgradera draft+summary till en starkare modell.
@@ -41,7 +45,7 @@ export const aiEnabled = (): boolean => client !== null;
 // ─── Token-logg (för kostnadsuppföljning) ─────────────────────────────────────
 
 interface UsageRecord {
-  feature: 'categorize' | 'draft' | 'summary';
+  feature: 'categorize' | 'draft' | 'summary' | 'suggest';
   model: string;
   input_tokens: number;
   output_tokens: number;
@@ -80,6 +84,144 @@ function extractJson<T>(text: string): T | null {
     return JSON.parse(match[0]) as T;
   } catch {
     return null;
+  }
+}
+
+// ─── Hjälpare: bygg FTS-fråga från fri text ───────────────────────────────────
+
+/**
+ * Bygger en SQLite FTS5-kompatibel sökfråga från fri text.
+ * Strippar interpunktion, filtrerar bort korta ord, OR:ar de N starkaste orden.
+ * Används av både public ai-suggest och tickets ai-draft.
+ */
+export function buildKbSearchQuery(text: string, maxTerms = 8): string {
+  return text
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 2)
+    .slice(0, maxTerms)
+    .join(' OR ');
+}
+
+// ─── FLAGGSKEPP: Föreslå lösning till slutanvändare via publika portalen ──────
+
+export interface SolutionSuggestion {
+  hasSolution: boolean;     // false = AI kunde inte hjälpa, användaren ska fortsätta skapa ärende
+  solution: string | null;  // Markdown-formatterat svar för slutanvändaren
+  confidence: number;       // 0.0–1.0
+  reason?: string;          // När hasSolution=false, kort förklaring (loggas, visas ej)
+}
+
+/**
+ * Föreslår en lösning på ett IT-problem baserat på företagets kunskapsbas,
+ * INNAN ett ärende skapas. Detta är deflection-AI:n — flaggskeppsfunktionen.
+ *
+ * KONSERVATIV: Funktionen är hellre tystlåten än hjälpsam. Om KB inte täcker
+ * problemet returnerar den hasSolution=false så att användaren skapar ett ärende
+ * istället. Hallucinerade lösningar är en värre upplevelse än ingen lösning alls.
+ *
+ * Modell: default (Haiku) — ca 2000 input + 300 output tokens ≈ $0,002 per förfrågan.
+ *   Lika billigt som ett utkast, så även med 90 % deflection-rate sparas pengar
+ *   netto eftersom varje undvikt ärende sparar 30+ minuters IT-tid.
+ */
+export async function suggestSolutionFromKB(
+  problemText: string,
+  relevantKbArticles: { title: string; content: string }[]
+): Promise<SolutionSuggestion | null> {
+  if (!client) return null;
+
+  const start = Date.now();
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let ok = false;
+
+  try {
+    // Om vi inte ens hittade KB-artiklar via FTS — säg det direkt utan API-anrop
+    if (relevantKbArticles.length === 0) {
+      ok = true;
+      return {
+        hasSolution: false,
+        solution: null,
+        confidence: 0,
+        reason: 'Inga relevanta KB-artiklar hittades via sökning',
+      };
+    }
+
+    const kbContext = relevantKbArticles
+      .slice(0, 5)
+      .map((a, i) => `[KB ${i + 1}] ${a.title}\n${a.content.slice(0, 1500)}`)
+      .join('\n\n---\n\n');
+
+    const systemPrompt = `Du är en hjälpsam IT-assistent på en svensk arbetsplats. Din uppgift är att hjälpa medarbetare lösa enkla IT-problem INNAN de skapar ett ärende — men ENDAST när du faktiskt kan ge en bra lösning baserat på företagets kunskapsbas.
+
+STRIKTA REGLER:
+1. Använd ENDAST informationen i kunskapsbasen nedan. Hitta INTE på.
+2. Om KB inte innehåller en relevant lösning — sätt hasSolution=false. Det är OK.
+3. Om problemet kräver fysisk åtgärd, hårdvarutillgång, eller administratörsrättigheter — sätt hasSolution=false.
+4. Om problemet är vagt eller du är osäker — sätt hasSolution=false eller låg confidence.
+5. Skriv på svenska, vänligt 'du'-tilltal.
+6. Vid lösning: max 5 numrerade konkreta steg.
+
+Svara ENDAST med JSON i formatet:
+{"hasSolution": true|false, "solution": "...", "confidence": 0.0-1.0, "reason": "..."}
+
+Fält:
+- solution: själva svaret (markdown OK, eller null om hasSolution=false)
+- confidence: 0.0–1.0. Sätt 0.7+ bara om du är riktigt säker. Mellan 0.4 och 0.7 = visa men markera som "kanske". Under 0.4 = sätt hasSolution=false.
+- reason: kort förklaring (1 mening) varför du sa nej. Loggas internt.`;
+
+    const userPrompt = `KUNSKAPSBAS:
+${kbContext}
+
+ANVÄNDARENS PROBLEM:
+${problemText.slice(0, 2000)}
+
+Bedöm om du kan hjälpa baserat på KB ovan.`;
+
+    const msg = await client.messages.create({
+      model: MODEL_DEFAULT,
+      max_tokens: 600,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userPrompt }],
+    });
+
+    inputTokens = msg.usage?.input_tokens ?? 0;
+    outputTokens = msg.usage?.output_tokens ?? 0;
+
+    const text = msg.content[0].type === 'text' ? msg.content[0].text : '';
+    const parsed = extractJson<SolutionSuggestion>(text);
+    if (!parsed) return null;
+
+    // Validera och normalisera output
+    const result: SolutionSuggestion = {
+      hasSolution: !!parsed.hasSolution,
+      solution: parsed.hasSolution ? (parsed.solution || null) : null,
+      confidence: typeof parsed.confidence === 'number' ?
+        Math.max(0, Math.min(1, parsed.confidence)) : 0,
+      reason: parsed.reason,
+    };
+
+    // Säkerhetsregel: om confidence < 0.4, tvinga hasSolution=false
+    if (result.confidence < 0.4) {
+      result.hasSolution = false;
+      result.solution = null;
+    }
+
+    ok = true;
+    return result;
+  } catch (err) {
+    console.error('AI solution suggestion failed:', err);
+    return null;
+  } finally {
+    logUsage({
+      feature: 'suggest',
+      model: MODEL_DEFAULT,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      ticket_id: null,  // Det finns inget ärende än — det är ju hela poängen
+      duration_ms: Date.now() - start,
+      ok,
+    });
   }
 }
 
