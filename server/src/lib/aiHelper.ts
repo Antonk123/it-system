@@ -104,6 +104,40 @@ export function buildKbSearchQuery(text: string, maxTerms = 10): string {
   return terms.join(' OR ');
 }
 
+// ─── Steg 1: Låt AI välja relevanta KB-artiklar baserat på problemtext ───────
+
+export async function findRelevantKbArticles(
+  problemText: string,
+  articles: { id: string; title: string }[]
+): Promise<string[]> {
+  if (!client || articles.length === 0) return [];
+  try {
+    const articleList = articles.map((a, i) => `${i + 1}. [${a.id}] ${a.title}`).join('\n');
+    const msg = await client.messages.create({
+      model: getModel('base'),
+      max_tokens: 200,
+      messages: [{
+        role: 'user',
+        content: `Du är en IT-support-assistent. En användare beskriver ett problem. Vilka av följande kunskapsbasartiklar KAN vara relevanta?
+
+PROBLEM: ${problemText}
+
+ARTIKLAR:
+${articleList}
+
+Svara ENDAST med en JSON-array av artikel-ID:n, t.ex. ["id1", "id2"]. Om ingen artikel verkar relevant, svara [].`
+      }]
+    });
+    const text = msg.content[0].type === 'text' ? msg.content[0].text : '';
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) return [];
+    return JSON.parse(match[0]);
+  } catch (err) {
+    console.error('AI article selection failed:', err);
+    return [];
+  }
+}
+
 // ─── FLAGGSKEPP: Föreslå lösning till slutanvändare via publika portalen ──────
 
 export interface SolutionSuggestion {

@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { sendTicketCreatedEmail } from '../lib/email.js';
-import { aiEnabled, suggestSolutionFromKB, buildKbSearchQuery } from '../lib/aiHelper.js';
+import { aiEnabled, suggestSolutionFromKB, findRelevantKbArticles } from '../lib/aiHelper.js';
 import { stripHtml } from '../lib/htmlUtils.js';
 
 const router = Router();
@@ -209,22 +209,20 @@ router.post('/ai-suggest', (req: Request, res: Response) => {
 
   const handle = async () => {
     try {
-      // Sök KB via FTS
-      const queryText = buildKbSearchQuery(problemText);
+      // Steg 1: Hämta alla publicerade KB-titlar, låt AI välja relevanta
+      const allArticles = db.prepare(
+        `SELECT id, title FROM kb_articles WHERE status = 'published'`
+      ).all() as { id: string; title: string }[];
+
+      const relevantIds = await findRelevantKbArticles(problemText, allArticles);
+
+      // Steg 2: Hämta fullständigt innehåll för de valda artiklarna
       let kbHits: { id: string; title: string; content: string }[] = [];
-      if (queryText) {
-        try {
-          kbHits = db.prepare(`
-            SELECT a.id, a.title, a.content
-            FROM kb_articles_fts fts
-            JOIN kb_articles a ON a.rowid = fts.rowid
-            WHERE kb_articles_fts MATCH ? AND a.status = 'published'
-            ORDER BY rank
-            LIMIT 5
-          `).all(queryText) as { id: string; title: string; content: string }[];
-        } catch (err) {
-          console.warn('Public KB search failed:', err);
-        }
+      if (relevantIds.length > 0) {
+        const placeholders = relevantIds.map(() => '?').join(',');
+        kbHits = db.prepare(
+          `SELECT id, title, content FROM kb_articles WHERE id IN (${placeholders}) AND status = 'published'`
+        ).all(...relevantIds) as { id: string; title: string; content: string }[];
       }
 
       const articlesForAI = kbHits.map(a => ({
