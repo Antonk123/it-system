@@ -77,7 +77,28 @@ git remote remove origin
 info "GitHub-kopplingen borttagen — systemet är nu lokalt"
 
 # --- 3. Konfiguration ---
-header "Konfiguration"
+header "Företagsinformation"
+
+read -rp "  Företagsnamn: " COMPANY_NAME </dev/tty
+if [ -z "$COMPANY_NAME" ]; then
+  err "Företagsnamn krävs."
+fi
+
+read -rp "  Admin-namn [IT-administratör]: " ADMIN_NAME </dev/tty
+ADMIN_NAME=${ADMIN_NAME:-IT-administratör}
+
+read -rp "  Admin e-post: " ADMIN_EMAIL </dev/tty
+if [ -z "$ADMIN_EMAIL" ]; then
+  err "Admin e-post krävs."
+fi
+
+read -rsp "  Admin lösenord (minst 6 tecken): " ADMIN_PASSWORD </dev/tty
+echo ""
+if [ ${#ADMIN_PASSWORD} -lt 6 ]; then
+  err "Lösenordet måste vara minst 6 tecken."
+fi
+
+header "Nätverkskonfiguration"
 echo -e "  Tryck ${BOLD}Enter${NC} för att använda standardvärden (visas i [hakparentes])\n"
 
 read -rp "  Frontend-port [8082]: " FRONTEND_PORT </dev/tty
@@ -89,7 +110,6 @@ BACKEND_PORT=${BACKEND_PORT:-3002}
 DEFAULT_URL="http://localhost:${FRONTEND_PORT}"
 read -rp "  App-URL (för CORS och e-postlänkar) [${DEFAULT_URL}]: " APP_URL </dev/tty
 APP_URL=${APP_URL:-$DEFAULT_URL}
-# Lägg till http:// om protokoll saknas
 if [[ ! "$APP_URL" =~ ^https?:// ]]; then
   APP_URL="http://$APP_URL"
   info "Protokoll saknades — lade till automatiskt: $APP_URL"
@@ -99,14 +119,25 @@ fi
 DETECTED_IP=$(hostname -I | awk '{print $1}' | tr -d '[:space:]')
 if [ -n "$DETECTED_IP" ] && [ "$DETECTED_IP" != "127.0.0.1" ]; then
   CORS_ORIGINS="${APP_URL},http://${DETECTED_IP}:${FRONTEND_PORT}"
-  info "Detekterad IP: ${DETECTED_IP} — CORS kommer att tillåta både localhost och ${DETECTED_IP}"
+  info "Detekterad IP: ${DETECTED_IP} — CORS tillåter både URL:en och ${DETECTED_IP}"
 else
   CORS_ORIGINS="${APP_URL}"
-  info "Kunde inte detektera nätverks-IP — använder endast ${APP_URL} för CORS"
 fi
 
-echo ""
-echo -e "  ${BOLD}SMTP-konfiguration${NC} (valfritt — tryck Enter för att hoppa över)"
+header "AI-konfiguration"
+echo -e "  AI-funktioner kräver en Anthropic API-nyckel."
+echo -e "  Hämta din nyckel på ${BOLD}https://console.anthropic.com/keys${NC}\n"
+
+read -rp "  Anthropic API-nyckel (tryck Enter för att hoppa över): " ANTHROPIC_API_KEY </dev/tty
+if [ -n "$ANTHROPIC_API_KEY" ]; then
+  ok "API-nyckel sparad — AI-funktioner aktiverade"
+else
+  warn "Ingen API-nyckel — AI-funktioner inaktiverade (kan läggas till i .env senare)"
+fi
+
+header "SMTP-konfiguration (valfritt)"
+echo -e "  Krävs för e-postnotifieringar. Tryck ${BOLD}Enter${NC} för att hoppa över.\n"
+
 read -rp "  SMTP-server: " SMTP_HOST </dev/tty
 if [ -n "$SMTP_HOST" ]; then
   read -rp "  SMTP-port [587]: " SMTP_PORT </dev/tty
@@ -132,22 +163,29 @@ ok "JWT_SECRET genererad"
 # --- 5. Skriv .env ---
 cat > .env << EOF
 # Genererat av setup.sh $(date +%Y-%m-%d\ %H:%M)
+# ${COMPANY_NAME}
 
+# --- Nätverk ---
 FRONTEND_PORT=${FRONTEND_PORT}
 BACKEND_PORT=${BACKEND_PORT}
 CORS_ORIGIN=${CORS_ORIGINS}
 APP_BASE_URL=${APP_URL}
+
+# --- Säkerhet ---
 JWT_SECRET=${JWT_SECRET}
+
+# --- AI (Anthropic) ---
+ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+AI_MODEL=claude-haiku-4-5-20251001
+AI_MODEL_SMART=
+
+# --- E-post ---
 SMTP_HOST=${SMTP_HOST}
 SMTP_PORT=${SMTP_PORT}
 SMTP_USER=${SMTP_USER}
 SMTP_PASS=${SMTP_PASS}
 EMAIL_FROM=${EMAIL_FROM}
 EMAIL_TO=${EMAIL_TO}
-
-# Krävs av Vite vid bygge (används ej i produktionen)
-VITE_SUPABASE_URL=http://localhost
-VITE_SUPABASE_PUBLISHABLE_KEY=placeholder
 EOF
 ok ".env skapad"
 
@@ -169,6 +207,9 @@ services:
       - UPLOAD_DIR=/app/data/uploads
       - CORS_ORIGIN=${CORS_ORIGIN}
       - APP_BASE_URL=${APP_BASE_URL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-}
+      - AI_MODEL_SMART=${AI_MODEL_SMART:-}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}
@@ -251,29 +292,36 @@ done
 echo ""
 ok "Backend svarar (${WAITED}s)"
 
-# --- 10. Initiera databas ---
+# --- 10. Initiera databas med admin-användare ---
 header "Initierar databas"
-docker exec it-ticketing-backend npm run init-db
-ok "Databas initierad"
+docker exec -e ADMIN_EMAIL="${ADMIN_EMAIL}" -e ADMIN_PASSWORD="${ADMIN_PASSWORD}" -e ADMIN_NAME="${ADMIN_NAME}" \
+  it-ticketing-backend npm run init-db
+ok "Databas initierad med admin: ${ADMIN_EMAIL}"
 
 # --- 10b. Ladda mallar och dynamiska fält ---
 header "Laddar mallar och dynamiska fält"
-info "Skapar 7 kategorier och 7 kompletta mallar med 43 dynamiska fält..."
+info "Skapar kategorier och mallar med dynamiska fält..."
 docker exec it-ticketing-backend npm run seed-templates
 ok "Mallar och fält skapade"
 
 # --- 11. Klar! ---
-header "Installation klar!"
+header "Installation klar — ${COMPANY_NAME}"
 echo -e "  ${BOLD}Öppna systemet i din webbläsare:${NC}"
 echo ""
 echo -e "    URL:      ${GREEN}${APP_URL}${NC}"
-echo -e "    E-post:   ${GREEN}admin@example.com${NC}"
-echo -e "    Lösenord: ${GREEN}admin123${NC}"
-echo ""
-warn "Byt lösenord direkt efter inloggning!"
+echo -e "    E-post:   ${GREEN}${ADMIN_EMAIL}${NC}"
+echo -e "    Lösenord: ${GREEN}(det du angav vid installation)${NC}"
+if [ -n "$ANTHROPIC_API_KEY" ]; then
+  echo -e "    AI:       ${GREEN}Aktiverad${NC}"
+else
+  echo -e "    AI:       ${YELLOW}Inaktiverad (lägg till ANTHROPIC_API_KEY i .env)${NC}"
+fi
 echo ""
 echo -e "  ${BOLD}Hantera systemet:${NC}"
-echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml --env-file ${INSTALL_DIR}/.env up -d    # Starta"
-echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml --env-file ${INSTALL_DIR}/.env down     # Stoppa"
-echo "    docker compose -f ${INSTALL_DIR}/docker-compose.local.yml logs -f                                 # Loggar"
+echo "    cd ${INSTALL_DIR}"
+echo "    docker compose -f docker-compose.local.yml --env-file .env up -d    # Starta"
+echo "    docker compose -f docker-compose.local.yml --env-file .env down     # Stoppa"
+echo "    docker compose -f docker-compose.local.yml logs -f                  # Loggar"
+echo ""
+echo -e "  ${BOLD}Konfiguration:${NC} ${INSTALL_DIR}/.env"
 echo ""
