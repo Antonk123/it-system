@@ -115,6 +115,9 @@ const TicketDetail = () => {
   const [aiCategoryDismissed, setAiCategoryDismissed] = useState(false);
   const [aiSummary, setAiSummary] = useState<{ status: string; blockers: string; lastAction: string } | null>(null);
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+  const [aiDraft, setAiDraft] = useState<string | null>(null);
+  const [aiDraftKbTitles, setAiDraftKbTitles] = useState<string[]>([]);
+  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
 
   const hasVisibleContent = (html: string | null | undefined): boolean => {
     if (!html) return false;
@@ -186,6 +189,28 @@ const TicketDetail = () => {
     if (!ticket) return;
     setAiCategoryDismissed(true);
     api.dismissAiCategorySuggestion(ticket.id).catch(() => {});
+  };
+
+  const handleGenerateAiDraft = async () => {
+    if (!id) return;
+    setIsGeneratingDraft(true);
+    try {
+      const result = await api.generateAiDraft(id);
+      setAiDraft(result.draft);
+      setAiDraftKbTitles(result.kbTitles || []);
+    } catch {
+      toast.error('Kunde inte generera AI-utkast');
+    } finally {
+      setIsGeneratingDraft(false);
+    }
+  };
+
+  const handleUseDraftAsSolution = () => {
+    if (!ticket || !aiDraft) return;
+    updateTicket(ticket.id, { solution: aiDraft });
+    setAiDraft(null);
+    setAiDraftKbTitles([]);
+    toast.success('Lösning sparad');
   };
 
   // Track recently viewed tickets
@@ -679,18 +704,74 @@ const TicketDetail = () => {
               )}
             </div>
 
-            {/* Solution */}
-            {ticket.solution && (
-              <div className="pt-4 border-t">
-                <div className="flex items-center gap-2 mb-2">
-                  <Lightbulb className="w-4 h-4 text-success" />
-                  <h3 className="font-medium text-foreground">Lösning</h3>
+            {/* Solution + AI Draft */}
+            <div className="pt-4 border-t">
+              {ticket.solution ? (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Lightbulb className="w-4 h-4 text-success" />
+                    <h3 className="font-medium text-foreground">Lösning</h3>
+                  </div>
+                  <div className="bg-success/20 border border-success/40 p-4 rounded-lg">
+                    <HtmlRenderer content={migrateContent(ticket.solution)} />
+                  </div>
                 </div>
-                <div className="bg-success/20 border border-success/40 p-4 rounded-lg">
-                  <HtmlRenderer content={migrateContent(ticket.solution)} />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Lightbulb className="w-4 h-4 text-muted-foreground" />
+                      <h3 className="font-medium text-foreground">Lösning</h3>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGenerateAiDraft}
+                      disabled={isGeneratingDraft}
+                      className="gap-1.5 text-xs"
+                    >
+                      {isGeneratingDraft ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5" />
+                      )}
+                      Föreslå svar (AI)
+                    </Button>
+                  </div>
+                  {aiDraft && (
+                    <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-purple-400 flex items-center gap-1.5">
+                          <Sparkles className="w-3 h-3" />
+                          AI-utkast — granska innan du sparar
+                        </span>
+                        <button onClick={() => { setAiDraft(null); setAiDraftKbTitles([]); }} className="text-muted-foreground hover:text-foreground">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <textarea
+                        value={aiDraft}
+                        onChange={(e) => setAiDraft(e.target.value)}
+                        className="w-full min-h-[120px] bg-background/50 border border-border rounded-md p-3 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-purple-500/50"
+                      />
+                      {aiDraftKbTitles.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Baserat på: {aiDraftKbTitles.join(', ')}
+                        </p>
+                      )}
+                      <div className="flex justify-end">
+                        <Button size="sm" onClick={handleUseDraftAsSolution} className="gap-1.5">
+                          Spara som lösning
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {!aiDraft && (
+                    <p className="text-xs text-muted-foreground">Ingen lösning registrerad ännu.</p>
+                  )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Notes + Comments — unified internal communication section */}
             <div className="pt-4 border-t">
@@ -711,7 +792,6 @@ const TicketDetail = () => {
                 </div>
               )}
               <TicketComments
-                ticketId={ticket.id}
                 comments={comments}
                 isLoading={commentsLoading}
                 onAddComment={addComment}

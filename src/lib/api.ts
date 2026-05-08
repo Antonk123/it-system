@@ -1030,6 +1030,26 @@ class ApiClient {
     });
   }
 
+  async requestAiSuggestion(problemText: string, userEmail?: string) {
+    return this.request<{
+      deflectionId: string;
+      hasSolution: boolean;
+      solution: string | null;
+      confidence: number;
+      kbReferences: { id: string; title: string }[];
+    }>('/public/ai-suggest', {
+      method: 'POST',
+      body: { problemText, userEmail },
+    });
+  }
+
+  async reportDeflectionOutcome(deflectionId: string, outcome: 'solved' | 'rejected', ticketId?: string) {
+    return this.request<{ ok: boolean }>(`/public/ai-suggest/${deflectionId}`, {
+      method: 'PATCH',
+      body: { outcome, ticketId },
+    });
+  }
+
   // Time Entries
   async getTimeEntries(ticketId: string) {
     return this.request<{ entries: TimeEntryRow[]; total_minutes: number }>(
