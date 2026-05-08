@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Select,
@@ -677,6 +678,17 @@ const Settings = () => {
       <div className="max-w-2xl space-y-5">
         <h1 className="text-xl font-bold">Inställningar</h1>
 
+        <Tabs defaultValue="general">
+          <TabsList className="w-full grid grid-cols-4">
+            <TabsTrigger value="general">Allmänt</TabsTrigger>
+            <TabsTrigger value="tickets">Ärenden</TabsTrigger>
+            <TabsTrigger value="integrations">Integrationer</TabsTrigger>
+            <TabsTrigger value="admin">Administration</TabsTrigger>
+          </TabsList>
+
+          {/* ═══ ALLMÄNT ═══ */}
+          <TabsContent value="general" className="space-y-5">
+
         {/* Appearance Section */}
         <Collapsible open={sectionsOpen.appearance} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, appearance: open }))}>
           <Card>
@@ -756,131 +768,66 @@ const Settings = () => {
           </Card>
         </Collapsible>
 
-        {/* System Users Section */}
-        <Collapsible open={sectionsOpen.users} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, users: open }))}>
+        {/* Notifikationer Section */}
+        <Collapsible open={sectionsOpen.notifications} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, notifications: open }))}>
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
                 <CardTitle className="flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Systemanvändare
-                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.users ? '−' : '+'}</span>
+                  <Bell className="w-5 h-5" />
+                  Notifikationer
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.notifications ? '−' : '+'}</span>
                 </CardTitle>
                 <CardDescription>
-                  Hantera användare som har tillgång att logga in i systemet.
+                  Ta emot push-notiser för påminnelser och inaktiva ärenden direkt i webbläsaren.
                 </CardDescription>
               </CardHeader>
             </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent className="space-y-4">
-            {/* Invite new user */}
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input
-                type="text"
-                placeholder="Visningsnamn (valfritt)"
-                value={inviteName}
-                onChange={(e) => setInviteName(e.target.value)}
-                disabled={isInviting}
-              />
-              <Input
-                type="email"
-                placeholder="E-postadress för ny användare..."
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && !isInviting && handleInviteUser()}
-                disabled={isInviting}
-              />
-              <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as 'admin' | 'user')} disabled={isInviting}>
-                <SelectTrigger className="w-36 shrink-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">Användare</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button onClick={handleInviteUser} className="shrink-0" disabled={isInviting}>
-                {isInviting ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Mail className="w-4 h-4 mr-2" />
-                )}
-                Skapa
-              </Button>
-            </div>
-
-            {/* Users list */}
-            <div className="border rounded-lg divide-y">
-              {usersLoading ? (
-                <div className="p-4 text-center text-muted-foreground">
-                  <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
-                  Laddar användare...
-                </div>
-              ) : usersError ? (
-                <div className="p-4 text-center text-destructive">
-                  {usersError}
-                </div>
-              ) : systemUsers.length === 0 ? (
-                <div className="p-4 text-center text-muted-foreground">
-                  Inga systemanvändare hittades.
-                </div>
-              ) : (
-                systemUsers.map((sysUser) => (
-                  <div key={sysUser.id} className="flex items-center gap-3 p-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">{sysUser.displayName || sysUser.email}</span>
-                      {sysUser.role === 'admin' && (
-                        <Badge variant="secondary" className="shrink-0">
-                          <Shield className="w-3 h-3 mr-1" />
-                          Admin
-                        </Badge>
-                        )}
-                        {!sysUser.emailConfirmed && (
-                          <Badge variant="outline" className="shrink-0 text-muted-foreground">
-                            Väntar på bekräftelse
-                          </Badge>
-                        )}
-                      </div>
-                      {sysUser.displayName && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {sysUser.email}
-                        </p>
-                      )}
-                      {sysUser.lastSignIn && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Senaste inloggning: {format(new Date(sysUser.lastSignIn), 'PPp', { locale: sv })}
-                        </p>
-                      )}
-                    </div>
-                    {sysUser.id !== currentUser?.id && (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => updateRole(sysUser.id, sysUser.role === 'admin' ? 'user' : 'admin')}
-                          title={sysUser.role === 'admin' ? 'Nedgradera till användare' : 'Uppgradera till admin'}
-                        >
-                          <Shield className="w-3 h-3 mr-1" />
-                          {sysUser.role === 'admin' ? 'Ta bort admin' : 'Gör admin'}
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setDeleteUserId(sysUser.id)}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-                      </div>
-                    )}
+                {/* iOS non-standalone callout */}
+                {iosNotInstalled && (
+                  <div className="rounded-md p-3 text-sm" style={{ backgroundColor: 'hsl(45 93% 47% / 0.15)' }}>
+                    Push-notiser fungerar bara när appen är installerad. Lägg till appen på hemskärmen för att aktivera.
                   </div>
-                ))
-              )}
-            </div>
+                )}
+
+                {/* Browser blocked callout */}
+                {pushBlocked && (
+                  <div className="rounded-md bg-destructive/20 p-3 text-sm">
+                    Notiser är blockerade i webbläsaren. Gå till webbläsarens inställningar och tillåt notiser för den här sidan.
+                  </div>
+                )}
+
+                {/* Toggle row */}
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <Label htmlFor="push-toggle">Push-notiser</Label>
+                    <p className="text-sm text-muted-foreground">
+                      {pushBlocked ? 'Blockerade i webbläsaren' :
+                       pushUnsupported ? 'Stöds inte i den här webbläsaren' :
+                       pushEnabled ? 'Aktiverade' : 'Avaktiverade'}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {pushLoading && <Loader2 className="w-4 h-4 animate-spin" />}
+                    <Switch
+                      id="push-toggle"
+                      checked={pushEnabled}
+                      onCheckedChange={handlePushToggle}
+                      disabled={pushLoading || pushBlocked || pushUnsupported || iosNotInstalled}
+                    />
+                  </div>
+                </div>
               </CardContent>
             </CollapsibleContent>
           </Card>
         </Collapsible>
+
+          </TabsContent>
+
+          {/* ═══ ÄRENDEN ═══ */}
+          <TabsContent value="tickets" className="space-y-5">
 
         {/* Categories Section */}
         <Collapsible open={sectionsOpen.categories} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, categories: open }))}>
@@ -1259,97 +1206,11 @@ const Settings = () => {
             </CollapsibleContent>
           </Card>
         </Collapsible>
-        {/* Backup & Export Section */}
-        <Collapsible open={sectionsOpen.backup} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, backup: open }))}>
-          <Card>
-            <CollapsibleTrigger className="w-full">
-              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
-                  <HardDriveDownload className="w-5 h-5" />
-                  Backup &amp; Export
-                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.backup ? '−' : '+'}</span>
-                </CardTitle>
-                <CardDescription>
-                  Ladda ned en komplett kopia av databasen och uppladdade filer som en ZIP-fil.
-                </CardDescription>
-              </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CardContent className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  ZIP-filen innehåller en WAL-säker ögonblicksbild av databasen samt alla uppladdade filer. Spara filen på en säker plats.
-                </p>
-                <Button
-                  onClick={handleBackup}
-                  disabled={backupLoading}
-                >
-                  {backupLoading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <HardDriveDownload className="w-4 h-4 mr-2" />
-                  )}
-                  {backupLoading ? 'Genererar backup...' : 'Ladda ned backup'}
-                </Button>
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
 
-        {/* Notifikationer Section */}
-        <Collapsible open={sectionsOpen.notifications} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, notifications: open }))}>
-          <Card>
-            <CollapsibleTrigger className="w-full">
-              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
-                  <Bell className="w-5 h-5" />
-                  Notifikationer
-                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.notifications ? '−' : '+'}</span>
-                </CardTitle>
-                <CardDescription>
-                  Ta emot push-notiser för påminnelser och inaktiva ärenden direkt i webbläsaren.
-                </CardDescription>
-              </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CardContent className="space-y-4">
-                {/* iOS non-standalone callout */}
-                {iosNotInstalled && (
-                  <div className="rounded-md p-3 text-sm" style={{ backgroundColor: 'hsl(45 93% 47% / 0.15)' }}>
-                    Push-notiser fungerar bara när appen är installerad. Lägg till appen på hemskärmen för att aktivera.
-                  </div>
-                )}
+          </TabsContent>
 
-                {/* Browser blocked callout */}
-                {pushBlocked && (
-                  <div className="rounded-md bg-destructive/20 p-3 text-sm">
-                    Notiser är blockerade i webbläsaren. Gå till webbläsarens inställningar och tillåt notiser för den här sidan.
-                  </div>
-                )}
-
-                {/* Toggle row */}
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <Label htmlFor="push-toggle">Push-notiser</Label>
-                    <p className="text-sm text-muted-foreground">
-                      {pushBlocked ? 'Blockerade i webbläsaren' :
-                       pushUnsupported ? 'Stöds inte i den här webbläsaren' :
-                       pushEnabled ? 'Aktiverade' : 'Avaktiverade'}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {pushLoading && <Loader2 className="w-4 h-4 animate-spin" />}
-                    <Switch
-                      id="push-toggle"
-                      checked={pushEnabled}
-                      onCheckedChange={handlePushToggle}
-                      disabled={pushLoading || pushBlocked || pushUnsupported || iosNotInstalled}
-                    />
-                  </div>
-                </div>
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
+          {/* ═══ INTEGRATIONER ═══ */}
+          <TabsContent value="integrations" className="space-y-5">
 
         {/* API Keys Section */}
         <Collapsible open={sectionsOpen.apiKeys} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, apiKeys: open }))}>
@@ -1628,6 +1489,176 @@ const Settings = () => {
             </CollapsibleContent>
           </Card>
         </Collapsible>
+
+          </TabsContent>
+
+          {/* ═══ ADMINISTRATION ═══ */}
+          <TabsContent value="admin" className="space-y-5">
+
+        {/* System Users Section */}
+        <Collapsible open={sectionsOpen.users} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, users: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Systemanvändare
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.users ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Hantera användare som har tillgång att logga in i systemet.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+            {/* Invite new user */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Input
+                type="text"
+                placeholder="Visningsnamn (valfritt)"
+                value={inviteName}
+                onChange={(e) => setInviteName(e.target.value)}
+                disabled={isInviting}
+              />
+              <Input
+                type="email"
+                placeholder="E-postadress för ny användare..."
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && !isInviting && handleInviteUser()}
+                disabled={isInviting}
+              />
+              <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as 'admin' | 'user')} disabled={isInviting}>
+                <SelectTrigger className="w-36 shrink-0">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">Användare</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button onClick={handleInviteUser} className="shrink-0" disabled={isInviting}>
+                {isInviting ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Mail className="w-4 h-4 mr-2" />
+                )}
+                Skapa
+              </Button>
+            </div>
+
+            {/* Users list */}
+            <div className="border rounded-lg divide-y">
+              {usersLoading ? (
+                <div className="p-4 text-center text-muted-foreground">
+                  <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
+                  Laddar användare...
+                </div>
+              ) : usersError ? (
+                <div className="p-4 text-center text-destructive">
+                  {usersError}
+                </div>
+              ) : systemUsers.length === 0 ? (
+                <div className="p-4 text-center text-muted-foreground">
+                  Inga systemanvändare hittades.
+                </div>
+              ) : (
+                systemUsers.map((sysUser) => (
+                  <div key={sysUser.id} className="flex items-center gap-3 p-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate">{sysUser.displayName || sysUser.email}</span>
+                      {sysUser.role === 'admin' && (
+                        <Badge variant="secondary" className="shrink-0">
+                          <Shield className="w-3 h-3 mr-1" />
+                          Admin
+                        </Badge>
+                        )}
+                        {!sysUser.emailConfirmed && (
+                          <Badge variant="outline" className="shrink-0 text-muted-foreground">
+                            Väntar på bekräftelse
+                          </Badge>
+                        )}
+                      </div>
+                      {sysUser.displayName && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {sysUser.email}
+                        </p>
+                      )}
+                      {sysUser.lastSignIn && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Senaste inloggning: {format(new Date(sysUser.lastSignIn), 'PPp', { locale: sv })}
+                        </p>
+                      )}
+                    </div>
+                    {sysUser.id !== currentUser?.id && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateRole(sysUser.id, sysUser.role === 'admin' ? 'user' : 'admin')}
+                          title={sysUser.role === 'admin' ? 'Nedgradera till användare' : 'Uppgradera till admin'}
+                        >
+                          <Shield className="w-3 h-3 mr-1" />
+                          {sysUser.role === 'admin' ? 'Ta bort admin' : 'Gör admin'}
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setDeleteUserId(sysUser.id)}
+                        >
+                          <Trash2 className="w-4 h-4 text-destructive" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        {/* Backup & Export Section */}
+        <Collapsible open={sectionsOpen.backup} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, backup: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <HardDriveDownload className="w-5 h-5" />
+                  Backup &amp; Export
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.backup ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Ladda ned en komplett kopia av databasen och uppladdade filer som en ZIP-fil.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  ZIP-filen innehåller en WAL-säker ögonblicksbild av databasen samt alla uppladdade filer. Spara filen på en säker plats.
+                </p>
+                <Button
+                  onClick={handleBackup}
+                  disabled={backupLoading}
+                >
+                  {backupLoading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <HardDriveDownload className="w-4 h-4 mr-2" />
+                  )}
+                  {backupLoading ? 'Genererar backup...' : 'Ladda ned backup'}
+                </Button>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Delete API key confirmation */}
