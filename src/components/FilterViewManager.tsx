@@ -10,9 +10,18 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Trash2, Save, Pencil, Check, X, Star } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Trash2, Save, Pencil, Check, X, Star, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useCategories } from '@/hooks/useCategories';
 
 interface FilterViewManagerProps {
   open: boolean;
@@ -25,24 +34,163 @@ interface FilterViewManagerProps {
   onSetDefault: (id: string) => void;
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  'open': 'Öppen',
-  'in-progress': 'Pågående',
-  'waiting': 'Väntar',
-  'resolved': 'Löst',
-  'closed': 'Stängd',
-};
+const ALL_STATUSES = [
+  { value: 'open', label: 'Öppen' },
+  { value: 'in-progress', label: 'Pågående' },
+  { value: 'waiting', label: 'Väntar' },
+  { value: 'resolved', label: 'Löst' },
+  { value: 'closed', label: 'Stängd' },
+];
+
+const STATUS_LABELS: Record<string, string> = Object.fromEntries(
+  ALL_STATUSES.map((s) => [s.value, s.label])
+);
+
+const PRIORITY_OPTIONS = [
+  { value: 'all', label: 'Alla' },
+  { value: 'low', label: 'Låg' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'Hög' },
+  { value: 'critical', label: 'Kritisk' },
+];
 
 function FilterSummary({ filters }: { filters: FilterView['filters'] }) {
   const parts: string[] = [];
   if (filters.status && filters.status.length > 0) {
     parts.push(`Status: ${filters.status.map((s) => STATUS_LABELS[s] || s).join(', ')}`);
   }
-  if (filters.priority && filters.priority !== 'all') parts.push(`Prioritet: ${filters.priority}`);
-  if (filters.category && filters.category !== 'all') parts.push(`Kategori`);
+  if (filters.priority && filters.priority !== 'all') {
+    const p = PRIORITY_OPTIONS.find((o) => o.value === filters.priority);
+    parts.push(`Prioritet: ${p?.label || filters.priority}`);
+  }
+  if (filters.category && filters.category !== 'all') parts.push('Kategori');
   if (filters.tags && filters.tags.length > 0) parts.push(`${filters.tags.length} taggar`);
   if (filters.search) parts.push(`Sök: "${filters.search}"`);
   return <span className="text-xs text-muted-foreground">{parts.join(' · ') || 'Inga filter'}</span>;
+}
+
+interface EditState {
+  name: string;
+  statuses: string[];
+  priority: string;
+  category: string;
+}
+
+function ViewFilterEditor({
+  initial,
+  onSave,
+  onCancel,
+  existingNames,
+}: {
+  initial: { name: string; filters: FilterView['filters'] };
+  onSave: (name: string, filters: FilterView['filters']) => void;
+  onCancel: () => void;
+  existingNames: string[];
+}) {
+  const { categories } = useCategories();
+  const [edit, setEdit] = useState<EditState>({
+    name: initial.name,
+    statuses: initial.filters.status || [],
+    priority: initial.filters.priority || 'all',
+    category: initial.filters.category || 'all',
+  });
+
+  const toggleStatus = (status: string) => {
+    setEdit((prev) => ({
+      ...prev,
+      statuses: prev.statuses.includes(status)
+        ? prev.statuses.filter((s) => s !== status)
+        : [...prev.statuses, status],
+    }));
+  };
+
+  const handleSave = () => {
+    if (!edit.name.trim()) {
+      toast.error('Namnet får inte vara tomt');
+      return;
+    }
+    const nameLower = edit.name.trim().toLowerCase();
+    if (existingNames.some((n) => n.toLowerCase() === nameLower && n.toLowerCase() !== initial.name.toLowerCase())) {
+      toast.error('En vy med detta namn finns redan');
+      return;
+    }
+    onSave(edit.name.trim(), {
+      ...initial.filters,
+      status: edit.statuses.length > 0 ? edit.statuses : undefined,
+      priority: edit.priority !== 'all' ? edit.priority : undefined,
+      category: edit.category !== 'all' ? edit.category : undefined,
+    });
+  };
+
+  return (
+    <div className="space-y-3 pt-2 animate-in slide-in-from-top-1 duration-150">
+      <div className="space-y-1.5">
+        <Label className="text-xs text-muted-foreground">Namn</Label>
+        <Input
+          value={edit.name}
+          onChange={(e) => setEdit((prev) => ({ ...prev, name: e.target.value }))}
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onCancel(); }}
+          className="h-8 text-sm"
+          autoFocus
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label className="text-xs text-muted-foreground">Status</Label>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+          {ALL_STATUSES.map((s) => (
+            <label key={s.value} className="flex items-center gap-1.5 text-sm cursor-pointer">
+              <Checkbox
+                checked={edit.statuses.includes(s.value)}
+                onCheckedChange={() => toggleStatus(s.value)}
+              />
+              {s.label}
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Prioritet</Label>
+          <Select value={edit.priority} onValueChange={(v) => setEdit((prev) => ({ ...prev, priority: v }))}>
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {PRIORITY_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label className="text-xs text-muted-foreground">Kategori</Label>
+          <Select value={edit.category} onValueChange={(v) => setEdit((prev) => ({ ...prev, category: v }))}>
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alla</SelectItem>
+              {categories.map((c) => (
+                <SelectItem key={c.id} value={c.id}>{c.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end gap-2 pt-1">
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          Avbryt
+        </Button>
+        <Button size="sm" onClick={handleSave} className="gap-1.5">
+          <Check className="w-3.5 h-3.5" />
+          Spara
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function FilterViewManager({
@@ -57,7 +205,6 @@ export function FilterViewManager({
 }: FilterViewManagerProps) {
   const [newViewName, setNewViewName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editName, setEditName] = useState('');
 
   const builtInView = views.find((v) => v.id === 'active-tickets');
   const customViews = views.filter((v) => v.id !== 'active-tickets');
@@ -76,28 +223,10 @@ export function FilterViewManager({
     toast.success(`Vyn "${newViewName.trim()}" skapad`);
   };
 
-  const handleStartEdit = (view: FilterView) => {
-    setEditingId(view.id);
-    setEditName(view.name);
-  };
-
-  const handleSaveEdit = (id: string) => {
-    if (!editName.trim()) {
-      toast.error('Namnet får inte vara tomt');
-      return;
-    }
-    if (views.some((v) => v.id !== id && v.name.toLowerCase() === editName.trim().toLowerCase())) {
-      toast.error('En vy med detta namn finns redan');
-      return;
-    }
-    onUpdateView(id, { name: editName.trim() });
+  const handleSaveEdit = (id: string, name: string, filters: FilterView['filters']) => {
+    onUpdateView(id, { name, filters });
     setEditingId(null);
     toast.success('Vyn uppdaterad');
-  };
-
-  const handleUpdateFilters = (id: string) => {
-    onUpdateView(id, { filters: currentFilters.filters });
-    toast.success('Vyns filter uppdaterade med nuvarande filter');
   };
 
   const handleDeleteView = (id: string, name: string) => {
@@ -122,10 +251,11 @@ export function FilterViewManager({
     currentFilters.filters.search;
 
   const allViews = [builtInView, ...customViews].filter(Boolean) as FilterView[];
+  const existingNames = allViews.map((v) => v.name);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[520px]">
+      <DialogContent className="sm:max-w-[520px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Hantera vyer</DialogTitle>
           <DialogDescription>
@@ -134,19 +264,16 @@ export function FilterViewManager({
         </DialogHeader>
 
         <div className="space-y-6">
-          {/* All views list */}
-          <div className="space-y-3">
-            <h3 className="text-sm font-medium">Vyer</h3>
-            <div className="space-y-2">
-              {allViews.map((view) => (
-                <div
-                  key={view.id}
-                  className={cn(
-                    'flex items-center gap-2 p-3 border rounded-lg transition-colors',
-                    view.isDefault && 'border-primary/40 bg-primary/5'
-                  )}
-                >
-                  {/* Default star */}
+          <div className="space-y-2">
+            {allViews.map((view) => (
+              <div
+                key={view.id}
+                className={cn(
+                  'border rounded-lg transition-colors',
+                  view.isDefault && 'border-primary/40 bg-primary/5'
+                )}
+              >
+                <div className="flex items-center gap-2 p-3">
                   <button
                     onClick={() => handleSetDefault(view.id)}
                     className={cn(
@@ -160,84 +287,51 @@ export function FilterViewManager({
                     <Star className={cn('w-4 h-4', view.isDefault && 'fill-current')} />
                   </button>
 
-                  {/* Name / edit */}
                   <div className="flex-1 min-w-0">
-                    {editingId === view.id ? (
-                      <div className="flex items-center gap-1">
-                        <Input
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') handleSaveEdit(view.id);
-                            if (e.key === 'Escape') setEditingId(null);
-                          }}
-                          className="h-7 text-sm"
-                          autoFocus
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 shrink-0"
-                          onClick={() => handleSaveEdit(view.id)}
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 shrink-0"
-                          onClick={() => setEditingId(null)}
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div>
-                        <p className="text-sm font-medium truncate">{view.name}</p>
-                        <FilterSummary filters={view.filters} />
-                      </div>
-                    )}
+                    <p className="text-sm font-medium truncate">{view.name}</p>
+                    <FilterSummary filters={view.filters} />
                   </div>
 
-                  {/* Actions */}
-                  {editingId !== view.id && (
-                    <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => setEditingId(editingId === view.id ? null : view.id)}
+                      title="Redigera"
+                    >
+                      {editingId === view.id ? (
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      ) : (
+                        <Pencil className="w-3.5 h-3.5" />
+                      )}
+                    </Button>
+                    {view.id !== 'active-tickets' && (
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-7 w-7"
-                        onClick={() => handleStartEdit(view)}
-                        title="Byt namn"
+                        className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => handleDeleteView(view.id, view.name)}
+                        title="Ta bort"
                       >
-                        <Pencil className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </Button>
-                      {hasFilters && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => handleUpdateFilters(view.id)}
-                          title="Uppdatera med nuvarande filter"
-                        >
-                          <Save className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
-                      {view.id !== 'active-tickets' && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                          onClick={() => handleDeleteView(view.id, view.name)}
-                          title="Ta bort"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
+
+                {editingId === view.id && (
+                  <div className="px-3 pb-3 border-t border-border/50">
+                    <ViewFilterEditor
+                      initial={{ name: view.name, filters: view.filters }}
+                      onSave={(name, filters) => handleSaveEdit(view.id, name, filters)}
+                      onCancel={() => setEditingId(null)}
+                      existingNames={existingNames}
+                    />
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
 
           {/* Create new view */}
