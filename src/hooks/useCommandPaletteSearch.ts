@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { api, TicketRow, KbArticleRow } from '@/lib/api';
+import { api, TicketRow, KbArticleRow, ContactRow } from '@/lib/api';
 
 interface PaginatedResponse<T> {
   data: T[];
@@ -11,8 +11,8 @@ interface PaginatedResponse<T> {
 export interface SearchResult {
   id: string;
   title: string;
-  type: 'ticket' | 'kb';
-  subtitle?: string; // status for tickets, article_type for KB
+  type: 'ticket' | 'kb' | 'contact';
+  subtitle?: string;
 }
 
 interface UseCommandPaletteSearchReturn {
@@ -27,6 +27,7 @@ export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const contactsCacheRef = useRef<ContactRow[] | null>(null);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -43,10 +44,17 @@ export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
 
     debounceRef.current = setTimeout(async () => {
       try {
-        const [ticketResponse, kbArticles] = await Promise.all([
+        const contactsPromise = contactsCacheRef.current
+          ? Promise.resolve(contactsCacheRef.current)
+          : api.getContacts();
+
+        const [ticketResponse, kbArticles, contacts] = await Promise.all([
           api.getTickets('?page=1&limit=6&status=all&search=' + encodeURIComponent(term)),
           api.getKbArticles({ search: term }),
+          contactsPromise,
         ]);
+
+        contactsCacheRef.current = contacts;
 
         const rows: TicketRow[] = Array.isArray(ticketResponse)
           ? (ticketResponse as TicketRow[])
@@ -66,7 +74,20 @@ export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
           subtitle: a.article_type ?? undefined,
         }));
 
-        setResults([...ticketResults, ...kbResults]);
+        const lower = term.toLowerCase();
+        const contactResults: SearchResult[] = contacts
+          .filter(c => c.name.toLowerCase().includes(lower)
+            || c.email.toLowerCase().includes(lower)
+            || (c.company_name && c.company_name.toLowerCase().includes(lower)))
+          .slice(0, 5)
+          .map(c => ({
+            id: c.id,
+            title: c.name,
+            type: 'contact',
+            subtitle: [c.email, c.company_name].filter(Boolean).join(' · '),
+          }));
+
+        setResults([...ticketResults, ...contactResults, ...kbResults]);
       } catch {
         setResults([]);
       } finally {
@@ -79,7 +100,6 @@ export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
     };
   }, [search]);
 
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);

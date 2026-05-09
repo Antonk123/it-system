@@ -55,10 +55,11 @@ const navItems = [
   { path: '/settings', icon: Settings, label: 'Inställningar' },
 ];
 
-function TypeBadge({ type }: { type: 'ticket' | 'kb' }) {
+function TypeBadge({ type }: { type: 'ticket' | 'kb' | 'contact' }) {
+  const label = type === 'ticket' ? 'Ärende' : type === 'kb' ? 'KB' : 'Kontakt';
   return (
     <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground ml-1 shrink-0">
-      {type === 'ticket' ? 'Ärende' : 'KB'}
+      {label}
     </span>
   );
 }
@@ -204,11 +205,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 {results.map(result => (
                   <CommandItem
                     key={`${result.type}-${result.id}`}
-                    onSelect={() => handleSelect(result.type === 'ticket' ? `/tickets/${result.id}` : `/kb/${result.id}`)}
+                    onSelect={() => handleSelect(
+                      result.type === 'ticket' ? `/tickets/${result.id}`
+                      : result.type === 'contact' ? `/users`
+                      : `/kb/${result.id}`
+                    )}
                     className="flex items-center gap-2"
                   >
                     {result.type === 'ticket' ? (
                       <Ticket className="w-4 h-4 text-muted-foreground shrink-0" />
+                    ) : result.type === 'contact' ? (
+                      <Users className="w-4 h-4 text-muted-foreground shrink-0" />
                     ) : (
                       <BookOpen className="w-4 h-4 text-muted-foreground shrink-0" />
                     )}
