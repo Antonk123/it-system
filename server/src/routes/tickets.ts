@@ -825,7 +825,8 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
     const xlsxBuffer = generateXLSX(tickets, categories, contacts);
 
     const timestamp = new Date().toISOString().split('T')[0];
-    const parts: string[] = ['arenden'];
+    const source = (req.query as any).source;
+    const parts: string[] = [source === 'rapport' ? 'rapport-arenden' : 'arenden'];
     if (query.status) parts.push(String(query.status).replace(/,/g, '-'));
     if (query.priority) parts.push(String(query.priority));
     if (query.category && query.category !== 'all') parts.push(String(query.category).replace(/\s+/g, '-'));

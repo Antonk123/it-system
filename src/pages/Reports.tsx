@@ -503,7 +503,8 @@ const Reports = () => {
         }
       }
 
-      const queryString = params.toString() ? `?${params.toString()}` : '';
+      params.append('source', 'rapport');
+      const queryString = `?${params.toString()}`;
 
       await api.exportTickets(queryString);
 
