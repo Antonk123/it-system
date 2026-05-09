@@ -546,7 +546,7 @@
   /* Per-theme light variants — D-01/D-03 */
 
   /* Slate Light — blue accent */
-  .light .theme-default {
+  .light.theme-default {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
     --background: 210 18% 98%;
     --background-gradient: linear-gradient(135deg, hsl(210, 18%, 98%) 0%, hsl(215, 16%, 96%) 100%);
@@ -636,7 +636,7 @@
   }
 
   /* Midnight Light — indigo accent */
-  .light .theme-midnight {
+  .light.theme-midnight {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
     --background: 230 25% 97%;
     --background-gradient: linear-gradient(135deg, hsl(230, 25%, 97%) 0%, hsl(235, 20%, 95%) 100%);
@@ -726,7 +726,7 @@
   }
 
   /* Graphite Light — amber accent */
-  .light .theme-graphite {
+  .light.theme-graphite {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
     --background: 220 12% 97%;
     --background-gradient: linear-gradient(135deg, hsl(220, 12%, 97%) 0%, hsl(215, 10%, 95%) 100%);
@@ -816,7 +816,7 @@
   }
 
   /* Stone Light — emerald accent */
-  .light .theme-stone {
+  .light.theme-stone {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
     --background: 200 8% 97%;
     --background-gradient: linear-gradient(135deg, hsl(200, 8%, 97%) 0%, hsl(195, 6%, 95%) 100%);
@@ -906,7 +906,7 @@
   }
 
   /* Linear Light — indigo-violet accent on clean white */
-  .light .theme-linear {
+  .light.theme-linear {
     --app-font-family: 'Inter', -apple-system, system-ui, sans-serif;
     --background: 180 7% 97%;
     --background-gradient: linear-gradient(135deg, hsl(180, 7%, 97%) 0%, hsl(210, 7%, 96%) 100%);
@@ -996,7 +996,7 @@
   }
 
   /* Spotify Light — green accent on clean white (rare mode for Spotify) */
-  .light .theme-spotify {
+  .light.theme-spotify {
     --app-font-family: 'Inter', -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
     --background: 0 0% 97%;
     --background-gradient: linear-gradient(180deg, hsl(0, 0%, 97%) 0%, hsl(0, 0%, 95%) 100%);

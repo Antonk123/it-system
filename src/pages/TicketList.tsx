@@ -95,7 +95,9 @@ const TicketList = () => {
     views,
     activeView,
     createView,
+    updateView,
     deleteView,
+    setDefaultView,
     applyView,
     setActiveView,
     getCurrentFiltersAsView,
@@ -234,7 +236,9 @@ const TicketList = () => {
         views={views}
         currentFilters={getCurrentFiltersAsView()}
         onCreateView={createView}
+        onUpdateView={updateView}
         onDeleteView={deleteView}
+        onSetDefault={setDefaultView}
       />
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

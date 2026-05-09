@@ -67,7 +67,9 @@ const Archive = () => {
     views,
     activeView,
     createView,
+    updateView,
     deleteView,
+    setDefaultView,
     applyView,
     setActiveView,
     getCurrentFiltersAsView,
@@ -372,7 +374,9 @@ const Archive = () => {
         views={views}
         currentFilters={getCurrentFiltersAsView()}
         onCreateView={createView}
+        onUpdateView={updateView}
         onDeleteView={deleteView}
+        onSetDefault={setDefaultView}
       />
 
       <ImportDialog
