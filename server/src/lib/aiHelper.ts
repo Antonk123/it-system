@@ -114,7 +114,7 @@ export async function findRelevantKbArticles(
   try {
     const articleList = articles.map((a, i) => `${i + 1}. [${a.id}] ${a.title}`).join('\n');
     const msg = await client.messages.create({
-      model: getModel('base'),
+      model: MODEL_DEFAULT,
       max_tokens: 200,
       messages: [{
         role: 'user',

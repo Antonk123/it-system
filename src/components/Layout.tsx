@@ -11,6 +11,7 @@ import { BottomTabBar } from '@/components/BottomTabBar';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
 import { applyMode, getStoredMode, saveModeTheme, ModeTheme } from '@/lib/appearance';
 import { dispatchModeChange } from '@/hooks/useMode';
+import { RouteBreadcrumbs } from '@/components/RouteBreadcrumbs';
 
 interface LayoutProps {
   children: ReactNode;
@@ -302,10 +303,10 @@ export const Layout = ({
         {/* Desktop header with search */}
         <div data-print-hide className="hidden lg:block sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 shadow-sm">
           <div className="flex items-center justify-between">
-            <div className="max-w-md flex-1">
+            <div className="flex items-center gap-4 flex-1">
               <button
                 onClick={() => setPaletteOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 text-muted-foreground text-sm hover:bg-muted/50 transition-colors w-72"
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 text-muted-foreground text-sm hover:bg-muted/50 transition-colors w-72 shrink-0"
               >
                 <Search className="w-4 h-4" />
                 <span>Sök ärenden, artiklar, sidor...</span>
@@ -313,6 +314,7 @@ export const Layout = ({
                   {navigator.platform?.includes('Mac') ? '⌘K' : 'Ctrl+K'}
                 </kbd>
               </button>
+              <RouteBreadcrumbs />
             </div>
             <Button variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">
               {mode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
