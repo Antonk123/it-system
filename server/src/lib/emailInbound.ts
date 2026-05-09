@@ -34,35 +34,31 @@ function getEmailConfig(): EmailConfig | null {
   };
 }
 
-async function processEmail(source: Buffer, config: EmailConfig): Promise<void> {
-  const parsed = await simpleParser(source);
+function findTicketByMessageId(messageIds: string[]): { id: string } | undefined {
+  if (messageIds.length === 0) return undefined;
+  const placeholders = messageIds.map(() => '?').join(',');
+  return db
+    .prepare(`SELECT id FROM tickets WHERE email_message_id IN (${placeholders}) LIMIT 1`)
+    .get(...messageIds) as { id: string } | undefined;
+}
 
-  const fromAddress = parsed.from?.value?.[0]?.address;
-  const fromName = parsed.from?.value?.[0]?.name || fromAddress;
-  const subject = parsed.subject || '(Inget ämne)';
+function stripReplyPrefix(subject: string): string {
+  return subject.replace(/^(Re|Sv|Fwd|Fw|VS)\s*:\s*/i, '').trim();
+}
 
-  if (!fromAddress) {
-    console.warn('[email-inbound] Email without from address, skipping');
-    return;
-  }
+function findTicketBySubject(subject: string): { id: string } | undefined {
+  const stripped = stripReplyPrefix(subject);
+  if (!stripped) return undefined;
+  return db
+    .prepare('SELECT id FROM tickets WHERE title = ? AND status NOT IN (\'closed\') ORDER BY created_at DESC LIMIT 1')
+    .get(stripped) as { id: string } | undefined;
+}
 
-  // Convert HTML to plain text, or use text body
-  let body = '';
-  if (parsed.html) {
-    body = convert(parsed.html as string, { wordwrap: false });
-  } else if (parsed.text) {
-    body = parsed.text;
-  }
-
-  // Trim excessive whitespace
-  body = body.replace(/\n{3,}/g, '\n\n').trim();
-
-  // Look up contact by email
+function resolveOrCreateContact(fromAddress: string, fromName: string, config: EmailConfig) {
   let contact = db
     .prepare('SELECT id, company_id FROM contacts WHERE LOWER(email) = LOWER(?)')
     .get(fromAddress) as { id: string; company_id: string | null } | undefined;
 
-  // Auto-create contact if enabled
   if (!contact && config.autoCreateContact) {
     const contactId = randomUUID();
     db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)').run(
@@ -74,16 +70,87 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     console.log(`[email-inbound] Created contact for ${fromAddress}`);
   }
 
-  // Create ticket
+  return contact;
+}
+
+function addCommentToTicket(ticketId: string, body: string, fromAddress: string, fromName: string): void {
+  const commentId = randomUUID();
+  const systemUserId = (db.prepare('SELECT id FROM users LIMIT 1').get() as { id: string } | undefined)?.id;
+  if (!systemUserId) {
+    console.warn('[email-inbound] No system user found, cannot add comment');
+    return;
+  }
+
+  const attribution = `**Från:** ${fromName} (${fromAddress})\n\n`;
+  db.prepare(
+    'INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal) VALUES (?, ?, ?, ?, 0)'
+  ).run(commentId, ticketId, systemUserId, attribution + body);
+
+  db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(ticketId);
+
+  console.log(`[email-inbound] Added comment to ticket ${ticketId} from ${fromAddress}`);
+}
+
+async function processEmail(source: Buffer, config: EmailConfig): Promise<void> {
+  const parsed = await simpleParser(source);
+
+  const fromAddress = parsed.from?.value?.[0]?.address;
+  const fromName = parsed.from?.value?.[0]?.name || fromAddress || '';
+  const subject = parsed.subject || '(Inget ämne)';
+  const messageId = parsed.messageId || null;
+
+  if (!fromAddress) {
+    console.warn('[email-inbound] Email without from address, skipping');
+    return;
+  }
+
+  let body = '';
+  if (parsed.html) {
+    body = convert(parsed.html as string, { wordwrap: false });
+  } else if (parsed.text) {
+    body = parsed.text;
+  }
+  body = body.replace(/\n{3,}/g, '\n\n').trim();
+
+  // --- Threading: check if this is a reply to an existing ticket ---
+  const referencedIds: string[] = [];
+  if (parsed.inReplyTo) {
+    referencedIds.push(parsed.inReplyTo);
+  }
+  if (parsed.references) {
+    const refs = Array.isArray(parsed.references) ? parsed.references : [parsed.references];
+    for (const ref of refs) {
+      if (!referencedIds.includes(ref)) referencedIds.push(ref);
+    }
+  }
+
+  let existingTicket = findTicketByMessageId(referencedIds);
+
+  if (!existingTicket && /^(Re|Sv|Fwd|Fw|VS)\s*:/i.test(subject)) {
+    existingTicket = findTicketBySubject(subject);
+  }
+
+  if (existingTicket) {
+    resolveOrCreateContact(fromAddress, fromName, config);
+    addCommentToTicket(existingTicket.id, body, fromAddress, fromName);
+
+    if (parsed.attachments && parsed.attachments.length > 0) {
+      await saveAttachments(parsed.attachments, existingTicket.id);
+    }
+    return;
+  }
+
+  // --- New ticket ---
+  const contact = resolveOrCreateContact(fromAddress, fromName, config);
+
   const ticketId = randomUUID();
   const companyId = contact?.company_id || null;
 
   db.prepare(
-    `INSERT INTO tickets (id, title, description, status, priority, requester_id, company_id)
-     VALUES (?, ?, ?, 'open', 'medium', ?, ?)`
-  ).run(ticketId, subject, body, contact?.id || null, companyId);
+    `INSERT INTO tickets (id, title, description, status, priority, requester_id, company_id, email_message_id)
+     VALUES (?, ?, ?, 'open', 'medium', ?, ?, ?)`
+  ).run(ticketId, subject, body, contact?.id || null, companyId, messageId);
 
-  // Add to FTS index
   const row = db
     .prepare('SELECT rowid FROM tickets WHERE id = ?')
     .get(ticketId) as { rowid: number } | undefined;
@@ -93,45 +160,14 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     ).run(row.rowid, subject, body, '', '');
   }
 
-  // Log in history
   db.prepare(
     'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
   ).run(randomUUID(), ticketId, null, 'created', null, 'email');
 
-  // Handle attachments
   if (parsed.attachments && parsed.attachments.length > 0) {
-    const fs = await import('fs');
-    const path = await import('path');
-    const uploadDir =
-      process.env.UPLOAD_DIR || path.join(process.cwd(), 'data/uploads');
-
-    for (const attachment of parsed.attachments) {
-      if (!attachment.filename) continue;
-
-      const attachId = randomUUID();
-      const ext = path.extname(attachment.filename);
-      const storedName = `${attachId}${ext}`;
-      const filePath = path.join(uploadDir, storedName);
-
-      // Ensure upload dir exists
-      fs.mkdirSync(uploadDir, { recursive: true });
-      fs.writeFileSync(filePath, attachment.content);
-
-      db.prepare(
-        `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      ).run(
-        attachId,
-        ticketId,
-        attachment.filename,
-        storedName,
-        attachment.size,
-        attachment.contentType
-      );
-    }
+    await saveAttachments(parsed.attachments, ticketId);
   }
 
-  // Dispatch webhook
   dispatchWebhook('ticket.created', {
     id: ticketId,
     title: subject,
@@ -141,6 +177,29 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
   }).catch(console.error);
 
   console.log(`[email-inbound] Created ticket "${subject}" from ${fromAddress}`);
+}
+
+async function saveAttachments(attachments: any[], ticketId: string): Promise<void> {
+  const fs = await import('fs');
+  const path = await import('path');
+  const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'data/uploads');
+
+  for (const attachment of attachments) {
+    if (!attachment.filename) continue;
+
+    const attachId = randomUUID();
+    const ext = path.extname(attachment.filename);
+    const storedName = `${attachId}${ext}`;
+    const filePath = path.join(uploadDir, storedName);
+
+    fs.mkdirSync(uploadDir, { recursive: true });
+    fs.writeFileSync(filePath, attachment.content);
+
+    db.prepare(
+      `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(attachId, ticketId, attachment.filename, storedName, attachment.size, attachment.contentType);
+  }
 }
 
 let pollingTimer: ReturnType<typeof setInterval> | null = null;
@@ -187,7 +246,6 @@ export async function startEmailPolling(): Promise<void> {
       const lock = await client.getMailboxLock('INBOX');
 
       try {
-        // Search for unseen messages
         const messages = client.fetch({ seen: false }, { source: true, envelope: true });
 
         for await (const message of messages) {
@@ -197,7 +255,6 @@ export async function startEmailPolling(): Promise<void> {
               continue;
             }
             await processEmail(message.source, config!);
-            // Mark as seen
             await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
           } catch (error) {
             console.error('[email-inbound] Error processing email:', error);
@@ -210,7 +267,6 @@ export async function startEmailPolling(): Promise<void> {
       await client.logout();
     } catch (error) {
       console.error('[email-inbound] IMAP polling error:', error);
-      // Ensure we clean up the connection on error
       try {
         if (client) await client.logout();
       } catch {
@@ -219,10 +275,7 @@ export async function startEmailPolling(): Promise<void> {
     }
   }
 
-  // Initial poll
   await poll();
-
-  // Schedule periodic polling
   pollingTimer = setInterval(poll, config.pollingInterval * 1000);
 }
 

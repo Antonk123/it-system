@@ -790,4 +790,14 @@ export const migrations: Migration[] = [
       db.prepare('CREATE INDEX IF NOT EXISTS idx_ai_usage_log_ticket ON ai_usage_log(ticket_id)').run();
     },
   },
+  {
+    id: '040',
+    name: 'add_email_message_id_to_tickets',
+    up: (db, { columnExists }) => {
+      if (!columnExists('tickets', 'email_message_id')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN email_message_id TEXT').run();
+        db.prepare('CREATE INDEX idx_tickets_email_message_id ON tickets(email_message_id)').run();
+      }
+    },
+  },
 ];
