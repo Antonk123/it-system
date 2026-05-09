@@ -199,7 +199,7 @@ const KnowledgeBase = () => {
   };
 
   const activeCategory = categories.find((c) => c.id === selectedCategoryId);
-  const headerTitle = isSearching ? 'Sökresultat' : activeCategory?.name || 'Knowledge Base';
+  const headerTitle = isSearching ? 'Sökresultat' : activeCategory?.name || 'Kunskapsbas';
 
   return (
     <Layout>

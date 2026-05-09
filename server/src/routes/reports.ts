@@ -5,6 +5,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 const router = Router();
 
 router.get('/summary', authenticate, (req: AuthRequest, res) => {
+  try {
   const { year, month } = req.query as { year?: string; month?: string };
 
   // Build filter conditions for created_at
@@ -175,9 +176,14 @@ router.get('/summary', authenticate, (req: AuthRequest, res) => {
     avgResolutionDays,
     agingTickets,
   });
+  } catch (error) {
+    console.error('Error generating report summary:', error);
+    res.status(500).json({ error: 'Failed to generate report summary' });
+  }
 });
 
 router.get('/time-summary', authenticate, (req: AuthRequest, res) => {
+  try {
   const { year, month } = req.query as { year?: string; month?: string };
 
   const filterConditions: string[] = [];
@@ -222,6 +228,10 @@ router.get('/time-summary', authenticate, (req: AuthRequest, res) => {
   `).all(...filterParams) as { id: string; title: string; total_minutes: number }[];
 
   res.json({ byCategory, topTickets });
+  } catch (error) {
+    console.error('Error generating time summary:', error);
+    res.status(500).json({ error: 'Failed to generate time summary' });
+  }
 });
 
 export default router;

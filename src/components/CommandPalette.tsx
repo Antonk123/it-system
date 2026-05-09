@@ -51,7 +51,7 @@ const navItems = [
   { path: '/reports', icon: BarChart3, label: 'Rapporter' },
   { path: '/archive', icon: Archive, label: 'Arkiv' },
   { path: '/users', icon: Users, label: 'Kontakter' },
-  { path: '/kb', icon: BookOpen, label: 'Knowledge Base' },
+  { path: '/kb', icon: BookOpen, label: 'Kunskapsbas' },
   { path: '/settings', icon: Settings, label: 'Inställningar' },
 ];
 

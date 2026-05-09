@@ -85,7 +85,7 @@ export const QuickCaptureFAB = ({ className }: QuickCaptureFABProps) => {
           <PopoverTrigger asChild>
             <Button
               size="icon"
-              className={cn("fixed bottom-6 z-50 h-14 w-14 rounded-full shadow-lg bg-primary text-primary-foreground hover:scale-105 hover:shadow-xl active:scale-95 transition-transform duration-200", className)}
+              className={cn("fixed bottom-6 z-50 h-14 w-14 rounded-full shadow-lg bg-primary text-primary-foreground hover:scale-105 hover:shadow-xl active:scale-95 transition-transform duration-200 hidden md:flex", className)}
               aria-label="Snabbt ärende"
             >
               <Plus className="h-6 w-6" />

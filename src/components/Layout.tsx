@@ -1,5 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search, Building2, Receipt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -49,7 +50,7 @@ const navItems = [{
 }, {
   path: '/kb',
   icon: BookOpen,
-  label: 'Knowledge Base'
+  label: 'Kunskapsbas'
 }, {
   path: '/settings',
   icon: Settings,
@@ -256,7 +257,7 @@ export const Layout = ({
             <NavOption
               key={item.path}
               item={item}
-              isActive={location.pathname === item.path}
+              isActive={item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)}
               open={!sidebarCollapsed}
               onClick={() => setSidebarOpen(false)}
             />
@@ -319,9 +320,15 @@ export const Layout = ({
           </div>
         </div>
 
-        <div className="p-5 pb-20 md:pb-5 lg:p-6 relative z-10">
+        <motion.div
+          key={location.pathname}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }}
+          className="p-5 pb-20 md:pb-5 lg:p-6 relative z-10"
+        >
           {children}
-        </div>
+        </motion.div>
       </main>
 
       <div data-print-hide>

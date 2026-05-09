@@ -219,7 +219,7 @@ const KBArticleForm = () => {
           <Button variant="ghost" size="sm" asChild>
             <Link to={isEditing && id ? `/kb/${id}` : '/kb'}>
               <ArrowLeft className="w-4 h-4 mr-2" />
-              {isEditing ? 'Avbryt' : 'Knowledge Base'}
+              {isEditing ? 'Avbryt' : 'Kunskapsbas'}
             </Link>
           </Button>
           <h1 className="text-lg font-semibold text-foreground">

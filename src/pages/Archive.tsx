@@ -208,37 +208,25 @@ const Archive = () => {
   }, [selectedIds, refetch]);
 
   const handleBulkExportXlsx = useCallback(async () => {
-    const selected = tickets.filter(t => selectedIds.includes(t.id));
-    if (selected.length === 0) return;
+    if (selectedIds.length === 0) return;
 
-    const XLSX = await import('xlsx');
-    const headers = ['ID', 'Titel', 'Prioritet', 'Kategori', 'Taggar', 'Stängd'];
-    const rows = selected.map(t => [
-      t.id,
-      t.title,
-      t.priority,
-      t.category || '',
-      (t.tags || []).map((tag: { name: string }) => tag.name).join('; '),
-      t.closedAt || '',
-    ]);
+    try {
+      // Build query string from current filters
+      const params = new URLSearchParams();
+      if (priorityFilter && priorityFilter !== 'all') params.set('priority', priorityFilter);
+      if (categoryFilter && categoryFilter !== 'all') params.set('category', categoryFilter);
+      if (search) params.set('search', search);
+      if (tagsFilter) params.set('tags', tagsFilter);
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
 
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Arkiv');
-    const xlsxData = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
-
-    const blob = new Blob([xlsxData], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `arkiv-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
-    document.body.appendChild(a);
-    a.click();
-    URL.revokeObjectURL(url);
-    document.body.removeChild(a);
-
-    toast.success(`${selected.length} ärenden exporterade till Excel`);
-  }, [tickets, selectedIds]);
+      const queryString = params.toString() ? `?${params.toString()}` : '';
+      await api.exportArchive(queryString);
+      toast.success('Arkiv exporterat till Excel');
+    } catch {
+      toast.error('Kunde inte exportera arkivet');
+    }
+  }, [selectedIds, priorityFilter, categoryFilter, search, tagsFilter, dateFrom, dateTo]);
 
   const handleBulkDelete = useCallback(async () => {
     try {

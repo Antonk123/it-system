@@ -61,7 +61,7 @@ const SharedKBArticle = () => {
               <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
                 <BookOpen className="w-3.5 h-3.5 text-primary-foreground" />
               </div>
-              <span className="text-sm font-semibold text-foreground tracking-tight">IT Knowledge Base</span>
+              <span className="text-sm font-semibold text-foreground tracking-tight">IT Kunskapsbas</span>
             </div>
             {article.category_name && (
               <span
@@ -121,7 +121,7 @@ const SharedKBArticle = () => {
                 <BookOpen className="w-3.5 h-3.5 text-primary-foreground" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-foreground leading-none">IT Knowledge Base</p>
+                <p className="text-sm font-semibold text-foreground leading-none">IT Kunskapsbas</p>
                 <p className="text-xs text-muted-foreground mt-0.5">Internt supportsystem</p>
               </div>
             </div>

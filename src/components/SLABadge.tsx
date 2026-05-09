@@ -61,7 +61,7 @@ export function SLABadge({ deadline, met, pausedAt, label, className }: SLABadge
       variant={variant}
       className={cn(
         'gap-1',
-        isWarning && !isUrgent && 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/30',
+        isWarning && !isUrgent && 'bg-[hsl(var(--status-in-progress)/0.2)] text-[hsl(var(--status-in-progress))] border-[hsl(var(--status-in-progress)/0.3)]',
         className
       )}
     >

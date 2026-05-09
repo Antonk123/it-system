@@ -82,7 +82,7 @@ export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) =
       <div className="flex items-center justify-between">
         <h3 className="font-medium text-foreground flex items-center gap-2 text-sm">
           <BookOpen className="w-4 h-4 text-muted-foreground" />
-          Knowledge Base ({linked.length})
+          Kunskapsbas ({linked.length})
         </h3>
         <Button
           variant="outline"

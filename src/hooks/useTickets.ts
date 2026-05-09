@@ -165,6 +165,10 @@ export const useTickets = (options?: UseTicketsOptions) => {
         company_id: company_id || null,
       });
 
+      if (data.warnings) {
+        data.warnings.forEach((w: string) => toast.warning(w));
+      }
+
       return {
         id: data.id,
         title: data.title,
@@ -217,7 +221,11 @@ export const useTickets = (options?: UseTicketsOptions) => {
         updateData.tag_ids = tagIds || updates.tag_ids || [];
       }
 
-      await api.updateTicket(id, { ...(updateData as any), customFields: customFields || undefined });
+      const updateResult = await api.updateTicket(id, { ...(updateData as any), customFields: customFields || undefined });
+
+      if (updateResult?.warnings) {
+        updateResult.warnings.forEach((w: string) => toast.warning(w));
+      }
 
       // Fetch fresh data from server
       const freshTicket = await api.getTicket(id);

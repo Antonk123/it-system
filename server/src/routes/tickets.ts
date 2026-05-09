@@ -296,6 +296,8 @@ interface TicketQueryParams {
   checklist?: string;
   sortBy?: string;
   sortDir?: string;
+  year?: string;
+  month?: string;
 }
 
 interface PaginatedResponse<T> {
@@ -823,7 +825,21 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
     const xlsxBuffer = generateXLSX(tickets, categories, contacts);
 
     const timestamp = new Date().toISOString().split('T')[0];
-    const filename = `tickets-export-${timestamp}.xlsx`;
+    const parts: string[] = ['arenden'];
+    if (query.status) parts.push(String(query.status).replace(/,/g, '-'));
+    if (query.priority) parts.push(String(query.priority));
+    if (query.category && query.category !== 'all') parts.push(String(query.category).replace(/\s+/g, '-'));
+    if (query.year) {
+      parts.push(String(query.year));
+      if (query.month) {
+        const monthNames = ['jan','feb','mar','apr','maj','jun','jul','aug','sep','okt','nov','dec'];
+        const mi = parseInt(String(query.month), 10);
+        if (!isNaN(mi) && mi >= 0 && mi <= 11) parts.push(monthNames[mi]);
+      }
+    }
+    if (query.search) parts.push('sok');
+    parts.push(timestamp);
+    const filename = `${parts.join('-')}.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
@@ -831,6 +847,74 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error exporting tickets:', error);
     res.status(500).json({ error: 'Failed to export tickets' });
+  }
+});
+
+// Export archive (closed tickets) to XLSX — lightweight 6-column format
+router.get('/export-archive', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const query = req.query as TicketQueryParams;
+
+    // Force status to closed for archive export
+    const archiveQuery = { ...query, status: 'closed' };
+    const { whereClause, params, joins } = buildWhereClause(archiveQuery);
+
+    // Get all matching closed tickets
+    const tickets = db.prepare(`
+      SELECT DISTINCT tickets.id, tickets.title, tickets.priority, tickets.category_id, tickets.closed_at
+      FROM tickets ${joins}
+      WHERE ${whereClause}
+      ORDER BY tickets.closed_at DESC
+    `).all(...params) as { id: string; title: string; priority: string; category_id: string | null; closed_at: string | null }[];
+
+    // Get categories for lookup
+    const categories = db.prepare('SELECT id, label FROM categories').all() as { id: string; label: string }[];
+    const categoryMap = new Map(categories.map(c => [c.id, c.label]));
+
+    // Get tags for all tickets in a single query
+    const tagsByTicket: Record<string, string[]> = {};
+    if (tickets.length > 0) {
+      const ticketIds = tickets.map(t => t.id);
+      const placeholders = ticketIds.map(() => '?').join(',');
+      const allTags = db.prepare(`
+        SELECT tt.ticket_id, t.name
+        FROM tags t
+        JOIN ticket_tags tt ON t.id = tt.tag_id
+        WHERE tt.ticket_id IN (${placeholders})
+        ORDER BY t.name
+      `).all(...ticketIds) as { ticket_id: string; name: string }[];
+
+      allTags.forEach(tag => {
+        if (!tagsByTicket[tag.ticket_id]) tagsByTicket[tag.ticket_id] = [];
+        tagsByTicket[tag.ticket_id].push(tag.name);
+      });
+    }
+
+    // Build XLSX with 6 columns
+    const headers = ['ID', 'Titel', 'Prioritet', 'Kategori', 'Taggar', 'Stängd'];
+    const rows = tickets.map(ticket => [
+      ticket.id,
+      ticket.title,
+      ticket.priority,
+      ticket.category_id ? categoryMap.get(ticket.category_id) || '' : '',
+      (tagsByTicket[ticket.id] || []).join('; '),
+      ticket.closed_at || '',
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Arkiv');
+    const xlsxBuffer = Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `arkiv-export-${timestamp}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(xlsxBuffer);
+  } catch (error) {
+    console.error('Error exporting archive:', error);
+    res.status(500).json({ error: 'Failed to export archive' });
   }
 });
 
@@ -1021,7 +1105,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Create ticket
-router.post('/', writeRateLimiter, authenticate, (req: AuthRequest, res: Response) => {
+router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
   const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id } = req.body;
 
   if (!title) {
@@ -1151,23 +1235,27 @@ router.post('/', writeRateLimiter, authenticate, (req: AuthRequest, res: Respons
       ? (db.prepare('SELECT name, email FROM contacts WHERE id = ?').get(ticket.requester_id) as { name: string; email: string } | undefined)
       : undefined;
 
-    sendTicketCreatedEmail({
-      id: ticket.id,
-      title: ticket.title,
-      description: ticket.description,
-      status: ticket.status,
-      priority: ticket.priority,
-      categoryId: ticket.category_id,
-      requesterName: requester?.name,
-      requesterEmail: requester?.email,
-    }).catch((error) => {
-      console.error('Error sending ticket created email:', error);
-    });
+    const warnings: string[] = [];
 
-    // Dispatch webhook for ticket creation
+    try {
+      await sendTicketCreatedEmail({
+        id: ticket.id,
+        title: ticket.title,
+        description: ticket.description,
+        status: ticket.status,
+        priority: ticket.priority,
+        categoryId: ticket.category_id,
+        requesterName: requester?.name,
+        requesterEmail: requester?.email,
+      });
+    } catch (error) {
+      console.error('Error sending ticket created email:', error);
+      warnings.push('E-postnotifiering kunde inte skickas');
+    }
+
     dispatchWebhook('ticket.created', { id: ticket.id, title: ticket.title, status: ticket.status, priority: ticket.priority }).catch(console.error);
 
-    res.status(201).json(ticket);
+    res.status(201).json({ ...ticket, warnings: warnings.length > 0 ? warnings : undefined });
   } catch (error) {
     console.error('Error creating ticket:', error);
     res.status(500).json({ error: 'Failed to create ticket' });
@@ -1461,7 +1549,7 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, (req: AuthRequest, r
 });
 
 // Update ticket
-router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id, tag_ids, ai_suggested_category_id } = req.body;
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
@@ -1627,6 +1715,8 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       createdAt: new Date(tag.created_at),
     }));
 
+    const warnings: string[] = [];
+
     // Dispatch webhook for ticket update
     if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
       dispatchWebhook('ticket.updated', { id: req.params.id, ...safeUpdates }).catch(console.error);
@@ -1641,21 +1731,24 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
         ? (db.prepare('SELECT name, email FROM contacts WHERE id = ?').get(ticket.requester_id) as { name: string; email: string } | undefined)
         : undefined;
 
-      sendTicketClosedEmail({
-        id: ticket.id,
-        title: ticket.title,
-        description: ticket.description,
-        status: ticket.status,
-        priority: ticket.priority,
-        categoryId: ticket.category_id,
-        requesterName: requester?.name,
-        requesterEmail: requester?.email,
-      }).catch((error) => {
+      try {
+        await sendTicketClosedEmail({
+          id: ticket.id,
+          title: ticket.title,
+          description: ticket.description,
+          status: ticket.status,
+          priority: ticket.priority,
+          categoryId: ticket.category_id,
+          requesterName: requester?.name,
+          requesterEmail: requester?.email,
+        });
+      } catch (error) {
         console.error('Error sending ticket closed email:', error);
-      });
+        warnings.push('E-postnotifiering vid stängning kunde inte skickas');
+      }
     }
 
-    res.json({ ...ticket, tags: formattedTags });
+    res.json({ ...ticket, tags: formattedTags, warnings: warnings.length > 0 ? warnings : undefined });
   } catch (error) {
     console.error('Error updating ticket:', error);
     res.status(500).json({ error: 'Failed to update ticket' });

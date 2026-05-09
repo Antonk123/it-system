@@ -203,7 +203,7 @@ const KBArticleDetail = () => {
             <Button variant="ghost" size="sm" asChild>
               <Link to="/kb">
                 <ArrowLeft className="w-4 h-4 mr-2" />
-                Knowledge Base
+                Kunskapsbas
               </Link>
             </Button>
             <div className="flex gap-2">

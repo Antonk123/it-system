@@ -11,8 +11,14 @@ async function main() {
   
   if (!existingAdmin) {
     const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+    const adminPassword = process.env.ADMIN_PASSWORD;
     const adminName = process.env.ADMIN_NAME || '';
+
+    if (!adminPassword) {
+      console.error('ADMIN_PASSWORD environment variable is required when creating admin user.');
+      console.error('Set it in your .env file or pass it directly.');
+      process.exit(1);
+    }
 
     const adminId = uuidv4();
     const passwordHash = await bcrypt.hash(adminPassword, 10);
