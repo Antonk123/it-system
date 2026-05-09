@@ -211,22 +211,16 @@ const Archive = () => {
     if (selectedIds.length === 0) return;
 
     try {
-      // Build query string from current filters
       const params = new URLSearchParams();
-      if (priorityFilter && priorityFilter !== 'all') params.set('priority', priorityFilter);
-      if (categoryFilter && categoryFilter !== 'all') params.set('category', categoryFilter);
-      if (search) params.set('search', search);
-      if (tagsFilter) params.set('tags', tagsFilter);
-      if (dateFrom) params.set('dateFrom', dateFrom);
-      if (dateTo) params.set('dateTo', dateTo);
+      params.set('ids', selectedIds.join(','));
 
-      const queryString = params.toString() ? `?${params.toString()}` : '';
+      const queryString = `?${params.toString()}`;
       await api.exportArchive(queryString);
-      toast.success('Arkiv exporterat till Excel');
+      toast.success(`${selectedIds.length} ärenden exporterade till Excel`);
     } catch {
       toast.error('Kunde inte exportera arkivet');
     }
-  }, [selectedIds, priorityFilter, categoryFilter, search, tagsFilter, dateFrom, dateTo]);
+  }, [selectedIds]);
 
   const handleBulkDelete = useCallback(async () => {
     try {

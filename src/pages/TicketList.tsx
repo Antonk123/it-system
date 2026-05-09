@@ -213,6 +213,12 @@ const TicketList = () => {
       if (categoryFilter && categoryFilter !== 'all') params.append('category', categoryFilter);
       if (search) params.append('search', search);
       if (tagsFilter) params.append('tags', tagsFilter);
+      if (tagMode && tagMode !== 'or') params.append('tagMode', tagMode);
+      if (dateFrom) params.append('dateFrom', dateFrom);
+      if (dateTo) params.append('dateTo', dateTo);
+      if (dateField && dateField !== 'created_at') params.append('dateField', dateField);
+      if (checklistFilter && checklistFilter !== 'all') params.append('checklist', checklistFilter);
+      if (companyFilter && companyFilter !== 'all') params.append('company_id', companyFilter);
       const queryString = params.toString() ? `?${params.toString()}` : '';
 
       await api.exportTickets(queryString);
@@ -221,7 +227,7 @@ const TicketList = () => {
       console.error('Export failed:', error);
       toast.error('Misslyckades att exportera ärenden');
     }
-  }, [selectedStatuses, priorityFilter, categoryFilter, search, tagsFilter]);
+  }, [selectedStatuses, priorityFilter, categoryFilter, search, tagsFilter, tagMode, dateFrom, dateTo, dateField, checklistFilter, companyFilter]);
 
   return (
     <Layout>

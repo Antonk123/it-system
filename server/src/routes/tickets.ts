@@ -411,6 +411,21 @@ function buildWhereClause(filters: TicketQueryParams) {
     params.push(filters.dateTo + 'T23:59:59.999Z');
   }
 
+  // Year/month filtering (used by Reports page)
+  if (filters.year && filters.year !== 'all') {
+    conditions.push("strftime('%Y', tickets.created_at) = ?");
+    params.push(filters.year);
+
+    if (filters.month && filters.month !== 'all') {
+      const monthNum = parseInt(filters.month, 10);
+      if (!isNaN(monthNum) && monthNum >= 0 && monthNum <= 11) {
+        const paddedMonth = String(monthNum + 1).padStart(2, '0');
+        conditions.push("strftime('%m', tickets.created_at) = ?");
+        params.push(paddedMonth);
+      }
+    }
+  }
+
   // Checklist completion filtering
   if (filters.checklist) {
     switch (filters.checklist) {
@@ -855,18 +870,32 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
 router.get('/export-archive', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const query = req.query as TicketQueryParams;
+    const idsParam = (req.query as any).ids as string | undefined;
 
-    // Force status to closed for archive export
-    const archiveQuery = { ...query, status: 'closed' };
-    const { whereClause, params, joins } = buildWhereClause(archiveQuery);
+    let tickets: { id: string; title: string; priority: string; category_id: string | null; closed_at: string | null }[];
 
-    // Get all matching closed tickets
-    const tickets = db.prepare(`
-      SELECT DISTINCT tickets.id, tickets.title, tickets.priority, tickets.category_id, tickets.closed_at
-      FROM tickets ${joins}
-      WHERE ${whereClause}
-      ORDER BY tickets.closed_at DESC
-    `).all(...params) as { id: string; title: string; priority: string; category_id: string | null; closed_at: string | null }[];
+    if (idsParam) {
+      const ids = idsParam.split(',').map(id => id.trim()).filter(id => id);
+      if (ids.length === 0) {
+        return res.status(400).json({ error: 'No IDs provided' });
+      }
+      const placeholders = ids.map(() => '?').join(',');
+      tickets = db.prepare(`
+        SELECT id, title, priority, category_id, closed_at
+        FROM tickets
+        WHERE id IN (${placeholders})
+        ORDER BY closed_at DESC
+      `).all(...ids) as typeof tickets;
+    } else {
+      const archiveQuery = { ...query, status: 'closed' };
+      const { whereClause, params, joins } = buildWhereClause(archiveQuery);
+      tickets = db.prepare(`
+        SELECT DISTINCT tickets.id, tickets.title, tickets.priority, tickets.category_id, tickets.closed_at
+        FROM tickets ${joins}
+        WHERE ${whereClause}
+        ORDER BY tickets.closed_at DESC
+      `).all(...params) as typeof tickets;
+    }
 
     // Get categories for lookup
     const categories = db.prepare('SELECT id, label FROM categories').all() as { id: string; label: string }[];
