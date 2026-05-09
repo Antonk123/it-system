@@ -49,6 +49,7 @@ const UserList = () => {
   const { companies } = useCompanies();
   const { tickets } = useTickets();
   const [search, setSearch] = useState('');
+  const [companyFilter, setCompanyFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -98,6 +99,11 @@ const UserList = () => {
       .toLowerCase();
 
   const filteredUsers = users.filter(user => {
+    if (companyFilter !== 'all') {
+      const uid = (user as any).company_id;
+      if (companyFilter === 'none') { if (uid) return false; }
+      else if (uid !== companyFilter) return false;
+    }
     const searchValue = normalizeSearch(search);
     if (searchValue === '') return true;
     return normalizeSearch(user.name).includes(searchValue) ||
@@ -105,10 +111,9 @@ const UserList = () => {
       normalizeSearch(user.department || '').includes(searchValue);
   });
 
-  // Reset to page 1 when search changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [search]);
+  }, [search, companyFilter]);
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
@@ -331,12 +336,26 @@ const UserList = () => {
           </div>
         </div>
 
-        <div className="max-w-md">
-          <SearchBar
-            value={search}
-            onChange={setSearch}
-            placeholder="Sök användare..."
-          />
+        <div className="flex items-center gap-3 max-w-2xl">
+          <div className="flex-1 min-w-0">
+            <SearchBar
+              value={search}
+              onChange={setSearch}
+              placeholder="Sök användare..."
+            />
+          </div>
+          <Select value={companyFilter} onValueChange={setCompanyFilter}>
+            <SelectTrigger className="w-[220px] shrink-0">
+              <SelectValue placeholder="Alla företag" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Alla företag</SelectItem>
+              <SelectItem value="none">Utan företag</SelectItem>
+              {companies.map(c => (
+                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {filteredUsers.length === 0 && search === '' ? (
