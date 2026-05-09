@@ -4,6 +4,7 @@ import { convert } from 'html-to-text';
 import { db } from '../db/connection.js';
 import { randomUUID } from 'crypto';
 import { dispatchWebhook } from './webhookDispatcher.js';
+import { sendTicketReceivedConfirmation } from './email.js';
 
 interface EmailConfig {
   host: string;
@@ -175,6 +176,13 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     priority: 'medium',
     source: 'email',
   }).catch(console.error);
+
+  sendTicketReceivedConfirmation({
+    toEmail: fromAddress,
+    toName: fromName,
+    ticketId,
+    title: subject,
+  }).catch(error => console.error('[email-inbound] Confirmation email failed:', error));
 
   console.log(`[email-inbound] Created ticket "${subject}" from ${fromAddress}`);
 }

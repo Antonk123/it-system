@@ -414,6 +414,79 @@ export const sendTicketClosedEmail = async (payload: TicketEmailPayload) => {
   await sendEmail(`Ärende stängt: ${payload.title}`, payload);
 };
 
+export const sendTicketReceivedConfirmation = async (opts: {
+  toEmail: string;
+  toName: string;
+  ticketId: string;
+  title: string;
+}) => {
+  const transporter = createTransporter();
+  const from = process.env.EMAIL_FROM;
+  const appBaseUrl = process.env.APP_BASE_URL;
+  if (!transporter || !from) return;
+
+  const replyTo = process.env.IMAP_USER || from;
+  const shortId = opts.ticketId.slice(0, 8).toUpperCase();
+  const ticketUrl = appBaseUrl ? `${appBaseUrl.replace(/\/$/, '')}/tickets/${opts.ticketId}` : null;
+
+  const content = `
+  <tr>
+    <td style="padding: 32px 36px 0;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 6px;">
+        <tr>
+          <td style="font-family: ${F}; font-size: 11px; font-weight: 700; color: #16a34a; text-transform: uppercase; letter-spacing: 0.06em;">Bekr&#228;ftelse</td>
+          <td align="right" style="font-family: ${FM}; font-size: 11px; color: ${T.textMut};">#${shortId}</td>
+        </tr>
+      </table>
+      <h1 style="margin: 0 0 16px 0; font-family: ${F}; color: ${T.text}; font-size: 21px; font-weight: 700; line-height: 1.3;">
+        Vi har mottagit ditt &#228;rende
+      </h1>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding: 0 36px 32px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 20px;">
+        <tr>
+          <td bgcolor="${T.surface}" style="background-color: ${T.surface}; padding: 14px 16px; border-left: 3px solid #16a34a;">
+            <p style="margin: 0 0 4px 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.65;">
+              Hej ${escapeHtml(opts.toName)},
+            </p>
+            <p style="margin: 0 0 4px 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.65;">
+              Ditt &#228;rende <strong>${escapeHtml(opts.title)}</strong> har registrerats med referensnummer <strong>#${shortId}</strong>.
+            </p>
+            <p style="margin: 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.65;">
+              Vi &#229;terkommer s&#229; snart vi kan. Svara p&#229; detta mail om du vill l&#228;gga till mer information.
+            </p>
+          </td>
+        </tr>
+      </table>
+      ${ticketUrl ? buildCta(ticketUrl, 'F&#246;lj &#228;rendet') : ''}
+    </td>
+  </tr>`;
+
+  const html = buildEmailShell(content, 'Automatiskt meddelande fr&#229;n IT-support &middot; Prefabm&#228;starna');
+
+  const text = [
+    `Hej ${opts.toName},`,
+    '',
+    `Ditt ärende "${opts.title}" har registrerats med referensnummer #${shortId}.`,
+    'Vi återkommer så snart vi kan. Svara på detta mail om du vill lägga till mer information.',
+    '',
+    ticketUrl ? `Följ ärendet: ${ticketUrl}` : null,
+  ].filter(Boolean).join('\n');
+
+  await transporter.sendMail({
+    from,
+    replyTo,
+    to: opts.toEmail,
+    subject: `[#${shortId}] Ärende mottaget: ${opts.title}`,
+    text,
+    html,
+  }).catch(error => {
+    console.error('[email-inbound] Failed to send confirmation:', error);
+  });
+};
+
 // ── Reminder email ──────────────────────────────────────────────────
 
 export const sendTicketReminderEmail = async (data: {
