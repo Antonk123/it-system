@@ -149,8 +149,8 @@ export function ActiveFilterChips({
               className="text-xs font-semibold text-muted-foreground hover:text-foreground px-1 transition-colors"
               title={
                 tagMode === 'or'
-                  ? 'Klicka for att byta till AND (maste ha alla taggar)'
-                  : 'Klicka for att byta till OR (racker med en tagg)'
+                  ? 'Klicka för att byta till AND (måste ha alla taggar)'
+                  : 'Klicka för att byta till OR (räcker med en tagg)'
               }
             >
               {tagMode === 'or' ? 'ELLER' : 'OCH'}

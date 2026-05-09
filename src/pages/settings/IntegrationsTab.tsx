@@ -29,7 +29,7 @@ const WebhookDeliveriesPanel = memo(({ webhookId }: { webhookId: string }) => {
 
   if (isLoading) return <div className="p-2"><Loader2 className="w-4 h-4 animate-spin" /></div>;
 
-  if (deliveries.length === 0) return <p className="text-xs text-muted-foreground p-2">Inga leveranser annu.</p>;
+  if (deliveries.length === 0) return <p className="text-xs text-muted-foreground p-2">Inga leveranser ännu.</p>;
 
   return (
     <div className="rounded border bg-muted/30 divide-y divide-border max-h-48 overflow-y-auto">
@@ -91,7 +91,7 @@ const IntegrationsTab = () => {
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.apiKeys ? '−' : '+'}</span>
                 </CardTitle>
                 <CardDescription>
-                  Skapa och hantera API-nycklar for extern integration.
+                  Skapa och hantera API-nycklar för extern integration.
                 </CardDescription>
               </CardHeader>
             </CollapsibleTrigger>
@@ -134,7 +134,7 @@ const IntegrationsTab = () => {
 
                 {createdApiKey && (
                   <div className="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3 space-y-2">
-                    <p className="text-sm font-medium text-yellow-400">Kopiera nyckeln nu — den visas bara en gang!</p>
+                    <p className="text-sm font-medium text-yellow-400">Kopiera nyckeln nu — den visas bara en gång!</p>
                     <div className="flex items-center gap-2">
                       <code className="flex-1 text-xs bg-background/50 p-2 rounded font-mono break-all">{createdApiKey}</code>
                       <Button
@@ -148,7 +148,7 @@ const IntegrationsTab = () => {
                         <Copy className="w-4 h-4" />
                       </Button>
                     </div>
-                    <Button size="sm" variant="outline" onClick={() => setCreatedApiKey(null)}>Stang</Button>
+                    <Button size="sm" variant="outline" onClick={() => setCreatedApiKey(null)}>Stäng</Button>
                   </div>
                 )}
 
@@ -163,7 +163,7 @@ const IntegrationsTab = () => {
                         <p className="text-xs text-muted-foreground font-mono">itk_live_{key.key_prefix}...</p>
                         {key.last_used_at && (
                           <p className="text-xs text-muted-foreground">
-                            Senast anvand: {format(new Date(key.last_used_at), 'd MMM yyyy HH:mm', { locale: sv })}
+                            Senast använd: {format(new Date(key.last_used_at), 'd MMM yyyy HH:mm', { locale: sv })}
                           </p>
                         )}
                       </div>
@@ -184,7 +184,7 @@ const IntegrationsTab = () => {
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
                 <CardTitle className="flex items-center gap-2">
                   <Inbox className="w-5 h-5" />
-                  E-post-ingang
+                  E-post-ingång
                   {emailInboundStatus?.configured && (
                     <Badge variant={emailInboundStatus.active ? 'default' : 'secondary'} className="ml-2">
                       {emailInboundStatus.active ? 'Aktiv' : 'Konfigurerad'}
@@ -193,7 +193,7 @@ const IntegrationsTab = () => {
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.emailInbound ? '−' : '+'}</span>
                 </CardTitle>
                 <CardDescription>
-                  Skapa arenden automatiskt fran inkommande e-post via IMAP.
+                  Skapa ärenden automatiskt från inkommande e-post via IMAP.
                 </CardDescription>
               </CardHeader>
             </CollapsibleTrigger>
@@ -207,7 +207,7 @@ const IntegrationsTab = () => {
                         <span className="text-sm font-mono">{emailInboundStatus.host}</span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Anvandare</span>
+                        <span className="text-sm text-muted-foreground">Användare</span>
                         <span className="text-sm font-mono">{emailInboundStatus.user}</span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -222,13 +222,13 @@ const IntegrationsTab = () => {
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Olästa e-postmeddelanden hamtar och skapar arenden automatiskt. Avsändaren matchas mot befintliga kontakter.
+                      Olästa e-postmeddelanden hämtar och skapar ärenden automatiskt. Avsändaren matchas mot befintliga kontakter.
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     <p className="text-sm text-muted-foreground">
-                      E-post-ingang ar inte konfigurerad. Ange foljande miljovariabler pa servern:
+                      E-post-ingång är inte konfigurerad. Ange följande miljövariabler på servern:
                     </p>
                     <div className="rounded-md border p-3 space-y-1 font-mono text-xs">
                       <p>IMAP_HOST=imap.example.com</p>
@@ -256,7 +256,7 @@ const IntegrationsTab = () => {
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.webhooks ? '−' : '+'}</span>
                 </CardTitle>
                 <CardDescription>
-                  Skicka automatiska HTTP-anrop vid arendehändelser.
+                  Skicka automatiska HTTP-anrop vid ärendehändelser.
                 </CardDescription>
               </CardHeader>
             </CollapsibleTrigger>
@@ -290,7 +290,7 @@ const IntegrationsTab = () => {
                     size="sm"
                     onClick={() => {
                       if (!newWebhookUrl.trim()) { toast.error('Ange en URL'); return; }
-                      if (newWebhookEvents.length === 0) { toast.error('Valj minst en händelse'); return; }
+                      if (newWebhookEvents.length === 0) { toast.error('Välj minst en händelse'); return; }
                       createWebhook({ url: newWebhookUrl.trim(), events: newWebhookEvents }).then(() => {
                         setNewWebhookUrl('');
                         setNewWebhookEvents([]);
@@ -356,7 +356,7 @@ const IntegrationsTab = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort API-nyckel?</AlertDialogTitle>
             <AlertDialogDescription>
-              Nyckeln slutar fungera omedelbart. Denna atgard kan inte angras.
+              Nyckeln slutar fungera omedelbart. Denna åtgärd kan inte ångras.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
