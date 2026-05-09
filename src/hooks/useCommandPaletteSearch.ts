@@ -82,9 +82,9 @@ export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
           .slice(0, 5)
           .map(c => ({
             id: c.id,
-            title: c.name,
+            title: c.name || c.email,
             type: 'contact',
-            subtitle: [c.email, c.company_name].filter(Boolean).join(' · '),
+            subtitle: c.company_name || undefined,
           }));
 
         setResults([...ticketResults, ...contactResults, ...kbResults]);
