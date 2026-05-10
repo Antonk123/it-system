@@ -251,6 +251,15 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
   console.log(`[email-inbound] Created ticket "${subject}" from ${fromAddress}`);
 }
 
+function isSignatureImage(attachment: any): boolean {
+  if (attachment.contentDisposition !== 'inline' || !attachment.contentId) return false;
+  if (!attachment.contentType?.startsWith('image/')) return false;
+  const name = (attachment.filename || '').toLowerCase();
+  if (/^image\d{3,4}\.(png|jpg|jpeg|gif)$/.test(name)) return true;
+  if (attachment.size && attachment.size < 15000) return true;
+  return false;
+}
+
 async function saveAttachments(attachments: any[], ticketId: string): Promise<void> {
   const fs = await import('fs');
   const path = await import('path');
@@ -258,6 +267,10 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
 
   for (const attachment of attachments) {
     if (!attachment.filename) continue;
+    if (isSignatureImage(attachment)) {
+      console.log(`[email-inbound] Skipping signature image: ${attachment.filename} (${attachment.size} bytes)`);
+      continue;
+    }
 
     const attachId = randomUUID();
     const ext = path.extname(attachment.filename);
@@ -354,8 +367,19 @@ export async function startEmailPolling(): Promise<void> {
 
         // Move all processed messages to "Processed" folder
         if (processedMsgUids.length > 0 && !connectionDead) {
-          await client.messageMove(processedMsgUids, 'Processed', { uid: true });
-          console.log(`[email-inbound] Moved ${processedMsgUids.length} email(s) to Processed`);
+          try {
+            await client.messageMove(processedMsgUids, 'Processed', { uid: true });
+            console.log(`[email-inbound] Moved ${processedMsgUids.length} email(s) to Processed`);
+          } catch (moveErr: any) {
+            console.warn(`[email-inbound] MOVE failed (${moveErr.message}), trying COPY+DELETE fallback`);
+            try {
+              await client.messageCopy(processedMsgUids, 'Processed', { uid: true });
+              await client.messageFlagsAdd(processedMsgUids, ['\\Deleted'], { uid: true });
+              console.log(`[email-inbound] COPY+DELETE fallback succeeded for ${processedMsgUids.length} email(s)`);
+            } catch (fallbackErr: any) {
+              console.error(`[email-inbound] COPY+DELETE fallback also failed:`, fallbackErr.message);
+            }
+          }
         }
       } finally {
         lock.release();
