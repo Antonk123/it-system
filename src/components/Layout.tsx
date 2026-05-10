@@ -292,7 +292,6 @@ export const Layout = ({
             >
               <Search className="w-4 h-4" />
               <span>Sök...</span>
-              <kbd className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded">Ctrl+K</kbd>
             </button>
           </div>
           <Button variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">

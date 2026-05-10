@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Link as LinkIcon, Loader2, ListChecks, Plus, Camera, Sparkles, RefreshCw, Check, X } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Link as LinkIcon, Loader2, ListChecks, Plus, Camera, Sparkles, RefreshCw, Check, X, MoreVertical, Bell } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { useCategories } from '@/hooks/useCategories';
 import { useUsers } from '@/hooks/useUsers';
@@ -57,6 +57,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import {
   Dialog,
@@ -108,6 +115,8 @@ const TicketDetail = () => {
     setShareUrl
   } = useTicketSharing();
   const [sharePopoverOpen, setSharePopoverOpen] = useState(false);
+  const [mobileReminderOpen, setMobileReminderOpen] = useState(false);
+  const [mobileDeleteOpen, setMobileDeleteOpen] = useState(false);
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
@@ -349,7 +358,7 @@ const TicketDetail = () => {
   return (
     <Layout>
       <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-2 sm:gap-4">
           <Button
             variant="ghost"
             className="gap-2"
@@ -359,90 +368,145 @@ const TicketDetail = () => {
             <span className="hidden sm:inline">Tillbaka</span>
           </Button>
           <div className="flex gap-2">
-            <Popover open={sharePopoverOpen} onOpenChange={setSharePopoverOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  onClick={handleShare}
-                  disabled={isShareLoading}
-                >
-                  {isShareLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Share2 className="w-4 h-4" />
-                  )}
-                  <span className="hidden sm:inline">Dela</span>
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80" align="end">
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <h4 className="font-medium text-sm">Dela ärende</h4>
-                    <p className="text-xs text-muted-foreground">
-                      Vem som helst med länken kan se ärendet.
-                    </p>
-                  </div>
-                  {shareUrl && (
-                    <div className="flex gap-2">
-                      <Input 
-                        value={shareUrl} 
-                        readOnly 
-                        className="text-xs"
-                      />
-                      <Button 
-                        size="icon" 
-                        variant="outline"
-                        onClick={handleCopyLink}
-                      >
-                        <Copy className="w-4 h-4" />
-                      </Button>
+            {/* Desktop: alla knappar synliga */}
+            <div className="hidden sm:flex gap-2">
+              <Popover open={sharePopoverOpen} onOpenChange={setSharePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={handleShare}
+                    disabled={isShareLoading}
+                  >
+                    {isShareLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Share2 className="w-4 h-4" />
+                    )}
+                    <span className="hidden sm:inline">Dela</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80" align="end">
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <h4 className="font-medium text-sm">Dela ärende</h4>
+                      <p className="text-xs text-muted-foreground">
+                        Vem som helst med länken kan se ärendet.
+                      </p>
                     </div>
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-            <ReminderDialog onCreateReminder={createReminder} />
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => navigate(`/tickets/${ticket.id}/edit`, {
-                state: { from: location.state?.from || location.pathname + location.search }
-              })}
-            >
-              <Pencil className="w-4 h-4" />
-              <span className="hidden sm:inline">Redigera</span>
-            </Button>
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={handleClone}
-            >
-              <Copy className="w-4 h-4" />
-              <span className="hidden sm:inline">Klona ärende</span>
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" className="gap-2 text-destructive">
-                  <Trash2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Ta bort</span>
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Ta bort ärende</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Är du säker på att du vill ta bort detta ärende? Denna åtgärd kan inte ångras.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Avbryt</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete}>Ta bort</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                    {shareUrl && (
+                      <div className="flex gap-2">
+                        <Input
+                          value={shareUrl}
+                          readOnly
+                          className="text-xs"
+                        />
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={handleCopyLink}
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </PopoverContent>
+              </Popover>
+              <ReminderDialog onCreateReminder={createReminder} />
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => navigate(`/tickets/${ticket.id}/edit`, {
+                  state: { from: location.state?.from || location.pathname + location.search }
+                })}
+              >
+                <Pencil className="w-4 h-4" />
+                <span className="hidden sm:inline">Redigera</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={handleClone}
+              >
+                <Copy className="w-4 h-4" />
+                <span className="hidden sm:inline">Klona ärende</span>
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="gap-2 text-destructive">
+                    <Trash2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">Ta bort</span>
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Ta bort ärende</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Är du säker på att du vill ta bort detta ärende? Denna åtgärd kan inte ångras.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Avbryt</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDelete}>Ta bort</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+
+            {/* Mobil: Redigera + mer-meny */}
+            <div className="flex sm:hidden gap-2">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => navigate(`/tickets/${ticket.id}/edit`, {
+                  state: { from: location.state?.from || location.pathname + location.search }
+                })}
+              >
+                <Pencil className="w-4 h-4" />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon">
+                    <MoreVertical className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => { handleShare(); }}>
+                    <Share2 className="w-4 h-4 mr-2" /> Dela
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setMobileReminderOpen(true)}>
+                    <Bell className="w-4 h-4 mr-2" /> Påminn mig
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleClone}>
+                    <Copy className="w-4 h-4 mr-2" /> Klona
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="text-destructive" onClick={() => setMobileDeleteOpen(true)}>
+                    <Trash2 className="w-4 h-4 mr-2" /> Ta bort
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
+
+        {/* Mobil-styrda dialoger */}
+        <ReminderDialog onCreateReminder={createReminder} open={mobileReminderOpen} onOpenChange={setMobileReminderOpen} />
+        <AlertDialog open={mobileDeleteOpen} onOpenChange={setMobileDeleteOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Ta bort ärende</AlertDialogTitle>
+              <AlertDialogDescription>
+                Är du säker på att du vill ta bort detta ärende? Denna åtgärd kan inte ångras.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Avbryt</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete}>Ta bort</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <Card>
           <CardHeader className="pb-4">

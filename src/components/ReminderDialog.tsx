@@ -22,10 +22,15 @@ import {
 
 interface ReminderDialogProps {
   onCreateReminder: (reminderTime: string, message?: string) => Promise<void>;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function ReminderDialog({ onCreateReminder }: ReminderDialogProps) {
-  const [open, setOpen] = useState(false);
+export function ReminderDialog({ onCreateReminder, open: controlledOpen, onOpenChange }: ReminderDialogProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = isControlled ? (onOpenChange ?? setInternalOpen) : setInternalOpen;
   const [date, setDate] = useState<Date>();
   const [time, setTime] = useState('09:00');
   const [message, setMessage] = useState('');
@@ -54,12 +59,14 @@ export function ReminderDialog({ onCreateReminder }: ReminderDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
-          <Bell className="h-4 w-4 mr-2" />
-          Påminn mig
-        </Button>
-      </DialogTrigger>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button variant="outline" size="sm">
+            <Bell className="h-4 w-4 mr-2" />
+            Påminn mig
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-[425px] overflow-hidden">
         <DialogHeader>
           <DialogTitle>Skapa påminnelse</DialogTitle>
