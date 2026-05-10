@@ -301,6 +301,11 @@ export async function startEmailPolling(): Promise<void> {
         secure: currentConfig.secure,
         auth: currentConfig.auth,
         logger: false as any,
+        socketTimeout: 30000,
+      });
+
+      client.on('error', (err: Error) => {
+        console.error('[email-inbound] IMAP connection error:', err.message);
       });
 
       await client.connect();
