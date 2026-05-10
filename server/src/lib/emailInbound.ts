@@ -178,6 +178,17 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     return;
   }
 
+  // --- Deduplication: skip if this messageId already created a ticket ---
+  if (messageId) {
+    const duplicate = db
+      .prepare('SELECT id FROM tickets WHERE email_message_id = ? LIMIT 1')
+      .get(messageId) as { id: string } | undefined;
+    if (duplicate) {
+      console.log(`[email-inbound] Duplicate email ${messageId}, ticket ${duplicate.id} already exists — skipping`);
+      return;
+    }
+  }
+
   // --- New ticket ---
   const contact = resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
 
@@ -304,8 +315,9 @@ export async function startEmailPolling(): Promise<void> {
               console.warn('[email-inbound] Message without source, skipping');
               continue;
             }
-            await processEmail(message.source, currentConfig);
+            // Mark as seen BEFORE processing to prevent re-processing on next poll
             await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
+            await processEmail(message.source, currentConfig);
           } catch (error) {
             console.error('[email-inbound] Error processing email:', error);
           }
