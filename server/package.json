@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
+    "@azure/msal-node": "^5.2.0",
     "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.7.0",
