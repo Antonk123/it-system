@@ -7,8 +7,6 @@ import { randomUUID } from 'crypto';
 import { dispatchWebhook } from './webhookDispatcher.js';
 import { sendTicketReceivedConfirmation } from './email.js';
 
-const processedUids = new Set<number>();
-
 interface EmailConfig {
   host: string;
   port: number;
@@ -313,36 +311,35 @@ export async function startEmailPolling(): Promise<void> {
       });
 
       await client.connect();
+
+      // Ensure "Processed" mailbox exists
+      try {
+        await client.mailboxCreate('Processed');
+      } catch {
+        // already exists
+      }
+
       const lock = await client.getMailboxLock('INBOX');
 
       try {
-        // Phase 1: fetch only UIDs (lightweight, no body download)
-        const uids = await client.search({ seen: false }, { uid: true });
-        const newUids = uids.filter(uid => !processedUids.has(uid));
-
-        if (newUids.length === 0) {
-          lock.release();
-          await client.logout();
-          return;
-        }
-
-        // Phase 2: fetch source only for unknown UIDs
-        const messages = client.fetch(
-          { uid: newUids.join(',') },
-          { source: true, envelope: true, uid: true },
-          { uid: true }
-        );
+        const messages = client.fetch('1:*', { source: true, envelope: true, uid: true });
+        const processedMsgUids: number[] = [];
 
         for await (const message of messages) {
           if (connectionDead) break;
           try {
-            processedUids.add(message.uid);
             if (!message.source) continue;
-            await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
             await processEmail(message.source, currentConfig);
+            processedMsgUids.push(message.uid);
           } catch (error) {
             console.error('[email-inbound] Error processing email:', error);
           }
+        }
+
+        // Move all processed messages to "Processed" folder
+        if (processedMsgUids.length > 0 && !connectionDead) {
+          await client.messageMove(processedMsgUids, 'Processed', { uid: true });
+          console.log(`[email-inbound] Moved ${processedMsgUids.length} email(s) to Processed`);
         }
       } finally {
         lock.release();
