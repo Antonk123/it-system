@@ -84,6 +84,15 @@ function stripReplyPrefix(subject: string): string {
   return subject.replace(/^(Re|Sv|Fwd|Fw|VS)\s*:\s*/i, '').trim();
 }
 
+function findTicketByShortId(subject: string): { id: string } | undefined {
+  const match = subject.match(/\[#([A-F0-9]{8})\]/i);
+  if (!match) return undefined;
+  const shortId = match[1].toLowerCase();
+  return db
+    .prepare('SELECT id FROM tickets WHERE LOWER(SUBSTR(id, 1, 8)) = ? LIMIT 1')
+    .get(shortId) as { id: string } | undefined;
+}
+
 function findTicketBySubject(subject: string): { id: string } | undefined {
   const stripped = stripReplyPrefix(subject);
   if (!stripped) return undefined;
@@ -179,6 +188,10 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
   }
 
   let existingTicket = findTicketByMessageId(referencedIds);
+
+  if (!existingTicket) {
+    existingTicket = findTicketByShortId(subject);
+  }
 
   if (!existingTicket && /^(Re|Sv|Fwd|Fw|VS)\s*:/i.test(subject)) {
     existingTicket = findTicketBySubject(subject);
