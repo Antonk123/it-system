@@ -144,11 +144,27 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
 
   let body = '';
   if (parsed.html) {
-    body = convert(parsed.html as string, { wordwrap: false });
+    body = convert(parsed.html as string, {
+      wordwrap: false,
+      selectors: [
+        { selector: 'img', format: 'skip' },
+        { selector: 'a', options: { hideLinkHrefIfSameAsText: true } },
+      ],
+    });
   } else if (parsed.text) {
     body = parsed.text;
   }
-  body = body.replace(/\n{3,}/g, '\n\n').trim();
+  body = body
+    .replace(/\[data:image\/[^\]]+\]/g, '')
+    .replace(/data:image\/[^\s)]+/g, '')
+    .replace(/https?:\/\/\S*safelinks\.protection\.outlook\.com\S*/g, (match) => {
+      try {
+        const url = new URL(match);
+        return decodeURIComponent(url.searchParams.get('url') || match);
+      } catch { return match; }
+    })
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 
   // --- Threading: check if this is a reply to an existing ticket ---
   const referencedIds: string[] = [];
