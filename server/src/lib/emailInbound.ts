@@ -7,6 +7,8 @@ import { randomUUID } from 'crypto';
 import { dispatchWebhook } from './webhookDispatcher.js';
 import { sendTicketReceivedConfirmation } from './email.js';
 
+const processedUids = new Set<number>();
+
 interface EmailConfig {
   host: string;
   port: number;
@@ -314,15 +316,28 @@ export async function startEmailPolling(): Promise<void> {
       const lock = await client.getMailboxLock('INBOX');
 
       try {
-        const messages = client.fetch({ seen: false }, { source: true, envelope: true });
+        // Phase 1: fetch only UIDs (lightweight, no body download)
+        const uids = await client.search({ seen: false }, { uid: true });
+        const newUids = uids.filter(uid => !processedUids.has(uid));
+
+        if (newUids.length === 0) {
+          lock.release();
+          await client.logout();
+          return;
+        }
+
+        // Phase 2: fetch source only for unknown UIDs
+        const messages = client.fetch(
+          { uid: newUids.join(',') },
+          { source: true, envelope: true, uid: true },
+          { uid: true }
+        );
 
         for await (const message of messages) {
           if (connectionDead) break;
           try {
-            if (!message.source) {
-              console.warn('[email-inbound] Message without source, skipping');
-              continue;
-            }
+            processedUids.add(message.uid);
+            if (!message.source) continue;
             await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
             await processEmail(message.source, currentConfig);
           } catch (error) {
