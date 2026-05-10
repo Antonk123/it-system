@@ -419,15 +419,15 @@ export const sendTicketReceivedConfirmation = async (opts: {
   toName: string;
   ticketId: string;
   title: string;
+  shareUrl?: string;
 }) => {
   const transporter = createTransporter();
   const from = process.env.EMAIL_FROM;
-  const appBaseUrl = process.env.APP_BASE_URL;
   if (!transporter || !from) return;
 
   const replyTo = process.env.IMAP_USER || from;
   const shortId = opts.ticketId.slice(0, 8).toUpperCase();
-  const ticketUrl = appBaseUrl ? `${appBaseUrl.replace(/\/$/, '')}/tickets/${opts.ticketId}` : null;
+  const ticketUrl = opts.shareUrl || null;
 
   const content = `
   <tr>

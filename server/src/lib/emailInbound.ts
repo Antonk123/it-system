@@ -3,7 +3,7 @@ import { simpleParser } from 'mailparser';
 import { convert } from 'html-to-text';
 import { ConfidentialClientApplication } from '@azure/msal-node';
 import { db } from '../db/connection.js';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes } from 'crypto';
 import { dispatchWebhook } from './webhookDispatcher.js';
 import { sendTicketReceivedConfirmation } from './email.js';
 
@@ -246,6 +246,12 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     await saveAttachments(parsed.attachments, ticketId);
   }
 
+  const shareToken = randomBytes(12).toString('hex');
+  db.prepare('INSERT INTO ticket_shares (id, ticket_id, share_token, created_by) VALUES (?, ?, ?, NULL)')
+    .run(randomUUID(), ticketId, shareToken);
+  const appBaseUrl = process.env.APP_BASE_URL || '';
+  const shareUrl = `${appBaseUrl.replace(/\/$/, '')}/shared/${shareToken}`;
+
   dispatchWebhook('ticket.created', {
     id: ticketId,
     title: subject,
@@ -259,6 +265,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     toName: fromName,
     ticketId,
     title: subject,
+    shareUrl,
   }).catch(error => console.error('[email-inbound] Confirmation email failed:', error));
 
   console.log(`[email-inbound] Created ticket "${subject}" from ${fromAddress}`);
