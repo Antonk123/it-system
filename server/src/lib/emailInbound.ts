@@ -1,6 +1,7 @@
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
 import { convert } from 'html-to-text';
+import { ConfidentialClientApplication } from '@azure/msal-node';
 import { db } from '../db/connection.js';
 import { randomUUID } from 'crypto';
 import { dispatchWebhook } from './webhookDispatcher.js';
@@ -10,29 +11,65 @@ interface EmailConfig {
   host: string;
   port: number;
   secure: boolean;
-  auth: {
-    user: string;
-    pass: string;
-  };
-  pollingInterval: number; // seconds
+  user: string;
+  pollingInterval: number;
   autoCreateContact: boolean;
+  auth: { user: string; accessToken: string } | { user: string; pass: string };
 }
 
-function getEmailConfig(): EmailConfig | null {
+function useOAuth2(): boolean {
+  return !!(process.env.IMAP_CLIENT_ID && process.env.IMAP_CLIENT_SECRET && process.env.IMAP_TENANT_ID);
+}
+
+let msalClient: ConfidentialClientApplication | null = null;
+
+function getMsalClient(): ConfidentialClientApplication {
+  if (!msalClient) {
+    msalClient = new ConfidentialClientApplication({
+      auth: {
+        clientId: process.env.IMAP_CLIENT_ID!,
+        authority: `https://login.microsoftonline.com/${process.env.IMAP_TENANT_ID!}`,
+        clientSecret: process.env.IMAP_CLIENT_SECRET!,
+      },
+    });
+  }
+  return msalClient;
+}
+
+async function getAccessToken(): Promise<string> {
+  const client = getMsalClient();
+  const result = await client.acquireTokenByClientCredential({
+    scopes: ['https://outlook.office365.com/.default'],
+  });
+  if (!result?.accessToken) {
+    throw new Error('Failed to acquire OAuth2 access token');
+  }
+  return result.accessToken;
+}
+
+async function getEmailConfig(): Promise<EmailConfig | null> {
   const host = process.env.IMAP_HOST;
   const user = process.env.IMAP_USER;
-  const pass = process.env.IMAP_PASS;
 
-  if (!host || !user || !pass) return null;
+  if (!host || !user) return null;
 
-  return {
+  const base = {
     host,
     port: parseInt(process.env.IMAP_PORT || '993'),
     secure: process.env.IMAP_SECURE !== 'false',
-    auth: { user, pass },
+    user,
     pollingInterval: parseInt(process.env.IMAP_POLL_INTERVAL || '60'),
     autoCreateContact: process.env.IMAP_AUTO_CREATE_CONTACT !== 'false',
   };
+
+  if (useOAuth2()) {
+    const accessToken = await getAccessToken();
+    return { ...base, auth: { user, accessToken } };
+  }
+
+  const pass = process.env.IMAP_PASS;
+  if (!pass) return null;
+  return { ...base, auth: { user, pass } };
 }
 
 function findTicketByMessageId(messageIds: string[]): { id: string } | undefined {
@@ -55,12 +92,12 @@ function findTicketBySubject(subject: string): { id: string } | undefined {
     .get(stripped) as { id: string } | undefined;
 }
 
-function resolveOrCreateContact(fromAddress: string, fromName: string, config: EmailConfig) {
+function resolveOrCreateContact(fromAddress: string, fromName: string, autoCreate: boolean) {
   let contact = db
     .prepare('SELECT id, company_id FROM contacts WHERE LOWER(email) = LOWER(?)')
     .get(fromAddress) as { id: string; company_id: string | null } | undefined;
 
-  if (!contact && config.autoCreateContact) {
+  if (!contact && autoCreate) {
     const contactId = randomUUID();
     db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)').run(
       contactId,
@@ -132,7 +169,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
   }
 
   if (existingTicket) {
-    resolveOrCreateContact(fromAddress, fromName, config);
+    resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
     addCommentToTicket(existingTicket.id, body, fromAddress, fromName);
 
     if (parsed.attachments && parsed.attachments.length > 0) {
@@ -142,7 +179,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
   }
 
   // --- New ticket ---
-  const contact = resolveOrCreateContact(fromAddress, fromName, config);
+  const contact = resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
 
   const ticketId = randomUUID();
   const companyId = contact?.company_id || null;
@@ -216,7 +253,7 @@ export function getEmailInboundStatus() {
   const configured = !!(
     process.env.IMAP_HOST &&
     process.env.IMAP_USER &&
-    process.env.IMAP_PASS
+    (process.env.IMAP_PASS || useOAuth2())
   );
   return {
     configured,
@@ -229,24 +266,29 @@ export function getEmailInboundStatus() {
 }
 
 export async function startEmailPolling(): Promise<void> {
-  const config = getEmailConfig();
+  const config = await getEmailConfig();
   if (!config) {
     console.log('[email-inbound] IMAP not configured, email-to-ticket disabled');
     return;
   }
 
+  const authMethod = useOAuth2() ? 'OAuth2' : 'Basic';
   console.log(
-    `[email-inbound] Starting email polling (every ${config.pollingInterval}s) from ${config.auth.user}`
+    `[email-inbound] Starting email polling (every ${config.pollingInterval}s) from ${config.user} [${authMethod}]`
   );
 
   async function poll() {
     let client: ImapFlow | null = null;
     try {
+      // Refresh token each poll for OAuth2
+      const currentConfig = useOAuth2() ? await getEmailConfig() : config;
+      if (!currentConfig) return;
+
       client = new ImapFlow({
-        host: config!.host,
-        port: config!.port,
-        secure: config!.secure,
-        auth: config!.auth,
+        host: currentConfig.host,
+        port: currentConfig.port,
+        secure: currentConfig.secure,
+        auth: currentConfig.auth,
         logger: false as any,
       });
 
@@ -262,7 +304,7 @@ export async function startEmailPolling(): Promise<void> {
               console.warn('[email-inbound] Message without source, skipping');
               continue;
             }
-            await processEmail(message.source, config!);
+            await processEmail(message.source, currentConfig);
             await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
           } catch (error) {
             console.error('[email-inbound] Error processing email:', error);
