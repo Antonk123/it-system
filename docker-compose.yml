@@ -27,6 +27,15 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - AI_MODEL=${AI_MODEL:-}
       - AI_MODEL_SMART=${AI_MODEL_SMART:-}
+      - IMAP_HOST=${IMAP_HOST:-}
+      - IMAP_PORT=${IMAP_PORT:-993}
+      - IMAP_USER=${IMAP_USER:-}
+      - IMAP_SECURE=${IMAP_SECURE:-true}
+      - IMAP_POLL_INTERVAL=${IMAP_POLL_INTERVAL:-60}
+      - IMAP_AUTO_CREATE_CONTACT=${IMAP_AUTO_CREATE_CONTACT:-true}
+      - IMAP_TENANT_ID=${IMAP_TENANT_ID:-}
+      - IMAP_CLIENT_ID=${IMAP_CLIENT_ID:-}
+      - IMAP_CLIENT_SECRET=${IMAP_CLIENT_SECRET:-}
     logging:
       driver: "json-file"
       options:
@@ -57,4 +66,4 @@ networks:
 
 volumes:
   it-ticketing-data:
-    driver: local
+    external: true

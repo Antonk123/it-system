@@ -304,7 +304,9 @@ export async function startEmailPolling(): Promise<void> {
         socketTimeout: 30000,
       });
 
+      let connectionDead = false;
       client.on('error', (err: Error) => {
+        connectionDead = true;
         console.error('[email-inbound] IMAP connection error:', err.message);
       });
 
@@ -315,12 +317,12 @@ export async function startEmailPolling(): Promise<void> {
         const messages = client.fetch({ seen: false }, { source: true, envelope: true });
 
         for await (const message of messages) {
+          if (connectionDead) break;
           try {
             if (!message.source) {
               console.warn('[email-inbound] Message without source, skipping');
               continue;
             }
-            // Mark as seen BEFORE processing to prevent re-processing on next poll
             await client.messageFlagsAdd(message.uid, ['\\Seen'], { uid: true });
             await processEmail(message.source, currentConfig);
           } catch (error) {
@@ -332,8 +334,10 @@ export async function startEmailPolling(): Promise<void> {
       }
 
       await client.logout();
-    } catch (error) {
-      console.error('[email-inbound] IMAP polling error:', error);
+    } catch (error: any) {
+      if (error?.code !== 'ETIMEOUT') {
+        console.error('[email-inbound] IMAP polling error:', error);
+      }
       try {
         if (client) await client.logout();
       } catch {
