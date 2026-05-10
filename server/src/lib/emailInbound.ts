@@ -301,7 +301,7 @@ export async function startEmailPolling(): Promise<void> {
         secure: currentConfig.secure,
         auth: currentConfig.auth,
         logger: false as any,
-        socketTimeout: 30000,
+        socketTimeout: 90000,
       });
 
       let connectionDead = false;
