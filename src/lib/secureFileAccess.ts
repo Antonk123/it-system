@@ -1,82 +1,62 @@
-/**
- * Secure file access utilities
- *
- * This module provides functions for accessing files that require authentication.
- * Since browsers don't send Authorization headers with <img> or <a> tags,
- * we need to fetch files using fetch() and create blob URLs.
- */
+const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
-// Cache for blob URLs to avoid re-fetching
 const blobUrlCache = new Map<string, string>();
 
-/**
- * Fetch a file with authentication and return a blob URL
- * @param fileId The attachment file ID
- * @returns A blob URL that can be used in <img> or <a> tags
- */
+async function fetchWithRefresh(url: string, isRetry = false): Promise<Response> {
+  const token = localStorage.getItem('auth_token');
+  const response = await fetch(url, {
+    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+    credentials: 'include',
+  });
+
+  if (response.status === 401 && !isRetry) {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (refreshToken) {
+      const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (refreshRes.ok) {
+        const data = await refreshRes.json();
+        localStorage.setItem('auth_token', data.accessToken);
+        if (data.refreshToken) {
+          localStorage.setItem('refreshToken', data.refreshToken);
+        }
+        return fetchWithRefresh(url, true);
+      }
+    }
+  }
+
+  return response;
+}
+
 export async function getAuthenticatedFileUrl(fileId: string): Promise<string> {
-  // Check cache first
   if (blobUrlCache.has(fileId)) {
     return blobUrlCache.get(fileId)!;
   }
 
-  try {
-    // Fetch file with authentication
-    const token = localStorage.getItem('auth_token');
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
-    const response = await fetch(`${import.meta.env.VITE_API_URL || '/api'}/attachments/file/${fileId}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch file: ${response.statusText}`);
-    }
-
-    // Create blob from response
-    const blob = await response.blob();
-    const blobUrl = URL.createObjectURL(blob);
-
-    // Cache the blob URL
-    blobUrlCache.set(fileId, blobUrl);
-
-    return blobUrl;
-  } catch (error) {
-    console.error('Error fetching authenticated file:', error);
-    throw error;
+  const response = await fetchWithRefresh(`${API_BASE_URL}/attachments/file/${fileId}`);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch file: ${response.statusText}`);
   }
+
+  const blob = await response.blob();
+  const blobUrl = URL.createObjectURL(blob);
+  blobUrlCache.set(fileId, blobUrl);
+  return blobUrl;
 }
 
-/**
- * Download a file with authentication
- * @param fileId The attachment file ID
- * @param filename The filename to save as
- */
 export async function downloadAuthenticatedFile(fileId: string, filename: string): Promise<void> {
-  try {
-    const blobUrl = await getAuthenticatedFileUrl(fileId);
-
-    // Create temporary link and trigger download
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  } catch (error) {
-    console.error('Error downloading file:', error);
-    throw error;
-  }
+  const blobUrl = await getAuthenticatedFileUrl(fileId);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
 
-/**
- * Revoke a blob URL to free memory
- * @param fileId The attachment file ID
- */
 export function revokeBlobUrl(fileId: string): void {
   const blobUrl = blobUrlCache.get(fileId);
   if (blobUrl) {
@@ -85,9 +65,6 @@ export function revokeBlobUrl(fileId: string): void {
   }
 }
 
-/**
- * Clear all cached blob URLs
- */
 export function clearBlobCache(): void {
   blobUrlCache.forEach(url => URL.revokeObjectURL(url));
   blobUrlCache.clear();
