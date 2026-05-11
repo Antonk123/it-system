@@ -77,6 +77,46 @@ export default defineConfig(({ mode }) => ({
             return 'editor-vendor';
           }
 
+          if (id.includes('framer-motion') || id.includes('motion-dom') || id.includes('motion-utils')) {
+            return 'motion-vendor';
+          }
+
+          if (id.includes('@radix-ui')) {
+            return 'radix-vendor';
+          }
+
+          if (id.includes('@dnd-kit')) {
+            return 'dnd-vendor';
+          }
+
+          if (
+            id.includes('react-markdown') ||
+            id.includes('rehype') ||
+            id.includes('remark') ||
+            id.includes('dompurify') ||
+            id.includes('turndown') ||
+            id.includes('mdast') ||
+            id.includes('hast') ||
+            id.includes('micromark') ||
+            id.includes('unified') ||
+            id.includes('unist')
+          ) {
+            return 'markdown-vendor';
+          }
+
+          if (id.includes('lucide-react')) {
+            return 'icons-vendor';
+          }
+
+          if (
+            id.includes('node_modules/react/') ||
+            id.includes('node_modules/react-dom/') ||
+            id.includes('react-router') ||
+            id.includes('scheduler')
+          ) {
+            return 'react-vendor';
+          }
+
           return 'vendor';
         },
       },
