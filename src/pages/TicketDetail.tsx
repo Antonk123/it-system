@@ -773,7 +773,7 @@ const TicketDetail = () => {
 
             {/* Solution + AI Draft */}
             <div className="pt-4 border-t">
-              {ticket.solution ? (
+              {hasVisibleContent(ticket.solution) ? (
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <Lightbulb className="w-4 h-4 text-success" />
