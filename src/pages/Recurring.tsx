@@ -451,6 +451,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
               size="icon"
               className="h-8 w-8"
               title={isActive ? 'Pausa schema' : 'Aktivera schema'}
+              aria-label={isActive ? `Pausa schemat ${template.title || ''}` : `Aktivera schemat ${template.title || ''}`}
               onClick={() => toggleTemplate.mutate(template.id)}
               disabled={toggleTemplate.isPending}
             >
@@ -467,6 +468,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
               size="icon"
               className="h-8 w-8"
               title="Redigera"
+              aria-label={`Redigera schemat ${template.title || ''}`}
               onClick={() => onEdit(template)}
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -480,6 +482,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
                   size="icon"
                   className="h-8 w-8 hover:text-destructive"
                   title="Ta bort"
+                  aria-label={`Ta bort schemat ${template.title || ''}`}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -510,6 +513,8 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
               size="icon"
               className="h-8 w-8"
               title={expanded ? 'Dölj historik' : 'Visa historik'}
+              aria-label={expanded ? 'Dölj historik' : 'Visa historik'}
+              aria-expanded={expanded}
               onClick={() => setExpanded((v) => !v)}
             >
               {expanded ? (

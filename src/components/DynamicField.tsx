@@ -91,7 +91,14 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
         );
 
       default:
-        return <Input value={value} onChange={(e) => onChange(e.target.value)} />;
+        return (
+          <Input
+            id={field.field_name}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            aria-label={field.field_label}
+          />
+        );
     }
   };
 

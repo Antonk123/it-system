@@ -58,10 +58,10 @@ const CategoryItem = memo(({
           className="flex-1"
           autoFocus
         />
-        <Button size="icon" variant="ghost" onClick={onSaveEdit}>
+        <Button size="icon" variant="ghost" onClick={onSaveEdit} aria-label="Spara kategorinamn">
           <Check className="w-4 h-4 text-green-500" />
         </Button>
-        <Button size="icon" variant="ghost" onClick={onCancelEdit}>
+        <Button size="icon" variant="ghost" onClick={onCancelEdit} aria-label="Avbryt redigering">
           <X className="w-4 h-4 text-muted-foreground" />
         </Button>
       </>
@@ -74,6 +74,7 @@ const CategoryItem = memo(({
             variant="ghost"
             onClick={() => onMove(category.id, 'up')}
             disabled={isFirst}
+            aria-label={`Flytta ${category.label} uppåt`}
           >
             <ArrowUp className="w-4 h-4 text-muted-foreground" />
           </Button>
@@ -82,6 +83,7 @@ const CategoryItem = memo(({
             variant="ghost"
             onClick={() => onMove(category.id, 'down')}
             disabled={isLast}
+            aria-label={`Flytta ${category.label} nedåt`}
           >
             <ArrowDown className="w-4 h-4 text-muted-foreground" />
           </Button>
@@ -90,6 +92,7 @@ const CategoryItem = memo(({
           size="icon"
           variant="ghost"
           onClick={() => onStartEdit(category.id, category.label)}
+          aria-label={`Redigera ${category.label}`}
         >
           <Pencil className="w-4 h-4 text-muted-foreground" />
         </Button>
@@ -97,6 +100,7 @@ const CategoryItem = memo(({
           size="icon"
           variant="ghost"
           onClick={() => onDelete(category.id)}
+          aria-label={`Ta bort ${category.label}`}
         >
           <Trash2 className="w-4 h-4 text-destructive" />
         </Button>
@@ -129,6 +133,7 @@ const TemplateItem = memo(({
         variant="ghost"
         onClick={onMoveUp}
         disabled={index === 0}
+        aria-label={`Flytta ${template.name} uppåt`}
       >
         <ArrowUp className="w-4 h-4 text-muted-foreground" />
       </Button>
@@ -137,6 +142,7 @@ const TemplateItem = memo(({
         variant="ghost"
         onClick={onMoveDown}
         disabled={index === totalCount - 1}
+        aria-label={`Flytta ${template.name} nedåt`}
       >
         <ArrowDown className="w-4 h-4 text-muted-foreground" />
       </Button>
@@ -145,6 +151,7 @@ const TemplateItem = memo(({
       size="icon"
       variant="ghost"
       onClick={onEdit}
+      aria-label={`Redigera mallen ${template.name}`}
     >
       <Pencil className="w-4 h-4 text-muted-foreground" />
     </Button>
@@ -152,6 +159,7 @@ const TemplateItem = memo(({
       size="icon"
       variant="ghost"
       onClick={onDelete}
+      aria-label={`Ta bort mallen ${template.name}`}
     >
       <Trash2 className="w-4 h-4 text-destructive" />
     </Button>
@@ -566,10 +574,10 @@ const TicketsTab = () => {
                         className="flex-1"
                         autoFocus
                       />
-                      <Button size="icon" variant="ghost" onClick={handleSaveTagEdit}>
+                      <Button size="icon" variant="ghost" onClick={handleSaveTagEdit} aria-label="Spara tagg">
                         <Check className="w-4 h-4 text-green-500" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={handleCancelTagEdit}>
+                      <Button size="icon" variant="ghost" onClick={handleCancelTagEdit} aria-label="Avbryt taggredigering">
                         <X className="w-4 h-4 text-muted-foreground" />
                       </Button>
                     </>
@@ -578,6 +586,7 @@ const TicketsTab = () => {
                       <div
                         style={{ backgroundColor: tag.color }}
                         className="w-4 h-4 rounded-full shrink-0"
+                        aria-hidden="true"
                       />
                       <span className="flex-1 font-medium">{tag.name}</span>
                       <Badge variant="outline" className="text-xs">
@@ -587,6 +596,7 @@ const TicketsTab = () => {
                         size="icon"
                         variant="ghost"
                         onClick={() => handleStartEditTag(tag.id, tag.name, tag.color)}
+                        aria-label={`Redigera taggen ${tag.name}`}
                       >
                         <Pencil className="w-4 h-4 text-muted-foreground" />
                       </Button>
@@ -594,6 +604,7 @@ const TicketsTab = () => {
                         size="icon"
                         variant="ghost"
                         onClick={() => setDeleteTagId(tag.id)}
+                        aria-label={`Ta bort taggen ${tag.name}`}
                       >
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
@@ -708,6 +719,7 @@ const TicketsTab = () => {
                               size="icon"
                               className="h-7 w-7"
                               title="Lägg till deluppgift under denna"
+                              aria-label="Lägg till deluppgift"
                               onClick={() => {
                                 const sub = window.prompt('Deluppgiftens text:');
                                 if (sub?.trim()) {
@@ -722,7 +734,7 @@ const TicketsTab = () => {
                               <CornerDownRight className="h-3 w-3" />
                             </Button>
                           )}
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleClDeleteItem(idx)}>
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleClDeleteItem(idx)} aria-label="Ta bort checklistepunkt">
                             <X className="h-3 w-3" />
                           </Button>
                         </div>
@@ -742,6 +754,7 @@ const TicketsTab = () => {
                         size="icon"
                         onClick={() => handleClAddItem(false, null)}
                         disabled={!clNewItemLabel.trim()}
+                        aria-label="Lägg till punkt"
                       >
                         <Plus className="h-4 w-4" />
                       </Button>
@@ -761,10 +774,10 @@ const TicketsTab = () => {
                         {t.description && <div className="text-xs text-muted-foreground">{t.description}</div>}
                         <div className="text-xs text-muted-foreground">{t.items.length} punkt{t.items.length !== 1 ? 'er' : ''}</div>
                       </div>
-                      <Button size="icon" variant="ghost" onClick={() => handleClOpenEdit(t)}>
+                      <Button size="icon" variant="ghost" onClick={() => handleClOpenEdit(t)} aria-label={`Redigera mallen ${t.name}`}>
                         <Pencil className="w-4 h-4 text-muted-foreground" />
                       </Button>
-                      <Button size="icon" variant="ghost" onClick={() => setDeleteClTemplateId(t.id)}>
+                      <Button size="icon" variant="ghost" onClick={() => setDeleteClTemplateId(t.id)} aria-label={`Ta bort mallen ${t.name}`}>
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     </div>

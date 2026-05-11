@@ -219,6 +219,7 @@ export function UnifiedFilterBar({
         className="h-10 w-10"
         onClick={onManageViews}
         title="Hantera vyer"
+        aria-label="Hantera filtervyer"
       >
         <Settings2 className="w-4 h-4" />
       </Button>
@@ -243,6 +244,8 @@ export function UnifiedFilterBar({
             className="h-10 w-10 shrink-0 relative"
             onClick={() => setFiltersOpen(!filtersOpen)}
             title="Filter"
+            aria-label={`Filter${activeFilterCount > 0 ? ` (${activeFilterCount} aktiva)` : ''}`}
+            aria-expanded={filtersOpen}
           >
             <SlidersHorizontal className="w-4 h-4" />
             {activeFilterCount > 0 && (

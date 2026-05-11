@@ -144,6 +144,7 @@ const IntegrationsTab = () => {
                           navigator.clipboard.writeText(createdApiKey);
                           toast.success('Kopierad till urklipp');
                         }}
+                        aria-label="Kopiera API-nyckel"
                       >
                         <Copy className="w-4 h-4" />
                       </Button>
@@ -167,7 +168,7 @@ const IntegrationsTab = () => {
                           </p>
                         )}
                       </div>
-                      <Button size="icon" variant="ghost" onClick={() => setDeleteApiKeyId(key.id)}>
+                      <Button size="icon" variant="ghost" onClick={() => setDeleteApiKeyId(key.id)} aria-label={`Ta bort API-nyckeln ${key.name}`}>
                         <Trash2 className="w-4 h-4 text-destructive" />
                       </Button>
                     </div>
@@ -333,10 +334,10 @@ const IntegrationsTab = () => {
                                 updateWebhook({ id: wh.id, active: checked }).catch(() => toast.error('Kunde inte uppdatera'));
                               }}
                             />
-                            <Button size="icon" variant="ghost" onClick={() => setViewDeliveriesId(viewDeliveriesId === wh.id ? null : wh.id)}>
+                            <Button size="icon" variant="ghost" onClick={() => setViewDeliveriesId(viewDeliveriesId === wh.id ? null : wh.id)} aria-label={`Visa leveranshistorik för webhook ${wh.url}`}>
                               <Eye className="w-4 h-4 text-muted-foreground" />
                             </Button>
-                            <Button size="icon" variant="ghost" onClick={() => setDeleteWebhookId(wh.id)}>
+                            <Button size="icon" variant="ghost" onClick={() => setDeleteWebhookId(wh.id)} aria-label={`Ta bort webhook ${wh.url}`}>
                               <Trash2 className="w-4 h-4 text-destructive" />
                             </Button>
                           </div>

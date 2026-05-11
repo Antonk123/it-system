@@ -467,12 +467,13 @@ const TicketDetail = () => {
                 onClick={() => navigate(`/tickets/${ticket.id}/edit`, {
                   state: { from: location.state?.from || location.pathname + location.search }
                 })}
+                aria-label="Redigera ärende"
               >
                 <Pencil className="w-4 h-4" />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon">
+                  <Button variant="outline" size="icon" aria-label="Fler åtgärder">
                     <MoreVertical className="w-4 h-4" />
                   </Button>
                 </DropdownMenuTrigger>
