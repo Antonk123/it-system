@@ -126,6 +126,7 @@ const TicketDetail = () => {
   const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
   const [aiDraft, setAiDraft] = useState<string | null>(null);
   const [aiDraftKbTitles, setAiDraftKbTitles] = useState<string[]>([]);
+  const [aiDraftAttachments, setAiDraftAttachments] = useState<string[]>([]);
   const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
 
   const hasVisibleContent = (html: string | null | undefined): boolean => {
@@ -207,6 +208,7 @@ const TicketDetail = () => {
       const result = await api.generateAiDraft(id);
       setAiDraft(result.draft);
       setAiDraftKbTitles(result.kbTitles || []);
+      setAiDraftAttachments(result.attachmentsUsed || []);
     } catch {
       toast.error('Kunde inte generera AI-utkast');
     } finally {
@@ -219,6 +221,7 @@ const TicketDetail = () => {
     updateTicket(ticket.id, { solution: aiDraft });
     setAiDraft(null);
     setAiDraftKbTitles([]);
+    setAiDraftAttachments([]);
     toast.success('Lösning sparad');
   };
 
@@ -818,9 +821,9 @@ const TicketDetail = () => {
                         onChange={(e) => setAiDraft(e.target.value)}
                         className="w-full min-h-[120px] bg-background/50 border border-border rounded-md p-3 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-purple-500/50"
                       />
-                      {aiDraftKbTitles.length > 0 && (
+                      {(aiDraftKbTitles.length > 0 || aiDraftAttachments.length > 0) && (
                         <p className="text-xs text-muted-foreground">
-                          Baserat på: {aiDraftKbTitles.join(', ')}
+                          Baserat på: {[...aiDraftKbTitles, ...aiDraftAttachments.map(a => `📎 ${a}`)].join(', ')}
                         </p>
                       )}
                       <div className="flex justify-end">

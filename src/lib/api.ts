@@ -375,7 +375,7 @@ class ApiClient {
   }
 
   async generateAiDraft(ticketId: string) {
-    return this.request<{ draft: string; kbArticlesUsed: number; kbTitles: string[] }>(
+    return this.request<{ draft: string; kbArticlesUsed: number; kbTitles: string[]; attachmentsUsed?: string[] }>(
       `/tickets/${ticketId}/ai-draft`,
       { method: 'POST' }
     );

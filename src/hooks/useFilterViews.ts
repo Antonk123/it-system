@@ -37,6 +37,7 @@ function loadState(): FilterViewsState {
 
       const builtIn = {
         ...BUILT_IN_VIEW,
+        ...(parsed.builtInFilters ? { filters: parsed.builtInFilters } : {}),
         isDefault: !defaultViewId || defaultViewId === BUILT_IN_VIEW.id,
       };
 
@@ -122,10 +123,12 @@ export function useFilterViews() {
   useEffect(() => {
     try {
       const defaultView = state.views.find((v) => v.isDefault);
+      const builtIn = state.views.find((v) => v.id === BUILT_IN_VIEW.id);
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({
           customViews: state.views.filter((v) => v.id !== BUILT_IN_VIEW.id),
+          builtInFilters: builtIn?.filters,
           activeViewId: state.activeViewId,
           defaultViewId: defaultView?.id || BUILT_IN_VIEW.id,
         })

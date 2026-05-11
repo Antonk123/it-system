@@ -349,7 +349,8 @@ Beskrivning: ${description.slice(0, 800)}`
 export async function draftReply(
   ticket: { title: string; description: string },
   relevantKbArticles: { title: string; content: string }[],
-  ticketId: string | null = null
+  ticketId: string | null = null,
+  attachments: { file_name: string; content: string }[] = []
 ): Promise<string | null> {
   if (!client) return null;
 
@@ -359,17 +360,20 @@ export async function draftReply(
   let ok = false;
 
   try {
-    // Trunkera KB-innehåll så vi inte spränger context-fönstret
     const kbContext = relevantKbArticles
       .slice(0, 5)
       .map((a, i) => `[KB ${i + 1}] ${a.title}\n${a.content.slice(0, 1500)}`)
       .join('\n\n---\n\n');
 
-    const systemPrompt = `Du är IT-supporten på ett svenskt SMB. Du skriver tydliga, vänliga, professionella svar till medarbetare som rapporterat ett ärende. Använd "du" inte "ni". Var konkret och steg-för-steg om det är en lösning. Avsluta alltid med "Hör av dig om det inte löste problemet, så tar vi det vidare." Skriv ENDAST mejlsvaret — ingen rubrik, ingen signatur, inga rubriker som "Hej" eller "Med vänliga hälsningar" (de läggs till av systemet).`;
+    const attachmentContext = attachments.length > 0
+      ? attachments.map((a, i) => `[Bilaga ${i + 1}] ${a.file_name}\n${a.content}`).join('\n\n---\n\n')
+      : '';
+
+    const systemPrompt = `Du är IT-supporten på ett svenskt SMB. Du skriver tydliga, vänliga, professionella svar till medarbetare som rapporterat ett ärende. Använd "du" inte "ni". Var konkret och steg-för-steg om det är en lösning. Avsluta alltid med "Hör av dig om det inte löste problemet, så tar vi det vidare." Skriv ENDAST mejlsvaret — ingen rubrik, ingen signatur, inga rubriker som "Hej" eller "Med vänliga hälsningar" (de läggs till av systemet).${attachments.length > 0 ? ' Om bilagor innehåller loggfiler eller felmeddelanden, analysera dem och referera till specifika rader eller fel i ditt svar.' : ''}`;
 
     const userPrompt = `KUNSKAPSBAS (relevanta artiklar från ert egna interna underlag):
 ${kbContext || '(inga relevanta artiklar hittades — basera svaret på generell IT-praxis)'}
-
+${attachmentContext ? `\nBIFOGADE FILER (bilagor som medarbetaren skickat med ärendet):\n${attachmentContext}\n` : ''}
 ÄRENDE FRÅN MEDARBETARE:
 Titel: ${ticket.title}
 Beskrivning: ${ticket.description}

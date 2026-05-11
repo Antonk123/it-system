@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
-import { existsSync, unlinkSync } from 'fs';
+import { existsSync, unlinkSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import * as XLSX from 'xlsx';
@@ -1331,10 +1331,37 @@ router.post('/:id/ai-draft', writeRateLimiter, authenticate, async (req: AuthReq
       }
     }
 
+    const TEXT_MIME_TYPES = ['text/plain', 'text/csv', 'message/rfc822', 'application/json'];
+    const MAX_ATTACHMENT_CHARS = 5000;
+    const MAX_ATTACHMENTS = 3;
+
+    const attachmentRows = db.prepare(`
+      SELECT file_name, file_path, file_type FROM ticket_attachments
+      WHERE ticket_id = ? AND file_type IN (${TEXT_MIME_TYPES.map(() => '?').join(',')})
+      ORDER BY created_at DESC LIMIT ?
+    `).all(ticket.id, ...TEXT_MIME_TYPES, MAX_ATTACHMENTS) as { file_name: string; file_path: string; file_type: string }[];
+
+    const attachmentContents: { file_name: string; content: string }[] = [];
+    for (const att of attachmentRows) {
+      const filePath = join(UPLOAD_DIR, att.file_path);
+      if (existsSync(filePath)) {
+        try {
+          const raw = readFileSync(filePath, 'utf-8');
+          attachmentContents.push({
+            file_name: att.file_name,
+            content: raw.slice(0, MAX_ATTACHMENT_CHARS),
+          });
+        } catch {
+          // Skippa filer som inte kan läsas
+        }
+      }
+    }
+
     const draft = await draftReply(
       { title: ticket.title, description: ticket.description },
       kbArticles,
-      ticket.id
+      ticket.id,
+      attachmentContents
     );
 
     if (!draft) {
@@ -1350,6 +1377,7 @@ router.post('/:id/ai-draft', writeRateLimiter, authenticate, async (req: AuthReq
       draft,
       kbArticlesUsed: kbArticles.length,
       kbTitles: kbArticles.map(a => a.title),
+      attachmentsUsed: attachmentContents.map(a => a.file_name),
     });
   } catch (error) {
     console.error('Error generating AI draft:', error);

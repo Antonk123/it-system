@@ -218,14 +218,15 @@ export const RichTextEditor = ({
   const [linkUrl, setLinkUrl] = useState('');
   const [linkText, setLinkText] = useState('');
   const [isInserting, setIsInserting] = useState(false);
+  const isLocalChange = useRef(false);
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
-  // Memoize extensions to prevent recreating them on every render
   const extensions = useMemo(() => [
     StarterKit.configure({
       heading: {
         levels: [2, 3, 4],
       },
-      // Disable Link and Underline in StarterKit since we configure them manually below
       link: false,
       underline: false,
     }),
@@ -247,7 +248,6 @@ export const RichTextEditor = ({
     Placeholder.configure({
       placeholder,
     }),
-    // TextAlign disabled - was causing right-alignment issues
   ], [placeholder]);
 
   const editor = useEditor({
@@ -255,17 +255,16 @@ export const RichTextEditor = ({
     content: value || '',
     editable: !disabled,
     onUpdate: ({ editor }) => {
-      const html = editor.getHTML();
-      onChange(html);
+      isLocalChange.current = true;
+      onChangeRef.current(editor.getHTML());
     },
   }, []);
 
-  // Update editor content when value prop changes from outside
-  // Skip updates during link insertion to prevent race condition
   useEffect(() => {
-    if (editor && value !== editor.getHTML() && !isInserting) {
+    if (editor && !isLocalChange.current && !isInserting && value !== editor.getHTML()) {
       editor.commands.setContent(value || '');
     }
+    isLocalChange.current = false;
   }, [value, editor, isInserting]);
 
   // Update editable state when disabled prop changes
