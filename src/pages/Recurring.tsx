@@ -521,13 +521,14 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
           </div>
         </div>
 
-        {/* Expandable history */}
+        {/* Expandable history — grid-rows trick animates height correctly */}
         <div
           className={cn(
-            'overflow-hidden transition-all duration-300',
-            expanded ? 'max-h-96' : 'max-h-0'
+            'grid transition-[grid-template-rows] duration-300 ease-out',
+            expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
           )}
         >
+          <div className="overflow-hidden">
           <div className="border-t border-border/40 bg-muted/20 px-4 py-3">
             <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
               Senaste ärenden
@@ -551,6 +552,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
             ) : (
               <p className="text-sm text-muted-foreground">Inga ärenden skapade ännu.</p>
             )}
+          </div>
           </div>
         </div>
       </CardContent>

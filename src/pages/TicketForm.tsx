@@ -702,9 +702,9 @@ const TicketForm = () => {
               {/* Tilldelad + Företag row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Tilldelad</Label>
+                  <Label htmlFor="ticket-assigned">Tilldelad</Label>
                   <Select value={formData.assigned_to || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, assigned_to: v === 'none' ? '' : v }))}>
-                    <SelectTrigger>
+                    <SelectTrigger id="ticket-assigned">
                       <SelectValue placeholder="Ingen tilldelad" />
                     </SelectTrigger>
                     <SelectContent>
@@ -716,9 +716,9 @@ const TicketForm = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Företag</Label>
+                  <Label htmlFor="ticket-company">Företag</Label>
                   <Select value={formData.company_id || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, company_id: v === 'none' ? '' : v }))}>
-                    <SelectTrigger>
+                    <SelectTrigger id="ticket-company">
                       <SelectValue placeholder="Inget företag" />
                     </SelectTrigger>
                     <SelectContent>
@@ -736,12 +736,13 @@ const TicketForm = () => {
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label>Prioritet</Label>
+                      <Label htmlFor="ticket-priority-edit">Prioritet</Label>
                       <Select
                         value={formData.priority}
                         onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
                       >
                         <SelectTrigger
+                          id="ticket-priority-edit"
                           aria-invalid={!!errors.priority}
                           className={errors.priority ? 'border-destructive focus:ring-destructive' : ''}
                         >
@@ -757,12 +758,13 @@ const TicketForm = () => {
                       {errors.priority && <p className="text-sm text-destructive mt-1">{errors.priority}</p>}
                     </div>
                     <div className="space-y-2">
-                      <Label>Status</Label>
+                      <Label htmlFor="ticket-status-edit">Status</Label>
                       <Select
                         value={formData.status}
                         onValueChange={(v) => { setFormData({ ...formData, status: v as TicketStatus }); setErrors(prev => { const p = { ...prev }; delete p['status']; return p; }); }}
                       >
                         <SelectTrigger
+                          id="ticket-status-edit"
                           aria-invalid={!!errors.status}
                           className={errors.status ? 'border-destructive focus:ring-destructive' : ''}
                         >
@@ -794,12 +796,13 @@ const TicketForm = () => {
                   <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
                     <div className="space-y-4 pt-4">
                       <div className="space-y-2">
-                        <Label>Prioritet</Label>
+                        <Label htmlFor="ticket-priority-create">Prioritet</Label>
                         <Select
                           value={formData.priority}
                           onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
                         >
                           <SelectTrigger
+                            id="ticket-priority-create"
                             aria-invalid={!!errors.priority}
                             className={errors.priority ? 'border-destructive focus:ring-destructive' : ''}
                           >

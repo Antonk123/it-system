@@ -46,7 +46,7 @@ export const StatusFlowPanel = ({ counts, isLoading }: StatusFlowPanelProps) => 
                 </div>
                 <div className="flex-1 h-2 bg-muted/50 rounded-full overflow-hidden">
                   <div
-                    className={cn('h-full rounded-full transition-all duration-700 ease-out', color)}
+                    className={cn('h-full rounded-full transition-[width] duration-300 ease-out', color)}
                     style={{ width: `${pct}%` }}
                   />
                 </div>

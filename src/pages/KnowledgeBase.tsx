@@ -81,6 +81,7 @@ const KnowledgeBase = () => {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [isSavingCategoryId, setIsSavingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState('');
 
   const isStale = (article: KbArticleRow): boolean => {
@@ -169,6 +170,8 @@ const KnowledgeBase = () => {
 
   const handleUpdateCategory = async (id: string) => {
     if (!editingCategoryName.trim()) return;
+    if (isSavingCategoryId) return;
+    setIsSavingCategoryId(id);
     try {
       await api.updateKbCategory(id, editingCategoryName.trim());
       await fetchCategories();
@@ -176,6 +179,8 @@ const KnowledgeBase = () => {
       toast.success('Kategori uppdaterad');
     } catch {
       toast.error('Kunde inte uppdatera kategori');
+    } finally {
+      setIsSavingCategoryId(null);
     }
   };
 
@@ -203,7 +208,7 @@ const KnowledgeBase = () => {
 
   return (
     <Layout>
-      <div className="flex h-[calc(100vh-4rem)]">
+      <div className="flex h-[calc(100dvh-4rem)]">
         {/* Sidebar */}
         <aside className="w-60 shrink-0 border-r border-border bg-card/50 flex flex-col">
           <div className="p-3 flex items-center justify-between">
@@ -282,6 +287,7 @@ const KnowledgeBase = () => {
                             variant="ghost"
                             className="h-9 w-9 md:h-7 md:w-7 p-0 shrink-0"
                             onClick={() => handleUpdateCategory(cat.id)}
+                            disabled={isSavingCategoryId === cat.id}
                             aria-label="Spara kategorinamn"
                           >
                             <Check className="w-3.5 h-3.5 text-green-600" />

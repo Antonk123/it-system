@@ -55,14 +55,15 @@ export function DateRangePopover({
       <PopoverContent className="w-[360px] p-4 space-y-4" align="start">
         {!hideDateFieldSelector && (
           <div className="space-y-2">
-            <Label className="text-xs text-muted-foreground">Datumfält</Label>
-            <div className="flex gap-2">
+            <Label id="date-field-label" className="text-xs text-muted-foreground">Datumfält</Label>
+            <div className="flex gap-2" role="group" aria-labelledby="date-field-label">
               {DATE_FIELD_OPTIONS.map((option) => (
                 <Button
                   key={option.value}
                   variant={dateField === option.value ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => onChange({ dateField: option.value })}
+                  aria-pressed={dateField === option.value}
                 >
                   {option.label}
                 </Button>

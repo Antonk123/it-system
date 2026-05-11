@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useId } from 'react';
 import { FilterView } from '@/types/filterView';
 import {
   Dialog,
@@ -20,6 +20,16 @@ import {
 } from '@/components/ui/select';
 import { Trash2, Save, Pencil, Check, X, Star, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { useCategories } from '@/hooks/useCategories';
 
@@ -88,6 +98,7 @@ function ViewFilterEditor({
   existingNames: string[];
 }) {
   const { categories } = useCategories();
+  const formId = useId();
   const [edit, setEdit] = useState<EditState>({
     name: initial.name,
     statuses: initial.filters.status || [],
@@ -125,8 +136,9 @@ function ViewFilterEditor({
   return (
     <div className="space-y-3 pt-2 animate-in slide-in-from-top-1 duration-150">
       <div className="space-y-1.5">
-        <Label className="text-xs text-muted-foreground">Namn</Label>
+        <Label htmlFor={`${formId}-name`} className="text-xs text-muted-foreground">Namn</Label>
         <Input
+          id={`${formId}-name`}
           value={edit.name}
           onChange={(e) => setEdit((prev) => ({ ...prev, name: e.target.value }))}
           onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') onCancel(); }}
@@ -136,8 +148,8 @@ function ViewFilterEditor({
       </div>
 
       <div className="space-y-1.5">
-        <Label className="text-xs text-muted-foreground">Status</Label>
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+        <Label className="text-xs text-muted-foreground" id={`${formId}-status-label`}>Status</Label>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5" role="group" aria-labelledby={`${formId}-status-label`}>
           {ALL_STATUSES.map((s) => (
             <label key={s.value} className="flex items-center gap-1.5 text-sm cursor-pointer">
               <Checkbox
@@ -152,9 +164,9 @@ function ViewFilterEditor({
 
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Prioritet</Label>
+          <Label htmlFor={`${formId}-priority`} className="text-xs text-muted-foreground">Prioritet</Label>
           <Select value={edit.priority} onValueChange={(v) => setEdit((prev) => ({ ...prev, priority: v }))}>
-            <SelectTrigger className="h-8 text-sm">
+            <SelectTrigger id={`${formId}-priority`} className="h-8 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -165,9 +177,9 @@ function ViewFilterEditor({
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Kategori</Label>
+          <Label htmlFor={`${formId}-category`} className="text-xs text-muted-foreground">Kategori</Label>
           <Select value={edit.category} onValueChange={(v) => setEdit((prev) => ({ ...prev, category: v }))}>
-            <SelectTrigger className="h-8 text-sm">
+            <SelectTrigger id={`${formId}-category`} className="h-8 text-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -205,6 +217,7 @@ export function FilterViewManager({
 }: FilterViewManagerProps) {
   const [newViewName, setNewViewName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
 
   const builtInView = views.find((v) => v.id === 'active-tickets');
   const customViews = views.filter((v) => v.id !== 'active-tickets');
@@ -230,11 +243,15 @@ export function FilterViewManager({
   };
 
   const handleDeleteView = (id: string, name: string) => {
-    if (confirm(`Ta bort vyn "${name}"?`)) {
-      onDeleteView(id);
-      if (editingId === id) setEditingId(null);
-      toast.success(`Vyn "${name}" borttagen`);
-    }
+    setPendingDelete({ id, name });
+  };
+
+  const confirmDeleteView = () => {
+    if (!pendingDelete) return;
+    onDeleteView(pendingDelete.id);
+    if (editingId === pendingDelete.id) setEditingId(null);
+    toast.success(`Vyn "${pendingDelete.name}" borttagen`);
+    setPendingDelete(null);
   };
 
   const handleSetDefault = (id: string) => {
@@ -369,6 +386,23 @@ export function FilterViewManager({
           </div>
         </div>
       </DialogContent>
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(o) => !o && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort vy?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Vyn <strong>{pendingDelete?.name}</strong> tas bort. Filtren förblir intakta — bara vyn raderas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteView} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }

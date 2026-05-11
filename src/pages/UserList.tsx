@@ -12,6 +12,7 @@ import { UserTicketHistory } from '@/components/UserTicketHistory';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import {
@@ -45,7 +46,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { User } from '@/types/ticket';
 
 const UserList = () => {
-  const { users, addUser, updateUser, deleteUser, refetch } = useUsers();
+  const { users, isLoading: usersLoading, addUser, updateUser, deleteUser, refetch } = useUsers();
   const { companies } = useCompanies();
   const { tickets } = useTickets();
   const [search, setSearch] = useState('');
@@ -375,7 +376,20 @@ const UserList = () => {
           </Select>
         </div>
 
-        {filteredUsers.length === 0 && search === '' ? (
+        {usersLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Card key={i}>
+                <CardContent className="p-4 space-y-3">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-40" />
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-9 w-full mt-2" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        ) : filteredUsers.length === 0 && search === '' ? (
           <div className="text-center py-16 border rounded-lg bg-card">
             <UsersIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">Inga användare ännu</p>
@@ -392,7 +406,7 @@ const UserList = () => {
                   <div className="flex items-start justify-between">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-foreground truncate">{user.name}</h3>
+                        <h2 className="font-medium text-foreground truncate">{user.name}</h2>
                         {openTicketsByUser[user.id] > 0 && (
                           <Badge variant="secondary" className="shrink-0">
                             {openTicketsByUser[user.id]} öppna

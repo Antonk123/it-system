@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigationType } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
@@ -65,7 +65,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-dvh flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
@@ -83,7 +83,7 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-dvh flex items-center justify-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>
     );
@@ -97,15 +97,29 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const RouteFallback = () => (
-  <div className="min-h-screen flex items-center justify-center">
+  <div className="min-h-dvh flex items-center justify-center">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
   </div>
 );
+
+/** Scrollar till toppen vid framåtnavigering (PUSH/REPLACE).
+ *  Vid back/forward (POP) låter vi browsern hantera scroll-position. */
+const ScrollToTopOnNavigate = () => {
+  const { pathname } = useLocation();
+  const navigationType = useNavigationType();
+  useEffect(() => {
+    if (navigationType !== 'POP') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+    }
+  }, [pathname, navigationType]);
+  return null;
+};
 
 const AppRoutes = () => {
   const location = useLocation();
   return (
     <Suspense fallback={<RouteFallback />}>
+      <ScrollToTopOnNavigate />
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />

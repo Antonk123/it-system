@@ -181,7 +181,7 @@ const PublicTicketForm = () => {
   // ── AI solved — deflection success ────────────────────────────
   if (aiSolved) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+      <div className="min-h-dvh flex items-center justify-center bg-background p-4 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,hsl(var(--primary)/0.07)_0%,transparent_100%)] pointer-events-none" />
         <div className="w-full max-w-md relative z-10 text-center">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-6">
@@ -212,7 +212,7 @@ const PublicTicketForm = () => {
   // ── Success state ─────────────────────────────────────────────
   if (isSuccess) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+      <div className="min-h-dvh flex items-center justify-center bg-background p-4 relative overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,hsl(var(--primary)/0.07)_0%,transparent_100%)] pointer-events-none" />
         <div className="w-full max-w-md relative z-10 text-center">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 mb-6">
@@ -242,7 +242,7 @@ const PublicTicketForm = () => {
 
   // ── Form ──────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background flex items-start justify-center p-4 py-10 relative overflow-hidden">
+    <div className="min-h-dvh bg-background flex items-start justify-center p-4 py-10 relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,hsl(var(--primary)/0.07)_0%,transparent_100%)] pointer-events-none" />
 
       <div className="w-full max-w-lg relative z-10">

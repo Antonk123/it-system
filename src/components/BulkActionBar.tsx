@@ -94,9 +94,19 @@ export function BulkActionBar({
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Radera permanent?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Du håller på att radera {selectedCount} ärende(n) permanent. Åtgärden kan inte ångras.
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              ⚠️ Permanent radering — kan INTE ångras
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <span className="block">
+                Du håller på att radera <strong>{selectedCount} ärende(n)</strong> permanent från databasen.
+              </span>
+              <span className="block text-foreground font-medium">
+                Detta tar bort all data — kommentarer, bilagor, historik och tidsregistreringar — för dessa ärenden. Det finns ingen ångerfunktion.
+              </span>
+              <span className="block text-sm">
+                Om du vill behålla data men dölja ärendena, stäng dem istället (status: Stängd).
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -108,7 +118,7 @@ export function BulkActionBar({
               }}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Radera ärendena
+              Ja, radera {selectedCount} permanent
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

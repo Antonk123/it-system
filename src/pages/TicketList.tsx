@@ -451,7 +451,7 @@ const TicketList = () => {
                       aria-label={`Öppna ärende ${ticket.title}, prioritet ${ticket.priority}, status ${statusLabels[ticket.status] ?? ticket.status}`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <h3 className="text-sm font-medium line-clamp-1 flex-1">{ticket.title}</h3>
+                        <span className="text-sm font-medium line-clamp-1 flex-1">{ticket.title}</span>
                         <Badge variant={priorityVariant(ticket.priority)} className="shrink-0 text-xs">
                           {ticket.priority}
                         </Badge>

@@ -22,11 +22,12 @@ export const BottomTabBar = () => {
   return (
     <nav
       className={cn(
-        'fixed bottom-0 inset-x-0 z-50 md:hidden',
+        'fixed bottom-0 inset-x-0 z-50 lg:hidden',
         'h-14 bg-card border-t border-border',
         'pb-[env(safe-area-inset-bottom)]',
         'flex items-stretch'
       )}
+      aria-label="Huvudnavigation"
     >
       {tabItems.map((item) => {
         const Icon = item.icon;

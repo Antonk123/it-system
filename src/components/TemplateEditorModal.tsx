@@ -13,6 +13,16 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, X, Check, Type } from 'lucide-react';
 import { DynamicField } from '@/components/DynamicField';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface TemplateEditorModalProps {
   open: boolean;
@@ -77,6 +87,7 @@ export const TemplateEditorModal = ({
   // Template type state
   const [templateType, setTemplateType] = useState<'standard' | 'dynamic'>('dynamic');
   const [showTypeChooser, setShowTypeChooser] = useState(false);
+  const [pendingFieldDelete, setPendingFieldDelete] = useState<string | null>(null);
 
   // Reset form when dialog opens/closes or template changes
   useEffect(() => {
@@ -309,8 +320,14 @@ export const TemplateEditorModal = ({
     }
   };
 
-  const handleDeleteField = async (fieldId: string) => {
-    if (!confirm('Är du säker på att du vill ta bort detta fält?')) return;
+  const handleDeleteField = (fieldId: string) => {
+    setPendingFieldDelete(fieldId);
+  };
+
+  const confirmDeleteField = async () => {
+    const fieldId = pendingFieldDelete;
+    if (!fieldId) return;
+    setPendingFieldDelete(null);
 
     // If it's a temporary field (not saved yet), just remove from state
     if (fieldId.startsWith('temp-')) {
@@ -914,6 +931,23 @@ export const TemplateEditorModal = ({
         </Tabs>
         )}
       </DialogContent>
+
+      <AlertDialog open={!!pendingFieldDelete} onOpenChange={(o) => !o && setPendingFieldDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort fält?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Är du säker på att du vill ta bort detta fält? Befintlig data i fältet förloras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteField} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 };

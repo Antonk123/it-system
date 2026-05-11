@@ -65,11 +65,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import { TicketStatus } from '@/types/ticket';
@@ -601,7 +603,7 @@ const TicketDetail = () => {
 
             {/* Description / Dynamic fields */}
             <div>
-              <h3 className="font-medium text-foreground mb-2">Beskrivning</h3>
+              <h2 className="font-medium text-foreground mb-2">Beskrivning</h2>
               {ticketFieldValues.length > 0 ? (
                 <div className="bg-secondary/30 border border-border p-4 rounded-lg space-y-4">
                   {ticketFieldValues.map((fv) => (
@@ -674,9 +676,9 @@ const TicketDetail = () => {
               <div className="pt-4 border-t">
                 <div className="flex items-center gap-2 mb-3">
                   <Paperclip className="w-4 h-4 text-muted-foreground" />
-                  <h3 className="font-medium text-foreground">
+                  <h2 className="font-medium text-foreground">
                     Bilagor ({attachments.length})
-                  </h3>
+                  </h2>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {attachments.map((attachment) => {
@@ -777,7 +779,7 @@ const TicketDetail = () => {
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <Lightbulb className="w-4 h-4 text-success" />
-                    <h3 className="font-medium text-foreground">Lösning</h3>
+                    <h2 className="font-medium text-foreground">Lösning</h2>
                   </div>
                   <div className="bg-success/20 border border-success/40 p-4 rounded-lg">
                     <HtmlRenderer content={migrateContent(ticket.solution)} />
@@ -788,7 +790,7 @@ const TicketDetail = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Lightbulb className="w-4 h-4 text-muted-foreground" />
-                      <h3 className="font-medium text-foreground">Lösning</h3>
+                      <h2 className="font-medium text-foreground">Lösning</h2>
                     </div>
                     <Button
                       variant="outline"
@@ -819,7 +821,8 @@ const TicketDetail = () => {
                       <textarea
                         value={aiDraft}
                         onChange={(e) => setAiDraft(e.target.value)}
-                        className="w-full min-h-[120px] bg-background/50 border border-border rounded-md p-3 text-sm resize-y focus:outline-none focus:ring-1 focus:ring-purple-500/50"
+                        aria-label="AI-genererat förslag på svar"
+                        className="w-full min-h-[120px] bg-background/50 border border-border rounded-md p-3 text-sm resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                       />
                       {(aiDraftKbTitles.length > 0 || aiDraftAttachments.length > 0) && (
                         <p className="text-xs text-muted-foreground">
@@ -900,28 +903,33 @@ const TicketDetail = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Spara som mall</DialogTitle>
+            <DialogDescription>Ge mallen ett tydligt namn så du hittar den lätt senare.</DialogDescription>
           </DialogHeader>
-          <Input
-            placeholder="Namn på mallen..."
-            value={templateName}
-            onChange={(e) => setTemplateName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && templateName.trim()) {
-                const items = pendingTemplateItems
-                  .filter(i => !i.parent_id)
-                  .flatMap(parent => {
-                    const children = pendingTemplateItems.filter(c => c.parent_id === parent.id);
-                    return [
-                      { label: parent.label },
-                      ...children.map(c => ({ label: c.label, parent_label: parent.label })),
-                    ];
-                  });
-                createChecklistTemplate({ name: templateName.trim(), items });
-                setTemplateDialogOpen(false);
-              }
-            }}
-            autoFocus
-          />
+          <div className="space-y-2">
+            <Label htmlFor="template-name">Namn på mallen</Label>
+            <Input
+              id="template-name"
+              placeholder="T.ex. Lösenordsåterställning"
+              value={templateName}
+              onChange={(e) => setTemplateName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && templateName.trim()) {
+                  const items = pendingTemplateItems
+                    .filter(i => !i.parent_id)
+                    .flatMap(parent => {
+                      const children = pendingTemplateItems.filter(c => c.parent_id === parent.id);
+                      return [
+                        { label: parent.label },
+                        ...children.map(c => ({ label: c.label, parent_label: parent.label })),
+                      ];
+                    });
+                  createChecklistTemplate({ name: templateName.trim(), items });
+                  setTemplateDialogOpen(false);
+                }
+              }}
+              autoFocus
+            />
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTemplateDialogOpen(false)}>Avbryt</Button>
             <Button

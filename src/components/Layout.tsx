@@ -1,6 +1,5 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search, Building2, Receipt } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -220,7 +219,7 @@ export const Layout = ({
   const handleLogout = async () => {
     await signOut();
   };
-  return <div className="min-h-screen flex bg-background relative overflow-hidden">
+  return <div className="min-h-dvh flex bg-background relative overflow-hidden">
       {/* Decorative floating shapes */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }}></div>
@@ -241,7 +240,7 @@ export const Layout = ({
 
       {/* Sidebar with collapsible design */}
       <aside className={cn(
-        "fixed lg:static inset-y-0 left-0 z-50 flex flex-col transition-all duration-300 ease-in-out",
+        "fixed lg:static inset-y-0 left-0 z-50 flex flex-col transition-[width,transform,background-color] duration-300 ease-in-out",
         "bg-sidebar border-r border-sidebar-border",
         // Mobile
         sidebarOpen ? "translate-x-0 w-64 shadow-2xl" : "-translate-x-full lg:translate-x-0",
@@ -286,7 +285,7 @@ export const Layout = ({
       {/* Main content */}
       <main className="flex-1 min-w-0 relative">
         {/* Mobile header */}
-        <div data-print-hide className="lg:hidden sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 flex items-center gap-4 shadow-sm">
+        <div data-print-hide className="lg:hidden sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] flex items-center gap-4 shadow-sm">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-2 rounded-lg hover:bg-primary/10 transition-colors"
@@ -330,21 +329,20 @@ export const Layout = ({
           </div>
         </div>
 
-        <motion.div
-          key={location.pathname}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.2 }}
-          className="p-5 pb-20 md:pb-5 lg:p-6 relative z-10"
-        >
+        {/* Mobile breadcrumbs (visible only on detail pages where crumbs > 0) */}
+        <div data-print-hide className="lg:hidden px-5 pt-3">
+          <RouteBreadcrumbs />
+        </div>
+
+        <div className="p-5 pb-20 lg:p-6 relative z-10">
           {children}
-        </motion.div>
+        </div>
       </main>
 
       <div data-print-hide>
         <QuickCaptureFAB className={cn(
           "left-4 lg:transition-[left] lg:duration-300",
-          "bottom-[72px] md:bottom-6",
+          "bottom-[72px] lg:bottom-6",
           sidebarCollapsed ? "lg:left-20" : "lg:left-[17rem]"
         )} />
       </div>

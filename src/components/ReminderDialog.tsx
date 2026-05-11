@@ -73,10 +73,11 @@ export function ReminderDialog({ onCreateReminder, open: controlledOpen, onOpenC
         </DialogHeader>
         <div className="space-y-4 pt-4">
           <div className="space-y-2">
-            <Label>Datum</Label>
+            <Label htmlFor="reminder-date">Datum</Label>
             <Popover>
               <PopoverTrigger asChild>
                 <Button
+                  id="reminder-date"
                   variant="outline"
                   className="w-full justify-start text-left font-normal"
                 >

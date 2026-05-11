@@ -259,9 +259,9 @@ const Invoices = () => {
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Företag</Label>
+                <Label htmlFor="invoice-company" className="text-xs text-muted-foreground">Företag</Label>
                 <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
-                  <SelectTrigger>
+                  <SelectTrigger id="invoice-company">
                     <SelectValue placeholder="Välj företag..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -272,12 +272,12 @@ const Invoices = () => {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Från datum</Label>
-                <Input type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} />
+                <Label htmlFor="invoice-period-start" className="text-xs text-muted-foreground">Från datum</Label>
+                <Input id="invoice-period-start" type="date" value={periodStart} onChange={e => setPeriodStart(e.target.value)} />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">Till datum</Label>
-                <Input type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)} />
+                <Label htmlFor="invoice-period-end" className="text-xs text-muted-foreground">Till datum</Label>
+                <Input id="invoice-period-end" type="date" value={periodEnd} onChange={e => setPeriodEnd(e.target.value)} />
               </div>
             </div>
             <Button onClick={handlePreview} disabled={previewing || !selectedCompanyId || !periodStart || !periodEnd}>

@@ -749,7 +749,7 @@ const Reports = () => {
                           </p>
                           <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                             <div
-                              className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-500"
+                              className="h-full bg-gradient-to-r from-primary to-accent transition-[width] duration-300"
                               style={{ width: `${statusKPIs.resolvedRate}%` }}
                             />
                           </div>
