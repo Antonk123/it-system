@@ -400,7 +400,17 @@ const TicketForm = () => {
         fieldErrors[key] = err.message;
       });
       setErrors(fieldErrors);
+      // Open collapsed sections if errors exist there (create mode)
+      if (!isEditing && (fieldErrors.priority || fieldErrors.status)) {
+        setDetailsOpen(true);
+      }
       toast.error('Rätta felen i formuläret');
+      // Scroll to first error field
+      requestAnimationFrame(() => {
+        const firstErrorEl = document.querySelector('[aria-invalid="true"]') as HTMLElement | null;
+        firstErrorEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        firstErrorEl?.focus?.();
+      });
       return;
     }
 
@@ -548,7 +558,11 @@ const TicketForm = () => {
                     onChange={(e) => { setFormData({ ...formData, title: e.target.value }); setErrors(prev => { const p = { ...prev }; delete p['title']; return p; }); }}
                     placeholder="Kort beskrivning av problemet"
                     required
+                    aria-invalid={!!errors.title}
+                    aria-describedby={errors.title ? 'title-error' : undefined}
+                    className={errors.title ? 'border-destructive focus-visible:ring-destructive' : ''}
                   />
+                  {errors.title && <p id="title-error" className="text-sm text-destructive mt-1">{errors.title}</p>}
                 </div>
                 {!isEditing && (
                   <div className="space-y-2 sm:w-[240px]">
@@ -635,13 +649,16 @@ const TicketForm = () => {
                   <Label htmlFor="description">
                     Beskrivning *
                   </Label>
-                  <RichTextEditor
-                    value={formData.description}
-                    onChange={(html) => { setFormData({ ...formData, description: html }); setErrors(prev => { const p = { ...prev }; delete p['description']; return p; }); }}
-                    placeholder="Detaljerad beskrivning av problemet..."
-                    minHeight="150px"
-                    required
-                  />
+                  <div className={errors.description ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
+                    <RichTextEditor
+                      value={formData.description}
+                      onChange={(html) => { setFormData({ ...formData, description: html }); setErrors(prev => { const p = { ...prev }; delete p['description']; return p; }); }}
+                      placeholder="Detaljerad beskrivning av problemet..."
+                      minHeight="150px"
+                      required
+                    />
+                  </div>
+                  {errors.description && <p className="text-sm text-destructive mt-1">{errors.description}</p>}
                 </div>
               )}
 
@@ -724,7 +741,10 @@ const TicketForm = () => {
                         value={formData.priority}
                         onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger
+                          aria-invalid={!!errors.priority}
+                          className={errors.priority ? 'border-destructive focus:ring-destructive' : ''}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -734,6 +754,7 @@ const TicketForm = () => {
                           <SelectItem value="critical">Kritisk</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.priority && <p className="text-sm text-destructive mt-1">{errors.priority}</p>}
                     </div>
                     <div className="space-y-2">
                       <Label>Status</Label>
@@ -741,7 +762,10 @@ const TicketForm = () => {
                         value={formData.status}
                         onValueChange={(v) => { setFormData({ ...formData, status: v as TicketStatus }); setErrors(prev => { const p = { ...prev }; delete p['status']; return p; }); }}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger
+                          aria-invalid={!!errors.status}
+                          className={errors.status ? 'border-destructive focus:ring-destructive' : ''}
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -752,6 +776,7 @@ const TicketForm = () => {
                           <SelectItem value="closed">Stängd</SelectItem>
                         </SelectContent>
                       </Select>
+                      {errors.status && <p className="text-sm text-destructive mt-1">{errors.status}</p>}
                     </div>
                   </div>
                 </div>
@@ -774,7 +799,10 @@ const TicketForm = () => {
                           value={formData.priority}
                           onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
                         >
-                          <SelectTrigger>
+                          <SelectTrigger
+                            aria-invalid={!!errors.priority}
+                            className={errors.priority ? 'border-destructive focus:ring-destructive' : ''}
+                          >
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -784,6 +812,7 @@ const TicketForm = () => {
                             <SelectItem value="critical">Kritisk</SelectItem>
                           </SelectContent>
                         </Select>
+                        {errors.priority && <p className="text-sm text-destructive mt-1">{errors.priority}</p>}
                       </div>
                     </div>
                   </CollapsibleContent>

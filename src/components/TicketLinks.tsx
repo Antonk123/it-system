@@ -225,10 +225,11 @@ export const TicketLinks = ({
               <Button
                 variant="ghost"
                 size="sm"
-                className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
+                className="md:opacity-0 md:group-hover:opacity-100 transition-opacity h-9 w-9 md:h-7 md:w-7 p-0 shrink-0"
                 onClick={() => handleDeleteLink(link.id)}
+                aria-label="Ta bort länk"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </Button>
             </div>
           ))}

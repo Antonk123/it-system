@@ -229,7 +229,15 @@ export const Layout = ({
       </div>
 
       {/* Mobile overlay with backdrop blur */}
-      {sidebarOpen && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden animate-fade-in" onClick={() => setSidebarOpen(false)} />}
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Stäng meny"
+          tabIndex={-1}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden animate-fade-in cursor-default"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
       {/* Sidebar with collapsible design */}
       <aside className={cn(
@@ -243,8 +251,9 @@ export const Layout = ({
       )}>
         {/* Close button for mobile */}
         <button
-          className="lg:hidden absolute top-4 right-4 text-sidebar-foreground hover:text-primary transition-colors z-20"
+          className="lg:hidden absolute top-3 right-3 text-sidebar-foreground hover:text-primary transition-colors z-20 inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => setSidebarOpen(false)}
+          aria-label="Stäng meny"
         >
           <X className="w-5 h-5" />
         </button>

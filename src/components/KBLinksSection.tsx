@@ -138,11 +138,12 @@ export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) =
               <Button
                 variant="ghost"
                 size="sm"
-                className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
+                className="md:opacity-0 md:group-hover:opacity-100 transition-opacity h-9 w-9 md:h-7 md:w-7 p-0 shrink-0"
                 onClick={() => unlinkMutation.mutate(article.id)}
                 disabled={unlinkMutation.isPending}
+                aria-label="Ta bort KB-länk"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </Button>
             </div>
           ))}
@@ -204,10 +205,11 @@ export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) =
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0 shrink-0"
+                      className="h-9 w-9 md:h-7 md:w-7 p-0 shrink-0"
                       onClick={() => linkMutation.mutate(article.id)}
                       disabled={linkMutation.isPending}
                       title="Länka artikel"
+                      aria-label="Länka KB-artikel"
                     >
                       <Link2 className="w-3.5 h-3.5" />
                     </Button>

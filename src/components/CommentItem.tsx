@@ -69,23 +69,25 @@ export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) =
           </span>
         </div>
         {canEdit && !isEditing && (
-          <div className="flex gap-1">
+          <div className="flex gap-2">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setIsEditing(true)}
-              className="h-6 w-6 p-0"
+              className="h-9 w-9 md:h-8 md:w-8 p-0"
+              aria-label="Redigera kommentar"
             >
-              <Pencil className="w-3 h-3" />
+              <Pencil className="w-3.5 h-3.5" />
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                  className="h-9 w-9 md:h-8 md:w-8 p-0 text-destructive hover:text-destructive"
+                  aria-label="Ta bort kommentar"
                 >
-                  <Trash2 className="w-3 h-3" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>

@@ -280,18 +280,20 @@ const KnowledgeBase = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 w-7 p-0"
+                            className="h-9 w-9 md:h-7 md:w-7 p-0 shrink-0"
                             onClick={() => handleUpdateCategory(cat.id)}
+                            aria-label="Spara kategorinamn"
                           >
-                            <Check className="w-3 h-3 text-green-600" />
+                            <Check className="w-3.5 h-3.5 text-green-600" />
                           </Button>
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-7 w-7 p-0"
+                            className="h-9 w-9 md:h-7 md:w-7 p-0 shrink-0"
                             onClick={() => setEditingCategoryId(null)}
+                            aria-label="Avbryt redigering"
                           >
-                            <X className="w-3 h-3" />
+                            <X className="w-3.5 h-3.5" />
                           </Button>
                         </>
                       ) : (
@@ -300,22 +302,24 @@ const KnowledgeBase = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="h-9 w-9 md:h-7 md:w-7 p-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0"
                             onClick={() => {
                               setEditingCategoryId(cat.id);
                               setEditingCategoryName(cat.name);
                             }}
+                            aria-label={`Redigera kategorin ${cat.name}`}
                           >
-                            <Pencil className="w-2.5 h-2.5" />
+                            <Pencil className="w-3 h-3" />
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive"
+                                className="h-9 w-9 md:h-7 md:w-7 p-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive shrink-0"
+                                aria-label={`Ta bort kategorin ${cat.name}`}
                               >
-                                <Trash2 className="w-2.5 h-2.5" />
+                                <Trash2 className="w-3 h-3" />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>

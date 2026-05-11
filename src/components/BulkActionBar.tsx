@@ -41,15 +41,17 @@ export function BulkActionBar({
   return (
     <>
       <div
-        className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-4 py-2 bg-card shadow-lg rounded-lg border transition-transform duration-200 ease-out ${
-          isVisible ? 'translate-y-0' : 'translate-y-[200%]'
+        className={`fixed left-1/2 -translate-x-1/2 z-50 flex flex-wrap items-center justify-center gap-2 sm:gap-3 px-3 py-2 bg-card shadow-lg rounded-lg border transition-transform duration-200 ease-out w-[calc(100vw-1rem)] max-w-[640px] sm:w-auto bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] md:bottom-6 ${
+          isVisible ? 'translate-y-0' : 'translate-y-[200%] pointer-events-none'
         }`}
+        role="region"
+        aria-label="Massåtgärder"
       >
         <span className="text-sm font-medium whitespace-nowrap">
-          {selectedCount} arende(n) valda
+          {selectedCount} ärende(n) valda
         </span>
 
-        <div className="h-4 w-px bg-border" />
+        <div className="hidden sm:block h-4 w-px bg-border" />
 
         <Button
           variant="outline"
@@ -61,7 +63,7 @@ export function BulkActionBar({
         </Button>
 
         <Select onValueChange={(value) => onChangePriority(value as TicketPriority)}>
-          <SelectTrigger className="h-8 w-[150px]">
+          <SelectTrigger className="h-9 w-[140px] sm:w-[150px]" aria-label="Ändra prioritet">
             <SelectValue placeholder="Ändra prioritet" />
           </SelectTrigger>
           <SelectContent>

@@ -108,8 +108,9 @@ export const TicketChecklist = ({
     return (
       <label
         htmlFor={`date-${item.id}`}
-        className="opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+        className="md:opacity-0 md:group-hover:opacity-100 transition-opacity cursor-pointer"
         title="Sätt förfallodatum"
+        aria-label="Sätt förfallodatum"
       >
         <input
           id={`date-${item.id}`}
@@ -118,8 +119,8 @@ export const TicketChecklist = ({
           onChange={(e) => onUpdate(item.id, { due_date: e.target.value || null })}
           className="sr-only"
         />
-        <span className="inline-flex items-center justify-center h-6 w-6 rounded hover:bg-muted transition-colors">
-          <Calendar className="h-3 w-3 text-muted-foreground" />
+        <span className="inline-flex items-center justify-center h-9 w-9 md:h-7 md:w-7 rounded hover:bg-muted transition-colors">
+          <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
         </span>
       </label>
     );
@@ -160,10 +161,11 @@ export const TicketChecklist = ({
           {!readOnly && !isChild && onAdd && (
             <button
               onClick={() => setShowSubInputFor(showSubInputFor === item.id ? null : item.id)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity inline-flex items-center justify-center h-6 w-6 rounded hover:bg-muted"
+              className="md:opacity-0 md:group-hover:opacity-100 transition-opacity inline-flex items-center justify-center h-9 w-9 md:h-7 md:w-7 rounded hover:bg-muted"
               title="Lägg till deluppgift"
+              aria-label="Lägg till deluppgift"
             >
-              <CornerDownRight className="h-3 w-3 text-muted-foreground" />
+              <CornerDownRight className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           )}
 
@@ -171,10 +173,11 @@ export const TicketChecklist = ({
             <Button
               variant="ghost"
               size="icon"
-              className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+              className="h-9 w-9 md:h-7 md:w-7 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0"
               onClick={() => onDelete?.(item.id)}
+              aria-label="Ta bort uppgift"
             >
-              <X className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
             </Button>
           )}
         </div>
@@ -194,20 +197,22 @@ export const TicketChecklist = ({
               type="button"
               variant="outline"
               size="icon"
-              className="h-8 w-8 shrink-0"
+              className="h-9 w-9 shrink-0"
               onClick={() => handleAddSubItem(item.id)}
               disabled={!subItemInputs[item.id]?.trim()}
+              aria-label="Lägg till deluppgift"
             >
-              <Plus className="h-3 w-3" />
+              <Plus className="h-3.5 w-3.5" />
             </Button>
             <Button
               type="button"
               variant="ghost"
               size="icon"
-              className="h-8 w-8 shrink-0"
+              className="h-9 w-9 shrink-0"
               onClick={() => setShowSubInputFor(null)}
+              aria-label="Avbryt"
             >
-              <X className="h-3 w-3" />
+              <X className="h-3.5 w-3.5" />
             </Button>
           </div>
         )}
@@ -280,10 +285,11 @@ export const TicketChecklist = ({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="h-9 w-9 md:h-7 md:w-7 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                 onClick={() => onPendingDelete?.(item.id)}
+                aria-label="Ta bort väntande uppgift"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </Button>
             )}
           </div>

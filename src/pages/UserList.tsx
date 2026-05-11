@@ -55,6 +55,7 @@ const UserList = () => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({ name: '', email: '', department: '', company_id: '' });
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [isSavingUser, setIsSavingUser] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
   const ITEMS_PER_PAGE = 10;
@@ -121,16 +122,31 @@ const UserList = () => {
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingUser) {
-      updateUser(editingUser.id, formData);
-    } else {
-      addUser(formData);
+    if (isSavingUser) return;
+    setIsSavingUser(true);
+    try {
+      if (editingUser) {
+        // updateUser throws via mutateAsync on failure
+        await updateUser(editingUser.id, formData);
+        toast.success('Användare uppdaterad');
+      } else {
+        // addUser swallows errors and returns null; hook shows toast.error
+        const created = await addUser(formData);
+        if (!created) {
+          return;
+        }
+        toast.success('Användare tillagd');
+      }
+      setFormData({ name: '', email: '', department: '', company_id: '' });
+      setEditingUser(null);
+      setIsDialogOpen(false);
+    } catch (error: any) {
+      toast.error(error?.message || 'Kunde inte spara användare');
+    } finally {
+      setIsSavingUser(false);
     }
-    setFormData({ name: '', email: '', department: '', company_id: '' });
-    setEditingUser(null);
-    setIsDialogOpen(false);
   };
 
   const handleEdit = (user: User) => {
@@ -323,10 +339,11 @@ const UserList = () => {
                   />
                 </div>
                 <div className="flex justify-end gap-2 pt-4">
-                  <Button type="button" variant="outline" onClick={handleDialogClose}>
+                  <Button type="button" variant="outline" onClick={handleDialogClose} disabled={isSavingUser}>
                     Avbryt
                   </Button>
-                  <Button type="submit">
+                  <Button type="submit" disabled={isSavingUser}>
+                    {isSavingUser && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
                     {editingUser ? 'Spara ändringar' : 'Lägg till användare'}
                   </Button>
                 </div>

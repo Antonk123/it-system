@@ -443,10 +443,12 @@ const TicketList = () => {
                   <p className="text-center text-muted-foreground py-12">Inga ärenden hittades</p>
                 ) : (
                   tickets.map(ticket => (
-                    <div
+                    <button
                       key={ticket.id}
+                      type="button"
                       onClick={() => handleTicketClick(ticket.id)}
-                      className="p-3 rounded-lg border bg-card cursor-pointer active:bg-muted/50 transition-colors"
+                      className="w-full text-left p-3 rounded-lg border bg-card active:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                      aria-label={`Öppna ärende ${ticket.title}, prioritet ${ticket.priority}, status ${statusLabels[ticket.status] ?? ticket.status}`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <h3 className="text-sm font-medium line-clamp-1 flex-1">{ticket.title}</h3>
@@ -460,7 +462,7 @@ const TicketList = () => {
                           <span className="text-xs text-muted-foreground">{ticket.companyName}</span>
                         )}
                       </div>
-                    </div>
+                    </button>
                   ))
                 )}
                 {/* Mobile pagination */}

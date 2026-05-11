@@ -64,9 +64,10 @@ const TimeSection = ({ ticketId }: TimeSectionProps) => {
               </div>
               <button
                 onClick={() => deleteEntry(entry.id)}
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive ml-2 mt-0.5"
+                className="md:opacity-0 md:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive ml-2 inline-flex items-center justify-center h-9 w-9 md:h-7 md:w-7 rounded shrink-0"
+                aria-label="Ta bort tidpost"
               >
-                <X size={14} />
+                <X size={16} />
               </button>
             </div>
           ))}

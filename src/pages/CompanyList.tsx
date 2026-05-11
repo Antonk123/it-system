@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Plus, Search, Trash2 } from 'lucide-react';
+import { Building2, Plus, Search, Trash2, Loader2 } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { useCompanies } from '@/hooks/useCompanies';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from 'sonner';
 
 const CompanyList = () => {
   const navigate = useNavigate();
@@ -17,6 +18,7 @@ const CompanyList = () => {
 
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [form, setForm] = useState({
     name: '',
     org_number: '',
@@ -31,10 +33,17 @@ const CompanyList = () => {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    const result = await createCompany(form);
-    if (result) {
-      setForm({ name: '', org_number: '', email: '', phone: '', address: '' });
-      setCreateOpen(false);
+    if (isCreating) return;
+    setIsCreating(true);
+    try {
+      // createCompany swallows errors and returns null; success/error toasts shown by hook
+      const result = await createCompany(form);
+      if (result) {
+        setForm({ name: '', org_number: '', email: '', phone: '', address: '' });
+        setCreateOpen(false);
+      }
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -113,10 +122,13 @@ const CompanyList = () => {
                   />
                 </div>
                 <div className="flex justify-end gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={() => setCreateOpen(false)}>
+                  <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={isCreating}>
                     Avbryt
                   </Button>
-                  <Button type="submit">Skapa företag</Button>
+                  <Button type="submit" disabled={isCreating || !form.name.trim()}>
+                    {isCreating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                    Skapa företag
+                  </Button>
                 </div>
               </form>
             </DialogContent>
