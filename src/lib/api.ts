@@ -64,10 +64,52 @@ class ApiClient {
     return error.code === 'EBADCSRFTOKEN' || !!(error.error?.toLowerCase().includes('csrf'));
   }
 
+  // Decode JWT payload and check expiration. 30s skew lets us refresh just before expiry.
+  private isTokenExpired(token: string): boolean {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (typeof payload.exp !== 'number') return false;
+      return payload.exp * 1000 < Date.now() + 30_000;
+    } catch {
+      return false; // Malformed — let server decide
+    }
+  }
+
+  private async tryRefresh(): Promise<boolean> {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) return false;
+    try {
+      const res = await fetch(`${this.baseUrl}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json() as { accessToken: string; refreshToken?: string };
+      this.setToken(data.accessToken);
+      if (data.refreshToken) {
+        localStorage.setItem('refreshToken', data.refreshToken);
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async request<T>(endpoint: string, options: ApiOptions = {}, isRetry = false): Promise<T> {
     const { method = 'GET', body, headers = {} } = options;
 
-    const token = this.getToken();
+    let token = this.getToken();
+
+    // Proactive refresh: if access token is expired, refresh before the request
+    // to avoid an unnecessary 401 that the browser logs to console.
+    if (token && !isRetry && this.isTokenExpired(token)) {
+      const refreshed = await this.tryRefresh();
+      if (refreshed) {
+        token = this.getToken();
+      }
+    }
+
     const requestHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
       ...headers,
@@ -92,26 +134,8 @@ class ApiClient {
     if (!response.ok) {
       // Handle 401: attempt silent token refresh BEFORE consuming body
       if (response.status === 401 && !isRetry) {
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (refreshToken) {
-          try {
-            const refreshRes = await fetch(`${this.baseUrl}/auth/refresh`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ refreshToken }),
-            });
-            if (refreshRes.ok) {
-              const data = await refreshRes.json() as { accessToken: string; refreshToken?: string };
-              this.setToken(data.accessToken);
-              if (data.refreshToken) {
-                localStorage.setItem('refreshToken', data.refreshToken);
-              }
-              // Retry the original request with new token
-              return this.request<T>(endpoint, options, true);
-            }
-          } catch {
-            // Swallow refresh errors — fall through to redirect
-          }
+        if (await this.tryRefresh()) {
+          return this.request<T>(endpoint, options, true);
         }
         // Refresh token absent or expired — silent redirect, no toast
         this.clearToken();
