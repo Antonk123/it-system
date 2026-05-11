@@ -92,10 +92,13 @@ if [ -z "$ADMIN_EMAIL" ]; then
   err "Admin e-post krävs."
 fi
 
-read -rsp "  Admin lösenord (minst 6 tecken): " ADMIN_PASSWORD </dev/tty
+read -rsp "  Admin lösenord (minst 12 tecken, versal+gemen+siffra+specialtecken): " ADMIN_PASSWORD </dev/tty
 echo ""
-if [ ${#ADMIN_PASSWORD} -lt 6 ]; then
-  err "Lösenordet måste vara minst 6 tecken."
+if [ ${#ADMIN_PASSWORD} -lt 12 ]; then
+  err "Lösenordet måste vara minst 12 tecken."
+fi
+if ! echo "$ADMIN_PASSWORD" | grep -qP '(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])'; then
+  err "Lösenordet måste innehålla minst en versal, en gemen, en siffra och ett specialtecken (@\$!%*?&)"
 fi
 
 header "Nätverkskonfiguration"
@@ -156,9 +159,36 @@ else
   info "SMTP hoppas över — e-postnotifieringar inaktiverade"
 fi
 
-# --- 4. Generera JWT_SECRET ---
+# --- 4. Generera hemligheter ---
 JWT_SECRET=$(openssl rand -base64 32)
 ok "JWT_SECRET genererad"
+
+CSRF_SECRET=$(openssl rand -base64 32)
+ok "CSRF_SECRET genererad"
+
+# VAPID-nycklar för push-notiser (kräver Node)
+if command -v node &>/dev/null; then
+  VAPID_KEYS=$(node -e "
+    try {
+      const wpp = require('web-push');
+      const k = wpp.generateVAPIDKeys();
+      console.log(k.publicKey + ':' + k.privateKey);
+    } catch(e) { console.log(''); }
+  " 2>/dev/null)
+  if [ -n "$VAPID_KEYS" ]; then
+    VAPID_PUBLIC_KEY="${VAPID_KEYS%%:*}"
+    VAPID_PRIVATE_KEY="${VAPID_KEYS##*:}"
+    ok "VAPID-nycklar genererade (push-notiser aktiverade)"
+  else
+    VAPID_PUBLIC_KEY=""
+    VAPID_PRIVATE_KEY=""
+    warn "web-push ej tillgängligt — push-notiser inaktiverade (kan genereras senare)"
+  fi
+else
+  VAPID_PUBLIC_KEY=""
+  VAPID_PRIVATE_KEY=""
+  warn "Node.js ej tillgängligt lokalt — VAPID-nycklar genereras inte"
+fi
 
 # --- 5. Skriv .env ---
 cat > .env << EOF
@@ -173,6 +203,12 @@ APP_BASE_URL=${APP_URL}
 
 # --- Säkerhet ---
 JWT_SECRET=${JWT_SECRET}
+CSRF_SECRET=${CSRF_SECRET}
+
+# --- Push-notiser (VAPID) ---
+VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+VAPID_SUBJECT=mailto:${ADMIN_EMAIL}
 
 # --- AI (Anthropic) ---
 ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
@@ -203,10 +239,14 @@ services:
     environment:
       - NODE_ENV=production
       - JWT_SECRET=${JWT_SECRET}
+      - CSRF_SECRET=${CSRF_SECRET}
       - DB_PATH=/app/data/database.sqlite
       - UPLOAD_DIR=/app/data/uploads
       - CORS_ORIGIN=${CORS_ORIGIN}
       - APP_BASE_URL=${APP_BASE_URL}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+      - VAPID_SUBJECT=${VAPID_SUBJECT:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - AI_MODEL=${AI_MODEL:-}
       - AI_MODEL_SMART=${AI_MODEL_SMART:-}
@@ -295,14 +335,8 @@ ok "Backend svarar (${WAITED}s)"
 # --- 10. Initiera databas med admin-användare ---
 header "Initierar databas"
 docker exec -e ADMIN_EMAIL="${ADMIN_EMAIL}" -e ADMIN_PASSWORD="${ADMIN_PASSWORD}" -e ADMIN_NAME="${ADMIN_NAME}" \
-  it-ticketing-backend npm run init-db
+  it-ticketing-backend node dist/db/init.js
 ok "Databas initierad med admin: ${ADMIN_EMAIL}"
-
-# --- 10b. Ladda mallar och dynamiska fält ---
-header "Laddar mallar och dynamiska fält"
-info "Skapar kategorier och mallar med dynamiska fält..."
-docker exec it-ticketing-backend npm run seed-templates
-ok "Mallar och fält skapade"
 
 # --- 11. Klar! ---
 header "Installation klar — ${COMPANY_NAME}"
