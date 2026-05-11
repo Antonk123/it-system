@@ -565,7 +565,7 @@
     --secondary-foreground: 222 47% 20%;
 
     --muted: 220 14% 93%;
-    --muted-foreground: 220 12% 48%;
+    --muted-foreground: 220 12% 38%; /* WCAG AA: 6.0:1 mot light bg (var 48% = 4.1:1) */
 
     --accent: 199 85% 48%;
     --accent-foreground: 0 0% 100%;
@@ -655,7 +655,7 @@
     --secondary-foreground: 234 40% 20%;
 
     --muted: 232 18% 93%;
-    --muted-foreground: 225 14% 48%;
+    --muted-foreground: 225 14% 38%; /* WCAG AA */
 
     --accent: 196 72% 48%;
     --accent-foreground: 0 0% 100%;
@@ -745,7 +745,7 @@
     --secondary-foreground: 220 14% 20%;
 
     --muted: 218 10% 93%;
-    --muted-foreground: 218 8% 48%;
+    --muted-foreground: 218 8% 38%; /* WCAG AA */
 
     --accent: 32 85% 42%;
     --accent-foreground: 0 0% 100%;
@@ -835,7 +835,7 @@
     --secondary-foreground: 200 10% 20%;
 
     --muted: 196 6% 93%;
-    --muted-foreground: 195 6% 48%;
+    --muted-foreground: 195 6% 38%; /* WCAG AA */
 
     --accent: 152 45% 35%;
     --accent-foreground: 0 0% 100%;
@@ -925,7 +925,7 @@
     --secondary-foreground: 210 11% 20%;
 
     --muted: 210 7% 93%;
-    --muted-foreground: 219 7% 45%;
+    --muted-foreground: 219 7% 38%; /* WCAG AA */
 
     --accent: 240 100% 62%;
     --accent-foreground: 0 0% 100%;
@@ -1498,7 +1498,7 @@
     --card: 0 0% 100% !important;
     --card-foreground: 222 47% 11% !important;
     --muted: 220 14% 93% !important;
-    --muted-foreground: 220 12% 48% !important;
+    --muted-foreground: 220 12% 38% !important; /* WCAG AA — print */
     --border: 220 13% 85% !important;
     --primary: 214 100% 50% !important;
     --primary-foreground: 0 0% 100% !important;

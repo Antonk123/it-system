@@ -23,11 +23,16 @@ const sectionLabels: Record<string, string> = {
 
 function buildCrumbs(pathname: string): { label: string; href?: string }[] {
   const segments = pathname.split('/').filter(Boolean);
-  if (segments.length < 2) return [];
+  if (segments.length === 0) return []; // root "/" — Dashboard har egen h1
 
   const section = segments[0];
   const sectionLabel = sectionLabels[section];
   if (!sectionLabel) return [];
+
+  // Top-level (e.g. /tickets) — visa sektionsnamnet som current page
+  if (segments.length === 1) {
+    return [{ label: sectionLabel }];
+  }
 
   const crumbs: { label: string; href?: string }[] = [
     { label: sectionLabel, href: `/${section}` },

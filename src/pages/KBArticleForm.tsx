@@ -319,11 +319,15 @@ const KBArticleForm = () => {
           </div>
 
           <div className="space-y-2">
-            <Label className="flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-muted-foreground" />
+            <Label id="kb-tags-label" className="flex items-center gap-1.5">
+              <Tag className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
               Taggar
             </Label>
-            <div className="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] rounded-md border border-input bg-background px-3 py-2">
+            <div
+              className="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] rounded-md border border-input bg-background px-3 py-2"
+              role="group"
+              aria-labelledby="kb-tags-label"
+            >
               {selectedTagIds.map(tagId => {
                 const tag = availableTags.find(t => t.id === tagId);
                 if (!tag) return null;
@@ -344,16 +348,16 @@ const KBArticleForm = () => {
           {/* Cross-ref link picker — only shown in edit mode */}
           {isEditing && (
             <div className="space-y-2">
-              <Label className="flex items-center gap-1.5">
-                <Link2 className="w-3.5 h-3.5 text-muted-foreground" />
+              <Label id="kb-crossrefs-label" className="flex items-center gap-1.5">
+                <Link2 className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
                 Se även-kopplingar
               </Label>
               {crossRefs.length > 0 && (
-                <div className="space-y-1 mb-2">
+                <div className="space-y-1 mb-2" role="list" aria-labelledby="kb-crossrefs-label">
                   {crossRefs.map((ref) => (
-                    <div key={ref.id} className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                    <div key={ref.id} role="listitem" className="flex items-center justify-between p-2 rounded-md bg-muted/50">
                       <span className="text-sm truncate">{ref.title}</span>
-                      <Button variant="ghost" size="sm" type="button" onClick={() => handleRemoveLink(ref.id)}>
+                      <Button variant="ghost" size="sm" type="button" onClick={() => handleRemoveLink(ref.id)} aria-label={`Ta bort koppling till ${ref.title}`}>
                         <X className="w-4 h-4" />
                       </Button>
                     </div>
@@ -362,7 +366,7 @@ const KBArticleForm = () => {
               )}
               <Popover open={linkPickerOpen} onOpenChange={setLinkPickerOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" type="button">
+                  <Button variant="outline" size="sm" type="button" aria-labelledby="kb-crossrefs-label">
                     Lägg till koppling
                   </Button>
                 </PopoverTrigger>
@@ -398,13 +402,15 @@ const KBArticleForm = () => {
           )}
 
           <div className="space-y-2">
-            <Label>Innehåll</Label>
-            <RichTextEditor
-              value={content}
-              onChange={setContent}
-              placeholder="Skriv artikelns innehåll..."
-              minHeight="300px"
-            />
+            <Label id="kb-content-label">Innehåll</Label>
+            <div role="group" aria-labelledby="kb-content-label">
+              <RichTextEditor
+                value={content}
+                onChange={setContent}
+                placeholder="Skriv artikelns innehåll..."
+                minHeight="300px"
+              />
+            </div>
           </div>
 
           <div className="flex gap-3 justify-end pt-2">
