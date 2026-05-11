@@ -27,12 +27,34 @@ export default tseslint.config(
       "@typescript-eslint/no-require-imports": "off",
       "@typescript-eslint/no-empty-object-type": "off",
       "@typescript-eslint/no-namespace": "off",
+      // Tvinga alla /api-anrop genom api.request() så CSRF, auth-header och
+      // refresh-retry hanteras enhetligt. Raw fetch missar dessa och har gett
+      // 403 (saknad CSRF-token) i prod.
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.name='fetch'] > Literal[value=/^\\/api/]",
+          message: "Använd api.request() (eller en api.* metod) istället för raw fetch mot /api — så får anropet CSRF-token, auth-header och refresh-retry automatiskt.",
+        },
+        {
+          selector: "CallExpression[callee.name='fetch'] TemplateLiteral Identifier[name='API_BASE_URL']",
+          message: "Använd api.request() (eller en api.* metod) istället för raw fetch mot ${API_BASE_URL} — så får anropet CSRF-token, auth-header och refresh-retry automatiskt.",
+        },
+      ],
     },
   },
   {
     files: ["src/components/ui/**/*.{ts,tsx}", "src/contexts/**/*.{ts,tsx}"],
     rules: {
       "react-refresh/only-export-components": "off",
+    },
+  },
+  {
+    // api.ts implementerar request()-wrappern och behöver raw fetch internt.
+    // secureFileAccess.ts anropar /auth/refresh som är CSRF-exempt.
+    files: ["src/lib/api.ts", "src/lib/secureFileAccess.ts"],
+    rules: {
+      "no-restricted-syntax": "off",
     },
   },
 );
