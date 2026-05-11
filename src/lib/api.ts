@@ -6,6 +6,7 @@ interface ApiOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   headers?: Record<string, string>;
+  signal?: AbortSignal;
 }
 
 interface PaginatedResponse<T> {
@@ -97,7 +98,7 @@ class ApiClient {
   }
 
   async request<T>(endpoint: string, options: ApiOptions = {}, isRetry = false): Promise<T> {
-    const { method = 'GET', body, headers = {} } = options;
+    const { method = 'GET', body, headers = {}, signal } = options;
 
     let token = this.getToken();
 
@@ -129,6 +130,7 @@ class ApiClient {
       headers: requestHeaders,
       body: body ? JSON.stringify(body) : undefined,
       credentials: 'include', // Required for CSRF cookie to be sent
+      signal,
     });
 
     if (!response.ok) {
@@ -770,6 +772,14 @@ class ApiClient {
   // Checklists
   async getChecklists(ticketId: string) {
     return this.request<ChecklistRow[]>(`/checklists/ticket/${ticketId}`);
+  }
+
+  async getChecklistProgress(ticketIds: string[], signal?: AbortSignal) {
+    return this.request<Record<string, { total: number; completed: number }>>('/checklists/progress', {
+      method: 'POST',
+      body: { ticketIds },
+      signal,
+    });
   }
 
   async createChecklistItem(ticketId: string, label: string, options?: { parent_id?: string | null; due_date?: string | null }) {

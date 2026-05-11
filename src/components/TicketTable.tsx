@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { Progress } from '@/components/ui/progress';
 import { useCategories } from '@/hooks/useCategories';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { api } from '@/lib/api';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -29,8 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 interface ChecklistProgress {
   ticketId: string;
@@ -111,18 +110,8 @@ export const TicketTable = memo(function TicketTable({
       if (ticketIds.length === 0) return;
 
       try {
-        const response = await fetch(`${API_BASE_URL}/checklists/progress`, {
-          method: 'POST',
-          signal,
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ ticketIds }),
-        });
-
-        if (response.ok && !signal.aborted) {
-          const data = await response.json() as Record<string, { total: number; completed: number }>;
+        const data = await api.getChecklistProgress(ticketIds, signal);
+        if (!signal.aborted) {
           setChecklistProgress(
             Object.entries(data).map(([ticketId, stats]) => ({
               ticketId,
