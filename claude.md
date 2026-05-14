@@ -2,33 +2,34 @@
 
 ## Project Overview
 
-**IT-Ticket** är ett ärendehanteringssystem byggt för enskild användare (Anton) på Prefabmästarna. Systemet används för att:
-- Skapa och hantera IT-ärenden
-- Arkivera lösningar för framtida referens
-- Skicka ut instruktioner och lösningar
+**IT-Ticket** är ett ärendehanteringssystem positionerat som open source-alternativ till Jira/Freshdesk för IT-konsulter. Drivs i prod på Prefabmästarna men byggs som generell produkt (multi-user med roller, API-nycklar, webhooks, mail-to-ticket, AI-features, fakturering, SLA).
 
-Single-user system — ingen annan har tillgång.
+Affärsmodell: open source + betald support/managed hosting. Ingen multi-tenancy — en instans per deployment.
 
 ## Tech Stack
 
 | Lager | Teknologi |
 |-------|-----------|
-| Frontend | React, TypeScript, Vite, Tailwind CSS, shadcn/ui |
-| Backend | Node.js, Express, TypeScript |
-| Databas | SQLite |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Framer Motion, TipTap, @tanstack/react-query |
+| Backend | Node.js, Express 4, TypeScript |
+| Databas | SQLite via better-sqlite3, FTS5 contentless för fulltext |
+| AI | Anthropic Claude SDK (deflection, draft, summary, kategorisering) |
+| Mail | ImapFlow + @azure/msal-node (M365 OAuth2 client credentials) |
+| Auth | JWT access tokens (15 min) + rolling refresh tokens, API-nycklar (SHA-256), CSRF (csrf-csrf), webhooks HMAC-signerade |
 | PWA | vite-plugin-pwa med Workbox |
 
 ## Infrastruktur & Hosting
 
-- **Host**: Proxmox-server med Docker via Portainer
+- **Host**: Proxmox-server med Docker via Portainer (stack `it-ticket-system`, id 39)
 - **Git**: [GitHub — Antonk123/it-system](https://github.com/Antonk123/it-system)
+- **Server-SSH**: `ssh root@10.38.195.180`, repo på `/opt/it-system/itticket-main`
 
 ### Miljöer
 
 | Miljö | URL | Syfte |
 |-------|-----|-------|
 | **Prod** | `https://ticket.prefabmastarna.se` | Live-system |
-| **Dev** | `http://10.38.195.180:5174/` | Testmiljö på servern |
+| **Dev** | `http://10.38.195.180:5174/` | Hot-reload-miljö på servern (bara `git pull` behövs) |
 | **Lokal** | `localhost` via `docker-compose.local.yml` | Lokal dev för att testa innan push |
 
 ### Portar
@@ -37,78 +38,37 @@ Single-user system — ingen annan har tillgång.
 |--------|-------------|-------------|
 | Backend (Express API) | 3001 | 3002 |
 | Frontend (nginx/prod) | 80 | 8082 |
-| Frontend (Vite/dev) | 8080 | — |
+| Frontend (Vite/dev) | 5173 | 5174 |
+
+### Kritiska env-vars (prod)
+
+`JWT_SECRET`, `CSRF_SECRET`, `ADMIN_PASSWORD`, `ANTHROPIC_API_KEY`, `VAPID_*`, `SMTP_*`, `IMAP_*` (host/port/user/secure/poll, samt OAuth: `IMAP_TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`).
+
+Backend `process.exit(1)` om `CSRF_SECRET` eller `JWT_SECRET` saknas i prod. Portainer-stack-filen är **separat** från repo-versionen — nya env-rader måste läggas till manuellt i Portainer GUI (se `Projekt/IT-System/lessons.md`).
 
 ## Deployment
 
-Flödet: lokal utveckling → git push → git pull på servern → Docker rebuild.
+Standardflöde: lokal utveckling → push → Anton bygger images via SSH → **Anton redeployar i Portainer**. Claude kör aldrig `docker-compose up`, `docker run` eller container-livscykel-kommandon — det skapar separat stack som krockar med Portainer.
 
 1. Gör ändringar lokalt (testa via `docker-compose.local.yml` vid behov)
 2. `git push` till GitHub
-3. På servern: `git pull`
-4. Bygg Docker-images:
+3. SSH till servern: `ssh root@10.38.195.180`
+4. `cd /opt/it-system/itticket-main && git pull`
+5. Bygg bara nödvändiga images (identifiera om ändring är frontend/backend/båda):
    - Backend: `docker build -t it-ticketing-backend:latest -f Dockerfile.server .`
    - Frontend: `docker build -t it-ticketing-frontend:latest -f Dockerfile.client .`
-5. Starta om via Portainer eller `docker restart`
+6. Anton redeployar via Portainer
 
-## Core Principles
+**Dev-miljön** kräver bara `git pull` — Dockerfile.dev.client kör Vite i watch-mode, ingen rebuild behövs.
 
-- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
-- **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
-- **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+## Projektspecifika regler
 
-## Task Management
-
-1. **Plan First**: Use plan mode or GSD workflows for non-trivial tasks.
-2. **Verify Plan**: Check in before starting implementation.
-3. **Track Progress**: Mark items complete as you go.
-4. **Explain Changes**: High-level summary at each step.
-5. **Document Results**: Document to Obsidian vault (see global CLAUDE.md).
-6. **Capture Lessons**: Document lärdomar i Obsidian (`Projekt/IT-System/lessons.md`).
-
-## Working Rules
-
-### 1. Plan Mode Default
-
-- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions).
-- If something goes sideways, STOP and re-plan immediately — don't keep pushing.
-- Use plan mode for verification steps, not just building.
-- Write detailed specs upfront to reduce ambiguity.
-
-### 2. Subagent Strategy
-
-- Use subagents liberally to keep main context window clean.
-- Offload research, exploration, and parallel analysis to subagents.
-- For complex problems, throw more compute at it via subagents.
-- One task per subagent for focused execution.
-
-### 3. Self-Improvement Loop
-
-- After ANY correction from the user: document the pattern in Obsidian (`Projekt/IT-System/lessons.md`).
-- Write rules for yourself that prevent the same mistake.
-- Ruthlessly iterate on these lessons until mistake rate drops.
-- Review lessons at session start for relevant project.
-
-### 4. Verification Before Done
-
-- Never mark a task complete without proving it works.
-- Diff behavior between main and your changes when relevant.
-- Ask yourself: "Would a staff engineer approve this?"
-- Run tests, check logs, demonstrate correctness.
-
-### 5. Demand Elegance (Balanced)
-
-- For non-trivial changes: pause and ask "is there a more elegant way?"
-- If a fix feels hacky: "Knowing everything I know now, implement the elegant solution."
-- Skip this for simple, obvious fixes — don't over-engineer.
-- Challenge your own work before presenting it.
-
-### 6. Autonomous Bug Fixing
-
-- When given a bug report: just fix it. Don't ask for hand-holding.
-- Point at logs, errors, failing tests — then resolve them.
-- Zero context switching required from the user.
-- Go fix failing CI tests without being told how.
+- Husky pre-commit kör lint-staged. Skippa aldrig `--no-verify`.
+- ESLint `no-restricted-syntax` blockerar raw `fetch('/api/...')` — alla mutating-anrop ska gå via `api.request()` i `src/lib/api.ts` (för CSRF-token + auth-header + 401-refresh).
+- DB-migrations måste in i `migrations.ts`-arrayen (`runMigrations()` i `initializeDatabase()`). Standalone `npx tsx`-scripts körs inte vid serverstart.
+- Dokumentera lärdomar i Obsidian: `Projekt/IT-System/lessons.md`
+- Obsidian-dokumentation i övrigt: se `Projekt/IT-System/` i vaultet
+- Generella arbetsregler (plan mode, verifiering, subagenter, kvalitet) ärvs från `~/.claude/CLAUDE.md`
 
 ## Frontend Aesthetics
 
