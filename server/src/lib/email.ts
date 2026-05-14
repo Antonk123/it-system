@@ -71,10 +71,10 @@ const getStatusStyle = (status: string): { bg: string; text: string; dot: string
 
 const getPriorityStyle = (priority: string): { bg: string; text: string; dot: string } => {
   const styles: Record<string, { bg: string; text: string; dot: string }> = {
-    low:    { bg: '#f0fdf4', text: '#166534', dot: '#22c55e' },
-    medium: { bg: '#fefce8', text: '#854d0e', dot: '#eab308' },
-    high:   { bg: '#fff7ed', text: '#9a3412', dot: '#f97316' },
-    urgent: { bg: '#fef2f2', text: '#991b1b', dot: '#ef4444' },
+    low:      { bg: '#f0fdf4', text: '#166534', dot: '#22c55e' },
+    medium:   { bg: '#fefce8', text: '#854d0e', dot: '#eab308' },
+    high:     { bg: '#fff7ed', text: '#9a3412', dot: '#f97316' },
+    critical: { bg: '#fef2f2', text: '#991b1b', dot: '#ef4444' },
   };
   return styles[priority] || { bg: '#f8fafc', text: '#64748b', dot: '#94a3b8' };
 };
@@ -95,7 +95,7 @@ const getPriorityLabel = (priority: string): string => {
     low: 'Låg',
     medium: 'Medium',
     high: 'Hög',
-    urgent: 'Akut',
+    critical: 'Kritisk',
   };
   return labels[priority] || priority;
 };

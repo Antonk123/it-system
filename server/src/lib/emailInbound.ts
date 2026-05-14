@@ -93,12 +93,22 @@ function findTicketByShortId(subject: string): { id: string } | undefined {
     .get(shortId) as { id: string } | undefined;
 }
 
-function findTicketBySubject(subject: string): { id: string } | undefined {
+function findTicketBySubject(subject: string, fromAddress: string): { id: string } | undefined {
   const stripped = stripReplyPrefix(subject);
   if (!stripped) return undefined;
+  // Require the sender to match the ticket's requester. Without this guard,
+  // any external sender replying "Re: <existing title>" would have their
+  // email body attached as a public comment to someone else's ticket.
   return db
-    .prepare('SELECT id FROM tickets WHERE title = ? AND status NOT IN (\'closed\') ORDER BY created_at DESC LIMIT 1')
-    .get(stripped) as { id: string } | undefined;
+    .prepare(`
+      SELECT t.id FROM tickets t
+      JOIN contacts c ON c.id = t.requester_id
+      WHERE t.title = ?
+        AND LOWER(c.email) = LOWER(?)
+        AND t.status NOT IN ('closed')
+      ORDER BY t.created_at DESC LIMIT 1
+    `)
+    .get(stripped, fromAddress) as { id: string } | undefined;
 }
 
 function resolveOrCreateContact(fromAddress: string, fromName: string, autoCreate: boolean) {
@@ -194,7 +204,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
   }
 
   if (!existingTicket && /^(Re|Sv|Fwd|Fw|VS)\s*:/i.test(subject)) {
-    existingTicket = findTicketBySubject(subject);
+    existingTicket = findTicketBySubject(subject, fromAddress);
   }
 
   if (existingTicket) {
@@ -307,7 +317,7 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
   }
 }
 
-let pollingTimer: ReturnType<typeof setInterval> | null = null;
+let pollingTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function getEmailInboundStatus() {
   const configured = !!(
@@ -418,13 +428,37 @@ export async function startEmailPolling(): Promise<void> {
     }
   }
 
+  // Recursive setTimeout instead of setInterval prevents overlapping polls when
+  // an IMAP fetch takes longer than the configured interval (mailbox lock, slow
+  // network). Each new poll starts only after the previous one resolves.
+  const intervalMs = config.pollingInterval * 1000;
+  let stopped = false;
+
+  const scheduleNext = () => {
+    if (stopped) return;
+    pollingTimer = setTimeout(async () => {
+      await poll();
+      scheduleNext();
+    }, intervalMs);
+  };
+
   await poll();
-  pollingTimer = setInterval(poll, config.pollingInterval * 1000);
+  scheduleNext();
+
+  stopPolling = () => {
+    stopped = true;
+    if (pollingTimer) {
+      clearTimeout(pollingTimer);
+      pollingTimer = null;
+    }
+  };
 }
 
+let stopPolling: (() => void) | null = null;
+
 export function stopEmailPolling(): void {
-  if (pollingTimer) {
-    clearInterval(pollingTimer);
-    pollingTimer = null;
+  if (stopPolling) {
+    stopPolling();
+    stopPolling = null;
   }
 }

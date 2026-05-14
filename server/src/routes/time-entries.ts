@@ -58,6 +58,13 @@ router.post('/:ticketId', authenticate, (req: AuthRequest, res) => {
 
   const noteValue = (note as string | null | undefined) ?? null;
 
+  // Verify ticket exists so we return 404 instead of a generic 500 from FK violation.
+  const ticketExists = db.prepare('SELECT 1 FROM tickets WHERE id = ?').get(ticketId);
+  if (!ticketExists) {
+    res.status(404).json({ error: 'Ticket not found' });
+    return;
+  }
+
   const id = randomUUID();
   db.prepare(`
     INSERT INTO time_entries (id, ticket_id, duration_minutes, note)

@@ -4,10 +4,15 @@ import { TAG_RULES, PRIORITY_RULES } from '../config/automation.js';
 
 // ─── Auto-tag ─────────────────────────────────────────────────────────────────
 
-/** Word-boundary match: ensures "office" doesn't match "backoffice" */
+/**
+ * Word-boundary match using Unicode-aware lookarounds.
+ * JS `\b` is ASCII-only, so it misclassifies Swedish words like "är" or
+ * "lösenord" when surrounded by non-ASCII letters. Using \p{L}/\p{N} matches
+ * letters/numbers across Unicode categories.
+ */
 function matchesWord(text: string, keyword: string): boolean {
   const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
+  return new RegExp(`(?<![\\p{L}\\p{N}])${escaped}(?![\\p{L}\\p{N}])`, 'iu').test(text);
 }
 
 /**
@@ -52,11 +57,13 @@ export function detectAutoPriority(
   title: string,
   description: string
 ): 'low' | 'medium' | 'high' | 'critical' | null {
-  const text = `${title} ${description}`.toLowerCase();
+  const text = `${title} ${description}`;
 
   for (const rule of PRIORITY_RULES) {
     for (const keyword of rule.keywords) {
-      if (text.includes(keyword.toLowerCase())) {
+      // Word-boundary match keeps "password" from triggering inside "passwordless"
+      // and matches the auto-tag behavior in matchesWord above.
+      if (matchesWord(text, keyword)) {
         console.log(`⚡ Auto-priority: keyword "${keyword}" → ${rule.priority}`);
         return rule.priority;
       }
