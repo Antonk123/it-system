@@ -381,17 +381,25 @@ export async function startEmailPolling(): Promise<void> {
       const lock = await client.getMailboxLock('INBOX');
 
       try {
-        const messages = client.fetch('1:*', { source: true, envelope: true, uid: true });
+        const uids = await client.search({ all: true }, { uid: true });
         const processedMsgUids: number[] = [];
 
-        for await (const message of messages) {
-          if (connectionDead) break;
-          try {
-            if (!message.source) continue;
-            await processEmail(message.source, currentConfig);
-            processedMsgUids.push(message.uid);
-          } catch (error) {
-            console.error('[email-inbound] Error processing email:', error);
+        if (uids && uids.length > 0) {
+          const messages = client.fetch(
+            uids,
+            { source: true, envelope: true, uid: true },
+            { uid: true }
+          );
+
+          for await (const message of messages) {
+            if (connectionDead) break;
+            try {
+              if (!message.source) continue;
+              await processEmail(message.source, currentConfig);
+              processedMsgUids.push(message.uid);
+            } catch (error) {
+              console.error('[email-inbound] Error processing email:', error);
+            }
           }
         }
 
