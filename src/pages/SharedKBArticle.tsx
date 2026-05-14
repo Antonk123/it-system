@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { BookOpen, Folder, AlertCircle, Calendar } from 'lucide-react';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
+import { KBImageLightbox } from '@/components/KBImageLightbox';
 import { api, KbArticleRow } from '@/lib/api';
 
 const SharedKBArticle = () => {
@@ -9,6 +10,7 @@ const SharedKBArticle = () => {
   const [article, setArticle] = useState<KbArticleRow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!token) { setError('Ingen länk angiven'); setIsLoading(false); return; }
@@ -105,8 +107,9 @@ const SharedKBArticle = () => {
         {/* Article body */}
         <main className="max-w-3xl mx-auto px-6 py-12">
           {article.content ? (
-            <div className="kb-prose">
+            <div ref={contentRef} className="kb-prose">
               <HtmlRenderer content={article.content} />
+              <KBImageLightbox containerRef={contentRef} contentKey={article.id} />
             </div>
           ) : (
             <p className="text-muted-foreground italic text-sm">Inget innehåll ännu.</p>

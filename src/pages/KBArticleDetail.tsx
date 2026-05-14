@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
+import { KBImageLightbox } from '@/components/KBImageLightbox';
 import { api, KbArticleRow, LinkedTicketRow, LinkedArticleRow } from '@/lib/api';
 import { addRecentlyViewedKB } from '@/lib/recentlyViewed';
 import { toast } from 'sonner';
@@ -372,7 +373,10 @@ const KBArticleDetail = () => {
             {/* Article content */}
             <div ref={contentRef} className="prose-wrapper border border-border rounded-lg p-5 bg-card min-h-[200px]">
               {article.content ? (
-                <HtmlRenderer content={article.content} />
+                <>
+                  <HtmlRenderer content={article.content} />
+                  <KBImageLightbox containerRef={contentRef} contentKey={article.id} />
+                </>
               ) : (
                 <p className="text-muted-foreground text-sm italic">Inget innehåll ännu.</p>
               )}
