@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle, Upload } from 'lucide-react';
 import { Layout } from '@/components/Layout';
+import { KBImportDialog } from '@/components/KBImportDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -75,6 +76,9 @@ const KnowledgeBase = () => {
       return next;
     }, { replace: true });
   }, [setSearchParams]);
+
+  // Import dialog state
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   // Category management state
   const [showCategoryManager, setShowCategoryManager] = useState(false);
@@ -384,13 +388,23 @@ const KnowledgeBase = () => {
                   <p className="text-sm text-muted-foreground">{articles.length} artiklar</p>
                 </div>
               </div>
-              <Button
-                onClick={() => navigate(`/kb/new${selectedCategoryId ? `?category=${selectedCategoryId}` : ''}`)}
-                size="sm"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Ny artikel
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowImportDialog(true)}
+                  size="sm"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Importera
+                </Button>
+                <Button
+                  onClick={() => navigate(`/kb/new${selectedCategoryId ? `?category=${selectedCategoryId}` : ''}`)}
+                  size="sm"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Ny artikel
+                </Button>
+              </div>
             </div>
 
             {/* Filters */}
@@ -540,6 +554,12 @@ const KnowledgeBase = () => {
           </div>
         </main>
       </div>
+      <KBImportDialog
+        open={showImportDialog}
+        onOpenChange={setShowImportDialog}
+        defaultCategoryId={selectedCategoryId}
+        onImported={fetchArticles}
+      />
     </Layout>
   );
 };
