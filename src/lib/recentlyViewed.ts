@@ -2,6 +2,19 @@ const RECENT_TICKETS_KEY = 'recently_viewed_tickets';
 const RECENT_KB_KEY = 'recently_viewed_kb';
 const MAX_RECENT = 5;
 
+/**
+ * Clears all per-user recently-viewed lists. Called on logout so a subsequent
+ * sign-in on the same browser doesn't surface the previous user's items.
+ */
+export function clearRecentlyViewed(): void {
+  try {
+    localStorage.removeItem(RECENT_TICKETS_KEY);
+    localStorage.removeItem(RECENT_KB_KEY);
+  } catch {
+    // localStorage may be unavailable; silently ignore
+  }
+}
+
 export interface RecentItem {
   id: string;
   title: string;

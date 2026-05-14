@@ -28,11 +28,15 @@ export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
   const [isSearching, setIsSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const contactsCacheRef = useRef<ContactRow[] | null>(null);
+  // Guards against stale in-flight requests clobbering newer results when the
+  // user types fast or clears the input mid-fetch.
+  const latestQueryRef = useRef('');
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     const term = search.trim();
+    latestQueryRef.current = term;
 
     if (!term) {
       setResults([]);
@@ -53,6 +57,10 @@ export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
           api.getKbArticles({ search: term }),
           contactsPromise,
         ]);
+
+        // If the user changed the query while this fetch was in flight,
+        // discard the stale result.
+        if (latestQueryRef.current !== term) return;
 
         contactsCacheRef.current = contacts;
 
@@ -89,9 +97,9 @@ export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
 
         setResults([...ticketResults, ...contactResults, ...kbResults]);
       } catch {
-        setResults([]);
+        if (latestQueryRef.current === term) setResults([]);
       } finally {
-        setIsSearching(false);
+        if (latestQueryRef.current === term) setIsSearching(false);
       }
     }, 250);
 

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -69,13 +69,19 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const searchHook = useCommandPaletteSearch();
   const { results, isSearching, search, setSearch } = searchHook;
 
-  // Load recently viewed items (merged and sorted by visitedAt desc, top 5)
-  const recentItems = useMemo((): (RecentItem & { itemType: 'ticket' | 'kb' })[] => {
+  // Load recently viewed items (merged and sorted by visitedAt desc, top 5).
+  // Reads localStorage on every open so newly-viewed items appear without
+  // remounting. Stored in state because localStorage reads are side-effecting.
+  const [recentItems, setRecentItems] = useState<(RecentItem & { itemType: 'ticket' | 'kb' })[]>([]);
+  useEffect(() => {
+    if (!open) return;
     const tickets = getRecentlyViewedTickets().map(item => ({ ...item, itemType: 'ticket' as const }));
     const kb = getRecentlyViewedKB().map(item => ({ ...item, itemType: 'kb' as const }));
-    return [...tickets, ...kb]
-      .sort((a, b) => b.visitedAt - a.visitedAt)
-      .slice(0, 5);
+    setRecentItems(
+      [...tickets, ...kb]
+        .sort((a, b) => b.visitedAt - a.visitedAt)
+        .slice(0, 5)
+    );
   }, [open]);
 
   // Filter nav items by search term when searching

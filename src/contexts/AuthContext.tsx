@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { api, AuthUser } from '@/lib/api';
+import { clearRecentlyViewed } from '@/lib/recentlyViewed';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -52,6 +53,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signOut = useCallback(async () => {
     await api.logout();
+    clearRecentlyViewed();
     setUser(null);
   }, []);
 
