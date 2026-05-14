@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import * as XLSX from 'xlsx';
 import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail } from '../lib/email.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
 import { writeRateLimiter } from '../middleware/rateLimit.js';
 import { dispatchWebhook } from '../lib/webhookDispatcher.js';
@@ -1552,8 +1552,8 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
   }
 });
 
-// Bulk delete tickets permanently
-router.post('/bulk-delete', writeRateLimiter, authenticate, (req: AuthRequest, res: Response) => {
+// Bulk delete tickets permanently — admin-only to prevent mass data loss
+router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { ids } = req.body;
 
   if (!Array.isArray(ids) || ids.length === 0) {
@@ -1851,106 +1851,6 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
   } catch (error) {
     console.error('Error deleting ticket:', error);
     res.status(500).json({ error: 'Failed to delete ticket' });
-  }
-});
-
-// ===== TAGS ENDPOINTS =====
-
-// Get all tags
-router.get('/tags', authenticate, (req: AuthRequest, res: Response) => {
-  try {
-    const tags = db.prepare('SELECT id, name, color, created_at FROM tags ORDER BY name').all();
-
-    const formattedTags = tags.map((tag: any) => ({
-      id: tag.id,
-      name: tag.name,
-      color: tag.color,
-      createdAt: new Date(tag.created_at),
-    }));
-
-    res.json(formattedTags);
-  } catch (error) {
-    console.error('Error fetching tags:', error);
-    res.status(500).json({ error: 'Failed to fetch tags' });
-  }
-});
-
-// Create new tag
-router.post('/tags', authenticate, (req: AuthRequest, res: Response) => {
-  try {
-    const { name, color } = req.body;
-
-    if (!name) {
-      return res.status(400).json({ error: 'Tag name is required' });
-    }
-
-    const id = uuidv4();
-    const tagColor = color || '#3b82f6';
-
-    db.prepare('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)').run(id, name, tagColor);
-
-    res.json({
-      id,
-      name,
-      color: tagColor,
-      createdAt: new Date(),
-    });
-  } catch (error: any) {
-    if (error.message?.includes('UNIQUE constraint failed')) {
-      return res.status(409).json({ error: 'Tag with this name already exists' });
-    }
-    console.error('Error creating tag:', error);
-    res.status(500).json({ error: 'Failed to create tag' });
-  }
-});
-
-// Update tag
-router.put('/tags/:id', authenticate, (req: AuthRequest, res: Response) => {
-  try {
-    const { name, color } = req.body;
-
-    const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(req.params.id) as { id: string; name: string; color: string; created_at: string } | undefined;
-    if (!tag) {
-      return res.status(404).json({ error: 'Tag not found' });
-    }
-
-    const updatedName = name || tag.name;
-    const updatedColor = color || tag.color;
-
-    db.prepare('UPDATE tags SET name = ?, color = ? WHERE id = ?').run(
-      updatedName,
-      updatedColor,
-      req.params.id
-    );
-
-    res.json({
-      id: req.params.id,
-      name: updatedName,
-      color: updatedColor,
-      createdAt: tag.created_at,
-    });
-  } catch (error: any) {
-    if (error.message?.includes('UNIQUE constraint failed')) {
-      return res.status(409).json({ error: 'Tag with this name already exists' });
-    }
-    console.error('Error updating tag:', error);
-    res.status(500).json({ error: 'Failed to update tag' });
-  }
-});
-
-// Delete tag
-router.delete('/tags/:id', authenticate, (req: AuthRequest, res: Response) => {
-  try {
-    const result = db.prepare('DELETE FROM tags WHERE id = ?').run(req.params.id);
-
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Tag not found' });
-    }
-
-    res.json({ message: 'Tag deleted' });
-  } catch (error) {
-    console.error('Error deleting tag:', error);
-    res.status(500).json({ error: 'Failed to delete tag' });
   }
 });
 

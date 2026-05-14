@@ -46,8 +46,10 @@ const PORT = process.env.PORT || 3001;
 
 // Trust proxy - CRITICAL for correct IP detection behind nginx reverse proxy
 // Without this, req.ip will be the proxy's IP, not the client's IP
-// This affects rate limiting and logging
-app.set('trust proxy', true);
+// This affects rate limiting and logging.
+// One hop: nginx -> express. Trusting 'true' (all hops) lets a misconfigured
+// chain spoof X-Forwarded-For and bypass rate limiting.
+app.set('trust proxy', 1);
 
 // Initialize database
 initializeDatabase();
@@ -136,7 +138,7 @@ app.use(cors({
     } else {
       console.error(`❌ CORS blocked: Origin '${origin}' not in allowed list.`);
       console.error(`   Allowed origins: ${allowedOrigins.join(', ')}`);
-      callback(new Error('Not allowed by CORS'));
+      callback(null, false);
     }
   },
   credentials: true,
@@ -148,6 +150,11 @@ app.use(passport.initialize());
 // CSRF protection (Double Submit Cookie Pattern via csrf-csrf)
 // Protects all state-changing endpoints (POST, PUT, PATCH, DELETE) under /api
 // Exempt: /api/auth/login and /api/auth/refresh (authenticate with credentials, not cookies)
+if (process.env.NODE_ENV === 'production' && !process.env.CSRF_SECRET) {
+  console.error('FATAL: CSRF_SECRET must be set in production');
+  process.exit(1);
+}
+
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getSecret: () => process.env.CSRF_SECRET || 'csrf-dev-secret-change-in-production',
   // Use the Authorization header as session identifier so each JWT session gets its own CSRF token
@@ -171,11 +178,13 @@ const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
   getCsrfTokenFromRequest: (req) => req.headers['x-csrf-token'] as string,
 });
 
-// Paths exempt from CSRF validation (authenticate by credentials, not session cookies)
-const csrfExemptPaths = new Set(['/api/auth/login', '/api/auth/refresh']);
+// Paths exempt from CSRF validation
+// - /api/auth/* — authenticate by credentials, not session cookies
+// - /api/public/* — credentialless endpoints for the unauthenticated public ticket form
+const csrfExemptPrefixes = ['/api/auth/login', '/api/auth/refresh', '/api/public/'];
 
 const conditionalCsrf = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if (csrfExemptPaths.has(req.path)) return next();
+  if (csrfExemptPrefixes.some((p) => req.path === p || req.path.startsWith(p))) return next();
   doubleCsrfProtection(req, res, next);
 };
 
@@ -232,10 +241,26 @@ app.use((err: Error & { status?: number; code?: string }, _req: express.Request,
 });
 
 // Start server
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`API available at http://localhost:${PORT}/api`);
 
   // Start email-to-ticket polling (non-blocking — logs its own errors)
   startEmailPolling().catch(console.error);
 });
+
+// Graceful shutdown so SQLite WAL checkpoints cleanly on container stop.
+import { stopEmailPolling } from './lib/emailInbound.js';
+import { closeDatabase } from './db/connection.js';
+const gracefulShutdown = (signal: string) => {
+  console.log(`Received ${signal}, shutting down gracefully...`);
+  stopEmailPolling();
+  server.close(() => {
+    try { closeDatabase(); } catch (err) { console.error('Error closing DB:', err); }
+    process.exit(0);
+  });
+  // Hard exit if cleanup hangs
+  setTimeout(() => process.exit(1), 10000).unref();
+};
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

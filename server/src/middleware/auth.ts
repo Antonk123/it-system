@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction, RequestHandler } from 'express';
-import { createHash } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 import passport from 'passport';
 import { db } from '../db/connection.js';
 
@@ -30,24 +30,37 @@ function tryApiKeyAuth(req: Request): AuthUser | null {
   const prefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
 
   const row = db.prepare(
-    'SELECT id, key_hash, user_id, expires_at FROM api_keys WHERE key_prefix = ?'
-  ).get(prefix) as { id: string; key_hash: string; user_id: string; expires_at: string | null } | undefined;
+    'SELECT id, key_hash, user_id, expires_at, last_used_at FROM api_keys WHERE key_prefix = ?'
+  ).get(prefix) as { id: string; key_hash: string; user_id: string; expires_at: string | null; last_used_at: string | null } | undefined;
 
   if (!row) return null;
 
   // Check expiry
   if (row.expires_at && new Date(row.expires_at) < new Date()) return null;
 
-  // Verify hash
+  // Verify hash with constant-time compare to avoid timing leaks.
   const hash = createHash('sha256').update(rawKey).digest('hex');
-  if (hash !== row.key_hash) return null;
+  let hashBuf: Buffer;
+  let rowBuf: Buffer;
+  try {
+    hashBuf = Buffer.from(hash, 'hex');
+    rowBuf = Buffer.from(row.key_hash, 'hex');
+  } catch {
+    return null;
+  }
+  if (hashBuf.length !== rowBuf.length || !timingSafeEqual(hashBuf, rowBuf)) return null;
 
   // Look up user
   const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(row.user_id) as AuthUser | undefined;
   if (!user) return null;
 
-  // Update last_used_at (fire-and-forget)
-  db.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(new Date().toISOString(), row.id);
+  // Update last_used_at, but throttle: only write if last update was > 5 minutes ago.
+  // Avoids a DB write on every single API-key-authenticated request.
+  const now = Date.now();
+  const lastUsed = row.last_used_at ? Date.parse(row.last_used_at) : 0;
+  if (!lastUsed || now - lastUsed > 5 * 60 * 1000) {
+    db.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(new Date(now).toISOString(), row.id);
+  }
 
   return user;
 }

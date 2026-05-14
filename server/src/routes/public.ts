@@ -4,6 +4,7 @@ import { db } from '../db/connection.js';
 import { sendTicketCreatedEmail } from '../lib/email.js';
 import { aiEnabled, suggestSolutionFromKB, findRelevantKbArticles } from '../lib/aiHelper.js';
 import { stripHtml } from '../lib/htmlUtils.js';
+import { publicWriteRateLimiter, publicAiRateLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
 
@@ -67,7 +68,7 @@ router.get('/categories', (_req: Request, res: Response) => {
 });
 
 // Submit public ticket
-router.post('/tickets', (req: Request, res: Response) => {
+router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) => {
   const { name, email, title, description, category, priority, customFields, template_id } = req.body;
 
   // Validate required fields
@@ -193,7 +194,7 @@ router.post('/tickets', (req: Request, res: Response) => {
  * Body: { problemText: string, userEmail?: string }
  * Svar: { deflectionId, hasSolution, solution, confidence, kbReferences }
  */
-router.post('/ai-suggest', (req: Request, res: Response) => {
+router.post('/ai-suggest', publicAiRateLimiter, (req: Request, res: Response) => {
   const { problemText, userEmail } = req.body as { problemText?: string; userEmail?: string };
 
   if (!problemText || typeof problemText !== 'string' || problemText.trim().length < 10) {
@@ -272,7 +273,7 @@ router.post('/ai-suggest', (req: Request, res: Response) => {
  * 'solved'   = användaren markerade att förslaget löste problemet (DEFLECTION!)
  * 'rejected' = användaren gick vidare och skapade ärende ändå
  */
-router.patch('/ai-suggest/:id', (req: Request, res: Response) => {
+router.patch('/ai-suggest/:id', publicWriteRateLimiter, (req: Request, res: Response) => {
   const { outcome, ticketId } = req.body as { outcome?: string; ticketId?: string };
   if (!outcome || !['solved', 'rejected'].includes(outcome)) {
     return res.status(400).json({ error: 'outcome måste vara "solved" eller "rejected"' });

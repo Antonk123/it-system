@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { db } from '../db/connection.js';
 import archiver from 'archiver';
 import { join, dirname } from 'path';
@@ -30,7 +30,7 @@ const upload = multer({
 
 const router = Router();
 
-router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   const tmpFile = join(tmpdir(), `backup-${randomUUID()}.sqlite`);
 
   try {
@@ -72,7 +72,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.post('/restore', authenticate, upload.single('file'), async (req: AuthRequest, res: Response) => {
+router.post('/restore', authenticate, requireAdmin, upload.single('file'), async (req: AuthRequest, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Ingen fil skickades. Ladda upp en backup-ZIP.' });
   }

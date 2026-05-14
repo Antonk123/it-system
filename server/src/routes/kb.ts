@@ -610,11 +610,18 @@ router.post('/upload-image', authenticate, (req: AuthRequest, res: Response) => 
 });
 
 // GET /api/kb/images/:filename — serve KB image (public, KB articles can be shared publicly)
+// Only files written by uploadImage.storage are served (prefix kb-, see line 29).
+// This prevents an attacker from enumerating ticket-attachment filenames in the
+// shared UPLOAD_DIR and bypassing the authenticated /api/attachments/file/:id route.
 router.get('/images/:filename', (req: Request, res: Response) => {
   const filename = req.params.filename as string;
   // Basic path traversal protection
-  if (filename.includes('..') || filename.includes('/')) {
+  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
     return res.status(400).json({ error: 'Invalid filename' });
+  }
+  // Only serve files written by the KB image upload pipeline (kb- prefix).
+  if (!filename.startsWith('kb-')) {
+    return res.status(404).json({ error: 'Image not found' });
   }
   const filePath = join(UPLOAD_DIR, filename);
   if (!existsSync(filePath)) {

@@ -72,3 +72,22 @@ export const writeRateLimiter = createRateLimiter(
   60 * 1000, // 1 minute
   60 // max 60 requests
 );
+
+/**
+ * Rate limiter for public unauthenticated endpoints (ticket form).
+ * 30 requests per minute per IP — generous enough for legitimate use but
+ * blocks attempts to DoS or fill the DB with bot submissions.
+ */
+export const publicWriteRateLimiter = createRateLimiter(
+  60 * 1000,
+  30
+);
+
+/**
+ * Rate limiter for public AI endpoints. Each call costs a real Anthropic API
+ * request, so we throttle hard: 10 per minute per IP.
+ */
+export const publicAiRateLimiter = createRateLimiter(
+  60 * 1000,
+  10
+);
