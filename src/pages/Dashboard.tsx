@@ -5,6 +5,7 @@ import { Ticket, Clock, CheckCircle, AlertTriangle, ArrowRight, PauseCircle } fr
 import { subDays, isSameDay, format, startOfDay } from 'date-fns';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
+import { useAuth } from '@/contexts/AuthContext';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useUpcomingReminders } from '@/hooks/useUpcomingReminders';
 import { useActivityFeed } from '@/hooks/useActivityFeed';
@@ -51,6 +52,14 @@ function getGreeting(): string {
   return 'God kväll';
 }
 
+function getGreetingName(email: string | undefined): string {
+  if (!email) return '';
+  const prefix = email.split('@')[0];
+  const firstSegment = prefix.split(/[.\-_]/)[0];
+  if (!firstSegment) return '';
+  return firstSegment.charAt(0).toUpperCase() + firstSegment.slice(1);
+}
+
 // ---------------------------------------------------------------------------
 // Dashboard
 // ---------------------------------------------------------------------------
@@ -58,6 +67,8 @@ function getGreeting(): string {
 const Dashboard = () => {
   const { tickets } = useTickets({ limit: 1000, status: 'all' });
   const { users, getUserById } = useUsers();
+  const { user } = useAuth();
+  const greetingName = getGreetingName(user?.email);
   const navigate = useNavigate();
   const { data: dashboardOverview, isLoading: isOverviewLoading } = useDashboardOverview();
   const { data: upcomingReminders, isLoading: isRemindersLoading } = useUpcomingReminders();
@@ -140,7 +151,11 @@ const Dashboard = () => {
           transition={{ duration: 0.3 }}
         >
           <h1 className="text-2xl md:text-[30px] font-bold tracking-tight text-foreground">
-            {getGreeting()}, <span className="font-serif italic font-medium text-[hsl(var(--accent))]">Anton</span>.
+            {getGreeting()}
+            {greetingName && (
+              <>, <span className="font-serif italic font-medium text-[hsl(var(--accent))]">{greetingName}</span></>
+            )}
+            .
           </h1>
           <p className="text-sm text-muted-foreground mt-1.5">
             Du har{' '}

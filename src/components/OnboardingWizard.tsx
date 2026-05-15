@@ -46,7 +46,13 @@ export function OnboardingWizard() {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) complete();
+        else setOpen(true);
+      }}
+    >
       <DialogContent className="max-w-md">
         {/* Progress dots */}
         <div className="flex justify-center gap-2 mb-2">
