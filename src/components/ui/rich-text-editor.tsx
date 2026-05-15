@@ -275,10 +275,19 @@ export const RichTextEditor = ({
   }, []);
 
   useEffect(() => {
-    if (editor && !isLocalChange.current && !isInserting && value !== editor.getHTML()) {
+    // Stale-closure guard: only sync prop -> editor when we are NOT in the middle
+    // of a local edit. The previous version reset isLocalChange unconditionally
+    // at the end of the effect, which let a follow-up render arriving with a
+    // stale `value` overwrite the user's most recent keystroke (cursor jumped
+    // to end, last character vanished).
+    if (!editor) return;
+    if (isLocalChange.current) {
+      isLocalChange.current = false;
+      return;
+    }
+    if (!isInserting && value !== editor.getHTML()) {
       editor.commands.setContent(value || '');
     }
-    isLocalChange.current = false;
   }, [value, editor, isInserting]);
 
   // Update editable state when disabled prop changes
@@ -366,13 +375,26 @@ export const RichTextEditor = ({
     // Reset input so same files can be re-selected
     e.target.value = '';
     setImageUploading(true);
+    let uploadedCount = 0;
     try {
       for (const file of files) {
+        // Client-side size guard — server enforces 10 MB but we want to avoid
+        // a wasted round-trip and give the user immediate feedback per file.
+        if (file.size > 10 * 1024 * 1024) {
+          toast.error(`${file.name} är större än 10 MB och hoppades över`);
+          continue;
+        }
         const { url } = await api.uploadKbImage(file);
         editor.chain().focus().setImage({ src: url }).run();
+        uploadedCount++;
+      }
+      if (uploadedCount === 0 && files.length > 0) {
+        // Every file was rejected by the size guard — make it explicit.
+        toast.error('Inga bilder kunde laddas upp');
       }
     } catch (err) {
       console.error('KB image upload failed:', err);
+      toast.error('Bildupladdningen misslyckades. Försök igen.');
     } finally {
       setImageUploading(false);
     }
@@ -730,20 +752,37 @@ export const RichTextEditor = ({
         className="sr-only"
         ref={imageInputRef}
         onChange={handleImageFileChange}
+        disabled={imageUploading}
         tabIndex={-1}
         aria-hidden="true"
       />
 
-      {/* Required indicator (hidden input for form validation) */}
+      {/* Required indicator. Browser HTML5-validation focuses an sr-only input
+          (invisible "click here") which felt like a frozen submit button. We
+          intercept onInvalid, scroll the actual editor into view, and focus it
+          so the user understands which field is missing. Parent forms should
+          still surface their own inline error via the `error` prop for clarity. */}
       {required && (
         <input
           type="text"
           value={editor.getText().trim()}
           onChange={() => {}}
           required
-          className="sr-only"
-          tabIndex={-1}
+          onInvalid={(e) => {
+            e.preventDefault();
+            const editorEl = e.currentTarget.previousElementSibling?.previousElementSibling as HTMLElement | null;
+            editorEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            editor.commands.focus();
+          }}
           aria-hidden="true"
+          tabIndex={-1}
+          style={{
+            position: 'absolute',
+            width: '1px',
+            height: '1px',
+            opacity: 0,
+            pointerEvents: 'none',
+          }}
         />
       )}
 
