@@ -8,6 +8,7 @@ import { db } from '../db/connection.js';
 import { JWT_SECRET } from '../config/passport.js';
 import { authenticate, AuthRequest, AuthUser } from '../middleware/auth.js';
 import { loginRateLimiter } from '../middleware/rateLimit.js';
+import { sendPasswordResetEmail } from '../lib/email.js';
 
 const router = Router();
 
@@ -232,6 +233,124 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
   } catch (error) {
     console.error('Error changing password:', error);
     res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// ── Password reset (forgot / reset) ──────────────────────────────────
+
+const RESET_TOKEN_EXPIRY_MINUTES = 60;
+// Generic response — sent regardless of whether the email matches a user, so
+// attackers can't enumerate accounts via this endpoint.
+const FORGOT_GENERIC_RESPONSE = {
+  message: 'Om e-postadressen finns i systemet har en återställningslänk skickats.',
+};
+
+router.post('/forgot-password', loginRateLimiter, async (req: Request, res: Response) => {
+  const { email } = req.body;
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ error: 'E-post krävs' });
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+
+  const user = db.prepare('SELECT id, email, display_name FROM users WHERE LOWER(email) = ?')
+    .get(normalizedEmail) as { id: string; email: string; display_name: string | null } | undefined;
+
+  if (user) {
+    try {
+      const token = crypto.randomBytes(32).toString('hex');
+      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+      const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MINUTES * 60 * 1000).toISOString();
+
+      const issueTokens = db.transaction(() => {
+        // Invalidate previously issued unused tokens for this user — only the latest
+        // request can complete a reset.
+        db.prepare(`UPDATE password_reset_tokens
+                    SET used_at = CURRENT_TIMESTAMP
+                    WHERE user_id = ? AND used_at IS NULL`).run(user.id);
+        db.prepare(`INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at)
+                    VALUES (?, ?, ?, ?)`).run(uuidv4(), user.id, tokenHash, expiresAt);
+      });
+      issueTokens();
+
+      const baseUrl = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
+      if (!baseUrl) {
+        console.warn('[forgot-password] APP_BASE_URL not configured — reset link cannot be built');
+      } else {
+        const resetUrl = `${baseUrl}/reset-password/${token}`;
+        try {
+          await sendPasswordResetEmail({
+            toEmail: user.email,
+            toName: user.display_name || user.email.split('@')[0],
+            resetUrl,
+            expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES,
+          });
+        } catch (err) {
+          console.error('[forgot-password] email send failed:', err);
+        }
+      }
+    } catch (err) {
+      console.error('[forgot-password] token issue failed:', err);
+    }
+  }
+
+  return res.json(FORGOT_GENERIC_RESPONSE);
+});
+
+router.post('/reset-password', loginRateLimiter, async (req: Request, res: Response) => {
+  const { token, newPassword } = req.body;
+
+  if (!token || typeof token !== 'string') {
+    return res.status(400).json({ error: 'Ogiltig återställningslänk' });
+  }
+  if (!newPassword || typeof newPassword !== 'string') {
+    return res.status(400).json({ error: 'Nytt lösenord krävs' });
+  }
+
+  // Same policy as change-password — keep in sync if updated above.
+  const PASSWORD_MIN_LENGTH = 12;
+  const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/;
+  if (newPassword.length < PASSWORD_MIN_LENGTH) {
+    return res.status(400).json({ error: 'Lösenordet måste vara minst 12 tecken långt' });
+  }
+  if (!PASSWORD_REGEX.test(newPassword)) {
+    return res.status(400).json({
+      error: 'Lösenordet måste innehålla minst en stor bokstav, en liten bokstav, en siffra och ett specialtecken (@$!%*?&)',
+    });
+  }
+
+  try {
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const row = db.prepare(`SELECT id, user_id, expires_at, used_at
+                            FROM password_reset_tokens
+                            WHERE token_hash = ?`)
+      .get(tokenHash) as { id: string; user_id: string; expires_at: string; used_at: string | null } | undefined;
+
+    if (!row) {
+      return res.status(400).json({ error: 'Ogiltig eller utgången återställningslänk' });
+    }
+    if (row.used_at) {
+      return res.status(400).json({ error: 'Länken har redan använts' });
+    }
+    if (new Date(row.expires_at) < new Date()) {
+      return res.status(400).json({ error: 'Länken har gått ut' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    const applyReset = db.transaction(() => {
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, row.user_id);
+      db.prepare('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ?').run(row.id);
+      // Force re-login on every device — the old refresh tokens may be in attacker
+      // hands if the reset was triggered by a compromise.
+      db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE user_id = ?').run(row.user_id);
+    });
+    applyReset();
+
+    return res.json({ message: 'Lösenordet har återställts. Logga in med ditt nya lösenord.' });
+  } catch (err) {
+    console.error('[reset-password] failed:', err);
+    return res.status(500).json({ error: 'Kunde inte återställa lösenordet' });
   }
 });
 

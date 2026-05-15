@@ -569,3 +569,88 @@ export const sendTicketReminderEmail = async (data: {
     console.error('Failed to send reminder email:', error);
   });
 };
+
+// ── Password reset email ────────────────────────────────────────────
+
+export const sendPasswordResetEmail = async (opts: {
+  toEmail: string;
+  toName: string;
+  resetUrl: string;
+  expiryMinutes: number;
+}): Promise<void> => {
+  const transporter = createTransporter();
+  const from = process.env.EMAIL_FROM;
+  if (!transporter || !from) {
+    console.warn('[password-reset] email not configured — set SMTP_HOST and EMAIL_FROM to enable reset');
+    return;
+  }
+
+  const subject = 'Återställ ditt lösenord';
+
+  const content = `
+  <tr>
+    <td style="padding: 36px 36px 0;">
+      <div style="font-family: ${F}; font-size: 11px; font-weight: 700; color: ${T.accent}; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;">L&#246;senords&#229;terst&#228;llning</div>
+      <h1 style="margin: 0 0 16px 0; font-family: ${F}; color: ${T.text}; font-size: 22px; font-weight: 700; line-height: 1.3;">
+        &#197;terst&#228;ll ditt l&#246;senord
+      </h1>
+      <p style="margin: 0 0 16px 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.6;">
+        Hej ${opts.toName},
+      </p>
+      <p style="margin: 0 0 24px 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.6;">
+        Vi tog emot en beg&#228;ran om att &#229;terst&#228;lla l&#246;senordet f&#246;r ditt konto i IT-&#228;rendesystemet.
+        Klicka p&#229; knappen nedan f&#246;r att v&#228;lja ett nytt l&#246;senord. L&#228;nken &#228;r giltig i ${opts.expiryMinutes} minuter
+        och kan bara anv&#228;ndas en g&#229;ng.
+      </p>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding: 0 36px 24px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+        <tr>
+          <td align="center">
+            <a href="${opts.resetUrl}"
+               style="display: inline-block; padding: 14px 28px; background: ${T.btnBg}; color: ${T.btnText}; text-decoration: none; border-radius: 8px; font-family: ${F}; font-size: 14px; font-weight: 600;">
+              V&#228;lj nytt l&#246;senord
+            </a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding: 0 36px 32px;">
+      <p style="margin: 0 0 8px 0; font-family: ${F}; color: ${T.textMut}; font-size: 12px; line-height: 1.6;">
+        F&#229;r du inte knappen att fungera? Kopiera och klistra in l&#228;nken i din webbl&#228;sare:
+      </p>
+      <p style="margin: 0 0 16px 0; font-family: ${FM}; color: ${T.textSec}; font-size: 12px; word-break: break-all; line-height: 1.5;">
+        ${opts.resetUrl}
+      </p>
+      <p style="margin: 0; font-family: ${F}; color: ${T.textMut}; font-size: 12px; line-height: 1.6;">
+        Om du inte beg&#228;rde n&#229;gon &#229;terst&#228;llning kan du ignorera det h&#228;r mailet — ditt l&#246;senord f&#246;r&#228;ndras inte.
+      </p>
+    </td>
+  </tr>
+  `;
+
+  const html = buildEmailShell(content, 'Detta &#228;r ett automatiskt mail fr&#229;n IT-&#228;rendesystemet.');
+
+  const text = [
+    `Hej ${opts.toName},`,
+    '',
+    'Vi tog emot en begäran om att återställa lösenordet för ditt konto i IT-ärendesystemet.',
+    `Öppna länken nedan för att välja ett nytt lösenord. Länken är giltig i ${opts.expiryMinutes} minuter och kan bara användas en gång.`,
+    '',
+    opts.resetUrl,
+    '',
+    'Om du inte begärde någon återställning kan du ignorera mailet — ditt lösenord förändras inte.',
+  ].join('\n');
+
+  await transporter.sendMail({
+    from,
+    to: opts.toEmail,
+    subject,
+    text,
+    html,
+  });
+};

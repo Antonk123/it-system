@@ -76,6 +76,14 @@ const Login = () => {
               <LogIn className="w-4 h-4 mr-2" />
               {isLoading ? "Loggar in..." : "Logga in"}
             </Button>
+            <div className="text-right">
+              <Link
+                to="/forgot-password"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Glömt lösenord?
+              </Link>
+            </div>
             <div className="mt-4 pt-4 border-t text-center">
               <p className="text-sm text-muted-foreground mb-2">Behöver du hjälp?</p>
               <Link

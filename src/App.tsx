@@ -18,6 +18,8 @@ const UserList = lazy(() => import("./pages/UserList"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Login = lazy(() => import("./pages/Login"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const PublicTicketForm = lazy(() => import("./pages/PublicTicketForm"));
 const SharedTicket = lazy(() => import("./pages/SharedTicket"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -123,6 +125,8 @@ const AppRoutes = () => {
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
+          <Route path="/reset-password/:token" element={<PublicRoute><ResetPassword /></PublicRoute>} />
           <Route path="/submit-ticket" element={<PublicTicketForm />} />
           <Route path="/shared/:token" element={<SharedTicket />} />
           <Route path="/kb/shared/:token" element={<SharedKBArticle />} />
