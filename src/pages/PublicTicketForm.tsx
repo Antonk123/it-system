@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
-import { CheckCircle, Send, AlertCircle, X, FileText, Upload, Paperclip, Loader2, Ticket, ArrowLeft, User, Sparkles, ThumbsUp, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { CheckCircle, Send, AlertCircle, Loader2, Ticket, ArrowLeft, Sparkles, ThumbsUp, ArrowRight } from 'lucide-react';
+import { Link, Navigate } from 'react-router-dom';
 import { api, CustomFieldInput } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DynamicFieldsForm } from '@/components/DynamicFieldsForm';
-import { cn } from '@/lib/utils';
 
 interface Category { id: string; label: string; }
 interface Template {
@@ -23,7 +22,6 @@ interface Template {
 }
 
 const PublicTicketForm = () => {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,8 +29,6 @@ const PublicTicketForm = () => {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [customFieldValues, setCustomFieldValues] = useState<CustomFieldInput[]>([]);
-  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
   const [formData, setFormData] = useState({ name: '', email: '', title: '', description: '', category: '', priority: 'medium' });
   const [aiSuggestion, setAiSuggestion] = useState<{
     deflectionId: string;
@@ -43,10 +39,11 @@ const PublicTicketForm = () => {
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [aiSolved, setAiSolved] = useState(false);
 
-  const { user } = useAuth();
-  const isLoggedIn = !!user;
+  const { user, isLoading: isAuthLoading } = useAuth();
 
   useEffect(() => {
+    // Skip data fetch if we'll redirect a logged-in user — saves a wasted call.
+    if (isAuthLoading || user) return;
     const fetchData = async () => {
       try {
         const [categoriesData, templatesData] = await Promise.all([
@@ -58,7 +55,21 @@ const PublicTicketForm = () => {
       } catch (e) { /* ignore */ }
     };
     fetchData();
-  }, []);
+  }, [isAuthLoading, user]);
+
+  // Logged-in users go to the internal ticket form. The minimal "logged-in" branch
+  // of this public form discarded most fields and didn't support attachments —
+  // routing them to /tickets/new is the right experience anyway.
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-dvh flex items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  if (user) {
+    return <Navigate to="/tickets/new" replace />;
+  }
 
   const handleTemplateSelect = (templateId: string) => {
     if (templateId === 'none') {
@@ -91,27 +102,16 @@ const PublicTicketForm = () => {
 
     setIsSubmitting(true);
     try {
-      if (isLoggedIn) {
-        await api.createTicket({
-          title: formData.title.trim(),
-          description: ' ',
-          status: 'open',
-          priority: 'medium',
-          category_id: null,
-          requester_id: user!.id,
-        });
-      } else {
-        await api.submitPublicTicket({
-          name: formData.name,
-          email: formData.email,
-          title: formData.title,
-          description: formData.description,
-          category: formData.category || undefined,
-          priority: formData.priority,
-          customFields: customFieldValues.length > 0 ? customFieldValues : undefined,
-          template_id: selectedTemplate?.id,
-        });
-      }
+      await api.submitPublicTicket({
+        name: formData.name,
+        email: formData.email,
+        title: formData.title,
+        description: formData.description,
+        category: formData.category || undefined,
+        priority: formData.priority,
+        customFields: customFieldValues.length > 0 ? customFieldValues : undefined,
+        template_id: selectedTemplate?.id,
+      });
       setIsSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ett oväntat fel uppstod');
@@ -148,29 +148,10 @@ const PublicTicketForm = () => {
     setAiSuggestion(null);
   };
 
-  const handleFilesSelect = (files: File[]) => setPendingFiles(prev => [...prev, ...files]);
-  const handleRemovePending = (index: number) => setPendingFiles(prev => prev.filter((_, i) => i !== index));
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length > 0) handleFilesSelect(files);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) handleFilesSelect(files);
-  };
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
   const handleReset = () => {
     setFormData({ name: '', email: '', title: '', description: '', category: '', priority: 'medium' });
     setSelectedTemplate(null);
     setCustomFieldValues([]);
-    setPendingFiles([]);
     setIsSuccess(false);
     setError(null);
   };
@@ -267,16 +248,8 @@ const PublicTicketForm = () => {
               </div>
             )}
 
-            {/* Logged-in badge */}
-            {isLoggedIn && (
-              <div className="inline-flex items-center gap-1.5 bg-primary/15 text-primary border border-primary/30 rounded-full px-3 py-1 text-sm">
-                <User className="h-3.5 w-3.5" />
-                Inloggad som {user!.email.split('@')[0]}
-              </div>
-            )}
-
-            {/* Name + Email — hidden when logged in */}
-            <div className={isLoggedIn ? 'hidden' : 'grid grid-cols-1 sm:grid-cols-2 gap-4'}>
+            {/* Name + Email */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="name" className="text-foreground text-sm font-medium">Ditt namn *</Label>
                 <Input
@@ -286,7 +259,7 @@ const PublicTicketForm = () => {
                   placeholder="Johan Andersson"
                   className={inputClass}
                   autoComplete="name"
-                  required={!isLoggedIn}
+                  required
                   maxLength={100}
                 />
               </div>
@@ -300,14 +273,14 @@ const PublicTicketForm = () => {
                   placeholder="namn@example.com"
                   className={inputClass}
                   autoComplete="email"
-                  required={!isLoggedIn}
+                  required
                   maxLength={255}
                 />
               </div>
             </div>
 
-            {/* Template — hidden when logged in */}
-            {!isLoggedIn && templates.length > 0 && (
+            {/* Template */}
+            {templates.length > 0 && (
               <div className="space-y-1.5">
                 <Label htmlFor="template" className="text-foreground text-sm font-medium flex items-center gap-1.5">
                   <FileText className="h-3.5 w-3.5 text-muted-foreground" />
@@ -334,8 +307,8 @@ const PublicTicketForm = () => {
               </div>
             )}
 
-            {/* Dynamic fields — hidden when logged in */}
-            {!isLoggedIn && selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0 && (
+            {/* Dynamic fields */}
+            {selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0 && (
               <DynamicFieldsForm
                 fields={selectedTemplate.fields}
                 onValuesChange={setCustomFieldValues}
@@ -356,8 +329,8 @@ const PublicTicketForm = () => {
               />
             </div>
 
-            {/* Description — hidden when logged in */}
-            {!isLoggedIn && (!selectedTemplate || !selectedTemplate.fields || selectedTemplate.fields.length === 0) && (
+            {/* Description */}
+            {(!selectedTemplate || !selectedTemplate.fields || selectedTemplate.fields.length === 0) && (
               <div className="space-y-1.5">
                 <Label htmlFor="description" className="text-foreground text-sm font-medium">Beskrivning *</Label>
                 <RichTextEditor
@@ -371,7 +344,7 @@ const PublicTicketForm = () => {
             )}
 
             {/* AI Deflection — suggest solution before submitting */}
-            {!isLoggedIn && !aiSuggestion && formData.description.replace(/<[^>]*>/g, '').trim().length >= 20 && (
+            {!aiSuggestion && formData.description.replace(/<[^>]*>/g, '').trim().length >= 20 && (
               <Button
                 type="button"
                 variant="outline"
@@ -447,101 +420,43 @@ const PublicTicketForm = () => {
               </div>
             )}
 
-            {/* Category + Priority — hidden when logged in */}
-            {!isLoggedIn && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {categories.length > 0 && (
-                  <div className="space-y-1.5">
-                    <Label className="text-foreground text-sm font-medium">Kategori</Label>
-                    <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                      <SelectTrigger className={selectTriggerClass}>
-                        <SelectValue placeholder="Välj kategori" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+            {/* Category + Priority */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {categories.length > 0 && (
                 <div className="space-y-1.5">
-                  <Label className="text-foreground text-sm font-medium">Prioritet</Label>
-                  <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+                  <Label className="text-foreground text-sm font-medium">Kategori</Label>
+                  <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
                     <SelectTrigger className={selectTriggerClass}>
-                      <SelectValue />
+                      <SelectValue placeholder="Välj kategori" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Låg</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">Hög</SelectItem>
-                      <SelectItem value="urgent">Brådskande</SelectItem>
+                      {categories.map((cat) => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
+              )}
+              <div className="space-y-1.5">
+                <Label className="text-foreground text-sm font-medium">Prioritet</Label>
+                <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+                  <SelectTrigger className={selectTriggerClass}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Låg</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">Hög</SelectItem>
+                    <SelectItem value="urgent">Brådskande</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-            )}
+            </div>
 
-            {/* File upload — hidden when logged in */}
-            {!isLoggedIn && (
-              <div className="space-y-2">
-                <Label className="text-foreground text-sm font-medium flex items-center gap-1.5">
-                  <Paperclip className="h-3.5 w-3.5 text-muted-foreground" />
-                  Bifoga filer (valfritt)
-                </Label>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  onChange={handleFileChange}
-                  className="hidden"
-                  accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip"
-                />
-                <div
-                  className={cn(
-                    "border-2 border-dashed rounded-xl p-6 text-center transition-colors cursor-pointer",
-                    isDragging
-                      ? "border-primary/60 bg-primary/5"
-                      : "border-border hover:border-primary/40 hover:bg-input/40"
-                  )}
-                  onClick={() => fileInputRef.current?.click()}
-                  onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                  onDragLeave={() => setIsDragging(false)}
-                  onDrop={handleDrop}
-                >
-                  <Upload className="h-7 w-7 mx-auto mb-2 text-muted-foreground" />
-                  <p className="text-sm text-foreground/80 mb-1">Klicka för att ladda upp, eller dra och släpp</p>
-                  <p className="text-xs text-muted-foreground">Bilder, PDF, Office-dokument (max 10 MB per fil)</p>
-                </div>
-
-                {pendingFiles.length > 0 && (
-                  <div className="space-y-1.5 mt-2">
-                    {pendingFiles.map((file, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between px-3 py-2 rounded-lg bg-input border border-border"
-                      >
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <FileText className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                          <div className="min-w-0 flex-1">
-                            <p className="text-sm text-foreground truncate">{file.name}</p>
-                            <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); handleRemovePending(index); }}
-                          className="ml-2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-                          aria-label={`Ta bort ${file.name}`}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Attachment hint — public form does not support direct upload */}
+            <p className="text-xs text-muted-foreground text-center">
+              Behöver du bifoga filer? Svara på bekräftelsemailet du får efter att ärendet skickats — bilagor läggs då till automatiskt.
+            </p>
 
             {/* Submit */}
             <Button
