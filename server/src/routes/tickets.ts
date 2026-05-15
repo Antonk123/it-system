@@ -9,6 +9,7 @@ import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail } from '../lib/email.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
+import { applySLAToTicket, handleSLAStatusChange } from '../lib/slaHelper.js';
 import { writeRateLimiter } from '../middleware/rateLimit.js';
 import { dispatchWebhook } from '../lib/webhookDispatcher.js';
 import { aiEnabled, suggestCategory, draftReply, summarizeTicket, buildKbSearchQuery } from '../lib/aiHelper.js';
@@ -31,6 +32,9 @@ const TICKET_COLUMNS = [
   'tickets.notes', 'tickets.solution', 'tickets.template_id',
   'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at',
   'tickets.ai_suggested_category_id', 'tickets.ai_suggested_confidence',
+  'tickets.sla_response_deadline', 'tickets.sla_resolution_deadline',
+  'tickets.sla_response_met', 'tickets.sla_resolution_met',
+  'tickets.sla_paused_at', 'tickets.sla_paused_duration',
 ].join(', ');
 
 // Multer config for CSV upload
@@ -1233,6 +1237,15 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
 
     createTransaction();
 
+    // Apply SLA deadlines based on company + priority. Resolves to default policy
+    // if no company-specific override exists. Non-fatal — a missing policy just
+    // leaves sla_*_deadline NULL and the ticket renders without SLA badges.
+    try {
+      applySLAToTicket(id, resolvedCompanyId, finalPriority);
+    } catch (error) {
+      console.error('SLA apply error (non-fatal):', error);
+    }
+
     // Auto-tag based on keyword rules (runs after transaction so tags can be created separately)
     try {
       applyAutoTags(id, title, finalDescription);
@@ -1764,6 +1777,16 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     });
 
     updateTransaction();
+
+    // SLA pause/resume + breach marking on status transitions. Runs after the
+    // main update so the latest status is what handleSLAStatusChange reads.
+    if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
+      try {
+        handleSLAStatusChange(req.params.id as string, existing.status as string, safeUpdates.status as string);
+      } catch (error) {
+        console.error('SLA status-change error (non-fatal):', error);
+      }
+    }
 
     const ticket = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(req.params.id) as TicketRow;
 

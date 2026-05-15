@@ -818,4 +818,25 @@ export const migrations: Migration[] = [
       db.prepare('CREATE INDEX idx_password_reset_expires ON password_reset_tokens(expires_at)').run();
     },
   },
+  {
+    id: '042',
+    name: 'seed_default_sla_policies',
+    up: (db) => {
+      // Only seed if no default-policy rows exist (idempotent across reruns
+      // and respects manual customization done after first seed).
+      const existing = db.prepare('SELECT COUNT(*) as n FROM sla_policies WHERE company_id IS NULL').get() as { n: number };
+      if (existing.n > 0) return;
+
+      const insert = db.prepare(
+        'INSERT INTO sla_policies (id, company_id, priority, response_time_minutes, resolution_time_minutes) VALUES (?, NULL, ?, ?, ?)'
+      );
+
+      // Industry-typical defaults for internal IT helpdesk. Values can be
+      // tuned per company via PUT /api/sla.
+      insert.run(randomUUID(), 'critical', 30, 240);    // 30m response / 4h resolution
+      insert.run(randomUUID(), 'high',     60, 480);    // 1h / 8h
+      insert.run(randomUUID(), 'medium',   240, 1440);  // 4h / 24h
+      insert.run(randomUUID(), 'low',      480, 4320);  // 8h / 72h
+    },
+  },
 ];

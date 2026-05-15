@@ -241,6 +241,22 @@ class ApiClient {
     });
   }
 
+  // SLA policies
+  async getSLAPolicies(companyId?: string) {
+    const query = companyId ? `?company_id=${encodeURIComponent(companyId)}` : '?company_id=default';
+    return this.request<SLAPolicyRow[]>(`/sla${query}`);
+  }
+
+  async upsertSLAPolicies(
+    companyId: string | null,
+    policies: Array<{ priority: string; response_time_minutes: number; resolution_time_minutes: number }>
+  ) {
+    return this.request<SLAPolicyRow[]>('/sla', {
+      method: 'PUT',
+      body: { company_id: companyId, policies },
+    });
+  }
+
   async logout() {
     try {
       const refreshToken = localStorage.getItem('refreshToken');
@@ -1405,6 +1421,16 @@ export interface SystemUser {
   createdAt: string;
   lastSignIn: string | null;
   emailConfirmed: boolean;
+}
+
+export interface SLAPolicyRow {
+  id: string;
+  company_id: string | null;
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  response_time_minutes: number;
+  resolution_time_minutes: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SharedTicketData {

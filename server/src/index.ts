@@ -39,6 +39,7 @@ import billingRoutes from './routes/billing.js';
 import apiKeyRoutes from './routes/apiKeys.js';
 import webhookRoutes from './routes/webhooks.js';
 import emailInboundRoutes from './routes/emailInbound.js';
+import slaRoutes from './routes/sla.js';
 import { startEmailPolling } from './lib/emailInbound.js';
 
 const app = express();
@@ -226,6 +227,7 @@ app.use('/api/billing', billingRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
 app.use('/api/webhooks', webhookRoutes);
 app.use('/api/email-inbound', emailInboundRoutes);
+app.use('/api/sla', slaRoutes);
 
 // Error handling
 // HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client

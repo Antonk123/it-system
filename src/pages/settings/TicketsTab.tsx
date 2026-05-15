@@ -4,6 +4,7 @@ import { useCategories } from '@/hooks/useCategories';
 import { useTags } from '@/hooks/useTags';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useChecklistTemplates } from '@/hooks/useChecklistTemplates';
+import { useSLAPolicies } from '@/hooks/useSLAPolicies';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,13 +25,23 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Type, ListChecks, CornerDownRight, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Type, ListChecks, CornerDownRight, ArrowUp, ArrowDown, Timer } from 'lucide-react';
 import { toast } from 'sonner';
 
 const TAG_COLORS = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
   '#3b82f6', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6',
 ];
+
+function formatSlaMinutes(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 1440) {
+    const h = minutes / 60;
+    return Number.isInteger(h) ? `${h} h` : `${h.toFixed(1)} h`;
+  }
+  const days = minutes / 1440;
+  return Number.isInteger(days) ? `${days} dygn` : `${days.toFixed(1)} dygn`;
+}
 
 const CategoryItem = memo(({
   category,
@@ -208,7 +219,10 @@ const TicketsTab = () => {
     tags: false,
     templates: false,
     checklistTemplates: false,
+    sla: false,
   });
+
+  const { policies: slaPolicies, isLoading: isSlaLoading } = useSLAPolicies();
 
   useEffect(() => { fetchChecklistTemplates(); }, [fetchChecklistTemplates]);
 
@@ -788,6 +802,62 @@ const TicketsTab = () => {
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        <Collapsible open={sectionsOpen.sla} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, sla: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <Timer className="w-5 h-5" />
+                  SLA-policy
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.sla ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Service Level Agreement: hur snabbt ärenden ska kvitteras (svar) och stängas (lösning) per prioritet.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  Default-policy som tillämpas på alla nya ärenden. Anpassning per företag kommer i nästa release.
+                </p>
+                {isSlaLoading ? (
+                  <div className="text-sm text-muted-foreground p-3">Hämtar policies...</div>
+                ) : slaPolicies.length === 0 ? (
+                  <div className="text-sm text-muted-foreground p-3 border rounded-lg">
+                    Inga policies hittades. Default-policy seedas automatiskt vid serverstart.
+                  </div>
+                ) : (
+                  <div className="border rounded-lg overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium">Prioritet</th>
+                          <th className="text-left px-3 py-2 font-medium">Svar inom</th>
+                          <th className="text-left px-3 py-2 font-medium">Lösning inom</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {(['critical', 'high', 'medium', 'low'] as const).map(prio => {
+                          const p = slaPolicies.find(x => x.priority === prio);
+                          if (!p) return null;
+                          return (
+                            <tr key={p.id}>
+                              <td className="px-3 py-2 capitalize font-medium">{prio === 'critical' ? 'Kritisk' : prio === 'high' ? 'Hög' : prio === 'medium' ? 'Medium' : 'Låg'}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{formatSlaMinutes(p.response_time_minutes)}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{formatSlaMinutes(p.resolution_time_minutes)}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </CardContent>
             </CollapsibleContent>
           </Card>

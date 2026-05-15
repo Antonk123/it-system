@@ -28,6 +28,7 @@ import { ReminderList } from '@/components/ReminderList';
 import { Layout } from '@/components/Layout';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PriorityBadge } from '@/components/PriorityBadge';
+import { SLABadge } from '@/components/SLABadge';
 import { CategoryBadge } from '@/components/CategoryBadge';
 import { TagBadges } from '@/components/TagBadges';
 import { TagSelector } from '@/components/TagSelector';
@@ -523,6 +524,18 @@ const TicketDetail = () => {
                   <StatusBadge status={ticket.status} />
                   <PriorityBadge priority={ticket.priority} />
                   <CategoryBadge category={ticket.category} />
+                  <SLABadge
+                    deadline={ticket.sla_response_deadline}
+                    met={ticket.sla_response_met}
+                    pausedAt={ticket.sla_paused_at}
+                    label="Svar"
+                  />
+                  <SLABadge
+                    deadline={ticket.sla_resolution_deadline}
+                    met={ticket.sla_resolution_met}
+                    pausedAt={ticket.sla_paused_at}
+                    label="Lösning"
+                  />
                   {effectiveTags.length > 0 && (
                     <TagBadges tags={effectiveTags as any} maxDisplay={5} />
                   )}

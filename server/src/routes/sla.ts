@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -36,9 +36,10 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
   }
 });
 
-// PUT / — upsert SLA policies for a company (or default)
-// Body: { company_id: string | null, policies: Array<{ priority, response_time_minutes, resolution_time_minutes }> }
-router.put('/', authenticate, (req: AuthRequest, res: Response) => {
+// PUT / — upsert SLA policies for a company (or default). Admin-only:
+// policy changes can affect every ticket's deadline calculation, so non-admins
+// must not be able to retune them.
+router.put('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const { company_id, policies } = req.body;
 
@@ -80,8 +81,8 @@ router.put('/', authenticate, (req: AuthRequest, res: Response) => {
   }
 });
 
-// DELETE /:id — delete single policy
-router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
+// DELETE /:id — delete single policy (admin-only)
+router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const result = db.prepare('DELETE FROM sla_policies WHERE id = ?').run(req.params.id);
     if (result.changes === 0) {
