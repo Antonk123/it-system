@@ -1619,9 +1619,19 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 
   try {
     const existing = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(req.params.id) as TicketRow | undefined;
-    
+
     if (!existing) {
       return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    // Permission check: only admins can change ticket assignee. Prevents non-admin
+    // users from stealing or reassigning tickets that aren't theirs. No-op assignments
+    // (sending the same value back) are allowed silently.
+    if (assigned_to !== undefined) {
+      const newAssignee = assigned_to || null;
+      if (newAssignee !== existing.assigned_to && req.user!.role !== 'admin') {
+        return res.status(403).json({ error: 'Endast administratörer kan ändra tilldelad användare' });
+      }
     }
 
     // When customFields are provided, compose description from them (same logic as POST)

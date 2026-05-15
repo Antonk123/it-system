@@ -16,7 +16,21 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { toast } from 'sonner';
 import { api } from '@/lib/api';
+
+// Whitelist safe URL protocols. Prevents javascript:, data:, vbscript: etc. from
+// reaching DB or downstream consumers (email replies, AI prompts, exports) where
+// they may bypass DOMPurify's render-time sanitization.
+const SAFE_LINK_PROTOCOLS = new Set(['http:', 'https:', 'mailto:', 'tel:']);
+function isSafeLinkUrl(rawUrl: string): boolean {
+  try {
+    const parsed = new URL(rawUrl, window.location.origin);
+    return SAFE_LINK_PROTOCOLS.has(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
 
 // ─── Resizable image node view ─────────────────────────────────────────────
 
@@ -287,6 +301,11 @@ export const RichTextEditor = ({
     const url = linkUrl.trim();
     const text = linkText.trim();
 
+    if (!isSafeLinkUrl(url)) {
+      toast.error('Ogiltig länk — endast http, https, mailto och tel stöds');
+      return;
+    }
+
     // Prevent external updates during insertion
     setIsInserting(true);
 
@@ -301,8 +320,13 @@ export const RichTextEditor = ({
       }
 
       if (text) {
-        // If display text is provided, insert it as a link
-        editor.chain().focus().insertContent(`<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`).run();
+        // Structured insertion via TipTap — escapes URL/text safely. Avoids storing
+        // raw HTML in DB (where downstream consumers may not sanitize).
+        editor.chain().focus().insertContent({
+          type: 'text',
+          text,
+          marks: [{ type: 'link', attrs: { href: url } }],
+        }).run();
       } else {
         // Use the saved selection to check if there was selected text
         const selectedText = savedSelection
@@ -312,7 +336,11 @@ export const RichTextEditor = ({
         if (selectedText) {
           editor.chain().focus().setLink({ href: url }).run();
         } else {
-          editor.chain().focus().insertContent(`<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`).run();
+          editor.chain().focus().insertContent({
+            type: 'text',
+            text: url,
+            marks: [{ type: 'link', attrs: { href: url } }],
+          }).run();
         }
       }
 
