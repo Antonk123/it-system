@@ -6,7 +6,9 @@ let pushEnabled = false;
 export function initWebPush(): boolean {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@prefabmastarna.se';
+  // VAPID subject identifies the app to push services. Override via VAPID_SUBJECT
+  // env var with the install owner's contact email/URL.
+  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
   if (!publicKey || !privateKey) {
     console.warn('Push notifications disabled (VAPID keys not configured)');
     return false;

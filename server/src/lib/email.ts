@@ -131,6 +131,10 @@ const markdownToEmailHtml = (text: string): string => {
 const F = `'Segoe UI', -apple-system, Helvetica, Arial, sans-serif`;
 const FM = `'SF Mono', 'Cascadia Code', Consolas, monospace`;
 
+// White-label brand name. Override via BRAND_NAME env var to use the
+// installation owner's company name in outgoing email branding/footer.
+const getBrandName = () => process.env.BRAND_NAME || 'IT-Support';
+
 const T = {
   bg:       '#eef2f7',
   card:     '#ffffff',
@@ -181,8 +185,7 @@ const buildEmailShell = (content: string, footerNote: string): string => `
         <table role="presentation" width="560" cellspacing="0" cellpadding="0" border="0" style="width: 560px; max-width: 560px;">
           <tr>
             <td style="padding: 0 0 14px 2px;">
-              <span style="font-family: ${F}; font-size: 13px; font-weight: 700; color: ${T.text}; letter-spacing: 0.03em; mso-line-height-rule: exactly;">Prefabm&#228;starna</span>
-              <span style="font-family: ${F}; font-size: 13px; font-weight: 400; color: ${T.textMut}; mso-line-height-rule: exactly;"> &middot; IT</span>
+              <span style="font-family: ${F}; font-size: 13px; font-weight: 700; color: ${T.text}; letter-spacing: 0.03em; mso-line-height-rule: exactly;">${getBrandName()}</span>
             </td>
           </tr>
         </table>
@@ -362,7 +365,7 @@ const formatTicketHtml = (payload: TicketEmailPayload, headerLabel: string, appB
     ctaUrl: ticketUrl,
   });
 
-  return buildEmailShell(content, 'Automatiskt meddelande fr&#229;n IT-&#228;rendesystemet &middot; Svara inte p&#229; detta mail');
+  return buildEmailShell(content, `Automatiskt meddelande fr&#229;n ${getBrandName()} &middot; Svara inte p&#229; detta mail`);
 };
 
 // ── Send helpers ────────────────────────────────────────────────────
@@ -464,7 +467,7 @@ export const sendTicketReceivedConfirmation = async (opts: {
     </td>
   </tr>`;
 
-  const html = buildEmailShell(content, 'Automatiskt meddelande fr&#229;n IT-support &middot; Prefabm&#228;starna');
+  const html = buildEmailShell(content, `Automatiskt meddelande fr&#229;n ${getBrandName()}`);
 
   const text = [
     `Hej ${opts.toName},`,
@@ -539,7 +542,7 @@ export const sendTicketReminderEmail = async (data: {
     ctaUrl: ticketUrl,
   });
 
-  const html = buildEmailShell(reminderContent, 'Automatisk p&#229;minnelse fr&#229;n IT-&#228;rendesystemet &middot; Svara inte p&#229; detta mail');
+  const html = buildEmailShell(reminderContent, `Automatisk p&#229;minnelse fr&#229;n ${getBrandName()} &middot; Svara inte p&#229; detta mail`);
 
   const text = [
     `PÅMINNELSE: ${ticket.title}`,
@@ -633,7 +636,7 @@ export const sendPasswordResetEmail = async (opts: {
   </tr>
   `;
 
-  const html = buildEmailShell(content, 'Detta &#228;r ett automatiskt mail fr&#229;n IT-&#228;rendesystemet.');
+  const html = buildEmailShell(content, `Detta &#228;r ett automatiskt mail fr&#229;n ${getBrandName()}.`);
 
   const text = [
     `Hej ${opts.toName},`,
