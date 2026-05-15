@@ -979,7 +979,7 @@ interface UpcomingReminderRow {
   ticket_priority: string;
 }
 
-// GET /dashboard-overview — aging tickets + today counts
+// GET /dashboard-overview — aging tickets + today counts + critical count
 router.get('/dashboard-overview', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const agingTickets = db.prepare(`
@@ -1012,7 +1012,14 @@ router.get('/dashboard-overview', authenticate, (req: AuthRequest, res: Response
       FROM tickets
     `).get() as TodayCountsRow;
 
-    res.json({ agingTickets, todayCounts });
+    const criticalRow = db.prepare(`
+      SELECT COUNT(*) as n
+      FROM tickets
+      WHERE priority = 'critical' AND status != 'closed'
+    `).get() as { n: number };
+    const criticalCount = criticalRow?.n ?? 0;
+
+    res.json({ agingTickets, todayCounts, criticalCount });
   } catch (error) {
     console.error('Error fetching dashboard overview:', error);
     res.status(500).json({ error: 'Failed to fetch dashboard overview' });

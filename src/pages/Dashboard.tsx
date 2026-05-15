@@ -1,15 +1,15 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Ticket, Clock, CheckCircle, AlertTriangle, ArrowRight, PauseCircle } from 'lucide-react';
-import { subDays, isSameDay, format, startOfDay } from 'date-fns';
-import { useTickets } from '@/hooks/useTickets';
+import { Ticket, Clock, CheckCircle, AlertTriangle, ArrowRight, PauseCircle, Sparkles } from 'lucide-react';
+import { useActiveQueue } from '@/hooks/useActiveQueue';
 import { useUsers } from '@/hooks/useUsers';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useUpcomingReminders } from '@/hooks/useUpcomingReminders';
 import { useActivityFeed } from '@/hooks/useActivityFeed';
 import { useStatusCounts } from '@/hooks/useStatusCounts';
+import { useDeflectionStats } from '@/hooks/useDeflectionStats';
 import { Layout } from '@/components/Layout';
 import { KPICard } from '@/components/KPICard';
 import { AgingTicketsPanel } from '@/components/AgingTicketsPanel';
@@ -65,8 +65,9 @@ function getGreetingName(email: string | undefined): string {
 // ---------------------------------------------------------------------------
 
 const Dashboard = () => {
-  const { tickets } = useTickets({ limit: 1000, status: 'all' });
-  const { users, getUserById } = useUsers();
+  // Smal fetch: bara aktiva ärenden, sorterade på priority, max 30 — driver TicketQueueTable
+  const { data: activeQueue, isLoading: isQueueLoading } = useActiveQueue(30);
+  const { getUserById } = useUsers();
   const { user } = useAuth();
   const greetingName = getGreetingName(user?.email);
   const navigate = useNavigate();
@@ -74,67 +75,17 @@ const Dashboard = () => {
   const { data: upcomingReminders, isLoading: isRemindersLoading } = useUpcomingReminders();
   const { data: activityEvents, isLoading: isActivityLoading } = useActivityFeed(15);
   const { data: statusCounts, isLoading: isStatusLoading } = useStatusCounts();
+  const { data: deflectionStats, isLoading: isDeflectionLoading } = useDeflectionStats();
 
   const stats = useMemo(() => {
-    const open = tickets.filter(t => t.status === 'open').length;
-    const inProgress = tickets.filter(t => t.status === 'in-progress').length;
-    const waiting = tickets.filter(t => t.status === 'waiting').length;
-    const resolved = tickets.filter(t => t.status === 'resolved').length;
-    const closed = tickets.filter(t => t.status === 'closed').length;
-    const critical = tickets.filter(t => t.priority === 'critical' && t.status !== 'closed').length;
-
-    return { open, inProgress, waiting, resolved, closed, critical, total: tickets.length };
-  }, [tickets]);
-
-  // Calculate trends (compare to last 7 days)
-  const trends = useMemo(() => {
-    const sevenDaysAgo = subDays(new Date(), 7);
-
-    const calculateTrend = (currentCount: number, filterFn: (t: any) => boolean) => {
-      const oldCount = tickets.filter(t =>
-        t.createdAt < sevenDaysAgo && filterFn(t)
-      ).length;
-
-      if (oldCount === 0) return { value: 0, direction: 'up' as const, isPositive: true };
-
-      const change = ((currentCount - oldCount) / oldCount) * 100;
-      return {
-        value: Math.abs(Math.round(change)),
-        direction: change >= 0 ? ('up' as const) : ('down' as const),
-        isPositive: change < 0, // Less is better for open/waiting
-      };
-    };
-
-    return {
-      open: calculateTrend(stats.open, t => t.status === 'open'),
-      inProgress: calculateTrend(stats.inProgress, t => t.status === 'in-progress'),
-      waiting: calculateTrend(stats.waiting, t => t.status === 'waiting'),
-      resolved: { ...calculateTrend(stats.resolved, t => t.status === 'resolved'), isPositive: true },
-      closed: { ...calculateTrend(stats.closed, t => t.status === 'closed'), isPositive: true },
-    };
-  }, [tickets, stats]);
-
-  // Calculate sparkline data (last 7 days)
-  const sparklineData = useMemo(() => {
-    const generateSparkline = (filterFn: (t: any) => boolean) => {
-      const days = [];
-      for (let i = 6; i >= 0; i--) {
-        const date = startOfDay(subDays(new Date(), i));
-        const count = tickets.filter(t =>
-          isSameDay(t.createdAt, date) && filterFn(t)
-        ).length;
-        days.push({ month: format(date, 'EEE'), value: count });
-      }
-      return days;
-    };
-
-    return {
-      open: generateSparkline(t => t.status === 'open'),
-      inProgress: generateSparkline(t => t.status === 'in-progress'),
-      waiting: generateSparkline(t => t.status === 'waiting'),
-      resolved: generateSparkline(t => t.status === 'resolved'),
-    };
-  }, [tickets]);
+    const open = statusCounts?.open ?? 0;
+    const inProgress = statusCounts?.['in-progress'] ?? 0;
+    const waiting = statusCounts?.waiting ?? 0;
+    const resolved = statusCounts?.resolved ?? 0;
+    const closed = statusCounts?.closed ?? 0;
+    const critical = dashboardOverview?.criticalCount ?? 0;
+    return { open, inProgress, waiting, resolved, closed, critical, total: open + inProgress + waiting + resolved + closed };
+  }, [statusCounts, dashboardOverview]);
 
   const getUserName = (id: string) => {
     const user = getUserById(id);
@@ -174,7 +125,7 @@ const Dashboard = () => {
 
         {/* KPI Grid */}
         <motion.div
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4"
           variants={kpiContainer}
           initial={prefersReducedMotion ? false : 'hidden'}
           animate={prefersReducedMotion ? false : 'visible'}
@@ -184,8 +135,6 @@ const Dashboard = () => {
               label="Öppna ärenden"
               value={stats.open}
               icon={<Ticket className="w-5 h-5" />}
-              trend={trends.open}
-              sparklineData={sparklineData.open}
               onClick={() => navigate('/tickets?status=open')}
               subLabel={
                 isOverviewLoading
@@ -201,8 +150,6 @@ const Dashboard = () => {
               label="Pågående"
               value={stats.inProgress}
               icon={<Clock className="w-5 h-5" />}
-              trend={trends.inProgress}
-              sparklineData={sparklineData.inProgress}
               onClick={() => navigate('/tickets?status=in-progress')}
             />
           </motion.div>
@@ -211,8 +158,6 @@ const Dashboard = () => {
               label="Väntar"
               value={stats.waiting}
               icon={<PauseCircle className="w-5 h-5" />}
-              trend={trends.waiting}
-              sparklineData={sparklineData.waiting}
               onClick={() => navigate('/tickets?status=waiting')}
             />
           </motion.div>
@@ -221,8 +166,6 @@ const Dashboard = () => {
               label="Lösta"
               value={stats.resolved}
               icon={<CheckCircle className="w-5 h-5" />}
-              trend={trends.resolved}
-              sparklineData={sparklineData.resolved}
               onClick={() => navigate('/tickets?status=resolved')}
               subLabel={
                 isOverviewLoading
@@ -230,6 +173,22 @@ const Dashboard = () => {
                   : dashboardOverview?.todayCounts.resolved_today
                     ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.resolved_today} idag</span>
                     : <span>+0 idag</span>
+              }
+            />
+          </motion.div>
+          <motion.div variants={kpiItem}>
+            <KPICard
+              label="AI-deflection"
+              value={deflectionStats?.deflectionRate ?? 0}
+              valueSuffix="%"
+              icon={<Sparkles className="w-5 h-5" />}
+              onClick={() => navigate('/reports')}
+              subLabel={
+                isDeflectionLoading
+                  ? <Skeleton className="h-3 w-20 mt-1" />
+                  : deflectionStats && deflectionStats.total > 0
+                    ? <span className="text-muted-foreground">{deflectionStats.solved} löst / {deflectionStats.total} (30d)</span>
+                    : <span className="text-muted-foreground">Inga 30d</span>
               }
             />
           </motion.div>
@@ -246,8 +205,8 @@ const Dashboard = () => {
             transition={{ delay: 0.15 }}
           >
             <TicketQueueTable
-              tickets={tickets}
-              isLoading={tickets.length === 0 && isOverviewLoading}
+              tickets={activeQueue ?? []}
+              isLoading={isQueueLoading}
               getUserName={getUserName}
             />
 

@@ -19,6 +19,7 @@ export interface TodayCounts {
 export interface DashboardOverview {
   agingTickets: AgingTicket[];
   todayCounts: TodayCounts;
+  criticalCount: number;
 }
 
 export const dashboardOverviewKeys = {
