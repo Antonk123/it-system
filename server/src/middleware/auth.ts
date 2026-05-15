@@ -18,25 +18,37 @@ declare global {
 
 export type AuthRequest = Request;
 
+// Methods that mutate state. API keys without 'write' permission must not
+// authenticate for these — even if the underlying user has admin role, the
+// API key is the credential and its scope wins.
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+type ApiKeyAuthResult =
+  | { kind: 'no_key' }                                    // Header missing or wrong prefix → fall through to JWT
+  | { kind: 'invalid' }                                   // Bad key, expired, etc → fall through to JWT (which will fail)
+  | { kind: 'forbidden_scope' }                           // Valid key but scope insufficient for this method → 403
+  | { kind: 'authenticated'; user: AuthUser };
+
 /**
  * Try to authenticate via API key (Bearer itk_live_xxx).
- * Returns the user if valid, null otherwise.
+ * Returns a tagged result so callers can distinguish "not an API-key request"
+ * from "valid key but lacks permission for this verb".
  */
-function tryApiKeyAuth(req: Request): AuthUser | null {
+function tryApiKeyAuth(req: Request): ApiKeyAuthResult {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer itk_live_')) return null;
+  if (!authHeader?.startsWith('Bearer itk_live_')) return { kind: 'no_key' };
 
   const rawKey = authHeader.substring('Bearer '.length);
   const prefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
 
   const row = db.prepare(
-    'SELECT id, key_hash, user_id, expires_at, last_used_at FROM api_keys WHERE key_prefix = ?'
-  ).get(prefix) as { id: string; key_hash: string; user_id: string; expires_at: string | null; last_used_at: string | null } | undefined;
+    'SELECT id, key_hash, user_id, expires_at, last_used_at, permissions FROM api_keys WHERE key_prefix = ?'
+  ).get(prefix) as { id: string; key_hash: string; user_id: string; expires_at: string | null; last_used_at: string | null; permissions: string | null } | undefined;
 
-  if (!row) return null;
+  if (!row) return { kind: 'invalid' };
 
   // Check expiry
-  if (row.expires_at && new Date(row.expires_at) < new Date()) return null;
+  if (row.expires_at && new Date(row.expires_at) < new Date()) return { kind: 'invalid' };
 
   // Verify hash with constant-time compare to avoid timing leaks.
   const hash = createHash('sha256').update(rawKey).digest('hex');
@@ -46,13 +58,26 @@ function tryApiKeyAuth(req: Request): AuthUser | null {
     hashBuf = Buffer.from(hash, 'hex');
     rowBuf = Buffer.from(row.key_hash, 'hex');
   } catch {
-    return null;
+    return { kind: 'invalid' };
   }
-  if (hashBuf.length !== rowBuf.length || !timingSafeEqual(hashBuf, rowBuf)) return null;
+  if (hashBuf.length !== rowBuf.length || !timingSafeEqual(hashBuf, rowBuf)) return { kind: 'invalid' };
+
+  // Enforce stored permissions. Default to read-only on any parse failure or
+  // missing field, so a corrupted row never silently grants write access.
+  let permissions: string[] = ['read'];
+  try {
+    const parsed = JSON.parse(row.permissions || '["read"]');
+    if (Array.isArray(parsed)) permissions = parsed.filter(p => typeof p === 'string');
+  } catch {
+    permissions = ['read'];
+  }
+  if (WRITE_METHODS.has(req.method) && !permissions.includes('write')) {
+    return { kind: 'forbidden_scope' };
+  }
 
   // Look up user
   const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(row.user_id) as AuthUser | undefined;
-  if (!user) return null;
+  if (!user) return { kind: 'invalid' };
 
   // Update last_used_at, but throttle: only write if last update was > 5 minutes ago.
   // Avoids a DB write on every single API-key-authenticated request.
@@ -62,18 +87,24 @@ function tryApiKeyAuth(req: Request): AuthUser | null {
     db.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(new Date(now).toISOString(), row.id);
   }
 
-  return user;
+  return { kind: 'authenticated', user };
 }
 
 export const authenticate: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
   // Try API key auth first
-  const apiKeyUser = tryApiKeyAuth(req);
-  if (apiKeyUser) {
-    req.user = apiKeyUser;
+  const apiKeyResult = tryApiKeyAuth(req);
+  if (apiKeyResult.kind === 'authenticated') {
+    req.user = apiKeyResult.user;
     return next();
   }
+  if (apiKeyResult.kind === 'forbidden_scope') {
+    return res.status(403).json({
+      error: 'API-nyckeln saknar skrivrättigheter för denna åtgärd',
+    });
+  }
+  // 'no_key' or 'invalid' → fall through to JWT (legitimate browser sessions
+  // and unauthenticated requests both land here).
 
-  // Fall back to JWT auth
   passport.authenticate('jwt', { session: false }, (err: Error | null, user: AuthUser | false) => {
     if (err) {
       return res.status(500).json({ error: 'Authentication error' });

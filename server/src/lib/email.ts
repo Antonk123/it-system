@@ -573,6 +573,84 @@ export const sendTicketReminderEmail = async (data: {
   });
 };
 
+// ── Assignment notification ─────────────────────────────────────────
+
+export const sendTicketAssignedEmail = async (opts: {
+  toEmail: string;
+  toName: string;
+  ticketId: string;
+  ticketTitle: string;
+  ticketPriority: string;
+  assignerName: string;
+}): Promise<void> => {
+  const transporter = createTransporter();
+  const from = process.env.EMAIL_FROM;
+  if (!transporter || !from) return;
+
+  const baseUrl = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
+  const ticketUrl = baseUrl ? `${baseUrl}/tickets/${opts.ticketId}` : '';
+  const shortId = opts.ticketId.slice(0, 8).toUpperCase();
+  const subject = `Tilldelat dig: [#${shortId}] ${opts.ticketTitle}`;
+  const prioStyle = getPriorityStyle(opts.ticketPriority);
+  const prioLabel = getPriorityLabel(opts.ticketPriority);
+
+  const content = `
+  <tr>
+    <td style="padding: 36px 36px 0;">
+      <div style="font-family: ${F}; font-size: 11px; font-weight: 700; color: ${T.accent}; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 8px;">Tilldelning</div>
+      <h1 style="margin: 0 0 16px 0; font-family: ${F}; color: ${T.text}; font-size: 22px; font-weight: 700; line-height: 1.3;">
+        Du har tilldelats ett nytt &#228;rende
+      </h1>
+      <p style="margin: 0 0 20px 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.6;">
+        Hej ${opts.toName},<br>
+        ${opts.assignerName} har tilldelat dig &#228;rende <strong>#${shortId}</strong>.
+      </p>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 16px;">
+        <tr>
+          <td style="padding: 14px 16px; background-color: ${T.surface}; border-radius: 8px; border: 1px solid ${T.line};">
+            <div style="font-family: ${F}; font-size: 13px; font-weight: 600; color: ${T.text}; margin-bottom: 6px;">${opts.ticketTitle}</div>
+            <span style="display: inline-block; padding: 2px 8px; background-color: ${prioStyle.bg}; color: ${prioStyle.text}; border-radius: 4px; font-family: ${F}; font-size: 11px; font-weight: 600;">${prioLabel}</span>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+  ${ticketUrl ? `
+  <tr>
+    <td style="padding: 0 36px 32px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+        <tr>
+          <td align="center">
+            <a href="${ticketUrl}"
+               style="display: inline-block; padding: 14px 28px; background: ${T.btnBg}; color: ${T.btnText}; text-decoration: none; border-radius: 8px; font-family: ${F}; font-size: 14px; font-weight: 600;">
+              &#214;ppna &#228;rendet
+            </a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>` : ''}
+  `;
+
+  const html = buildEmailShell(content, `Automatiskt meddelande fr&#229;n ${getBrandName()} &middot; Svara inte p&#229; detta mail`);
+  const text = [
+    `Hej ${opts.toName},`,
+    '',
+    `${opts.assignerName} har tilldelat dig ärende #${shortId}: ${opts.ticketTitle}`,
+    `Prioritet: ${prioLabel}`,
+    '',
+    ticketUrl ? `Öppna ärendet: ${ticketUrl}` : '',
+  ].filter(Boolean).join('\n');
+
+  await transporter.sendMail({
+    from,
+    to: opts.toEmail,
+    subject,
+    text,
+    html,
+  });
+};
+
 // ── Password reset email ────────────────────────────────────────────
 
 export const sendPasswordResetEmail = async (opts: {

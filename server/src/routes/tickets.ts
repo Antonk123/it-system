@@ -6,7 +6,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import * as XLSX from 'xlsx';
 import { db } from '../db/connection.js';
-import { sendTicketClosedEmail, sendTicketCreatedEmail } from '../lib/email.js';
+import { sendTicketClosedEmail, sendTicketCreatedEmail, sendTicketAssignedEmail } from '../lib/email.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
 import { applySLAToTicket, handleSLAStatusChange } from '../lib/slaHelper.js';
@@ -1728,6 +1728,21 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
           : null;
         historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'category_id', oldCat, newCat);
       }
+      if ('assigned_to' in safeUpdates && safeUpdates.assigned_to !== existing.assigned_to) {
+        const userLabel = (uid: string | null) => {
+          if (!uid) return null;
+          const u = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(uid) as { email: string; display_name: string | null } | undefined;
+          return u ? (u.display_name || u.email) : null;
+        };
+        historyInsert.run(
+          uuidv4(),
+          req.params.id,
+          req.user!.id,
+          'assigned_to',
+          userLabel(existing.assigned_to as string | null),
+          userLabel(safeUpdates.assigned_to as string | null),
+        );
+      }
       if ('title' in safeUpdates && safeUpdates.title !== existing.title) {
         historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'title', null, null);
       }
@@ -1785,6 +1800,37 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         handleSLAStatusChange(req.params.id as string, existing.status as string, safeUpdates.status as string);
       } catch (error) {
         console.error('SLA status-change error (non-fatal):', error);
+      }
+    }
+
+    // Notify the new assignee by mail when ticket is reassigned. Only fires on
+    // assign (new value non-null) — clearing an assignee sends nothing.
+    if (
+      'assigned_to' in safeUpdates &&
+      safeUpdates.assigned_to !== existing.assigned_to &&
+      safeUpdates.assigned_to
+    ) {
+      try {
+        const assignee = db.prepare('SELECT email, display_name FROM users WHERE id = ?')
+          .get(safeUpdates.assigned_to as string) as { email: string; display_name: string | null } | undefined;
+        const assigner = db.prepare('SELECT email, display_name FROM users WHERE id = ?')
+          .get(req.user!.id) as { email: string; display_name: string | null } | undefined;
+        if (assignee?.email) {
+          // Avoid spamming users who assign tickets to themselves.
+          const isSelfAssign = safeUpdates.assigned_to === req.user!.id;
+          if (!isSelfAssign) {
+            await sendTicketAssignedEmail({
+              toEmail: assignee.email,
+              toName: assignee.display_name || assignee.email.split('@')[0],
+              ticketId: req.params.id as string,
+              ticketTitle: existing.title,
+              ticketPriority: (safeUpdates.priority as string) || existing.priority,
+              assignerName: assigner?.display_name || assigner?.email?.split('@')[0] || 'System',
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Assignee notification error (non-fatal):', error);
       }
     }
 
