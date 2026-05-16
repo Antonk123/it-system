@@ -132,6 +132,7 @@ const AppRoutes = () => {
           <Route path="/kb/shared/:token" element={<SharedKBArticle />} />
           <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
           <Route path="/tickets" element={<ProtectedRoute><TicketList /></ProtectedRoute>} />
+          <Route path="/my-tickets" element={<ProtectedRoute><TicketList /></ProtectedRoute>} />
           <Route path="/tickets/new" element={<ProtectedRoute><TicketForm /></ProtectedRoute>} />
           <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetail /></ProtectedRoute>} />
           <Route path="/tickets/:id/edit" element={<ProtectedRoute><TicketForm /></ProtectedRoute>} />

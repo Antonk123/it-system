@@ -21,6 +21,7 @@ interface UseTicketsOptions {
   sortBy?: 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
   sortDir?: 'asc' | 'desc';
   company_id?: string;
+  assigned_to?: string;
 }
 
 interface PaginationInfo {
@@ -63,6 +64,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
     if (opts.sortBy) params.append('sortBy', opts.sortBy);
     if (opts.sortDir) params.append('sortDir', opts.sortDir);
     if (opts.company_id && opts.company_id !== 'all') params.append('company_id', opts.company_id);
+    if (opts.assigned_to && opts.assigned_to !== 'all') params.append('assigned_to', opts.assigned_to);
     return params.toString() ? `?${params.toString()}` : '';
   }, []);
 

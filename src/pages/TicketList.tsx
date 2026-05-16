@@ -6,6 +6,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { useCompanies } from '@/hooks/useCompanies';
+import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Layout } from '@/components/Layout';
 import { TicketTable } from '@/components/TicketTable';
@@ -55,6 +56,8 @@ const TicketList = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
+  const isMyTickets = location.pathname === '/my-tickets';
 
   // Read state from URL
   const page = Number(searchParams.get('page')) || 1;
@@ -127,6 +130,7 @@ const TicketList = () => {
     sortBy: sortKey,
     sortDir: sortDirection,
     company_id: companyFilter,
+    assigned_to: isMyTickets && user?.id ? user.id : undefined,
   });
 
   const { users } = useUsers();
@@ -249,7 +253,7 @@ const TicketList = () => {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-foreground">Alla ärenden</h1>
+            <h1 className="text-xl font-bold text-foreground">{isMyTickets ? 'Mina ärenden' : 'Alla ärenden'}</h1>
             {pagination && pagination.total > 0 && (
               <p className="text-muted-foreground mt-1">
                 Visar {((pagination.page - 1) * pagination.limit) + 1}-
