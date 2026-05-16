@@ -393,6 +393,7 @@ export const TicketTable = memo(function TicketTable({
                     deadline={ticket.sla_resolution_deadline}
                     met={ticket.sla_resolution_met}
                     pausedAt={ticket.sla_paused_at}
+                    ticketStatus={ticket.status}
                   />
                 </div>
               </TableCell>

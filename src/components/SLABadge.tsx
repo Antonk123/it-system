@@ -8,13 +8,26 @@ interface SLABadgeProps {
   pausedAt: string | null;
   label?: string;
   className?: string;
+  ticketStatus?: string;
 }
 
-export function SLABadge({ deadline, met, pausedAt, label, className }: SLABadgeProps) {
+export function SLABadge({ deadline, met, pausedAt, label, className, ticketStatus }: SLABadgeProps) {
   if (!deadline) return null;
+
+  const isClosedOrResolved = ticketStatus === 'closed' || ticketStatus === 'resolved';
 
   // Already resolved
   if (met !== null) {
+    // På stängda/lösta ärenden — dämpa "Bruten" till historik-färg istället för alarm-rött.
+    // SLA-status är fakta att rapportera på, inte ett aktivt larm.
+    if (isClosedOrResolved && met === 0) {
+      return (
+        <Badge variant="outline" className={cn('gap-1 text-muted-foreground border-muted-foreground/30', className)}>
+          <AlertTriangle className="h-3 w-3" />
+          {label} Bruten
+        </Badge>
+      );
+    }
     return (
       <Badge variant={met === 1 ? 'secondary' : 'destructive'} className={cn('gap-1', className)}>
         {met === 1 ? <CheckCircle className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}

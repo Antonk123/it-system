@@ -529,12 +529,14 @@ const TicketDetail = () => {
                     met={ticket.sla_response_met}
                     pausedAt={ticket.sla_paused_at}
                     label="Svar"
+                    ticketStatus={ticket.status}
                   />
                   <SLABadge
                     deadline={ticket.sla_resolution_deadline}
                     met={ticket.sla_resolution_met}
                     pausedAt={ticket.sla_paused_at}
                     label="Lösning"
+                    ticketStatus={ticket.status}
                   />
                   {effectiveTags.length > 0 && (
                     <TagBadges tags={effectiveTags as any} maxDisplay={5} />
