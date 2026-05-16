@@ -30,24 +30,17 @@ const tableExists = (name: string) => {
   return !!row;
 };
 
-const VALID_TABLE_NAMES = new Set([
-  'tickets', 'categories', 'contacts', 'users', 'tags', 'ticket_tags',
-  'ticket_templates', 'template_checklists', 'template_fields', 'ticket_field_values',
-  'ticket_attachments', 'ticket_comments', 'ticket_history', 'ticket_reminders',
-  'ticket_checklists', 'checklist_templates', 'checklist_template_items',
-  'kb_articles', 'kb_articles_fts', 'kb_categories', 'kb_article_tags', 'kb_article_links', 'kb_article_shares',
-  'recurring_templates', 'recurring_ticket_history',
-  'time_entries',
-  'push_subscriptions',
-  'tickets_fts',
-  'ticket_kb_links',
-  'refresh_tokens',
-]);
+// SQLite-identifier whitelist regex: bokstäver, siffror, underscore — startar inte med siffra.
+// Skyddar PRAGMA table_info(${tableName}) mot injection eftersom det inte går att parametrisera.
+const VALID_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 const columnExists = (tableName: string, columnName: string) => {
-  if (!VALID_TABLE_NAMES.has(tableName)) {
-    throw new Error(`columnExists: unknown table "${tableName}"`);
+  if (!VALID_IDENTIFIER.test(tableName)) {
+    throw new Error(`columnExists: invalid table name "${tableName}"`);
   }
+  // Returnera false om tabellen inte finns istället för att kasta — migrations kan
+  // legitimt kolla columnExists FÖRE tabellen skapas (defensiv idempotent kod).
+  if (!tableExists(tableName)) return false;
   const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[];
   return columns.some((column) => column.name === columnName);
 };
