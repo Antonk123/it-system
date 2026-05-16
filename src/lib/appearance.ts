@@ -93,7 +93,7 @@ const sidebarIconSet = new Set<string>(SIDEBAR_ICON_OPTIONS.map((o) => o.value))
 
 export const isSidebarIcon = (value: string): value is SidebarIcon => sidebarIconSet.has(value);
 
-export const DEFAULT_SIDEBAR_ICON: SidebarIcon = "lifebuoy";
+export const DEFAULT_SIDEBAR_ICON: SidebarIcon = "inbox";
 
 export const getStoredSidebarIcon = (): SidebarIcon => {
   if (typeof window === "undefined") return DEFAULT_SIDEBAR_ICON;
