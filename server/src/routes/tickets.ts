@@ -1522,11 +1522,9 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
     return res.status(400).json({ error: 'Invalid priority value' });
   }
 
-  // assigned_to: admin-only (matches single-PUT semantics) and target user must exist
+  // assigned_to: self-service tillåts (matchar single-PUT). Bara validate att
+  // target-user existerar — history-loggen spårar vem som ändrade.
   if (assigned_to !== undefined) {
-    if (req.user!.role !== 'admin') {
-      return res.status(403).json({ error: 'Endast administratörer kan ändra tilldelad användare' });
-    }
     const normalizedAssignee = assigned_to || null;
     if (normalizedAssignee !== null) {
       const target = db.prepare('SELECT id FROM users WHERE id = ?').get(normalizedAssignee) as { id: string } | undefined;

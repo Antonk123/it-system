@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
-import { useAuth } from '@/contexts/AuthContext';
 import { Layout } from '@/components/Layout';
 import { TicketTable } from '@/components/TicketTable';
 import { EmptyState } from '@/components/EmptyState';
@@ -96,8 +95,6 @@ const Archive = () => {
   });
 
   const { users } = useUsers();
-  const { user: currentUser } = useAuth();
-  const isAdmin = currentUser?.role === 'admin';
 
   // Reopen makes sense whenever any selected ticket is resolved/closed.
   // Archive lists status=closed exclusively, so a non-empty selection always
@@ -377,7 +374,7 @@ const Archive = () => {
       <BulkActionBar
         selectedCount={selectedIds.length}
         canReopen={canReopenSelection}
-        canAssign={isAdmin}
+        canAssign
         onReopen={handleBulkReopen}
         onChangePriority={handleBulkChangePriority}
         onAssign={handleBulkAssign}
