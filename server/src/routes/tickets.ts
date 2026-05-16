@@ -1696,15 +1696,10 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Ticket not found' });
     }
 
-    // Permission check: only admins can change ticket assignee. Prevents non-admin
-    // users from stealing or reassigning tickets that aren't theirs. No-op assignments
-    // (sending the same value back) are allowed silently.
-    if (assigned_to !== undefined) {
-      const newAssignee = assigned_to || null;
-      if (newAssignee !== existing.assigned_to && req.user!.role !== 'admin') {
-        return res.status(403).json({ error: 'Endast administratörer kan ändra tilldelad användare' });
-      }
-    }
+    // Self-service ticket-picking: every authenticated user can change the assignee.
+    // History-log persists who changed what (rad 1773), and the audit trail is
+    // sufficient for a small internal IT-support team. Locking this to admin
+    // creates more friction than it prevents.
 
     // When customFields are provided, compose description from them (same logic as POST)
     let finalDescription: string | undefined = description;

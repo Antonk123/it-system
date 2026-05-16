@@ -21,24 +21,34 @@ interface UserRow {
   last_login: string | null;
 }
 
-// Get all system users (admin only)
-router.get('/', authenticate, requireAdmin, (_req: AuthRequest, res: Response) => {
+// Get all system users. Auth:ade users får en reduced payload (för
+// assignee-dropdown och @-mentions); admins får fullständigt payload (email,
+// lastSignIn, etc) för Administration → Användare-tabben.
+router.get('/', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const users = db.prepare(`
       SELECT id, email, display_name, role, created_at, last_login FROM users ORDER BY created_at DESC
     `).all() as Omit<UserRow, 'password_hash'>[];
-    
-    // Map to expected format
-    const mapped = users.map(u => ({
-      id: u.id,
-      email: u.email,
-      displayName: u.display_name,
-      role: u.role,
-      createdAt: u.created_at,
-      lastSignIn: u.last_login,
-      emailConfirmed: true, // Always true for local users
-    }));
-    
+
+    const isAdmin = req.user?.role === 'admin';
+
+    const mapped = users.map(u => isAdmin
+      ? {
+          id: u.id,
+          email: u.email,
+          displayName: u.display_name,
+          role: u.role,
+          createdAt: u.created_at,
+          lastSignIn: u.last_login,
+          emailConfirmed: true,
+        }
+      : {
+          id: u.id,
+          displayName: u.display_name,
+          role: u.role,
+        }
+    );
+
     res.json({ users: mapped });
   } catch (error) {
     console.error('Error fetching users:', error);

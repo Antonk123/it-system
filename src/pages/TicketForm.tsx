@@ -18,7 +18,6 @@ import { CategoryCombobox } from '@/components/CategoryCombobox';
 import { TemplateCombobox } from '@/components/TemplateCombobox';
 import { DynamicFieldsForm } from '@/components/DynamicFieldsForm';
 import { CustomFieldInput, api } from '@/lib/api';
-import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
@@ -44,10 +43,7 @@ const TicketForm = () => {
   const location = useLocation();
   const { addTicket, updateTicket, getTicketById } = useTickets();
   const { users } = useUsers();
-  const { user: authUser } = useAuth();
-  const isAdmin = authUser?.role === 'admin';
-  // Non-admins får 403 från GET /api/users, så skippa anropet helt för dem.
-  const { users: systemUsers } = useSystemUsers({ enabled: isAdmin });
+  const { users: systemUsers } = useSystemUsers();
   const { companies } = useCompanies();
   const { categories, addCategory } = useCategories();
   const { templates } = useTemplates();
@@ -730,27 +726,17 @@ const TicketForm = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="ticket-assigned">Tilldelad</Label>
-                  {isAdmin ? (
-                    <Select value={formData.assigned_to || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, assigned_to: v === 'none' ? '' : v }))}>
-                      <SelectTrigger id="ticket-assigned">
-                        <SelectValue placeholder="Ingen tilldelad" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Ingen tilldelad</SelectItem>
-                        {systemUsers.map(u => (
-                          <SelectItem key={u.id} value={u.id}>{u.displayName || u.email}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      id="ticket-assigned"
-                      value={(existingTicket as any)?.assignedToName || 'Ingen tilldelad'}
-                      disabled
-                      readOnly
-                      title="Endast administratörer kan ändra tilldelad användare"
-                    />
-                  )}
+                  <Select value={formData.assigned_to || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, assigned_to: v === 'none' ? '' : v }))}>
+                    <SelectTrigger id="ticket-assigned">
+                      <SelectValue placeholder="Ingen tilldelad" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Ingen tilldelad</SelectItem>
+                      {systemUsers.map(u => (
+                        <SelectItem key={u.id} value={u.id}>{u.displayName || u.email}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="ticket-company">Företag</Label>
