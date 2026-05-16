@@ -42,7 +42,7 @@ export function ReminderList({ reminders, onDeleteReminder, onClearSent }: Remin
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   {reminder.sent === 1 && (
-                    <Check className="h-4 w-4 text-green-600 flex-shrink-0" />
+                    <Check className="h-4 w-4 text-[hsl(var(--success))] flex-shrink-0" />
                   )}
                   <span className={reminder.sent === 1 ? 'line-through text-muted-foreground' : 'font-medium'}>
                     {format(new Date(reminder.reminder_time), 'PPP HH:mm', { locale: sv })}

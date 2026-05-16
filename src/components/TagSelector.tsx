@@ -137,7 +137,7 @@ export function TagSelector({ selectedTagIds = [], preloadedTags, onTagsChange, 
                     />
                     <span className="flex-1 text-sm">{tag.name}</span>
                     {selectedTagIds.includes(tag.id) && (
-                      <Check size={16} className="text-green-600" />
+                      <Check size={16} className="text-[hsl(var(--success))]" />
                     )}
                   </button>
                 ))}

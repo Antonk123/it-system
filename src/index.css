@@ -116,6 +116,20 @@
     --search-glow-accent-bright: 199 80% 75%;
     --search-glow-base: 220 40% 7%;
     --search-input-bg: 218 38% 10%;
+
+    /* Semantic accent — AI / branded actions (purple/violet family).
+       Dark default — brightened för läsbarhet på mörk bakgrund. */
+    --ai: 270 85% 70%;
+    --ai-foreground: 270 100% 5%;
+
+    /* Warning — amber för "behöver uppmärksamhet, inte kritiskt". */
+    --warning: 38 95% 60%;
+    --warning-foreground: 0 0% 5%;
+
+    /* Success — confirmation green. --success-foreground definieras här,
+       --success ärvs/överskrivs av .dark och light-teman. */
+    --success: 142 65% 55%;
+    --success-foreground: 0 0% 5%;
   }
 
   /* Midnight - GitHub dark-inspired deep indigo */
@@ -544,6 +558,23 @@
   }
 
   /* Per-theme light variants — D-01/D-03 */
+
+  /* Gemensamma semantiska tokens för light-mode. Per-tema light-block
+     ärver dessa men kan override:a vid behov (samma specificitet,
+     senare regel vinner — så .light.theme-* placeras efter denna). */
+  .light {
+    /* AI accent — purple-600-ish (WCAG AA ≈ 4.6:1 mot vit). */
+    --ai: 270 70% 50%;
+    --ai-foreground: 270 100% 97%;
+
+    /* Warning — amber-500 (used som badge-bakgrund med mörk text). */
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    /* Success default (override:as redan i flera light-teman). */
+    --success: 142 60% 35%;
+    --success-foreground: 0 0% 100%;
+  }
 
   /* Slate Light — blue accent */
   .light.theme-default {
@@ -1126,6 +1157,14 @@
 
     --success: 142 60% 25%;
     --success-foreground: 142 70% 90%;
+
+    /* Semantic accent (AI) — brighter for dark mode legibility. */
+    --ai: 270 85% 72%;
+    --ai-foreground: 270 100% 5%;
+
+    /* Warning — slightly brighter amber on dark. */
+    --warning: 38 95% 62%;
+    --warning-foreground: 0 0% 5%;
 
     --sidebar-background: 0 0% 7%;
     --sidebar-foreground: 0 0% 98%;

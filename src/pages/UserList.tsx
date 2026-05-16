@@ -8,6 +8,7 @@ import { useCompanies } from '@/hooks/useCompanies';
 import { useTickets } from '@/hooks/useTickets';
 import { Layout } from '@/components/Layout';
 import { SearchBar } from '@/components/SearchBar';
+import { EmptyState } from '@/components/EmptyState';
 import { UserTicketHistory } from '@/components/UserTicketHistory';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -399,32 +400,23 @@ const UserList = () => {
             ))}
           </div>
         ) : filteredUsers.length === 0 ? (
-          <div className="text-center py-16 border rounded-lg bg-card">
-            <UsersIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            {search === '' && companyFilter === 'all' ? (
-              <>
-                <p className="text-muted-foreground">Inga användare ännu</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Lägg till användare för att tilldela dem ärenden
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-muted-foreground">Inga användare matchar filtret</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-4"
-                  onClick={() => {
-                    setSearch('');
-                    setCompanyFilter('all');
-                  }}
-                >
-                  Rensa filter
-                </Button>
-              </>
-            )}
-          </div>
+          search === '' && companyFilter === 'all' ? (
+            <EmptyState
+              icon={<UsersIcon />}
+              title="Inga användare ännu"
+              description="Lägg till användare för att tilldela dem ärenden"
+            />
+          ) : (
+            <EmptyState
+              icon={<UsersIcon />}
+              title="Inga användare matchar filtret"
+              hasFilters
+              onClearFilters={() => {
+                setSearch('');
+                setCompanyFilter('all');
+              }}
+            />
+          )
         ) : (
           <>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

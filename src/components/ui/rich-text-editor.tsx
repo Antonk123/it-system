@@ -261,6 +261,19 @@ export const RichTextEditor = ({
     TableHeader,
     Placeholder.configure({
       placeholder,
+      showOnlyWhenEditable: true,
+      // emptyEditorClass triggers on the doc when the whole editor is empty.
+      // emptyNodeClass (default 'is-empty') is applied per empty node, so a
+      // manually-cleared <p></p> (or stacked empty paragraphs) still surfaces
+      // the placeholder hint.
+      emptyEditorClass: 'is-editor-empty',
+      emptyNodeClass: 'is-empty',
+      // Default is true, which hides the placeholder on nodes the cursor
+      // isn't currently in. Setting false makes the placeholder visible on
+      // ANY empty top-level node, which is what users expect after clearing
+      // the field (cursor lands in an empty <p></p> but the hint should
+      // still render even if focus drifts).
+      showOnlyCurrent: false,
     }),
   ], [placeholder]);
 
@@ -269,6 +282,22 @@ export const RichTextEditor = ({
     content: value || '',
     editable: !disabled,
     editorProps: {
+      // Ctrl+Enter (or Cmd+Enter on Mac) submits the surrounding form. TipTap
+      // captures all key events when focused, so without this handler the user
+      // has no keyboard path to submit from inside the editor. Plain Enter is
+      // left alone (creates a new paragraph). Modifier-Bold/Italic/etc. don't
+      // hit this branch since they don't use the Enter key.
+      handleKeyDown: (view, event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+          const form = view.dom.closest('form');
+          if (form) {
+            event.preventDefault();
+            form.requestSubmit();
+            return true;
+          }
+        }
+        return false;
+      },
       // Strip Office/Outlook cruft on paste. Regex-based — DOMPurify is overkill
       // for these narrow patterns and adds bundle weight. We only target the
       // classes/styles/tags that we know break rendering or leak local paths.
@@ -866,6 +895,19 @@ export const RichTextEditor = ({
         }
 
         .rich-text-editor-content .ProseMirror p.is-editor-empty:first-child::before {
+          content: attr(data-placeholder);
+          float: left;
+          color: hsl(var(--muted-foreground));
+          pointer-events: none;
+          height: 0;
+        }
+
+        /* TipTap applies .is-empty per empty node (via Placeholder extension's
+           emptyNodeClass). With showOnlyCurrent:false the class lands on
+           every empty <p>, so a manually-cleared field — even after focus
+           drift — keeps the placeholder hint. Limited to :first-child to
+           avoid duplicated hints when the user leaves several blank lines. */
+        .rich-text-editor-content .ProseMirror p.is-empty:first-child::before {
           content: attr(data-placeholder);
           float: left;
           color: hsl(var(--muted-foreground));

@@ -12,7 +12,10 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground",
+      // Defaults: horizontal flex with mobile-friendly overflow scroll. Pages that
+      // want a grid layout can override via className (e.g. "grid grid-cols-2"),
+      // which Tailwind's later utilities will win against `flex`.
+      "flex h-10 items-center justify-center overflow-x-auto whitespace-nowrap rounded-md bg-muted p-1 text-muted-foreground",
       className,
     )}
     {...props}

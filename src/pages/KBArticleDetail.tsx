@@ -298,7 +298,7 @@ const KBArticleDetail = () => {
           <h1 className="text-2xl font-bold text-foreground">{article.title}</h1>
           <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
             {article.status === 'draft' && (
-              <Badge variant="outline" className="border-amber-500 text-amber-600">Utkast</Badge>
+              <Badge variant="outline" className="border-[hsl(var(--warning))] text-[hsl(var(--warning))]">Utkast</Badge>
             )}
             {article.category_name && (
               <Badge
@@ -320,7 +320,7 @@ const KBArticleDetail = () => {
             <Button
               variant="ghost"
               size="sm"
-              className="h-auto py-0.5 px-2 text-sm text-muted-foreground hover:text-green-600 dark:hover:text-green-400 gap-1.5"
+              className="h-auto py-0.5 px-2 text-sm text-muted-foreground hover:text-[hsl(var(--success))] gap-1.5"
               onClick={handleMarkReviewed}
               disabled={isReviewing}
             >

@@ -35,7 +35,7 @@ const WebhookDeliveriesPanel = memo(({ webhookId }: { webhookId: string }) => {
     <div className="rounded border bg-muted/30 divide-y divide-border max-h-48 overflow-y-auto">
       {deliveries.slice(0, 20).map((d) => (
         <div key={d.id} className="flex items-center gap-2 px-2 py-1.5 text-xs">
-          <span className={`w-2 h-2 rounded-full ${d.response_code && d.response_code >= 200 && d.response_code < 300 ? 'bg-green-500' : 'bg-red-500'}`} />
+          <span className={`w-2 h-2 rounded-full ${d.response_code && d.response_code >= 200 && d.response_code < 300 ? 'bg-[hsl(var(--success))]' : 'bg-destructive'}`} />
           <span className="font-mono">{d.event}</span>
           <span className="text-muted-foreground ml-auto">
             {d.response_code || 'Err'} &middot; {d.created_at ? format(new Date(d.created_at), 'd MMM HH:mm', { locale: sv }) : '-'}

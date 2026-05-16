@@ -294,7 +294,7 @@ const KnowledgeBase = () => {
                             disabled={isSavingCategoryId === cat.id}
                             aria-label="Spara kategorinamn"
                           >
-                            <Check className="w-3.5 h-3.5 text-green-600" />
+                            <Check className="w-3.5 h-3.5 text-[hsl(var(--success))]" />
                           </Button>
                           <Button
                             size="sm"
@@ -534,7 +534,7 @@ const KnowledgeBase = () => {
                               </Badge>
                             )}
                             {isStale(article) && (
-                              <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-600 dark:text-amber-400 gap-1">
+                              <Badge variant="outline" className="text-xs border-[hsl(var(--warning))]/50 text-[hsl(var(--warning))] gap-1">
                                 <AlertTriangle className="w-3 h-3" />
                                 Inaktuell
                               </Badge>

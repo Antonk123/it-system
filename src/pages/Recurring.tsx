@@ -393,7 +393,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
               'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
               isActive
                 ? 'bg-emerald-500/15 text-emerald-500'
-                : 'bg-amber-500/15 text-amber-500'
+                : 'bg-[hsl(var(--warning))]/15 text-[hsl(var(--warning))]'
             )}
           >
             <RefreshCw className="h-4 w-4" />
@@ -408,7 +408,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
                   'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
                   isActive
                     ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                    : 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
+                    : 'bg-[hsl(var(--warning))]/15 text-[hsl(var(--warning))]'
                 )}
               >
                 {isActive ? 'Aktiv' : 'Pausad'}
@@ -456,7 +456,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
               disabled={toggleTemplate.isPending}
             >
               {isActive ? (
-                <Pause className="h-4 w-4 text-amber-500" />
+                <Pause className="h-4 w-4 text-[hsl(var(--warning))]" />
               ) : (
                 <Play className="h-4 w-4 text-emerald-500" />
               )}

@@ -577,6 +577,10 @@ const TicketForm = () => {
                     onChange={(e) => { setFormData({ ...formData, title: e.target.value }); setErrors(prev => { const p = { ...prev }; delete p['title']; return p; }); }}
                     placeholder="Kort beskrivning av problemet"
                     required
+                    // Autofocus only on create — editing an existing ticket
+                    // shouldn't steal focus on mount (user may be scrolling
+                    // to a specific field, and autofocus jumps the viewport).
+                    autoFocus={!isEditing}
                     aria-invalid={!!errors.title}
                     aria-describedby={errors.title ? 'title-error' : undefined}
                     className={errors.title ? 'border-destructive focus-visible:ring-destructive' : ''}

@@ -5,6 +5,7 @@ import { useUsers } from '@/hooks/useUsers';
 import { useAuth } from '@/contexts/AuthContext';
 import { Layout } from '@/components/Layout';
 import { TicketTable } from '@/components/TicketTable';
+import { EmptyState } from '@/components/EmptyState';
 import { PaginationControls } from '@/components/PaginationControls';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Archive as ArchiveIcon, Upload } from 'lucide-react';
@@ -323,32 +324,23 @@ const Archive = () => {
             ))}
           </div>
         ) : tickets.length === 0 ? (
-          <div className="text-center py-16 border rounded-lg bg-card">
-            <ArchiveIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            {search === '' && categoryFilter === 'all' && priorityFilter === 'all' && selectedTagIds.length === 0 && !checklistFilter && !dateFrom && !dateTo ? (
-              <>
-                <p className="text-muted-foreground">Inga arkiverade ärenden ännu</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Stängda ärenden visas här
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-muted-foreground">Inga arkiverade ärenden matchar filtret</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-4"
-                  onClick={() => updateFilters({
-                    search: '', priority: 'all', category: 'all',
-                    tags: [], tagMode: 'or', checklist: '', dateFrom: '', dateTo: ''
-                  })}
-                >
-                  Rensa filter
-                </Button>
-              </>
-            )}
-          </div>
+          search === '' && categoryFilter === 'all' && priorityFilter === 'all' && selectedTagIds.length === 0 && !checklistFilter && !dateFrom && !dateTo ? (
+            <EmptyState
+              icon={<ArchiveIcon />}
+              title="Inga arkiverade ärenden ännu"
+              description="Stängda ärenden visas här"
+            />
+          ) : (
+            <EmptyState
+              icon={<ArchiveIcon />}
+              title="Inga arkiverade ärenden matchar filtret"
+              hasFilters
+              onClearFilters={() => updateFilters({
+                search: '', priority: 'all', category: 'all',
+                tags: [], tagMode: 'or', checklist: '', dateFrom: '', dateTo: ''
+              })}
+            />
+          )
         ) : (
           <>
             <div className={isLoading ? 'opacity-50 pointer-events-none' : ''}>

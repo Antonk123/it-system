@@ -214,10 +214,10 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
 
               <div className="border rounded-lg p-4 bg-card">
                 <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle2 className="w-4 h-4 text-green-500" />
+                  <CheckCircle2 className="w-4 h-4 text-[hsl(var(--success))]" />
                   <span className="text-sm text-muted-foreground">Giltiga</span>
                 </div>
-                <p className="text-2xl font-bold text-green-600">{preview.valid}</p>
+                <p className="text-2xl font-bold text-[hsl(var(--success))]">{preview.valid}</p>
               </div>
 
               <div className="border rounded-lg p-4 bg-card">

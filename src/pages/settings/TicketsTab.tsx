@@ -86,7 +86,7 @@ const CategoryItem = memo(({
           autoFocus
         />
         <Button size="icon" variant="ghost" onClick={onSaveEdit} aria-label="Spara kategorinamn">
-          <Check className="w-4 h-4 text-green-500" />
+          <Check className="w-4 h-4 text-[hsl(var(--success))]" />
         </Button>
         <Button size="icon" variant="ghost" onClick={onCancelEdit} aria-label="Avbryt redigering">
           <X className="w-4 h-4 text-muted-foreground" />
@@ -728,7 +728,7 @@ const TicketsTab = () => {
                         autoFocus
                       />
                       <Button size="icon" variant="ghost" onClick={handleSaveTagEdit} aria-label="Spara tagg">
-                        <Check className="w-4 h-4 text-green-500" />
+                        <Check className="w-4 h-4 text-[hsl(var(--success))]" />
                       </Button>
                       <Button size="icon" variant="ghost" onClick={handleCancelTagEdit} aria-label="Avbryt taggredigering">
                         <X className="w-4 h-4 text-muted-foreground" />

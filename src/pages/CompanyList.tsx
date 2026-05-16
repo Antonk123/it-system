@@ -1,16 +1,22 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Plus, Search, Trash2, Loader2 } from 'lucide-react';
+import { Building2, Plus, Search, Trash2, Loader2, MoreHorizontal } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
 import { useCompanies } from '@/hooks/useCompanies';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { toast } from 'sonner';
+import { EmptyState } from '@/components/EmptyState';
 
 const CompanyList = () => {
   const navigate = useNavigate();
@@ -19,6 +25,7 @@ const CompanyList = () => {
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [form, setForm] = useState({
     name: '',
     org_number: '',
@@ -30,6 +37,7 @@ const CompanyList = () => {
   const filtered = companies.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase())
   );
+  const hasFilters = search.trim() !== '';
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,21 +155,21 @@ const CompanyList = () => {
         </div>
 
         {/* Table */}
-        <div className="border rounded-lg overflow-hidden bg-card">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Org.nummer</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground">Öppna ärenden</th>
-                <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Totalt</th>
-                <th className="px-4 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
+        {isLoading ? (
+          <div className="border rounded-lg overflow-hidden bg-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Org.nummer</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Öppna ärenden</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Totalt</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="border-b last:border-0">
                     <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
                     <td className="px-4 py-3 hidden md:table-cell"><Skeleton className="h-4 w-24" /></td>
@@ -170,15 +178,46 @@ const CompanyList = () => {
                     <td className="px-4 py-3 hidden sm:table-cell"><Skeleton className="h-4 w-8" /></td>
                     <td className="px-4 py-3"><Skeleton className="h-4 w-8" /></td>
                   </tr>
-                ))
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
-                    {search ? 'Inga företag matchar sökningen' : 'Inga företag ännu — skapa det första!'}
-                  </td>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : filtered.length === 0 ? (
+          hasFilters ? (
+            <EmptyState
+              icon={<Building2 />}
+              title="Inga företag matchar sökningen"
+              hasFilters
+              onClearFilters={() => setSearch('')}
+            />
+          ) : (
+            <EmptyState
+              icon={<Building2 />}
+              title="Inga företag ännu"
+              description="Skapa ditt första företag för att börja gruppera kontakter och ärenden."
+              action={
+                <Button size="sm" className="gap-2" onClick={() => setCreateOpen(true)}>
+                  <Plus className="w-4 h-4" />
+                  Skapa företag
+                </Button>
+              }
+            />
+          )
+        ) : (
+          <div className="border rounded-lg overflow-hidden bg-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Org.nummer</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Öppna ärenden</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Totalt</th>
+                  <th className="px-4 py-3" />
                 </tr>
-              ) : (
-                filtered.map(company => (
+              </thead>
+              <tbody>
+                {filtered.map(company => (
                   <tr
                     key={company.id}
                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer transition-colors"
@@ -205,39 +244,63 @@ const CompanyList = () => {
                       className="px-4 py-3"
                       onClick={e => e.stopPropagation()}
                     >
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            className="h-8 w-8 text-muted-foreground"
+                            aria-label={`Åtgärder för ${company.name}`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <MoreHorizontal className="w-4 h-4" />
                           </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Ta bort företag</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Är du säker på att du vill ta bort <strong>{company.name}</strong>? Denna åtgärd kan inte ångras.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Avbryt</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => deleteCompany(company.id)}>
-                              Ta bort
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onSelect={() => setDeleteTarget({ id: company.id, name: company.name })}
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Ta bort
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
+
+      {/* Centralized delete confirmation (triggered from row dropdown) */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort företag</AlertDialogTitle>
+            <AlertDialogDescription>
+              Är du säker på att du vill ta bort <strong>{deleteTarget?.name}</strong>? Denna åtgärd kan inte ångras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteTarget) deleteCompany(deleteTarget.id);
+                setDeleteTarget(null);
+              }}
+            >
+              Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };

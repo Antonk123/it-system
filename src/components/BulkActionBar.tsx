@@ -74,7 +74,7 @@ export function BulkActionBar({
             variant="outline"
             size="sm"
             onClick={onReopen}
-            className="border-green-500 text-green-500 hover:bg-green-500/10 hover:text-green-500"
+            className="border-[hsl(var(--success))] text-[hsl(var(--success))] hover:bg-[hsl(var(--success))]/10 hover:text-[hsl(var(--success))]"
           >
             Öppna igen
           </Button>

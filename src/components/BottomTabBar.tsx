@@ -25,6 +25,8 @@ export const BottomTabBar = () => {
         'fixed bottom-0 inset-x-0 z-50 lg:hidden',
         'h-14 bg-card border-t border-border',
         'pb-[env(safe-area-inset-bottom)]',
+        // overflow-visible so the lifted center FAB ("Nytt") isn't clipped by the bar
+        'overflow-visible',
         'flex items-stretch'
       )}
       aria-label="Huvudnavigation"
@@ -35,7 +37,7 @@ export const BottomTabBar = () => {
 
         if (item.path === '/tickets/new') {
           return (
-            <div key={item.path} className="flex-1 flex items-center justify-center relative -mt-3">
+            <div key={item.path} className="flex-1 flex items-center justify-center relative -mt-3 overflow-visible">
               <Link to={item.path} className="flex flex-col items-center justify-center gap-0.5">
                 <div className={cn(
                   'w-12 h-12 rounded-full flex items-center justify-center shadow-lg -mt-4',

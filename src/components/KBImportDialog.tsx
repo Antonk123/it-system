@@ -360,7 +360,7 @@ export function KBImportDialog({ open, onOpenChange, defaultCategoryId, onImport
                     </div>
                     <div className="shrink-0 w-6 flex justify-center">
                       {f.status === 'uploading' && <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />}
-                      {f.status === 'done' && <CheckCircle2 className="w-4 h-4 text-green-600" />}
+                      {f.status === 'done' && <CheckCircle2 className="w-4 h-4 text-[hsl(var(--success))]" />}
                       {f.status === 'error' && <AlertCircle className="w-4 h-4 text-destructive" />}
                       {f.status === 'pending' && !isImporting && (
                         <button

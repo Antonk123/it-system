@@ -279,6 +279,9 @@ const KBArticleForm = () => {
                 setErrors(prev => { const p = { ...prev }; delete p.title; return p; });
               }}
               placeholder="Artikelns titel..."
+              // Autofocus only on create — editing shouldn't yank focus on
+              // mount (user may scroll to a specific section to edit).
+              autoFocus={!isEditing}
               className={errors.title ? 'border-destructive' : ''}
             />
             {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}

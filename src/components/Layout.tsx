@@ -338,7 +338,9 @@ export const Layout = ({
           <RouteBreadcrumbs />
         </div>
 
-        <div className="p-5 pb-20 lg:p-6 relative z-10">
+        {/* pb-24 on mobile leaves room for the fixed BottomTabBar + lifted FAB without
+            clipping the last row of content. lg: keeps the regular desktop padding. */}
+        <div className="p-5 pb-24 lg:p-6 lg:pb-6 relative z-10">
           {children}
         </div>
       </main>
