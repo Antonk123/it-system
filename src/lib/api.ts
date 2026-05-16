@@ -1355,6 +1355,7 @@ export interface CompanyRow {
   email: string | null;
   phone: string | null;
   address: string | null;
+  sla_disabled: number;
   contact_count: number;
   open_ticket_count: number;
   total_ticket_count: number;

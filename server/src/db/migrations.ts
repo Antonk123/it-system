@@ -868,4 +868,15 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    id: '045',
+    name: 'add_sla_disabled_to_companies',
+    up: (db, { columnExists }) => {
+      // Per-företag opt-out av SLA. Interna ärenden eller företag utan
+      // avtal ska inte ha SLA-deadlines. Default 0 = SLA aktiverad.
+      if (!columnExists('companies', 'sla_disabled')) {
+        db.prepare('ALTER TABLE companies ADD COLUMN sla_disabled INTEGER NOT NULL DEFAULT 0').run();
+      }
+    },
+  },
 ];

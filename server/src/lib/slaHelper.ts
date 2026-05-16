@@ -28,9 +28,15 @@ export function findSLAPolicy(companyId: string | null, priority: string): SLAPo
 
 /**
  * Calculate SLA deadlines for a ticket and set them.
- * Called when a ticket is created.
+ * Called when a ticket is created. Skippar om företaget har sla_disabled=1
+ * (interna ärenden / företag utan avtal).
  */
 export function applySLAToTicket(ticketId: string, companyId: string | null, priority: string): void {
+  if (companyId) {
+    const co = db.prepare('SELECT sla_disabled FROM companies WHERE id = ?').get(companyId) as { sla_disabled: number } | undefined;
+    if (co?.sla_disabled) return;
+  }
+
   const policy = findSLAPolicy(companyId, priority);
   if (!policy) return;
 

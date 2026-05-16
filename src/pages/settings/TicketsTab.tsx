@@ -8,6 +8,8 @@ import { useSLAPolicies } from '@/hooks/useSLAPolicies';
 import { useCompanies } from '@/hooks/useCompanies';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -240,9 +242,33 @@ const TicketsTab = () => {
 
   // SLA-policy scope: 'default' = global, eller specifikt företags-id
   const [slaScope, setSlaScope] = useState<string>('default');
-  const { companies } = useCompanies();
+  const { companies, updateCompany } = useCompanies();
   const { policies: defaultSlaPolicies } = useSLAPolicies('default');
   const { policies: slaPolicies, isLoading: isSlaLoading, upsertPolicies } = useSLAPolicies(slaScope);
+
+  // SLA-disable per företag (interna ärenden behöver oftast ingen SLA)
+  const selectedCompany = useMemo(
+    () => slaScope !== 'default' ? companies.find(c => c.id === slaScope) : null,
+    [companies, slaScope]
+  );
+  const slaDisabled = !!selectedCompany?.sla_disabled;
+  const [isTogglingSla, setIsTogglingSla] = useState(false);
+
+  const handleToggleSlaDisabled = useCallback(async (disabled: boolean) => {
+    if (!selectedCompany) return;
+    setIsTogglingSla(true);
+    try {
+      await updateCompany(selectedCompany.id, { sla_disabled: disabled ? 1 : 0 } as any);
+      toast.success(disabled
+        ? `SLA inaktiverad för ${selectedCompany.name} — aktiva ärenden rensade`
+        : `SLA aktiverad för ${selectedCompany.name} — applicerad på aktiva ärenden`
+      );
+    } catch (err) {
+      toast.error('Kunde inte ändra SLA-status: ' + (err instanceof Error ? err.message : 'okänt fel'));
+    } finally {
+      setIsTogglingSla(false);
+    }
+  }, [selectedCompany, updateCompany]);
 
   // Företag som har egna overrides (för att markera i dropdown)
   const { policies: allSlaPolicies } = useSLAPolicies();
@@ -984,13 +1010,40 @@ const TicketsTab = () => {
                   {slaScope !== 'default' && !scopeHasOverrides && (
                     <Badge variant="outline" className="text-xs shrink-0">Använder default</Badge>
                   )}
-                  {slaScope !== 'default' && scopeHasOverrides && (
+                  {slaScope !== 'default' && scopeHasOverrides && !slaDisabled && (
                     <Badge variant="secondary" className="text-xs shrink-0">Egen override</Badge>
                   )}
+                  {slaScope !== 'default' && slaDisabled && (
+                    <Badge variant="outline" className="text-xs shrink-0 border-destructive/40 text-destructive">SLA inaktiverad</Badge>
+                  )}
                 </div>
+
+                {selectedCompany && (
+                  <div className="flex items-start gap-3 p-3 mb-3 border rounded-lg bg-muted/30">
+                    <Switch
+                      id="sla-enabled-toggle"
+                      checked={!slaDisabled}
+                      onCheckedChange={(v) => handleToggleSlaDisabled(!v)}
+                      disabled={isTogglingSla}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <Label htmlFor="sla-enabled-toggle" className="text-sm font-medium cursor-pointer">
+                        SLA aktiverad för {selectedCompany.name}
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Stänger du av räknas ingen SLA-deadline för det här företaget — passar interna ärenden eller företag utan avtal. Aktiva (öppna) ärenden synkas direkt; stängda lämnas orörda för rapporter.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {isSlaLoading ? (
                   <div className="text-sm text-muted-foreground p-3">Hämtar policies...</div>
-                ) : slaPolicies.length === 0 ? (
+                ) : slaDisabled ? (
+                  <div className="text-sm text-muted-foreground p-3 border rounded-lg">
+                    SLA är inaktiverat för det här företaget. Inga deadlines beräknas och inga SLA-badges visas. Slå på igen ovan för att återaktivera.
+                  </div>
+                ) : Object.keys(slaDraft).length === 0 ? (
                   <div className="text-sm text-muted-foreground p-3 border rounded-lg">
                     Inga policies hittades. Default-policy seedas automatiskt vid serverstart.
                   </div>

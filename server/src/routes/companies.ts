@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { applySLAToTicket } from '../lib/slaHelper.js';
 
 const router = Router();
 
@@ -12,6 +13,7 @@ interface CompanyRow {
   email: string | null;
   phone: string | null;
   address: string | null;
+  sla_disabled: number;
   created_at: string;
   updated_at: string;
 }
@@ -116,19 +118,20 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Company not found' });
     }
 
-    const { name, org_number, email, phone, address } = req.body;
+    const { name, org_number, email, phone, address, sla_disabled } = req.body;
     const updates: Record<string, any> = {};
     if (name !== undefined) updates.name = name.trim();
     if (org_number !== undefined) updates.org_number = org_number?.trim() || null;
     if (email !== undefined) updates.email = email?.trim() || null;
     if (phone !== undefined) updates.phone = phone?.trim() || null;
     if (address !== undefined) updates.address = address?.trim() || null;
+    if (sla_disabled !== undefined) updates.sla_disabled = sla_disabled ? 1 : 0;
 
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ error: 'No fields to update' });
     }
 
-    const allowedFields = ['name', 'org_number', 'email', 'phone', 'address', 'updated_at'];
+    const allowedFields = ['name', 'org_number', 'email', 'phone', 'address', 'sla_disabled', 'updated_at'];
     updates.updated_at = new Date().toISOString();
 
     const setClauses = Object.keys(updates)
@@ -139,6 +142,36 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       .map(k => updates[k]);
 
     db.prepare(`UPDATE companies SET ${setClauses.join(', ')} WHERE id = ?`).run(...values, req.params.id);
+
+    // SLA-toggle: synka aktiva (icke-stängda/lösta) ärenden så badgen
+    // försvinner/återkommer direkt utan att admin behöver röra varje ärende.
+    if (sla_disabled !== undefined) {
+      const isNowDisabled = sla_disabled ? 1 : 0;
+      const wasDisabled = existing.sla_disabled || 0;
+      if (isNowDisabled !== wasDisabled) {
+        if (isNowDisabled) {
+          db.prepare(`
+            UPDATE tickets SET
+              sla_response_deadline = NULL,
+              sla_resolution_deadline = NULL,
+              sla_response_met = NULL,
+              sla_resolution_met = NULL,
+              sla_paused_at = NULL,
+              sla_paused_duration = 0
+            WHERE company_id = ? AND status NOT IN ('closed', 'resolved')
+          `).run(req.params.id);
+        } else {
+          // Re-apply SLA per ärende baserat på dess prio
+          const tickets = db.prepare(
+            `SELECT id, priority FROM tickets WHERE company_id = ? AND status NOT IN ('closed', 'resolved')`
+          ).all(req.params.id) as { id: string; priority: string }[];
+          for (const t of tickets) {
+            applySLAToTicket(t.id, req.params.id, t.priority);
+          }
+        }
+      }
+    }
+
     const company = db.prepare('SELECT * FROM companies WHERE id = ?').get(req.params.id) as CompanyRow;
     res.json(company);
   } catch (error) {
