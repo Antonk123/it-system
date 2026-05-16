@@ -16,11 +16,11 @@ export const isFontTheme = (value: string): value is FontTheme => fontClassSet.h
 
 export const getStoredFontTheme = (): FontTheme => {
   if (typeof window === "undefined") {
-    return "font-jakarta";
+    return "font-inter";
   }
 
   const stored = window.localStorage.getItem(FONT_STORAGE_KEY);
-  return stored && isFontTheme(stored) ? stored : "font-jakarta";
+  return stored && isFontTheme(stored) ? stored : "font-inter";
 };
 
 export const applyFontTheme = (fontTheme: FontTheme) => {
@@ -46,11 +46,11 @@ export type ModeTheme = "light" | "dark";
 
 export const getStoredMode = (): ModeTheme => {
   if (typeof window === "undefined") {
-    return "dark";
+    return "light";
   }
 
   const stored = window.localStorage.getItem(MODE_STORAGE_KEY);
-  return stored === "light" || stored === "dark" ? stored : "dark";
+  return stored === "light" || stored === "dark" ? stored : "light";
 };
 
 export const applyMode = (mode: ModeTheme) => {
