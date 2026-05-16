@@ -9,9 +9,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Palette, Type, Bell, Loader2 } from 'lucide-react';
+import { Palette, Type, Bell, Loader2, Image as ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
-import { FONT_OPTIONS, FontTheme, applyFontTheme, getStoredFontTheme, isFontTheme, saveFontTheme, ModeTheme, applyMode, getStoredMode, saveModeTheme } from '@/lib/appearance';
+import { FONT_OPTIONS, FontTheme, applyFontTheme, getStoredFontTheme, isFontTheme, saveFontTheme, ModeTheme, applyMode, getStoredMode, saveModeTheme, SIDEBAR_ICON_OPTIONS, SidebarIcon as SidebarIconValue, isSidebarIcon, getStoredSidebarIcon, saveSidebarIcon } from '@/lib/appearance';
+import { dispatchSidebarIconChange } from '@/hooks/useSidebarIcon';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
@@ -29,6 +30,7 @@ const GeneralTab = () => {
   const { theme, setTheme } = useTheme();
   const [fontTheme, setFontTheme] = useState<FontTheme>(getStoredFontTheme());
   const [mode, setMode] = useState<ModeTheme>(getStoredMode());
+  const [sidebarIcon, setSidebarIcon] = useState<SidebarIconValue>(getStoredSidebarIcon());
   const [pushLoading, setPushLoading] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushBlocked, setPushBlocked] = useState(false);
@@ -129,6 +131,14 @@ const GeneralTab = () => {
     toast.success('Teckensnitt uppdaterat');
   };
 
+  const handleSidebarIconChange = (value: string) => {
+    if (!isSidebarIcon(value)) return;
+    setSidebarIcon(value);
+    saveSidebarIcon(value);
+    dispatchSidebarIconChange(value);
+    toast.success('Sidofältets ikon uppdaterad');
+  };
+
   return (
     <>
         <Collapsible open={sectionsOpen.appearance} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, appearance: open }))}>
@@ -202,6 +212,28 @@ const GeneralTab = () => {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2">
+                <ImageIcon className="w-4 h-4" />
+                Sidofältets ikon
+              </label>
+              <Select value={sidebarIcon} onValueChange={handleSidebarIconChange}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Välj ikon" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SIDEBAR_ICON_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Ikon som visas högst upp i sidofältet bredvid produktnamnet.
+              </p>
             </div>
               </CardContent>
             </CollapsibleContent>

@@ -1,6 +1,21 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search, Building2, Receipt, Inbox } from 'lucide-react';
+import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search, Building2, Receipt, Inbox, LifeBuoy, Headset, Wrench, MessageSquareText, ShieldCheck, Sparkles, Zap, HelpCircle, type LucideIcon } from 'lucide-react';
+import { useSidebarIcon } from '@/hooks/useSidebarIcon';
+import { SidebarIcon as SidebarIconValue } from '@/lib/appearance';
+
+const SIDEBAR_ICON_MAP: Record<SidebarIconValue, LucideIcon> = {
+  lifebuoy: LifeBuoy,
+  headset: Headset,
+  inbox: Inbox,
+  ticket: Ticket,
+  wrench: Wrench,
+  'message-square': MessageSquareText,
+  'shield-check': ShieldCheck,
+  sparkles: Sparkles,
+  zap: Zap,
+  'help-circle': HelpCircle,
+};
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -104,11 +119,13 @@ interface TitleSectionProps {
 }
 
 const TitleSection = ({ open }: TitleSectionProps) => {
+  const sidebarIconValue = useSidebarIcon();
+  const SidebarIcon = SIDEBAR_ICON_MAP[sidebarIconValue] ?? LifeBuoy;
   return (
     <div className="p-4 border-b border-sidebar-border">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
-          <Ticket className="w-6 h-6 text-white" />
+          <SidebarIcon className="w-6 h-6 text-white" />
         </div>
 
         {open && (
