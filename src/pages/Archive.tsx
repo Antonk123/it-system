@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
+import { useAuth } from '@/contexts/AuthContext';
 import { Layout } from '@/components/Layout';
 import { TicketTable } from '@/components/TicketTable';
 import { PaginationControls } from '@/components/PaginationControls';
@@ -94,6 +95,15 @@ const Archive = () => {
   });
 
   const { users } = useUsers();
+  const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'admin';
+
+  // Reopen makes sense whenever any selected ticket is resolved/closed.
+  // Archive lists status=closed exclusively, so a non-empty selection always
+  // qualifies — but we compute it from the actual selection for correctness.
+  const canReopenSelection = tickets.some(
+    (t) => selectedIds.includes(t.id) && (t.status === 'resolved' || t.status === 'closed'),
+  );
 
   // Initialize URL params if missing (required for backend pagination)
   useEffect(() => {
@@ -222,6 +232,18 @@ const Archive = () => {
     }
   }, [selectedIds]);
 
+  const handleBulkAssign = useCallback(async (userId: string | null) => {
+    if (selectedIds.length === 0) return;
+    try {
+      const result = await api.bulkUpdateTickets(selectedIds, { assigned_to: userId });
+      toast.success(`${result?.updated ?? selectedIds.length} ärenden tilldelade`);
+      setSelectedIds([]);
+      refetch();
+    } catch {
+      toast.error('Kunde inte tilldela ärenden');
+    }
+  }, [selectedIds, refetch]);
+
   const handleBulkDelete = useCallback(async () => {
     try {
       const result = await api.bulkDeleteTickets(selectedIds);
@@ -300,13 +322,32 @@ const Archive = () => {
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
-        ) : tickets.length === 0 && search === '' && categoryFilter === 'all' && priorityFilter === 'all' && !dateFrom && !dateTo ? (
+        ) : tickets.length === 0 ? (
           <div className="text-center py-16 border rounded-lg bg-card">
             <ArchiveIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">Inga arkiverade ärenden ännu</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Stängda ärenden visas här
-            </p>
+            {search === '' && categoryFilter === 'all' && priorityFilter === 'all' && selectedTagIds.length === 0 && !checklistFilter && !dateFrom && !dateTo ? (
+              <>
+                <p className="text-muted-foreground">Inga arkiverade ärenden ännu</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Stängda ärenden visas här
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-muted-foreground">Inga arkiverade ärenden matchar filtret</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4"
+                  onClick={() => updateFilters({
+                    search: '', priority: 'all', category: 'all',
+                    tags: [], tagMode: 'or', checklist: '', dateFrom: '', dateTo: ''
+                  })}
+                >
+                  Rensa filter
+                </Button>
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -343,8 +384,11 @@ const Archive = () => {
       {/* Floating bulk action bar */}
       <BulkActionBar
         selectedCount={selectedIds.length}
+        canReopen={canReopenSelection}
+        canAssign={isAdmin}
         onReopen={handleBulkReopen}
         onChangePriority={handleBulkChangePriority}
+        onAssign={handleBulkAssign}
         onExportCsv={handleBulkExportXlsx}
         onDeletePermanently={handleBulkDelete}
       />

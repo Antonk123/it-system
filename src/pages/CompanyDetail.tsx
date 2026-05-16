@@ -27,6 +27,7 @@ const CompanyDetail = () => {
   }, [rate]);
 
   const [editOpen, setEditOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState({
     name: '',
     org_number: '',
@@ -49,9 +50,14 @@ const CompanyDetail = () => {
 
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id) return;
-    const result = await updateCompany(id, form);
-    if (result) setEditOpen(false);
+    if (!id || isSaving) return;
+    setIsSaving(true);
+    try {
+      const result = await updateCompany(id, form);
+      if (result) setEditOpen(false);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (isLoading) {
@@ -301,10 +307,12 @@ const CompanyDetail = () => {
               />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setEditOpen(false)}>
+              <Button type="button" variant="outline" onClick={() => setEditOpen(false)} disabled={isSaving}>
                 Avbryt
               </Button>
-              <Button type="submit">Spara ändringar</Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? 'Sparar...' : 'Spara ändringar'}
+              </Button>
             </div>
           </form>
         </DialogContent>

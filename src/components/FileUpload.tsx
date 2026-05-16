@@ -4,6 +4,11 @@ import { Button } from '@/components/ui/button';
 import { TicketAttachment } from '@/hooks/useTicketAttachments';
 import { cn } from '@/lib/utils';
 import { SecureImage, SecureDownloadLink } from '@/components/SecureAttachment';
+import { toast } from 'sonner';
+
+// Matches the backend multer limit (server/src/routes/tickets.ts).
+// Bumping this means bumping it on the server too.
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 interface FileUploadProps {
   attachments: TicketAttachment[];
@@ -40,8 +45,26 @@ export const FileUpload = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Filter out oversized files and toast per rejection. Returns the surviving
+  // set so callers can decide whether to forward anything.
+  const filterBySize = (files: File[]): File[] => {
+    const accepted: File[] = [];
+    for (const f of files) {
+      if (f.size > MAX_FILE_SIZE) {
+        toast.error(`${f.name} är större än 10 MB och hoppades över`);
+        continue;
+      }
+      accepted.push(f);
+    }
+    return accepted;
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
+    if (disabled) {
+      if (inputRef.current) inputRef.current.value = '';
+      return;
+    }
+    const files = filterBySize(Array.from(e.target.files || []));
     if (files.length > 0) {
       onFilesSelect(files);
     }
@@ -52,6 +75,7 @@ export const FileUpload = ({
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    if (disabled) return;
     setIsDragging(true);
   };
 
@@ -63,7 +87,10 @@ export const FileUpload = ({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files);
+    // Disabled was decorative — the dashed area still accepted drops. Hard-stop
+    // here so the user gets the same behaviour they see from the button.
+    if (disabled) return;
+    const files = filterBySize(Array.from(e.dataTransfer.files));
     if (files.length > 0) {
       onFilesSelect(files);
     }

@@ -166,9 +166,14 @@ router.get('/public/:token', (req: Request, res: Response) => {
       SELECT id, label, completed, position FROM ticket_checklists WHERE ticket_id = ? ORDER BY position ASC
     `).all(share.ticket_id) as ChecklistRow[];
 
+    // Filtrera bort interna anteckningar — `notes` är agent-internt och får
+    // inte läcka till mottagaren av en publik delningslänk.
+    const { notes: _internalNotes, ...ticketPublic } = ticket;
+    void _internalNotes;
+
     res.json({
       ticket: {
-        ...ticket,
+        ...ticketPublic,
         category,
       },
       requester,

@@ -4,6 +4,7 @@ import { db } from '../db/connection.js';
 import { sendTicketCreatedEmail } from '../lib/email.js';
 import { aiEnabled, suggestSolutionFromKB, findRelevantKbArticles } from '../lib/aiHelper.js';
 import { stripHtml } from '../lib/htmlUtils.js';
+import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
 import { publicWriteRateLimiter, publicAiRateLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
@@ -69,7 +70,7 @@ router.get('/categories', (_req: Request, res: Response) => {
 
 // Submit public ticket
 router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) => {
-  const { name, email, title, description, category, priority, customFields, template_id } = req.body;
+  let { name, email, title, description, category, priority, customFields, template_id } = req.body;
 
   // Validate required fields
   if (!name || !email || !title) {
@@ -102,10 +103,16 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
   const validPriorities = ['low', 'medium', 'high', 'critical'];
   const ticketPriority = validPriorities.includes(priority) ? priority : 'medium';
 
+  // Defense-in-depth: sanitera HTML server-side. Public endpoint är extra
+  // exponerad — okänd request-origin, ingen auth, så strikt sanitering.
+  name = sanitizePlainText(name);
+  title = sanitizePlainText(title);
+  if (description !== undefined) description = sanitizeRichText(description);
+
   try {
     // Find or create contact
     let contact = db.prepare('SELECT id FROM contacts WHERE email = ?').get(email) as ContactRow | undefined;
-    
+
     if (!contact) {
       const contactId = uuidv4();
       db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)').run(contactId, name, email);

@@ -320,7 +320,7 @@ const KBArticleDetail = () => {
             <Button
               variant="ghost"
               size="sm"
-              className="h-auto py-0.5 px-2 text-sm text-muted-foreground hover:text-green-600 gap-1.5"
+              className="h-auto py-0.5 px-2 text-sm text-muted-foreground hover:text-green-600 dark:hover:text-green-400 gap-1.5"
               onClick={handleMarkReviewed}
               disabled={isReviewing}
             >

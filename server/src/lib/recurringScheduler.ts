@@ -36,18 +36,33 @@ export function computeNextRun(
     next.setDate(next.getDate() + 1);
     next.setHours(0, 0, 0, 0);
   } else if (intervalType === 'weekly') {
-    const target = intervalDay ?? 1; // default Monday
+    // Strikt: weekly KRÄVER ett interval_day (0=sön..6=lör). UI:t skickar
+    // alltid ett värde — utan check defaultar API-direct (curl/scripts) tyst
+    // till måndag, vilket döljer programmeringsfel hos integratörer.
+    if (intervalDay === null || intervalDay === undefined) {
+      throw new Error('interval_day krävs när interval_type är "weekly" (0=söndag..6=lördag)');
+    }
+    if (typeof intervalDay !== 'number' || intervalDay < 0 || intervalDay > 6 || !Number.isInteger(intervalDay)) {
+      throw new Error(`interval_day måste vara heltal 0-6 för weekly (fick: ${intervalDay})`);
+    }
     const current = next.getDay();
-    const daysUntil = (target - current + 7) % 7 || 7;
+    const daysUntil = (intervalDay - current + 7) % 7 || 7;
     next.setDate(next.getDate() + daysUntil);
     next.setHours(0, 0, 0, 0);
   } else if (intervalType === 'monthly') {
-    const targetDay = intervalDay ?? 1; // default 1st of month
+    // Strikt: monthly KRÄVER ett interval_day (1-31). Clamp:as till sista
+    // giltiga dagen i månaden så feb-31 → feb-28/29.
+    if (intervalDay === null || intervalDay === undefined) {
+      throw new Error('interval_day krävs när interval_type är "monthly" (1-31)');
+    }
+    if (typeof intervalDay !== 'number' || intervalDay < 1 || intervalDay > 31 || !Number.isInteger(intervalDay)) {
+      throw new Error(`interval_day måste vara heltal 1-31 för monthly (fick: ${intervalDay})`);
+    }
     // Move to next month
     next.setMonth(next.getMonth() + 1);
     // Clamp day to last valid day of that month (Pitfall 2: day-31 edge case)
     const daysInMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
-    next.setDate(Math.min(targetDay, daysInMonth));
+    next.setDate(Math.min(intervalDay, daysInMonth));
     next.setHours(0, 0, 0, 0);
   }
 

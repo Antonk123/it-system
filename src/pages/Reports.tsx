@@ -615,12 +615,13 @@ const Reports = () => {
         />
 
         <Tabs defaultValue="översikt">
-          <TabsList>
-            <TabsTrigger value="översikt">Översikt</TabsTrigger>
-            <TabsTrigger value="trend">Trend</TabsTrigger>
-            <TabsTrigger value="personer">Personer</TabsTrigger>
-            <TabsTrigger value="taggar">Taggar</TabsTrigger>
-            <TabsTrigger value="tid">Tid</TabsTrigger>
+          {/* Mobile: horizontal scroll. Desktop: 5-col grid. */}
+          <TabsList className="w-full h-auto flex overflow-x-auto whitespace-nowrap md:grid md:grid-cols-5">
+            <TabsTrigger value="översikt" className="shrink-0 md:shrink">Översikt</TabsTrigger>
+            <TabsTrigger value="trend" className="shrink-0 md:shrink">Trend</TabsTrigger>
+            <TabsTrigger value="personer" className="shrink-0 md:shrink">Personer</TabsTrigger>
+            <TabsTrigger value="taggar" className="shrink-0 md:shrink">Taggar</TabsTrigger>
+            <TabsTrigger value="tid" className="shrink-0 md:shrink">Tid</TabsTrigger>
           </TabsList>
 
           {/* ── Flik 1: Översikt ── */}

@@ -5,6 +5,7 @@ import { memo, useEffect, useState } from 'react';
 import { ArrowUpDown, Loader2, X } from 'lucide-react';
 import { Ticket, User, TicketStatus, TicketPriority } from '@/types/ticket';
 import { PriorityBadge } from './PriorityBadge';
+import { StatusBadge } from './StatusBadge';
 import { SLABadge } from './SLABadge';
 import { CategoryBadge } from './CategoryBadge';
 import { TagBadges } from './TagBadges';
@@ -211,16 +212,7 @@ export const TicketTable = memo(function TicketTable({
                   <h3 className="text-sm font-bold text-foreground truncate flex-1">
                     {ticket.title}
                   </h3>
-                  <span className={cn(
-                    'shrink-0 text-xs font-bold px-2 py-0.5 rounded-full',
-                    ticket.status === 'open' && 'bg-blue-500/15 text-blue-600',
-                    ticket.status === 'in-progress' && 'bg-yellow-500/15 text-yellow-600',
-                    ticket.status === 'waiting' && 'bg-orange-500/15 text-orange-600',
-                    ticket.status === 'resolved' && 'bg-green-500/15 text-green-600',
-                    ticket.status === 'closed' && 'bg-muted text-muted-foreground',
-                  )}>
-                    {statusLabels[ticket.status]}
-                  </span>
+                  <StatusBadge status={ticket.status} className="shrink-0" />
                 </div>
                 {/* Row 2: Priority + Age */}
                 <div className="flex items-center justify-between gap-2">

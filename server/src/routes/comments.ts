@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { sanitizeRichText } from '../lib/htmlSanitizer.js';
 
 const router = Router();
 
@@ -56,10 +57,13 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     const id = uuidv4();
     const now = new Date().toISOString();
 
+    // Defense-in-depth: sanitera HTML server-side (TipTap rich-text).
+    const safeContent = sanitizeRichText(content.trim());
+
     db.prepare(`
       INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, req.params.ticketId, req.user.id, content.trim(), isInternal ? 1 : 0, now, now);
+    `).run(id, req.params.ticketId, req.user.id, safeContent, isInternal ? 1 : 0, now, now);
 
     // Update ticket's updated_at timestamp
     db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now, req.params.ticketId);
@@ -107,8 +111,9 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     }
 
     const now = new Date().toISOString();
+    const safeContent = sanitizeRichText(content.trim());
     db.prepare('UPDATE ticket_comments SET content = ?, updated_at = ? WHERE id = ?')
-      .run(content.trim(), now, req.params.id);
+      .run(safeContent, now, req.params.id);
 
     const comment = db.prepare(`
       SELECT

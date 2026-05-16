@@ -547,7 +547,7 @@ const TicketDetail = () => {
             {/* AI Category Suggestion Banner */}
             {ticket.ai_suggested_category_id && !ticket.category && !aiCategoryDismissed && (
               <div className="flex items-center gap-3 p-3 rounded-lg border border-purple-500/30 bg-purple-500/5">
-                <Sparkles className="w-4 h-4 text-purple-400 flex-shrink-0" />
+                <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400 flex-shrink-0" />
                 <p className="text-sm flex-1">
                   AI föreslår: <span className="font-medium">{getCategoryLabel(ticket.ai_suggested_category_id)}</span>
                   {ticket.ai_suggested_confidence && (
@@ -569,7 +569,7 @@ const TicketDetail = () => {
             {aiSummary && (
               <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-4 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-purple-400 flex items-center gap-1.5">
+                  <span className="text-xs font-medium text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
                     <Sparkles className="w-3 h-3" />
                     AI-sammanfattning
                   </span>
@@ -824,7 +824,7 @@ const TicketDetail = () => {
                   {aiDraft && (
                     <div className="rounded-lg border border-purple-500/30 bg-purple-500/5 p-3 space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-purple-400 flex items-center gap-1.5">
+                        <span className="text-xs font-medium text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
                           <Sparkles className="w-3 h-3" />
                           AI-utkast — granska innan du sparar
                         </span>

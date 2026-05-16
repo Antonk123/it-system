@@ -39,6 +39,24 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     return res.status(400).json({ error: 'Name is required' });
   }
 
+  // Validera expires_at: om satt måste det vara ett giltigt framtida datum.
+  // Utan denna check accepterar `new Date('garbage') < new Date()` (= false)
+  // tyst och nyckeln går aldrig ut.
+  let normalizedExpiresAt: string | null = null;
+  if (expires_at !== undefined && expires_at !== null && expires_at !== '') {
+    if (typeof expires_at !== 'string') {
+      return res.status(400).json({ error: 'expires_at måste vara ett ISO-datum (sträng)' });
+    }
+    const parsed = new Date(expires_at);
+    if (isNaN(parsed.getTime())) {
+      return res.status(400).json({ error: 'expires_at är inte ett giltigt datum' });
+    }
+    if (parsed.getTime() <= Date.now()) {
+      return res.status(400).json({ error: 'expires_at måste ligga i framtiden' });
+    }
+    normalizedExpiresAt = parsed.toISOString();
+  }
+
   try {
     const id = randomUUID();
     const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
@@ -49,7 +67,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 
     db.prepare(
       'INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, name.trim(), keyPrefix, keyHash, req.user!.id, perms, expires_at || null);
+    ).run(id, name.trim(), keyPrefix, keyHash, req.user!.id, perms, normalizedExpiresAt);
 
     res.status(201).json({
       id,
@@ -57,7 +75,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       key: rawKey, // Only returned on creation
       key_prefix: keyPrefix,
       permissions: perms,
-      expires_at: expires_at || null,
+      expires_at: normalizedExpiresAt,
       created_at: new Date().toISOString(),
     });
   } catch (error) {

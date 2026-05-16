@@ -839,4 +839,33 @@ export const migrations: Migration[] = [
       insert.run(randomUUID(), 'low',      480, 4320);  // 8h / 72h
     },
   },
+  {
+    id: '043',
+    name: 'webhook_delivery_retry_columns',
+    up: (db, { tableExists, columnExists }) => {
+      if (!tableExists('webhook_deliveries')) return;
+      if (!columnExists('webhook_deliveries', 'next_retry_at')) {
+        db.prepare('ALTER TABLE webhook_deliveries ADD COLUMN next_retry_at TEXT').run();
+      }
+      if (!columnExists('webhook_deliveries', 'last_error')) {
+        db.prepare('ALTER TABLE webhook_deliveries ADD COLUMN last_error TEXT').run();
+      }
+      // Index used by the retry scheduler to pick due, undelivered rows.
+      db.prepare(
+        'CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_retry ON webhook_deliveries(delivered_at, next_retry_at, attempts)'
+      ).run();
+    },
+  },
+  {
+    id: '044',
+    name: 'add_last_aging_notified_at_to_tickets',
+    up: (db, { columnExists }) => {
+      // Dedup-stöd för PWA-push: utan denna kolumn spammar aging-checken
+      // samma inaktiva ärenden varje dag. pushScheduler sätter värdet efter
+      // utskick och filtrerar bort de som notifierats senaste 24h.
+      if (!columnExists('tickets', 'last_aging_notified_at')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN last_aging_notified_at TEXT').run();
+      }
+    },
+  },
 ];

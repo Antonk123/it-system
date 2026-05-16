@@ -9,6 +9,7 @@ import { JWT_SECRET } from '../config/passport.js';
 import { authenticate, AuthRequest, AuthUser } from '../middleware/auth.js';
 import { loginRateLimiter } from '../middleware/rateLimit.js';
 import { sendPasswordResetEmail } from '../lib/email.js';
+import { validatePassword } from '../lib/passwordPolicy.js';
 
 const router = Router();
 
@@ -195,20 +196,10 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
     return res.status(400).json({ error: 'Current and new password required' });
   }
 
-  // Strong password policy: minimum 12 characters with complexity requirements
-  const PASSWORD_MIN_LENGTH = 12;
-  const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/;
-
-  if (newPassword.length < PASSWORD_MIN_LENGTH) {
-    return res.status(400).json({
-      error: 'Password must be at least 12 characters long'
-    });
-  }
-
-  if (!PASSWORD_REGEX.test(newPassword)) {
-    return res.status(400).json({
-      error: 'Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character (@$!%*?&)'
-    });
+  // Strong password policy: shared with admin user-create + password reset
+  const policy = validatePassword(newPassword);
+  if (!policy.ok) {
+    return res.status(400).json({ error: policy.error });
   }
 
   try {
@@ -307,16 +298,10 @@ router.post('/reset-password', loginRateLimiter, async (req: Request, res: Respo
     return res.status(400).json({ error: 'Nytt lösenord krävs' });
   }
 
-  // Same policy as change-password — keep in sync if updated above.
-  const PASSWORD_MIN_LENGTH = 12;
-  const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/;
-  if (newPassword.length < PASSWORD_MIN_LENGTH) {
-    return res.status(400).json({ error: 'Lösenordet måste vara minst 12 tecken långt' });
-  }
-  if (!PASSWORD_REGEX.test(newPassword)) {
-    return res.status(400).json({
-      error: 'Lösenordet måste innehålla minst en stor bokstav, en liten bokstav, en siffra och ett specialtecken (@$!%*?&)',
-    });
+  // Samma policy som change-password och admin-create — centraliserad i passwordPolicy.ts.
+  const policy = validatePassword(newPassword);
+  if (!policy.ok) {
+    return res.status(400).json({ error: policy.error });
   }
 
   try {

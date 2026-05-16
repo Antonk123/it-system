@@ -4,6 +4,10 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { validatePassword } from '../lib/passwordPolicy.js';
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DISPLAY_NAME_MAX_LENGTH = 100;
 
 const router = Router();
 
@@ -46,8 +50,35 @@ router.get('/', authenticate, requireAdmin, (_req: AuthRequest, res: Response) =
 router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   const { email, password, role, displayName } = req.body;
 
-  if (!email) {
-    return res.status(400).json({ error: 'Email is required' });
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ error: 'E-post krävs' });
+  }
+
+  // Validera e-postformat — tidigare accepterades vad som helst.
+  if (!EMAIL_REGEX.test(email)) {
+    return res.status(400).json({ error: 'Ogiltigt e-postformat' });
+  }
+
+  // Validera displayName-längd om angivet (1-100 tecken efter trim).
+  if (displayName !== undefined && displayName !== null) {
+    if (typeof displayName !== 'string') {
+      return res.status(400).json({ error: 'displayName måste vara en sträng' });
+    }
+    const trimmed = displayName.trim();
+    if (trimmed.length > 0 && trimmed.length > DISPLAY_NAME_MAX_LENGTH) {
+      return res.status(400).json({ error: `Visningsnamn får vara max ${DISPLAY_NAME_MAX_LENGTH} tecken` });
+    }
+  }
+
+  // Om admin sätter ett konkret lösenord ska det följa samma policy som
+  // change-password / reset-password. Auto-genererade lösenord (32 tecken hex,
+  // utan specialtecken) skickas tillbaka som temporaryPassword och måste
+  // bytas vid första inloggning — de behöver inte uppfylla policyn.
+  if (password !== undefined && password !== null && password !== '') {
+    const policy = validatePassword(password);
+    if (!policy.ok) {
+      return res.status(400).json({ error: policy.error });
+    }
   }
 
   // Generate a cryptographically secure random password if not provided
@@ -94,30 +125,60 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
   }
 });
 
-// Update user role (admin only)
+// Update user (admin only) — role and/or displayName
 router.patch('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
-  const { role } = req.body;
+  const { role, displayName } = req.body as { role?: unknown; displayName?: unknown };
 
-  if (!role || !['admin', 'user'].includes(role)) {
-    return res.status(400).json({ error: 'Valid role is required' });
+  const updates: { column: string; value: unknown }[] = [];
+
+  // Role-validering (oförändrad semantik — bara om fältet faktiskt skickas).
+  if (role !== undefined) {
+    if (typeof role !== 'string' || !['admin', 'user'].includes(role)) {
+      return res.status(400).json({ error: 'Ogiltig roll' });
+    }
+    // Förhindra att admin tar bort sin egen admin-access.
+    if (req.params.id === req.user!.id && role !== 'admin') {
+      return res.status(400).json({ error: 'Du kan inte ta bort din egen admin-åtkomst' });
+    }
+    updates.push({ column: 'role', value: role });
+  }
+
+  // displayName-validering (1-100 tecken efter trim). Tom sträng tolkas som
+  // "rensa fältet" och sparas som NULL.
+  if (displayName !== undefined) {
+    if (displayName === null) {
+      updates.push({ column: 'display_name', value: null });
+    } else if (typeof displayName !== 'string') {
+      return res.status(400).json({ error: 'displayName måste vara en sträng' });
+    } else {
+      const trimmed = displayName.trim();
+      if (trimmed.length === 0) {
+        updates.push({ column: 'display_name', value: null });
+      } else if (trimmed.length > DISPLAY_NAME_MAX_LENGTH) {
+        return res.status(400).json({ error: `Visningsnamn får vara max ${DISPLAY_NAME_MAX_LENGTH} tecken` });
+      } else {
+        updates.push({ column: 'display_name', value: trimmed });
+      }
+    }
+  }
+
+  if (updates.length === 0) {
+    return res.status(400).json({ error: 'Inget att uppdatera (skicka role och/eller displayName)' });
   }
 
   try {
-    // Prevent removing own admin access
-    if (req.params.id === req.user!.id && role !== 'admin') {
-      return res.status(400).json({ error: 'Cannot remove your own admin access' });
-    }
-
-    const result = db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, req.params.id);
+    const setClause = updates.map(u => `${u.column} = ?`).join(', ');
+    const values = updates.map(u => u.value);
+    const result = db.prepare(`UPDATE users SET ${setClause} WHERE id = ?`).run(...values, req.params.id);
 
     if (result.changes === 0) {
-      return res.status(404).json({ error: 'User not found' });
+      return res.status(404).json({ error: 'Användaren hittades inte' });
     }
 
-    res.json({ message: 'Role updated' });
+    res.json({ message: 'Användaren uppdaterades' });
   } catch (error) {
-    console.error('Error updating user role:', error);
-    res.status(500).json({ error: 'Failed to update role' });
+    console.error('Error updating user:', error);
+    res.status(500).json({ error: 'Kunde inte uppdatera användare' });
   }
 });
 

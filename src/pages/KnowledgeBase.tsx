@@ -534,7 +534,7 @@ const KnowledgeBase = () => {
                               </Badge>
                             )}
                             {isStale(article) && (
-                              <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-600 gap-1">
+                              <Badge variant="outline" className="text-xs border-amber-500/50 text-amber-600 dark:text-amber-400 gap-1">
                                 <AlertTriangle className="w-3 h-3" />
                                 Inaktuell
                               </Badge>

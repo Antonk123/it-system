@@ -350,7 +350,7 @@ const PublicTicketForm = () => {
                 variant="outline"
                 onClick={handleAiSuggest}
                 disabled={isAiLoading}
-                className="w-full h-11 rounded-xl gap-2 border-purple-500/30 text-purple-400 hover:bg-purple-500/5 hover:border-purple-500/50 transition-all"
+                className="w-full h-11 rounded-xl gap-2 border-purple-500/30 text-purple-600 dark:text-purple-400 hover:bg-purple-500/5 hover:border-purple-500/50 transition-all"
               >
                 {isAiLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -365,8 +365,8 @@ const PublicTicketForm = () => {
             {aiSuggestion && (
               <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-5 space-y-4">
                 <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-purple-400" />
-                  <span className="text-sm font-medium text-purple-400">
+                  <Sparkles className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
                     {aiSuggestion.hasSolution ? 'Vi hittade en möjlig lösning' : 'Ingen lösning hittades'}
                   </span>
                 </div>

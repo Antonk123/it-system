@@ -2,49 +2,9 @@ import { Router, Response } from 'express';
 import { randomUUID, randomBytes } from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { isSafeWebhookUrl } from '../lib/webhookValidator.js';
 
 const router = Router();
-
-/**
- * Validates that a webhook URL points to a public HTTPS endpoint.
- * Blocks SSRF vectors: non-https, loopback, RFC1918, link-local, IPv6 ULA.
- */
-function isSafeWebhookUrl(raw: string): { ok: true } | { ok: false; reason: string } {
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    return { ok: false, reason: 'Invalid URL' };
-  }
-  if (parsed.protocol !== 'https:') return { ok: false, reason: 'Only https:// URLs are allowed' };
-
-  const host = parsed.hostname.toLowerCase();
-  if (host === 'localhost' || host === '::1' || host.endsWith('.localhost') || host.endsWith('.local')) {
-    return { ok: false, reason: 'Loopback/local hosts are not allowed' };
-  }
-
-  // Block raw IPv4 in private/loopback/link-local ranges
-  const ipv4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (ipv4) {
-    const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
-    if (a === 10) return { ok: false, reason: 'Private 10.0.0.0/8 not allowed' };
-    if (a === 127) return { ok: false, reason: 'Loopback 127.0.0.0/8 not allowed' };
-    if (a === 169 && b === 254) return { ok: false, reason: 'Link-local 169.254.0.0/16 not allowed' };
-    if (a === 172 && b >= 16 && b <= 31) return { ok: false, reason: 'Private 172.16.0.0/12 not allowed' };
-    if (a === 192 && b === 168) return { ok: false, reason: 'Private 192.168.0.0/16 not allowed' };
-    if (a === 0) return { ok: false, reason: 'Reserved 0.0.0.0/8 not allowed' };
-  }
-
-  // Block IPv6 loopback / link-local / unique-local
-  if (host.startsWith('[')) {
-    const v6 = host.slice(1, -1);
-    if (v6 === '::1' || v6.startsWith('fe80:') || v6.startsWith('fc') || v6.startsWith('fd')) {
-      return { ok: false, reason: 'Private/loopback IPv6 not allowed' };
-    }
-  }
-
-  return { ok: true };
-}
 
 interface WebhookRow {
   id: string;
@@ -82,14 +42,14 @@ router.get('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =>
 });
 
 // POST / — create a webhook
-router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   const { url, events } = req.body;
 
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'URL is required' });
   }
 
-  const safe = isSafeWebhookUrl(url);
+  const safe = await isSafeWebhookUrl(url);
   if (!safe.ok) {
     return res.status(400).json({ error: `Invalid webhook URL: ${safe.reason}` });
   }
@@ -122,7 +82,7 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
 });
 
 // PUT /:id — update a webhook
-router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   const { url, events, active } = req.body;
 
   try {
@@ -135,7 +95,7 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
     const values: any[] = [];
 
     if (url !== undefined) {
-      const safe = isSafeWebhookUrl(url);
+      const safe = await isSafeWebhookUrl(url);
       if (!safe.ok) {
         return res.status(400).json({ error: `Invalid webhook URL: ${safe.reason}` });
       }

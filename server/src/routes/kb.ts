@@ -7,6 +7,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { db } from '../db/connection.js';
 import { stripHtml } from '../lib/htmlUtils.js';
+import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -111,10 +112,11 @@ router.post('/categories', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const id = uuidv4();
     const now = new Date().toISOString();
+    const safeName = sanitizePlainText(name.trim());
     const maxPos = (db.prepare('SELECT MAX(position) as m FROM kb_categories').get() as { m: number | null }).m ?? -1;
     db.prepare(
       'INSERT INTO kb_categories (id, name, color, position, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(id, name.trim(), color || null, maxPos + 1, now);
+    ).run(id, safeName, color || null, maxPos + 1, now);
     const category = db.prepare('SELECT id, name, color, position, created_at FROM kb_categories WHERE id = ?').get(id) as KbCategoryRow;
     res.status(201).json(category);
   } catch (error) {
@@ -132,8 +134,9 @@ router.put('/categories/:id', authenticate, (req: AuthRequest, res: Response) =>
   try {
     const existing = db.prepare('SELECT id FROM kb_categories WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Category not found' });
+    const safeName = sanitizePlainText(name.trim());
     db.prepare('UPDATE kb_categories SET name = ?, color = ? WHERE id = ?')
-      .run(name.trim(), color || null, req.params.id);
+      .run(safeName, color || null, req.params.id);
     const category = db.prepare('SELECT id, name, color, position, created_at FROM kb_categories WHERE id = ?').get(req.params.id) as KbCategoryRow;
     res.json(category);
   } catch (error) {
@@ -267,6 +270,10 @@ router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
     const now = new Date().toISOString();
     const articleStatus: 'draft' | 'published' = status === 'draft' ? 'draft' : 'published';
 
+    // Defense-in-depth: sanitera HTML server-side.
+    const safeTitle = sanitizePlainText(title.trim());
+    const safeContent = sanitizeRichText(content);
+
     const insertArticleAndFts = db.transaction((articleId: string, articleTitle: string, articleContent: string, categoryId: string | null, articleTypeVal: string | null, articleStatusVal: string, timestamp: string) => {
       db.prepare(
         'INSERT INTO kb_articles (id, title, content, category_id, article_type, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)'
@@ -282,7 +289,7 @@ router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
       }
     });
 
-    insertArticleAndFts(id, title.trim(), content, category_id || null, article_type || null, articleStatus, now);
+    insertArticleAndFts(id, safeTitle, safeContent, category_id || null, article_type || null, articleStatus, now);
 
     const article = db.prepare(`
       SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.created_at, a.updated_at,
@@ -319,7 +326,9 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     const now = new Date().toISOString();
     const articleId = req.params.id as string;
-    const articleContent = content ?? '';
+    // Defense-in-depth: sanitera HTML server-side.
+    const articleContent = sanitizeRichText(content ?? '');
+    const safeTitle = sanitizePlainText(String(title).trim());
     const articleStatus: 'draft' | 'published' = status === 'draft' ? 'draft' : 'published';
 
     const updateArticleAndFts = db.transaction((aid: string, articleTitle: string, articleContent: string, categoryId: string | null, articleTypeVal: string | null, articleStatusVal: string, timestamp: string) => {
@@ -339,7 +348,7 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
       }
     });
 
-    updateArticleAndFts(articleId, String(title).trim(), articleContent, category_id || null, article_type || null, articleStatus, now);
+    updateArticleAndFts(articleId, safeTitle, articleContent, category_id || null, article_type || null, articleStatus, now);
 
     const article = db.prepare(`
       SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.created_at, a.updated_at,

@@ -15,11 +15,22 @@ const Settings = () => {
       <div className="max-w-2xl space-y-5">
         <h1 className="text-xl font-bold">Inställningar</h1>
         <Tabs defaultValue="general">
-          <TabsList className={`w-full grid ${isAdmin ? 'grid-cols-4' : 'grid-cols-3'}`}>
-            <TabsTrigger value="general">Allmänt</TabsTrigger>
-            <TabsTrigger value="tickets">Ärenden</TabsTrigger>
-            <TabsTrigger value="integrations">Integrationer</TabsTrigger>
-            {isAdmin && <TabsTrigger value="admin">Administration</TabsTrigger>}
+          {/*
+            Mobile: horizontal scroll keeps every tab tappable at 360px even with
+            longer labels ("Integrationer"/"Administration"). Desktop: even grid.
+            Dynamic md:grid-cols-N must be a full class string so Tailwind picks it up.
+          */}
+          <TabsList
+            className={`w-full h-auto flex overflow-x-auto whitespace-nowrap md:grid ${isAdmin ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}
+          >
+            <TabsTrigger value="general" className="shrink-0 md:shrink">Allmänt</TabsTrigger>
+            <TabsTrigger value="tickets" className="shrink-0 md:shrink">Ärenden</TabsTrigger>
+            <TabsTrigger value="integrations" className="shrink-0 md:shrink">Integrationer</TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="admin" className="shrink-0 md:shrink">
+                Administration
+              </TabsTrigger>
+            )}
           </TabsList>
           <TabsContent value="general" className="space-y-5">
             <GeneralTab />

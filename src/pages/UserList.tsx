@@ -282,7 +282,16 @@ const UserList = () => {
               onChange={handleFileSelect}
               className="hidden"
             />
-            <Dialog open={isDialogOpen} onOpenChange={(open) => !open && handleDialogClose()}>
+            <Dialog
+              open={isDialogOpen}
+              onOpenChange={(open) => {
+                // Blockera Esc/click-outside mid-save så formstate inte rivs medan
+                // async-anropet fortfarande är in-flight. Användaren får trycka Avbryt
+                // efter att spinnarna tagit slut.
+                if (!open && isSavingUser) return;
+                if (!open) handleDialogClose();
+              }}
+            >
               <DialogTrigger asChild>
                 <Button className="gap-2" onClick={() => setIsDialogOpen(true)}>
                   <Plus className="w-4 h-4" />
@@ -389,13 +398,32 @@ const UserList = () => {
               </Card>
             ))}
           </div>
-        ) : filteredUsers.length === 0 && search === '' ? (
+        ) : filteredUsers.length === 0 ? (
           <div className="text-center py-16 border rounded-lg bg-card">
             <UsersIcon className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">Inga användare ännu</p>
-            <p className="text-sm text-muted-foreground mt-1">
-              Lägg till användare för att tilldela dem ärenden
-            </p>
+            {search === '' && companyFilter === 'all' ? (
+              <>
+                <p className="text-muted-foreground">Inga användare ännu</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Lägg till användare för att tilldela dem ärenden
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-muted-foreground">Inga användare matchar filtret</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-4"
+                  onClick={() => {
+                    setSearch('');
+                    setCompanyFilter('all');
+                  }}
+                >
+                  Rensa filter
+                </Button>
+              </>
+            )}
           </div>
         ) : (
           <>

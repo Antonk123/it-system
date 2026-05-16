@@ -24,9 +24,14 @@ export const TicketComments = ({
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Strip HTML tags before checking — TipTap's empty doc "<p></p>" otherwise
+  // passes .trim() and lets users post blank comments.
+  const hasVisibleText = (html: string) =>
+    html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim()) return;
+    if (!hasVisibleText(newComment)) return;
 
     setIsSubmitting(true);
     try {
@@ -58,7 +63,7 @@ export const TicketComments = ({
           showToolbar={true}
         />
         <div className="flex justify-end">
-          <Button type="submit" size="sm" disabled={isSubmitting || !newComment.trim()}>
+          <Button type="submit" size="sm" disabled={isSubmitting || !hasVisibleText(newComment)}>
             {isSubmitting && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
             Lägg till kommentar
           </Button>

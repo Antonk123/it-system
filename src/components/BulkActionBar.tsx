@@ -18,25 +18,41 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useSystemUsers } from '@/hooks/useSystemUsers';
 
 interface BulkActionBarProps {
   selectedCount: number;
+  /**
+   * Whether Reopen makes sense for the current selection.
+   * Pass `selectedTickets.some(t => t.status === 'resolved' || t.status === 'closed')`.
+   * Defaults to true (Archive always lists closed tickets).
+   */
+  canReopen?: boolean;
+  /** Whether assignee dropdown is shown (admins only). */
+  canAssign?: boolean;
   onReopen: () => void;
   onChangePriority: (priority: TicketPriority) => void;
+  onAssign?: (userId: string | null) => void;
   onExportCsv: () => void;
   onDeletePermanently: () => void;
 }
 
 export function BulkActionBar({
   selectedCount,
+  canReopen = true,
+  canAssign = false,
   onReopen,
   onChangePriority,
+  onAssign,
   onExportCsv,
   onDeletePermanently,
 }: BulkActionBarProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const isVisible = selectedCount > 0;
+  // Only fetch system users when bulk-assign is available — avoids ett extra
+  // network round-trip för non-admins som ändå inte kan använda dropdownen.
+  const { users: systemUsers } = useSystemUsers({ enabled: canAssign });
 
   return (
     <>
@@ -53,14 +69,16 @@ export function BulkActionBar({
 
         <div className="hidden sm:block h-4 w-px bg-border" />
 
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onReopen}
-          className="border-green-500 text-green-500 hover:bg-green-500/10 hover:text-green-500"
-        >
-          Öppna igen
-        </Button>
+        {canReopen && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onReopen}
+            className="border-green-500 text-green-500 hover:bg-green-500/10 hover:text-green-500"
+          >
+            Öppna igen
+          </Button>
+        )}
 
         <Select onValueChange={(value) => onChangePriority(value as TicketPriority)}>
           <SelectTrigger className="h-9 w-[140px] sm:w-[150px]" aria-label="Ändra prioritet">
@@ -73,6 +91,24 @@ export function BulkActionBar({
             <SelectItem value="critical">Kritisk prioritet</SelectItem>
           </SelectContent>
         </Select>
+
+        {canAssign && onAssign && (
+          <Select
+            onValueChange={(value) => onAssign(value === '__unassigned__' ? null : value)}
+          >
+            <SelectTrigger className="h-9 w-[150px] sm:w-[170px]" aria-label="Tilldela alla">
+              <SelectValue placeholder="Tilldela alla" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__unassigned__">Ej tilldelad</SelectItem>
+              {systemUsers.map((u) => (
+                <SelectItem key={u.id} value={u.id}>
+                  {u.displayName || u.email}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
 
         <Button
           variant="outline"

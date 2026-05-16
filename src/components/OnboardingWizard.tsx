@@ -30,6 +30,9 @@ export function OnboardingWizard() {
   };
 
   const handleStep1 = async () => {
+    // Re-entry guard. Double-Enter on the input previously fired this twice
+    // before the first await resolved, creating duplicate companies.
+    if (isSubmitting) return;
     if (!companyName.trim()) {
       toast.error('Ange ett företagsnamn');
       return;
@@ -86,7 +89,13 @@ export function OnboardingWizard() {
                   placeholder="Företagsnamn AB"
                   value={companyName}
                   onChange={e => setCompanyName(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleStep1()}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !isSubmitting) {
+                      e.preventDefault();
+                      handleStep1();
+                    }
+                  }}
+                  disabled={isSubmitting}
                   autoFocus
                 />
               </div>
@@ -97,7 +106,13 @@ export function OnboardingWizard() {
                   placeholder="556xxx-xxxx"
                   value={orgNumber}
                   onChange={e => setOrgNumber(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleStep1()}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !isSubmitting) {
+                      e.preventDefault();
+                      handleStep1();
+                    }
+                  }}
+                  disabled={isSubmitting}
                 />
               </div>
               <div className="flex justify-between pt-2">

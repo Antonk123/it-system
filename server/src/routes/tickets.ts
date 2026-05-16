@@ -14,6 +14,7 @@ import { writeRateLimiter } from '../middleware/rateLimit.js';
 import { dispatchWebhook } from '../lib/webhookDispatcher.js';
 import { aiEnabled, suggestCategory, draftReply, summarizeTicket, buildKbSearchQuery } from '../lib/aiHelper.js';
 import { stripHtml } from '../lib/htmlUtils.js';
+import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1147,7 +1148,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
 // Create ticket
 router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
-  const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id } = req.body;
+  let { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id } = req.body;
 
   if (!title) {
     return res.status(400).json({ error: 'Title is required' });
@@ -1163,6 +1164,13 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
   if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
     return res.status(400).json({ error: 'Invalid priority value' });
   }
+
+  // Defense-in-depth: sanitera HTML server-side så API-direct anrop inte kan
+  // smuggla in <script>/onerror/javascript: även om frontend DOMPurify hoppas över.
+  title = sanitizePlainText(title);
+  if (description !== undefined) description = sanitizeRichText(description);
+  if (notes !== undefined) notes = sanitizeRichText(notes);
+  if (solution !== undefined) solution = sanitizeRichText(solution);
 
   try {
     const id = uuidv4();
@@ -1498,9 +1506,9 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
     return res.status(400).json({ error: 'ids must be a non-empty array' });
   }
 
-  const { status, priority, category_id } = updates || {};
+  const { status, priority, category_id, assigned_to } = updates || {};
 
-  if (status === undefined && priority === undefined && category_id === undefined) {
+  if (status === undefined && priority === undefined && category_id === undefined && assigned_to === undefined) {
     return res.status(400).json({ error: 'At least one field to update is required' });
   }
 
@@ -1511,11 +1519,31 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
     return res.status(400).json({ error: 'Invalid priority value' });
   }
 
+  // assigned_to: admin-only (matches single-PUT semantics) and target user must exist
+  if (assigned_to !== undefined) {
+    if (req.user!.role !== 'admin') {
+      return res.status(403).json({ error: 'Endast administratörer kan ändra tilldelad användare' });
+    }
+    const normalizedAssignee = assigned_to || null;
+    if (normalizedAssignee !== null) {
+      const target = db.prepare('SELECT id FROM users WHERE id = ?').get(normalizedAssignee) as { id: string } | undefined;
+      if (!target) {
+        return res.status(400).json({ error: 'Invalid assigned_to: user does not exist' });
+      }
+    }
+  }
+
   try {
     const now = new Date().toISOString();
     const historyInsert = db.prepare(
       'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
     );
+
+    const userLabel = (uid: string | null): string | null => {
+      if (!uid) return null;
+      const u = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(uid) as { email: string; display_name: string | null } | undefined;
+      return u ? (u.display_name || u.email) : null;
+    };
 
     const bulkUpdate = db.transaction(() => {
       let updatedCount = 0;
@@ -1550,6 +1578,20 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
               ? (db.prepare('SELECT label FROM categories WHERE id = ?').get(category_id) as { label: string } | undefined)?.label ?? null
               : null;
             historyInsert.run(uuidv4(), ticketId, req.user!.id, 'category_id', oldCat, newCat);
+          }
+        }
+        if (assigned_to !== undefined) {
+          const newAssignee = assigned_to || null;
+          safeUpdates.assigned_to = newAssignee;
+          if (newAssignee !== existing.assigned_to) {
+            historyInsert.run(
+              uuidv4(),
+              ticketId,
+              req.user!.id,
+              'assigned_to',
+              userLabel(existing.assigned_to as string | null),
+              userLabel(newAssignee),
+            );
           }
         }
 
@@ -1628,7 +1670,7 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: 
 
 // Update ticket
 router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
-  const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id, tag_ids, ai_suggested_category_id } = req.body;
+  let { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id, tag_ids, ai_suggested_category_id } = req.body;
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return res.status(400).json({ error: 'Invalid status value' });
@@ -1636,6 +1678,13 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
     return res.status(400).json({ error: 'Invalid priority value' });
   }
+
+  // Defense-in-depth: sanitera HTML server-side. Bara fält som faktiskt skickas
+  // sanitiseras — undefined betyder "rör inte" i PUT-logiken nedan.
+  if (title !== undefined) title = sanitizePlainText(title);
+  if (description !== undefined) description = sanitizeRichText(description);
+  if (notes !== undefined) notes = sanitizeRichText(notes);
+  if (solution !== undefined) solution = sanitizeRichText(solution);
 
   try {
     const existing = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(req.params.id) as TicketRow | undefined;

@@ -27,6 +27,12 @@ interface CommentItemProps {
   onDelete: (commentId: string) => Promise<void>;
 }
 
+// Visible-text-check that strips HTML tags. TipTap stores empty content as
+// "<p></p>" which has non-zero length but no visible body — naive .trim() lets
+// these slip through and creates blank comments in the thread.
+const hasVisibleText = (html: string) =>
+  html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
+
 export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) => {
   const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
@@ -36,7 +42,7 @@ export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) =
   const canEdit = user?.id === comment.userId || user?.role === 'admin';
 
   const handleUpdate = async () => {
-    if (!editContent.trim()) return;
+    if (!hasVisibleText(editContent)) return;
     setIsUpdating(true);
     try {
       await onUpdate(comment.id, editContent);
@@ -131,7 +137,7 @@ export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) =
               <X className="w-3 h-3 mr-1" />
               Avbryt
             </Button>
-            <Button size="sm" onClick={handleUpdate} disabled={isUpdating || !editContent.trim()} className="h-7 text-xs">
+            <Button size="sm" onClick={handleUpdate} disabled={isUpdating || !hasVisibleText(editContent)} className="h-7 text-xs">
               <Check className="w-3 h-3 mr-1" />
               Spara
             </Button>

@@ -66,7 +66,7 @@ const KBArticleForm = () => {
   const [categories, setCategories] = useState<KbCategoryRow[]>([]);
   const [isLoading, setIsLoading] = useState(isEditing);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ title?: string; category?: string }>({});
+  const [errors, setErrors] = useState<{ title?: string; category?: string; content?: string }>({});
   const [templateDismissed, setTemplateDismissed] = useState(
     () => !!(searchParams.get('title') || searchParams.get('article_type'))
   );
@@ -156,10 +156,17 @@ const KBArticleForm = () => {
     }
   };
 
+  // Strip HTML tags and check for visible text. TipTap renders an empty doc as
+  // "<p></p>" which would otherwise pass a naive .trim() check and let users
+  // save articles with no body.
+  const hasVisibleContent = (html: string) =>
+    html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
+
   const validate = () => {
-    const newErrors: { title?: string; category?: string } = {};
+    const newErrors: { title?: string; category?: string; content?: string } = {};
     if (!title.trim()) newErrors.title = 'Titel krävs';
     if (!categoryId || categoryId === 'none') newErrors.category = 'Kategori krävs';
+    if (!hasVisibleContent(content)) newErrors.content = 'Innehåll krävs';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -265,7 +272,12 @@ const KBArticleForm = () => {
             <Input
               id="title"
               value={title}
-              onChange={(e) => { setTitle(e.target.value); setErrors({}); }}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                // Clear only the title error so other unaddressed errors
+                // (category, content) remain visible until the user fixes them.
+                setErrors(prev => { const p = { ...prev }; delete p.title; return p; });
+              }}
               placeholder="Artikelns titel..."
               className={errors.title ? 'border-destructive' : ''}
             />
@@ -274,7 +286,13 @@ const KBArticleForm = () => {
 
           <div className="space-y-2">
             <Label htmlFor="category">Kategori</Label>
-            <Select value={categoryId} onValueChange={setCategoryId}>
+            <Select
+              value={categoryId}
+              onValueChange={(v) => {
+                setCategoryId(v);
+                setErrors(prev => { const p = { ...prev }; delete p.category; return p; });
+              }}
+            >
               <SelectTrigger id="category" className={errors.category ? 'border-destructive' : ''}>
                 <SelectValue placeholder="Välj kategori" />
               </SelectTrigger>
@@ -402,15 +420,22 @@ const KBArticleForm = () => {
           )}
 
           <div className="space-y-2">
-            <Label id="kb-content-label">Innehåll</Label>
-            <div role="group" aria-labelledby="kb-content-label">
+            <Label id="kb-content-label">
+              Innehåll <span className="text-destructive">*</span>
+            </Label>
+            <div role="group" aria-labelledby="kb-content-label" className={errors.content ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
               <RichTextEditor
                 value={content}
-                onChange={setContent}
+                onChange={(html) => {
+                  setContent(html);
+                  setErrors(prev => { const p = { ...prev }; delete p.content; return p; });
+                }}
                 placeholder="Skriv artikelns innehåll..."
                 minHeight="300px"
+                error={!!errors.content}
               />
             </div>
+            {errors.content && <p className="text-xs text-destructive">{errors.content}</p>}
           </div>
 
           <div className="flex gap-3 justify-end pt-2">

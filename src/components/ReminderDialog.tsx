@@ -19,6 +19,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { toast } from 'sonner';
 
 interface ReminderDialogProps {
   onCreateReminder: (reminderTime: string, message?: string) => Promise<void>;
@@ -39,12 +40,32 @@ export function ReminderDialog({ onCreateReminder, open: controlledOpen, onOpenC
   const handleSubmit = async () => {
     if (!date) return;
 
+    // type="time" inputs can be cleared to an empty string on some browsers.
+    // Guard so we never hand "Invalid Date" to the API.
+    if (!time || !/^\d{1,2}:\d{2}$/.test(time)) {
+      toast.error('Ange en giltig tid');
+      return;
+    }
+    const [hoursStr, minutesStr] = time.split(':');
+    const hours = parseInt(hoursStr, 10);
+    const minutes = parseInt(minutesStr, 10);
+    if (
+      Number.isNaN(hours) || Number.isNaN(minutes) ||
+      hours < 0 || hours > 23 || minutes < 0 || minutes > 59
+    ) {
+      toast.error('Ange en giltig tid');
+      return;
+    }
+
+    const reminderDateTime = new Date(date);
+    reminderDateTime.setHours(hours, minutes, 0, 0);
+    if (Number.isNaN(reminderDateTime.getTime())) {
+      toast.error('Ogiltigt datum eller tid');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const [hours, minutes] = time.split(':');
-      const reminderDateTime = new Date(date);
-      reminderDateTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-
       await onCreateReminder(reminderDateTime.toISOString(), message || undefined);
 
       // Reset form
@@ -121,7 +142,7 @@ export function ReminderDialog({ onCreateReminder, open: controlledOpen, onOpenC
 
           <Button
             onClick={handleSubmit}
-            disabled={!date || isSubmitting}
+            disabled={!date || !time || isSubmitting}
             className="w-full mt-2 rounded-xl overflow-hidden"
           >
             {isSubmitting ? 'Skapar...' : 'Skapa påminnelse'}

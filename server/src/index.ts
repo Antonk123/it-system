@@ -8,6 +8,7 @@ import { startReminderScheduler } from './lib/reminderScheduler.js';
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
 import { startAutoCloseScheduler } from './lib/autoCloseScheduler.js';
 import { startRecurringScheduler } from './lib/recurringScheduler.js';
+import { startWebhookRetryScheduler } from './lib/webhookRetryScheduler.js';
 import { initWebPush } from './lib/push.js';
 import { startPushScheduler } from './lib/pushScheduler.js';
 import cron from 'node-cron';
@@ -83,6 +84,10 @@ startAutoCloseScheduler();
 
 // Recurring ticket scheduler (every minute)
 startRecurringScheduler();
+
+// Webhook retry scheduler (every minute) — re-attempts failed deliveries
+// with exponential backoff up to 5 attempts.
+startWebhookRetryScheduler();
 
 // Security headers with Helmet
 // Protects against common web vulnerabilities

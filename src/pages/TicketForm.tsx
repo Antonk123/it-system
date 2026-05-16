@@ -292,6 +292,19 @@ const TicketForm = () => {
   // Track unsaved changes
   useEffect(() => {
     if (existingTicket) {
+      // Build a comparable snapshot of saved customFieldValues from the ticket
+      // so a change in any dynamic field flips the dirty flag too.
+      const savedFieldSnapshot = JSON.stringify(
+        editInitialFieldValues
+          .map((v) => ({ n: v.fieldName, v: v.fieldValue ?? '' }))
+          .sort((a, b) => a.n.localeCompare(b.n))
+      );
+      const currentFieldSnapshot = JSON.stringify(
+        customFieldValues
+          .map((v) => ({ n: v.fieldName, v: v.fieldValue ?? '' }))
+          .sort((a, b) => a.n.localeCompare(b.n))
+      );
+
       const hasChanges =
         formData.title !== existingTicket.title ||
         formData.description !== existingTicket.description ||
@@ -301,6 +314,9 @@ const TicketForm = () => {
         formData.requesterId !== existingTicket.requesterId ||
         formData.notes !== (existingTicket.notes || '') ||
         formData.solution !== (existingTicket.solution || '') ||
+        formData.assigned_to !== ((existingTicket as any).assigned_to || '') ||
+        formData.company_id !== ((existingTicket as any).company_id || '') ||
+        (customFieldValues.length > 0 && savedFieldSnapshot !== currentFieldSnapshot) ||
         pendingFiles.length > 0 ||
         pendingChecklistItems.length > 0;
 
@@ -310,7 +326,7 @@ const TicketForm = () => {
       const hasData = formData.title || formData.description || formData.requesterId;
       setHasUnsavedChanges(hasData);
     }
-  }, [formData, existingTicket, isEditing, pendingFiles, pendingChecklistItems]);
+  }, [formData, existingTicket, isEditing, pendingFiles, pendingChecklistItems, customFieldValues, editInitialFieldValues]);
 
   // Prevent navigation with unsaved changes
   useEffect(() => {
@@ -400,8 +416,11 @@ const TicketForm = () => {
         fieldErrors[key] = err.message;
       });
       setErrors(fieldErrors);
-      // Open collapsed sections if errors exist there (create mode)
-      if (!isEditing && (fieldErrors.priority || fieldErrors.status)) {
+      // Open collapsed sections if errors exist there (create mode). Status
+      // isn't rendered in create mode, so only auto-open on priority — opening
+      // the details panel for a non-existent status field used to scroll to
+      // nothing and confuse users about which field needed attention.
+      if (!isEditing && fieldErrors.priority) {
         setDetailsOpen(true);
       }
       toast.error('Rätta felen i formuläret');

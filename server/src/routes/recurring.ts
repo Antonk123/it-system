@@ -84,6 +84,14 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: "interval_type must be one of 'daily', 'weekly', 'monthly'" });
     }
 
+    // weekly/monthly kräver interval_day — fångas annars som 500 i computeNextRun
+    if (interval_type === 'weekly' && (interval_day === null || interval_day === undefined)) {
+      return res.status(400).json({ error: 'interval_day krävs när interval_type är "weekly" (0=söndag..6=lördag)' });
+    }
+    if (interval_type === 'monthly' && (interval_day === null || interval_day === undefined)) {
+      return res.status(400).json({ error: 'interval_day krävs när interval_type är "monthly" (1-31)' });
+    }
+
     const id = uuidv4();
     const next_run = computeNextRun(interval_type, interval_day);
     const tagsJson = JSON.stringify(tags || []);
@@ -151,6 +159,18 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     // Recompute next_run if interval changed, or if resuming from paused
     const intervalChanged = interval_type !== undefined || interval_day !== undefined;
     const resuming = is_active !== undefined && is_active === 1 && existing.is_active === 0;
+
+    // Validera att weekly/monthly har interval_day INNAN vi anropar computeNextRun
+    // (annars kastar den och vi får 500 istället för 400)
+    if (intervalChanged || resuming) {
+      if (newIntervalType === 'weekly' && (newIntervalDay === null || newIntervalDay === undefined)) {
+        return res.status(400).json({ error: 'interval_day krävs när interval_type är "weekly" (0=söndag..6=lördag)' });
+      }
+      if (newIntervalType === 'monthly' && (newIntervalDay === null || newIntervalDay === undefined)) {
+        return res.status(400).json({ error: 'interval_day krävs när interval_type är "monthly" (1-31)' });
+      }
+    }
+
     const newNextRun = (intervalChanged || resuming)
       ? computeNextRun(newIntervalType, newIntervalDay)
       : existing.next_run;

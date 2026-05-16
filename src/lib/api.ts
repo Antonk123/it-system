@@ -406,7 +406,7 @@ class ApiClient {
     });
   }
 
-  async bulkUpdateTickets(ids: string[], updates: { status?: string; priority?: string; category_id?: string | null }) {
+  async bulkUpdateTickets(ids: string[], updates: { status?: string; priority?: string; category_id?: string | null; assigned_to?: string | null }) {
     return this.request<{ updated: number }>('/tickets/bulk', {
       method: 'PUT',
       body: { ids, updates },

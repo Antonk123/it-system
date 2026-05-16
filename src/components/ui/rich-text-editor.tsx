@@ -268,6 +268,49 @@ export const RichTextEditor = ({
     extensions,
     content: value || '',
     editable: !disabled,
+    editorProps: {
+      // Strip Office/Outlook cruft on paste. Regex-based — DOMPurify is overkill
+      // for these narrow patterns and adds bundle weight. We only target the
+      // classes/styles/tags that we know break rendering or leak local paths.
+      transformPastedHTML(html: string) {
+        return html
+          // <o:p>, <w:*>, <xml> — Office namespace tags
+          .replace(/<\/?o:p[^>]*>/gi, '')
+          .replace(/<\/?(w|m|o|v|x):[a-zA-Z][^>]*>/gi, '')
+          .replace(/<xml[^>]*>[\s\S]*?<\/xml>/gi, '')
+          // <!--[if ...]>...<![endif]--> — Office conditional comments
+          .replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, '')
+          // class="MsoNormal" and any other Mso* class — token-based to avoid
+          // mangling unrelated classes on the same element
+          .replace(/\sclass="([^"]*)"/gi, (_m, cls: string) => {
+            const filtered = cls
+              .split(/\s+/)
+              .filter((c) => !/^Mso/i.test(c))
+              .join(' ')
+              .trim();
+            return filtered ? ` class="${filtered}"` : '';
+          })
+          // Inline styles: drop the whole style attr if it only contains
+          // font-family / mso-* / Office-y junk. Conservative: only strip
+          // declarations that match the known-bad patterns, keep the rest.
+          .replace(/\sstyle="([^"]*)"/gi, (_m, style: string) => {
+            const cleaned = style
+              .split(';')
+              .map((d) => d.trim())
+              .filter((d) => {
+                if (!d) return false;
+                if (/^mso-/i.test(d)) return false;
+                if (/^font-family\s*:/i.test(d)) return false;
+                return true;
+              })
+              .join('; ');
+            return cleaned ? ` style="${cleaned}"` : '';
+          })
+          // file:///... image sources — local paths that won't resolve in browser
+          // and may leak Windows usernames. Drop the whole <img> tag.
+          .replace(/<img[^>]*\ssrc=["']file:\/\/\/[^"']*["'][^>]*>/gi, '');
+      },
+    },
     onUpdate: ({ editor }) => {
       isLocalChange.current = true;
       onChangeRef.current(editor.getHTML());
@@ -402,9 +445,12 @@ export const RichTextEditor = ({
 
   return (
     <div className={cn('rich-text-editor', className)}>
-      {/* Toolbar */}
+      {/* Toolbar — horizontal scroll on narrow viewports. At 360px the 12+ buttons
+          previously wrapped to 4-5 rows; horizontal scroll is more ergonomic than
+          stuffing everything into a dropdown menu and matches the editing pattern
+          users know from mobile word processors. */}
       {showToolbar && (
-        <div className="border border-input rounded-t-lg bg-muted/30 p-2 flex flex-wrap gap-1">
+        <div className="border border-input rounded-t-lg bg-muted/30 p-2 flex flex-nowrap gap-1 overflow-x-auto rte-toolbar-scroll">
           {/* Text formatting */}
           <Button
             type="button"
@@ -787,6 +833,26 @@ export const RichTextEditor = ({
       )}
 
       <style>{`
+        /* Toolbar scroll styling — slim scrollbar, prevent buttons from shrinking
+           so they stay tap-sized on mobile. */
+        .rte-toolbar-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent;
+        }
+        .rte-toolbar-scroll::-webkit-scrollbar {
+          height: 4px;
+        }
+        .rte-toolbar-scroll::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .rte-toolbar-scroll::-webkit-scrollbar-thumb {
+          background: hsl(var(--muted-foreground) / 0.3);
+          border-radius: 2px;
+        }
+        .rte-toolbar-scroll > * {
+          flex-shrink: 0;
+        }
+
         .rich-text-editor-content .ProseMirror {
           padding: 0.75rem;
           outline: none;
