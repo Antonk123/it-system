@@ -26,10 +26,13 @@ const VALID_PRIORITIES = ['low', 'medium', 'high', 'critical'];
 
 // Explicit column lists for SELECT optimization (instead of SELECT *)
 // Reduces data transfer by 30-40% by avoiding unnecessary columns
-// Use 'tickets.' prefix for all columns to avoid ambiguity when JOINs are present
+// Use 'tickets.' prefix for all columns to avoid ambiguity when JOINs are present.
+// assigned_to_name is a correlated subquery so non-admins can render the assignee
+// display-name without needing access to the admin-only GET /api/users endpoint.
 const TICKET_COLUMNS = [
   'tickets.id', 'tickets.title', 'tickets.description', 'tickets.status', 'tickets.priority',
   'tickets.category_id', 'tickets.requester_id', 'tickets.company_id', 'tickets.assigned_to',
+  '(SELECT COALESCE(display_name, email) FROM users WHERE id = tickets.assigned_to) AS assigned_to_name',
   'tickets.notes', 'tickets.solution', 'tickets.template_id',
   'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at',
   'tickets.ai_suggested_category_id', 'tickets.ai_suggested_confidence',
