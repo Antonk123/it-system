@@ -124,17 +124,14 @@ const TitleSection = ({ open }: TitleSectionProps) => {
   return (
     <div className="p-4 border-b border-sidebar-border">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg">
-          <SidebarIcon className="w-6 h-6 text-white" />
+        <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg">
+          <img src="/icons/pfm-logo-lg.png" alt="PFM" className="w-full h-full object-cover" />
         </div>
 
         {open && (
           <div className="transition-opacity duration-200">
             <span className="block text-sm font-semibold text-sidebar-foreground">
               IT-ärenden
-            </span>
-            <span className="block text-xs text-muted-foreground">
-              Ticket System
             </span>
           </div>
         )}
@@ -314,14 +311,19 @@ export const Layout = ({
           >
             <Menu className="w-6 h-6" />
           </button>
-          <div className="flex-1">
-            <button
-              onClick={() => setPaletteOpen(true)}
-              className="flex w-full items-center gap-2 px-3 py-2 rounded-lg border border-border/50 text-muted-foreground text-sm hover:bg-muted/50 transition-colors"
-            >
+          <div className="flex-1 relative group" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
+            {/* Glow layer */}
+            <div className="absolute z-[-1] overflow-hidden h-full w-full rounded-xl blur-[2px]">
+              <div className="absolute w-[999px] h-[999px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+                              bg-[conic-gradient(hsl(var(--search-glow-base)),hsl(var(--search-glow-primary-deep))_5%,hsl(var(--search-glow-base))_38%,hsl(var(--search-glow-base))_50%,hsl(var(--search-glow-accent-vivid))_60%,hsl(var(--search-glow-base))_87%)]
+                              transition-all duration-2000
+                              animate-search-glow-slow
+                              group-hover:rotate-[-120deg] group-focus-within:animate-search-glow-focus" />
+            </div>
+            <div className="relative flex w-full items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-primary/30 text-muted-foreground text-sm cursor-pointer transition-colors">
               <Search className="w-4 h-4" />
-              <span>Sök...</span>
-            </button>
+              <span>Sök överallt...</span>
+            </div>
           </div>
           <Button variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">
             {mode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
@@ -332,16 +334,37 @@ export const Layout = ({
         <div data-print-hide className="hidden lg:block sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 flex-1">
-              <button
-                onClick={() => setPaletteOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border/50 text-muted-foreground text-sm hover:bg-muted/50 transition-colors w-72 shrink-0"
-              >
-                <Search className="w-4 h-4" />
-                <span>Sök ärenden, artiklar, sidor...</span>
-                <kbd className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono">
-                  {navigator.platform?.includes('Mac') ? '⌘K' : 'Ctrl+K'}
-                </kbd>
-              </button>
+              <div className="relative group w-80 shrink-0 cursor-pointer" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
+                {/* Glow layer 1: outer rotating gradient */}
+                <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[56px] rounded-xl blur-[3px]">
+                  <div className="absolute w-[999px] h-[999px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
+                                  bg-[conic-gradient(hsl(var(--search-glow-base)),hsl(var(--search-glow-primary-deep))_5%,hsl(var(--search-glow-base))_38%,hsl(var(--search-glow-base))_50%,hsl(var(--search-glow-accent-vivid))_60%,hsl(var(--search-glow-base))_87%)]
+                                  transition-all duration-2000
+                                  animate-search-glow-slow
+                                  group-hover:rotate-[-120deg] group-focus-within:animate-search-glow-focus" />
+                </div>
+                {/* Glow layer 2: inner gradient */}
+                <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[52px] rounded-xl blur-[3px]">
+                  <div className="absolute w-[600px] h-[600px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[82deg]
+                                  bg-[conic-gradient(rgba(0,0,0,0),hsl(var(--search-glow-primary-dark)),rgba(0,0,0,0)_10%,rgba(0,0,0,0)_50%,hsl(var(--search-glow-accent-dark)),rgba(0,0,0,0)_60%)]
+                                  transition-all duration-2000
+                                  group-hover:rotate-[-98deg] group-focus-within:rotate-[442deg]" />
+                </div>
+                {/* Glow layer 3: highlight */}
+                <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[50px] rounded-lg blur-[2px]">
+                  <div className="absolute w-[600px] h-[600px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[70deg]
+                                  bg-[conic-gradient(rgba(0,0,0,0)_0%,hsl(var(--search-glow-primary-bright)),rgba(0,0,0,0)_8%,rgba(0,0,0,0)_50%,hsl(var(--search-glow-accent-bright)),rgba(0,0,0,0)_58%)]
+                                  brightness-140 transition-all duration-2000
+                                  group-hover:rotate-[-97deg] group-focus-within:rotate-[443deg]" />
+                </div>
+                <div className="relative flex items-center gap-2 px-4 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-primary/30 text-muted-foreground text-sm transition-colors">
+                  <Search className="w-4 h-4" />
+                  <span>Sök överallt...</span>
+                  <kbd className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono">
+                    {navigator.platform?.includes('Mac') ? '⌘K' : 'Ctrl+K'}
+                  </kbd>
+                </div>
+              </div>
               <RouteBreadcrumbs />
             </div>
             <Button variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">
@@ -357,7 +380,7 @@ export const Layout = ({
 
         {/* pb-24 on mobile leaves room for the fixed BottomTabBar + lifted FAB without
             clipping the last row of content. lg: keeps the regular desktop padding. */}
-        <div className="p-5 pb-24 lg:p-6 lg:pb-6 relative z-10">
+        <div className="p-5 pb-28 lg:p-6 lg:pb-6 relative z-10" style={{ paddingBottom: 'max(7rem, calc(5rem + env(safe-area-inset-bottom, 0px)))' }}>
           {children}
         </div>
       </main>

@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Ticket, Plus, Building2, Menu } from 'lucide-react';
+import { LayoutDashboard, Ticket, Plus, Building2, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const tabItems = [
@@ -7,7 +7,7 @@ const tabItems = [
   { path: '/tickets', icon: Ticket, label: 'Ärenden' },
   { path: '/tickets/new', icon: Plus, label: 'Nytt' },
   { path: '/companies', icon: Building2, label: 'Företag' },
-  { path: '/settings', icon: Menu, label: 'Meny' },
+  { path: '/settings', icon: MoreHorizontal, label: 'Mer' },
 ];
 
 export const BottomTabBar = () => {
@@ -23,12 +23,12 @@ export const BottomTabBar = () => {
     <nav
       className={cn(
         'fixed bottom-0 inset-x-0 z-50 lg:hidden',
-        'h-14 bg-card border-t border-border',
+        'bg-card/95 backdrop-blur-lg border-t border-border',
         'pb-[env(safe-area-inset-bottom)]',
-        // overflow-visible so the lifted center FAB ("Nytt") isn't clipped by the bar
         'overflow-visible',
         'flex items-stretch'
       )}
+      style={{ minHeight: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}
       aria-label="Huvudnavigation"
     >
       {tabItems.map((item) => {

@@ -162,8 +162,9 @@ const PublicTicketForm = () => {
   // ── AI solved — deflection success ────────────────────────────
   if (aiSolved) {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-background p-4 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,hsl(var(--primary)/0.07)_0%,transparent_100%)] pointer-events-none" />
+      <div className="min-h-dvh flex items-center justify-center bg-[hsl(var(--search-input-bg))] p-4 relative overflow-hidden">
+        <div className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-primary/8 blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-1/4 -right-32 w-80 h-80 rounded-full bg-accent/10 blur-[100px] pointer-events-none" />
         <div className="w-full max-w-md relative z-10 text-center">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-6">
             <ThumbsUp className="w-10 h-10 text-emerald-500" />
@@ -193,8 +194,9 @@ const PublicTicketForm = () => {
   // ── Success state ─────────────────────────────────────────────
   if (isSuccess) {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-background p-4 relative overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,hsl(var(--primary)/0.07)_0%,transparent_100%)] pointer-events-none" />
+      <div className="min-h-dvh flex items-center justify-center bg-[hsl(var(--search-input-bg))] p-4 relative overflow-hidden">
+        <div className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-primary/8 blur-[100px] pointer-events-none" />
+        <div className="absolute bottom-1/4 -right-32 w-80 h-80 rounded-full bg-accent/10 blur-[100px] pointer-events-none" />
         <div className="w-full max-w-md relative z-10 text-center">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 mb-6">
             <CheckCircle className="w-10 h-10 text-primary" />
@@ -223,21 +225,29 @@ const PublicTicketForm = () => {
 
   // ── Form ──────────────────────────────────────────────────────
   return (
-    <div className="min-h-dvh bg-background flex items-start justify-center p-4 py-10 relative overflow-hidden">
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_40%_at_50%_0%,hsl(var(--primary)/0.07)_0%,transparent_100%)] pointer-events-none" />
+    <div className="min-h-dvh bg-[hsl(var(--search-input-bg))] flex items-start justify-center p-4 py-10 relative overflow-hidden">
+      <div className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-primary/8 blur-[100px] pointer-events-none" />
+      <div className="absolute bottom-1/4 -right-32 w-80 h-80 rounded-full bg-accent/10 blur-[100px] pointer-events-none" />
+      <div
+        className="absolute inset-0 pointer-events-none opacity-[0.03]"
+        style={{
+          backgroundImage: 'linear-gradient(hsl(var(--foreground)) 1px, transparent 1px), linear-gradient(90deg, hsl(var(--foreground)) 1px, transparent 1px)',
+          backgroundSize: '64px 64px',
+        }}
+      />
 
       <div className="w-full max-w-lg relative z-10">
         {/* Brand header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 mb-5">
-            <Ticket className="w-7 h-7 text-primary" />
+          <div className="inline-flex w-16 h-16 rounded-2xl overflow-hidden mb-5 ring-1 ring-primary/20 shadow-lg shadow-primary/10">
+            <img src="/icons/pfm-logo-lg.png" alt="PFM" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-2xl font-semibold text-foreground tracking-tight">Skicka en supportförfrågan</h1>
           <p className="text-sm text-muted-foreground mt-1.5">Fyll i formuläret så återkommer vi så snart som möjligt.</p>
         </div>
 
         {/* Card */}
-        <div className="bg-card border border-border rounded-2xl p-8 shadow-2xl backdrop-blur-sm">
+        <div className="bg-card/95 border border-primary/20 rounded-2xl p-8 shadow-2xl backdrop-blur-xl">
           <form onSubmit={handleSubmit} className="space-y-5">
 
             {/* Error */}
