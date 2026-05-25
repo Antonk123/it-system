@@ -70,38 +70,3 @@ export const saveModeTheme = (mode: ModeTheme) => {
   }
   window.localStorage.setItem(MODE_STORAGE_KEY, mode);
 };
-
-// Sidebar icon utilities
-export const SIDEBAR_ICON_STORAGE_KEY = "app-sidebar-icon";
-
-export const SIDEBAR_ICON_OPTIONS = [
-  { value: "lifebuoy", label: "Livring (support)" },
-  { value: "headset", label: "Headset (helpdesk)" },
-  { value: "inbox", label: "Inkorg" },
-  { value: "ticket", label: "Biljett (klassisk)" },
-  { value: "wrench", label: "Skiftnyckel (IT)" },
-  { value: "message-square", label: "Meddelande" },
-  { value: "shield-check", label: "Sköld (säkerhet)" },
-  { value: "sparkles", label: "Sparkles (modernt)" },
-  { value: "zap", label: "Blixt (snabb)" },
-  { value: "help-circle", label: "Frågetecken" },
-] as const;
-
-export type SidebarIcon = (typeof SIDEBAR_ICON_OPTIONS)[number]["value"];
-
-const sidebarIconSet = new Set<string>(SIDEBAR_ICON_OPTIONS.map((o) => o.value));
-
-export const isSidebarIcon = (value: string): value is SidebarIcon => sidebarIconSet.has(value);
-
-export const DEFAULT_SIDEBAR_ICON: SidebarIcon = "inbox";
-
-export const getStoredSidebarIcon = (): SidebarIcon => {
-  if (typeof window === "undefined") return DEFAULT_SIDEBAR_ICON;
-  const stored = window.localStorage.getItem(SIDEBAR_ICON_STORAGE_KEY);
-  return stored && isSidebarIcon(stored) ? stored : DEFAULT_SIDEBAR_ICON;
-};
-
-export const saveSidebarIcon = (icon: SidebarIcon) => {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(SIDEBAR_ICON_STORAGE_KEY, icon);
-};
