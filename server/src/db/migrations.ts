@@ -879,4 +879,68 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    id: '046',
+    name: 'add_template_type_column',
+    up: (db, { columnExists }) => {
+      if (!columnExists('ticket_templates', 'template_type')) {
+        db.prepare("ALTER TABLE ticket_templates ADD COLUMN template_type TEXT DEFAULT 'standard'").run();
+      }
+      const rows = db.prepare(`
+        SELECT DISTINCT t.id FROM ticket_templates t
+        JOIN template_fields f ON f.template_id = t.id
+      `).all() as { id: string }[];
+      for (const row of rows) {
+        db.prepare("UPDATE ticket_templates SET template_type = 'dynamic' WHERE id = ?").run(row.id);
+      }
+    },
+  },
+  {
+    id: '047',
+    name: 'seed_dynamic_template_fields',
+    up: (db) => {
+      const ins = db.prepare(`
+        INSERT INTO template_fields (id, template_id, field_name, field_label, field_type, placeholder, default_value, required, options, position)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+
+      const fieldDefs: Record<string, [string, string, string, string | null, number, string | null, number][]> = {
+        'Programvaruinstallation': [
+          ['program_name',    'Programvarans namn',  'text',     'T.ex. Microsoft Visio',             1, null,   0],
+          ['version',         'Version',             'text',     'T.ex. 2024, senaste',               0, null,   1],
+          ['antal_datorer',   'Antal datorer',       'number',   '1',                                 1, null,   2],
+          ['motivering',      'Motivering',          'textarea', 'Beskriv varför programvaran behövs', 1, null,   3],
+        ],
+        'Behörighetsförfrågan': [
+          ['system_name',     'System / tjänst',     'text',     'T.ex. SharePoint, ERP',             1, null,   0],
+          ['access_level',    'Behörighetsnivå',     'select',   null,                                1, '["Läs","Skriv","Admin"]', 1],
+          ['anvandare',       'Användare',           'text',     'Namn eller e-post på den som behöver åtkomst', 1, null, 2],
+          ['motivering',      'Motivering',          'textarea', 'Beskriv varför åtkomst behövs',     1, null,   3],
+        ],
+        'Nätverksproblem': [
+          ['plats',           'Plats / rum',         'text',     'T.ex. Kontor 3, Rum 201',           1, null,   0],
+          ['problem_type',    'Typ av problem',      'select',   null,                                1, '["Ingen anslutning","Långsamt","Instabilt","VPN-problem","Wi-Fi","Annat"]', 1],
+          ['start_time',      'När började problemet?', 'text',  'T.ex. idag kl 09:00',              0, null,   2],
+          ['antal_drabbade',  'Antal drabbade',      'number',   '1',                                 0, null,   3],
+          ['beskrivning',     'Beskriv problemet',   'textarea', 'Vad händer? Felmeddelanden?',       1, null,   4],
+        ],
+        'Skrivarproblem': [
+          ['skrivare_namn',   'Skrivarens namn / modell', 'text', 'T.ex. HP LaserJet Pro, Kontor-Skrivare', 1, null, 0],
+          ['skrivare_plats',  'Plats',               'text',     'T.ex. Kontor 2, Plan 3',           0, null,   1],
+          ['problem_type',    'Typ av problem',      'select',   null,                                1, '["Skriver inte ut","Papper fastnar","Dålig utskriftskvalitet","Offline / hittas ej","Tonerbyte","Annat"]', 2],
+          ['felmeddelande',   'Eventuellt felmeddelande', 'text', 'Vad står det på skärmen / datorn?', 0, null, 3],
+        ],
+      };
+
+      for (const [templateName, fields] of Object.entries(fieldDefs)) {
+        const tmpl = db.prepare('SELECT id FROM ticket_templates WHERE name = ?').get(templateName) as { id: string } | undefined;
+        if (!tmpl) continue;
+        const existing = (db.prepare('SELECT COUNT(*) as n FROM template_fields WHERE template_id = ?').get(tmpl.id) as { n: number }).n;
+        if (existing > 0) continue;
+        for (const [fieldName, label, type, placeholder, required, options, position] of fields) {
+          ins.run(randomUUID(), tmpl.id, fieldName, label, type, placeholder, null, required, options, position);
+        }
+      }
+    },
+  },
 ];
