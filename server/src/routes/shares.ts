@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { createRateLimiter } from '../middleware/rateLimit.js';
 import { existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -12,6 +13,12 @@ const __dirname = dirname(__filename);
 const UPLOAD_DIR = process.env.UPLOAD_DIR || join(__dirname, '../../data/uploads');
 
 const router = Router();
+
+/**
+ * Rate limiter for public share endpoints.
+ * 30 requests per minute per IP — prevents brute-force of share tokens.
+ */
+const sharePublicRateLimiter = createRateLimiter(60 * 1000, 30);
 
 interface ShareRow {
   id: string;
@@ -124,7 +131,7 @@ router.delete('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Respons
 });
 
 // Get shared ticket (PUBLIC - no auth required)
-router.get('/public/:token', (req: Request, res: Response) => {
+router.get('/public/:token', sharePublicRateLimiter, (req: Request, res: Response) => {
   try {
     const share = db.prepare('SELECT id, ticket_id, share_token, created_by, created_at FROM ticket_shares WHERE share_token = ?').get(req.params.token) as ShareRow | undefined;
     
@@ -190,7 +197,7 @@ router.get('/public/:token', (req: Request, res: Response) => {
 });
 
 // Serve file for shared ticket (PUBLIC)
-router.get('/public/file/:token/:attachmentId', (req: Request, res: Response) => {
+router.get('/public/file/:token/:attachmentId', sharePublicRateLimiter, (req: Request, res: Response) => {
   try {
     // Verify share token
     const share = db.prepare('SELECT id, ticket_id, share_token, created_by, created_at FROM ticket_shares WHERE share_token = ?').get(req.params.token) as ShareRow | undefined;

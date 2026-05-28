@@ -160,6 +160,9 @@ const TicketList = () => {
       newParams.set('page', '1');
       // Deactivate active view when filters are changed manually
       setActiveView(null);
+      // Clear bulk selection — selected IDs from a previous filter
+      // set could refer to tickets no longer visible
+      setSelectedIds([]);
     }
 
     setSearchParams(newParams);
@@ -355,6 +358,7 @@ const TicketList = () => {
             else newParams.set('company_id', v);
             newParams.set('page', '1');
             setActiveView(null);
+            setSelectedIds([]);
             setSearchParams(newParams);
           }}>
             <SelectTrigger className="w-[180px]">
@@ -385,7 +389,7 @@ const TicketList = () => {
           dateField={dateField}
           views={views}
           activeViewId={activeView?.id ?? null}
-          onSelectView={(view) => applyView(view, 'ticketlist')}
+          onSelectView={(view) => { applyView(view, 'ticketlist'); setSelectedIds([]); }}
           onManageViews={() => setManageViewsOpen(true)}
           onChange={updateFilters}
           onClearAll={() => updateFilters({

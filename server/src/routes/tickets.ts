@@ -832,12 +832,20 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
     // Build WHERE clause from filters
     const { whereClause, params, joins } = buildWhereClause(query);
 
-    // Get all matching tickets (no pagination for export)
+    // Pagination for export — default 10000, max 50000
+    const MAX_EXPORT_LIMIT = 50000;
+    const DEFAULT_EXPORT_LIMIT = 10000;
+    const rawLimit = parseInt(String(req.query.limit || ''), 10);
+    const exportLimit = (!rawLimit || rawLimit <= 0) ? DEFAULT_EXPORT_LIMIT : Math.min(rawLimit, MAX_EXPORT_LIMIT);
+    const rawOffset = parseInt(String(req.query.offset || ''), 10);
+    const exportOffset = (!rawOffset || rawOffset < 0) ? 0 : rawOffset;
+
     const tickets = db.prepare(`
       SELECT DISTINCT tickets.* FROM tickets ${joins}
       WHERE ${whereClause}
       ORDER BY tickets.created_at DESC
-    `).all(...params) as TicketRow[];
+      LIMIT ? OFFSET ?
+    `).all(...params, exportLimit, exportOffset) as TicketRow[];
 
     // Get all categories for lookup
     const categories = db.prepare('SELECT id, label FROM categories').all();

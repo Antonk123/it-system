@@ -228,6 +228,31 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     }
   }
 
+  // --- Deduplication: check if a ticket with same sender + similar subject was created very recently ---
+  const strippedSubject = stripReplyPrefix(subject);
+  if (strippedSubject) {
+    const recentDuplicate = db
+      .prepare(
+        `SELECT t.id FROM tickets t
+         JOIN contacts c ON c.id = t.requester_id
+         WHERE t.title = ?
+           AND LOWER(c.email) = LOWER(?)
+           AND t.created_at >= datetime('now', '-60 seconds')
+         LIMIT 1`
+      )
+      .get(strippedSubject, fromAddress) as { id: string } | undefined;
+
+    if (recentDuplicate) {
+      console.log(`[email-inbound] Near-duplicate detected for "${subject}" from ${fromAddress} — adding as comment to ${recentDuplicate.id}`);
+      resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
+      addCommentToTicket(recentDuplicate.id, body, fromAddress, fromName);
+      if (parsed.attachments && parsed.attachments.length > 0) {
+        await saveAttachments(parsed.attachments, recentDuplicate.id);
+      }
+      return;
+    }
+  }
+
   // --- New ticket ---
   const contact = resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
 
@@ -307,13 +332,21 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
     const storedName = `${attachId}${ext}`;
     const filePath = path.join(uploadDir, storedName);
 
-    fs.mkdirSync(uploadDir, { recursive: true });
-    fs.writeFileSync(filePath, attachment.content);
-
+    // Insert DB row first, then write file. If file write fails, clean up the DB row.
+    // This avoids orphaned files on disk when the DB insert would have failed.
     db.prepare(
       `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type)
        VALUES (?, ?, ?, ?, ?, ?)`
     ).run(attachId, ticketId, attachment.filename, storedName, attachment.size, attachment.contentType);
+
+    try {
+      fs.mkdirSync(uploadDir, { recursive: true });
+      fs.writeFileSync(filePath, attachment.content);
+    } catch (writeErr) {
+      // File write failed — remove the DB row to stay consistent
+      db.prepare('DELETE FROM ticket_attachments WHERE id = ?').run(attachId);
+      console.error(`[email-inbound] Failed to write attachment file ${storedName}, DB row cleaned up:`, writeErr);
+    }
   }
 }
 

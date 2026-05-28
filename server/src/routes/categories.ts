@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -25,7 +25,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
 });
 
 // Create category
-router.post('/', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { label } = req.body;
 
   if (!label || typeof label !== 'string' || label.trim().length === 0) {
@@ -50,7 +50,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Reorder categories
-router.put('/reorder', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/reorder', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { ids } = req.body as { ids?: string[] };
 
   if (!Array.isArray(ids) || ids.length === 0) {
@@ -76,7 +76,7 @@ router.put('/reorder', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Update category
-router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { label } = req.body;
 
   if (!label || typeof label !== 'string' || label.trim().length === 0) {
@@ -100,7 +100,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Delete category
-router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const result = db.prepare('DELETE FROM categories WHERE id = ?').run(req.params.id);
     

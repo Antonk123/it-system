@@ -98,6 +98,8 @@ const TicketForm = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [failedUploads, setFailedUploads] = useState<{ files: File[]; ticketId: string } | null>(null);
+  const [isRetrying, setIsRetrying] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [customFieldValues, setCustomFieldValues] = useState<CustomFieldInput[]>([]);
   const [editInitialFieldValues, setEditInitialFieldValues] = useState<CustomFieldInput[]>([]);
@@ -467,13 +469,13 @@ const TicketForm = () => {
 
         if (newTicket) {
           // Upload pending files to the new ticket
-          let uploadErrors = 0;
+          const failedFiles: File[] = [];
           for (const file of pendingFiles) {
             try {
               await uploadAttachment(newTicket.id, file);
             } catch (error) {
               if (import.meta.env.DEV) console.error('Error uploading file:', file.name, error);
-              uploadErrors++;
+              failedFiles.push(file);
             }
           }
 
@@ -489,12 +491,14 @@ const TicketForm = () => {
 
           setHasUnsavedChanges(false);
 
-          if (uploadErrors > 0) {
-            toast.success(`Ärendet skapades, men ${uploadErrors} fil(er) kunde inte laddas upp`);
-          } else {
-            toast.success('Ärendet skapades');
+          if (failedFiles.length > 0) {
+            setFailedUploads({ files: failedFiles, ticketId: newTicket.id });
+            toast.warning(`Ärendet skapades, men ${failedFiles.length} fil(er) kunde inte laddas upp`);
+            // Don't navigate — show retry UI instead
+            return;
           }
 
+          toast.success('Ärendet skapades');
           navigate(`/tickets/${newTicket.id}`);
           return;
         }
@@ -507,6 +511,37 @@ const TicketForm = () => {
       setIsSaving(false);
     }
   };
+
+  const handleRetryUploads = useCallback(async () => {
+    if (!failedUploads) return;
+    setIsRetrying(true);
+    const stillFailed: File[] = [];
+    for (const file of failedUploads.files) {
+      try {
+        await uploadAttachment(failedUploads.ticketId, file);
+      } catch (error) {
+        if (import.meta.env.DEV) console.error('Retry failed for:', file.name, error);
+        stillFailed.push(file);
+      }
+    }
+    setIsRetrying(false);
+    if (stillFailed.length > 0) {
+      setFailedUploads({ ...failedUploads, files: stillFailed });
+      toast.error(`${stillFailed.length} fil(er) misslyckades igen`);
+    } else {
+      toast.success('Alla filer uppladdade!');
+      const ticketId = failedUploads.ticketId;
+      setFailedUploads(null);
+      navigate(`/tickets/${ticketId}`);
+    }
+  }, [failedUploads, uploadAttachment, navigate]);
+
+  const handleSkipFailedUploads = useCallback(() => {
+    if (!failedUploads) return;
+    const ticketId = failedUploads.ticketId;
+    setFailedUploads(null);
+    navigate(`/tickets/${ticketId}`);
+  }, [failedUploads, navigate]);
 
   const handleNavigateBack = () => {
     const goBack = () => {
@@ -554,6 +589,54 @@ const TicketForm = () => {
             </div>
           )}
         </div>
+
+        {/* Failed upload retry banner */}
+        {failedUploads && (
+          <Card className="border-destructive/50 bg-destructive/5">
+            <CardContent className="pt-4 pb-4 space-y-3">
+              <div className="flex items-start gap-3">
+                <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center">
+                  <ArrowLeft className="w-4 h-4 text-destructive rotate-[135deg]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground">
+                    Ärendet skapades, men {failedUploads.files.length} fil(er) kunde inte laddas upp
+                  </p>
+                  <ul className="mt-1 space-y-0.5">
+                    {failedUploads.files.map((file, i) => (
+                      <li key={i} className="text-xs text-muted-foreground truncate">
+                        {file.name} ({(file.size / 1024).toFixed(0)} KB)
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 ml-11">
+                <Button
+                  size="sm"
+                  onClick={handleRetryUploads}
+                  disabled={isRetrying}
+                  className="gap-2"
+                >
+                  {isRetrying ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <PlusCircle className="w-3.5 h-3.5" />
+                  )}
+                  {isRetrying ? 'Laddar upp...' : 'Försök igen'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleSkipFailedUploads}
+                  disabled={isRetrying}
+                >
+                  Hoppa över
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

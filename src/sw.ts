@@ -29,7 +29,10 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const url: string = event.notification.data?.url ?? '/';
+  const rawUrl: string = event.notification.data?.url ?? '/';
+  // Validate URL to prevent javascript: or other dangerous schemes
+  const isSafe = rawUrl.startsWith('/') || rawUrl.startsWith('https://') || rawUrl.startsWith('http://');
+  const url = isSafe ? rawUrl : '/';
   event.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })

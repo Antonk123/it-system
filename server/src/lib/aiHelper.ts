@@ -28,6 +28,16 @@ import { v4 as uuidv4 } from 'uuid';
 const apiKey = process.env.ANTHROPIC_API_KEY;
 const client = apiKey ? new Anthropic({ apiKey }) : null;
 
+/**
+ * Strip prompt-injection patterns from KB content before embedding in prompts.
+ * Removes lines that look like system/instruction directives and truncates.
+ */
+function sanitizeForPrompt(text: string, maxLength = 1500): string {
+  const injectionPatterns = /^\s*(\[SYSTEM\]|\[INST\]|\[\/INST\]|<<SYS>>|<\/s>|<\|im_start\|>|<\|im_end\|>|### Instruction|### System|SYSTEM:|ASSISTANT:|USER:)/im;
+  const lines = text.split('\n').filter(line => !injectionPatterns.test(line));
+  return lines.join('\n').slice(0, maxLength);
+}
+
 // Default-modell för alla AI-funktioner. Haiku 4.5 är optimerad för exakt vårt
 // användningsfall: hämta info ur given kontext (KB-artiklar) och presentera
 // den vänligt på svenska. Snabb (oftast <1s), billig (~5x billigare än Sonnet),
@@ -184,7 +194,7 @@ export async function suggestSolutionFromKB(
 
     const kbContext = relevantKbArticles
       .slice(0, 5)
-      .map((a, i) => `[KB ${i + 1}] ${a.title}\n${a.content.slice(0, 1500)}`)
+      .map((a, i) => `[KB ${i + 1}] ${sanitizeForPrompt(a.title, 200)}\n${sanitizeForPrompt(a.content)}`)
       .join('\n\n---\n\n');
 
     const systemPrompt = `Du är en hjälpsam IT-assistent på en svensk arbetsplats. Din uppgift är att hjälpa medarbetare lösa enkla IT-problem INNAN de skapar ett ärende — men ENDAST när du faktiskt kan ge en bra lösning baserat på företagets kunskapsbas.
@@ -362,7 +372,7 @@ export async function draftReply(
   try {
     const kbContext = relevantKbArticles
       .slice(0, 5)
-      .map((a, i) => `[KB ${i + 1}] ${a.title}\n${a.content.slice(0, 1500)}`)
+      .map((a, i) => `[KB ${i + 1}] ${sanitizeForPrompt(a.title, 200)}\n${sanitizeForPrompt(a.content)}`)
       .join('\n\n---\n\n');
 
     const attachmentContext = attachments.length > 0

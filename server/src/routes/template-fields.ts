@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 
 const router = Router({ mergeParams: true });
 
@@ -33,7 +33,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // POST /api/templates/:templateId/fields
-router.post('/', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const { templateId } = req.params;
     const { field_name, field_label, field_type, placeholder, default_value, required, options } = req.body;
@@ -61,7 +61,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 
 // PUT /api/templates/:templateId/fields/reorder
 // IMPORTANT: This route must come BEFORE /:fieldId to prevent Express from matching "reorder" as a fieldId
-router.put('/reorder', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/reorder', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const { ids } = req.body as { ids: string[] };
     if (!Array.isArray(ids)) {
@@ -86,7 +86,7 @@ router.put('/reorder', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // PUT /api/templates/:templateId/fields/:fieldId
-router.put('/:fieldId', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/:fieldId', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const { fieldId } = req.params;
     const { field_name, field_label, field_type, placeholder, default_value, required, options } = req.body;
@@ -120,7 +120,7 @@ router.put('/:fieldId', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // DELETE /api/templates/:templateId/fields/:fieldId
-router.delete('/:fieldId', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/:fieldId', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const result = db.prepare('DELETE FROM template_fields WHERE id = ?').run(req.params.fieldId);
     if (result.changes === 0) {

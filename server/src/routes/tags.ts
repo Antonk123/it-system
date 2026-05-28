@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -24,7 +24,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
 });
 
 // Create tag
-router.post('/', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, color } = req.body;
 
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -53,7 +53,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Update tag
-router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, color } = req.body;
 
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -83,7 +83,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Delete tag
-router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const result = db.prepare('DELETE FROM tags WHERE id = ?').run(req.params.id);
 
