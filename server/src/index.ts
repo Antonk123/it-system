@@ -6,6 +6,7 @@ import { doubleCsrf } from 'csrf-csrf';
 import { initializeDatabase } from './db/connection.js';
 import { startReminderScheduler } from './lib/reminderScheduler.js';
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
+import { cleanupOldAiUsage } from './lib/aiHelper.js';
 import { startAutoCloseScheduler } from './lib/autoCloseScheduler.js';
 import { startRecurringScheduler } from './lib/recurringScheduler.js';
 import { startWebhookRetryScheduler } from './lib/webhookRetryScheduler.js';
@@ -78,6 +79,16 @@ cron.schedule('0 3 * * *', () => {
   }
 });
 console.log('✅ Refresh token cleanup scheduled (daily at 03:00)');
+
+// Daily cleanup of old AI usage logs (older than 90 days) at 03:15
+cron.schedule('15 3 * * *', () => {
+  try {
+    cleanupOldAiUsage();
+  } catch (error) {
+    console.error('Error during scheduled AI usage cleanup:', error);
+  }
+});
+console.log('✅ AI usage log cleanup scheduled (daily at 03:15)');
 
 // Auto-close resolved tickets (daily at 02:30, configurable via AUTO_CLOSE_DAYS env var)
 startAutoCloseScheduler();

@@ -58,6 +58,14 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
   }
 
   try {
+    // Limit API keys per user to prevent database bloat
+    const keyCount = db.prepare(
+      'SELECT COUNT(*) as count FROM api_keys WHERE user_id = ?'
+    ).get(req.user!.id) as { count: number };
+    if (keyCount.count >= 20) {
+      return res.status(400).json({ error: 'Maximalt 20 API-nycklar per användare' });
+    }
+
     const id = randomUUID();
     const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
     const keyPrefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);

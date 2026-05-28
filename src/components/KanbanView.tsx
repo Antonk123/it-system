@@ -11,6 +11,7 @@ import {
 } from '@dnd-kit/core';
 import { arrayMove, SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { Ticket as TicketType, User, TicketStatus } from '@/types/ticket';
+import { STATUS_LABELS } from '@/lib/constants';
 import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
 
@@ -22,13 +23,6 @@ interface KanbanViewProps {
 }
 
 const STATUSES: TicketStatus[] = ['open', 'in-progress', 'waiting', 'resolved', 'closed'];
-const STATUS_LABELS: Record<TicketStatus, string> = {
-  'open': 'Öppen',
-  'in-progress': 'Pågående',
-  'waiting': 'Väntar',
-  'resolved': 'Löst',
-  'closed': 'Stängd',
-};
 
 export function KanbanView({ tickets, users, onStatusChange, onTicketClick }: KanbanViewProps) {
   const [activeId, setActiveId] = useState<string | null>(null);

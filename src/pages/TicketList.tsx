@@ -22,6 +22,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { TicketStatus, TicketPriority } from '@/types/ticket';
 import { cn } from '@/lib/utils';
+import { STATUS_LABELS } from '@/lib/constants';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
@@ -32,14 +33,6 @@ const listContainer = {
 const listItem = {
   hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: 'easeOut' } },
-};
-
-const statusLabels: Record<TicketStatus, string> = {
-  'open': 'Öppen',
-  'in-progress': 'Pågående',
-  'waiting': 'Väntar',
-  'resolved': 'Löst',
-  'closed': 'Stängd',
 };
 
 const priorityVariant = (priority: string): 'default' | 'destructive' | 'secondary' | 'outline' => {
@@ -190,7 +183,7 @@ const TicketList = () => {
   const handleStatusChange = useCallback(async (ticketId: string, status: TicketStatus) => {
     try {
       await updateTicket(ticketId, { status });
-      toast.success(`Status uppdaterad till ${statusLabels[status]}`);
+      toast.success(`Status uppdaterad till ${STATUS_LABELS[status]}`);
     } catch {
       toast.error('Kunde inte uppdatera status');
     }
@@ -344,7 +337,7 @@ const TicketList = () => {
                   updateFilters({ status: next });
                 }}
               >
-                {statusLabels[s]}
+                {STATUS_LABELS[s]}
               </Badge>
             ))}
           </div>
@@ -456,7 +449,7 @@ const TicketList = () => {
                       type="button"
                       onClick={() => handleTicketClick(ticket.id)}
                       className="w-full text-left p-3 rounded-lg border bg-card active:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                      aria-label={`Öppna ärende ${ticket.title}, prioritet ${ticket.priority}, status ${statusLabels[ticket.status] ?? ticket.status}`}
+                      aria-label={`Öppna ärende ${ticket.title}, prioritet ${ticket.priority}, status ${STATUS_LABELS[ticket.status] ?? ticket.status}`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-sm font-medium line-clamp-1 flex-1">{ticket.title}</span>
@@ -465,7 +458,7 @@ const TicketList = () => {
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        <Badge variant="outline" className="text-xs">{statusLabels[ticket.status] ?? ticket.status}</Badge>
+                        <Badge variant="outline" className="text-xs">{STATUS_LABELS[ticket.status] ?? ticket.status}</Badge>
                         {ticket.companyName && (
                           <span className="text-xs text-muted-foreground">{ticket.companyName}</span>
                         )}

@@ -138,16 +138,18 @@ router.post('/refresh', (req: Request, res: Response) => {
       { expiresIn: ACCESS_TOKEN_EXPIRY }
     );
 
-    // Delete consumed refresh token (rolling token pattern — single use)
-    db.prepare('DELETE FROM refresh_tokens WHERE id = ?').run(tokenRow.id);
-
-    // Issue new refresh token with fresh 7-day expiry (rolling per D-06)
+    // Atomically rotate refresh token (delete old + insert new in one transaction)
+    // Prevents session loss if server crashes between operations.
     const newRefreshToken = generateRefreshToken();
     const newRefreshTokenId = uuidv4();
     const newExpiresAt = getRefreshTokenExpiry();
-    db.prepare(
-      'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
-    ).run(newRefreshTokenId, tokenRow.user_id, newRefreshToken, newExpiresAt);
+    const rotateToken = db.transaction(() => {
+      db.prepare('DELETE FROM refresh_tokens WHERE id = ?').run(tokenRow.id);
+      db.prepare(
+        'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
+      ).run(newRefreshTokenId, tokenRow.user_id, newRefreshToken, newExpiresAt);
+    });
+    rotateToken();
 
     res.json({
       accessToken,

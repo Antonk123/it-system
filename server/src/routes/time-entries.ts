@@ -8,6 +8,7 @@ const router = Router();
 interface TimeEntryRow {
   id: string;
   ticket_id: string;
+  user_id: string | null;
   duration_minutes: number;
   note: string | null;
   created_at: string;
@@ -18,7 +19,7 @@ router.get('/:ticketId', authenticate, (req: AuthRequest, res) => {
   const { ticketId } = req.params;
 
   const entries = db.prepare(`
-    SELECT id, ticket_id, duration_minutes, note, created_at
+    SELECT id, ticket_id, user_id, duration_minutes, note, created_at
     FROM time_entries
     WHERE ticket_id = ?
     ORDER BY created_at DESC
@@ -58,21 +59,28 @@ router.post('/:ticketId', authenticate, (req: AuthRequest, res) => {
 
   const noteValue = (note as string | null | undefined) ?? null;
 
-  // Verify ticket exists so we return 404 instead of a generic 500 from FK violation.
-  const ticketExists = db.prepare('SELECT 1 FROM tickets WHERE id = ?').get(ticketId);
-  if (!ticketExists) {
+  // Verify ticket exists and check ownership
+  const ticket = db.prepare('SELECT id, assigned_to, created_by FROM tickets WHERE id = ?').get(ticketId) as { id: string; assigned_to: string | null; created_by: string | null } | undefined;
+  if (!ticket) {
     res.status(404).json({ error: 'Ticket not found' });
+    return;
+  }
+
+  const userId = req.user!.id;
+  const isAdmin = req.user!.role === 'admin';
+  if (!isAdmin && ticket.assigned_to !== userId && ticket.created_by !== userId) {
+    res.status(403).json({ error: 'Du kan bara logga tid på ärenden du är tilldelad eller skapare av' });
     return;
   }
 
   const id = randomUUID();
   db.prepare(`
-    INSERT INTO time_entries (id, ticket_id, duration_minutes, note)
-    VALUES (?, ?, ?, ?)
-  `).run(id, ticketId, duration_minutes, noteValue);
+    INSERT INTO time_entries (id, ticket_id, user_id, duration_minutes, note)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(id, ticketId, userId, duration_minutes, noteValue);
 
   const entry = db.prepare(`
-    SELECT id, ticket_id, duration_minutes, note, created_at
+    SELECT id, ticket_id, user_id, duration_minutes, note, created_at
     FROM time_entries
     WHERE id = ?
   `).get(id) as TimeEntryRow;
@@ -84,16 +92,23 @@ router.post('/:ticketId', authenticate, (req: AuthRequest, res) => {
 router.delete('/:ticketId/:id', authenticate, (req: AuthRequest, res) => {
   const { ticketId, id } = req.params;
 
-  const result = db.prepare(`
-    DELETE FROM time_entries
+  const entry = db.prepare(`
+    SELECT id, user_id FROM time_entries
     WHERE id = ? AND ticket_id = ?
-  `).run(id, ticketId);
+  `).get(id, ticketId) as { id: string; user_id: string | null } | undefined;
 
-  if (result.changes === 0) {
+  if (!entry) {
     res.status(404).json({ error: 'Time entry not found' });
     return;
   }
 
+  // Only the creator or an admin can delete a time entry
+  if (req.user!.role !== 'admin' && entry.user_id !== req.user!.id) {
+    res.status(403).json({ error: 'Du kan bara ta bort dina egna tidsregistreringar' });
+    return;
+  }
+
+  db.prepare('DELETE FROM time_entries WHERE id = ?').run(id);
   res.status(204).send();
 });
 

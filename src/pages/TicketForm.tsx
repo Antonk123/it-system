@@ -660,6 +660,7 @@ const TicketForm = () => {
                     onChange={(e) => { setFormData({ ...formData, title: e.target.value }); setErrors(prev => { const p = { ...prev }; delete p['title']; return p; }); }}
                     placeholder="Kort beskrivning av problemet"
                     required
+                    disabled={isSubmitting}
                     // Autofocus only on create — editing an existing ticket
                     // shouldn't steal focus on mount (user may be scrolling
                     // to a specific field, and autofocus jumps the viewport).
@@ -780,6 +781,7 @@ const TicketForm = () => {
                       setErrors(prev => { const p = { ...prev }; delete p['category']; return p; });
                     }}
                     onAddCategory={handleAddCategory}
+                    disabled={isSubmitting}
                   />
                   {errors.category && <p className="text-sm text-destructive mt-1">{errors.category}</p>}
                 </div>
@@ -809,7 +811,7 @@ const TicketForm = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="ticket-assigned">Tilldelad</Label>
-                  <Select value={formData.assigned_to || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, assigned_to: v === 'none' ? '' : v }))}>
+                  <Select value={formData.assigned_to || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, assigned_to: v === 'none' ? '' : v }))} disabled={isSubmitting}>
                     <SelectTrigger id="ticket-assigned">
                       <SelectValue placeholder="Ingen tilldelad" />
                     </SelectTrigger>
@@ -823,7 +825,7 @@ const TicketForm = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="ticket-company">Företag</Label>
-                  <Select value={formData.company_id || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, company_id: v === 'none' ? '' : v }))}>
+                  <Select value={formData.company_id || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, company_id: v === 'none' ? '' : v }))} disabled={isSubmitting}>
                     <SelectTrigger id="ticket-company">
                       <SelectValue placeholder="Inget företag" />
                     </SelectTrigger>
@@ -846,6 +848,7 @@ const TicketForm = () => {
                       <Select
                         value={formData.priority}
                         onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
+                        disabled={isSubmitting}
                       >
                         <SelectTrigger
                           id="ticket-priority-edit"
@@ -868,6 +871,7 @@ const TicketForm = () => {
                       <Select
                         value={formData.status}
                         onValueChange={(v) => { setFormData({ ...formData, status: v as TicketStatus }); setErrors(prev => { const p = { ...prev }; delete p['status']; return p; }); }}
+                        disabled={isSubmitting}
                       >
                         <SelectTrigger
                           id="ticket-status-edit"
@@ -906,6 +910,7 @@ const TicketForm = () => {
                         <Select
                           value={formData.priority}
                           onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
+                          disabled={isSubmitting}
                         >
                           <SelectTrigger
                             id="ticket-priority-create"

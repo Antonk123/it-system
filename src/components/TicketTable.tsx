@@ -4,6 +4,7 @@ import { sv } from 'date-fns/locale';
 import { memo, useEffect, useState } from 'react';
 import { ArrowUpDown, Loader2, X } from 'lucide-react';
 import { Ticket, User, TicketStatus, TicketPriority } from '@/types/ticket';
+import { STATUS_LABELS } from '@/lib/constants';
 import { PriorityBadge } from './PriorityBadge';
 import { StatusBadge } from './StatusBadge';
 import { SLABadge } from './SLABadge';
@@ -63,13 +64,8 @@ interface TicketTableProps {
   onBulkAction?: (ids: string[], updates: BulkUpdates) => Promise<void>;
 }
 
-const statusLabels: Record<TicketStatus, string> = {
-  'open': 'Öppen',
-  'in-progress': 'Pågående',
-  'waiting': 'Väntar',
-  'resolved': 'Löst',
-  'closed': 'Stängd',
-};
+// Re-export for backward compat within this file
+const statusLabels = STATUS_LABELS;
 
 export const TicketTable = memo(function TicketTable({
   tickets,

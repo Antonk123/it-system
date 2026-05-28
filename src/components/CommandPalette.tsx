@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -67,7 +67,33 @@ function TypeBadge({ type }: { type: 'ticket' | 'kb' | 'contact' }) {
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
   const searchHook = useCommandPaletteSearch();
-  const { results, isSearching, search, setSearch } = searchHook;
+  const { results, isSearching, search: hookSearch, setSearch: setHookSearch } = searchHook;
+
+  // Local input state for instant display; debounced value feeds the search hook
+  const [inputValue, setInputValue] = useState('');
+  const debounceTimer = React.useRef<ReturnType<typeof setTimeout>>();
+
+  const handleInputChange = (value: string) => {
+    setInputValue(value);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    if (!value.trim()) {
+      // Clear immediately when input is emptied
+      setHookSearch('');
+      return;
+    }
+    debounceTimer.current = setTimeout(() => {
+      setHookSearch(value);
+    }, 300);
+  };
+
+  // Reset input when palette closes
+  useEffect(() => {
+    if (!open) {
+      setInputValue('');
+      setHookSearch('');
+      if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    }
+  }, [open, setHookSearch]);
 
   // Load recently viewed items (merged and sorted by visitedAt desc, top 5).
   // Reads localStorage on every open so newly-viewed items appear without
@@ -84,16 +110,17 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     );
   }, [open]);
 
-  // Filter nav items by search term when searching
+  // Filter nav items by search term when searching (uses instant input for responsiveness)
   const filteredNavItems = useMemo(() => {
-    if (!search.trim()) return navItems;
-    const lower = search.toLowerCase();
+    if (!inputValue.trim()) return navItems;
+    const lower = inputValue.toLowerCase();
     return navItems.filter(item => item.label.toLowerCase().includes(lower));
-  }, [search]);
+  }, [inputValue]);
 
   const handleSelect = (path: string) => {
     onOpenChange(false);
-    setSearch('');
+    setInputValue('');
+    setHookSearch('');
     navigate(path);
   };
 
@@ -112,13 +139,13 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput
         placeholder="Sök ärenden, artiklar, sidor..."
-        value={search}
-        onValueChange={setSearch}
+        value={inputValue}
+        onValueChange={handleInputChange}
       />
 
       <CommandList className="max-h-[420px]">
         {/* ── IDLE STATE (no search) ── */}
-        {!search && (
+        {!inputValue && (
           <>
             {/* Recently visited */}
             {recentItems.length > 0 && (
@@ -198,7 +225,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         )}
 
         {/* ── SEARCH STATE ── */}
-        {search && (
+        {inputValue && (
           <>
             {/* Loading */}
             {isSearching && results.length === 0 && (
@@ -237,7 +264,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
             {/* No results */}
             {!isSearching && results.length === 0 && (
-              <CommandEmpty>Inga resultat för &quot;{search}&quot;</CommandEmpty>
+              <CommandEmpty>Inga resultat för &quot;{inputValue}&quot;</CommandEmpty>
             )}
 
             {/* Filtered nav items during search */}

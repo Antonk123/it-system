@@ -16,6 +16,7 @@ interface CategoryComboboxProps {
   onValueChange: (value: string) => void;
   onAddCategory: (label: string) => Promise<void>;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 export const CategoryCombobox = ({
@@ -24,6 +25,7 @@ export const CategoryCombobox = ({
   onValueChange,
   onAddCategory,
   placeholder = 'Välj kategori',
+  disabled = false,
 }: CategoryComboboxProps) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -62,12 +64,13 @@ export const CategoryCombobox = ({
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          disabled={disabled}
           className="w-full justify-between font-normal"
         >
           {displayLabel}

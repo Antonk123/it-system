@@ -968,4 +968,13 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    id: '049',
+    name: 'add_user_id_to_time_entries',
+    up: (db, { columnExists }) => {
+      if (columnExists('time_entries', 'user_id')) return;
+      db.prepare('ALTER TABLE time_entries ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE SET NULL').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_time_entries_user ON time_entries(user_id)').run();
+    },
+  },
 ];

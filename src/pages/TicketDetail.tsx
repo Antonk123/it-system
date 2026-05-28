@@ -77,8 +77,10 @@ import {
 } from '@/components/ui/dialog';
 import { TicketStatus } from '@/types/ticket';
 import { api } from '@/lib/api';
+import { STATUS_LABELS } from '@/lib/constants';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useQueryClient } from '@tanstack/react-query';
 
 const formatFileSize = (bytes: number | null) => {
   if (!bytes) return '';
@@ -87,18 +89,11 @@ const formatFileSize = (bytes: number | null) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-const statusLabels: Record<TicketStatus, string> = {
-  'open': 'Öppen',
-  'in-progress': 'Pågående',
-  'waiting': 'Väntar',
-  'resolved': 'Löst',
-  'closed': 'Stängd',
-};
-
 const TicketDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
   const { getTicketById, updateTicket, deleteTicket, isLoading: ticketsLoading } = useTickets();
   const { getCategoryLabel } = useCategories();
   const { getUserById } = useUsers();
@@ -268,12 +263,13 @@ const TicketDetail = () => {
 
   const handleStatusChange = (status: TicketStatus) => {
     updateTicket(ticket.id, { status });
-    toast.success(`Status uppdaterad till ${statusLabels[status]}`);
+    toast.success(`Status uppdaterad till ${STATUS_LABELS[status]}`);
   };
 
   const handleTagsChange = (tagIds: string[]) => {
     updateTicket(ticket.id, { tag_ids: tagIds }).then(() => {
       refreshTagsFromAPI(ticket.id);
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
       toast.success('Taggar uppdaterade');
     }).catch(() => {
       refreshTagsFromAPI(ticket.id);
@@ -392,7 +388,7 @@ const TicketDetail = () => {
                     <span className="hidden sm:inline">Dela</span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-80" align="end">
+                <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" align="end">
                   <div className="space-y-3">
                     <div className="space-y-1">
                       <h4 className="font-medium text-sm">Dela ärende</h4>
@@ -979,7 +975,7 @@ const TicketDetail = () => {
           <SelectContent>
             {(['open', 'in-progress', 'waiting', 'resolved', 'closed'] as TicketStatus[]).map(s => (
               <SelectItem key={s} value={s}>
-                {({ open: 'Öppen', 'in-progress': 'Pågående', waiting: 'Väntar', resolved: 'Löst', closed: 'Stängd' } as Record<string, string>)[s]}
+                {STATUS_LABELS[s]}
               </SelectItem>
             ))}
           </SelectContent>

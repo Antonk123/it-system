@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api, ChecklistRow } from '@/lib/api';
 import { checklistItemSchema, getValidationError } from '@/lib/validations';
 import { toast } from 'sonner';
@@ -16,6 +17,7 @@ export interface ChecklistItem {
 }
 
 export const useTicketChecklists = (ticketId?: string) => {
+  const queryClient = useQueryClient();
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -51,8 +53,12 @@ export const useTicketChecklists = (ticketId?: string) => {
     try {
       await api.updateChecklistItem(id, updates);
       setItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+      // Refresh ticket list so checklist progress column stays in sync
+      if ('completed' in updates) {
+        queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      }
     } catch (error) { if (import.meta.env.DEV) console.error('Error updating checklist item:', error); }
-  }, []);
+  }, [queryClient]);
 
   const deleteChecklistItem = useCallback(async (id: string) => {
     try {

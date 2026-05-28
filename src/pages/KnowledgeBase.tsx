@@ -477,8 +477,10 @@ const KnowledgeBase = () => {
                 >
                   <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
                   <p className="text-sm">
-                    {isSearching || typeFilter !== 'all'
-                      ? 'Inga artiklar matchar sökningen'
+                    {isSearching
+                      ? `Inga artiklar hittades för "${search}"`
+                      : typeFilter !== 'all'
+                      ? 'Inga artiklar matchar filtret'
                       : 'Inga artiklar ännu — skapa din första!'}
                   </p>
                 </motion.div>

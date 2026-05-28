@@ -28,6 +28,10 @@ import { v4 as uuidv4 } from 'uuid';
 const apiKey = process.env.ANTHROPIC_API_KEY;
 const client = apiKey ? new Anthropic({ apiKey }) : null;
 
+// ─── Consecutive failure tracking (Issue: silent AI outage) ──────────────────
+let consecutiveFailures = 0;
+const FAILURE_ALERT_THRESHOLD = 5;
+
 /**
  * Strip prompt-injection patterns from KB content before embedding in prompts.
  * Removes lines that look like system/instruction directives and truncates.
@@ -65,6 +69,19 @@ interface UsageRecord {
 }
 
 function logUsage(record: UsageRecord): void {
+  // Track consecutive failures for outage alerting
+  if (record.ok) {
+    if (consecutiveFailures >= FAILURE_ALERT_THRESHOLD) {
+      console.log(`✅ AI API: recovered after ${consecutiveFailures} consecutive failures`);
+    }
+    consecutiveFailures = 0;
+  } else {
+    consecutiveFailures++;
+    if (consecutiveFailures >= FAILURE_ALERT_THRESHOLD) {
+      console.warn(`⚠️ AI API: ${consecutiveFailures} consecutive failures — check ANTHROPIC_API_KEY and service status`);
+    }
+  }
+
   try {
     db.prepare(`
       INSERT INTO ai_usage_log (id, feature, model, input_tokens, output_tokens, ticket_id, duration_ms, ok, created_at)
@@ -324,9 +341,12 @@ Beskrivning: ${description.slice(0, 800)}`
     const text = msg.content[0].type === 'text' ? msg.content[0].text : '';
     const parsed = extractJson<CategorySuggestion>(text);
 
-    // Validera att den föreslagna kategorin finns i listan
+    // Validera att den föreslagna kategorin finns i listan OCH fortfarande i DB
+    // (skyddar mot race condition om kategori raderas medan AI-anropet körs)
     if (!parsed || !categories.find(c => c.id === parsed.categoryId)) return null;
     if (typeof parsed.confidence !== 'number') return null;
+    const stillExists = db.prepare('SELECT 1 FROM categories WHERE id = ?').get(parsed.categoryId);
+    if (!stillExists) return null;
 
     ok = true;
     return parsed;
@@ -452,7 +472,8 @@ export async function summarizeTicket(
 
   try {
     // Begränsa antalet kommentarer för att hålla token-kostnaden nere
-    const recent = comments.slice(-20);
+    const maxComments = parseInt(process.env.AI_MAX_SUMMARY_COMMENTS || '30', 10);
+    const recent = comments.slice(-maxComments);
     const timeline = recent
       .map(c => `[${c.created_at}] ${c.author}: ${c.content.slice(0, 500)}`)
       .join('\n');
@@ -499,6 +520,18 @@ ${timeline}`
       ok,
     });
   }
+}
+
+// ─── Cleanup av gammal AI-logg ────────────────────────────────────────────────
+
+/**
+ * Raderar ai_usage_log-rader äldre än 90 dagar.
+ * Körs via cron i index.ts (daily).
+ */
+export function cleanupOldAiUsage(): void {
+  const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+  const result = db.prepare('DELETE FROM ai_usage_log WHERE created_at < ?').run(cutoff);
+  console.log(`🧹 AI usage cleanup: ${result.changes} rows older than 90 days deleted`);
 }
 
 // ─── Kostnadsöversikt (helper för admin-panel senare) ─────────────────────────
