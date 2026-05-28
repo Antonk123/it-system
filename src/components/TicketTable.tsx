@@ -303,20 +303,29 @@ export const TicketTable = memo(function TicketTable({
       <Table className={cn(compact && "text-xs")}>
         <TableHeader>
           <TableRow className="border-b border-border/50 bg-background/40 backdrop-blur-sm">
-            {onSelectionChange && (
-              <TableHead className={cn(
-                "pl-4 transition-all duration-200",
-                selectionMode ? "w-10 opacity-100" : "w-10 opacity-100"
-              )}>
+            {onSelectionChange && selectionMode && (
+              <TableHead className="w-10 pl-4">
                 <Checkbox
-                  checked={selectionMode && allSelected}
-                  ref={(el) => { if (el) (el as any).indeterminate = selectionMode && someSelected; }}
+                  checked={allSelected}
+                  ref={(el) => { if (el) (el as any).indeterminate = someSelected; }}
                   onCheckedChange={toggleAll}
                   aria-label="Markera alla"
                 />
               </TableHead>
             )}
-            <TableHead className="font-semibold text-foreground/90">Ärende</TableHead>
+            <TableHead className="font-semibold text-foreground/90">
+              <div className="flex items-center gap-2">
+                {onSelectionChange && !selectionMode && (
+                  <Checkbox
+                    checked={false}
+                    onCheckedChange={toggleAll}
+                    aria-label="Välj flera"
+                    className="opacity-40 hover:opacity-100 transition-opacity"
+                  />
+                )}
+                Ärende
+              </div>
+            </TableHead>
             <TableHead className="font-semibold text-foreground/90">{renderSortButton('Status', 'status', enableStatusSort)}</TableHead>
             <TableHead className="font-semibold text-foreground/90">{renderSortButton('Prioritet', 'priority', enablePrioritySort)}</TableHead>
             <TableHead className="font-semibold text-foreground/90">Förlopp</TableHead>
@@ -346,21 +355,13 @@ export const TicketTable = memo(function TicketTable({
                 }
               }}
             >
-              {onSelectionChange && (
-                <TableCell
-                  className={cn(
-                    "pl-4 transition-all duration-200",
-                    selectionMode ? "w-10 opacity-100" : "w-0 opacity-0 overflow-hidden p-0"
-                  )}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {selectionMode && (
-                    <Checkbox
-                      checked={selectedIds.includes(ticket.id)}
-                      onCheckedChange={() => toggleOne(ticket.id)}
-                      aria-label={`Markera ${ticket.title}`}
-                    />
-                  )}
+              {onSelectionChange && selectionMode && (
+                <TableCell className="w-10 pl-4" onClick={(e) => e.stopPropagation()}>
+                  <Checkbox
+                    checked={selectedIds.includes(ticket.id)}
+                    onCheckedChange={() => toggleOne(ticket.id)}
+                    aria-label={`Markera ${ticket.title}`}
+                  />
                 </TableCell>
               )}
               {/* Ärende: Title + Category/Tags/SLA row */}
