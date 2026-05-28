@@ -2,6 +2,7 @@ import { Request, Response, NextFunction, RequestHandler } from 'express';
 import { createHash, timingSafeEqual } from 'crypto';
 import passport from 'passport';
 import { db } from '../db/connection.js';
+import { logger } from '../lib/logger.js';
 
 export interface AuthUser {
   id: string;
@@ -98,6 +99,7 @@ export const authenticate: RequestHandler = (req: Request, res: Response, next: 
     return next();
   }
   if (apiKeyResult.kind === 'forbidden_scope') {
+    logger.warn('API key lacks write permission', { method: req.method, path: req.path });
     return res.status(403).json({
       error: 'API-nyckeln saknar skrivrättigheter för denna åtgärd',
     });
@@ -107,9 +109,11 @@ export const authenticate: RequestHandler = (req: Request, res: Response, next: 
 
   passport.authenticate('jwt', { session: false }, (err: Error | null, user: AuthUser | false) => {
     if (err) {
+      logger.error('Authentication error', { error: String(err), path: req.path });
       return res.status(500).json({ error: 'Authentication error' });
     }
     if (!user) {
+      logger.warn('Unauthorized request', { method: req.method, path: req.path });
       return res.status(401).json({ error: 'Unauthorized' });
     }
     req.user = user;
@@ -120,6 +124,7 @@ export const authenticate: RequestHandler = (req: Request, res: Response, next: 
 export const requireAdmin: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
   const user = req.user as AuthUser | undefined;
   if (!user || user.role !== 'admin') {
+    logger.warn('Admin access denied', { userId: user?.id, path: req.path });
     return res.status(403).json({ error: 'Forbidden: Admin access required' });
   }
   next();

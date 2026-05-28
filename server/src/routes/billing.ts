@@ -2,8 +2,18 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { logAudit } from '../lib/auditLog.js';
 
 const router = Router();
+
+interface TimeEntryPreview {
+  time_entry_id: string;
+  ticket_id: string;
+  duration_minutes: number;
+  note: string | null;
+  created_at: string;
+  ticket_title: string;
+}
 
 // --- Billing Rates ---
 
@@ -19,7 +29,7 @@ interface BillingRateRow {
 // GET /rates/:companyId — get billing rate for a company
 router.get('/rates/:companyId', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
-    const rate = db.prepare('SELECT * FROM billing_rates WHERE company_id = ?').get(req.params.companyId) as BillingRateRow | undefined;
+    const rate = db.prepare('SELECT id, company_id, rate_per_hour, currency, created_at, updated_at FROM billing_rates WHERE company_id = ?').get(req.params.companyId) as BillingRateRow | undefined;
     res.json(rate || null);
   } catch (error) {
     console.error('Error fetching billing rate:', error);
@@ -45,7 +55,7 @@ router.put('/rates/:companyId', authenticate, requireAdmin, (req: AuthRequest, r
         .run(uuidv4(), req.params.companyId, rate_per_hour, currency || 'SEK');
     }
 
-    const rate = db.prepare('SELECT * FROM billing_rates WHERE company_id = ?').get(req.params.companyId) as BillingRateRow;
+    const rate = db.prepare('SELECT id, company_id, rate_per_hour, currency, created_at, updated_at FROM billing_rates WHERE company_id = ?').get(req.params.companyId) as BillingRateRow;
     res.json(rate);
   } catch (error) {
     console.error('Error updating billing rate:', error);
@@ -85,23 +95,24 @@ interface InvoiceLineRow {
 router.get('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.query.company_id as string | undefined;
-    let invoices: any[];
+    let invoices: (InvoiceRow & { company_name: string })[];
 
+    const invoiceCols = 'i.id, i.company_id, i.period_start, i.period_end, i.status, i.total_hours, i.total_amount, i.currency, i.pdf_path, i.created_at, i.sent_at, i.paid_at';
     if (companyId) {
       invoices = db.prepare(`
-        SELECT i.*, co.name as company_name
+        SELECT ${invoiceCols}, co.name as company_name
         FROM invoices i
         JOIN companies co ON i.company_id = co.id
         WHERE i.company_id = ?
         ORDER BY i.created_at DESC
-      `).all(companyId);
+      `).all(companyId) as (InvoiceRow & { company_name: string })[];
     } else {
       invoices = db.prepare(`
-        SELECT i.*, co.name as company_name
+        SELECT ${invoiceCols}, co.name as company_name
         FROM invoices i
         JOIN companies co ON i.company_id = co.id
         ORDER BY i.created_at DESC
-      `).all();
+      `).all() as (InvoiceRow & { company_name: string })[];
     }
 
     res.json(invoices);
@@ -115,23 +126,25 @@ router.get('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Resp
 router.get('/invoices/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const invoice = db.prepare(`
-      SELECT i.*, co.name as company_name, co.org_number, co.email as company_email, co.address as company_address
+      SELECT i.id, i.company_id, i.period_start, i.period_end, i.status, i.total_hours, i.total_amount, i.currency, i.pdf_path, i.created_at, i.sent_at, i.paid_at,
+             co.name as company_name, co.org_number, co.email as company_email, co.address as company_address
       FROM invoices i
       JOIN companies co ON i.company_id = co.id
       WHERE i.id = ?
-    `).get(req.params.id) as any;
+    `).get(req.params.id) as (InvoiceRow & { company_name: string; org_number: string | null; company_email: string | null; company_address: string | null }) | undefined;
 
     if (!invoice) {
       return res.status(404).json({ error: 'Invoice not found' });
     }
 
     const lines = db.prepare(`
-      SELECT il.*, t.title as ticket_title
+      SELECT il.id, il.invoice_id, il.ticket_id, il.time_entry_id, il.description, il.hours, il.rate, il.amount, il.created_at,
+             t.title as ticket_title
       FROM invoice_lines il
       LEFT JOIN tickets t ON il.ticket_id = t.id
       WHERE il.invoice_id = ?
       ORDER BY il.created_at ASC
-    `).all(invoice.id);
+    `).all(invoice.id) as (InvoiceLineRow & { ticket_title: string | null })[];
 
     res.json({ ...invoice, lines });
   } catch (error) {
@@ -167,10 +180,10 @@ router.post('/invoices/preview', authenticate, requireAdmin, (req: AuthRequest, 
         AND te.created_at >= ?
         AND te.created_at < ?
       ORDER BY te.created_at ASC
-    `).all(company_id, period_start, period_end) as any[];
+    `).all(company_id, period_start, period_end) as TimeEntryPreview[];
 
     // Group by ticket
-    const ticketMap = new Map<string, { ticket_id: string; ticket_title: string; total_minutes: number; entries: any[] }>();
+    const ticketMap = new Map<string, { ticket_id: string; ticket_title: string; total_minutes: number; entries: TimeEntryPreview[] }>();
 
     for (const entry of entries) {
       if (!ticketMap.has(entry.ticket_id)) {
@@ -245,7 +258,12 @@ router.post('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Res
       }
     })();
 
-    const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(invoiceId);
+    const invoice = db.prepare(
+      'SELECT id, company_id, period_start, period_end, status, total_hours, total_amount, currency, pdf_path, created_at, sent_at, paid_at FROM invoices WHERE id = ?'
+    ).get(invoiceId);
+
+    logAudit(req.user!.id, 'invoice_create', 'invoice', invoiceId, `company: ${company_id}, amount: ${total_amount}`, req.ip);
+
     res.status(201).json(invoice);
   } catch (error) {
     console.error('Error creating invoice:', error);
@@ -261,12 +279,14 @@ router.put('/invoices/:id/status', authenticate, requireAdmin, (req: AuthRequest
       return res.status(400).json({ error: 'Invalid status' });
     }
 
-    const existing = db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id) as InvoiceRow | undefined;
+    const existing = db.prepare(
+      'SELECT id, company_id, period_start, period_end, status, total_hours, total_amount, currency, pdf_path, created_at, sent_at, paid_at FROM invoices WHERE id = ?'
+    ).get(req.params.id) as InvoiceRow | undefined;
     if (!existing) {
       return res.status(404).json({ error: 'Invoice not found' });
     }
 
-    const updates: Record<string, any> = { status };
+    const updates: Record<string, string> = { status };
     if (status === 'sent') updates.sent_at = new Date().toISOString();
     if (status === 'paid') updates.paid_at = new Date().toISOString();
 
@@ -275,7 +295,11 @@ router.put('/invoices/:id/status', authenticate, requireAdmin, (req: AuthRequest
 
     db.prepare(`UPDATE invoices SET ${setClauses} WHERE id = ?`).run(...values, req.params.id);
 
-    const invoice = db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id);
+    logAudit(req.user!.id, 'invoice_status_change', 'invoice', req.params.id, `${existing.status} -> ${status}`, req.ip);
+
+    const invoice = db.prepare(
+      'SELECT id, company_id, period_start, period_end, status, total_hours, total_amount, currency, pdf_path, created_at, sent_at, paid_at FROM invoices WHERE id = ?'
+    ).get(req.params.id);
     res.json(invoice);
   } catch (error) {
     console.error('Error updating invoice status:', error);
@@ -286,7 +310,9 @@ router.put('/invoices/:id/status', authenticate, requireAdmin, (req: AuthRequest
 // DELETE /invoices/:id — delete draft invoice
 router.delete('/invoices/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
-    const existing = db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id) as InvoiceRow | undefined;
+    const existing = db.prepare(
+      'SELECT id, status FROM invoices WHERE id = ?'
+    ).get(req.params.id) as Pick<InvoiceRow, 'id' | 'status'> | undefined;
     if (!existing) {
       return res.status(404).json({ error: 'Invoice not found' });
     }
@@ -295,6 +321,9 @@ router.delete('/invoices/:id', authenticate, requireAdmin, (req: AuthRequest, re
     }
 
     db.prepare('DELETE FROM invoices WHERE id = ?').run(req.params.id);
+
+    logAudit(req.user!.id, 'invoice_delete', 'invoice', req.params.id, null, req.ip);
+
     res.json({ message: 'Invoice deleted' });
   } catch (error) {
     console.error('Error deleting invoice:', error);

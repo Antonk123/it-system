@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { validatePassword } from '../lib/passwordPolicy.js';
+import { logAudit } from '../lib/auditLog.js';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DISPLAY_NAME_MAX_LENGTH = 100;
@@ -117,6 +118,8 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
         VALUES (?, ?, ?, ?, ?)
       `).run(id, email, passwordHash, userRole, resolvedDisplayName);
 
+      logAudit(req.user!.id, 'user_create', 'user', id, `email: ${email}, role: ${userRole}`, req.ip);
+
       res.status(201).json({
         message: 'User created',
         user: { id, email, role: userRole, displayName: resolvedDisplayName },
@@ -185,6 +188,9 @@ router.patch('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respons
       return res.status(404).json({ error: 'Användaren hittades inte' });
     }
 
+    const changedFields = updates.map(u => `${u.column}: ${u.value}`).join(', ');
+    logAudit(req.user!.id, 'user_update', 'user', req.params.id, changedFields, req.ip);
+
     res.json({ message: 'Användaren uppdaterades' });
   } catch (error) {
     console.error('Error updating user:', error);
@@ -205,6 +211,8 @@ router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respon
     if (result.changes === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
+
+    logAudit(req.user!.id, 'user_delete', 'user', req.params.id, null, req.ip);
 
     res.json({ message: 'User deleted' });
   } catch (error) {

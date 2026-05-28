@@ -24,7 +24,7 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
   try {
     const comments = db.prepare(`
       SELECT
-        c.*,
+        c.id, c.ticket_id, c.user_id, c.content, c.is_internal, c.created_at, c.updated_at, c.deleted_at,
         COALESCE(u.display_name, contact.name, u.email) as user_name,
         u.email as user_email
       FROM ticket_comments c
@@ -70,7 +70,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 
     const comment = db.prepare(`
       SELECT
-        c.*,
+        c.id, c.ticket_id, c.user_id, c.content, c.is_internal, c.created_at, c.updated_at, c.deleted_at,
         COALESCE(u.display_name, contact.name, u.email) as user_name,
         u.email as user_email
       FROM ticket_comments c
@@ -117,7 +117,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     const comment = db.prepare(`
       SELECT
-        c.*,
+        c.id, c.ticket_id, c.user_id, c.content, c.is_internal, c.created_at, c.updated_at, c.deleted_at,
         COALESCE(u.display_name, contact.name, u.email) as user_name,
         u.email as user_email
       FROM ticket_comments c

@@ -100,6 +100,7 @@ const TicketForm = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [failedUploads, setFailedUploads] = useState<{ files: File[]; ticketId: string } | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [customFieldValues, setCustomFieldValues] = useState<CustomFieldInput[]>([]);
   const [editInitialFieldValues, setEditInitialFieldValues] = useState<CustomFieldInput[]>([]);
@@ -443,8 +444,12 @@ const TicketForm = () => {
         await updateTicket(id, { ...submitFormData, assigned_to: formData.assigned_to || undefined, company_id: formData.company_id || undefined } as any, customFieldValues.length > 0 ? customFieldValues : undefined);
 
         // Upload pending files
-        for (const file of pendingFiles) {
-          await uploadAttachment(id, file);
+        if (pendingFiles.length > 0) {
+          for (let i = 0; i < pendingFiles.length; i++) {
+            setUploadProgress(`Laddar upp fil ${i + 1} av ${pendingFiles.length}...`);
+            await uploadAttachment(id, pendingFiles[i]);
+          }
+          setUploadProgress(null);
         }
 
         // Add pending checklist items
@@ -470,14 +475,16 @@ const TicketForm = () => {
         if (newTicket) {
           // Upload pending files to the new ticket
           const failedFiles: File[] = [];
-          for (const file of pendingFiles) {
+          for (let i = 0; i < pendingFiles.length; i++) {
             try {
-              await uploadAttachment(newTicket.id, file);
+              setUploadProgress(`Laddar upp fil ${i + 1} av ${pendingFiles.length}...`);
+              await uploadAttachment(newTicket.id, pendingFiles[i]);
             } catch (error) {
-              if (import.meta.env.DEV) console.error('Error uploading file:', file.name, error);
-              failedFiles.push(file);
+              if (import.meta.env.DEV) console.error('Error uploading file:', pendingFiles[i].name, error);
+              failedFiles.push(pendingFiles[i]);
             }
           }
+          setUploadProgress(null);
 
           // Add pending checklist items to the new ticket
           if (pendingChecklistItems.length > 0) {
@@ -1088,7 +1095,13 @@ const TicketForm = () => {
                 </>
               )}
 
-              <div className="flex justify-end gap-2 pt-4">
+              <div className="flex items-center justify-end gap-2 pt-4">
+                {uploadProgress && (
+                  <span className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    {uploadProgress}
+                  </span>
+                )}
                 <Button type="button" variant="outline" onClick={handleNavigateBack} disabled={isSaving}>
                   Avbryt
                 </Button>

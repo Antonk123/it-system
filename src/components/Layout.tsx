@@ -296,7 +296,7 @@ export const Layout = ({
           </button>
           <div className="flex-1 relative group" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
             {/* Glow layer */}
-            <div className="absolute z-[-1] overflow-hidden h-full w-full rounded-xl blur-[2px]">
+            <div className="absolute z-[-1] overflow-hidden h-full w-full rounded-xl blur-[2px] dark:opacity-50">
               <div className="absolute w-[999px] h-[999px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
                               bg-[conic-gradient(hsl(var(--search-glow-base)),hsl(var(--search-glow-primary-deep))_5%,hsl(var(--search-glow-base))_38%,hsl(var(--search-glow-base))_50%,hsl(var(--search-glow-accent-vivid))_60%,hsl(var(--search-glow-base))_87%)]
                               transition-all duration-2000
@@ -319,7 +319,7 @@ export const Layout = ({
             <div className="flex items-center gap-4 flex-1">
               <div className="relative group w-80 shrink-0 cursor-pointer" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
                 {/* Glow layer 1: outer rotating gradient */}
-                <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[56px] rounded-xl blur-[3px]">
+                <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[56px] rounded-xl blur-[3px] dark:opacity-50">
                   <div className="absolute w-[999px] h-[999px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
                                   bg-[conic-gradient(hsl(var(--search-glow-base)),hsl(var(--search-glow-primary-deep))_5%,hsl(var(--search-glow-base))_38%,hsl(var(--search-glow-base))_50%,hsl(var(--search-glow-accent-vivid))_60%,hsl(var(--search-glow-base))_87%)]
                                   transition-all duration-2000
@@ -327,14 +327,14 @@ export const Layout = ({
                                   group-hover:rotate-[-120deg] group-focus-within:animate-search-glow-focus" />
                 </div>
                 {/* Glow layer 2: inner gradient */}
-                <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[52px] rounded-xl blur-[3px]">
+                <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[52px] rounded-xl blur-[3px] dark:opacity-50">
                   <div className="absolute w-[600px] h-[600px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[82deg]
                                   bg-[conic-gradient(rgba(0,0,0,0),hsl(var(--search-glow-primary-dark)),rgba(0,0,0,0)_10%,rgba(0,0,0,0)_50%,hsl(var(--search-glow-accent-dark)),rgba(0,0,0,0)_60%)]
                                   transition-all duration-2000
                                   group-hover:rotate-[-98deg] group-focus-within:rotate-[442deg]" />
                 </div>
                 {/* Glow layer 3: highlight */}
-                <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[50px] rounded-lg blur-[2px]">
+                <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[50px] rounded-lg blur-[2px] dark:opacity-50">
                   <div className="absolute w-[600px] h-[600px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[70deg]
                                   bg-[conic-gradient(rgba(0,0,0,0)_0%,hsl(var(--search-glow-primary-bright)),rgba(0,0,0,0)_8%,rgba(0,0,0,0)_50%,hsl(var(--search-glow-accent-bright)),rgba(0,0,0,0)_58%)]
                                   brightness-140 transition-all duration-2000

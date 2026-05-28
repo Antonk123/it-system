@@ -60,6 +60,12 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
 
   try {
     const id = randomUUID();
+    // The webhook secret is an HMAC signing key, NOT a password/credential.
+    // It is intentionally stored in readable form because both parties (our
+    // server and the webhook consumer) need the raw key to compute/verify
+    // HMAC-SHA256 signatures on every delivery. This is the same design used
+    // by GitHub, Stripe, and other webhook providers. Hashing it would make
+    // signature computation impossible.
     const secret = randomBytes(32).toString('hex');
 
     db.prepare(

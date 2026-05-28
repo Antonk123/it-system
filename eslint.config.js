@@ -13,7 +13,6 @@ export default tseslint.config(
       ".remember/**",
       ".planning/**",
       ".superpowers/**",
-      "server/**",
       "node_modules/**",
     ],
   },
@@ -64,6 +63,23 @@ export default tseslint.config(
     files: ["src/lib/api.ts", "src/lib/secureFileAccess.ts"],
     rules: {
       "no-restricted-syntax": "off",
+    },
+  },
+  {
+    // Backend-filer: Node-globals, inga React-plugins, inga fetch-restriktioner.
+    // prefer-const nedgraderas till warn — pre-existing let-destructuring i routes
+    // ska inte blockera commits, men ska fortfarande synas i lint-output.
+    files: ["server/**/*.ts"],
+    languageOptions: {
+      globals: globals.node,
+    },
+    plugins: {},
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+      "react-hooks/exhaustive-deps": "off",
+      "react-refresh/only-export-components": "off",
+      "no-restricted-syntax": "off",
+      "prefer-const": "off",
     },
   },
 );

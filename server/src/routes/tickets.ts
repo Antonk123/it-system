@@ -65,9 +65,9 @@ function escapeCSVField(field: any): string {
   return str;
 }
 
-function generateXLSX(tickets: any[], categories: any[], contacts: any[]): Buffer {
-  const categoryMap = new Map(categories.map((c: any) => [c.id, c.label]));
-  const contactMap = new Map(contacts.map((c: any) => [c.id, { name: c.name, email: c.email }]));
+function generateXLSX(tickets: TicketRow[], categories: CategoryLookup[], contacts: ContactLookup[]): Buffer {
+  const categoryMap = new Map(categories.map((c) => [c.id, c.label]));
+  const contactMap = new Map(contacts.map((c) => [c.id, { name: c.name, email: c.email }]));
 
   const headers = [
     'id', 'title', 'description', 'status', 'priority', 'category',
@@ -287,6 +287,31 @@ interface TicketRow {
   closed_at: string | null;
 }
 
+interface TagRow {
+  id: string;
+  name: string;
+  color: string;
+  created_at: string;
+  ticket_id?: string;
+}
+
+interface CustomFieldInput {
+  fieldName: string;
+  fieldLabel: string;
+  fieldValue?: string;
+}
+
+interface CategoryLookup {
+  id: string;
+  label: string;
+}
+
+interface ContactLookup {
+  id: string;
+  name: string;
+  email: string;
+}
+
 interface TicketQueryParams {
   page?: string;
   limit?: string;
@@ -338,7 +363,7 @@ function validatePaginationParams(query: TicketQueryParams) {
 // Helper: Build WHERE clause with JOINs for enhanced search
 function buildWhereClause(filters: TicketQueryParams) {
   const conditions: string[] = [];
-  const params: any[] = [];
+  const params: (string | number)[] = [];
   let joins = '';
 
   // Handle status filter - support both single and multi-status
@@ -612,7 +637,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
     `).all(...params, limit, offset) as TicketRow[];
 
     // Fetch tags for all tickets in a single query (fixes N+1 problem)
-    let ticketsWithTags: any[];
+    let ticketsWithTags: (TicketRow & { tags: { id: string; name: string; color: string; createdAt: Date }[] })[];
 
     if (tickets.length > 0) {
       const ticketIds = tickets.map(t => t.id);
@@ -625,11 +650,11 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
         JOIN ticket_tags tt ON t.id = tt.tag_id
         WHERE tt.ticket_id IN (${placeholders})
         ORDER BY t.name
-      `).all(...ticketIds) as any[];
+      `).all(...ticketIds) as (TagRow & { ticket_id: string })[];
 
       // Group tags by ticket_id in memory
-      const tagsByTicket: Record<string, any[]> = {};
-      allTags.forEach((tag: any) => {
+      const tagsByTicket: Record<string, { id: string; name: string; color: string; createdAt: Date }[]> = {};
+      allTags.forEach((tag) => {
         if (!tagsByTicket[tag.ticket_id]) {
           tagsByTicket[tag.ticket_id] = [];
         }
@@ -642,7 +667,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
       });
 
       // Attach tags to tickets
-      ticketsWithTags = tickets.map((ticket: any) => ({
+      ticketsWithTags = tickets.map((ticket) => ({
         ...ticket,
         tags: tagsByTicket[ticket.id] || [],
       }));
@@ -652,7 +677,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
 
     // Build pagination metadata
     const totalPages = Math.ceil(total / limit);
-    const paginatedResponse: PaginatedResponse<any> = {
+    const paginatedResponse: PaginatedResponse<TicketRow & { tags: { id: string; name: string; color: string; createdAt: Date }[] }> = {
       data: ticketsWithTags,
       pagination: {
         page,
@@ -729,12 +754,12 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
     // Get categories and contacts for lookup
     const categories = db.prepare('SELECT id, label FROM categories').all();
     // Case-insensitive category map
-    const categoryMap = new Map(categories.map((c: any) => [c.label.toLowerCase(), c.id]));
+    const categoryMap = new Map((categories as CategoryLookup[]).map((c) => [c.label.toLowerCase(), c.id]));
 
-    const contacts = db.prepare('SELECT id, name, email FROM contacts').all();
+    const contacts = db.prepare('SELECT id, name, email FROM contacts').all() as ContactLookup[];
     // Case-insensitive contact maps
-    const contactByNameMap = new Map(contacts.map((c: any) => [c.name.toLowerCase(), c.id]));
-    const contactByEmailMap = new Map(contacts.map((c: any) => [c.email.toLowerCase(), c.id]));
+    const contactByNameMap = new Map(contacts.map((c) => [c.name.toLowerCase(), c.id]));
+    const contactByEmailMap = new Map(contacts.map((c) => [c.email.toLowerCase(), c.id]));
 
     const stmt = db.prepare(`
       INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, notes, solution)
@@ -841,22 +866,22 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
     const exportOffset = (!rawOffset || rawOffset < 0) ? 0 : rawOffset;
 
     const tickets = db.prepare(`
-      SELECT DISTINCT tickets.* FROM tickets ${joins}
+      SELECT DISTINCT ${TICKET_COLUMNS} FROM tickets ${joins}
       WHERE ${whereClause}
       ORDER BY tickets.created_at DESC
       LIMIT ? OFFSET ?
     `).all(...params, exportLimit, exportOffset) as TicketRow[];
 
     // Get all categories for lookup
-    const categories = db.prepare('SELECT id, label FROM categories').all();
+    const categories = db.prepare('SELECT id, label FROM categories').all() as CategoryLookup[];
 
     // Get all contacts for lookup
-    const contacts = db.prepare('SELECT id, name, email FROM contacts').all();
+    const contacts = db.prepare('SELECT id, name, email FROM contacts').all() as ContactLookup[];
 
     const xlsxBuffer = generateXLSX(tickets, categories, contacts);
 
     const timestamp = new Date().toISOString().split('T')[0];
-    const source = (req.query as any).source;
+    const source = req.query.source as string | undefined;
     const parts: string[] = [source === 'rapport' ? 'rapport-arenden' : 'arenden'];
     if (query.status) parts.push(String(query.status).replace(/,/g, '-'));
     if (query.priority) parts.push(String(query.priority));
@@ -886,7 +911,7 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
 router.get('/export-archive', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const query = req.query as TicketQueryParams;
-    const idsParam = (req.query as any).ids as string | undefined;
+    const idsParam = req.query.ids as string | undefined;
 
     let tickets: { id: string; title: string; priority: string; category_id: string | null; closed_at: string | null }[];
 
@@ -1141,9 +1166,9 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
       JOIN ticket_tags tt ON t.id = tt.tag_id
       WHERE tt.ticket_id = ?
       ORDER BY t.name
-    `).all(ticket.id) as any[];
+    `).all(ticket.id) as TagRow[];
 
-    const formattedTags = tags.map((tag: any) => ({
+    const formattedTags = tags.map((tag) => ({
       id: tag.id,
       name: tag.name,
       color: tag.color,
@@ -1200,8 +1225,8 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
     let finalDescription: string;
     if (customFields && Array.isArray(customFields) && customFields.length > 0) {
       finalDescription = customFields
-        .filter((field: any) => field.fieldLabel)
-        .map((field: any) => `**${field.fieldLabel}**: ${field.fieldValue || '(ej angivet)'}`)
+        .filter((field: CustomFieldInput) => field.fieldLabel)
+        .map((field: CustomFieldInput) => `**${field.fieldLabel}**: ${field.fieldValue || '(ej angivet)'}`)
         .join('  \n');
     } else {
       finalDescription = description || '';
@@ -1244,7 +1269,7 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
           INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
           VALUES (?, ?, ?, ?, ?)
         `);
-        customFields.forEach((field: any) => {
+        customFields.forEach((field: CustomFieldInput) => {
           if (field.fieldName && field.fieldLabel) {
             insertFieldStmt.run(uuidv4(), id, field.fieldName, field.fieldLabel, field.fieldValue || '');
           }
@@ -1496,7 +1521,8 @@ router.get('/:id/ai-summary', authenticate, async (req: AuthRequest, res: Respon
 router.get('/:id/history', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const history = db.prepare(`
-      SELECT th.*, COALESCE(u.display_name, u.email) as user_name
+      SELECT th.id, th.ticket_id, th.user_id, th.field_name, th.old_value, th.new_value, th.changed_at,
+             COALESCE(u.display_name, u.email) as user_name
       FROM ticket_history th
       LEFT JOIN users u ON th.user_id = u.id
       WHERE th.ticket_id = ?
@@ -1711,8 +1737,8 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     let finalDescription: string | undefined = description;
     if (customFields && Array.isArray(customFields) && customFields.length > 0) {
       finalDescription = customFields
-        .filter((field: any) => field.fieldLabel)
-        .map((field: any) => `**${field.fieldLabel}**: ${field.fieldValue || '(ej angivet)'}`)
+        .filter((field: CustomFieldInput) => field.fieldLabel)
+        .map((field: CustomFieldInput) => `**${field.fieldLabel}**: ${field.fieldValue || '(ej angivet)'}`)
         .join('  \n');
     }
 
@@ -1821,7 +1847,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
           INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
           VALUES (?, ?, ?, ?, ?)
         `);
-        customFields.forEach((field: any) => {
+        customFields.forEach((field: CustomFieldInput) => {
           if (field.fieldName && field.fieldLabel) {
             insertFieldStmt.run(uuidv4(), req.params.id, field.fieldName, field.fieldLabel, field.fieldValue || '');
           }
@@ -1903,9 +1929,9 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       JOIN ticket_tags tt ON t.id = tt.tag_id
       WHERE tt.ticket_id = ?
       ORDER BY t.name
-    `).all(req.params.id) as any[];
+    `).all(req.params.id) as TagRow[];
 
-    const formattedTags = tags.map((tag: any) => ({
+    const formattedTags = tags.map((tag) => ({
       id: tag.id,
       name: tag.name,
       color: tag.color,
@@ -2023,7 +2049,9 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
       VALUES (?, ?, ?, ?, ?)
     `).run(id, ticketId, userId, reminder_time, message || null);
 
-    const reminder = db.prepare('SELECT * FROM ticket_reminders WHERE id = ?').get(id);
+    const reminder = db.prepare(
+      'SELECT id, ticket_id, user_id, reminder_time, message, sent, created_at, sent_at FROM ticket_reminders WHERE id = ?'
+    ).get(id);
     res.status(201).json(reminder);
   } catch (error) {
     console.error('Error creating reminder:', error);
@@ -2035,7 +2063,8 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
 router.get('/:id/reminders', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const reminders = db.prepare(`
-      SELECT tr.*, u.display_name as user_name, u.email as user_email
+      SELECT tr.id, tr.ticket_id, tr.user_id, tr.reminder_time, tr.message, tr.sent, tr.created_at, tr.sent_at,
+             u.display_name as user_name, u.email as user_email
       FROM ticket_reminders tr
       JOIN users u ON tr.user_id = u.id
       WHERE tr.ticket_id = ?
@@ -2074,9 +2103,9 @@ router.delete('/:id/reminders/:reminderId', authenticate, (req: AuthRequest, res
     const { reminderId } = req.params;
     const userId = req.user!.id;
 
-    const reminder = db.prepare(`
-      SELECT * FROM ticket_reminders WHERE id = ?
-    `).get(reminderId) as any;
+    const reminder = db.prepare(
+      'SELECT id, ticket_id, user_id, reminder_time, message, sent, created_at, sent_at FROM ticket_reminders WHERE id = ?'
+    ).get(reminderId) as { id: string; ticket_id: string; user_id: string; reminder_time: string; message: string | null; sent: number; created_at: string; sent_at: string | null } | undefined;
 
     if (!reminder) {
       return res.status(404).json({ error: 'Reminder not found' });

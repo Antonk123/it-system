@@ -6,6 +6,7 @@ import { db } from '../db/connection.js';
 import { randomUUID, randomBytes } from 'crypto';
 import { dispatchWebhook } from './webhookDispatcher.js';
 import { sendTicketReceivedConfirmation } from './email.js';
+import { logger } from './logger.js';
 
 interface EmailConfig {
   host: string;
@@ -124,7 +125,7 @@ function resolveOrCreateContact(fromAddress: string, fromName: string, autoCreat
       fromAddress
     );
     contact = { id: contactId, company_id: null };
-    console.log(`[email-inbound] Created contact for ${fromAddress}`);
+    logger.info('Created contact from inbound email', { email: fromAddress });
   }
 
   return contact;
@@ -134,7 +135,7 @@ function addCommentToTicket(ticketId: string, body: string, fromAddress: string,
   const commentId = randomUUID();
   const systemUserId = (db.prepare('SELECT id FROM users LIMIT 1').get() as { id: string } | undefined)?.id;
   if (!systemUserId) {
-    console.warn('[email-inbound] No system user found, cannot add comment');
+    logger.warn('No system user found, cannot add email comment');
     return;
   }
 
@@ -145,10 +146,17 @@ function addCommentToTicket(ticketId: string, body: string, fromAddress: string,
 
   db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(ticketId);
 
-  console.log(`[email-inbound] Added comment to ticket ${ticketId} from ${fromAddress}`);
+  logger.info('Added email comment to ticket', { ticketId, from: fromAddress });
 }
 
 async function processEmail(source: Buffer, config: EmailConfig): Promise<void> {
+  // Guard against oversized emails that could OOM the process during parsing.
+  // 25 MB is generous — most legitimate emails are well under 10 MB.
+  if (source.length > 25 * 1024 * 1024) {
+    logger.warn('Skipping oversized email', { sizeMB: (source.length / 1024 / 1024).toFixed(1), limitMB: 25 });
+    return;
+  }
+
   const parsed = await simpleParser(source);
 
   const fromAddress = parsed.from?.value?.[0]?.address;
@@ -157,7 +165,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
   const messageId = parsed.messageId || null;
 
   if (!fromAddress) {
-    console.warn('[email-inbound] Email without from address, skipping');
+    logger.warn('Email without from address, skipping');
     return;
   }
 
@@ -223,7 +231,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
       .prepare('SELECT id FROM tickets WHERE email_message_id = ? LIMIT 1')
       .get(messageId) as { id: string } | undefined;
     if (duplicate) {
-      console.log(`[email-inbound] Duplicate email ${messageId}, ticket ${duplicate.id} already exists — skipping`);
+      logger.info('Duplicate email skipped', { messageId, existingTicketId: duplicate.id });
       return;
     }
   }
@@ -243,7 +251,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
       .get(strippedSubject, fromAddress) as { id: string } | undefined;
 
     if (recentDuplicate) {
-      console.log(`[email-inbound] Near-duplicate detected for "${subject}" from ${fromAddress} — adding as comment to ${recentDuplicate.id}`);
+      logger.info('Near-duplicate email, adding as comment', { subject, from: fromAddress, ticketId: recentDuplicate.id });
       resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
       addCommentToTicket(recentDuplicate.id, body, fromAddress, fromName);
       if (parsed.attachments && parsed.attachments.length > 0) {
@@ -301,9 +309,9 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     ticketId,
     title: subject,
     shareUrl,
-  }).catch(error => console.error('[email-inbound] Confirmation email failed:', error));
+  }).catch(error => logger.error('Confirmation email failed', { error: String(error) }));
 
-  console.log(`[email-inbound] Created ticket "${subject}" from ${fromAddress}`);
+  logger.info('Created ticket from email', { ticketId, subject, from: fromAddress });
 }
 
 function isSignatureImage(attachment: any): boolean {
@@ -323,7 +331,7 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
   for (const attachment of attachments) {
     if (!attachment.filename) continue;
     if (isSignatureImage(attachment)) {
-      console.log(`[email-inbound] Skipping signature image: ${attachment.filename} (${attachment.size} bytes)`);
+      logger.debug('Skipping signature image', { filename: attachment.filename, size: attachment.size });
       continue;
     }
 
@@ -345,7 +353,7 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
     } catch (writeErr) {
       // File write failed — remove the DB row to stay consistent
       db.prepare('DELETE FROM ticket_attachments WHERE id = ?').run(attachId);
-      console.error(`[email-inbound] Failed to write attachment file ${storedName}, DB row cleaned up:`, writeErr);
+      logger.error('Failed to write attachment file, DB row cleaned up', { storedName, error: String(writeErr) });
     }
   }
 }
@@ -371,14 +379,16 @@ export function getEmailInboundStatus() {
 export async function startEmailPolling(): Promise<void> {
   const config = await getEmailConfig();
   if (!config) {
-    console.log('[email-inbound] IMAP not configured, email-to-ticket disabled');
+    logger.info('IMAP not configured, email-to-ticket disabled');
     return;
   }
 
   const authMethod = useOAuth2() ? 'OAuth2' : 'Basic';
-  console.log(
-    `[email-inbound] Starting email polling (every ${config.pollingInterval}s) from ${config.user} [${authMethod}]`
-  );
+  logger.info('Starting email polling', {
+    intervalSeconds: config.pollingInterval,
+    user: config.user,
+    authMethod,
+  });
 
   async function poll() {
     let client: ImapFlow | null = null;
@@ -399,7 +409,7 @@ export async function startEmailPolling(): Promise<void> {
       let connectionDead = false;
       client.on('error', (err: Error) => {
         connectionDead = true;
-        console.error('[email-inbound] IMAP connection error:', err.message);
+        logger.error('IMAP connection error', { error: err.message });
       });
 
       await client.connect();
@@ -431,7 +441,7 @@ export async function startEmailPolling(): Promise<void> {
               await processEmail(message.source, currentConfig);
               processedMsgUids.push(message.uid);
             } catch (error) {
-              console.error('[email-inbound] Error processing email:', error);
+              logger.error('Error processing email', { error: String(error) });
             }
           }
         }
@@ -440,15 +450,15 @@ export async function startEmailPolling(): Promise<void> {
         if (processedMsgUids.length > 0 && !connectionDead) {
           try {
             await client.messageMove(processedMsgUids, 'Processed', { uid: true });
-            console.log(`[email-inbound] Moved ${processedMsgUids.length} email(s) to Processed`);
+            logger.info('Moved emails to Processed folder', { count: processedMsgUids.length });
           } catch (moveErr: any) {
-            console.warn(`[email-inbound] MOVE failed (${moveErr.message}), trying COPY+DELETE fallback`);
+            logger.warn('MOVE failed, trying COPY+DELETE fallback', { error: moveErr.message });
             try {
               await client.messageCopy(processedMsgUids, 'Processed', { uid: true });
               await client.messageFlagsAdd(processedMsgUids, ['\\Deleted'], { uid: true });
-              console.log(`[email-inbound] COPY+DELETE fallback succeeded for ${processedMsgUids.length} email(s)`);
+              logger.info('COPY+DELETE fallback succeeded', { count: processedMsgUids.length });
             } catch (fallbackErr: any) {
-              console.error(`[email-inbound] COPY+DELETE fallback also failed:`, fallbackErr.message);
+              logger.error('COPY+DELETE fallback also failed', { error: fallbackErr.message });
             }
           }
         }
@@ -459,7 +469,7 @@ export async function startEmailPolling(): Promise<void> {
       await client.logout();
     } catch (error: any) {
       if (error?.code !== 'ETIMEOUT') {
-        console.error('[email-inbound] IMAP polling error:', error);
+        logger.error('IMAP polling error', { error: String(error) });
       }
       try {
         if (client) await client.logout();

@@ -3,7 +3,11 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { doubleCsrf } from 'csrf-csrf';
+import { randomUUID } from 'crypto';
+import fs from 'fs';
+import path from 'path';
 import { initializeDatabase } from './db/connection.js';
+import { db } from './db/connection.js';
 import { startReminderScheduler } from './lib/reminderScheduler.js';
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
 import { cleanupOldAiUsage } from './lib/aiHelper.js';
@@ -14,6 +18,7 @@ import { initWebPush } from './lib/push.js';
 import { startPushScheduler } from './lib/pushScheduler.js';
 import cron from 'node-cron';
 import passport from './config/passport.js';
+import { logger } from './lib/logger.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -60,35 +65,60 @@ initializeDatabase();
 // Init push notifications (VAPID keys are optional - gracefully disabled if not set)
 const pushReady = initWebPush();
 if (pushReady) {
-  console.log('Push notifications enabled (VAPID configured)');
+  logger.info('Push notifications enabled (VAPID configured)');
   startPushScheduler();
 } else {
-  console.log('Push notifications disabled (VAPID keys not set)');
+  logger.info('Push notifications disabled (VAPID keys not set)');
 }
 
 // Start reminder scheduler (always enabled - push reminders fire even without SMTP)
 startReminderScheduler();
-console.log('Reminder scheduler enabled');
+logger.info('Reminder scheduler enabled');
 
 // Daily cleanup of expired/revoked refresh tokens at 03:00
 cron.schedule('0 3 * * *', () => {
   try {
     cleanupRefreshTokens();
   } catch (error) {
-    console.error('Error during scheduled refresh token cleanup:', error);
+    logger.error('Error during scheduled refresh token cleanup', { error: String(error) });
   }
 });
-console.log('✅ Refresh token cleanup scheduled (daily at 03:00)');
+logger.info('Refresh token cleanup scheduled (daily at 03:00)');
 
 // Daily cleanup of old AI usage logs (older than 90 days) at 03:15
 cron.schedule('15 3 * * *', () => {
   try {
     cleanupOldAiUsage();
   } catch (error) {
-    console.error('Error during scheduled AI usage cleanup:', error);
+    logger.error('Error during scheduled AI usage cleanup', { error: String(error) });
   }
 });
-console.log('✅ AI usage log cleanup scheduled (daily at 03:15)');
+logger.info('AI usage log cleanup scheduled (daily at 03:15)');
+
+// Daily automatic database backup at 04:00 — keeps last 7 days
+const BACKUP_DIR = path.join(path.dirname(process.env.DB_PATH || path.join(__dirname, '../../data/database.sqlite')), 'backups');
+cron.schedule('0 4 * * *', async () => {
+  try {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const backupPath = path.join(BACKUP_DIR, `backup-${dateStr}.sqlite`);
+    await db.backup(backupPath);
+    logger.info('Automatic backup completed', { path: backupPath });
+
+    // Retain only the 7 most recent backups
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter((f: string) => f.startsWith('backup-') && f.endsWith('.sqlite'))
+      .sort()
+      .reverse();
+    for (const old of files.slice(7)) {
+      fs.unlinkSync(path.join(BACKUP_DIR, old));
+      logger.info('Deleted old backup', { file: old });
+    }
+  } catch (error) {
+    logger.error('Automatic backup failed', { error: String(error) });
+  }
+});
+logger.info('Automatic backup scheduled (daily at 04:00, retain 7)');
 
 // Auto-close resolved tickets (daily at 02:30, configurable via AUTO_CLOSE_DAYS env var)
 startAutoCloseScheduler();
@@ -99,6 +129,14 @@ startRecurringScheduler();
 // Webhook retry scheduler (every minute) — re-attempts failed deliveries
 // with exponential backoff up to 5 attempts.
 startWebhookRetryScheduler();
+
+// Request ID tracking — allows tracing requests through logs
+app.use((req, res, next) => {
+  const requestId = req.headers['x-request-id'] as string || randomUUID();
+  res.setHeader('X-Request-ID', requestId);
+  (req as any).requestId = requestId;
+  next();
+});
 
 // Security headers with Helmet
 // Protects against common web vulnerabilities
@@ -138,9 +176,10 @@ const defaultOrigins = [
 const allowedOrigins = [...new Set([...envOrigins, ...defaultOrigins])];
 
 // Log CORS configuration at startup for debugging
-console.log('🔒 CORS Configuration:');
-console.log('  Environment CORS_ORIGIN:', process.env.CORS_ORIGIN || '(not set - using defaults)');
-console.log('  Allowed Origins:', allowedOrigins.join(', '));
+logger.info('CORS configuration loaded', {
+  envOrigin: process.env.CORS_ORIGIN || '(not set - using defaults)',
+  allowedOrigins,
+});
 
 app.use(cors({
   origin: (origin, callback) => {
@@ -153,8 +192,7 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.error(`❌ CORS blocked: Origin '${origin}' not in allowed list.`);
-      console.error(`   Allowed origins: ${allowedOrigins.join(', ')}`);
+      logger.warn('CORS blocked request', { origin, allowedOrigins });
       callback(null, false);
     }
   },
@@ -168,7 +206,7 @@ app.use(passport.initialize());
 // Protects all state-changing endpoints (POST, PUT, PATCH, DELETE) under /api
 // Exempt: /api/auth/login and /api/auth/refresh (authenticate with credentials, not cookies)
 if (process.env.NODE_ENV === 'production' && !process.env.CSRF_SECRET) {
-  console.error('FATAL: CSRF_SECRET must be set in production');
+  logger.error('FATAL: CSRF_SECRET must be set in production');
   process.exit(1);
 }
 
@@ -253,28 +291,28 @@ app.use((err: Error & { status?: number; code?: string }, _req: express.Request,
     // Client errors: forward the error message and optional code (e.g. EBADCSRFTOKEN)
     res.status(status).json({ error: err.message, code: err.code });
   } else {
-    console.error('Unhandled error:', err);
+    logger.error('Unhandled error', { error: err.message, stack: err.stack });
     res.status(500).json({ error: 'Internal server error' });
   }
 });
 
 // Start server
 const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`API available at http://localhost:${PORT}/api`);
+  logger.info(`Server running on port ${PORT}`, { port: Number(PORT) });
+  logger.info(`API available at http://localhost:${PORT}/api`);
 
   // Start email-to-ticket polling (non-blocking — logs its own errors)
-  startEmailPolling().catch(console.error);
+  startEmailPolling().catch((err) => logger.error('Email polling failed to start', { error: String(err) }));
 });
 
 // Graceful shutdown so SQLite WAL checkpoints cleanly on container stop.
 import { stopEmailPolling } from './lib/emailInbound.js';
 import { closeDatabase } from './db/connection.js';
 const gracefulShutdown = (signal: string) => {
-  console.log(`Received ${signal}, shutting down gracefully...`);
+  logger.info(`Received ${signal}, shutting down gracefully...`, { signal });
   stopEmailPolling();
   server.close(() => {
-    try { closeDatabase(); } catch (err) { console.error('Error closing DB:', err); }
+    try { closeDatabase(); } catch (err) { logger.error('Error closing DB', { error: String(err) }); }
     process.exit(0);
   });
   // Hard exit if cleanup hangs

@@ -614,6 +614,15 @@ const Reports = () => {
           users={users}
         />
 
+        {/* Empty state when no tickets exist */}
+        {!isLoading && !isError && totalTickets === 0 && tickets.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />
+            <p className="text-lg font-medium text-muted-foreground">Inga ärenden att visa statistik för</p>
+            <p className="text-sm text-muted-foreground/70 mt-1">Skapa ärenden för att se rapporter och trender här.</p>
+          </div>
+        )}
+
         <Tabs defaultValue="översikt">
           {/* Mobile: horizontal scroll. Desktop: 5-col grid. */}
           <TabsList className="w-full h-auto flex overflow-x-auto whitespace-nowrap md:grid md:grid-cols-5">

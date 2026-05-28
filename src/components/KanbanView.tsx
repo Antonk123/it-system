@@ -82,7 +82,7 @@ export function KanbanView({ tickets, users, onStatusChange, onTicketClick }: Ka
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 overflow-x-auto pb-4">
+      <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 overflow-x-auto pb-4">
         {STATUSES.map(status => (
           <KanbanColumn
             key={status}

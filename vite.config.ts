@@ -8,7 +8,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 8080,
+    port: 5173,
     proxy: {
       '/api': {
         target: process.env.API_TARGET || 'http://it-ticketing-backend:3001',

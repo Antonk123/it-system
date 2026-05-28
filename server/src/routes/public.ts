@@ -9,6 +9,19 @@ import { publicWriteRateLimiter, publicAiRateLimiter } from '../middleware/rateL
 
 const router = Router();
 
+// ─── Idempotency key store (in-memory, 5-minute TTL) ────────────────────────
+// Prevents duplicate ticket creation from network retries on the public form.
+const idempotencyStore = new Map<string, { ticketId: string; expiresAt: number }>();
+const IDEMPOTENCY_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+// Periodic cleanup every 60s to evict expired entries
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of idempotencyStore) {
+    if (entry.expiresAt <= now) idempotencyStore.delete(key);
+  }
+}, 60_000).unref();
+
 interface ContactRow {
   id: string;
   name: string;
@@ -70,6 +83,18 @@ router.get('/categories', (_req: Request, res: Response) => {
 
 // Submit public ticket
 router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) => {
+  // ─── Idempotency: prevent duplicate tickets from network retries ───
+  const idempotencyKey = req.headers['idempotency-key'] as string | undefined;
+  if (idempotencyKey) {
+    const existing = idempotencyStore.get(idempotencyKey);
+    if (existing && existing.expiresAt > Date.now()) {
+      return res.status(201).json({
+        message: 'Ticket submitted successfully',
+        ticketId: existing.ticketId,
+      });
+    }
+  }
+
   let { name, email, title, description, category, priority, customFields, template_id } = req.body;
 
   // Validate required fields
@@ -178,6 +203,14 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
     }).catch((error) => {
       console.error('Error sending public ticket email:', error);
     });
+
+    // Store idempotency key so retries return the same ticket
+    if (idempotencyKey) {
+      idempotencyStore.set(idempotencyKey, {
+        ticketId,
+        expiresAt: Date.now() + IDEMPOTENCY_TTL_MS,
+      });
+    }
 
     res.status(201).json({
       message: 'Ticket submitted successfully',

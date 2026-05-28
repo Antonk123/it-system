@@ -15,11 +15,60 @@
 
 Kräver Docker och Docker Compose.
 
+### Automatisk installation (rekommenderat)
+
 ```sh
 bash <(curl -fsSL https://raw.githubusercontent.com/Antonk123/it-system/main/setup.sh)
 ```
 
 Scriptet guidar dig genom konfigurationen och startar systemet. När det är klart visas URL och inloggningsuppgifter.
+
+### Lokal utveckling
+
+```sh
+git clone https://github.com/Antonk123/it-system.git
+cd it-system
+cp .env.example .env          # Fyll i JWT_SECRET och CSRF_SECRET
+docker compose -f docker-compose.local.yml up --build
+```
+
+Frontend: `http://localhost:8082` — Backend: `http://localhost:3002/api`
+
+### Miljövariabler
+
+All konfiguration sker via `.env`. Se [`.env.example`](.env.example) för dokumenterade variabler.
+
+| Variabel | Krävs | Beskrivning |
+|----------|-------|-------------|
+| `JWT_SECRET` | Ja | JWT-signeringsnyckel |
+| `CSRF_SECRET` | Ja (prod) | CSRF-tokensignering |
+| `CORS_ORIGIN` | Ja (prod) | Tillåtna origins (kommaseparerat) |
+| `APP_BASE_URL` | Ja | Bas-URL för länkar i mejl |
+| `ANTHROPIC_API_KEY` | Nej | Aktiverar AI-funktioner |
+| `SMTP_HOST/PORT/USER/PASS` | Nej | Utgående e-post |
+| `IMAP_HOST/PORT/USER` | Nej | E-post → ärende |
+| `VAPID_PUBLIC_KEY/PRIVATE_KEY` | Nej | Push-notiser |
+
+## API-översikt
+
+Alla endpoints ligger under `/api`. Autentisering via JWT Bearer-token. CSRF-skydd via `X-CSRF-Token`-header.
+
+| Endpoint | Beskrivning |
+|----------|-------------|
+| `POST /api/auth/login` | Logga in, få JWT + refresh token |
+| `GET /api/tickets` | Lista ärenden (filter, sökning, paginering) |
+| `POST /api/tickets` | Skapa ärende |
+| `GET /api/tickets/:id` | Hämta ärende med kommentarer |
+| `PUT /api/tickets/:id` | Uppdatera ärende |
+| `GET /api/contacts` | Lista kontakter/kunder |
+| `GET /api/categories` | Lista kategorier |
+| `GET /api/kb` | Kunskapsbas-artiklar |
+| `GET /api/reports/*` | Rapporter och statistik |
+| `GET /api/backup` | Ladda ner backup (admin) |
+| `POST /api/backup/restore` | Återställ backup (admin) |
+| `GET /api/health` | Hälsokontroll |
+
+Se respektive routfil i `server/src/routes/` för fullständig dokumentation.
 
 ## Tech stack
 

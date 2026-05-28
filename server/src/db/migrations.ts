@@ -977,4 +977,55 @@ export const migrations: Migration[] = [
       db.prepare('CREATE INDEX IF NOT EXISTS idx_time_entries_user ON time_entries(user_id)').run();
     },
   },
+  {
+    id: '050',
+    name: 'add_fts5_auto_sync_triggers',
+    up: (db, { tableExists }) => {
+      if (!tableExists('tickets_fts')) return;
+
+      // Contentless FTS5 requires the special 'delete' command to remove
+      // entries: INSERT INTO fts(fts, rowid, ...) VALUES('delete', ...).
+      // Triggers use BEGIN...END blocks with internal semicolons — must
+      // use db.exec() (see migration '002' for precedent).
+
+      db.exec(`CREATE TRIGGER IF NOT EXISTS tickets_fts_ai
+        AFTER INSERT ON tickets FOR EACH ROW BEGIN
+          INSERT INTO tickets_fts(rowid, title, description, notes, solution)
+          VALUES (NEW.rowid, NEW.title, COALESCE(NEW.description, ''), COALESCE(NEW.notes, ''), COALESCE(NEW.solution, ''));
+        END`);
+
+      db.exec(`CREATE TRIGGER IF NOT EXISTS tickets_fts_au
+        AFTER UPDATE OF title, description, notes, solution ON tickets FOR EACH ROW BEGIN
+          INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution)
+          VALUES('delete', OLD.rowid, OLD.title, COALESCE(OLD.description, ''), COALESCE(OLD.notes, ''), COALESCE(OLD.solution, ''));
+          INSERT INTO tickets_fts(rowid, title, description, notes, solution)
+          VALUES (NEW.rowid, NEW.title, COALESCE(NEW.description, ''), COALESCE(NEW.notes, ''), COALESCE(NEW.solution, ''));
+        END`);
+
+      db.exec(`CREATE TRIGGER IF NOT EXISTS tickets_fts_ad
+        AFTER DELETE ON tickets FOR EACH ROW BEGIN
+          INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution)
+          VALUES('delete', OLD.rowid, OLD.title, COALESCE(OLD.description, ''), COALESCE(OLD.notes, ''), COALESCE(OLD.solution, ''));
+        END`);
+    },
+  },
+  {
+    id: '051',
+    name: 'create_audit_log_table',
+    up: (db, { tableExists }) => {
+      if (tableExists('audit_log')) return;
+      db.prepare(`CREATE TABLE audit_log (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+        action TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT,
+        details TEXT,
+        ip_address TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`).run();
+      db.prepare('CREATE INDEX idx_audit_log_created_at ON audit_log(created_at)').run();
+      db.prepare('CREATE INDEX idx_audit_log_user_id ON audit_log(user_id)').run();
+    },
+  },
 ];

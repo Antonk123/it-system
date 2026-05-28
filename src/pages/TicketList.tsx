@@ -322,6 +322,7 @@ const TicketList = () => {
               value={search}
               onChange={e => updateFilters({ search: e.target.value })}
               className="pl-9 w-full"
+              aria-label="Sök ärenden"
             />
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1">
@@ -330,11 +331,22 @@ const TicketList = () => {
                 key={s}
                 variant={selectedStatuses.includes(s) ? 'default' : 'outline'}
                 className="cursor-pointer shrink-0"
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   const next = selectedStatuses.includes(s)
                     ? selectedStatuses.filter(x => x !== s)
                     : [...selectedStatuses, s];
                   updateFilters({ status: next });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    const next = selectedStatuses.includes(s)
+                      ? selectedStatuses.filter(x => x !== s)
+                      : [...selectedStatuses, s];
+                    updateFilters({ status: next });
+                  }
                 }}
               >
                 {STATUS_LABELS[s]}

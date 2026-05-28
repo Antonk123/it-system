@@ -8,7 +8,17 @@ interface RateLimitStore {
 }
 
 /**
- * Simple in-memory rate limiter middleware
+ * Simple in-memory rate limiter middleware.
+ *
+ * The in-memory store is intentional: IT-Ticket is a single-instance app backed
+ * by SQLite, so there is no second process that needs to share rate-limit
+ * counters. Storing counts in RAM avoids unnecessary DB writes on every request.
+ * Counts reset on server restart — this is acceptable because restarts are
+ * infrequent and the window durations are short (≤15 min).
+ *
+ * If the app ever scales to multiple instances behind a load balancer, this
+ * should be replaced with a shared store (e.g. Redis or an SQLite table).
+ *
  * @param windowMs - Time window in milliseconds
  * @param max - Maximum number of requests per window
  */

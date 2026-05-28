@@ -25,7 +25,7 @@ export const KanbanColumn = memo(function KanbanColumn({ status, label, tickets,
     <div
       ref={setNodeRef}
       className={cn(
-        'flex flex-col bg-muted rounded-lg p-4 min-h-[500px] transition-colors',
+        'flex flex-col bg-muted rounded-lg p-4 min-h-[500px] min-w-[240px] sm:min-w-0 transition-colors',
         isOver && 'bg-muted/80 ring-2 ring-primary'
       )}
     >

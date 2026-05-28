@@ -10,6 +10,7 @@ import { authenticate, AuthRequest, AuthUser } from '../middleware/auth.js';
 import { loginRateLimiter } from '../middleware/rateLimit.js';
 import { sendPasswordResetEmail } from '../lib/email.js';
 import { validatePassword } from '../lib/passwordPolicy.js';
+import { logAudit } from '../lib/auditLog.js';
 
 const router = Router();
 
@@ -36,6 +37,7 @@ router.post('/login', loginRateLimiter, (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Login failed' });
     }
     if (!user) {
+      logAudit(null, 'login_failure', 'session', null, `email: ${req.body?.email ?? 'unknown'}`, req.ip);
       return res.status(401).json({ error: info?.message || 'Invalid credentials' });
     }
 
@@ -57,6 +59,8 @@ router.post('/login', loginRateLimiter, (req: Request, res: Response) => {
         INSERT INTO refresh_tokens (id, user_id, token, expires_at)
         VALUES (?, ?, ?, ?)
       `).run(refreshTokenId, user.id, refreshToken, expiresAt);
+
+      logAudit(user.id, 'login_success', 'session', user.id, null, req.ip);
 
       res.json({
         user: {
@@ -221,6 +225,8 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
 
     const newHash = await bcrypt.hash(newPassword, 10);
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, req.user!.id);
+
+    logAudit(req.user!.id, 'password_change', 'user', req.user!.id, null, req.ip);
 
     res.json({ message: 'Password changed successfully' });
   } catch (error) {

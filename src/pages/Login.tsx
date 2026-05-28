@@ -59,7 +59,7 @@ const Login = () => {
               <img src="/icons/pfm-logo-lg.png" alt="PFM" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">IT-Ticket</h1>
-            <p className="text-sm text-muted-foreground mt-1.5">Logga in f&ouml;r att forts&auml;tta</p>
+            <p className="text-sm text-muted-foreground mt-1.5">Logga in för att fortsätta</p>
           </div>
 
           {/* Form */}
@@ -80,13 +80,13 @@ const Login = () => {
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="signin-password">L&ouml;senord</Label>
+              <Label htmlFor="signin-password">Lösenord</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
                 <Input
                   id="signin-password"
                   type="password"
-                  placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;"
+                  placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="pl-10 bg-background/50"
@@ -103,19 +103,19 @@ const Login = () => {
                 to="/forgot-password"
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
-                Gl&ouml;mt l&ouml;senord?
+                Glömt lösenord?
               </Link>
             </div>
           </form>
 
           <div className="mt-6 pt-5 border-t border-border/50 text-center">
-            <p className="text-xs text-muted-foreground mb-2">Beh&ouml;ver du hj&auml;lp?</p>
+            <p className="text-xs text-muted-foreground mb-2">Behöver du hjälp?</p>
             <Link
               to="/submit-ticket"
               className="inline-flex items-center gap-2 text-primary hover:underline text-sm font-medium"
             >
               <Ticket className="w-4 h-4" />
-              Skapa &auml;rende
+              Skapa ärende
             </Link>
           </div>
         </div>

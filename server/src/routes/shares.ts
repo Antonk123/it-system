@@ -139,7 +139,9 @@ router.get('/public/:token', sharePublicRateLimiter, (req: Request, res: Respons
       return res.status(404).json({ error: 'Invalid or expired share link' });
     }
 
-    const ticket = db.prepare('SELECT * FROM tickets WHERE id = ?').get(share.ticket_id) as TicketRow | undefined;
+    const ticket = db.prepare(
+      'SELECT id, title, description, status, priority, category_id, requester_id, notes, solution, created_at, updated_at, resolved_at, closed_at FROM tickets WHERE id = ?'
+    ).get(share.ticket_id) as TicketRow | undefined;
     
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
@@ -148,7 +150,7 @@ router.get('/public/:token', sharePublicRateLimiter, (req: Request, res: Respons
     // Get category
     let category: CategoryRow | null = null;
     if (ticket.category_id) {
-      category = db.prepare('SELECT * FROM categories WHERE id = ?').get(ticket.category_id) as CategoryRow | undefined || null;
+      category = db.prepare('SELECT id, name, label FROM categories WHERE id = ?').get(ticket.category_id) as CategoryRow | undefined || null;
     }
 
     // Get requester
@@ -215,9 +217,9 @@ router.get('/public/file/:token/:attachmentId', sharePublicRateLimiter, (req: Re
       file_type: string | null;
     }
     
-    const attachment = db.prepare(`
-      SELECT * FROM ticket_attachments WHERE id = ? AND ticket_id = ?
-    `).get(req.params.attachmentId, share.ticket_id) as AttachmentFullRow | undefined;
+    const attachment = db.prepare(
+      'SELECT id, ticket_id, file_name, file_path, file_type FROM ticket_attachments WHERE id = ? AND ticket_id = ?'
+    ).get(req.params.attachmentId, share.ticket_id) as AttachmentFullRow | undefined;
 
     if (!attachment) {
       return res.status(404).json({ error: 'Attachment not found' });

@@ -334,12 +334,7 @@ const TicketDetail = () => {
       // Navigate back to source page (preserves filters/pagination)
       navigate(location.state.from);
     } else {
-      // No source info - fall back to history or default
-      if (window.history.length > 2) {
-        navigate(-1);
-      } else {
-        navigate('/tickets');
-      }
+      navigate('/tickets');
     }
   };
 

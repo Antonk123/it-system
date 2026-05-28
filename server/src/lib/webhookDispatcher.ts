@@ -54,6 +54,16 @@ async function attemptDelivery(
   // Re-validate URL right before fetch to defeat DNS-rebind attacks where the
   // webhook URL was clean at create-time but its hostname now resolves to an
   // internal IP. A definitive failure here — do not retry.
+  //
+  // TOCTTOU note: there is a small window between this validation (which does
+  // dns.promises.lookup) and the fetch() call below where a hostile DNS server
+  // could switch the A record to an internal IP. This residual risk is
+  // acceptable because:
+  //   1. Webhook URLs are admin-configured — not user/attacker-controlled.
+  //   2. Validation happens at delivery time, not just at creation time.
+  //   3. Full DNS-pinning (resolve → connect to IP with Host header) would
+  //      require a custom http.Agent and complicate TLS certificate validation.
+  //      It can be added later as defense-in-depth if the threat model changes.
   const safety = await isSafeWebhookUrl(webhook.url);
   if (!safety.ok) {
     db.prepare(
@@ -62,6 +72,8 @@ async function attemptDelivery(
     return;
   }
 
+  // webhook.secret is an HMAC shared signing key stored in readable form —
+  // see comment in webhooks.ts for rationale (same pattern as GitHub/Stripe).
   const signature = createHmac('sha256', webhook.secret).update(delivery.payload).digest('hex');
 
   try {
@@ -118,7 +130,7 @@ async function deliverOne(webhook: WebhookRow, event: string, body: string): Pro
 
 export async function dispatchWebhook(event: string, payload: Record<string, any>): Promise<void> {
   const webhooks = db.prepare(
-    'SELECT * FROM webhooks WHERE active = 1'
+    'SELECT id, url, events, secret, active FROM webhooks WHERE active = 1'
   ).all() as WebhookRow[];
 
   const body = JSON.stringify({ event, payload, timestamp: new Date().toISOString() });

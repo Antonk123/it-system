@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { ArrowUpDown, Loader2, X } from 'lucide-react';
 import { Ticket, User, TicketStatus, TicketPriority } from '@/types/ticket';
 import { STATUS_LABELS } from '@/lib/constants';
@@ -99,12 +99,15 @@ export const TicketTable = memo(function TicketTable({
     return checklistProgress.find(p => p.ticketId === ticketId);
   };
 
+  // Stabilize ticket IDs so the effect only re-runs when actual IDs change
+  const ticketIdsKey = useMemo(() => tickets.map(t => t.id).join(','), [tickets]);
+
   useEffect(() => {
     const controller = new AbortController();
     const { signal } = controller;
 
     const fetchChecklistProgress = async () => {
-      const ticketIds = tickets.map(t => t.id);
+      const ticketIds = ticketIdsKey.split(',').filter(Boolean);
       if (ticketIds.length === 0) return;
 
       try {
@@ -126,7 +129,7 @@ export const TicketTable = memo(function TicketTable({
 
     fetchChecklistProgress();
     return () => controller.abort();
-  }, [tickets]);
+  }, [ticketIdsKey]);
 
   const renderSortButton = (label: string, key: 'status' | 'priority' | 'category', enabled: boolean) => {
     if (!enabled) {

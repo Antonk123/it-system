@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { randomUUID, randomBytes, createHash } from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { logAudit } from '../lib/auditLog.js';
 
 const router = Router();
 
@@ -77,6 +78,8 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       'INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(id, name.trim(), keyPrefix, keyHash, req.user!.id, perms, normalizedExpiresAt);
 
+    logAudit(req.user!.id, 'api_key_create', 'api_key', id, `name: ${name.trim()}, prefix: ${keyPrefix}`, req.ip);
+
     res.status(201).json({
       id,
       name: name.trim(),
@@ -102,6 +105,8 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (result.changes === 0) {
       return res.status(404).json({ error: 'API key not found' });
     }
+
+    logAudit(req.user!.id, 'api_key_delete', 'api_key', req.params.id, null, req.ip);
 
     res.json({ message: 'API key deleted' });
   } catch (error) {
