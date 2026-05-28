@@ -828,15 +828,15 @@ export const migrations: Migration[] = [
       if (existing.n > 0) return;
 
       const insert = db.prepare(
-        'INSERT INTO sla_policies (id, company_id, priority, response_time_minutes, resolution_time_minutes) VALUES (?, NULL, ?, ?, ?)'
+        'INSERT INTO sla_policies (id, company_id, priority, response_time_minutes, resolution_time_minutes) VALUES (?, ?, ?, ?, ?)'
       );
 
       // Industry-typical defaults for internal IT helpdesk. Values can be
       // tuned per company via PUT /api/sla.
-      insert.run(randomUUID(), 'critical', 30, 240);    // 30m response / 4h resolution
-      insert.run(randomUUID(), 'high',     60, 480);    // 1h / 8h
-      insert.run(randomUUID(), 'medium',   240, 1440);  // 4h / 24h
-      insert.run(randomUUID(), 'low',      480, 4320);  // 8h / 72h
+      insert.run(randomUUID(), null, 'critical', 30, 240);    // 30m response / 4h resolution
+      insert.run(randomUUID(), null, 'high',     60, 480);    // 1h / 8h
+      insert.run(randomUUID(), null, 'medium',   240, 1440);  // 4h / 24h
+      insert.run(randomUUID(), null, 'low',      480, 4320);  // 8h / 72h
     },
   },
   {
@@ -940,6 +940,31 @@ export const migrations: Migration[] = [
         for (const [fieldName, label, type, placeholder, required, options, position] of fields) {
           ins.run(randomUUID(), tmpl.id, fieldName, label, type, placeholder, null, required, options, position);
         }
+      }
+    },
+  },
+  {
+    id: '048',
+    name: 'fix_sla_policies_company_id_data',
+    up: (db) => {
+      // Remediation: migration #042 originally had a hardcoded NULL in SQL
+      // for company_id, but if an older version accidentally shifted args so
+      // that a priority string ended up in company_id, fix those rows.
+      // Detect rows where company_id contains a priority string instead of
+      // a UUID or NULL.
+      const broken = db.prepare(
+        `SELECT id, company_id FROM sla_policies WHERE company_id IN ('critical', 'high', 'medium', 'low')`
+      ).all() as { id: string; company_id: string }[];
+
+      if (broken.length === 0) return;
+
+      const fix = db.prepare(
+        'UPDATE sla_policies SET company_id = NULL, priority = ? WHERE id = ?'
+      );
+
+      for (const row of broken) {
+        // The company_id field contains what should have been the priority
+        fix.run(row.company_id, row.id);
       }
     },
   },

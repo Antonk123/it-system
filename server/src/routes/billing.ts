@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -17,7 +17,7 @@ interface BillingRateRow {
 }
 
 // GET /rates/:companyId — get billing rate for a company
-router.get('/rates/:companyId', authenticate, (req: AuthRequest, res: Response) => {
+router.get('/rates/:companyId', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const rate = db.prepare('SELECT * FROM billing_rates WHERE company_id = ?').get(req.params.companyId) as BillingRateRow | undefined;
     res.json(rate || null);
@@ -28,7 +28,7 @@ router.get('/rates/:companyId', authenticate, (req: AuthRequest, res: Response) 
 });
 
 // PUT /rates/:companyId — upsert billing rate
-router.put('/rates/:companyId', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/rates/:companyId', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const { rate_per_hour, currency } = req.body;
     if (!rate_per_hour || typeof rate_per_hour !== 'number' || rate_per_hour <= 0) {
@@ -82,7 +82,7 @@ interface InvoiceLineRow {
 }
 
 // GET /invoices — list invoices (optionally filter by company_id)
-router.get('/invoices', authenticate, (req: AuthRequest, res: Response) => {
+router.get('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const companyId = req.query.company_id as string | undefined;
     let invoices: any[];
@@ -112,7 +112,7 @@ router.get('/invoices', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // GET /invoices/:id — get single invoice with lines
-router.get('/invoices/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.get('/invoices/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const invoice = db.prepare(`
       SELECT i.*, co.name as company_name, co.org_number, co.email as company_email, co.address as company_address
@@ -142,7 +142,7 @@ router.get('/invoices/:id', authenticate, (req: AuthRequest, res: Response) => {
 
 // POST /invoices/preview — preview invoice (don't save)
 // Body: { company_id, period_start, period_end }
-router.post('/invoices/preview', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/invoices/preview', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const { company_id, period_start, period_end } = req.body;
     if (!company_id || !period_start || !period_end) {
@@ -219,7 +219,7 @@ router.post('/invoices/preview', authenticate, (req: AuthRequest, res: Response)
 });
 
 // POST /invoices — create invoice from preview
-router.post('/invoices', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const { company_id, period_start, period_end, lines, total_hours, total_amount, currency } = req.body;
 
@@ -254,7 +254,7 @@ router.post('/invoices', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // PUT /invoices/:id/status — update invoice status (draft -> sent -> paid)
-router.put('/invoices/:id/status', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/invoices/:id/status', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const { status } = req.body;
     if (!['draft', 'sent', 'paid'].includes(status)) {
@@ -284,7 +284,7 @@ router.put('/invoices/:id/status', authenticate, (req: AuthRequest, res: Respons
 });
 
 // DELETE /invoices/:id — delete draft invoice
-router.delete('/invoices/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/invoices/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const existing = db.prepare('SELECT * FROM invoices WHERE id = ?').get(req.params.id) as InvoiceRow | undefined;
     if (!existing) {

@@ -86,6 +86,23 @@ interface AttachmentRow {
   created_at: string;
 }
 
+interface TicketOwnerRow {
+  requester_id: string | null;
+  assigned_to: string | null;
+}
+
+/** Check if user is admin, ticket requester, or assigned agent */
+function canAccessTicketAttachment(user: { id: string; role: string }, ticketId: string): boolean {
+  if (user.role === 'admin') return true;
+
+  const ticket = db.prepare(
+    'SELECT requester_id, assigned_to FROM tickets WHERE id = ?'
+  ).get(ticketId) as TicketOwnerRow | undefined;
+
+  if (!ticket) return false;
+  return ticket.requester_id === user.id || ticket.assigned_to === user.id;
+}
+
 // Get attachments for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
@@ -162,8 +179,13 @@ router.get('/file/:id', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Attachment not found' });
     }
 
+    // Authorization: verify user has access to the parent ticket
+    if (!canAccessTicketAttachment(req.user!, attachment.ticket_id)) {
+      return res.status(403).json({ error: 'Forbidden: you do not have access to this attachment' });
+    }
+
     const filePath = join(UPLOAD_DIR, attachment.file_path);
-    
+
     if (!existsSync(filePath)) {
       return res.status(404).json({ error: 'File not found' });
     }
@@ -188,6 +210,11 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     if (!attachment) {
       return res.status(404).json({ error: 'Attachment not found' });
+    }
+
+    // Authorization: verify user has access to the parent ticket
+    if (!canAccessTicketAttachment(req.user!, attachment.ticket_id)) {
+      return res.status(403).json({ error: 'Forbidden: you do not have access to this attachment' });
     }
 
     // IMPORTANT: Delete from database FIRST, then file
