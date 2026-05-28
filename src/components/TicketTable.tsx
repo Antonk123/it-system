@@ -4,7 +4,6 @@ import { sv } from 'date-fns/locale';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { ArrowUpDown, Loader2, X } from 'lucide-react';
 import { Ticket, User, TicketStatus, TicketPriority } from '@/types/ticket';
-import { STATUS_LABELS } from '@/lib/constants';
 import { PriorityBadge } from './PriorityBadge';
 import { StatusBadge } from './StatusBadge';
 import { SLABadge } from './SLABadge';
@@ -64,9 +63,6 @@ interface TicketTableProps {
   onBulkAction?: (ids: string[], updates: BulkUpdates) => Promise<void>;
 }
 
-// Re-export for backward compat within this file
-const statusLabels = STATUS_LABELS;
-
 export const TicketTable = memo(function TicketTable({
   tickets,
   users,
@@ -86,8 +82,8 @@ export const TicketTable = memo(function TicketTable({
 }: TicketTableProps) {
   const { categories } = useCategories();
   const [checklistProgress, setChecklistProgress] = useState<ChecklistProgress[]>([]);
-  const [savingIds, setSavingIds] = useState<Record<string, boolean>>({});
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
   const isMobile = useIsMobile();
 
   const getUserName = (userId: string) => {
@@ -158,16 +154,27 @@ export const TicketTable = memo(function TicketTable({
   const someSelected = selectedIds.length > 0 && !allSelected;
 
   const toggleAll = () => {
-    if (allSelected) {
+    if (selectionMode && allSelected) {
+      // Deselect all and exit selection mode
       onSelectionChange?.([]);
+      setSelectionMode(false);
+    } else if (selectionMode) {
+      // Already in selection mode, select all
+      onSelectionChange?.(tickets.map(t => t.id));
     } else {
+      // Enter selection mode and select all
+      setSelectionMode(true);
       onSelectionChange?.(tickets.map(t => t.id));
     }
   };
 
   const toggleOne = (id: string) => {
     if (selectedIds.includes(id)) {
-      onSelectionChange?.(selectedIds.filter(s => s !== id));
+      const newIds = selectedIds.filter(s => s !== id);
+      onSelectionChange?.(newIds);
+      if (newIds.length === 0) {
+        setSelectionMode(false);
+      }
     } else {
       onSelectionChange?.([...selectedIds, id]);
     }
@@ -179,6 +186,7 @@ export const TicketTable = memo(function TicketTable({
     try {
       await onBulkAction(selectedIds, updates);
       onSelectionChange?.([]);
+      setSelectionMode(false);
     } finally {
       setBulkSaving(false);
     }
@@ -283,7 +291,7 @@ export const TicketTable = memo(function TicketTable({
             variant="ghost"
             size="sm"
             className="ml-auto h-7 text-xs gap-1"
-            onClick={() => onSelectionChange?.([])}
+            onClick={() => { onSelectionChange?.([]); setSelectionMode(false); }}
           >
             <X className="h-3 w-3" />
             Avmarkera
@@ -296,28 +304,30 @@ export const TicketTable = memo(function TicketTable({
         <TableHeader>
           <TableRow className="border-b border-border/50 bg-background/40 backdrop-blur-sm">
             {onSelectionChange && (
-              <TableHead className="w-10 pl-4">
+              <TableHead className={cn(
+                "pl-4 transition-all duration-200",
+                selectionMode ? "w-10 opacity-100" : "w-10 opacity-100"
+              )}>
                 <Checkbox
-                  checked={allSelected}
-                  ref={(el) => { if (el) (el as any).indeterminate = someSelected; }}
+                  checked={selectionMode && allSelected}
+                  ref={(el) => { if (el) (el as any).indeterminate = selectionMode && someSelected; }}
                   onCheckedChange={toggleAll}
                   aria-label="Markera alla"
                 />
               </TableHead>
             )}
-            <TableHead className="font-semibold text-foreground/90">Titel</TableHead>
+            <TableHead className="font-semibold text-foreground/90">Ärende</TableHead>
             <TableHead className="font-semibold text-foreground/90">{renderSortButton('Status', 'status', enableStatusSort)}</TableHead>
             <TableHead className="font-semibold text-foreground/90">{renderSortButton('Prioritet', 'priority', enablePrioritySort)}</TableHead>
-            <TableHead className="font-semibold text-foreground/90">{renderSortButton('Kategori', 'category', enableCategorySort)}</TableHead>
-            <TableHead className="font-semibold text-foreground/90">Taggar</TableHead>
             <TableHead className="font-semibold text-foreground/90">Förlopp</TableHead>
             <TableHead className="font-semibold text-foreground/90">Beställare</TableHead>
-            <TableHead className="font-semibold text-foreground/90">Skapad</TableHead>
-            <TableHead className="font-semibold text-foreground/90">Uppdaterad</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {tickets.map((ticket, index) => (
+          {tickets.map((ticket) => {
+            const requesterName = getUserName(ticket.requesterId);
+            const initials = requesterName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+            return (
             <TableRow
               key={ticket.id}
               className={cn(
@@ -337,111 +347,51 @@ export const TicketTable = memo(function TicketTable({
               }}
             >
               {onSelectionChange && (
-                <TableCell className="w-10 pl-4" onClick={(e) => e.stopPropagation()}>
-                  <Checkbox
-                    checked={selectedIds.includes(ticket.id)}
-                    onCheckedChange={() => toggleOne(ticket.id)}
-                    aria-label={`Markera ${ticket.title}`}
-                  />
+                <TableCell
+                  className={cn(
+                    "pl-4 transition-all duration-200",
+                    selectionMode ? "w-10 opacity-100" : "w-0 opacity-0 overflow-hidden p-0"
+                  )}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {selectionMode && (
+                    <Checkbox
+                      checked={selectedIds.includes(ticket.id)}
+                      onCheckedChange={() => toggleOne(ticket.id)}
+                      aria-label={`Markera ${ticket.title}`}
+                    />
+                  )}
                 </TableCell>
               )}
+              {/* Ärende: Title + Category/Tags/SLA row */}
               <TableCell className={cn(compact && "py-3")}>
-                <span className="font-semibold text-foreground group-hover:text-primary transition-colors duration-200">
-                  {ticket.title}
-                </span>
-              </TableCell>
-              <TableCell className={cn(compact && "py-2")} onClick={(e) => e.stopPropagation()}>
-                {(() => {
-                  const saving = !!savingIds[ticket.id];
-                  return (
-                    <div className="flex items-center gap-2">
-                      <Select
-                        value={ticket.status}
-                        onValueChange={async (value) => {
-                          if (!onStatusChange) return;
-                          setSavingIds(s => ({ ...s, [ticket.id]: true }));
-                          try {
-                            await onStatusChange(ticket.id, value as TicketStatus);
-                          } catch (error) {
-                            console.error('Status update failed:', error);
-                          } finally {
-                            setSavingIds(s => ({ ...s, [ticket.id]: false }));
-                          }
-                        }}
-                      >
-                        <SelectTrigger className={cn("w-[140px] h-7 text-xs", compact && "h-6 text-[11px]")} disabled={saving}>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="open">{statusLabels['open']}</SelectItem>
-                          <SelectItem value="in-progress">{statusLabels['in-progress']}</SelectItem>
-                          <SelectItem value="waiting">{statusLabels['waiting']}</SelectItem>
-                          <SelectItem value="resolved">{statusLabels['resolved']}</SelectItem>
-                          <SelectItem value="closed">{statusLabels['closed']}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {saving && <Loader2 className="animate-spin h-4 w-4 text-muted-foreground" />}
-                    </div>
-                  );
-                })()}
-              </TableCell>
-              <TableCell className={cn(compact && "py-2")}>
-                <div className="flex flex-col gap-1 items-start">
-                  <PriorityBadge priority={ticket.priority} />
-                  <SLABadge
-                    deadline={ticket.sla_resolution_deadline}
-                    met={ticket.sla_resolution_met}
-                    pausedAt={ticket.sla_paused_at}
-                    ticketStatus={ticket.status}
-                  />
+                <div className="flex flex-col gap-1">
+                  <span className="font-semibold text-foreground group-hover:text-primary transition-colors duration-200">
+                    {ticket.title}
+                  </span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CategoryBadge category={ticket.category} />
+                    {ticket.tags && ticket.tags.length > 0 && (
+                      <TagBadges tags={ticket.tags} maxDisplay={2} />
+                    )}
+                    <SLABadge
+                      deadline={ticket.sla_resolution_deadline}
+                      met={ticket.sla_resolution_met}
+                      pausedAt={ticket.sla_paused_at}
+                      ticketStatus={ticket.status}
+                    />
+                  </div>
                 </div>
               </TableCell>
-              <TableCell className={cn(compact && "py-2")} onClick={(e) => e.stopPropagation()}>
-                {onCategoryChange ? (
-                  (() => {
-                    const saving = !!savingIds[ticket.id];
-                    return (
-                      <div className="flex items-center gap-2">
-                        <Select
-                          value={ticket.category ?? ''}
-                          onValueChange={async (value) => {
-                            if (!onCategoryChange) return;
-                            setSavingIds(s => ({ ...s, [ticket.id]: true }));
-                            try {
-                              await onCategoryChange(ticket.id, value);
-                            } catch (error) {
-                              console.error('Category update failed:', error);
-                            } finally {
-                              setSavingIds(s => ({ ...s, [ticket.id]: false }));
-                            }
-                          }}
-                        >
-                          <SelectTrigger className={cn("w-[180px] h-7 text-xs", compact && "h-6 text-[11px]")} disabled={saving}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {categories.map((cat) => (
-                              <SelectItem key={cat.id} value={cat.id}>
-                                {cat.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        {saving && <Loader2 className="animate-spin h-4 w-4 text-muted-foreground" />}
-                      </div>
-                    );
-                  })()
-                ) : (
-                  <CategoryBadge category={ticket.category} />
-                )}
+              {/* Status: Badge only */}
+              <TableCell className={cn(compact && "py-2")}>
+                <StatusBadge status={ticket.status} />
               </TableCell>
-              <TableCell className={cn(compact && "py-2")} onClick={(e) => e.stopPropagation()}>
-                {ticket.tags && ticket.tags.length > 0 ? (
-                  <TagBadges tags={ticket.tags} maxDisplay={2} />
-                ) : (
-                  <span className="text-muted-foreground text-sm">—</span>
-                )}
+              {/* Prioritet */}
+              <TableCell className={cn(compact && "py-2")}>
+                <PriorityBadge priority={ticket.priority} />
               </TableCell>
+              {/* Förlopp */}
               <TableCell className={cn(compact && "py-3")}>
                 {(() => {
                   const progress = getProgress(ticket.id);
@@ -471,17 +421,23 @@ export const TicketTable = memo(function TicketTable({
                   );
                 })()}
               </TableCell>
-              <TableCell className={cn("text-muted-foreground", compact && "py-2")}>
-                {getUserName(ticket.requesterId)}
-              </TableCell>
-              <TableCell className={cn("text-muted-foreground", compact && "py-2")}>
-                {format(ticket.createdAt, 'd MMM yyyy', { locale: sv })}
-              </TableCell>
-              <TableCell className={cn("text-muted-foreground", compact && "py-2")}>
-                {format(ticket.updatedAt, 'd MMM yyyy', { locale: sv })}
+              {/* Beställare: Avatar + name + date */}
+              <TableCell className={cn(compact && "py-2")}>
+                <div className="flex items-center gap-2">
+                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                    <span className="text-xs font-bold text-muted-foreground">{initials}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-sm text-foreground">{requesterName}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {format(ticket.createdAt, 'd MMM yyyy', { locale: sv })}
+                    </span>
+                  </div>
+                </div>
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
     </div>

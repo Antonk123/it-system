@@ -70,35 +70,37 @@ export const UserTicketHistory = ({ userId }: UserTicketHistoryProps) => {
       </div>
 
       {/* Ticket Table */}
-      <div className="border rounded-md overflow-hidden">
+      <div className="rounded-2xl overflow-hidden border border-border/50 backdrop-blur-sm bg-card/30">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead>Titel</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Prioritet</TableHead>
-              <TableHead>Skapad</TableHead>
+            <TableRow className="border-b border-border/50 bg-background/40 backdrop-blur-sm">
+              <TableHead className="font-semibold text-foreground/90">Titel</TableHead>
+              <TableHead className="font-semibold text-foreground/90">Status</TableHead>
+              <TableHead className="font-semibold text-foreground/90">Prioritet</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {userTickets.map((ticket) => (
-              <TableRow key={ticket.id}>
+              <TableRow
+                key={ticket.id}
+                className="cursor-pointer transition-all duration-200 hover:bg-gradient-to-r hover:from-primary/5 hover:to-accent/5 border-b border-border/30 last:border-0 group"
+              >
                 <TableCell>
                   <Link
                     to={`/tickets/${ticket.id}`}
-                    className="text-primary hover:underline font-medium"
+                    className="font-semibold text-foreground group-hover:text-primary transition-colors duration-200"
                   >
                     {ticket.title}
                   </Link>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {format(ticket.createdAt, 'd MMM yyyy', { locale: sv })}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <StatusBadge status={ticket.status} />
                 </TableCell>
                 <TableCell>
                   <PriorityBadge priority={ticket.priority} />
-                </TableCell>
-                <TableCell className="text-muted-foreground text-sm">
-                  {format(ticket.createdAt, 'd MMM yyyy', { locale: sv })}
                 </TableCell>
               </TableRow>
             ))}
