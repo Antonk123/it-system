@@ -166,7 +166,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
             `SELECT id, priority FROM tickets WHERE company_id = ? AND status NOT IN ('closed', 'resolved')`
           ).all(req.params.id) as { id: string; priority: string }[];
           for (const t of tickets) {
-            applySLAToTicket(t.id, req.params.id, t.priority);
+            applySLAToTicket(t.id, req.params.id as string, t.priority);
           }
         }
       }
