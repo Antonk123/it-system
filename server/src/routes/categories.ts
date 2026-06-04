@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -19,7 +20,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
     const categories = db.prepare('SELECT id, name, label, position, created_at FROM categories ORDER BY position ASC, created_at ASC').all() as CategoryRow[];
     res.json(categories);
   } catch (error) {
-    console.error('Error fetching categories:', error);
+    logger.error('Error fetching categories:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch categories' });
   }
 });
@@ -44,7 +45,7 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
     const category = db.prepare('SELECT id, name, label, position, created_at FROM categories WHERE id = ?').get(id) as CategoryRow;
     res.status(201).json(category);
   } catch (error) {
-    console.error('Error creating category:', error);
+    logger.error('Error creating category:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create category' });
   }
 });
@@ -70,7 +71,7 @@ router.put('/reorder', authenticate, requireAdmin, (req: AuthRequest, res: Respo
     const categories = db.prepare('SELECT id, name, label, position, created_at FROM categories ORDER BY position ASC, created_at ASC').all() as CategoryRow[];
     res.json(categories);
   } catch (error) {
-    console.error('Error reordering categories:', error);
+    logger.error('Error reordering categories:', { error: String(error) });
     res.status(500).json({ error: 'Failed to reorder categories' });
   }
 });
@@ -94,7 +95,7 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
     const category = db.prepare('SELECT id, name, label, position, created_at FROM categories WHERE id = ?').get(req.params.id) as CategoryRow;
     res.json(category);
   } catch (error) {
-    console.error('Error updating category:', error);
+    logger.error('Error updating category:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update category' });
   }
 });
@@ -110,7 +111,7 @@ router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respon
     
     res.json({ message: 'Category deleted' });
   } catch (error) {
-    console.error('Error deleting category:', error);
+    logger.error('Error deleting category:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete category' });
   }
 });

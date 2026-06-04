@@ -3,6 +3,7 @@ import { randomUUID, randomBytes, createHash } from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { logAudit } from '../lib/auditLog.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -27,7 +28,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json(keys);
   } catch (error) {
-    console.error('Error listing API keys:', error);
+    logger.error('Error listing API keys:', { error: String(error) });
     res.status(500).json({ error: 'Failed to list API keys' });
   }
 });
@@ -90,7 +91,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       created_at: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Error creating API key:', error);
+    logger.error('Error creating API key:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create API key' });
   }
 });
@@ -110,7 +111,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json({ message: 'API key deleted' });
   } catch (error) {
-    console.error('Error deleting API key:', error);
+    logger.error('Error deleting API key:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete API key' });
   }
 });

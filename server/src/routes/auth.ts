@@ -6,11 +6,19 @@ import crypto from 'crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { JWT_SECRET } from '../config/passport.js';
-import { authenticate, AuthRequest, AuthUser } from '../middleware/auth.js';
-import { loginRateLimiter } from '../middleware/rateLimit.js';
+import { authenticate, requireAdmin, AuthRequest, AuthUser } from '../middleware/auth.js';
+import { loginRateLimiter, createRateLimiter } from '../middleware/rateLimit.js';
 import { sendPasswordResetEmail } from '../lib/email.js';
 import { validatePassword } from '../lib/passwordPolicy.js';
 import { logAudit } from '../lib/auditLog.js';
+import { logger } from '../lib/logger.js';
+
+/**
+ * Rate limiter for token refresh endpoint.
+ * 10 attempts per 15 minutes per IP — generous for legitimate silent refresh
+ * but blocks brute-force token replay attacks.
+ */
+const refreshRateLimiter = createRateLimiter(15 * 60 * 1000, 10);
 
 const router = Router();
 
@@ -73,14 +81,14 @@ router.post('/login', loginRateLimiter, (req: Request, res: Response) => {
         refreshToken,
       });
     } catch (error) {
-      console.error('Error generating tokens:', error);
+      logger.error('Error generating tokens:', { error: String(error) });
       return res.status(500).json({ error: 'Failed to generate tokens' });
     }
   })(req, res);
 });
 
 // Refresh access token using refresh token
-router.post('/refresh', (req: Request, res: Response) => {
+router.post('/refresh', refreshRateLimiter, (req: Request, res: Response) => {
   const { refreshToken } = req.body;
 
   if (!refreshToken) {
@@ -161,7 +169,7 @@ router.post('/refresh', (req: Request, res: Response) => {
       refreshToken: newRefreshToken,
     });
   } catch (error) {
-    console.error('Error refreshing token:', error);
+    logger.error('Error refreshing token:', { error: String(error) });
     res.status(500).json({ error: 'Failed to refresh token' });
   }
 });
@@ -184,7 +192,7 @@ router.post('/logout', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json({ message: 'Logged out successfully' });
   } catch (error) {
-    console.error('Error during logout:', error);
+    logger.error('Error during logout:', { error: String(error) });
     res.status(500).json({ error: 'Failed to logout' });
   }
 });
@@ -344,6 +352,34 @@ router.post('/reset-password', loginRateLimiter, async (req: Request, res: Respo
   } catch (err) {
     console.error('[reset-password] failed:', err);
     return res.status(500).json({ error: 'Kunde inte återställa lösenordet' });
+  }
+});
+
+// GET /audit-log — admin-only audit log viewer
+router.get('/audit-log', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const entityType = req.query.entity_type as string;
+    const action = req.query.action as string;
+
+    let where = 'WHERE 1=1';
+    const params: unknown[] = [];
+    if (entityType) { where += ' AND a.entity_type = ?'; params.push(entityType); }
+    if (action) { where += ' AND a.action = ?'; params.push(action); }
+
+    const entries = db.prepare(`
+      SELECT a.*, u.email as user_email, u.display_name as user_display_name
+      FROM audit_log a LEFT JOIN users u ON a.user_id = u.id
+      ${where} ORDER BY a.created_at DESC LIMIT ? OFFSET ?
+    `).all(...params, limit, offset);
+
+    const total = (db.prepare(`SELECT COUNT(*) as count FROM audit_log a ${where}`).get(...params) as { count: number }).count;
+
+    res.json({ entries, total, limit, offset });
+  } catch (error) {
+    logger.error('Error fetching audit log', { error: String(error) });
+    res.status(500).json({ error: 'Failed to fetch audit log' });
   }
 });
 

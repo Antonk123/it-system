@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router({ mergeParams: true });
 
@@ -27,7 +28,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
     const fields = db.prepare('SELECT * FROM template_fields WHERE template_id = ? ORDER BY position ASC').all(templateId) as TemplateFieldRow[];
     res.json(fields);
   } catch (error) {
-    console.error('Error fetching template fields:', error);
+    logger.error('Error fetching template fields:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch template fields' });
   }
 });
@@ -54,7 +55,7 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
     const field = db.prepare('SELECT * FROM template_fields WHERE id = ?').get(id) as TemplateFieldRow;
     res.status(201).json(field);
   } catch (error) {
-    console.error('Error creating template field:', error);
+    logger.error('Error creating template field:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create template field' });
   }
 });
@@ -80,7 +81,7 @@ router.put('/reorder', authenticate, requireAdmin, (req: AuthRequest, res: Respo
     const fields = db.prepare('SELECT * FROM template_fields WHERE template_id = ? ORDER BY position ASC').all(req.params.templateId) as TemplateFieldRow[];
     res.json(fields);
   } catch (error) {
-    console.error('Error reordering template fields:', error);
+    logger.error('Error reordering template fields:', { error: String(error) });
     res.status(500).json({ error: 'Failed to reorder template fields' });
   }
 });
@@ -114,7 +115,7 @@ router.put('/:fieldId', authenticate, requireAdmin, (req: AuthRequest, res: Resp
     const field = db.prepare('SELECT * FROM template_fields WHERE id = ?').get(fieldId) as TemplateFieldRow;
     res.json(field);
   } catch (error) {
-    console.error('Error updating template field:', error);
+    logger.error('Error updating template field:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update template field' });
   }
 });
@@ -128,7 +129,7 @@ router.delete('/:fieldId', authenticate, requireAdmin, (req: AuthRequest, res: R
     }
     res.json({ message: 'Template field deleted' });
   } catch (error) {
-    console.error('Error deleting template field:', error);
+    logger.error('Error deleting template field:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete template field' });
   }
 });

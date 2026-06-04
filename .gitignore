@@ -6,6 +6,9 @@
 # Databasbackuper (innehåller verklig data)
 backup/
 
+# Server runtime data (databas, uploads, backups)
+server/data/
+
 # Känsliga dokument (interna anteckningar, projektinstruktioner)
 TODO.md
 CLAUDE.md

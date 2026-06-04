@@ -220,7 +220,9 @@ export const Layout = ({
   const handleLogout = async () => {
     await signOut();
   };
-  return <div className="min-h-dvh flex bg-background relative overflow-hidden">
+  return <><a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-background focus:px-4 focus:py-2 focus:rounded-md focus:ring-2 focus:ring-ring">
+      Hoppa till innehåll
+    </a><div className="min-h-dvh flex bg-background relative overflow-hidden">
       {/* Decorative floating shapes */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div className="absolute top-20 right-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }}></div>
@@ -233,7 +235,7 @@ export const Layout = ({
         <button
           type="button"
           aria-label="Stäng meny"
-          tabIndex={-1}
+          tabIndex={0}
           className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden animate-fade-in cursor-default"
           onClick={() => setSidebarOpen(false)}
         />
@@ -284,7 +286,7 @@ export const Layout = ({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 min-w-0 relative">
+      <main id="main-content" className="flex-1 min-w-0 relative">
         {/* Mobile header */}
         <div data-print-hide className="lg:hidden sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] flex items-center gap-4 shadow-sm">
           <button
@@ -383,5 +385,5 @@ export const Layout = ({
       </div>
 
       <OnboardingWizard />
-    </div>;
+    </div></>;
 };

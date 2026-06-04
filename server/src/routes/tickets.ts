@@ -10,11 +10,14 @@ import { sendTicketClosedEmail, sendTicketCreatedEmail, sendTicketAssignedEmail 
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
 import { applySLAToTicket, handleSLAStatusChange } from '../lib/slaHelper.js';
-import { writeRateLimiter } from '../middleware/rateLimit.js';
+import { writeRateLimiter, createRateLimiter } from '../middleware/rateLimit.js';
+
+const aiRateLimiter = createRateLimiter(60 * 1000, 5);
 import { dispatchWebhook } from '../lib/webhookDispatcher.js';
 import { aiEnabled, suggestCategory, draftReply, summarizeTicket, buildKbSearchQuery } from '../lib/aiHelper.js';
 import { stripHtml } from '../lib/htmlUtils.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
+import { logger } from '../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -691,11 +694,9 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json(paginatedResponse);
   } catch (error) {
-    console.error('Error fetching tickets:', error);
-    console.error('Query params:', req.query);
+    logger.error('Error fetching tickets:', { error: String(error) });
     if (error instanceof Error) {
-      console.error('Error message:', error.message);
-      console.error('Error stack:', error.stack);
+      logger.error('Ticket query details', { query: JSON.stringify(req.query), message: error.message, stack: error.stack });
     }
     res.status(500).json({ error: 'Failed to fetch tickets' });
   }
@@ -737,7 +738,7 @@ router.post('/import/preview', authenticate, upload.single('file'), (req: AuthRe
       results,
     });
   } catch (error) {
-    console.error('Error previewing import:', error);
+    logger.error('Error previewing import:', { error: String(error) });
     res.status(500).json({ error: 'Failed to preview import' });
   }
 });
@@ -810,11 +811,7 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
           ticket.solution || null
         );
 
-        // Synka FTS5-index
-        const ftsRow = db.prepare('SELECT rowid FROM tickets WHERE id = ?').get(id) as { rowid: number };
-        db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)')
-          .run(ftsRow.rowid, ticket.title, ticket.description || '', ticket.notes || '', ticket.solution || '');
-
+        // FTS5 synkas automatiskt via triggers (migration 050)
         created++;
       }
 
@@ -833,18 +830,18 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
       });
     } catch (error) {
       // Transaction failed and rolled back - no partial data
-      console.error('Transaction failed, all changes rolled back:', error);
+      logger.error('Transaction failed, all changes rolled back:', { error: String(error) });
 
       res.status(400).json({
         success: false,
         created: 0,
         failed: tickets.length,
-        error: error instanceof Error ? error.message : 'Transaction failed',
+        error: 'Import misslyckades, kontrollera data och försök igen',
         message: 'CSV import failed. All changes have been rolled back. Please fix the errors and try again.',
       });
     }
   } catch (error) {
-    console.error('Error confirming import:', error);
+    logger.error('Error confirming import:', { error: String(error) });
     res.status(500).json({ error: 'Failed to import tickets' });
   }
 });
@@ -902,7 +899,7 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(xlsxBuffer);
   } catch (error) {
-    console.error('Error exporting tickets:', error);
+    logger.error('Error exporting tickets:', { error: String(error) });
     res.status(500).json({ error: 'Failed to export tickets' });
   }
 });
@@ -984,7 +981,7 @@ router.get('/export-archive', authenticate, (req: AuthRequest, res: Response) =>
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(xlsxBuffer);
   } catch (error) {
-    console.error('Error exporting archive:', error);
+    logger.error('Error exporting archive:', { error: String(error) });
     res.status(500).json({ error: 'Failed to export archive' });
   }
 });
@@ -1058,7 +1055,7 @@ router.get('/dashboard-overview', authenticate, (req: AuthRequest, res: Response
 
     res.json({ agingTickets, todayCounts, criticalCount });
   } catch (error) {
-    console.error('Error fetching dashboard overview:', error);
+    logger.error('Error fetching dashboard overview:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch dashboard overview' });
   }
 });
@@ -1086,7 +1083,7 @@ router.get('/activity-feed', authenticate, (req: AuthRequest, res: Response) => 
 
     res.json(events);
   } catch (error) {
-    console.error('Error fetching activity feed:', error);
+    logger.error('Error fetching activity feed:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch activity feed' });
   }
 });
@@ -1113,7 +1110,7 @@ router.get('/status-counts', authenticate, (req: AuthRequest, res: Response) => 
     }
     res.json(result);
   } catch (error) {
-    console.error('Error fetching status counts:', error);
+    logger.error('Error fetching status counts:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch status counts' });
   }
 });
@@ -1140,7 +1137,7 @@ router.get('/upcoming-reminders', authenticate, (req: AuthRequest, res: Response
 
     res.json(reminders);
   } catch (error) {
-    console.error('Error fetching upcoming reminders:', error);
+    logger.error('Error fetching upcoming reminders:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch upcoming reminders' });
   }
 });
@@ -1177,7 +1174,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json({ ...ticket, field_values: fieldValues, tags: formattedTags });
   } catch (error) {
-    console.error('Error fetching ticket:', error);
+    logger.error('Error fetching ticket:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch ticket' });
   }
 });
@@ -1234,8 +1231,8 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
 
     // Warn if template is used but no custom fields provided
     if (template_id && (!customFields || customFields.length === 0)) {
-      console.warn(`⚠️ Ticket created with template_id ${template_id} but no customFields provided`);
-      console.warn('This likely indicates a frontend bug - field values will not be saved');
+      logger.warn(`⚠️ Ticket created with template_id ${template_id} but no customFields provided`);
+      logger.warn('This likely indicates a frontend bug - field values will not be saved');
     }
 
     // Auto-priority: only when user did not explicitly provide one
@@ -1280,10 +1277,7 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
       db.prepare('INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)')
         .run(uuidv4(), id, req.user!.id, 'created', null, null);
 
-      // Synka FTS5-index
-      const row = db.prepare('SELECT rowid FROM tickets WHERE id = ?').get(id) as { rowid: number };
-      db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)')
-        .run(row.rowid, title, finalDescription, notes || '', solution || '');
+      // FTS5 synkas automatiskt via triggers (migration 050)
     });
 
     createTransaction();
@@ -1294,14 +1288,14 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
     try {
       applySLAToTicket(id, resolvedCompanyId, finalPriority);
     } catch (error) {
-      console.error('SLA apply error (non-fatal):', error);
+      logger.error('SLA apply error (non-fatal):', { error: String(error) });
     }
 
     // Auto-tag based on keyword rules (runs after transaction so tags can be created separately)
     try {
       applyAutoTags(id, title, finalDescription);
     } catch (error) {
-      console.error('Auto-tag error (non-fatal):', error);
+      logger.error('Auto-tag error (non-fatal):', { error: String(error) });
     }
 
     // AI-kategorisering: kör non-blocking så ärendet returneras direkt.
@@ -1317,10 +1311,10 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
               SET ai_suggested_category_id = ?, ai_suggested_confidence = ?
               WHERE id = ?
             `).run(suggestion.categoryId, suggestion.confidence, id);
-            console.log(`🤖 AI-kategori föreslagen för ${id}: ${suggestion.categoryId} (conf ${suggestion.confidence})`);
+            logger.info(`🤖 AI-kategori föreslagen för ${id}: ${suggestion.categoryId} (conf ${suggestion.confidence})`);
           }
         })
-        .catch((err) => console.error('AI categorize error (non-fatal):', err));
+        .catch((err) => logger.error('AI categorize error (non-fatal):', { error: String(err) }));
     }
 
     const ticket = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(id) as TicketRow;
@@ -1343,7 +1337,7 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
         requesterEmail: requester?.email,
       });
     } catch (error) {
-      console.error('Error sending ticket created email:', error);
+      logger.error('Error sending ticket created email:', { error: String(error) });
       warnings.push('E-postnotifiering kunde inte skickas');
     }
 
@@ -1351,7 +1345,7 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
 
     res.status(201).json({ ...ticket, warnings: warnings.length > 0 ? warnings : undefined });
   } catch (error) {
-    console.error('Error creating ticket:', error);
+    logger.error('Error creating ticket:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create ticket' });
   }
 });
@@ -1364,7 +1358,7 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
  * KB-artiklar väljs via FTS-sökning på titel + beskrivning.
  * Sparar utkastet i ai_draft_response så det kan visas i UI:t.
  */
-router.post('/:id/ai-draft', writeRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/:id/ai-draft', aiRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
   if (!aiEnabled()) {
     return res.status(503).json({ error: 'AI är inte konfigurerat på denna installation (ANTHROPIC_API_KEY saknas)' });
   }
@@ -1391,7 +1385,7 @@ router.post('/:id/ai-draft', writeRateLimiter, authenticate, async (req: AuthReq
         kbArticles = kbArticles.map(a => ({ title: a.title, content: stripHtml(a.content) }));
       } catch (err) {
         // FTS-sökning kan kasta om tokenizering misslyckas — gå vidare utan KB
-        console.warn('KB FTS search failed, continuing without KB context:', err);
+        logger.warn('KB FTS search failed, continuing without KB context:', { error: String(err) });
       }
     }
 
@@ -1444,7 +1438,7 @@ router.post('/:id/ai-draft', writeRateLimiter, authenticate, async (req: AuthReq
       attachmentsUsed: attachmentContents.map(a => a.file_name),
     });
   } catch (error) {
-    console.error('Error generating AI draft:', error);
+    logger.error('Error generating AI draft:', { error: String(error) });
     res.status(500).json({ error: 'Kunde inte generera AI-utkast' });
   }
 });
@@ -1454,7 +1448,7 @@ router.post('/:id/ai-draft', writeRateLimiter, authenticate, async (req: AuthReq
  * Returnerar en cachad sammanfattning av ärendet om < 1h gammal, annars genererar ny.
  * Använd query-param ?force=1 för att tvinga ny sammanfattning.
  */
-router.get('/:id/ai-summary', authenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id/ai-summary', aiRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
   if (!aiEnabled()) {
     return res.status(503).json({ error: 'AI är inte konfigurerat på denna installation' });
   }
@@ -1512,7 +1506,7 @@ router.get('/:id/ai-summary', authenticate, async (req: AuthRequest, res: Respon
 
     res.json({ summary, cached: false, ageMinutes: 0 });
   } catch (error) {
-    console.error('Error generating AI summary:', error);
+    logger.error('Error generating AI summary:', { error: String(error) });
     res.status(500).json({ error: 'Kunde inte generera AI-sammanfattning' });
   }
 });
@@ -1527,10 +1521,11 @@ router.get('/:id/history', authenticate, (req: AuthRequest, res: Response) => {
       LEFT JOIN users u ON th.user_id = u.id
       WHERE th.ticket_id = ?
       ORDER BY th.changed_at ASC
+      LIMIT 500
     `).all(req.params.id);
     res.json(history);
   } catch (error) {
-    console.error('Error fetching ticket history:', error);
+    logger.error('Error fetching ticket history:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch ticket history' });
   }
 });
@@ -1644,7 +1639,7 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
     const count = bulkUpdate();
     return res.json({ updated: count });
   } catch (error) {
-    console.error('Bulk update error:', error);
+    logger.error('Bulk update error:', { error: String(error) });
     return res.status(500).json({ error: 'Failed to bulk update tickets' });
   }
 });
@@ -1662,22 +1657,16 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: 
       let deletedCount = 0;
 
       for (const ticketId of ids) {
-        // Hämta data för FTS-rensning och filbilagor innan radering
-        const ticketForFts = db.prepare('SELECT rowid, title, description, notes, solution FROM tickets WHERE id = ?')
-          .get(ticketId) as { rowid: number; title: string; description: string; notes: string | null; solution: string | null } | undefined;
+        // Hämta filbilagor innan radering
         const attachments = db.prepare(
           'SELECT file_path FROM ticket_attachments WHERE ticket_id = ?'
         ).all(ticketId) as { file_path: string }[];
 
+        // FTS5 rensas automatiskt via triggers (migration 050)
         const result = db.prepare('DELETE FROM tickets WHERE id = ?').run(ticketId);
 
         if (result.changes > 0) {
           deletedCount++;
-          // Rensa FTS5-index
-          if (ticketForFts) {
-            db.prepare("INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution) VALUES('delete', ?, ?, ?, ?, ?)")
-              .run(ticketForFts.rowid, ticketForFts.title, ticketForFts.description, ticketForFts.notes || '', ticketForFts.solution || '');
-          }
           // Clean up attachment files from disk (DB CASCADE handles relation tables)
           for (const attachment of attachments) {
             const filePath = join(UPLOAD_DIR, attachment.file_path);
@@ -1685,7 +1674,7 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: 
               try {
                 unlinkSync(filePath);
               } catch (err) {
-                console.error(`Failed to delete attachment file ${filePath}:`, err);
+                logger.error('Failed to delete attachment file', { filePath, error: String(err) });
               }
             }
           }
@@ -1698,7 +1687,7 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: 
     const count = bulkDelete();
     return res.json({ deleted: count });
   } catch (error) {
-    console.error('Bulk delete error:', error);
+    logger.error('Bulk delete error:', { error: String(error) });
     return res.status(500).json({ error: 'Failed to bulk delete tickets' });
   }
 });
@@ -1782,7 +1771,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       if (allowedFields.includes(key)) {
         safeUpdates[key] = value;
       } else {
-        console.warn(`Attempted to update non-whitelisted field: ${key}`);
+        logger.warn(`Attempted to update non-whitelisted field: ${key}`);
       }
     }
 
@@ -1863,18 +1852,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         });
       }
 
-      // Synka FTS5-index om sökbara fält ändrades
-      if ('title' in safeUpdates || 'description' in safeUpdates || 'notes' in safeUpdates || 'solution' in safeUpdates) {
-        const existingFts = db.prepare('SELECT rowid FROM tickets WHERE id = ?')
-          .get(req.params.id) as { rowid: number };
-        // Contentless FTS5: delete old entry, insert new
-        db.prepare("INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution) VALUES('delete', ?, ?, ?, ?, ?)")
-          .run(existingFts.rowid, existing.title, existing.description, existing.notes || '', existing.solution || '');
-        const updated = db.prepare('SELECT title, description, notes, solution FROM tickets WHERE id = ?')
-          .get(req.params.id) as { title: string; description: string; notes: string | null; solution: string | null };
-        db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)')
-          .run(existingFts.rowid, updated.title, updated.description, updated.notes || '', updated.solution || '');
-      }
+      // FTS5 synkas automatiskt via triggers (migration 050)
     });
 
     updateTransaction();
@@ -1885,7 +1863,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       try {
         handleSLAStatusChange(req.params.id as string, existing.status as string, safeUpdates.status as string);
       } catch (error) {
-        console.error('SLA status-change error (non-fatal):', error);
+        logger.error('SLA status-change error (non-fatal):', { error: String(error) });
       }
     }
 
@@ -1916,7 +1894,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
           }
         }
       } catch (error) {
-        console.error('Assignee notification error (non-fatal):', error);
+        logger.error('Assignee notification error (non-fatal):', { error: String(error) });
       }
     }
 
@@ -1966,24 +1944,23 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
           requesterEmail: requester?.email,
         });
       } catch (error) {
-        console.error('Error sending ticket closed email:', error);
+        logger.error('Error sending ticket closed email:', { error: String(error) });
         warnings.push('E-postnotifiering vid stängning kunde inte skickas');
       }
     }
 
     res.json({ ...ticket, tags: formattedTags, warnings: warnings.length > 0 ? warnings : undefined });
   } catch (error) {
-    console.error('Error updating ticket:', error);
+    logger.error('Error updating ticket:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update ticket' });
   }
 });
 
 // Delete ticket
-router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     // Hämta data för FTS-rensning och filbilagor innan radering
-    const ticketForFts = db.prepare('SELECT rowid, title, description, notes, solution FROM tickets WHERE id = ?')
-      .get(req.params.id) as { rowid: number; title: string; description: string; notes: string | null; solution: string | null } | undefined;
+    // FTS5 rensas automatiskt via triggers (migration 050)
     const attachments = db.prepare(
       'SELECT file_path FROM ticket_attachments WHERE ticket_id = ?'
     ).all(req.params.id) as { file_path: string }[];
@@ -1994,12 +1971,6 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Ticket not found' });
     }
 
-    // Rensa FTS5-index
-    if (ticketForFts) {
-      db.prepare("INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution) VALUES('delete', ?, ?, ?, ?, ?)")
-        .run(ticketForFts.rowid, ticketForFts.title, ticketForFts.description, ticketForFts.notes || '', ticketForFts.solution || '');
-    }
-
     // Clean up attachment files from disk (DB relations cascade automatically)
     for (const attachment of attachments) {
       const filePath = join(UPLOAD_DIR, attachment.file_path);
@@ -2007,14 +1978,14 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
         try {
           unlinkSync(filePath);
         } catch (err) {
-          console.error(`Failed to delete attachment file ${filePath}:`, err);
+          logger.error('Failed to delete attachment file', { filePath, error: String(err) });
         }
       }
     }
 
     res.json({ message: 'Ticket deleted' });
   } catch (error) {
-    console.error('Error deleting ticket:', error);
+    logger.error('Error deleting ticket:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete ticket' });
   }
 });
@@ -2054,7 +2025,7 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
     ).get(id);
     res.status(201).json(reminder);
   } catch (error) {
-    console.error('Error creating reminder:', error);
+    logger.error('Error creating reminder:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create reminder' });
   }
 });
@@ -2073,7 +2044,7 @@ router.get('/:id/reminders', authenticate, (req: AuthRequest, res: Response) => 
 
     res.json(reminders);
   } catch (error) {
-    console.error('Error fetching reminders:', error);
+    logger.error('Error fetching reminders:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch reminders' });
   }
 });
@@ -2092,7 +2063,7 @@ router.delete('/:id/reminders/sent', authenticate, (req: AuthRequest, res: Respo
 
     res.json({ deleted: result.changes });
   } catch (error) {
-    console.error('Error clearing sent reminders:', error);
+    logger.error('Error clearing sent reminders:', { error: String(error) });
     res.status(500).json({ error: 'Failed to clear sent reminders' });
   }
 });
@@ -2119,7 +2090,7 @@ router.delete('/:id/reminders/:reminderId', authenticate, (req: AuthRequest, res
     db.prepare('DELETE FROM ticket_reminders WHERE id = ?').run(reminderId);
     res.json({ message: 'Reminder deleted' });
   } catch (error) {
-    console.error('Error deleting reminder:', error);
+    logger.error('Error deleting reminder:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete reminder' });
   }
 });

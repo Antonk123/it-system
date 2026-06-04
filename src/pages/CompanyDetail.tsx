@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCompanyDetail, useCompanies } from '@/hooks/useCompanies';
+import { toast } from 'sonner';
 import { useBillingRate } from '@/hooks/useBilling';
 
 const CompanyDetail = () => {
@@ -55,6 +56,8 @@ const CompanyDetail = () => {
     try {
       const result = await updateCompany(id, form);
       if (result) setEditOpen(false);
+    } catch (error) {
+      toast.error('Kunde inte uppdatera företaget');
     } finally {
       setIsSaving(false);
     }

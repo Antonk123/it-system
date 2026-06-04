@@ -123,3 +123,13 @@ export function handleSLAStatusChange(ticketId: string, oldStatus: string, newSt
     }
   }
 }
+
+/**
+ * Recalculate SLA deadlines when a ticket's priority changes.
+ * Looks up the ticket's company_id and re-applies the SLA policy for the new priority.
+ */
+export function recalculateSLAOnPriorityChange(ticketId: string, newPriority: string): void {
+  const ticket = db.prepare('SELECT company_id FROM tickets WHERE id = ?').get(ticketId) as { company_id: string | null } | undefined;
+  if (!ticket) return;
+  applySLAToTicket(ticketId, ticket.company_id, newPriority);
+}

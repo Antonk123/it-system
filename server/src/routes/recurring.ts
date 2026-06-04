@@ -1,8 +1,9 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { computeNextRun } from '../lib/recurringScheduler.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -66,13 +67,13 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
 
     res.json(result);
   } catch (error) {
-    console.error('Error fetching recurring templates:', error);
+    logger.error('Error fetching recurring templates:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch recurring templates' });
   }
 });
 
 // POST /api/recurring — create a new template
-router.post('/', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, title, description, priority, category_id, tags, interval_type, interval_day } = req.body;
 
   try {
@@ -128,13 +129,13 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       history: []
     });
   } catch (error) {
-    console.error('Error creating recurring template:', error);
+    logger.error('Error creating recurring template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create recurring template' });
   }
 });
 
 // PUT /api/recurring/:id — update a template
-router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, title, description, priority, category_id, tags, interval_type, interval_day, is_active } = req.body;
 
   try {
@@ -213,13 +214,13 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json({ ...updated, tags: parsedTags, history });
   } catch (error) {
-    console.error('Error updating recurring template:', error);
+    logger.error('Error updating recurring template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update recurring template' });
   }
 });
 
 // DELETE /api/recurring/:id — delete a template (cascades history)
-router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const existing = db.prepare(
       'SELECT id FROM recurring_templates WHERE id = ?'
@@ -232,13 +233,13 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
     db.prepare('DELETE FROM recurring_templates WHERE id = ?').run(req.params.id);
     res.status(204).send();
   } catch (error) {
-    console.error('Error deleting recurring template:', error);
+    logger.error('Error deleting recurring template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete recurring template' });
   }
 });
 
 // PATCH /api/recurring/:id/toggle — quick pause/resume toggle
-router.patch('/:id/toggle', authenticate, (req: AuthRequest, res: Response) => {
+router.patch('/:id/toggle', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const existing = db.prepare(
       'SELECT id, is_active, interval_type, interval_day FROM recurring_templates WHERE id = ?'
@@ -268,7 +269,7 @@ router.patch('/:id/toggle', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json({ id: req.params.id, is_active: new_active, next_run: updatedNextRun });
   } catch (error) {
-    console.error('Error toggling recurring template:', error);
+    logger.error('Error toggling recurring template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to toggle recurring template' });
   }
 });

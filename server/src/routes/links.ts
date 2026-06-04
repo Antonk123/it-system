@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -98,7 +99,7 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
 
     res.json(mapped);
   } catch (error) {
-    console.error('Error fetching ticket links:', error);
+    logger.error('Error fetching ticket links:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch ticket links' });
   }
 });
@@ -189,7 +190,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 
     res.status(201).json(response);
   } catch (error) {
-    console.error('Error creating ticket link:', error);
+    logger.error('Error creating ticket link:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create ticket link' });
   }
 });
@@ -211,7 +212,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json({ message: 'Link deleted' });
   } catch (error) {
-    console.error('Error deleting ticket link:', error);
+    logger.error('Error deleting ticket link:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete ticket link' });
   }
 });

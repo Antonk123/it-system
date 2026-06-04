@@ -109,6 +109,7 @@ export const useUsers = () => {
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error deleting user:', error);
+      toast.error('Kunde inte ta bort användare');
     },
   });
 

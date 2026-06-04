@@ -9,6 +9,7 @@ import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import multer from 'multer';
 import unzipper from 'unzipper';
+import { logger } from '../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -144,7 +145,7 @@ router.post('/restore', authenticate, requireAdmin, upload.single('file'), async
       restartRequired: true,
     });
   } catch (error) {
-    console.error('Restore failed:', error);
+    logger.error('Restore failed:', { error: String(error) });
     rmSync(tmpDir, { recursive: true, force: true });
     res.status(500).json({ error: 'Återställning misslyckades. Kontrollera att ZIP-filen är en giltig backup.' });
   }

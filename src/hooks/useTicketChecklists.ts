@@ -57,7 +57,7 @@ export const useTicketChecklists = (ticketId?: string) => {
       if ('completed' in updates) {
         queryClient.invalidateQueries({ queryKey: ['tickets'] });
       }
-    } catch (error) { if (import.meta.env.DEV) console.error('Error updating checklist item:', error); }
+    } catch (error) { if (import.meta.env.DEV) console.error('Error updating checklist item:', error); toast.error('Kunde inte uppdatera checklistpunkt'); }
   }, [queryClient]);
 
   const deleteChecklistItem = useCallback(async (id: string) => {
@@ -65,7 +65,7 @@ export const useTicketChecklists = (ticketId?: string) => {
       await api.deleteChecklistItem(id);
       // Also remove children
       setItems(prev => prev.filter(item => item.id !== id && item.parent_id !== id));
-    } catch (error) { if (import.meta.env.DEV) console.error('Error deleting checklist item:', error); }
+    } catch (error) { if (import.meta.env.DEV) console.error('Error deleting checklist item:', error); toast.error('Kunde inte ta bort checklistpunkt'); }
   }, []);
 
   const bulkAddChecklistItems = useCallback(async (targetTicketId: string, labels: string[]) => {

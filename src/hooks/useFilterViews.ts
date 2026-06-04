@@ -4,17 +4,6 @@ import { useSearchParams } from 'react-router-dom';
 
 const STORAGE_KEY = 'filter-views';
 
-function generateUUID(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
-
 const BUILT_IN_VIEW: FilterView = {
   id: 'active-tickets',
   name: 'Aktiva ärenden',
@@ -142,7 +131,7 @@ export function useFilterViews() {
     (viewData: Omit<FilterView, 'id' | 'createdAt' | 'updatedAt'>) => {
       const newView: FilterView = {
         ...viewData,
-        id: generateUUID(),
+        id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };

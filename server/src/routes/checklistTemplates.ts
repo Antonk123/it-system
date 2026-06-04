@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -44,7 +45,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
     }));
     res.json(result);
   } catch (error) {
-    console.error('Error fetching checklist templates:', error);
+    logger.error('Error fetching checklist templates:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch checklist templates' });
   }
 });
@@ -86,7 +87,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     if (error.message?.includes('UNIQUE constraint')) {
       return res.status(409).json({ error: 'A template with that name already exists' });
     }
-    console.error('Error creating checklist template:', error);
+    logger.error('Error creating checklist template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create checklist template' });
   }
 });
@@ -128,7 +129,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (error.message?.includes('UNIQUE constraint')) {
       return res.status(409).json({ error: 'A template with that name already exists' });
     }
-    console.error('Error updating checklist template:', error);
+    logger.error('Error updating checklist template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update checklist template' });
   }
 });
@@ -140,7 +141,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (result.changes === 0) return res.status(404).json({ error: 'Template not found' });
     res.json({ message: 'Template deleted' });
   } catch (error) {
-    console.error('Error deleting checklist template:', error);
+    logger.error('Error deleting checklist template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete checklist template' });
   }
 });
@@ -193,7 +194,7 @@ router.post('/:id/apply', authenticate, (req: AuthRequest, res: Response) => {
 
     res.status(201).json(created.map(r => ({ ...r, completed: r.completed === 1 })));
   } catch (error) {
-    console.error('Error applying checklist template:', error);
+    logger.error('Error applying checklist template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to apply template' });
   }
 });

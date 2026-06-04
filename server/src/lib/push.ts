@@ -29,9 +29,14 @@ interface PushPayload {
   body: string;
 }
 
-export async function sendPushToAllSubscriptions(payload: PushPayload): Promise<void> {
+export async function sendPushToAllSubscriptions(payload: PushPayload, userId?: string): Promise<void> {
   if (!pushEnabled) return;
-  const subs = db.prepare('SELECT endpoint, p256dh, auth FROM push_subscriptions').all() as
+  const query = userId
+    ? 'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = ?'
+    : 'SELECT endpoint, p256dh, auth FROM push_subscriptions';
+  const subs = (userId
+    ? db.prepare(query).all(userId)
+    : db.prepare(query).all()) as
     { endpoint: string; p256dh: string; auth: string }[];
   for (const sub of subs) {
     try {

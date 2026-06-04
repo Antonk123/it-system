@@ -20,6 +20,16 @@ import cron from 'node-cron';
 import passport from './config/passport.js';
 import { logger } from './lib/logger.js';
 
+// Global error handlers — catch unhandled promises and exceptions
+process.on('unhandledRejection', (reason, _promise) => {
+  logger.error('Unhandled promise rejection', { reason: String(reason) });
+});
+
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught exception', { error: error.message, stack: error.stack });
+  process.exit(1);
+});
+
 // Import routes
 import authRoutes from './routes/auth.js';
 import ticketRoutes from './routes/tickets.js';
@@ -147,7 +157,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"], // Allow inline styles for React apps
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https:"],
+      connectSrc: ["'self'"],
       fontSrc: ["'self'", "data:"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
@@ -166,19 +176,23 @@ app.use(helmet({
 
 // Middleware
 // CORS configuration - NEVER use '*' with credentials
-// Merge environment CORS_ORIGIN with localhost defaults for maximum flexibility
+// Merge environment CORS_ORIGIN with localhost defaults for dev flexibility
 const envOrigins = process.env.CORS_ORIGIN?.split(',').filter(Boolean) || [];
-const defaultOrigins = [
-  'http://localhost:5173',          // Vite dev server (local)
-  'http://localhost:8082',          // Docker frontend (local)
-];
-// Use Set to deduplicate in case of overlaps
-const allowedOrigins = [...new Set([...envOrigins, ...defaultOrigins])];
+const allowedOrigins = [...envOrigins];
+
+// Only allow localhost origins in non-production environments
+if (process.env.NODE_ENV !== 'production') {
+  allowedOrigins.push('http://localhost:5173', 'http://localhost:8082');
+}
+
+// Deduplicate
+const uniqueOrigins = [...new Set(allowedOrigins)];
 
 // Log CORS configuration at startup for debugging
 logger.info('CORS configuration loaded', {
-  envOrigin: process.env.CORS_ORIGIN || '(not set - using defaults)',
-  allowedOrigins,
+  envOrigin: process.env.CORS_ORIGIN || '(not set)',
+  allowedOrigins: uniqueOrigins,
+  nodeEnv: process.env.NODE_ENV || 'development',
 });
 
 app.use(cors({
@@ -189,10 +203,10 @@ app.use(cors({
       return;
     }
 
-    if (allowedOrigins.includes(origin)) {
+    if (uniqueOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      logger.warn('CORS blocked request', { origin, allowedOrigins });
+      logger.warn('CORS blocked request', { origin, allowedOrigins: uniqueOrigins });
       callback(null, false);
     }
   },

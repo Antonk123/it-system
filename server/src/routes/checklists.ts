@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -46,7 +47,7 @@ router.post('/progress', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json(result);
   } catch (error) {
-    console.error('Error fetching batch checklist progress:', error);
+    logger.error('Error fetching batch checklist progress:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch checklist progress' });
   }
 });
@@ -59,7 +60,7 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
     `).all(req.params.ticketId) as ChecklistRow[];
     res.json(items.map(mapItem));
   } catch (error) {
-    console.error('Error fetching checklists:', error);
+    logger.error('Error fetching checklists:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch checklists' });
   }
 });
@@ -95,7 +96,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     const item = db.prepare('SELECT * FROM ticket_checklists WHERE id = ?').get(id) as ChecklistRow;
     res.status(201).json(mapItem(item));
   } catch (error) {
-    console.error('Error creating checklist item:', error);
+    logger.error('Error creating checklist item:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create checklist item' });
   }
 });
@@ -161,7 +162,7 @@ router.post('/ticket/:ticketId/bulk', authenticate, (req: AuthRequest, res: Resp
 
     res.status(201).json(createdItems.map(mapItem));
   } catch (error) {
-    console.error('Error bulk creating checklist items:', error);
+    logger.error('Error bulk creating checklist items:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create checklist items' });
   }
 });
@@ -206,7 +207,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     const item = db.prepare('SELECT * FROM ticket_checklists WHERE id = ?').get(itemId) as ChecklistRow;
     res.json(mapItem(item));
   } catch (error) {
-    console.error('Error updating checklist item:', error);
+    logger.error('Error updating checklist item:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update checklist item' });
   }
 });
@@ -222,7 +223,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json({ message: 'Checklist item deleted' });
   } catch (error) {
-    console.error('Error deleting checklist item:', error);
+    logger.error('Error deleting checklist item:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete checklist item' });
   }
 });

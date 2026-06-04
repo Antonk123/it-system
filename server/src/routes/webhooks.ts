@@ -3,6 +3,7 @@ import { randomUUID, randomBytes } from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { isSafeWebhookUrl } from '../lib/webhookValidator.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -36,7 +37,7 @@ router.get('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =>
 
     res.json(webhooks);
   } catch (error) {
-    console.error('Error listing webhooks:', error);
+    logger.error('Error listing webhooks:', { error: String(error) });
     res.status(500).json({ error: 'Failed to list webhooks' });
   }
 });
@@ -56,6 +57,12 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
 
   if (!events || !Array.isArray(events) || events.length === 0) {
     return res.status(400).json({ error: 'At least one event is required' });
+  }
+
+  const VALID_EVENTS = ['ticket.created', 'ticket.updated', 'ticket.deleted', 'ticket.status_changed', 'comment.created', 'contact.created', 'contact.updated'];
+  const invalidEvents = events.filter((e: string) => !VALID_EVENTS.includes(e));
+  if (invalidEvents.length > 0) {
+    return res.status(400).json({ error: `Invalid event type(s): ${invalidEvents.join(', ')}`, validEvents: VALID_EVENTS });
   }
 
   try {
@@ -82,7 +89,7 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
       last_triggered_at: null,
     });
   } catch (error) {
-    console.error('Error creating webhook:', error);
+    logger.error('Error creating webhook:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create webhook' });
   }
 });
@@ -128,7 +135,7 @@ router.put('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Res
 
     res.json(webhook);
   } catch (error) {
-    console.error('Error updating webhook:', error);
+    logger.error('Error updating webhook:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update webhook' });
   }
 });
@@ -144,7 +151,7 @@ router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respon
 
     res.json({ message: 'Webhook deleted' });
   } catch (error) {
-    console.error('Error deleting webhook:', error);
+    logger.error('Error deleting webhook:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete webhook' });
   }
 });
@@ -158,7 +165,7 @@ router.get('/:id/deliveries', authenticate, requireAdmin, (req: AuthRequest, res
 
     res.json(deliveries);
   } catch (error) {
-    console.error('Error listing deliveries:', error);
+    logger.error('Error listing deliveries:', { error: String(error) });
     res.status(500).json({ error: 'Failed to list deliveries' });
   }
 });

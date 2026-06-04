@@ -1028,4 +1028,46 @@ export const migrations: Migration[] = [
       db.prepare('CREATE INDEX idx_audit_log_user_id ON audit_log(user_id)').run();
     },
   },
+  {
+    id: '052',
+    name: 'rebuild_fts5_index',
+    up: (db, { tableExists }) => {
+      if (!tableExists('tickets_fts')) return;
+      // Purge duplicate entries caused by manual FTS writes + auto-sync triggers
+      db.exec("INSERT INTO tickets_fts(tickets_fts) VALUES('rebuild')");
+    },
+  },
+  {
+    id: '053',
+    name: 'add_index_tickets_created_at',
+    up: (db) => {
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at DESC)').run();
+    },
+  },
+  {
+    id: '054',
+    name: 'add_missing_fk_indexes',
+    up: (db) => {
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_ticket_history_user ON ticket_history(user_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_ticket_comments_user ON ticket_comments(user_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_ticket_checklists_parent ON ticket_checklists(parent_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(entity_type, entity_id)').run();
+    },
+  },
+  {
+    id: '055',
+    name: 'add_user_id_to_push_subscriptions',
+    up: (db, { columnExists }) => {
+      if (columnExists('push_subscriptions', 'user_id')) return;
+      db.prepare('ALTER TABLE push_subscriptions ADD COLUMN user_id TEXT REFERENCES users(id) ON DELETE CASCADE').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user ON push_subscriptions(user_id)').run();
+    },
+  },
+  {
+    id: '056',
+    name: 'add_webhook_delivery_cleanup_index',
+    up: (db) => {
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created ON webhook_deliveries(created_at)').run();
+    },
+  },
 ];

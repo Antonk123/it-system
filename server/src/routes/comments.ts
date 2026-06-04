@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { sanitizeRichText } from '../lib/htmlSanitizer.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -32,11 +33,12 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
       LEFT JOIN contacts contact ON contact.email = u.email
       WHERE c.ticket_id = ? AND c.deleted_at IS NULL
       ORDER BY c.created_at ASC
+      LIMIT 500
     `).all(req.params.ticketId) as CommentRow[];
 
     res.json(comments);
   } catch (error) {
-    console.error('Error fetching comments:', error);
+    logger.error('Error fetching comments:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch comments' });
   }
 });
@@ -81,7 +83,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 
     res.status(201).json(comment);
   } catch (error) {
-    console.error('Error creating comment:', error);
+    logger.error('Error creating comment:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create comment' });
   }
 });
@@ -128,7 +130,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json(comment);
   } catch (error) {
-    console.error('Error updating comment:', error);
+    logger.error('Error updating comment:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update comment' });
   }
 });
@@ -156,7 +158,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json({ message: 'Comment deleted' });
   } catch (error) {
-    console.error('Error deleting comment:', error);
+    logger.error('Error deleting comment:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete comment' });
   }
 });

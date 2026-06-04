@@ -8,7 +8,9 @@ import { fileURLToPath } from 'url';
 import { db } from '../db/connection.js';
 import { stripHtml } from '../lib/htmlUtils.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { createRateLimiter } from '../middleware/rateLimit.js';
+import { logger } from '../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -43,6 +45,8 @@ const uploadImage = multer({
   },
 });
 
+
+const kbShareRateLimiter = createRateLimiter(60 * 1000, 30);
 
 const router = Router();
 
@@ -98,13 +102,13 @@ router.get('/categories', authenticate, (_req: AuthRequest, res: Response) => {
     `).all() as (KbCategoryRow & { article_count: number })[];
     res.json(categories);
   } catch (error) {
-    console.error('Error fetching KB categories:', error);
+    logger.error('Error fetching KB categories:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch KB categories' });
   }
 });
 
 // POST /api/kb/categories
-router.post('/categories', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/categories', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, color } = req.body;
   if (!name || typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'Name is required' });
@@ -120,13 +124,13 @@ router.post('/categories', authenticate, (req: AuthRequest, res: Response) => {
     const category = db.prepare('SELECT id, name, color, position, created_at FROM kb_categories WHERE id = ?').get(id) as KbCategoryRow;
     res.status(201).json(category);
   } catch (error) {
-    console.error('Error creating KB category:', error);
+    logger.error('Error creating KB category:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create KB category' });
   }
 });
 
 // PUT /api/kb/categories/:id
-router.put('/categories/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/categories/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, color } = req.body;
   if (!name || typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'Name is required' });
@@ -140,20 +144,20 @@ router.put('/categories/:id', authenticate, (req: AuthRequest, res: Response) =>
     const category = db.prepare('SELECT id, name, color, position, created_at FROM kb_categories WHERE id = ?').get(req.params.id) as KbCategoryRow;
     res.json(category);
   } catch (error) {
-    console.error('Error updating KB category:', error);
+    logger.error('Error updating KB category:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update KB category' });
   }
 });
 
 // DELETE /api/kb/categories/:id
-router.delete('/categories/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/categories/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const existing = db.prepare('SELECT id FROM kb_categories WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Category not found' });
     db.prepare('DELETE FROM kb_categories WHERE id = ?').run(req.params.id);
     res.json({ message: 'Category deleted' });
   } catch (error) {
-    console.error('Error deleting KB category:', error);
+    logger.error('Error deleting KB category:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete KB category' });
   }
 });
@@ -207,7 +211,7 @@ router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json(articles);
   } catch (error) {
-    console.error('Error fetching KB articles:', error);
+    logger.error('Error fetching KB articles:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch KB articles' });
   }
 });
@@ -230,7 +234,7 @@ router.get('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
     const tagMap = getTagsForArticles([id]);
     res.json({ ...article, tags: tagMap.get(id) || [] });
   } catch (error) {
-    console.error('Error fetching KB article:', error);
+    logger.error('Error fetching KB article:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch KB article' });
   }
 });
@@ -247,13 +251,13 @@ router.get('/articles/:id/tickets', authenticate, (req: AuthRequest, res: Respon
     `).all(req.params.id);
     res.json(tickets);
   } catch (error) {
-    console.error('Error fetching article linked tickets:', error);
+    logger.error('Error fetching article linked tickets:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch linked tickets' });
   }
 });
 
 // POST /api/kb/articles
-router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/articles', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { title, content = '', category_id, article_type, tag_ids, status } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'Title is required' });
@@ -302,13 +306,13 @@ router.post('/articles', authenticate, (req: AuthRequest, res: Response) => {
     const tagMap = getTagsForArticles([id]);
     res.status(201).json({ ...article, tags: tagMap.get(id) || [] });
   } catch (error) {
-    console.error('Error creating KB article:', error);
+    logger.error('Error creating KB article:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create KB article' });
   }
 });
 
 // PUT /api/kb/articles/:id
-router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { title, content, category_id, article_type, tag_ids, status } = req.body;
   if (!title || typeof title !== 'string' || !title.trim()) {
     return res.status(400).json({ error: 'Title is required' });
@@ -361,7 +365,7 @@ router.put('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
     const tagMap = getTagsForArticles([articleId]);
     res.json({ ...article, tags: tagMap.get(articleId) || [] });
   } catch (error) {
-    console.error('Error updating KB article:', error);
+    logger.error('Error updating KB article:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update KB article' });
   }
 });
@@ -375,13 +379,13 @@ router.patch('/articles/:id/review', authenticate, (req: AuthRequest, res: Respo
     db.prepare('UPDATE kb_articles SET last_reviewed_at = ? WHERE id = ?').run(now, req.params.id);
     res.json({ last_reviewed_at: now });
   } catch (error) {
-    console.error('Error marking KB article as reviewed:', error);
+    logger.error('Error marking KB article as reviewed:', { error: String(error) });
     res.status(500).json({ error: 'Failed to mark article as reviewed' });
   }
 });
 
 // DELETE /api/kb/articles/:id
-router.delete('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const existing = db.prepare('SELECT id, title, content, rowid FROM kb_articles WHERE id = ?').get(req.params.id) as { id: string; title: string; content: string; rowid: number } | undefined;
     if (!existing) return res.status(404).json({ error: 'Article not found' });
@@ -392,7 +396,7 @@ router.delete('/articles/:id', authenticate, (req: AuthRequest, res: Response) =
     })();
     res.json({ message: 'Article deleted' });
   } catch (error) {
-    console.error('Error deleting KB article:', error);
+    logger.error('Error deleting KB article:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete KB article' });
   }
 });
@@ -415,7 +419,7 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
     `).all(req.params.ticketId);
     res.json(articles);
   } catch (error) {
-    console.error('Error fetching ticket KB links:', error);
+    logger.error('Error fetching ticket KB links:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch ticket KB links' });
   }
 });
@@ -439,7 +443,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     if (error?.message?.includes('UNIQUE')) {
       return res.status(409).json({ error: 'Article already linked to this ticket' });
     }
-    console.error('Error linking KB article to ticket:', error);
+    logger.error('Error linking KB article to ticket:', { error: String(error) });
     res.status(500).json({ error: 'Failed to link KB article' });
   }
 });
@@ -455,7 +459,7 @@ router.delete('/ticket/:ticketId/:articleId', authenticate, (req: AuthRequest, r
       .run(req.params.ticketId, req.params.articleId);
     res.json({ message: 'Link removed' });
   } catch (error) {
-    console.error('Error removing KB link:', error);
+    logger.error('Error removing KB link:', { error: String(error) });
     res.status(500).json({ error: 'Failed to remove KB link' });
   }
 });
@@ -480,7 +484,7 @@ router.get('/articles/:id/links', authenticate, async (req: AuthRequest, res: Re
     `).all(id, id);
     res.json(links);
   } catch (error) {
-    console.error('Error fetching article links:', error);
+    logger.error('Error fetching article links:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch article links' });
   }
 });
@@ -508,7 +512,7 @@ router.post('/articles/:id/links', authenticate, async (req: AuthRequest, res: R
     `).run(linkId, id, targetArticleId);
     res.status(201).json({ id: linkId, source_article_id: id, target_article_id: targetArticleId });
   } catch (error) {
-    console.error('Error creating article link:', error);
+    logger.error('Error creating article link:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create article link' });
   }
 });
@@ -525,7 +529,7 @@ router.delete('/articles/:id/links/:targetId', authenticate, async (req: AuthReq
     if (result.changes === 0) return res.status(404).json({ error: 'Link not found' });
     res.json({ message: 'Link removed' });
   } catch (error) {
-    console.error('Error removing article link:', error);
+    logger.error('Error removing article link:', { error: String(error) });
     res.status(500).json({ error: 'Failed to remove article link' });
   }
 });
@@ -538,7 +542,7 @@ router.get('/articles/:id/share', authenticate, (req: AuthRequest, res: Response
     const row = db.prepare('SELECT share_token FROM kb_article_shares WHERE article_id = ?').get(req.params.id) as { share_token: string } | undefined;
     res.json({ share_token: row?.share_token || null });
   } catch (error) {
-    console.error('Error fetching KB share:', error);
+    logger.error('Error fetching KB share:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch share' });
   }
 });
@@ -560,7 +564,7 @@ router.post('/articles/:id/share', authenticate, (req: AuthRequest, res: Respons
 
     res.status(201).json({ share_token: shareToken });
   } catch (error) {
-    console.error('Error creating KB share:', error);
+    logger.error('Error creating KB share:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create share' });
   }
 });
@@ -572,7 +576,7 @@ router.delete('/articles/:id/share', authenticate, (req: AuthRequest, res: Respo
     if (result.changes === 0) return res.status(404).json({ error: 'Share not found' });
     res.json({ message: 'Share revoked' });
   } catch (error) {
-    console.error('Error revoking KB share:', error);
+    logger.error('Error revoking KB share:', { error: String(error) });
     res.status(500).json({ error: 'Failed to revoke share' });
   }
 });
@@ -597,7 +601,7 @@ router.get('/public/:token', (_req: Request, res: Response) => {
     const tagMap = getTagsForArticles([share.article_id]);
     res.json({ ...article, tags: tagMap.get(share.article_id) || [] });
   } catch (error) {
-    console.error('Error fetching public KB article:', error);
+    logger.error('Error fetching public KB article:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch article' });
   }
 });
@@ -608,7 +612,7 @@ router.get('/public/:token', (_req: Request, res: Response) => {
 router.post('/upload-image', authenticate, (req: AuthRequest, res: Response) => {
   uploadImage.single('image')(req, res, (err) => {
     if (err) {
-      console.error('KB image upload error:', err.message);
+      logger.error('KB image upload error:', err.message);
       return res.status(400).json({ error: err.message });
     }
     if (!req.file) {

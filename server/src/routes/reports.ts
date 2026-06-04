@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -177,7 +178,7 @@ router.get('/summary', authenticate, (req: AuthRequest, res) => {
     agingTickets,
   });
   } catch (error) {
-    console.error('Error generating report summary:', error);
+    logger.error('Error generating report summary:', { error: String(error) });
     res.status(500).json({ error: 'Failed to generate report summary' });
   }
 });
@@ -229,7 +230,7 @@ router.get('/time-summary', authenticate, (req: AuthRequest, res) => {
 
   res.json({ byCategory, topTickets });
   } catch (error) {
-    console.error('Error generating time summary:', error);
+    logger.error('Error generating time summary:', { error: String(error) });
     res.status(500).json({ error: 'Failed to generate time summary' });
   }
 });

@@ -2,8 +2,9 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import * as XLSX from 'xlsx';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import multer from 'multer';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -30,7 +31,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
     `).all() as ContactRow[];
     res.json(contacts);
   } catch (error) {
-    console.error('Error fetching contacts:', error);
+    logger.error('Error fetching contacts:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch contacts' });
   }
 });
@@ -124,7 +125,7 @@ router.get('/export', authenticate, (_req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="kontakter-${timestamp}.xlsx"`);
     res.send(xlsxBuffer);
   } catch (error) {
-    console.error('Error exporting contacts:', error);
+    logger.error('Error exporting contacts:', { error: String(error) });
     res.status(500).json({ error: 'Failed to export contacts' });
   }
 });
@@ -214,7 +215,7 @@ router.post('/import/preview', authenticate, upload.single('file'), (req: AuthRe
       results,
     });
   } catch (error) {
-    console.error('Error previewing contact import:', error);
+    logger.error('Error previewing contact import:', { error: String(error) });
     res.status(500).json({ error: 'Failed to preview import' });
   }
 });
@@ -265,7 +266,7 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
 
     res.json({ success: true, created, failed, errors });
   } catch (error) {
-    console.error('Error confirming contact import:', error);
+    logger.error('Error confirming contact import:', { error: String(error) });
     res.status(500).json({ error: 'Failed to import contacts' });
   }
 });
@@ -286,7 +287,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
     
     res.json(contact);
   } catch (error) {
-    console.error('Error fetching contact:', error);
+    logger.error('Error fetching contact:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch contact' });
   }
 });
@@ -313,7 +314,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     `).get(id) as ContactRow;
     res.status(201).json(contact);
   } catch (error) {
-    console.error('Error creating contact:', error);
+    logger.error('Error creating contact:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create contact' });
   }
 });
@@ -350,7 +351,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       if (allowedFields.includes(key)) {
         safeUpdates[key] = value;
       } else {
-        console.warn(`Attempted to update non-whitelisted field: ${key}`);
+        logger.warn(`Attempted to update non-whitelisted field: ${key}`);
       }
     }
 
@@ -369,13 +370,13 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     `).get(req.params.id) as ContactRow;
     res.json(contact);
   } catch (error) {
-    console.error('Error updating contact:', error);
+    logger.error('Error updating contact:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update contact' });
   }
 });
 
 // Delete contact
-router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const result = db.prepare('DELETE FROM contacts WHERE id = ?').run(req.params.id);
 
@@ -385,7 +386,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json({ message: 'Contact deleted' });
   } catch (error) {
-    console.error('Error deleting contact:', error);
+    logger.error('Error deleting contact:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete contact' });
   }
 });

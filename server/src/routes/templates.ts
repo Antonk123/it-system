@@ -1,8 +1,9 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import templateFieldsRouter from './template-fields.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -26,14 +27,28 @@ interface TemplateRow {
 // GET /api/templates - Get all templates (with fields)
 router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
   try {
-    const templates = db.prepare('SELECT * FROM ticket_templates ORDER BY position ASC, name ASC').all() as TemplateRow[];
-    const templatesWithFields = templates.map(template => {
-      const fields = db.prepare('SELECT * FROM template_fields WHERE template_id = ? ORDER BY position ASC').all(template.id);
-      return { ...template, fields };
-    });
+    const templates = db.prepare(
+      'SELECT id, name, description, title_template, description_template, priority, category_id, notes_template, solution_template, position, created_by, created_at, updated_at, template_type FROM ticket_templates ORDER BY position ASC, name ASC'
+    ).all() as TemplateRow[];
+    const allFields = db.prepare(
+      'SELECT id, template_id, field_name, field_label, field_type, placeholder, default_value, required, options, position, created_at, updated_at FROM template_fields ORDER BY position ASC'
+    ).all() as (Record<string, unknown> & { template_id: string })[];
+
+    // Group fields by template_id in memory (fixes N+1)
+    const fieldsByTemplate = new Map<string, typeof allFields>();
+    for (const field of allFields) {
+      const list = fieldsByTemplate.get(field.template_id) || [];
+      list.push(field);
+      fieldsByTemplate.set(field.template_id, list);
+    }
+
+    const templatesWithFields = templates.map(template => ({
+      ...template,
+      fields: fieldsByTemplate.get(template.id) || [],
+    }));
     res.json(templatesWithFields);
   } catch (error) {
-    console.error('Error fetching templates:', error);
+    logger.error('Error fetching templates:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch templates' });
   }
 });
@@ -50,13 +65,13 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json({ ...template, fields });
   } catch (error) {
-    console.error('Error fetching template:', error);
+    logger.error('Error fetching template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch template' });
   }
 });
 
 // POST /api/templates - Create new template
-router.post('/', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, description, template_type, title_template, description_template, priority, category_id, notes_template, solution_template, fields } = req.body;
 
   try {
@@ -121,13 +136,13 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     const templateFields = db.prepare('SELECT * FROM template_fields WHERE template_id = ? ORDER BY position ASC').all(id);
     res.status(201).json({ ...template, fields: templateFields });
   } catch (error) {
-    console.error('Error creating template:', error);
+    logger.error('Error creating template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create template' });
   }
 });
 
 // PUT /api/templates/:id - Update template
-router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, description, template_type, title_template, description_template, priority, category_id, notes_template, solution_template } = req.body;
 
   try {
@@ -157,13 +172,13 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     const templateFields = db.prepare('SELECT * FROM template_fields WHERE template_id = ? ORDER BY position ASC').all(req.params.id);
     res.json({ ...template, fields: templateFields });
   } catch (error) {
-    console.error('Error updating template:', error);
+    logger.error('Error updating template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update template' });
   }
 });
 
 // PUT /api/templates/reorder - Reorder templates
-router.put('/reorder', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/reorder', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { ids } = req.body as { ids: string[] };
 
   try {
@@ -183,13 +198,13 @@ router.put('/reorder', authenticate, (req: AuthRequest, res: Response) => {
     const templates = db.prepare('SELECT * FROM ticket_templates ORDER BY position ASC').all() as TemplateRow[];
     res.json(templates);
   } catch (error) {
-    console.error('Error reordering templates:', error);
+    logger.error('Error reordering templates:', { error: String(error) });
     res.status(500).json({ error: 'Failed to reorder templates' });
   }
 });
 
 // DELETE /api/templates/:id - Delete template
-router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const result = db.prepare('DELETE FROM ticket_templates WHERE id = ?').run(req.params.id);
 
@@ -199,7 +214,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json({ message: 'Template deleted' });
   } catch (error) {
-    console.error('Error deleting template:', error);
+    logger.error('Error deleting template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete template' });
   }
 });

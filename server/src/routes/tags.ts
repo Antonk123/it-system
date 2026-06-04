@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -18,7 +19,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
     const tags = db.prepare('SELECT * FROM tags ORDER BY name ASC').all() as TagRow[];
     res.json(tags);
   } catch (error) {
-    console.error('Error fetching tags:', error);
+    logger.error('Error fetching tags:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch tags' });
   }
 });
@@ -44,7 +45,7 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
     const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(id) as TagRow;
     res.status(201).json(tag);
   } catch (error) {
-    console.error('Error creating tag:', error);
+    logger.error('Error creating tag:', { error: String(error) });
     if ((error as any).message.includes('UNIQUE constraint failed')) {
       return res.status(400).json({ error: 'Tag name already exists' });
     }
@@ -74,7 +75,7 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
     const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(req.params.id) as TagRow;
     res.json(tag);
   } catch (error) {
-    console.error('Error updating tag:', error);
+    logger.error('Error updating tag:', { error: String(error) });
     if ((error as any).message.includes('UNIQUE constraint failed')) {
       return res.status(400).json({ error: 'Tag name already exists' });
     }
@@ -93,7 +94,7 @@ router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respon
 
     res.json({ message: 'Tag deleted' });
   } catch (error) {
-    console.error('Error deleting tag:', error);
+    logger.error('Error deleting tag:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete tag' });
   }
 });

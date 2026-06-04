@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -31,7 +32,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json(policies);
   } catch (error) {
-    console.error('Error fetching SLA policies:', error);
+    logger.error('Error fetching SLA policies:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch SLA policies' });
   }
 });
@@ -76,7 +77,7 @@ router.put('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =>
 
     res.json(updated);
   } catch (error) {
-    console.error('Error updating SLA policies:', error);
+    logger.error('Error updating SLA policies:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update SLA policies' });
   }
 });
@@ -90,7 +91,7 @@ router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respon
     }
     res.json({ message: 'SLA policy deleted' });
   } catch (error) {
-    console.error('Error deleting SLA policy:', error);
+    logger.error('Error deleting SLA policy:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete SLA policy' });
   }
 });

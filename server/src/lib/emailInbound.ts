@@ -272,14 +272,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
      VALUES (?, ?, ?, 'open', 'medium', ?, ?, ?)`
   ).run(ticketId, subject, body, contact?.id || null, companyId, messageId);
 
-  const row = db
-    .prepare('SELECT rowid FROM tickets WHERE id = ?')
-    .get(ticketId) as { rowid: number } | undefined;
-  if (row) {
-    db.prepare(
-      'INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)'
-    ).run(row.rowid, subject, body, '', '');
-  }
+  // FTS5 synkas automatiskt via triggers (migration 050)
 
   db.prepare(
     'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
@@ -328,7 +321,10 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
   const path = await import('path');
   const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'data/uploads');
 
-  for (const attachment of attachments) {
+  // Limit to 20 attachments per email to prevent abuse
+  const limited = attachments.slice(0, 20);
+
+  for (const attachment of limited) {
     if (!attachment.filename) continue;
     if (isSignatureImage(attachment)) {
       logger.debug('Skipping signature image', { filename: attachment.filename, size: attachment.size });

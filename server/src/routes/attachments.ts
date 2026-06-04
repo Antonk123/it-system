@@ -6,6 +6,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { logger } from '../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -118,7 +119,7 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
 
     res.json(withUrls);
   } catch (error) {
-    console.error('Error fetching attachments:', error);
+    logger.error('Error fetching attachments:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch attachments' });
   }
 });
@@ -129,7 +130,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
   upload.single('file')(req, res, (err) => {
     if (err) {
       // Multer error (file validation failed)
-      console.error('File upload validation error:', err.message);
+      logger.error('File upload validation error:', err.message);
       return res.status(400).json({ error: err.message });
     }
 
@@ -164,7 +165,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
         url: `/api/attachments/file/${attachment.id}`,
       });
     } catch (error) {
-      console.error('Error uploading attachment:', error);
+      logger.error('Error uploading attachment:', { error: String(error) });
       res.status(500).json({ error: 'Failed to upload attachment' });
     }
   });
@@ -198,7 +199,7 @@ router.get('/file/:id', authenticate, (req: AuthRequest, res: Response) => {
     res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
     res.sendFile(filePath);
   } catch (error) {
-    console.error('Error serving file:', error);
+    logger.error('Error serving file:', { error: String(error) });
     res.status(500).json({ error: 'Failed to serve file' });
   }
 });
@@ -229,13 +230,13 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
         unlinkSync(filePath);
       } catch (fileError) {
         // Log but don't fail the request - orphaned file is acceptable
-        console.warn('Failed to delete file from disk (orphaned file):', filePath, fileError);
+        logger.warn('Failed to delete file from disk (orphaned file)', { filePath, error: String(fileError) });
       }
     }
 
     res.json({ message: 'Attachment deleted' });
   } catch (error) {
-    console.error('Error deleting attachment:', error);
+    logger.error('Error deleting attachment:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete attachment' });
   }
 });

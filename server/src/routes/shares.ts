@@ -7,6 +7,7 @@ import { createRateLimiter } from '../middleware/rateLimit.js';
 import { existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { logger } from '../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -78,7 +79,7 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
     const share = db.prepare('SELECT id, ticket_id, share_token, created_by, created_at FROM ticket_shares WHERE ticket_id = ?').get(req.params.ticketId) as ShareRow | undefined;
     res.json({ share_token: share?.share_token || null });
   } catch (error) {
-    console.error('Error fetching share:', error);
+    logger.error('Error fetching share:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch share' });
   }
 });
@@ -109,7 +110,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 
     res.status(201).json({ share_token: shareToken });
   } catch (error) {
-    console.error('Error creating share:', error);
+    logger.error('Error creating share:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create share' });
   }
 });
@@ -125,7 +126,7 @@ router.delete('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Respons
     
     res.json({ message: 'Share deleted' });
   } catch (error) {
-    console.error('Error deleting share:', error);
+    logger.error('Error deleting share:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete share' });
   }
 });
@@ -193,7 +194,7 @@ router.get('/public/:token', sharePublicRateLimiter, (req: Request, res: Respons
       })),
     });
   } catch (error) {
-    console.error('Error fetching shared ticket:', error);
+    logger.error('Error fetching shared ticket:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch shared ticket' });
   }
 });
@@ -239,7 +240,7 @@ router.get('/public/file/:token/:attachmentId', sharePublicRateLimiter, (req: Re
     res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
     res.sendFile(filePath);
   } catch (error) {
-    console.error('Error serving shared file:', error);
+    logger.error('Error serving shared file:', { error: String(error) });
     res.status(500).json({ error: 'Failed to serve file' });
   }
 });

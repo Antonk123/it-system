@@ -159,22 +159,28 @@ const TicketDetail = () => {
 
   useEffect(() => {
     if (!id) return;
+    let mounted = true;
     api.getTicket(id).then((detail) => {
+      if (!mounted) return;
       if (detail.field_values && detail.field_values.length > 0) {
         setTicketFieldValues(detail.field_values);
       }
       // Always load fresh tags from single-ticket endpoint (list endpoint may miss them)
       if (detail.tags) setTagsFromAPI(detail.tags);
     }).catch(() => {});
+    return () => { mounted = false; };
   }, [id]);
 
   // Fetch AI summary for tickets with enough comments
   useEffect(() => {
     if (!id || comments.length < 5) return;
+    let mounted = true;
     setAiSummaryLoading(true);
     api.getAiSummary(id).then((result) => {
+      if (!mounted) return;
       if (result.summary) setAiSummary(result.summary);
-    }).catch(() => {}).finally(() => setAiSummaryLoading(false));
+    }).catch(() => {}).finally(() => { if (mounted) setAiSummaryLoading(false); });
+    return () => { mounted = false; };
   }, [id, comments.length]);
 
   const handleRefreshAiSummary = () => {
@@ -360,6 +366,7 @@ const TicketDetail = () => {
             variant="ghost"
             className="gap-2"
             onClick={handleBack}
+            aria-label="Tillbaka"
           >
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Tillbaka</span>
@@ -374,6 +381,7 @@ const TicketDetail = () => {
                     className="gap-2"
                     onClick={handleShare}
                     disabled={isShareLoading}
+                    aria-label="Dela"
                   >
                     {isShareLoading ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -510,7 +518,7 @@ const TicketDetail = () => {
           <CardHeader className="pb-4">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
-                <CardTitle className="text-xl mb-2">{ticket.title}</CardTitle>
+                <h1 className="text-xl font-semibold leading-none tracking-tight mb-2">{ticket.title}</h1>
                 <div className="flex items-center gap-3 flex-wrap">
                   <StatusBadge status={ticket.status} />
                   <PriorityBadge priority={ticket.priority} />
@@ -805,6 +813,7 @@ const TicketDetail = () => {
                       onClick={handleGenerateAiDraft}
                       disabled={isGeneratingDraft}
                       className="gap-1.5 text-xs"
+                      aria-label="Föreslå svar med AI"
                     >
                       {isGeneratingDraft ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />

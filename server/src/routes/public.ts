@@ -6,6 +6,7 @@ import { aiEnabled, suggestSolutionFromKB, findRelevantKbArticles } from '../lib
 import { stripHtml } from '../lib/htmlUtils.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
 import { publicWriteRateLimiter, publicAiRateLimiter } from '../middleware/rateLimit.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -65,7 +66,7 @@ router.get('/templates', (_req: Request, res: Response) => {
 
     res.json(templatesWithFields);
   } catch (error) {
-    console.error('Error fetching public templates:', error);
+    logger.error('Error fetching public templates:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch templates' });
   }
 });
@@ -76,7 +77,7 @@ router.get('/categories', (_req: Request, res: Response) => {
     const categories = db.prepare('SELECT id, label FROM categories ORDER BY position ASC, created_at ASC').all() as CategoryRow[];
     res.json(categories);
   } catch (error) {
-    console.error('Error fetching public categories:', error);
+    logger.error('Error fetching public categories:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch categories' });
   }
 });
@@ -172,10 +173,7 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
       VALUES (?, ?, ?, 'open', ?, ?, ?, ?)
     `).run(ticketId, title, finalDescription, ticketPriority, categoryId, contact.id, template_id || null);
 
-    // Synka FTS5-index
-    const ftsRow = db.prepare('SELECT rowid FROM tickets WHERE id = ?').get(ticketId) as { rowid: number };
-    db.prepare('INSERT INTO tickets_fts(rowid, title, description, notes, solution) VALUES (?,?,?,?,?)')
-      .run(ftsRow.rowid, title, finalDescription, '', '');
+    // FTS5 synkas automatiskt via triggers (migration 050)
 
     // Store custom field values if provided
     if (customFields && Array.isArray(customFields) && customFields.length > 0) {
@@ -201,7 +199,7 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
       requesterName: contact.name,
       requesterEmail: contact.email,
     }).catch((error) => {
-      console.error('Error sending public ticket email:', error);
+      logger.error('Error sending public ticket email:', { error: String(error) });
     });
 
     // Store idempotency key so retries return the same ticket
@@ -217,7 +215,7 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
       ticketId
     });
   } catch (error) {
-    console.error('Error creating public ticket:', error);
+    logger.error('Error creating public ticket:', { error: String(error) });
     res.status(500).json({ error: 'Failed to submit ticket' });
   }
 });
@@ -296,12 +294,12 @@ router.post('/ai-suggest', publicAiRateLimiter, (req: Request, res: Response) =>
         kbReferences: kbHits.map(a => ({ id: a.id, title: a.title })),
       });
     } catch (err) {
-      console.error('Error in ai-suggest:', err);
+      logger.error('Error in ai-suggest:', { error: String(err) });
       res.status(500).json({ error: 'Kunde inte generera förslag' });
     }
   };
 
-  handle();
+  handle().catch(err => logger.error('AI suggest handle error', { error: String(err) }));
 });
 
 /**
@@ -330,7 +328,7 @@ router.patch('/ai-suggest/:id', publicWriteRateLimiter, (req: Request, res: Resp
     }
     res.json({ ok: true });
   } catch (err) {
-    console.error('Error patching deflection:', err);
+    logger.error('Error patching deflection:', { error: String(err) });
     res.status(500).json({ error: 'Kunde inte uppdatera utfall' });
   }
 });
@@ -357,7 +355,7 @@ router.get('/ai-suggest/stats', (_req: Request, res: Response) => {
 
     res.json({ ...stats, total, deflectionRate });
   } catch (err) {
-    console.error('Error fetching deflection stats:', err);
+    logger.error('Error fetching deflection stats:', { error: String(err) });
     res.status(500).json({ error: 'Kunde inte hämta stats' });
   }
 });

@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Trash2, Users, Mail, Shield, Loader2, HardDriveDownload, Upload } from 'lucide-react';
 import { toast } from 'sonner';
+import { api } from '@/lib/api';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 
@@ -95,23 +96,10 @@ const AdminTab = () => {
     setConfirmRestore(false);
     setRestoreLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
-      const baseUrl = import.meta.env.VITE_API_URL || '/api';
-      const formData = new FormData();
-      formData.append('file', file);
-      const response = await fetch(`${baseUrl}/backup/restore`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: formData,
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        toast.error(data.error || 'Återställning misslyckades');
-        return;
-      }
+      const data = await api.uploadFile<{ message?: string; error?: string }>('/backup/restore', file);
       toast.success(data.message || 'Backup återställd');
-    } catch {
-      toast.error('Återställning misslyckades. Kontrollera filen och försök igen.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Återställning misslyckades. Kontrollera filen och försök igen.');
     } finally {
       setRestoreLoading(false);
       restoreFileRef.current = null;

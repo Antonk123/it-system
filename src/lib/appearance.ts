@@ -1,4 +1,4 @@
-export const FONT_STORAGE_KEY = "app-font-theme";
+const FONT_STORAGE_KEY = "app-font-theme";
 
 export const FONT_OPTIONS = [
   { value: "font-jakarta", label: "Plus Jakarta Sans (standard)" },
@@ -40,7 +40,7 @@ export const saveFontTheme = (fontTheme: FontTheme) => {
 };
 
 // Light/Dark Mode utilities
-export const MODE_STORAGE_KEY = "app-mode-theme";
+const MODE_STORAGE_KEY = "app-mode-theme";
 
 export type ModeTheme = "light" | "dark";
 

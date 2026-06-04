@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { logAudit } from '../lib/auditLog.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -32,7 +33,7 @@ router.get('/rates/:companyId', authenticate, requireAdmin, (req: AuthRequest, r
     const rate = db.prepare('SELECT id, company_id, rate_per_hour, currency, created_at, updated_at FROM billing_rates WHERE company_id = ?').get(req.params.companyId) as BillingRateRow | undefined;
     res.json(rate || null);
   } catch (error) {
-    console.error('Error fetching billing rate:', error);
+    logger.error('Error fetching billing rate:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch billing rate' });
   }
 });
@@ -58,7 +59,7 @@ router.put('/rates/:companyId', authenticate, requireAdmin, (req: AuthRequest, r
     const rate = db.prepare('SELECT id, company_id, rate_per_hour, currency, created_at, updated_at FROM billing_rates WHERE company_id = ?').get(req.params.companyId) as BillingRateRow;
     res.json(rate);
   } catch (error) {
-    console.error('Error updating billing rate:', error);
+    logger.error('Error updating billing rate:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update billing rate' });
   }
 });
@@ -117,7 +118,7 @@ router.get('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Resp
 
     res.json(invoices);
   } catch (error) {
-    console.error('Error fetching invoices:', error);
+    logger.error('Error fetching invoices:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch invoices' });
   }
 });
@@ -148,7 +149,7 @@ router.get('/invoices/:id', authenticate, requireAdmin, (req: AuthRequest, res: 
 
     res.json({ ...invoice, lines });
   } catch (error) {
-    console.error('Error fetching invoice:', error);
+    logger.error('Error fetching invoice:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch invoice' });
   }
 });
@@ -226,7 +227,7 @@ router.post('/invoices/preview', authenticate, requireAdmin, (req: AuthRequest, 
       total_amount: Math.round(totalAmount * 100) / 100,
     });
   } catch (error) {
-    console.error('Error previewing invoice:', error);
+    logger.error('Error previewing invoice:', { error: String(error) });
     res.status(500).json({ error: 'Failed to preview invoice' });
   }
 });
@@ -234,11 +235,28 @@ router.post('/invoices/preview', authenticate, requireAdmin, (req: AuthRequest, 
 // POST /invoices — create invoice from preview
 router.post('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
-    const { company_id, period_start, period_end, lines, total_hours, total_amount, currency } = req.body;
+    const { company_id, period_start, period_end, lines, currency } = req.body;
 
     if (!company_id || !period_start || !period_end || !lines) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+
+    if (!Array.isArray(lines) || lines.length === 0) {
+      return res.status(400).json({ error: 'At least one invoice line is required' });
+    }
+
+    // L28: Check overlapping invoice periods for the same company
+    const overlap = db.prepare(`
+      SELECT id FROM invoices
+      WHERE company_id = ? AND period_start < ? AND period_end > ?
+    `).get(company_id, period_end, period_start) as { id: string } | undefined;
+    if (overlap) {
+      return res.status(409).json({ error: 'An invoice with overlapping period already exists for this company' });
+    }
+
+    // L27: Re-verify totals server-side from lines instead of trusting client
+    const computedTotalHours = Math.round(lines.reduce((sum: number, l: any) => sum + (Number(l.hours) || 0), 0) * 100) / 100;
+    const computedTotalAmount = Math.round(lines.reduce((sum: number, l: any) => sum + (Number(l.amount) || 0), 0) * 100) / 100;
 
     const invoiceId = uuidv4();
 
@@ -246,7 +264,7 @@ router.post('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Res
       db.prepare(`
         INSERT INTO invoices (id, company_id, period_start, period_end, total_hours, total_amount, currency)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(invoiceId, company_id, period_start, period_end, total_hours, total_amount, currency || 'SEK');
+      `).run(invoiceId, company_id, period_start, period_end, computedTotalHours, computedTotalAmount, currency || 'SEK');
 
       const insertLine = db.prepare(`
         INSERT INTO invoice_lines (id, invoice_id, ticket_id, description, hours, rate, amount)
@@ -262,11 +280,11 @@ router.post('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Res
       'SELECT id, company_id, period_start, period_end, status, total_hours, total_amount, currency, pdf_path, created_at, sent_at, paid_at FROM invoices WHERE id = ?'
     ).get(invoiceId);
 
-    logAudit(req.user!.id, 'invoice_create', 'invoice', invoiceId, `company: ${company_id}, amount: ${total_amount}`, req.ip);
+    logAudit(req.user!.id, 'invoice_create', 'invoice', invoiceId, `company: ${company_id}, amount: ${computedTotalAmount}`, req.ip);
 
     res.status(201).json(invoice);
   } catch (error) {
-    console.error('Error creating invoice:', error);
+    logger.error('Error creating invoice:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create invoice' });
   }
 });
@@ -286,6 +304,12 @@ router.put('/invoices/:id/status', authenticate, requireAdmin, (req: AuthRequest
       return res.status(404).json({ error: 'Invoice not found' });
     }
 
+    // H01: Status can only go forward: draft→sent→paid
+    const statusOrder: Record<string, number> = { draft: 0, sent: 1, paid: 2 };
+    if (statusOrder[status] <= statusOrder[existing.status]) {
+      return res.status(400).json({ error: `Cannot transition from '${existing.status}' to '${status}'. Status can only go forward: draft→sent→paid.` });
+    }
+
     const updates: Record<string, string> = { status };
     if (status === 'sent') updates.sent_at = new Date().toISOString();
     if (status === 'paid') updates.paid_at = new Date().toISOString();
@@ -302,7 +326,7 @@ router.put('/invoices/:id/status', authenticate, requireAdmin, (req: AuthRequest
     ).get(req.params.id);
     res.json(invoice);
   } catch (error) {
-    console.error('Error updating invoice status:', error);
+    logger.error('Error updating invoice status:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update invoice status' });
   }
 });
@@ -326,7 +350,7 @@ router.delete('/invoices/:id', authenticate, requireAdmin, (req: AuthRequest, re
 
     res.json({ message: 'Invoice deleted' });
   } catch (error) {
-    console.error('Error deleting invoice:', error);
+    logger.error('Error deleting invoice:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete invoice' });
   }
 });

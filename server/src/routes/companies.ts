@@ -1,8 +1,9 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { applySLAToTicket } from '../lib/slaHelper.js';
+import { logger } from '../lib/logger.js';
 
 const router = Router();
 
@@ -38,7 +39,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
     `).all() as CompanyWithStats[];
     res.json(companies);
   } catch (error) {
-    console.error('Error fetching companies:', error);
+    logger.error('Error fetching companies:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch companies' });
   }
 });
@@ -84,7 +85,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('Error fetching company:', error);
+    logger.error('Error fetching company:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch company' });
   }
 });
@@ -105,7 +106,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     const company = db.prepare('SELECT * FROM companies WHERE id = ?').get(id) as CompanyRow;
     res.status(201).json(company);
   } catch (error) {
-    console.error('Error creating company:', error);
+    logger.error('Error creating company:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create company' });
   }
 });
@@ -175,13 +176,13 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     const company = db.prepare('SELECT * FROM companies WHERE id = ?').get(req.params.id) as CompanyRow;
     res.json(company);
   } catch (error) {
-    console.error('Error updating company:', error);
+    logger.error('Error updating company:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update company' });
   }
 });
 
 // DELETE /:id — delete company (contacts keep their data, company_id set to null via FK)
-router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const existing = db.prepare('SELECT * FROM companies WHERE id = ?').get(req.params.id) as CompanyRow | undefined;
     if (!existing) {
@@ -191,7 +192,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
     db.prepare('DELETE FROM companies WHERE id = ?').run(req.params.id);
     res.json({ message: 'Company deleted' });
   } catch (error) {
-    console.error('Error deleting company:', error);
+    logger.error('Error deleting company:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete company' });
   }
 });

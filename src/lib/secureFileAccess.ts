@@ -72,7 +72,7 @@ export function revokeBlobUrl(fileId: string): void {
   }
 }
 
-export function clearBlobCache(): void {
+function clearBlobCache(): void {
   blobUrlCache.forEach(url => URL.revokeObjectURL(url));
   blobUrlCache.clear();
 }

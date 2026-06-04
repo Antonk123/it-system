@@ -6,6 +6,7 @@ import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { validatePassword } from '../lib/passwordPolicy.js';
 import { logAudit } from '../lib/auditLog.js';
+import { logger } from '../lib/logger.js';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DISPLAY_NAME_MAX_LENGTH = 100;
@@ -52,7 +53,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
 
     res.json({ users: mapped });
   } catch (error) {
-    console.error('Error fetching users:', error);
+    logger.error('Error fetching users:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
@@ -133,7 +134,7 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
       throw insertError; // Re-throw if it's not a UNIQUE constraint error
     }
   } catch (error) {
-    console.error('Error creating user:', error);
+    logger.error('Error creating user:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create user' });
   }
 });
@@ -193,7 +194,7 @@ router.patch('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respons
 
     res.json({ message: 'Användaren uppdaterades' });
   } catch (error) {
-    console.error('Error updating user:', error);
+    logger.error('Error updating user:', { error: String(error) });
     res.status(500).json({ error: 'Kunde inte uppdatera användare' });
   }
 });
@@ -216,7 +217,7 @@ router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respon
 
     res.json({ message: 'User deleted' });
   } catch (error) {
-    console.error('Error deleting user:', error);
+    logger.error('Error deleting user:', { error: String(error) });
     res.status(500).json({ error: 'Failed to delete user' });
   }
 });

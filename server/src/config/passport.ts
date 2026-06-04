@@ -68,6 +68,7 @@ passport.use(new JwtStrategy(
     // Query parameters are logged in browser history, server logs, and proxies
     jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
     secretOrKey: JWT_SECRET,
+    algorithms: ['HS256'] as const,
   },
   (payload, done) => {
     try {

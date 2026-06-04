@@ -409,12 +409,17 @@ const sendEmail = async (subject: string, payload: TicketEmailPayload) => {
   });
 };
 
+/** Strip CR/LF from a string to prevent email header injection. */
+const sanitizeSubject = (s: string): string => s.replace(/[\r\n]/g, ' ');
+
 export const sendTicketCreatedEmail = async (payload: TicketEmailPayload) => {
-  await sendEmail(`Nytt ärende skapat: ${payload.title}`, payload);
+  const safeTitle = sanitizeSubject(payload.title);
+  await sendEmail(`Nytt ärende skapat: ${safeTitle}`, { ...payload, title: safeTitle });
 };
 
 export const sendTicketClosedEmail = async (payload: TicketEmailPayload) => {
-  await sendEmail(`Ärende stängt: ${payload.title}`, payload);
+  const safeTitle = sanitizeSubject(payload.title);
+  await sendEmail(`Ärende stängt: ${safeTitle}`, { ...payload, title: safeTitle });
 };
 
 export const sendTicketReceivedConfirmation = async (opts: {
@@ -430,6 +435,7 @@ export const sendTicketReceivedConfirmation = async (opts: {
 
   const replyTo = process.env.IMAP_USER || from;
   const shortId = opts.ticketId.slice(0, 8).toUpperCase();
+  const safeTitle = sanitizeSubject(opts.title);
   const ticketUrl = opts.shareUrl || null;
 
   const content = `
@@ -482,7 +488,7 @@ export const sendTicketReceivedConfirmation = async (opts: {
     from,
     replyTo,
     to: opts.toEmail,
-    subject: `[#${shortId}] Ärende mottaget: ${opts.title}`,
+    subject: `[#${shortId}] Ärende mottaget: ${safeTitle}`,
     text,
     html,
   }).catch(error => {
@@ -516,7 +522,7 @@ export const sendTicketReminderEmail = async (data: {
   const ticketUrl = appBaseUrl ? `${appBaseUrl.replace(/\/$/, '')}/tickets/${ticket.id}` : null;
   const shortId = ticket.id.slice(0, 8).toUpperCase();
 
-  const subject = `Påminnelse: ${ticket.title}`;
+  const subject = `Påminnelse: ${sanitizeSubject(ticket.title)}`;
 
   let infoRows = '';
   if (categoryLabel) infoRows += buildInfoRow('Kategori', escapeHtml(categoryLabel));
@@ -590,7 +596,7 @@ export const sendTicketAssignedEmail = async (opts: {
   const baseUrl = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
   const ticketUrl = baseUrl ? `${baseUrl}/tickets/${opts.ticketId}` : '';
   const shortId = opts.ticketId.slice(0, 8).toUpperCase();
-  const subject = `Tilldelat dig: [#${shortId}] ${opts.ticketTitle}`;
+  const subject = `Tilldelat dig: [#${shortId}] ${sanitizeSubject(opts.ticketTitle)}`;
   const prioStyle = getPriorityStyle(opts.ticketPriority);
   const prioLabel = getPriorityLabel(opts.ticketPriority);
 

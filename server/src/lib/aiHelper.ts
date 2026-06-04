@@ -56,6 +56,36 @@ const MODEL_SMART = process.env.AI_MODEL_SMART || MODEL_DEFAULT;
 
 export const aiEnabled = (): boolean => client !== null;
 
+// ─── Monthly budget circuit breaker ──────────────────────────────────────────
+
+const AI_MONTHLY_TOKEN_LIMIT = parseInt(process.env.AI_MONTHLY_TOKEN_LIMIT || '5000000', 10);
+let budgetCache: { withinBudget: boolean; checkedAt: number } | null = null;
+const BUDGET_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function isWithinBudget(): boolean {
+  const now = Date.now();
+  if (budgetCache && (now - budgetCache.checkedAt) < BUDGET_CACHE_TTL) {
+    return budgetCache.withinBudget;
+  }
+  try {
+    const monthStart = new Date();
+    monthStart.setDate(1);
+    monthStart.setHours(0, 0, 0, 0);
+    const row = db.prepare(
+      'SELECT COALESCE(SUM(input_tokens + output_tokens), 0) as total FROM ai_usage_log WHERE created_at >= ?'
+    ).get(monthStart.toISOString()) as { total: number };
+    const withinBudget = row.total < AI_MONTHLY_TOKEN_LIMIT;
+    budgetCache = { withinBudget, checkedAt: now };
+    if (!withinBudget) {
+      console.warn(`⚠️ AI monthly token budget exceeded: ${row.total} / ${AI_MONTHLY_TOKEN_LIMIT}`);
+    }
+    return withinBudget;
+  } catch {
+    // On error, allow usage (fail-open for the budget check)
+    return true;
+  }
+}
+
 // ─── Token-logg (för kostnadsuppföljning) ─────────────────────────────────────
 
 interface UsageRecord {
@@ -191,6 +221,7 @@ export async function suggestSolutionFromKB(
   relevantKbArticles: { title: string; content: string }[]
 ): Promise<SolutionSuggestion | null> {
   if (!client) return null;
+  if (!isWithinBudget()) return null;
 
   const start = Date.now();
   let inputTokens = 0;
@@ -236,7 +267,7 @@ Fält:
 ${kbContext}
 
 ANVÄNDARENS PROBLEM:
-${problemText.slice(0, 2000)}
+${sanitizeForPrompt(problemText, 2000)}
 
 Bedöm om du kan hjälpa baserat på KB ovan.`;
 
@@ -311,6 +342,7 @@ export async function suggestCategory(
   ticketId: string | null = null
 ): Promise<CategorySuggestion | null> {
   if (!client || categories.length === 0) return null;
+  if (!isWithinBudget()) return null;
 
   const start = Date.now();
   let inputTokens = 0;
@@ -330,8 +362,8 @@ Tillgängliga kategorier:
 ${labels}
 
 Ärende:
-Titel: ${title}
-Beskrivning: ${description.slice(0, 800)}`
+Titel: ${sanitizeForPrompt(title, 200)}
+Beskrivning: ${sanitizeForPrompt(description, 800)}`
       }]
     });
 
@@ -383,6 +415,7 @@ export async function draftReply(
   attachments: { file_name: string; content: string }[] = []
 ): Promise<string | null> {
   if (!client) return null;
+  if (!isWithinBudget()) return null;
 
   const start = Date.now();
   let inputTokens = 0;
@@ -396,7 +429,7 @@ export async function draftReply(
       .join('\n\n---\n\n');
 
     const attachmentContext = attachments.length > 0
-      ? attachments.map((a, i) => `[Bilaga ${i + 1}] ${a.file_name}\n${a.content}`).join('\n\n---\n\n')
+      ? attachments.map((a, i) => `[Bilaga ${i + 1}] ${sanitizeForPrompt(a.file_name, 200)}\n${sanitizeForPrompt(a.content, 3000)}`).join('\n\n---\n\n')
       : '';
 
     const systemPrompt = `Du är IT-supporten på ett svenskt SMB. Du skriver tydliga, vänliga, professionella svar till medarbetare som rapporterat ett ärende. Använd "du" inte "ni". Var konkret och steg-för-steg om det är en lösning. Avsluta alltid med "Hör av dig om det inte löste problemet, så tar vi det vidare." Skriv ENDAST mejlsvaret — ingen rubrik, ingen signatur, inga rubriker som "Hej" eller "Med vänliga hälsningar" (de läggs till av systemet).${attachments.length > 0 ? ' Om bilagor innehåller loggfiler eller felmeddelanden, analysera dem och referera till specifika rader eller fel i ditt svar.' : ''}`;
@@ -405,8 +438,8 @@ export async function draftReply(
 ${kbContext || '(inga relevanta artiklar hittades — basera svaret på generell IT-praxis)'}
 ${attachmentContext ? `\nBIFOGADE FILER (bilagor som medarbetaren skickat med ärendet):\n${attachmentContext}\n` : ''}
 ÄRENDE FRÅN MEDARBETARE:
-Titel: ${ticket.title}
-Beskrivning: ${ticket.description}
+Titel: ${sanitizeForPrompt(ticket.title, 200)}
+Beskrivning: ${sanitizeForPrompt(ticket.description, 2000)}
 
 Skriv ditt svar nu.`;
 
@@ -464,6 +497,7 @@ export async function summarizeTicket(
   ticketId: string | null = null
 ): Promise<TicketSummary | null> {
   if (!client) return null;
+  if (!isWithinBudget()) return null;
 
   const start = Date.now();
   let inputTokens = 0;
@@ -475,7 +509,7 @@ export async function summarizeTicket(
     const maxComments = parseInt(process.env.AI_MAX_SUMMARY_COMMENTS || '30', 10);
     const recent = comments.slice(-maxComments);
     const timeline = recent
-      .map(c => `[${c.created_at}] ${c.author}: ${c.content.slice(0, 500)}`)
+      .map(c => `[${c.created_at}] ${sanitizeForPrompt(c.author, 100)}: ${sanitizeForPrompt(c.content, 500)}`)
       .join('\n');
 
     const msg = await client.messages.create({
@@ -489,8 +523,8 @@ export async function summarizeTicket(
 - blockers: vad som hindrar progress (eller "Inget" om inget)
 - lastAction: vad som hände senast
 
-Ärende: ${ticket.title}
-Beskrivning: ${ticket.description.slice(0, 800)}
+Ärende: ${sanitizeForPrompt(ticket.title, 200)}
+Beskrivning: ${sanitizeForPrompt(ticket.description, 800)}
 
 Tidslinje (senaste ${recent.length}):
 ${timeline}`
