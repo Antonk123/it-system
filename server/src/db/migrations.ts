@@ -1104,4 +1104,26 @@ export const migrations: Migration[] = [
       db.prepare('CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created ON webhook_deliveries(created_at)').run();
     },
   },
+  {
+    id: '057',
+    name: 'fix_fts5_contentless_delete_triggers',
+    up: (db, { tableExists }) => {
+      if (!tableExists('tickets_fts')) return;
+      // contentless_delete=1 tables use DELETE FROM, not the 'delete' command
+      db.exec('DROP TRIGGER IF EXISTS tickets_fts_au');
+      db.exec('DROP TRIGGER IF EXISTS tickets_fts_ad');
+
+      db.exec(`CREATE TRIGGER tickets_fts_au
+        AFTER UPDATE OF title, description, notes, solution ON tickets FOR EACH ROW BEGIN
+          DELETE FROM tickets_fts WHERE rowid = OLD.rowid;
+          INSERT INTO tickets_fts(rowid, title, description, notes, solution)
+          VALUES (NEW.rowid, NEW.title, COALESCE(NEW.description, ''), COALESCE(NEW.notes, ''), COALESCE(NEW.solution, ''));
+        END`);
+
+      db.exec(`CREATE TRIGGER tickets_fts_ad
+        AFTER DELETE ON tickets FOR EACH ROW BEGIN
+          DELETE FROM tickets_fts WHERE rowid = OLD.rowid;
+        END`);
+    },
+  },
 ];
