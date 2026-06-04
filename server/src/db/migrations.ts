@@ -1033,8 +1033,42 @@ export const migrations: Migration[] = [
     name: 'rebuild_fts5_index',
     up: (db, { tableExists }) => {
       if (!tableExists('tickets_fts')) return;
-      // Purge duplicate entries caused by manual FTS writes + auto-sync triggers
-      db.exec("INSERT INTO tickets_fts(tickets_fts) VALUES('rebuild')");
+      // Contentless FTS5 doesn't support 'rebuild'. Drop and recreate instead.
+      db.exec('DROP TRIGGER IF EXISTS tickets_fts_ai');
+      db.exec('DROP TRIGGER IF EXISTS tickets_fts_au');
+      db.exec('DROP TRIGGER IF EXISTS tickets_fts_ad');
+      db.exec('DROP TABLE IF EXISTS tickets_fts');
+
+      db.exec(`CREATE VIRTUAL TABLE tickets_fts USING fts5(
+        title, description, notes, solution,
+        content='', contentless_delete=1
+      )`);
+
+      // Re-populate from source table
+      db.exec(`INSERT INTO tickets_fts(rowid, title, description, notes, solution)
+        SELECT rowid, title, COALESCE(description, ''), COALESCE(notes, ''), COALESCE(solution, '')
+        FROM tickets`);
+
+      // Recreate auto-sync triggers (same as migration 050)
+      db.exec(`CREATE TRIGGER IF NOT EXISTS tickets_fts_ai
+        AFTER INSERT ON tickets FOR EACH ROW BEGIN
+          INSERT INTO tickets_fts(rowid, title, description, notes, solution)
+          VALUES (NEW.rowid, NEW.title, COALESCE(NEW.description, ''), COALESCE(NEW.notes, ''), COALESCE(NEW.solution, ''));
+        END`);
+
+      db.exec(`CREATE TRIGGER IF NOT EXISTS tickets_fts_au
+        AFTER UPDATE OF title, description, notes, solution ON tickets FOR EACH ROW BEGIN
+          INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution)
+          VALUES('delete', OLD.rowid, OLD.title, COALESCE(OLD.description, ''), COALESCE(OLD.notes, ''), COALESCE(OLD.solution, ''));
+          INSERT INTO tickets_fts(rowid, title, description, notes, solution)
+          VALUES (NEW.rowid, NEW.title, COALESCE(NEW.description, ''), COALESCE(NEW.notes, ''), COALESCE(NEW.solution, ''));
+        END`);
+
+      db.exec(`CREATE TRIGGER IF NOT EXISTS tickets_fts_ad
+        AFTER DELETE ON tickets FOR EACH ROW BEGIN
+          INSERT INTO tickets_fts(tickets_fts, rowid, title, description, notes, solution)
+          VALUES('delete', OLD.rowid, OLD.title, COALESCE(OLD.description, ''), COALESCE(OLD.notes, ''), COALESCE(OLD.solution, ''));
+        END`);
     },
   },
   {
