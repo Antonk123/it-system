@@ -41,30 +41,11 @@ export const TicketLinks = ({
   const [isAdding, setIsAdding] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Fetch active tickets (open, in-progress, waiting, resolved)
-  const { tickets: activeTickets } = useTickets({
+  const { tickets } = useTickets({
     page: 1,
     limit: 500,
+    status: 'all',
   });
-
-  // Fetch closed/archived tickets separately
-  const { tickets: closedTickets } = useTickets({
-    page: 1,
-    limit: 500,
-    status: 'closed'
-  });
-
-  // Merge all tickets
-  const tickets = [...activeTickets, ...closedTickets];
-
-  // Debug: Log ticket statuses
-  if (import.meta.env.DEV && tickets.length > 0) {
-    const statusCounts = tickets.reduce((acc, t) => {
-      acc[t.status] = (acc[t.status] || 0) + 1;
-      return acc;
-    }, {} as Record<string, number>);
-    console.log('TicketLinks - Total tickets:', tickets.length, 'By status:', statusCounts);
-  }
 
   const handleAddLink = async (ticketId: string) => {
     if (ticketId === currentTicketId) {
