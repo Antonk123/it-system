@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Link as LinkIcon, X, Loader2, Search, Check } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Link as LinkIcon, X, Loader2, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { TicketLink } from '@/types/ticket';
 import { StatusBadge } from '@/components/StatusBadge';
@@ -20,7 +20,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
+import { useDebounce } from '@/hooks/useDebounce';
 
 interface TicketLinksProps {
   links: TicketLink[];
@@ -40,12 +40,23 @@ export const TicketLinks = ({
   const [open, setOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearch = useDebounce(searchQuery, 250);
 
-  const { tickets } = useTickets({
-    page: 1,
-    limit: 500,
-    status: 'all',
-  });
+  const { tickets, isLoading: isSearching } = useTickets(
+    debouncedSearch.length >= 2
+      ? { page: 1, limit: 50, status: 'all', search: debouncedSearch }
+      : undefined
+  );
+
+  const linkedIds = useMemo(
+    () => new Set([currentTicketId, ...links.map((l) => l.linkedTicket.id)]),
+    [currentTicketId, links]
+  );
+
+  const availableTickets = useMemo(
+    () => tickets.filter((t) => !linkedIds.has(t.id)),
+    [tickets, linkedIds]
+  );
 
   const handleAddLink = async (ticketId: string) => {
     if (ticketId === currentTicketId) {
@@ -65,33 +76,6 @@ export const TicketLinks = ({
       setIsAdding(false);
     }
   };
-
-  // Filter out current ticket and already linked tickets
-  const excludedTickets = tickets.filter(
-    (ticket) =>
-      ticket.id !== currentTicketId &&
-      !links.some((link) => link.linkedTicket.id === ticket.id)
-  );
-
-  // Custom search filter
-  const availableTickets = excludedTickets.filter((ticket) => {
-    if (!searchQuery) return true;
-
-    const query = searchQuery.toLowerCase();
-    const searchableText = [
-      ticket.title,
-      ticket.id,
-      ticket.description || '',
-      ticket.category || '',
-      ticket.status,
-      ticket.priority,
-      ticket.notes || '',
-      ticket.solution || '',
-      ...(ticket.tags?.map((t: any) => t.name) || []),
-    ].join(' ').toLowerCase();
-
-    return searchableText.includes(query);
-  });
 
   const handleDeleteLink = async (linkId: string) => {
     try {
@@ -114,7 +98,7 @@ export const TicketLinks = ({
         open={open}
         onOpenChange={(isOpen) => {
           setOpen(isOpen);
-          if (!isOpen) setSearchQuery(''); // Clear search when closed
+          if (!isOpen) setSearchQuery('');
         }}
       >
         <PopoverTrigger asChild>
@@ -137,36 +121,46 @@ export const TicketLinks = ({
               onValueChange={setSearchQuery}
             />
             <CommandList>
-              <CommandEmpty>Inga ärenden hittades.</CommandEmpty>
-              <CommandGroup>
-                {availableTickets.slice(0, 100).map((ticket) => (
-                  <CommandItem
-                    key={ticket.id}
-                    value={ticket.id}
-                    onSelect={() => handleAddLink(ticket.id)}
-                    disabled={isAdding}
-                    className="flex items-start gap-2 py-2"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium line-clamp-1">
-                        {ticket.title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-muted-foreground font-mono">
-                          #{ticket.id.slice(0, 8)}
-                        </span>
-                        <StatusBadge status={ticket.status} />
-                        <PriorityBadge priority={ticket.priority} />
-                        {ticket.category && (
-                          <span className="text-xs text-muted-foreground">
-                            {ticket.category}
+              {debouncedSearch.length < 2 ? (
+                <CommandEmpty>Skriv minst 2 tecken för att söka.</CommandEmpty>
+              ) : isSearching ? (
+                <CommandEmpty>
+                  <Loader2 className="w-4 h-4 animate-spin inline mr-2" />
+                  Söker...
+                </CommandEmpty>
+              ) : availableTickets.length === 0 ? (
+                <CommandEmpty>Inga ärenden hittades.</CommandEmpty>
+              ) : (
+                <CommandGroup>
+                  {availableTickets.map((ticket) => (
+                    <CommandItem
+                      key={ticket.id}
+                      value={ticket.id}
+                      onSelect={() => handleAddLink(ticket.id)}
+                      disabled={isAdding}
+                      className="flex items-start gap-2 py-2"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium line-clamp-1">
+                          {ticket.title}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs text-muted-foreground font-mono">
+                            #{ticket.id.slice(0, 8)}
                           </span>
-                        )}
+                          <StatusBadge status={ticket.status} />
+                          <PriorityBadge priority={ticket.priority} />
+                          {ticket.category && (
+                            <span className="text-xs text-muted-foreground">
+                              {ticket.category}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
             </CommandList>
           </Command>
         </PopoverContent>
