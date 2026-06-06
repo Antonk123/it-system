@@ -69,7 +69,7 @@ export default defineConfig(({ mode }) => ({
             return undefined;
           }
 
-          if (id.includes('recharts') || id.includes('chart.js') || id.includes('jspdf') || id.includes('html2canvas') || id.includes('xlsx')) {
+          if (id.includes('recharts')) {
             return 'reporting-vendor';
           }
 

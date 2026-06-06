@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import multer from 'multer';
@@ -96,8 +96,8 @@ function parseCSV(buffer: Buffer): Record<string, string>[] {
   return rows;
 }
 
-// Export contacts to CSV (must come before /:id route)
-router.get('/export', authenticate, (_req: AuthRequest, res: Response) => {
+// Export contacts to XLSX (must come before /:id route)
+router.get('/export', authenticate, async (_req: AuthRequest, res: Response) => {
   try {
     const contacts = db.prepare(`
       SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.department, c.created_at
@@ -115,10 +115,11 @@ router.get('/export', authenticate, (_req: AuthRequest, res: Response) => {
       c.name, c.email, c.phone || '', c.company_name || '', c.created_at
     ]);
 
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Kontakter');
-    const xlsxBuffer = Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Kontakter');
+    ws.addRow(headers);
+    ws.addRows(rows);
+    const xlsxBuffer = Buffer.from(await wb.xlsx.writeBuffer());
 
     const timestamp = new Date().toISOString().split('T')[0];
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

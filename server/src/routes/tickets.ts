@@ -4,7 +4,7 @@ import multer from 'multer';
 import { existsSync, unlinkSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail, sendTicketAssignedEmail } from '../lib/email.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
@@ -68,7 +68,7 @@ function escapeCSVField(field: any): string {
   return str;
 }
 
-function generateXLSX(tickets: TicketRow[], categories: CategoryLookup[], contacts: ContactLookup[]): Buffer {
+async function generateXLSX(tickets: TicketRow[], categories: CategoryLookup[], contacts: ContactLookup[]): Promise<Buffer> {
   const categoryMap = new Map(categories.map((c) => [c.id, c.label]));
   const contactMap = new Map(contacts.map((c) => [c.id, { name: c.name, email: c.email }]));
 
@@ -89,10 +89,11 @@ function generateXLSX(tickets: TicketRow[], categories: CategoryLookup[], contac
     ];
   });
 
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Ärenden');
-  return Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Ärenden');
+  ws.addRow(headers);
+  ws.addRows(rows);
+  return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
 // CSV Import helpers
@@ -846,8 +847,8 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
   }
 });
 
-// Export tickets to CSV
-router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
+// Export tickets to XLSX
+router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const query = req.query as TicketQueryParams;
 
@@ -875,7 +876,7 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
     // Get all contacts for lookup
     const contacts = db.prepare('SELECT id, name, email FROM contacts').all() as ContactLookup[];
 
-    const xlsxBuffer = generateXLSX(tickets, categories, contacts);
+    const xlsxBuffer = await generateXLSX(tickets, categories, contacts);
 
     const timestamp = new Date().toISOString().split('T')[0];
     const source = req.query.source as string | undefined;
@@ -905,7 +906,7 @@ router.get('/export', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Export archive (closed tickets) to XLSX — lightweight 6-column format
-router.get('/export-archive', authenticate, (req: AuthRequest, res: Response) => {
+router.get('/export-archive', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const query = req.query as TicketQueryParams;
     const idsParam = req.query.ids as string | undefined;
@@ -969,10 +970,11 @@ router.get('/export-archive', authenticate, (req: AuthRequest, res: Response) =>
       ticket.closed_at || '',
     ]);
 
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Arkiv');
-    const xlsxBuffer = Buffer.from(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }));
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Arkiv');
+    ws.addRow(headers);
+    ws.addRows(rows);
+    const xlsxBuffer = Buffer.from(await wb.xlsx.writeBuffer());
 
     const timestamp = new Date().toISOString().split('T')[0];
     const filename = `arkiv-export-${timestamp}.xlsx`;

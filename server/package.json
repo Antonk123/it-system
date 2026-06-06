@@ -17,6 +17,7 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "csrf-csrf": "^4.0.3",
+    "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "helmet": "^8.1.0",
     "html-to-text": "^9.0.5",
@@ -32,8 +33,7 @@
     "sanitize-html": "^2.17.4",
     "unzipper": "^0.12.3",
     "uuid": "^11.0.5",
-    "web-push": "^3.6.7",
-    "xlsx": "^0.18.5"
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@types/archiver": "^7.0.0",
