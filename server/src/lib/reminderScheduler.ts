@@ -1,9 +1,9 @@
-import cron from 'node-cron';
+import cron, { ScheduledTask } from 'node-cron';
 import { db } from '../db/connection.js';
 import { sendTicketReminderEmail } from './email.js';
 import { sendPushToAllSubscriptions } from './push.js';
 
-let schedulerTask: cron.ScheduledTask | null = null;
+let schedulerTask: ScheduledTask | null = null;
 
 interface DueReminder {
   id: string;

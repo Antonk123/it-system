@@ -1,7 +1,7 @@
-import cron from 'node-cron';
+import cron, { ScheduledTask } from 'node-cron';
 import { processWebhookRetries } from './webhookDispatcher.js';
 
-let schedulerTask: cron.ScheduledTask | null = null;
+let schedulerTask: ScheduledTask | null = null;
 let running = false;
 
 export function startWebhookRetryScheduler() {

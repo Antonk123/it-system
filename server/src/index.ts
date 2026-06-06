@@ -17,6 +17,7 @@ import { startWebhookRetryScheduler } from './lib/webhookRetryScheduler.js';
 import { initWebPush } from './lib/push.js';
 import { startPushScheduler } from './lib/pushScheduler.js';
 import cron from 'node-cron';
+import archiver from 'archiver';
 import passport from './config/passport.js';
 import { logger } from './lib/logger.js';
 
@@ -105,30 +106,78 @@ cron.schedule('15 3 * * *', () => {
 });
 logger.info('AI usage log cleanup scheduled (daily at 03:15)');
 
-// Daily automatic database backup at 04:00 — keeps last 7 days
-const BACKUP_DIR = path.join(path.dirname(process.env.DB_PATH || path.join(__dirname, '../../data/database.sqlite')), 'backups');
+// Daily automatic backup at 04:00 — keeps last BACKUP_RETENTION_DAYS snapshots.
+// Each snapshot is a ZIP containing data/database.sqlite + data/uploads, so it can
+// be restored directly via POST /api/backup/restore (matches manual-download format).
+// Pre-ZIP, PRAGMA integrity_check runs against the snapshot — a corrupted DB never
+// reaches retention.
+const BACKUP_DB_DEFAULT = path.join(__dirname, '../../data/database.sqlite');
+const BACKUP_DIR = path.join(path.dirname(process.env.DB_PATH || BACKUP_DB_DEFAULT), 'backups');
+const BACKUP_UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../data/uploads');
+const BACKUP_RETENTION_DAYS = Math.max(1, parseInt(process.env.BACKUP_RETENTION_DAYS || '7', 10));
+
 cron.schedule('0 4 * * *', async () => {
+  const tmpDbPath = path.join(BACKUP_DIR, `tmp-${Date.now()}.sqlite`);
+  let tmpDbCreated = false;
+
   try {
     fs.mkdirSync(BACKUP_DIR, { recursive: true });
     const dateStr = new Date().toISOString().slice(0, 10);
-    const backupPath = path.join(BACKUP_DIR, `backup-${dateStr}.sqlite`);
-    await db.backup(backupPath);
+    const backupPath = path.join(BACKUP_DIR, `backup-${dateStr}.zip`);
+
+    // 1. Snapshot DB to tmp file (online backup, WAL-safe)
+    await db.backup(tmpDbPath);
+    tmpDbCreated = true;
+
+    // 2. Verify snapshot integrity — corrupt files never roll into retention
+    const Database = (await import('better-sqlite3')).default;
+    const verifyDb = new Database(tmpDbPath, { readonly: true });
+    try {
+      const result = verifyDb.pragma('integrity_check') as Array<{ integrity_check: string }>;
+      const passed = result.length === 1 && result[0].integrity_check === 'ok';
+      if (!passed) {
+        throw new Error(`integrity_check failed: ${JSON.stringify(result)}`);
+      }
+    } finally {
+      verifyDb.close();
+    }
+
+    // 3. Bundle DB + uploads into ZIP (same structure as manual download → directly restorable)
+    await new Promise<void>((resolve, reject) => {
+      const output = fs.createWriteStream(backupPath);
+      const archive = archiver('zip', { zlib: { level: 6 } });
+      output.on('close', () => resolve());
+      output.on('error', reject);
+      archive.on('error', reject);
+      archive.pipe(output);
+      archive.file(tmpDbPath, { name: 'data/database.sqlite' });
+      if (fs.existsSync(BACKUP_UPLOAD_DIR)) {
+        archive.directory(BACKUP_UPLOAD_DIR, 'data/uploads');
+      }
+      archive.finalize();
+    });
+
+    fs.unlinkSync(tmpDbPath);
+    tmpDbCreated = false;
     logger.info('Automatic backup completed', { path: backupPath });
 
-    // Retain only the 7 most recent backups
+    // 4. Retention — keep newest N, delete older .zip and any legacy .sqlite snapshots
     const files = fs.readdirSync(BACKUP_DIR)
-      .filter((f: string) => f.startsWith('backup-') && f.endsWith('.sqlite'))
+      .filter((f: string) => f.startsWith('backup-') && (f.endsWith('.zip') || f.endsWith('.sqlite')))
       .sort()
       .reverse();
-    for (const old of files.slice(7)) {
+    for (const old of files.slice(BACKUP_RETENTION_DAYS)) {
       fs.unlinkSync(path.join(BACKUP_DIR, old));
       logger.info('Deleted old backup', { file: old });
     }
   } catch (error) {
+    if (tmpDbCreated) {
+      try { fs.unlinkSync(tmpDbPath); } catch { /* ignore */ }
+    }
     logger.error('Automatic backup failed', { error: String(error) });
   }
 });
-logger.info('Automatic backup scheduled (daily at 04:00, retain 7)');
+logger.info(`Automatic backup scheduled (daily at 04:00, retain ${BACKUP_RETENTION_DAYS})`);
 
 // Auto-close resolved tickets (daily at 02:30, configurable via AUTO_CLOSE_DAYS env var)
 startAutoCloseScheduler();
@@ -219,13 +268,13 @@ app.use(passport.initialize());
 // CSRF protection (Double Submit Cookie Pattern via csrf-csrf)
 // Protects all state-changing endpoints (POST, PUT, PATCH, DELETE) under /api
 // Exempt: /api/auth/login and /api/auth/refresh (authenticate with credentials, not cookies)
-if (process.env.NODE_ENV === 'production' && !process.env.CSRF_SECRET) {
-  logger.error('FATAL: CSRF_SECRET must be set in production');
+if (!process.env.CSRF_SECRET) {
+  logger.error('FATAL: CSRF_SECRET must be set (no dev fallback — generate with `openssl rand -hex 64`)');
   process.exit(1);
 }
 
 const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
-  getSecret: () => process.env.CSRF_SECRET || 'csrf-dev-secret-change-in-production',
+  getSecret: () => process.env.CSRF_SECRET!,
   // Use the Authorization header as session identifier so each JWT session gets its own CSRF token
   getSessionIdentifier: (req) => {
     try {
