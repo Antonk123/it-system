@@ -137,7 +137,7 @@ const BottomSection = ({ open, user, onLogout, onToggle }: BottomSectionProps) =
       <Link to="/tickets/new">
         <button className={cn(
           "w-full flex items-center gap-2 rounded-md transition-all duration-200",
-          "bg-gradient-to-r from-primary to-accent text-white",
+          "bg-linear-to-r from-primary to-accent text-white",
           "hover:from-primary/90 hover:to-accent/90",
           open ? "h-11 px-4" : "h-11 justify-center"
         )}>
@@ -236,7 +236,7 @@ export const Layout = ({
           type="button"
           aria-label="Stäng meny"
           tabIndex={0}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 lg:hidden animate-fade-in cursor-default"
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden animate-fade-in cursor-default"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -253,7 +253,7 @@ export const Layout = ({
       )}>
         {/* Close button for mobile */}
         <button
-          className="lg:hidden absolute top-3 right-3 text-sidebar-foreground hover:text-primary transition-colors z-20 inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="lg:hidden absolute top-3 right-3 text-sidebar-foreground hover:text-primary transition-colors z-20 inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-sidebar-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => setSidebarOpen(false)}
           aria-label="Stäng meny"
         >
@@ -330,17 +330,17 @@ export const Layout = ({
                 </div>
                 {/* Glow layer 2: inner gradient */}
                 <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[52px] rounded-xl blur-[3px] dark:opacity-50">
-                  <div className="absolute w-[600px] h-[600px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[82deg]
+                  <div className="absolute w-[600px] h-[600px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-82
                                   bg-[conic-gradient(rgba(0,0,0,0),hsl(var(--search-glow-primary-dark)),rgba(0,0,0,0)_10%,rgba(0,0,0,0)_50%,hsl(var(--search-glow-accent-dark)),rgba(0,0,0,0)_60%)]
                                   transition-all duration-2000
-                                  group-hover:rotate-[-98deg] group-focus-within:rotate-[442deg]" />
+                                  group-hover:rotate-[-98deg] group-focus-within:rotate-442" />
                 </div>
                 {/* Glow layer 3: highlight */}
                 <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[50px] rounded-lg blur-[2px] dark:opacity-50">
-                  <div className="absolute w-[600px] h-[600px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[70deg]
+                  <div className="absolute w-[600px] h-[600px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-70
                                   bg-[conic-gradient(rgba(0,0,0,0)_0%,hsl(var(--search-glow-primary-bright)),rgba(0,0,0,0)_8%,rgba(0,0,0,0)_50%,hsl(var(--search-glow-accent-bright)),rgba(0,0,0,0)_58%)]
                                   brightness-140 transition-all duration-2000
-                                  group-hover:rotate-[-97deg] group-focus-within:rotate-[443deg]" />
+                                  group-hover:rotate-[-97deg] group-focus-within:rotate-443" />
                 </div>
                 <div className="relative flex items-center gap-2 px-4 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-primary/30 text-muted-foreground text-sm transition-colors">
                   <Search className="w-4 h-4" />
@@ -374,7 +374,7 @@ export const Layout = ({
         <QuickCaptureFAB className={cn(
           "left-4 lg:transition-[left] lg:duration-300",
           "bottom-[72px] lg:bottom-6",
-          sidebarCollapsed ? "lg:left-20" : "lg:left-[17rem]"
+          sidebarCollapsed ? "lg:left-20" : "lg:left-68"
         )} />
       </div>
 

@@ -56,7 +56,7 @@ export const KPICard = ({
       >
         <CardContent className="p-4">
           <div className="flex items-start justify-between mb-3">
-            <div className="p-2 rounded-lg bg-gradient-to-br from-primary/20 to-accent/10 backdrop-blur-sm">
+            <div className="p-2 rounded-lg bg-linear-to-br from-primary/20 to-accent/10 backdrop-blur-xs">
               <div className="text-primary w-5 h-5">{icon}</div>
             </div>
             {trend && (
@@ -77,7 +77,7 @@ export const KPICard = ({
                 decimals={valueDecimals}
                 suffix={valueSuffix}
                 prefix={valuePrefix}
-                className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent"
+                className="bg-linear-to-r from-primary to-accent bg-clip-text text-transparent"
               />
             </div>
             {subLabel != null && (
@@ -97,7 +97,7 @@ export const KPICard = ({
         </CardContent>
 
         {/* Decorative gradient overlay */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50 pointer-events-none" />
+        <div className="absolute top-0 right-0 w-32 h-32 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50 pointer-events-none" />
       </Card>
   );
 };

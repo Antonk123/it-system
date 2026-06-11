@@ -60,7 +60,7 @@ export function DateRangePopover({
               {DATE_FIELD_OPTIONS.map((option) => (
                 <Button
                   key={option.value}
-                  variant={dateField === option.value ? 'default' : 'outline'}
+                  variant={dateField === option.value ? 'default' : 'outline-solid'}
                   size="sm"
                   onClick={() => onChange({ dateField: option.value })}
                   aria-pressed={dateField === option.value}
@@ -81,7 +81,7 @@ export function DateRangePopover({
             type="date"
             value={dateFrom}
             onChange={(e) => onChange({ dateFrom: e.target.value })}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
 
@@ -94,7 +94,7 @@ export function DateRangePopover({
             type="date"
             value={dateTo}
             onChange={(e) => onChange({ dateTo: e.target.value })}
-            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
 

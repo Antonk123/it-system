@@ -1,17 +1,447 @@
 /* Distinctive typography - avoiding generic AI fonts */
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap')
+layer(base);
 
-@import url("https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Crimson+Pro:wght@400;500;600;700&display=swap')
+layer(base);
 
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap')
+layer(base);
 
-@import url("https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:wght@400;700&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:wght@400;700&display=swap')
+layer(base);
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap')
+layer(base);
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@plugin 'tailwindcss-animate';
+@plugin '@tailwindcss/typography';
+
+@custom-variant dark (&:is(.dark *));
+
+@utility container {
+  margin-inline: auto;
+  padding-inline: 2rem;
+  @media (width >= --theme(--breakpoint-sm)) {
+    max-width: none;
+  }
+  @media (width >= 1400px) {
+    max-width: 1400px;
+  }
+}
+
+@theme {
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-fade-in: fade-in 0.5s ease-out;
+  --animate-slide-in-right: slide-in-right 0.4s ease-out;
+  --animate-scale-in: scale-in 0.3s ease-out;
+  --animate-spin-slow: spin 4s linear infinite;
+  --animate-search-glow-slow: search-glow-slow 2s ease-in-out infinite alternate;
+  --animate-search-glow-focus: search-glow-focus 4s ease-in-out infinite;
+
+  --transition-duration-2000: 2000ms;
+
+  --font-sans: Plus Jakarta Sans, ui-sans-serif, system-ui, sans-serif;
+  --font-serif: Crimson Pro, Libre Caslon Text, ui-serif, Georgia, serif;
+  --font-mono: JetBrains Mono, ui-monospace, Fira Code, monospace;
+
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  @keyframes slide-in-right {
+    from {
+      opacity: 0;
+      transform: translateX(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+  @keyframes scale-in {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes search-glow-slow {
+    from {
+      transform: translate(-50%, -50%) rotate(60deg);
+    }
+    to {
+      transform: translate(-50%, -50%) rotate(-120deg);
+    }
+  }
+  @keyframes search-glow-focus {
+    from {
+      transform: translate(-50%, -50%) rotate(82deg);
+    }
+    to {
+      transform: translate(-50%, -50%) rotate(442deg);
+    }
+  }
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility status-badge-open {
+  /* Status badges with enhanced styling */
+  @apply bg-[hsl(var(--status-open)/0.1)] text-[hsl(var(--status-open))] border-[hsl(var(--status-open)/0.3)] transition-all duration-200;
+}
+
+@utility status-badge-in-progress {
+  @apply bg-[hsl(var(--status-in-progress)/0.1)] text-[hsl(var(--status-in-progress))] border-[hsl(var(--status-in-progress)/0.3)] transition-all duration-200;
+}
+
+@utility status-badge-waiting {
+  @apply bg-[hsl(var(--status-waiting)/0.1)] text-[hsl(var(--status-waiting))] border-[hsl(var(--status-waiting)/0.3)] transition-all duration-200;
+}
+
+@utility status-badge-resolved {
+  @apply bg-[hsl(var(--status-resolved)/0.1)] text-[hsl(var(--status-resolved))] border-[hsl(var(--status-resolved)/0.3)] transition-all duration-200;
+}
+
+@utility status-badge-closed {
+  @apply bg-[hsl(var(--status-closed)/0.1)] text-[hsl(var(--status-closed))] border-[hsl(var(--status-closed)/0.3)] transition-all duration-200;
+}
+
+@utility priority-badge-low {
+  @apply bg-[hsl(var(--priority-low)/0.1)] text-[hsl(var(--priority-low))] transition-all duration-200;
+}
+
+@utility priority-badge-medium {
+  @apply bg-[hsl(var(--priority-medium)/0.1)] text-[hsl(var(--priority-medium))] transition-all duration-200;
+}
+
+@utility priority-badge-high {
+  @apply bg-[hsl(var(--priority-high)/0.1)] text-[hsl(var(--priority-high))] transition-all duration-200;
+}
+
+@utility priority-badge-critical {
+  @apply bg-[hsl(var(--priority-critical)/0.1)] text-[hsl(var(--priority-critical))] transition-all duration-200;
+}
+
+@utility ticket-card {
+  /* Glassmorphic ticket card */
+  position: relative;
+  background: linear-gradient(
+    135deg,
+    hsla(var(--card), 0.4) 0%,
+    hsla(var(--card), 0.2) 100%
+  );
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid hsla(var(--border), 0.5);
+  border-radius: 16px;
+  overflow: visible;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    padding: 2px;
+    background: linear-gradient(
+      135deg,
+      hsla(var(--primary), 0.5) 0%,
+      hsla(var(--accent), 0.3) 50%,
+      transparent 100%
+    );
+    -webkit-mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask:
+      linear-gradient(#fff 0 0) content-box,
+      linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  &:hover::before {
+    opacity: 1;
+  }
+
+  &:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow:
+      0 20px 40px -12px hsla(var(--primary), 0.25),
+      0 8px 16px -8px hsla(var(--accent), 0.3),
+      inset 0 1px 0 hsla(var(--primary), 0.1);
+  }
+
+  /* Decorative corner accent */
+  &::after {
+    content: '';
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(
+      135deg,
+      hsla(var(--primary), 0.3) 0%,
+      transparent 70%
+    );
+    clip-path: polygon(100% 0, 0 0, 100% 100%);
+    border-radius: 0 16px 0 0;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  &:hover::after {
+    opacity: 1;
+  }
+}
+
+@utility ticket-row {
+  /* Table row styling */
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+@utility geo-border {
+  /* Geometric accent borders */
+  position: relative;
+  isolation: isolate;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(
+      180deg,
+      hsla(var(--primary), 0.8) 0%,
+      hsla(var(--accent), 0.8) 100%
+    );
+    clip-path: polygon(
+      0 0,
+      100% 0,
+      100% 30%,
+      0 35%,
+      0 65%,
+      100% 70%,
+      100% 100%,
+      0 100%
+    );
+    transition: all 0.3s ease;
+  }
+
+  &:hover::before {
+    width: 6px;
+    background: linear-gradient(
+      180deg,
+      hsla(var(--accent), 1) 0%,
+      hsla(var(--primary), 1) 100%
+    );
+  }
+}
+
+@utility floating-tag {
+  /* Floating tag effect */
+  animation: float 3s ease-in-out infinite;
+}
+
+@utility neon-glow {
+  /* Neon glow effect */
+  text-shadow:
+    0 0 10px hsla(var(--primary), 0.5),
+    0 0 20px hsla(var(--primary), 0.3),
+    0 0 30px hsla(var(--primary), 0.2);
+}
+
+@utility skew-container {
+  /* Skewed container for visual interest */
+  position: relative;
+  isolation: isolate;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    background: linear-gradient(
+      135deg,
+      hsla(var(--primary), 0.1) 0%,
+      hsla(var(--accent), 0.05) 100%
+    );
+    transform: skewY(-1deg);
+    border-radius: inherit;
+    z-index: -1;
+  }
+}
+
+@utility glow-subtle {
+  /* Utility classes for enhanced visuals */
+  box-shadow: 0 0 20px hsla(var(--primary), 0.3);
+}
+
+@utility glow-accent {
+  box-shadow: 0 0 30px hsla(var(--accent), 0.4);
+}
+
+@utility grid-pattern {
+  /* Grid pattern background */
+  background-image:
+    linear-gradient(hsla(var(--primary), 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, hsla(var(--primary), 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+@utility holographic {
+  /* Holographic shimmer effect */
+  position: relative;
+  overflow: hidden;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      110deg,
+      transparent 30%,
+      hsla(var(--primary), 0.2) 50%,
+      transparent 70%
+    );
+    animation: shimmer 3s infinite;
+    pointer-events: none;
+  }
+}
+
+@utility ring-segment {
+  /* Theme-specific enhancements */
+
+  /* Radial Progress Rings animations */
+
+  /* Ring segment hover effects */
+  transition: all 0.3s ease;
+}
+
+@utility ring-segment-active {
+  filter: drop-shadow(0 0 8px currentColor) brightness(1.1);
+  stroke-width: 10;
+}
+
+@utility ring-legend-item {
+  /* Legend item hover effects */
+  transition:
+    transform 0.2s ease,
+    background-color 0.2s ease;
+
+  &:hover {
+    transform: translateX(4px);
+  }
+}
+
+@utility requester-bar {
+  /* Requester bar hover effects */
+  transition: all 0.3s ease;
+
+  &:hover {
+    filter: brightness(1.1);
+    transform: translateX(2px);
+  }
+}
 
 @layer base {
   body {
@@ -1241,230 +1671,16 @@
 }
 
 @layer components {
-  /* Status badges with enhanced styling */
-  .status-badge-open {
-    @apply bg-[hsl(var(--status-open)/0.1)] text-[hsl(var(--status-open))] border-[hsl(var(--status-open)/0.3)] transition-all duration-200;
-  }
-
-  .status-badge-in-progress {
-    @apply bg-[hsl(var(--status-in-progress)/0.1)] text-[hsl(var(--status-in-progress))] border-[hsl(var(--status-in-progress)/0.3)] transition-all duration-200;
-  }
-
-  .status-badge-waiting {
-    @apply bg-[hsl(var(--status-waiting)/0.1)] text-[hsl(var(--status-waiting))] border-[hsl(var(--status-waiting)/0.3)] transition-all duration-200;
-  }
-
-  .status-badge-resolved {
-    @apply bg-[hsl(var(--status-resolved)/0.1)] text-[hsl(var(--status-resolved))] border-[hsl(var(--status-resolved)/0.3)] transition-all duration-200;
-  }
-
-  .status-badge-closed {
-    @apply bg-[hsl(var(--status-closed)/0.1)] text-[hsl(var(--status-closed))] border-[hsl(var(--status-closed)/0.3)] transition-all duration-200;
-  }
-
-  .priority-badge-low {
-    @apply bg-[hsl(var(--priority-low)/0.1)] text-[hsl(var(--priority-low))] transition-all duration-200;
-  }
-
-  .priority-badge-medium {
-    @apply bg-[hsl(var(--priority-medium)/0.1)] text-[hsl(var(--priority-medium))] transition-all duration-200;
-  }
-
-  .priority-badge-high {
-    @apply bg-[hsl(var(--priority-high)/0.1)] text-[hsl(var(--priority-high))] transition-all duration-200;
-  }
-
-  .priority-badge-critical {
-    @apply bg-[hsl(var(--priority-critical)/0.1)] text-[hsl(var(--priority-critical))] transition-all duration-200;
-  }
-
-  /* Glassmorphic ticket card */
-  .ticket-card {
-    position: relative;
-    background: linear-gradient(135deg,
-      hsla(var(--card), 0.4) 0%,
-      hsla(var(--card), 0.2) 100%);
-    backdrop-filter: blur(20px) saturate(180%);
-    border: 1px solid hsla(var(--border), 0.5);
-    border-radius: 16px;
-    overflow: visible;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .ticket-card::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 16px;
-    padding: 2px;
-    background: linear-gradient(135deg,
-      hsla(var(--primary), 0.5) 0%,
-      hsla(var(--accent), 0.3) 50%,
-      transparent 100%);
-    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-    mask-composite: exclude;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
-  .ticket-card:hover::before {
-    opacity: 1;
-  }
-
-  .ticket-card:hover {
-    transform: translateY(-4px) scale(1.01);
-    box-shadow:
-      0 20px 40px -12px hsla(var(--primary), 0.25),
-      0 8px 16px -8px hsla(var(--accent), 0.3),
-      inset 0 1px 0 hsla(var(--primary), 0.1);
-  }
-
-  /* Decorative corner accent */
-  .ticket-card::after {
-    content: '';
-    position: absolute;
-    top: -1px;
-    right: -1px;
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg,
-      hsla(var(--primary), 0.3) 0%,
-      transparent 70%);
-    clip-path: polygon(100% 0, 0 0, 100% 100%);
-    border-radius: 0 16px 0 0;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
-  .ticket-card:hover::after {
-    opacity: 1;
-  }
-
-  /* Table row styling */
-  .ticket-row {
-    position: relative;
-    transition: all 0.2s ease;
-  }
-
-  /* Geometric accent borders */
-  .geo-border {
-    position: relative;
-    isolation: isolate;
-  }
-
-  .geo-border::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: linear-gradient(180deg,
-      hsla(var(--primary), 0.8) 0%,
-      hsla(var(--accent), 0.8) 100%);
-    clip-path: polygon(
-      0 0,
-      100% 0,
-      100% 30%,
-      0 35%,
-      0 65%,
-      100% 70%,
-      100% 100%,
-      0 100%
-    );
-    transition: all 0.3s ease;
-  }
-
-  .geo-border:hover::before {
-    width: 6px;
-    background: linear-gradient(180deg,
-      hsla(var(--accent), 1) 0%,
-      hsla(var(--primary), 1) 100%);
-  }
-
-  /* Floating tag effect */
-  .floating-tag {
-    animation: float 3s ease-in-out infinite;
-  }
 
   @keyframes float {
     0%, 100% { transform: translateY(0px); }
     50% { transform: translateY(-4px); }
   }
 
-  /* Neon glow effect */
-  .neon-glow {
-    text-shadow:
-      0 0 10px hsla(var(--primary), 0.5),
-      0 0 20px hsla(var(--primary), 0.3),
-      0 0 30px hsla(var(--primary), 0.2);
-  }
-
-  /* Skewed container for visual interest */
-  .skew-container {
-    position: relative;
-    isolation: isolate;
-  }
-
-  .skew-container::before {
-    content: '';
-    position: absolute;
-    inset: -2px;
-    background: linear-gradient(135deg,
-      hsla(var(--primary), 0.1) 0%,
-      hsla(var(--accent), 0.05) 100%);
-    transform: skewY(-1deg);
-    border-radius: inherit;
-    z-index: -1;
-  }
-
-  /* Utility classes for enhanced visuals */
-  .glow-subtle {
-    box-shadow: 0 0 20px hsla(var(--primary), 0.3);
-  }
-
-  .glow-accent {
-    box-shadow: 0 0 30px hsla(var(--accent), 0.4);
-  }
-
-  /* Grid pattern background */
-  .grid-pattern {
-    background-image:
-      linear-gradient(hsla(var(--primary), 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, hsla(var(--primary), 0.03) 1px, transparent 1px);
-    background-size: 32px 32px;
-  }
-
-  /* Holographic shimmer effect */
-  .holographic {
-    position: relative;
-    overflow: hidden;
-  }
-
-  .holographic::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      110deg,
-      transparent 30%,
-      hsla(var(--primary), 0.2) 50%,
-      transparent 70%
-    );
-    animation: shimmer 3s infinite;
-    pointer-events: none;
-  }
-
   @keyframes shimmer {
     0% { transform: translateX(-100%); }
     100% { transform: translateX(100%); }
   }
-
-  /* Theme-specific enhancements */
-
-  /* Radial Progress Rings animations */
   @keyframes ring-fill {
     from {
       stroke-dashoffset: var(--dash-total);
@@ -1472,35 +1688,6 @@
     to {
       stroke-dashoffset: var(--dash-offset);
     }
-  }
-
-  /* Ring segment hover effects */
-  .ring-segment {
-    transition: all 0.3s ease;
-  }
-
-  .ring-segment-active {
-    filter: drop-shadow(0 0 8px currentColor) brightness(1.1);
-    stroke-width: 10;
-  }
-
-  /* Legend item hover effects */
-  .ring-legend-item {
-    transition: transform 0.2s ease, background-color 0.2s ease;
-  }
-
-  .ring-legend-item:hover {
-    transform: translateX(4px);
-  }
-
-  /* Requester bar hover effects */
-  .requester-bar {
-    transition: all 0.3s ease;
-  }
-
-  .requester-bar:hover {
-    filter: brightness(1.1);
-    transform: translateX(2px);
   }
 }
 

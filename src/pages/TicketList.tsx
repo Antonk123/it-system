@@ -37,7 +37,7 @@ const listItem = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: 'easeOut' } },
 };
 
-const priorityVariant = (priority: string): 'default' | 'destructive' | 'secondary' | 'outline' => {
+const priorityVariant = (priority: string): 'default' | 'destructive' | 'secondary' | 'outline-solid' => {
   switch (priority) {
     case 'critical': return 'destructive';
     case 'high': return 'destructive';
@@ -262,7 +262,7 @@ const TicketList = () => {
           <div className="flex flex-wrap items-center gap-2">
             <div className="hidden md:flex items-center gap-2">
               <Button
-                variant={viewMode === 'table' ? 'default' : 'outline'}
+                variant={viewMode === 'table' ? 'default' : 'outline-solid'}
                 size="sm"
                 onClick={() => setViewMode(viewMode === 'table' ? 'kanban' : 'table')}
                 className="h-8 gap-2"
@@ -331,7 +331,7 @@ const TicketList = () => {
             {(['open', 'in-progress', 'waiting'] as TicketStatus[]).map(s => (
               <Badge
                 key={s}
-                variant={selectedStatuses.includes(s) ? 'default' : 'outline'}
+                variant={selectedStatuses.includes(s) ? 'default' : 'outline-solid'}
                 className="cursor-pointer shrink-0"
                 role="button"
                 tabIndex={0}
@@ -467,7 +467,7 @@ const TicketList = () => {
                       key={ticket.id}
                       type="button"
                       onClick={() => handleTicketClick(ticket.id)}
-                      className="w-full text-left p-3 rounded-lg border bg-card active:bg-muted/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                      className="w-full text-left p-3 rounded-lg border bg-card active:bg-muted/50 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                       aria-label={`Öppna ärende ${ticket.title}, prioritet ${ticket.priority}, status ${STATUS_LABELS[ticket.status] ?? ticket.status}`}
                     >
                       <div className="flex items-start justify-between gap-2">

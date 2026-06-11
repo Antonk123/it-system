@@ -171,7 +171,7 @@ const PublicTicketForm = () => {
           </div>
           <h2 className="text-2xl font-semibold text-foreground mb-2">Glad att det löste sig!</h2>
           <p className="text-muted-foreground mb-8">Inget ärende behövde skapas. Kontakta oss gärna igen om du behöver mer hjälp.</p>
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-2xl backdrop-blur-sm flex flex-col gap-3">
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-2xl backdrop-blur-xs flex flex-col gap-3">
             <Button
               onClick={() => { handleReset(); setAiSolved(false); setAiSuggestion(null); }}
               className="w-full h-11 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-colors cursor-pointer"
@@ -203,7 +203,7 @@ const PublicTicketForm = () => {
           </div>
           <h2 className="text-2xl font-semibold text-foreground mb-2">Ärendet skickat!</h2>
           <p className="text-muted-foreground mb-8">Tack för att du kontaktar oss. Vi återkommer så snart som möjligt.</p>
-          <div className="bg-card border border-border rounded-2xl p-6 shadow-2xl backdrop-blur-sm flex flex-col gap-3">
+          <div className="bg-card border border-border rounded-2xl p-6 shadow-2xl backdrop-blur-xs flex flex-col gap-3">
             <Button
               onClick={handleReset}
               className="w-full h-11 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-semibold transition-colors cursor-pointer"
@@ -253,7 +253,7 @@ const PublicTicketForm = () => {
             {/* Error */}
             {error && (
               <div className="flex items-start gap-3 rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{error}</span>
               </div>
             )}
@@ -471,7 +471,7 @@ const PublicTicketForm = () => {
             {/* Submit */}
             <Button
               type="submit"
-              className="w-full h-11 rounded-xl bg-gradient-to-br from-primary via-primary to-primary/90 hover:from-primary/90 hover:via-primary hover:to-primary active:scale-[0.98] text-primary-foreground shadow-lg shadow-primary/20 hover:shadow-primary/30 font-semibold transition-all duration-200 cursor-pointer"
+              className="w-full h-11 rounded-xl bg-linear-to-br from-primary via-primary to-primary/90 hover:from-primary/90 hover:via-primary hover:to-primary active:scale-[0.98] text-primary-foreground shadow-lg shadow-primary/20 hover:shadow-primary/30 font-semibold transition-all duration-200 cursor-pointer"
               disabled={isSubmitting}
             >
               {isSubmitting ? (

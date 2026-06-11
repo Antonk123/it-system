@@ -70,10 +70,10 @@ export const UserTicketHistory = ({ userId }: UserTicketHistoryProps) => {
       </div>
 
       {/* Ticket Table */}
-      <div className="rounded-2xl overflow-hidden border border-border/50 backdrop-blur-sm bg-card/30">
+      <div className="rounded-2xl overflow-hidden border border-border/50 backdrop-blur-xs bg-card/30">
         <Table>
           <TableHeader>
-            <TableRow className="border-b border-border/50 bg-background/40 backdrop-blur-sm">
+            <TableRow className="border-b border-border/50 bg-background/40 backdrop-blur-xs">
               <TableHead className="font-semibold text-foreground/90">Titel</TableHead>
               <TableHead className="font-semibold text-foreground/90">Status</TableHead>
               <TableHead className="font-semibold text-foreground/90">Prioritet</TableHead>
@@ -83,7 +83,7 @@ export const UserTicketHistory = ({ userId }: UserTicketHistoryProps) => {
             {userTickets.map((ticket) => (
               <TableRow
                 key={ticket.id}
-                className="cursor-pointer transition-all duration-200 hover:bg-gradient-to-r hover:from-primary/5 hover:to-accent/5 border-b border-border/30 last:border-0 group"
+                className="cursor-pointer transition-all duration-200 hover:bg-linear-to-r hover:from-primary/5 hover:to-accent/5 border-b border-border/30 last:border-0 group"
               >
                 <TableCell>
                   <Link

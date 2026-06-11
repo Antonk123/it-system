@@ -239,7 +239,7 @@ export function UnifiedFilterBar({
         </div>
         {isMobile && (
           <Button
-            variant={filtersOpen ? 'secondary' : 'outline'}
+            variant={filtersOpen ? 'secondary' : 'outline-solid'}
             size="icon"
             className="h-10 w-10 shrink-0 relative"
             onClick={() => setFiltersOpen(!filtersOpen)}

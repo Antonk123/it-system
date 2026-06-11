@@ -49,10 +49,10 @@ const PRIORITY_LABELS: Record<string, string> = {
 };
 
 const AVATAR_COLORS = [
-  'bg-gradient-to-br from-purple-500 to-pink-500',
-  'bg-gradient-to-br from-blue-500 to-cyan-500',
-  'bg-gradient-to-br from-orange-500 to-red-500',
-  'bg-gradient-to-br from-green-500 to-teal-500',
+  'bg-linear-to-br from-purple-500 to-pink-500',
+  'bg-linear-to-br from-blue-500 to-cyan-500',
+  'bg-linear-to-br from-orange-500 to-red-500',
+  'bg-linear-to-br from-green-500 to-teal-500',
 ];
 
 function getInitials(name: string): string {

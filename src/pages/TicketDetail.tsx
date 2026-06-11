@@ -558,7 +558,7 @@ const TicketDetail = () => {
             {/* AI Category Suggestion Banner */}
             {ticket.ai_suggested_category_id && !ticket.category && !aiCategoryDismissed && (
               <div className="flex items-center gap-3 p-3 rounded-lg border border-[hsl(var(--ai))]/30 bg-[hsl(var(--ai))]/5">
-                <Sparkles className="w-4 h-4 text-[hsl(var(--ai))] flex-shrink-0" />
+                <Sparkles className="w-4 h-4 text-[hsl(var(--ai))] shrink-0" />
                 <p className="text-sm flex-1">
                   AI föreslår: <span className="font-medium">{getCategoryLabel(ticket.ai_suggested_category_id)}</span>
                   {ticket.ai_suggested_confidence && (
@@ -848,7 +848,7 @@ const TicketDetail = () => {
                         value={aiDraft}
                         onChange={(e) => setAiDraft(e.target.value)}
                         aria-label="AI-genererat förslag på svar"
-                        className="w-full min-h-[120px] bg-background/50 border border-border rounded-md p-3 text-sm resize-y focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+                        className="w-full min-h-[120px] bg-background/50 border border-border rounded-md p-3 text-sm resize-y focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                       />
                       {(aiDraftKbTitles.length > 0 || aiDraftAttachments.length > 0) && (
                         <p className="text-xs text-muted-foreground">
@@ -1006,7 +1006,7 @@ const TicketDetail = () => {
         >
           <Clock className="h-4 w-4 mr-1" /> Tid
         </Button>
-        <label className="flex-shrink-0">
+        <label className="shrink-0">
           <Button size="sm" variant="outline" className="h-10 pointer-events-none" asChild>
             <span><Camera className="h-4 w-4 mr-1" /> Foto</span>
           </Button>

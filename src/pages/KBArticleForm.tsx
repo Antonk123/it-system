@@ -334,7 +334,7 @@ const KBArticleForm = () => {
               Taggar
             </Label>
             <div
-              className="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] rounded-md border border-input bg-background px-3 py-2"
+              className="flex flex-wrap items-center gap-1.5 min-h-10 rounded-md border border-input bg-background px-3 py-2"
               role="group"
               aria-labelledby="kb-tags-label"
             >

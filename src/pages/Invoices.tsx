@@ -32,10 +32,10 @@ const STATUS_LABELS: Record<string, string> = {
   cancelled: 'Makulerad',
 };
 
-const STATUS_VARIANTS: Record<string, 'secondary' | 'default' | 'destructive' | 'outline'> = {
+const STATUS_VARIANTS: Record<string, 'secondary' | 'default' | 'destructive' | 'outline-solid'> = {
   draft: 'secondary',
   sent: 'default',
-  paid: 'outline',
+  paid: 'outline-solid',
   cancelled: 'destructive',
 };
 

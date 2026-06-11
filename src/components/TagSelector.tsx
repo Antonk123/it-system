@@ -133,7 +133,7 @@ export function TagSelector({ selectedTagIds = [], preloadedTags, onTagsChange, 
                   >
                     <div
                       style={{ backgroundColor: tag.color }}
-                      className="w-3 h-3 rounded-full flex-shrink-0"
+                      className="w-3 h-3 rounded-full shrink-0"
                     />
                     <span className="flex-1 text-sm">{tag.name}</span>
                     {selectedTagIds.includes(tag.id) && (

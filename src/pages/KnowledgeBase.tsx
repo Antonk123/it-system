@@ -494,7 +494,7 @@ const KnowledgeBase = () => {
                         className={cn(
                           'w-full text-left p-4 rounded-lg border border-border bg-card',
                           'hover:bg-accent/50 hover:border-primary/30 transition-colors',
-                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                          'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary'
                         )}
                       >
                         <div className="flex items-start justify-between gap-3">

@@ -239,7 +239,7 @@ export const TicketTable = memo(function TicketTable({
     <div className="space-y-2">
       {/* Bulk Action Bar */}
       {selectedIds.length > 0 && onBulkAction && (
-        <div className="flex flex-wrap items-center gap-2 px-4 py-2 rounded-xl border border-primary/30 bg-primary/5 backdrop-blur-sm">
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2 rounded-xl border border-primary/30 bg-primary/5 backdrop-blur-xs">
           <span className="text-sm font-medium text-foreground/80">{selectedIds.length} valda</span>
           <div className="flex items-center gap-2 ml-2">
             <Select
@@ -299,10 +299,10 @@ export const TicketTable = memo(function TicketTable({
         </div>
       )}
 
-    <div className="rounded-2xl overflow-hidden border border-border/50 backdrop-blur-sm bg-card/30">
+    <div className="rounded-2xl overflow-hidden border border-border/50 backdrop-blur-xs bg-card/30">
       <Table className={cn(compact && "text-xs")}>
         <TableHeader>
-          <TableRow className="border-b border-border/50 bg-background/40 backdrop-blur-sm">
+          <TableRow className="border-b border-border/50 bg-background/40 backdrop-blur-xs">
             {onSelectionChange && selectionMode && (
               <TableHead className="w-10 pl-4">
                 <Checkbox
@@ -342,7 +342,7 @@ export const TicketTable = memo(function TicketTable({
               className={cn(
                 compact && "h-9",
                 "ticket-row cursor-pointer transition-all duration-200",
-                "hover:bg-gradient-to-r hover:from-primary/5 hover:to-accent/5",
+                "hover:bg-linear-to-r hover:from-primary/5 hover:to-accent/5",
                 "border-b border-border/30 last:border-0",
                 "relative group",
                 selectedIds.includes(ticket.id) && "bg-primary/5"
@@ -437,7 +437,7 @@ export const TicketTable = memo(function TicketTable({
               {/* Beställare: Avatar + name + date */}
               <TableCell className={cn(compact && "py-2")}>
                 <div className="flex items-center gap-2">
-                  <div className="flex-shrink-0 w-6 h-6 rounded-full bg-muted flex items-center justify-center">
+                  <div className="shrink-0 w-6 h-6 rounded-full bg-muted flex items-center justify-center">
                     <span className="text-xs font-bold text-muted-foreground">{initials}</span>
                   </div>
                   <div className="flex flex-col">

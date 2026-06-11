@@ -52,7 +52,7 @@ export const TagBadges = memo(function TagBadges({
             px-2 py-1 rounded text-xs font-medium whitespace-nowrap
             border border-border transition-all duration-200
             text-foreground hover:text-white
-            hover:bg-[var(--tag-color)] hover:border-[var(--tag-color)]
+            hover:bg-(--tag-color) hover:border-(--tag-color)
             ${clickable ? 'cursor-pointer' : ''}
           `}
           onClick={(e) => handleTagClick(e, tag.id)}

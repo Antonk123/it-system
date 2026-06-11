@@ -812,11 +812,11 @@ export const RichTextEditor = ({
         className={cn(
           'rich-text-editor-content',
           showToolbar ? 'rounded-b-lg' : 'rounded-lg',
-          'border border-input bg-background/50 backdrop-blur-sm',
+          'border border-input bg-background/50 backdrop-blur-xs',
           'transition-all duration-200',
           !disabled && 'hover:bg-background/80 hover:border-primary/30 hover:shadow-sm',
           error && 'border-destructive',
-          'focus-within:outline-none focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+          'focus-within:outline-hidden focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
           disabled && 'cursor-not-allowed opacity-50'
         )}
         style={{ minHeight }}

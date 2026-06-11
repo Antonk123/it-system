@@ -75,7 +75,7 @@ export const TicketActivity = ({ history, isLoading }: TicketActivityProps) => {
             const { icon, text } = getActivityInfo(item);
             return (
               <div key={item.id} className="flex items-start gap-3 text-sm">
-                <div className="mt-0.5 text-muted-foreground flex-shrink-0">
+                <div className="mt-0.5 text-muted-foreground shrink-0">
                   {icon}
                 </div>
                 <div>

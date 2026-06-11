@@ -383,7 +383,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
   const isActive = template.is_active === 1;
 
   return (
-    <Card className="overflow-hidden border border-border/60 bg-card/80 backdrop-blur-sm transition-shadow hover:shadow-md">
+    <Card className="overflow-hidden border border-border/60 bg-card/80 backdrop-blur-xs transition-shadow hover:shadow-md">
       <CardContent className="p-0">
         {/* Main row */}
         <div className="flex items-start gap-4 p-4">

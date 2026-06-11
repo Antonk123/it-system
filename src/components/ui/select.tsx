@@ -20,7 +20,7 @@ const SelectTrigger = React.forwardRef<
       "flex h-11 w-full items-center justify-between rounded-lg border border-border bg-input px-3 py-2 text-base ring-offset-background text-foreground placeholder:text-muted-foreground",
       "transition-all duration-200",
       "hover:bg-input/80 hover:border-primary/40",
-      "focus:outline-none focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 focus:border-primary/60",
+      "focus:outline-hidden focus:ring-2 focus:ring-primary/30 focus:ring-offset-2 focus:border-primary/60",
       "disabled:cursor-not-allowed disabled:opacity-50",
       "[&>span]:line-clamp-1 md:h-10 md:text-sm",
       className,
@@ -71,8 +71,8 @@ const SelectContent = React.forwardRef<
     <SelectPrimitive.Content
       ref={ref}
       className={cn(
-        "relative z-50 max-h-96 min-w-[8rem] overflow-hidden rounded-xl border border-border/50",
-        "bg-gradient-to-br from-popover/95 to-popover/85 backdrop-blur-xl text-popover-foreground",
+        "relative z-50 max-h-96 min-w-32 overflow-hidden rounded-xl border border-border/50",
+        "bg-linear-to-br from-popover/95 to-popover/85 backdrop-blur-xl text-popover-foreground",
         "shadow-2xl shadow-primary/20",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -91,7 +91,7 @@ const SelectContent = React.forwardRef<
         className={cn(
           "p-1.5",
           position === "popper" &&
-            "w-full min-w-[var(--radix-select-trigger-width)]",
+            "w-full min-w-(--radix-select-trigger-width)",
         )}
       >
         {children}
@@ -117,14 +117,14 @@ const SelectItem = React.forwardRef<
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
-      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-2.5 pl-9 pr-3 text-sm outline-none",
+      "relative flex w-full cursor-pointer select-none items-center rounded-lg py-2.5 pl-9 pr-3 text-sm outline-hidden",
       "transition-all duration-200",
-      "hover:bg-gradient-to-r hover:from-primary/15 hover:to-accent/10",
-      "data-[highlighted]:bg-gradient-to-r data-[highlighted]:from-primary/15 data-[highlighted]:to-accent/10",
-      "data-[highlighted]:text-foreground",
-      "data-[state=checked]:bg-gradient-to-r data-[state=checked]:from-primary/10 data-[state=checked]:to-accent/5",
+      "hover:bg-linear-to-r hover:from-primary/15 hover:to-accent/10",
+      "data-highlighted:bg-linear-to-r data-highlighted:from-primary/15 data-highlighted:to-accent/10",
+      "data-highlighted:text-foreground",
+      "data-[state=checked]:bg-linear-to-r data-[state=checked]:from-primary/10 data-[state=checked]:to-accent/5",
       "data-[state=checked]:text-primary data-[state=checked]:font-semibold",
-      "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "data-disabled:pointer-events-none data-disabled:opacity-50",
       className,
     )}
     {...props}
