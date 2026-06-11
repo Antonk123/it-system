@@ -3,15 +3,16 @@ import { Strategy as LocalStrategy } from 'passport-local';
 import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt';
 import bcrypt from 'bcryptjs';
 import { db } from '../db/connection.js';
+import { logger } from '../lib/logger.js';
 
 // CRITICAL: JWT_SECRET must be set in environment variables
 // Never use a hardcoded fallback in production
 const JWT_SECRET: string = (() => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
-    console.error('FATAL: JWT_SECRET environment variable is not set!');
-    console.error('Please set JWT_SECRET to a strong random value.');
-    console.error('Generate one with: openssl rand -base64 32');
+    logger.error('FATAL: JWT_SECRET environment variable is not set!');
+    logger.error('Please set JWT_SECRET to a strong random value.');
+    logger.error('Generate one with: openssl rand -base64 32');
     process.exit(1);
   }
   return secret;

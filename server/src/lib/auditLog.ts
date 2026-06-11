@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import { db } from '../db/connection.js';
+import { logger } from './logger.js';
 
 /**
  * Logs a sensitive operation to the audit_log table.
@@ -24,6 +25,6 @@ export function logAudit(
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).run(randomUUID(), userId, action, entityType, resolvedEntityId, details, resolvedIp ?? null);
   } catch (err) {
-    console.error('Audit log insert failed (non-fatal):', err);
+    logger.error('Audit log insert failed (non-fatal)', { error: String(err) });
   }
 }

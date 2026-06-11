@@ -29,6 +29,8 @@ Scriptet guidar dig genom konfigurationen och startar systemet. När det är kla
 git clone https://github.com/Antonk123/it-system.git
 cd it-system
 cp .env.example .env          # Fyll i JWT_SECRET och CSRF_SECRET
+# Lägg till i .env vid lokal körning (docker-compose.local kör NODE_ENV=production):
+# CORS_ORIGIN=http://localhost:8082
 docker compose -f docker-compose.local.yml up --build
 ```
 
@@ -44,7 +46,14 @@ All konfiguration sker via `.env`. Se [`.env.example`](.env.example) för dokume
 | `CSRF_SECRET` | Ja (prod) | CSRF-tokensignering |
 | `CORS_ORIGIN` | Ja (prod) | Tillåtna origins (kommaseparerat) |
 | `APP_BASE_URL` | Ja | Bas-URL för länkar i mejl |
+| `BRAND_NAME` | Nej | Varumärke i utgående mejl (default: `IT-Support`) |
 | `ANTHROPIC_API_KEY` | Nej | Aktiverar AI-funktioner |
+| `AI_MODEL` | Nej | Claude-modell för AI-funktioner (default: Haiku 4.5) |
+| `AI_MODEL_SMART` | Nej | Starkare modell för draft och summary |
+| `AI_MONTHLY_TOKEN_LIMIT` | Nej | Circuit-breaker för månatlig tokenanvändning (default: 5 000 000) |
+| `AUTO_CLOSE_DAYS` | Nej | Dagar tills lösta ärenden stängs automatiskt (default: 30) |
+| `BACKUP_RETENTION_DAYS` | Nej | Antal dagar att behålla automatiska backupar (default: 7) |
+| `PUSH_AGING_DAYS` | Nej | Push-notis om ärenden utan uppdatering i X dagar (default: 7) |
 | `SMTP_HOST/PORT/USER/PASS` | Nej | Utgående e-post |
 | `IMAP_HOST/PORT/USER` | Nej | E-post → ärende |
 | `VAPID_PUBLIC_KEY/PRIVATE_KEY` | Nej | Push-notiser |
@@ -61,9 +70,19 @@ Alla endpoints ligger under `/api`. Autentisering via JWT Bearer-token. CSRF-sky
 | `GET /api/tickets/:id` | Hämta ärende med kommentarer |
 | `PUT /api/tickets/:id` | Uppdatera ärende |
 | `GET /api/contacts` | Lista kontakter/kunder |
+| `GET /api/companies` | Lista företag |
 | `GET /api/categories` | Lista kategorier |
+| `GET /api/tags` | Lista taggar |
+| `GET /api/templates` | Ärendemallar |
 | `GET /api/kb` | Kunskapsbas-artiklar |
 | `GET /api/reports/*` | Rapporter och statistik |
+| `GET /api/billing/*` | Fakturering per kund |
+| `GET /api/sla` | SLA-konfiguration och status |
+| `GET /api/webhooks` | Webhook-konfiguration |
+| `GET /api/api-keys` | API-nyckelhantering |
+| `GET /api/time-entries` | Tidsrapportering |
+| `GET /api/recurring` | Återkommande ärenden |
+| `POST /api/email-inbound/*` | Inkommande e-post → ärende |
 | `GET /api/backup` | Ladda ner backup (admin) |
 | `POST /api/backup/restore` | Återställ backup (admin) |
 | `GET /api/health` | Hälsokontroll |

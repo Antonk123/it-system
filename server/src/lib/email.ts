@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { db } from '../db/connection.js';
 import { stripHtml } from './htmlUtils.js';
+import { logger } from './logger.js';
 
 interface TicketEmailPayload {
   id: string;
@@ -364,7 +365,7 @@ const formatTicketHtml = (payload: TicketEmailPayload, headerLabel: string, appB
 const sendEmail = async (subject: string, payload: TicketEmailPayload) => {
   const config = getEmailConfig();
   if (!config) {
-    console.warn('Email not configured. Set SMTP_HOST, EMAIL_FROM, and EMAIL_TO to enable email.');
+    logger.warn('Email not configured. Set SMTP_HOST, EMAIL_FROM, and EMAIL_TO to enable email.');
     return;
   }
 
@@ -483,7 +484,7 @@ export const sendTicketReceivedConfirmation = async (opts: {
     text,
     html,
   }).catch(error => {
-    console.error('[email-inbound] Failed to send confirmation:', error);
+    logger.error('[email-inbound] Failed to send confirmation', { error: String(error) });
   });
 };
 
@@ -499,7 +500,7 @@ export const sendTicketReminderEmail = async (data: {
   const from = process.env.EMAIL_FROM;
   const appBaseUrl = process.env.APP_BASE_URL;
   if (!host || !from) {
-    console.warn('Email not configured. Set SMTP_HOST and EMAIL_FROM to enable reminder emails.');
+    logger.warn('Email not configured. Set SMTP_HOST and EMAIL_FROM to enable reminder emails.');
     return;
   }
 
@@ -566,7 +567,7 @@ export const sendTicketReminderEmail = async (data: {
     text,
     html,
   }).catch(error => {
-    console.error('Failed to send reminder email:', error);
+    logger.error('Failed to send reminder email', { error: String(error) });
   });
 };
 
@@ -659,7 +660,7 @@ export const sendPasswordResetEmail = async (opts: {
   const transporter = createTransporter();
   const from = process.env.EMAIL_FROM;
   if (!transporter || !from) {
-    console.warn('[password-reset] email not configured — set SMTP_HOST and EMAIL_FROM to enable reset');
+    logger.warn('[password-reset] email not configured — set SMTP_HOST and EMAIL_FROM to enable reset');
     return;
   }
 

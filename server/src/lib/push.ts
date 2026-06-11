@@ -1,5 +1,6 @@
 import webpush from 'web-push';
 import { db } from '../db/connection.js';
+import { logger } from './logger.js';
 
 let pushEnabled = false;
 
@@ -10,7 +11,7 @@ export function initWebPush(): boolean {
   // env var with the install owner's contact email/URL.
   const subject = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
   if (!publicKey || !privateKey) {
-    console.warn('Push notifications disabled (VAPID keys not configured)');
+    logger.warn('Push notifications disabled (VAPID keys not configured)');
     return false;
   }
   webpush.setVapidDetails(subject, publicKey, privateKey);
@@ -47,9 +48,9 @@ export async function sendPushToAllSubscriptions(payload: PushPayload, userId?: 
     } catch (err: any) {
       if (err.statusCode === 410 || err.statusCode === 404) {
         db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(sub.endpoint);
-        console.log(`Removed expired push subscription: ${sub.endpoint}`);
+        logger.info('Removed expired push subscription', { endpoint: sub.endpoint });
       } else {
-        console.error('Push send error:', err.message);
+        logger.error('Push send error', { message: err.message });
       }
     }
   }

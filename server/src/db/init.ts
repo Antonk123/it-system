@@ -1,9 +1,10 @@
 import { initializeDatabase, db, closeDatabase } from './connection.js';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
+import { logger } from '../lib/logger.js';
 
 async function main() {
-  console.log('Initializing database...');
+  logger.info('Initializing database...');
   initializeDatabase();
 
   // Check if admin user exists
@@ -15,8 +16,8 @@ async function main() {
     const adminName = process.env.ADMIN_NAME || '';
 
     if (!adminPassword) {
-      console.error('ADMIN_PASSWORD environment variable is required when creating admin user.');
-      console.error('Set it in your .env file or pass it directly.');
+      logger.error('ADMIN_PASSWORD environment variable is required when creating admin user.');
+      logger.error('Set it in your .env file or pass it directly.');
       process.exit(1);
     }
 
@@ -28,15 +29,14 @@ async function main() {
       VALUES (?, ?, ?, ?, ?)
     `).run(adminId, adminEmail, passwordHash, 'admin', adminName || null);
 
-    console.log('Admin user created:');
-    console.log(`  Email: ${adminEmail}`);
-    console.log('  IMPORTANT: Change password after first login if using defaults!');
+    logger.info('Admin user created', { email: adminEmail });
+    logger.warn('IMPORTANT: Change password after first login if using defaults!');
   } else {
-    console.log('Admin user already exists, skipping creation.');
+    logger.info('Admin user already exists, skipping creation.');
   }
 
   closeDatabase();
-  console.log('Database initialization complete!');
+  logger.info('Database initialization complete!');
 }
 
-main().catch(console.error);
+main().catch((err) => logger.error('Database init failed', { error: String(err) }));

@@ -3,6 +3,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { migrations } from './migrations.js';
+import { logger } from '../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -66,17 +67,17 @@ function runMigrations(): void {
 
   for (const migration of migrations) {
     if (applied.has(migration.id)) continue;
-    console.log(`Running migration ${migration.id}: ${migration.name}`);
+    logger.info(`Running migration ${migration.id}: ${migration.name}`);
     try {
       db.transaction(() => {
         migration.up(db, { tableExists, columnExists });
         markApplied.run(migration.id, migration.name, new Date().toISOString());
       })();
     } catch (err) {
-      console.error(`Migration ${migration.id} (${migration.name}) failed:`, err);
+      logger.error(`Migration ${migration.id} (${migration.name}) failed`, { error: String(err) });
       throw err; // Stop startup — don't run further migrations on partial state
     }
-    console.log(`Migration ${migration.id} applied`);
+    logger.info(`Migration ${migration.id} applied`);
   }
 }
 
@@ -86,7 +87,7 @@ export function initializeDatabase() {
   // schema.sql contains multi-statement DDL — exec handles multiple statements at once
   db.exec(schema);
   runMigrations();
-  console.log('Database initialized successfully');
+  logger.info('Database initialized successfully');
 }
 
 export function closeDatabase() {

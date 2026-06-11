@@ -51,9 +51,15 @@ Skapa `/opt/it-ticketing/backup.sh`:
 ```bash
 #!/bin/bash
 set -e
+
+# Läs .env om den finns (gör BACKUP_RETENTION_DAYS tillgänglig)
+ENV_FILE="/opt/it-ticketing/.env"
+[ -f "$ENV_FILE" ] && set -a && . "$ENV_FILE" && set +a
+
 BACKUP_DIR="/opt/it-ticketing/backups"
 mkdir -p "$BACKUP_DIR"
 TIMESTAMP=$(date +%Y%m%d-%H%M)
+RETENTION="${BACKUP_RETENTION_DAYS:-7}"
 
 docker run --rm \
   -v it-ticketing-data:/data:ro \
@@ -63,16 +69,44 @@ docker run --rm \
     tar czf /backup/uploads-${TIMESTAMP}.tar.gz -C /data uploads/
   "
 
-# Behåll 14 dagars backups
-find "$BACKUP_DIR" -name "database-*.sqlite" -mtime +14 -delete
-find "$BACKUP_DIR" -name "uploads-*.tar.gz" -mtime +14 -delete
+# Behåll $RETENTION dagars backups (styrs av BACKUP_RETENTION_DAYS i .env, default 7)
+find "$BACKUP_DIR" -name "database-*.sqlite" -mtime +"${RETENTION}" -delete
+find "$BACKUP_DIR" -name "uploads-*.tar.gz" -mtime +"${RETENTION}" -delete
 
-echo "$(date): Backup klar — database-${TIMESTAMP}.sqlite"
+echo "$(date): Backup klar — database-${TIMESTAMP}.sqlite (retention: ${RETENTION}d)"
 ```
 
 ```bash
 chmod +x /opt/it-ticketing/backup.sh
 ```
+
+### Off-site backup (rekommenderas)
+
+Automatiska backupar sparas i samma Docker-volym som databasen. Vid disk-haveri på hosten försvinner både databas och backupfiler. Kopiera därför backuparna till ett externt mål med [rclone](https://rclone.org/).
+
+**Konfigurera rclone** (kör en gång):
+
+```bash
+# Installera
+curl https://rclone.org/install.sh | sudo bash
+
+# Konfigurera ett mål — välj provider (S3, B2, Azure, SFTP, …)
+rclone config
+# Följ guiden, ge destinationen ett namn, t.ex. "backup-s3"
+```
+
+**Cron — kopiera backupar nattligen** (lägg till med `crontab -e`):
+
+```bash
+# Kör varje natt kl 04:30 (30 min efter automatisk backup)
+30 4 * * * rclone copy /opt/it-ticketing/backups backup-s3:it-ticketing-backups/ \
+  --log-file /var/log/it-ticketing-rclone.log \
+  --log-level INFO
+```
+
+Byt `backup-s3:it-ticketing-backups/` mot ditt rclone-mål och bucket-/container-namn. Använd `rclone ls backup-s3:it-ticketing-backups/` för att verifiera att filer laddas upp.
+
+**Retention off-site** — rclone kopierar bara nya filer. Sätt bucket lifecycle rules (S3/B2) eller lägg till `--min-age`/`--max-age` för att styra hur länge filer bevaras off-site oberoende av lokal retention.
 
 ---
 

@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { TAG_RULES, PRIORITY_RULES } from '../config/automation.js';
+import { logger } from './logger.js';
 
 // ─── Auto-tag ─────────────────────────────────────────────────────────────────
 
@@ -39,7 +40,7 @@ export function applyAutoTags(ticketId: string, title: string, _description: str
         ticketId,
         tag.id
       );
-      console.log(`🏷️  Auto-tag: applied "${rule.tagName}" to ticket ${ticketId}`);
+      logger.info('Auto-tag applied', { tag: rule.tagName, ticketId });
     }
 
     addedTagNames.add(rule.tagName);
@@ -64,7 +65,7 @@ export function detectAutoPriority(
       // Word-boundary match keeps "password" from triggering inside "passwordless"
       // and matches the auto-tag behavior in matchesWord above.
       if (matchesWord(text, keyword)) {
-        console.log(`⚡ Auto-priority: keyword "${keyword}" → ${rule.priority}`);
+        logger.info('Auto-priority detected', { keyword, priority: rule.priority });
         return rule.priority;
       }
     }

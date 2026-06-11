@@ -59,6 +59,7 @@ import webhookRoutes from './routes/webhooks.js';
 import emailInboundRoutes from './routes/emailInbound.js';
 import slaRoutes from './routes/sla.js';
 import { startEmailPolling } from './lib/emailInbound.js';
+import { uploadBackupOffsite } from './lib/offsiteBackup.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -160,6 +161,13 @@ cron.schedule('0 4 * * *', async () => {
     fs.unlinkSync(tmpDbPath);
     tmpDbCreated = false;
     logger.info('Automatic backup completed', { path: backupPath });
+
+    // 3b. Off-site upload (non-fatal stub — configure via OFFSITE_BACKUP_CMD)
+    try {
+      await uploadBackupOffsite(backupPath);
+    } catch (offSiteErr) {
+      logger.error('Off-site backup threw unexpectedly', { error: String(offSiteErr) });
+    }
 
     // 4. Retention — keep newest N, delete older .zip and any legacy .sqlite snapshots
     const files = fs.readdirSync(BACKUP_DIR)

@@ -3,7 +3,7 @@
 # Klonar repot och sätter upp ett färdigt system från grunden.
 #
 # Kör med:
-#   bash <(curl -fsSL https://raw.githubusercontent.com/OWNER/REPO/main/setup.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/Antonk123/it-system/main/setup.sh)
 # Eller lokalt:
 #   bash setup.sh
 
