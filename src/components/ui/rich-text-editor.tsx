@@ -212,6 +212,7 @@ export interface RichTextEditorProps {
   minHeight?: string;
   showToolbar?: boolean;
   error?: boolean;
+  id?: string;
 }
 
 export const RichTextEditor = ({
@@ -224,6 +225,7 @@ export const RichTextEditor = ({
   minHeight = '200px',
   showToolbar = true,
   error = false,
+  id,
 }: RichTextEditorProps) => {
   const [imageUploading, setImageUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -806,6 +808,7 @@ export const RichTextEditor = ({
       {/* Editor content */}
       <EditorContent
         editor={editor}
+        id={id}
         className={cn(
           'rich-text-editor-content',
           showToolbar ? 'rounded-b-lg' : 'rounded-lg',

@@ -60,7 +60,7 @@ export const PaginationControls = ({
           value={String(pageSize)}
           onValueChange={(value) => onPageSizeChange(Number(value))}
         >
-          <SelectTrigger className="w-[80px]">
+          <SelectTrigger className="w-[80px]" aria-label="Visa per sida">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

@@ -184,6 +184,7 @@ export const FileUpload = ({
                   className="h-8 w-8 text-destructive"
                   onClick={() => onRemoveAttachment(attachment)}
                   disabled={disabled}
+                  aria-label="Ta bort bilaga"
                 >
                   <X className="w-4 h-4" />
                 </Button>
@@ -220,6 +221,7 @@ export const FileUpload = ({
                   className="h-8 w-8"
                   onClick={() => onRemovePending(index)}
                   disabled={disabled}
+                  aria-label="Ta bort bilaga"
                 >
                   <X className="w-4 h-4" />
                 </Button>

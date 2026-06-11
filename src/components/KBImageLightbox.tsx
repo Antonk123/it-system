@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, RefObject } from 'react';
+import { useEffect, useState, useCallback, useRef, RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -20,6 +20,8 @@ interface ActiveImage {
  */
 export function KBImageLightbox({ containerRef, contentKey }: KBImageLightboxProps) {
   const [active, setActive] = useState<ActiveImage | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
   const close = useCallback(() => setActive(null), []);
 
@@ -64,10 +66,52 @@ export function KBImageLightbox({ containerRef, contentKey }: KBImageLightboxPro
     };
   }, [active, close]);
 
+  // Flytta fokus till stäng-knappen när lightboxen öppnas
+  useEffect(() => {
+    if (!active) return;
+    // rAF säkerställer att portalen renderas innan vi försöker fokusera
+    const id = requestAnimationFrame(() => {
+      closeButtonRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(id);
+  }, [active]);
+
+  // Focus-trap: Tab cyklar inom dialogen
+  useEffect(() => {
+    if (!active) return;
+    const onTab = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+      const focusable = Array.from(
+        dialog.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.hasAttribute('disabled'));
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', onTab);
+    return () => document.removeEventListener('keydown', onTab);
+  }, [active]);
+
   if (!active) return null;
 
   return createPortal(
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-label={active.alt || 'Förstorad bild'}
@@ -85,6 +129,7 @@ export function KBImageLightbox({ containerRef, contentKey }: KBImageLightboxPro
       }}
     >
       <button
+        ref={closeButtonRef}
         type="button"
         onClick={(e) => { e.stopPropagation(); close(); }}
         aria-label="Stäng förstoring"

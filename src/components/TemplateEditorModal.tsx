@@ -663,6 +663,7 @@ export const TemplateEditorModal = ({
                             variant="ghost"
                             onClick={() => handleMoveField(field.id, 'up')}
                             disabled={index === 0}
+                            aria-label="Flytta fält uppåt"
                           >
                             <ArrowUp className="w-4 h-4 text-muted-foreground" />
                           </Button>
@@ -671,6 +672,7 @@ export const TemplateEditorModal = ({
                             variant="ghost"
                             onClick={() => handleMoveField(field.id, 'down')}
                             disabled={index === fields.length - 1}
+                            aria-label="Flytta fält nedåt"
                           >
                             <ArrowDown className="w-4 h-4 text-muted-foreground" />
                           </Button>
@@ -679,6 +681,7 @@ export const TemplateEditorModal = ({
                           size="icon"
                           variant="ghost"
                           onClick={() => handleStartEditField(field)}
+                          aria-label="Redigera fält"
                         >
                           <Pencil className="w-4 h-4 text-muted-foreground" />
                         </Button>
@@ -686,6 +689,7 @@ export const TemplateEditorModal = ({
                           size="icon"
                           variant="ghost"
                           onClick={() => handleDeleteField(field.id)}
+                          aria-label="Ta bort fält"
                         >
                           <Trash2 className="w-4 h-4 text-destructive" />
                         </Button>
@@ -701,7 +705,7 @@ export const TemplateEditorModal = ({
                       <h3 className="font-semibold">
                         {editingFieldId ? 'Redigera fält' : 'Lägg till nytt fält'}
                       </h3>
-                      <Button size="icon" variant="ghost" onClick={resetFieldForm}>
+                      <Button size="icon" variant="ghost" onClick={resetFieldForm} aria-label="Stäng fältformuläret">
                         <X className="w-4 h-4" />
                       </Button>
                     </div>
@@ -811,6 +815,7 @@ export const TemplateEditorModal = ({
                                   type="button"
                                   size="icon"
                                   variant="ghost"
+                                  aria-label="Ta bort alternativ"
                                   onClick={() => {
                                     const updated = selectOptions.filter((_, i) => i !== index);
                                     setSelectOptions(updated);

@@ -316,6 +316,7 @@ export function FilterViewManager({
                       className="h-7 w-7"
                       onClick={() => setEditingId(editingId === view.id ? null : view.id)}
                       title="Redigera"
+                      aria-label="Redigera"
                     >
                       {editingId === view.id ? (
                         <ChevronUp className="w-3.5 h-3.5" />
@@ -330,6 +331,7 @@ export function FilterViewManager({
                         className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => handleDeleteView(view.id, view.name)}
                         title="Ta bort"
+                        aria-label="Ta bort"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>

@@ -8,6 +8,49 @@ import { Input } from '@/components/ui/input';
 import { api, KbArticleRow } from '@/lib/api';
 import { toast } from 'sonner';
 
+// Escapar HTML-specialtecken i en textsträng.
+// Används för att säkra FTS5-snippet innan vi renderar highlight-markeringar.
+const escapeHtml = (text: string): string =>
+  text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+// FTS5-snippet innehåller platshållare __MARK_START__ / __MARK_END__ från backend.
+// Steg: escape all text → återställ highlight-taggarna som riktig HTML.
+const MARK_START = '__MARK_START__';
+const MARK_END = '__MARK_END__';
+
+/**
+ * Tar ett FTS5-snippet med platshållare och returnerar säker HTML med <mark>-taggar.
+ * Backend ersätter FTS5:s standardmarkeringar med MARK_START/MARK_END innan det
+ * skickas till klienten — se getKbArticles() i api/routes/kb.ts.
+ * Om backend INTE använder platshållare (dvs. snippet redan innehåller <mark>):
+ * extrahera text, escape:a, sätt tillbaka <mark>.
+ */
+const safeSnippetHtml = (snippet: string): string => {
+  if (snippet.includes(MARK_START)) {
+    // Ny väg: platshållare → escape → återställ som <mark>
+    return snippet
+      .split(MARK_START)
+      .map((part, i) => {
+        if (i === 0) return escapeHtml(part);
+        const [highlighted, rest] = part.split(MARK_END);
+        return `<mark>${escapeHtml(highlighted ?? '')}</mark>${escapeHtml(rest ?? '')}`;
+      })
+      .join('');
+  }
+  // Fallback: snippet innehåller redan <mark> (äldre backend) —
+  // strippa ut mark-taggarna, escape:a texten, sätt tillbaka <mark>.
+  const stripped = snippet.replace(/<\/?mark>/g, '\x00');
+  const parts = stripped.split('\x00');
+  // Udda index = highlight-text, jämna = vanlig text
+  return parts
+    .map((part, i) => (i % 2 === 1 ? `<mark>${escapeHtml(part)}</mark>` : escapeHtml(part)))
+    .join('');
+};
+
 interface KBLinksSectionProps {
   ticketId: string;
   ticketTitle?: string;
@@ -193,12 +236,11 @@ export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) =
                           {article.category_name}
                         </Badge>
                       )}
-                      {/* FTS5 snippet: safe <mark> tags from our own SQLite server — single-user system */}
+                      {/* FTS5 snippet: text escapas med safeSnippetHtml — bara <mark>-taggar är riktig HTML */}
                       {article.snippet && (
                         <p
                           className="text-xs text-muted-foreground mt-0.5 line-clamp-2"
-                          // nosec: content is FTS5 snippet from our own SQLite server, single-user system, no XSS risk
-                          dangerouslySetInnerHTML={{ __html: article.snippet }}
+                          dangerouslySetInnerHTML={{ __html: safeSnippetHtml(article.snippet) }}
                         />
                       )}
                     </div>

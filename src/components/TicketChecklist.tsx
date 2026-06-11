@@ -312,6 +312,7 @@ export const TicketChecklist = ({
             size="icon"
             onClick={handleAddTopLevel}
             disabled={!newItemLabel.trim()}
+            aria-label="Lägg till ny punkt"
           >
             <Plus className="h-4 w-4" />
           </Button>

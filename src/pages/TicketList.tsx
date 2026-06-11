@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Search } from 'lucide-react';
@@ -10,7 +10,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Layout } from '@/components/Layout';
 import { TicketTable } from '@/components/TicketTable';
-import { KanbanView } from '@/components/KanbanView';
 import { PaginationControls } from '@/components/PaginationControls';
 import { ImportDialog } from '@/components/ImportDialog';
 import { FilterViewManager } from '@/components/FilterViewManager';
@@ -25,6 +24,9 @@ import { cn } from '@/lib/utils';
 import { STATUS_LABELS } from '@/lib/constants';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+
+// KanbanView laddas lazy — drar in dnd-vendor (~48 kB) som inte behövs i tabell-vy
+const KanbanView = lazy(() => import('@/components/KanbanView').then(m => ({ default: m.KanbanView })));
 
 const listContainer = {
   hidden: {},
@@ -518,12 +520,18 @@ const TicketList = () => {
                     )}
                   </>
                 ) : (
-                  <KanbanView
-                    tickets={tickets}
-                    users={users}
-                    onStatusChange={handleStatusChange}
-                    onTicketClick={handleTicketClick}
-                  />
+                  <Suspense fallback={
+                    <div className="flex items-center justify-center py-16">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+                    </div>
+                  }>
+                    <KanbanView
+                      tickets={tickets}
+                      users={users}
+                      onStatusChange={handleStatusChange}
+                      onTicketClick={handleTicketClick}
+                    />
+                  </Suspense>
                 )}
               </div>
             </div>

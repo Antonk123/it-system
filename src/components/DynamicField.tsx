@@ -34,6 +34,7 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
             placeholder={field.placeholder || 'Skriv här...'}
             minHeight="150px"
             required={field.required === 1}
+            id={field.field_name}
           />
         );
 

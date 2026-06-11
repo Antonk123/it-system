@@ -120,6 +120,7 @@ const ScrollToTopOnNavigate = () => {
 const AppRoutes = () => {
   const location = useLocation();
   return (
+    <ErrorBoundary>
     <Suspense fallback={<RouteFallback />}>
       <ScrollToTopOnNavigate />
       <AnimatePresence mode="wait">
@@ -152,6 +153,7 @@ const AppRoutes = () => {
         </Routes>
       </AnimatePresence>
     </Suspense>
+    </ErrorBoundary>
   );
 };
 

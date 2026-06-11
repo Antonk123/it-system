@@ -90,6 +90,9 @@ export const CategoryCombobox = ({
         <div className="max-h-60 overflow-y-auto">
           {/* Hardcoded "Ingen kategori" option */}
           <div
+            role="option"
+            aria-selected={value === 'none'}
+            tabIndex={0}
             className={cn(
               'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/60',
               value === 'none' && 'bg-muted/60'
@@ -98,6 +101,14 @@ export const CategoryCombobox = ({
               onValueChange('none');
               setOpen(false);
               setSearch('');
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onValueChange('none');
+                setOpen(false);
+                setSearch('');
+              }
             }}
           >
             <Check
@@ -121,6 +132,9 @@ export const CategoryCombobox = ({
             filteredCategories.map((cat) => (
               <div
                 key={cat.id}
+                role="option"
+                aria-selected={value === cat.id}
+                tabIndex={0}
                 className={cn(
                   'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/60',
                   value === cat.id && 'bg-muted/60'
@@ -129,6 +143,14 @@ export const CategoryCombobox = ({
                   onValueChange(cat.id);
                   setOpen(false);
                   setSearch('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onValueChange(cat.id);
+                    setOpen(false);
+                    setSearch('');
+                  }
                 }}
               >
                 <Check
@@ -147,8 +169,17 @@ export const CategoryCombobox = ({
         <div className="border-t border-border/40">
           {!showNewInput ? (
             <div
+              role="option"
+              aria-selected={false}
+              tabIndex={0}
               className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/60 text-sm"
               onClick={() => setShowNewInput(true)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setShowNewInput(true);
+                }
+              }}
             >
               <PlusCircle className="h-4 w-4 shrink-0 text-muted-foreground" />
               <span>Ny kategori...</span>

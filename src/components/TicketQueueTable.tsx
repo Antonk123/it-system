@@ -101,11 +101,11 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName }: TicketQueu
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/10">
-                  <th className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">ID</th>
-                  <th className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3">Ärende</th>
-                  <th className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">Status</th>
-                  <th className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">Prioritet</th>
-                  <th className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap hidden lg:table-cell">Tilldelad</th>
+                  <th scope="col" className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">ID</th>
+                  <th scope="col" className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3">Ärende</th>
+                  <th scope="col" className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">Status</th>
+                  <th scope="col" className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">Prioritet</th>
+                  <th scope="col" className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap hidden lg:table-cell">Tilldelad</th>
                 </tr>
               </thead>
               <tbody>
@@ -116,7 +116,15 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName }: TicketQueu
                     <tr
                       key={ticket.id}
                       className="border-b border-border/35 last:border-b-0 cursor-pointer hover:bg-muted/35 transition-colors"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => navigate(`/tickets/${ticket.id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          navigate(`/tickets/${ticket.id}`);
+                        }
+                      }}
                     >
                       <td className="px-4 py-3.5">
                         <span className="font-mono text-[11.5px] text-muted-foreground font-medium tracking-wide">

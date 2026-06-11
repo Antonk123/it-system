@@ -347,11 +347,23 @@ export const TicketTable = memo(function TicketTable({
                 "relative group",
                 selectedIds.includes(ticket.id) && "bg-primary/5"
               )}
+              role="button"
+              tabIndex={0}
               onClick={() => {
                 if (onTicketClick) {
                   onTicketClick(ticket.id);
                 } else {
                   window.location.href = `/tickets/${ticket.id}`;
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  if (onTicketClick) {
+                    onTicketClick(ticket.id);
+                  } else {
+                    window.location.href = `/tickets/${ticket.id}`;
+                  }
                 }
               }}
             >

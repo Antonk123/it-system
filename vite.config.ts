@@ -51,6 +51,13 @@ export default defineConfig(({ mode }) => ({
       },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,woff2}'],
+        // Lazy-laddade vendor-chunks precachas inte — de hämtas on-demand
+        globIgnores: [
+          '**/editor-vendor*.js',
+          '**/reporting-vendor*.js',
+          '**/motion-vendor*.js',
+          '**/dnd-vendor*.js',
+        ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
     })
@@ -81,7 +88,7 @@ export default defineConfig(({ mode }) => ({
             return 'motion-vendor';
           }
 
-          if (id.includes('@radix-ui')) {
+          if (id.includes('@radix-ui') || id.includes('node_modules/cmdk/')) {
             return 'radix-vendor';
           }
 
@@ -106,6 +113,14 @@ export default defineConfig(({ mode }) => ({
 
           if (id.includes('lucide-react')) {
             return 'icons-vendor';
+          }
+
+          if (id.includes('@tanstack/react-query') || id.includes('@tanstack/query-core')) {
+            return 'query-vendor';
+          }
+
+          if (id.includes('node_modules/date-fns/')) {
+            return 'date-vendor';
           }
 
           if (

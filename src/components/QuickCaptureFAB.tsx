@@ -104,6 +104,7 @@ export const QuickCaptureFAB = ({ className }: QuickCaptureFABProps) => {
           onKeyDown={handleKeyDown}
           placeholder="Vad behöver du hjälp med?"
           className={titleError ? 'border-destructive' : ''}
+          aria-label="Ärendets titel"
         />
         {titleError && (
           <p className="text-xs text-destructive mt-1">Ange en rubrik för att fortsätta</p>

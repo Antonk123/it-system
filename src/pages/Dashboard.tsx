@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
-import { Ticket, Clock, CheckCircle, AlertTriangle, ArrowRight, PauseCircle, Sparkles } from 'lucide-react';
+import { Ticket, Clock, CheckCircle, AlertTriangle, ArrowRight, PauseCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { useActiveQueue } from '@/hooks/useActiveQueue';
 import { useUsers } from '@/hooks/useUsers';
 import { useAuth } from '@/contexts/AuthContext';
@@ -66,16 +66,27 @@ function getGreetingName(email: string | undefined): string {
 
 const Dashboard = () => {
   // Smal fetch: bara aktiva ärenden, sorterade på priority, max 30 — driver TicketQueueTable
-  const { data: activeQueue, isLoading: isQueueLoading } = useActiveQueue(30);
+  const { data: activeQueue, isLoading: isQueueLoading, isError: isQueueError, refetch: refetchQueue } = useActiveQueue(30);
   const { getUserById } = useUsers();
   const { user } = useAuth();
   const greetingName = getGreetingName(user?.email);
   const navigate = useNavigate();
-  const { data: dashboardOverview, isLoading: isOverviewLoading } = useDashboardOverview();
-  const { data: upcomingReminders, isLoading: isRemindersLoading } = useUpcomingReminders();
-  const { data: activityEvents, isLoading: isActivityLoading } = useActivityFeed(15);
-  const { data: statusCounts, isLoading: isStatusLoading } = useStatusCounts();
-  const { data: deflectionStats, isLoading: isDeflectionLoading } = useDeflectionStats();
+  const { data: dashboardOverview, isLoading: isOverviewLoading, isError: isOverviewError, refetch: refetchOverview } = useDashboardOverview();
+  const { data: upcomingReminders, isLoading: isRemindersLoading, isError: isRemindersError, refetch: refetchReminders } = useUpcomingReminders();
+  const { data: activityEvents, isLoading: isActivityLoading, isError: isActivityError, refetch: refetchActivity } = useActivityFeed(15);
+  const { data: statusCounts, isLoading: isStatusLoading, isError: isStatusError, refetch: refetchStatus } = useStatusCounts();
+  const { data: deflectionStats, isLoading: isDeflectionLoading, isError: isDeflectionError, refetch: refetchDeflection } = useDeflectionStats();
+
+  const hasError = isQueueError || isOverviewError || isRemindersError || isActivityError || isStatusError || isDeflectionError;
+
+  const handleRetryAll = () => {
+    refetchQueue();
+    refetchOverview();
+    refetchReminders();
+    refetchActivity();
+    refetchStatus();
+    refetchDeflection();
+  };
 
   const stats = useMemo(() => {
     const open = statusCounts?.open ?? 0;
@@ -122,6 +133,22 @@ const Dashboard = () => {
             }
           </p>
         </motion.div>
+
+        {/* Fel-banner — visas diskret om en eller flera queries failar */}
+        {hasError && (
+          <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-destructive/10 border border-destructive/25 text-sm text-destructive">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span className="flex-1">Kunde inte hämta all data — siffror kan vara ofullständiga.</span>
+            <button
+              onClick={handleRetryAll}
+              className="flex items-center gap-1.5 text-xs font-medium hover:opacity-80 transition-opacity"
+              aria-label="Försök igen"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Försök igen
+            </button>
+          </div>
+        )}
 
         {/* KPI Grid */}
         <motion.div

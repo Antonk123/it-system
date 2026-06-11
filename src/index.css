@@ -66,7 +66,7 @@
     --status-in-progress: 45 93% 47%;
     --status-waiting: 195 70% 45%;
     --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 47%;
+    --status-closed: 215 16% 65%; /* WCAG AA: höjd från 47% → 65% för kontrast på mörk bakgrund */
 
     /* Priority colors */
     --priority-low: 142 71% 45%;
@@ -171,7 +171,7 @@
     --status-in-progress: 45 93% 47%;
     --status-waiting: 195 70% 45%;
     --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 47%;
+    --status-closed: 215 16% 65%; /* WCAG AA: höjd från 47% → 65% */
 
     /* Priority colors */
     --priority-low: 142 71% 45%;
@@ -256,7 +256,7 @@
     --status-in-progress: 45 93% 47%;
     --status-waiting: 195 70% 45%;
     --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 47%;
+    --status-closed: 215 16% 65%; /* WCAG AA: höjd från 47% → 65% */
 
     /* Priority colors */
     --priority-low: 142 71% 45%;
@@ -341,7 +341,7 @@
     --status-in-progress: 45 93% 47%;
     --status-waiting: 195 70% 45%;
     --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 47%;
+    --status-closed: 215 16% 65%; /* WCAG AA: höjd från 47% → 65% */
 
     /* Priority colors */
     --priority-low: 142 71% 45%;
@@ -426,7 +426,7 @@
     --status-in-progress: 45 93% 47%;
     --status-waiting: 195 70% 45%;
     --status-resolved: 134 62% 40%;
-    --status-closed: 219 7% 57%;
+    --status-closed: 219 7% 65%; /* WCAG AA: höjd från 57% → 65% */
 
     /* Priority colors */
     --priority-low: 134 62% 40%;
@@ -511,7 +511,7 @@
     --status-in-progress: 32 100% 58%;
     --status-waiting: 195 70% 55%;
     --status-resolved: 141 73% 48%;
-    --status-closed: 0 0% 49%;
+    --status-closed: 0 0% 65%; /* WCAG AA: höjd från 49% → 65% */
 
     /* Priority colors */
     --priority-low: 141 73% 48%;

@@ -73,6 +73,9 @@ export const UserCombobox = ({
             filteredUsers.map((user) => (
               <div
                 key={user.id}
+                role="option"
+                aria-selected={value === user.id}
+                tabIndex={0}
                 className={cn(
                   'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/60',
                   value === user.id && 'bg-muted/60'
@@ -81,6 +84,14 @@ export const UserCombobox = ({
                   onValueChange(user.id);
                   setOpen(false);
                   setSearch('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onValueChange(user.id);
+                    setOpen(false);
+                    setSearch('');
+                  }
                 }}
               >
                 <Check

@@ -92,12 +92,14 @@ const TimeSection = ({ ticketId }: TimeSectionProps) => {
             setError(null);
           }}
           className="h-8 text-sm"
+          aria-label="Tid att logga"
         />
         <Input
           placeholder="Anteckning (valfri)..."
           value={noteInput}
           onChange={(e) => setNoteInput(e.target.value)}
           className="h-8 text-sm"
+          aria-label="Anteckning"
         />
         {error !== null && (
           <p className="text-xs text-destructive">{error}</p>

@@ -28,7 +28,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Type, ListChecks, CornerDownRight, ArrowUp, ArrowDown, Timer, Save, RotateCcw } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Type, ListChecks, CornerDownRight, ArrowUp, ArrowDown, Timer, Save, RotateCcw, Loader2 } from 'lucide-react';
 import { Select as UiSelect, SelectContent as UiSelectContent, SelectItem as UiSelectItem, SelectTrigger as UiSelectTrigger, SelectValue as UiSelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
@@ -197,6 +197,9 @@ const TemplateItem = memo(({
 
 TemplateItem.displayName = 'TemplateItem';
 
+// Stabil modul-konstant — utanför komponenten för att undvika react-hooks/exhaustive-deps-varningar
+const PRIO_ORDER = ['critical', 'high', 'medium', 'low'] as const;
+
 const TicketsTab = () => {
   const { categories, addCategory, updateCategory, deleteCategory, reorderCategories } = useCategories();
   const { tags, createTag, updateTag, deleteTag } = useTags();
@@ -231,6 +234,7 @@ const TicketsTab = () => {
   const [clTemplateItems, setClTemplateItems] = useState<{ label: string; isChild: boolean; parentIndex: number | null }[]>([]);
   const [clNewItemLabel, setClNewItemLabel] = useState('');
   const [deleteClTemplateId, setDeleteClTemplateId] = useState<string | null>(null);
+  const [isSavingCl, setIsSavingCl] = useState(false);
 
   const [sectionsOpen, setSectionsOpen] = useState({
     categories: false,
@@ -282,7 +286,6 @@ const TicketsTab = () => {
 
   // SLA edit-state: per prioritet, response/resolution som {value, unit}
   type SlaDraft = { response: { value: number; unit: SlaUnit }; resolution: { value: number; unit: SlaUnit } };
-  const PRIO_ORDER = ['critical', 'high', 'medium', 'low'] as const;
   const [slaDraft, setSlaDraft] = useState<Record<string, SlaDraft>>({});
   const [isSavingSla, setIsSavingSla] = useState(false);
 
@@ -568,13 +571,18 @@ const TicketsTab = () => {
       }
       return { label: item.label };
     });
-    if (clEditingId) {
-      await updateChecklistTemplate(clEditingId, { name: clTemplateName.trim(), description: clTemplateDesc.trim() || undefined, items: apiItems });
-    } else {
-      await createChecklistTemplate({ name: clTemplateName.trim(), description: clTemplateDesc.trim() || undefined, items: apiItems });
+    setIsSavingCl(true);
+    try {
+      if (clEditingId) {
+        await updateChecklistTemplate(clEditingId, { name: clTemplateName.trim(), description: clTemplateDesc.trim() || undefined, items: apiItems });
+      } else {
+        await createChecklistTemplate({ name: clTemplateName.trim(), description: clTemplateDesc.trim() || undefined, items: apiItems });
+      }
+      setClTemplateFormOpen(false);
+      await fetchChecklistTemplates();
+    } finally {
+      setIsSavingCl(false);
     }
-    setClTemplateFormOpen(false);
-    await fetchChecklistTemplates();
   };
 
   const handleClAddItem = (isChild: boolean, parentIdx: number | null) => {
@@ -939,8 +947,10 @@ const TicketsTab = () => {
                       </Button>
                     </div>
                     <div className="flex gap-2 justify-end">
-                      <Button variant="outline" onClick={() => setClTemplateFormOpen(false)}>Avbryt</Button>
-                      <Button onClick={handleClSave}>Spara mall</Button>
+                      <Button variant="outline" onClick={() => setClTemplateFormOpen(false)} disabled={isSavingCl}>Avbryt</Button>
+                      <Button onClick={handleClSave} disabled={isSavingCl}>
+                        {isSavingCl ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Sparar...</> : 'Spara mall'}
+                      </Button>
                     </div>
                   </div>
                 )}
