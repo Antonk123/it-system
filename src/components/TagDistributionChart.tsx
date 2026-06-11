@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarRectangleItem } from 'recharts';
 import { useNavigate } from 'react-router-dom';
 import { Ticket, Tag } from '@/types/ticket';
 import { cn } from '@/lib/utils';
@@ -89,8 +89,9 @@ export const TagDistributionChart = ({
     }));
   }, [tagDistData]);
 
-  // Handle bar click
-  const handleBarClick = (data: TagDistData) => {
+  // Handle bar click (recharts 3 passes BarRectangleItem; datum is on .payload)
+  const handleBarClick = (bar: BarRectangleItem) => {
+    const data = bar.payload as TagDistData;
     if (onTagClick) {
       onTagClick(data.tagId);
     } else {

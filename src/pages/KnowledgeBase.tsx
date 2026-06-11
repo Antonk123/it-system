@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle, Upload } from 'lucide-react';
 import { Layout } from '@/components/Layout';
@@ -29,11 +29,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-const listContainer = {
+const listContainer: Variants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.05 } },
 };
-const listItem = {
+const listItem: Variants = {
   hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: 'easeOut' } },
 };

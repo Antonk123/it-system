@@ -32,7 +32,7 @@ export function ReminderDialog({ onCreateReminder, open: controlledOpen, onOpenC
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : internalOpen;
   const setOpen = isControlled ? (onOpenChange ?? setInternalOpen) : setInternalOpen;
-  const [date, setDate] = useState<Date>();
+  const [date, setDate] = useState<Date | undefined>();
   const [time, setTime] = useState('09:00');
   const [message, setMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -113,7 +113,7 @@ export function ReminderDialog({ onCreateReminder, open: controlledOpen, onOpenC
                   onSelect={setDate}
                   disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
                   locale={sv}
-                  initialFocus
+                  autoFocus
                 />
               </PopoverContent>
             </Popover>

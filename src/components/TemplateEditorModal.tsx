@@ -29,7 +29,8 @@ interface TemplateEditorModalProps {
   onOpenChange: (open: boolean) => void;
   template: Template | null;
   categories: Category[];
-  onSave: (templateData: Omit<Template, 'id' | 'position' | 'createdBy' | 'createdAt' | 'updatedAt'>) => void;
+  // Returnerar den skapade mallen (minst { id }) så nya dynamiska fält kan kopplas direkt efter create
+  onSave: (templateData: Omit<Template, 'id' | 'position' | 'createdBy' | 'createdAt' | 'updatedAt'>) => Promise<{ id: string } | void>;
   onUpdate: (id: string, updates: Partial<Template>) => void;
 }
 
@@ -263,6 +264,8 @@ export const TemplateEditorModal = ({
         required: fieldFormData.required ? 1 : 0,
         options: fieldFormData.options || null,
         position: fields.length,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
       setFields([...fields, tempField]);
       resetFieldForm();
@@ -291,6 +294,8 @@ export const TemplateEditorModal = ({
         required: fieldFormData.required ? 1 : 0,
         options: fieldFormData.options || null,
         position: fields.find(f => f.id === editingFieldId)?.position || 0,
+        created_at: fields.find(f => f.id === editingFieldId)?.created_at || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
       };
       setFields(fields.map(f => f.id === editingFieldId ? updatedField : f));
       resetFieldForm();

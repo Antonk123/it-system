@@ -22,6 +22,8 @@ interface KPICardProps {
   className?: string;
   onClick?: () => void;
   subLabel?: string | ReactNode;
+  /** ms-fördröjning för staggered entrance-reveal (sätts t.ex. av Reports KPI-raden) */
+  animationDelay?: number;
 }
 
 export const KPICard = ({
@@ -36,6 +38,7 @@ export const KPICard = ({
   className,
   onClick,
   subLabel,
+  animationDelay,
 }: KPICardProps) => {
   const TrendIcon = trend?.direction === 'up' ? TrendingUp : TrendingDown;
   const trendColor = trend
@@ -50,8 +53,14 @@ export const KPICard = ({
           'relative overflow-hidden transition-all duration-300 hover:-translate-y-1',
           'hover:shadow-2xl hover:shadow-primary/20',
           onClick && 'cursor-pointer',
+          animationDelay != null && 'animate-fade-in',
           className
         )}
+        style={
+          animationDelay != null
+            ? { animationDelay: `${animationDelay}ms`, animationFillMode: 'backwards' }
+            : undefined
+        }
         onClick={onClick}
       >
         <CardContent className="p-4">

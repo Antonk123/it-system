@@ -37,7 +37,7 @@ const listItem = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: 'easeOut' } },
 };
 
-const priorityVariant = (priority: string): 'default' | 'destructive' | 'secondary' | 'outline-solid' => {
+const priorityVariant = (priority: string): 'default' | 'destructive' | 'secondary' | 'outline' => {
   switch (priority) {
     case 'critical': return 'destructive';
     case 'high': return 'destructive';
@@ -262,7 +262,7 @@ const TicketList = () => {
           <div className="flex flex-wrap items-center gap-2">
             <div className="hidden md:flex items-center gap-2">
               <Button
-                variant={viewMode === 'table' ? 'default' : 'outline-solid'}
+                variant={viewMode === 'table' ? 'default' : 'outline'}
                 size="sm"
                 onClick={() => setViewMode(viewMode === 'table' ? 'kanban' : 'table')}
                 className="h-8 gap-2"
@@ -331,7 +331,7 @@ const TicketList = () => {
             {(['open', 'in-progress', 'waiting'] as TicketStatus[]).map(s => (
               <Badge
                 key={s}
-                variant={selectedStatuses.includes(s) ? 'default' : 'outline-solid'}
+                variant={selectedStatuses.includes(s) ? 'default' : 'outline'}
                 className="cursor-pointer shrink-0"
                 role="button"
                 tabIndex={0}

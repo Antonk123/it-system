@@ -17,7 +17,10 @@ jobs:
       - run: npm ci
       - run: cd server && npm ci
       - run: npx eslint . --max-warnings 5
-      - run: npx tsc --noEmit
+      # Root-tsconfig har files:[]+references → 'tsc --noEmit' typecheckar INGET. Kör projekten explicit.
+      - run: npx tsc --noEmit -p tsconfig.app.json
+      - run: npx tsc --noEmit -p tsconfig.node.json
+      - run: npm test
 
   lint-server:
     runs-on: ubuntu-latest

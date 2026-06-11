@@ -24,7 +24,7 @@ export function useTicketReminders(ticketId: string) {
     setIsLoading(true);
     try {
       const data = await api.getReminders(ticketId);
-      setReminders(data);
+      setReminders(data as TicketReminder[]);
     } catch (error) {
       if (import.meta.env.DEV) console.error('Error fetching reminders:', error);
       toast.error('Kunde inte hämta påminnelser');

@@ -907,7 +907,7 @@ const Reports = () => {
                             stackId="status"
                             fill={`url(#requester-${status})`}
                             radius={status === 'open' ? [0, 4, 4, 0] : 0}
-                            onClick={(data) => setSelectedUserId(data.userId)}
+                            onClick={(bar) => setSelectedUserId(bar.payload.userId)}
                             className="cursor-pointer requester-bar"
                             animationDuration={800}
                             animationEasing="ease-out"
@@ -923,7 +923,10 @@ const Reports = () => {
           {/* ── Flik 4: Taggar ── */}
           <TabsContent value="taggar" className="space-y-5 mt-5">
             <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
-              <TagAnalytics tickets={tickets} tags={tags} />
+              <TagAnalytics
+                tickets={tickets}
+                tags={tags.map((t) => ({ ...t, createdAt: new Date(t.created_at) }))}
+              />
             </div>
           </TabsContent>
 

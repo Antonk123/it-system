@@ -891,7 +891,7 @@ const TicketDetail = () => {
                 comments={comments}
                 isLoading={commentsLoading}
                 isError={commentsError}
-                onAddComment={addComment}
+                onAddComment={(content, isInternal) => addComment(content, isInternal).then(() => {})}
                 onUpdateComment={updateComment}
                 onDeleteComment={deleteComment}
               />
@@ -919,7 +919,7 @@ const TicketDetail = () => {
                 isLoading={linksLoading}
                 isError={linksError}
                 currentTicketId={ticket.id}
-                onAddLink={addLink}
+                onAddLink={(targetTicketId) => addLink(targetTicketId).then(() => {})}
                 onDeleteLink={deleteLink}
               />
             </div>

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, Send, AlertCircle, Loader2, Ticket, ArrowLeft, Sparkles, ThumbsUp, ArrowRight, FileText } from 'lucide-react';
 import { Link, Navigate } from 'react-router-dom';
-import { api, CustomFieldInput } from '@/lib/api';
+import { api, CustomFieldInput, TemplateFieldRow } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,7 @@ interface Template {
   description_template: string;
   priority: string;
   category_id: string | null;
+  fields?: TemplateFieldRow[];
 }
 
 const PublicTicketForm = () => {

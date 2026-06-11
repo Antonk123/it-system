@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 interface UseTicketsOptions {
   page?: number;
   limit?: number;
-  status?: TicketStatus | 'all';
+  status?: TicketStatus | 'all' | (string & {}); // tillåter komma-separerad multi-status, t.ex. "open,waiting"
   priority?: TicketPriority | 'all';
   category?: string | 'all';
   search?: string;

@@ -60,7 +60,7 @@ export function DateRangePopover({
               {DATE_FIELD_OPTIONS.map((option) => (
                 <Button
                   key={option.value}
-                  variant={dateField === option.value ? 'default' : 'outline-solid'}
+                  variant={dateField === option.value ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => onChange({ dateField: option.value })}
                   aria-pressed={dateField === option.value}

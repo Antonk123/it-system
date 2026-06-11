@@ -526,7 +526,7 @@ const UserList = () => {
                     return (
                       <Button
                         key={page}
-                        variant={currentPage === page ? "default" : "outline-solid"}
+                        variant={currentPage === page ? "default" : "outline"}
                         size="sm"
                         onClick={() => setCurrentPage(page)}
                         className="w-9 h-9 p-0"

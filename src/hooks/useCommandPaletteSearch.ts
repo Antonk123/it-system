@@ -66,7 +66,7 @@ export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
 
         const rows: TicketRow[] = Array.isArray(ticketResponse)
           ? (ticketResponse as TicketRow[])
-          : (ticketResponse as PaginatedResponse<TicketRow>).data;
+          : (ticketResponse as unknown as PaginatedResponse<TicketRow>).data;
 
         const ticketResults: SearchResult[] = rows.slice(0, 5).map(t => ({
           id: t.id,

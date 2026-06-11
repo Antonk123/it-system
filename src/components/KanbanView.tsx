@@ -28,7 +28,9 @@ export function KanbanView({ tickets, users, onStatusChange, onTicketClick }: Ka
   const [activeId, setActiveId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, {
-      distance: 8,
+      activationConstraint: {
+        distance: 8,
+      },
     })
   );
 

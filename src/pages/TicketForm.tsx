@@ -174,6 +174,7 @@ const TicketForm = () => {
                 id: freshTemplateRow.id,
                 name: freshTemplateRow.name,
                 description: freshTemplateRow.description,
+                type: (freshTemplateRow.template_type as Template['type']) || 'dynamic',
                 titleTemplate: freshTemplateRow.title_template,
                 descriptionTemplate: freshTemplateRow.description_template,
                 priority: freshTemplateRow.priority as Template['priority'],
@@ -256,7 +257,7 @@ const TicketForm = () => {
               id: freshTemplate.id,
               name: freshTemplate.name,
               description: freshTemplate.description,
-              type: freshTemplate.template_type || 'dynamic',
+              type: (freshTemplate.template_type as Template['type']) || 'dynamic',
               titleTemplate: freshTemplate.title_template,
               descriptionTemplate: freshTemplate.description_template,
               priority: freshTemplate.priority as Template['priority'],
@@ -327,7 +328,7 @@ const TicketForm = () => {
     } else if (!isEditing) {
       // For new tickets, mark as unsaved if any data is entered
       const hasData = formData.title || formData.description || formData.requesterId;
-      setHasUnsavedChanges(hasData);
+      setHasUnsavedChanges(!!hasData);
     }
   }, [formData, existingTicket, isEditing, pendingFiles, pendingChecklistItems, customFieldValues, editInitialFieldValues]);
 

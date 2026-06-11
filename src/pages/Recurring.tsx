@@ -283,7 +283,7 @@ function TemplateFormDialog({ open, onOpenChange, editing }: TemplateFormDialogP
                       checked={form.tags.includes(tag.id)}
                       onCheckedChange={() => toggleTag(tag.id)}
                     />
-                    <span>{tag.label}</span>
+                    <span>{tag.name}</span>
                   </label>
                 ))}
               </div>

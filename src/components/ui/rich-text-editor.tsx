@@ -1,4 +1,4 @@
-import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Link } from '@tiptap/extension-link';
 import { Image } from '@tiptap/extension-image';
@@ -40,12 +40,13 @@ const ResizableImageView = ({
   node,
   updateAttributes,
   selected,
-}: {
-  node: { attrs: { src: string; alt?: string; title?: string; width?: string } };
-  updateAttributes: (attrs: Record<string, unknown>) => void;
-  selected: boolean;
-}) => {
-  const { src, alt, title, width } = node.attrs;
+}: ReactNodeViewProps) => {
+  const { src, alt, title, width } = node.attrs as {
+    src: string;
+    alt?: string;
+    title?: string;
+    width?: string;
+  };
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
 

@@ -605,8 +605,9 @@ class ApiClient {
     field_type: string;
     placeholder?: string;
     default_value?: string;
-    required?: boolean;
+    required?: boolean | number; // skickas som 0/1 (SQLite-flagga); backend coercar truthiness
     options?: string[];
+    position?: number;
   }) {
     return this.request<TemplateFieldRow>(`/templates/${templateId}/fields`, {
       method: 'POST',
@@ -620,7 +621,7 @@ class ApiClient {
     field_type: string;
     placeholder: string;
     default_value: string;
-    required: boolean;
+    required: boolean | number; // skickas som 0/1 (SQLite-flagga)
     options: string[];
   }>) {
     return this.request<TemplateFieldRow>(`/templates/${templateId}/fields/${fieldId}`, {
@@ -1360,6 +1361,15 @@ export interface TicketRow {
   tags?: Array<{ id: string; name: string; color: string }>;
   ai_suggested_category_id?: string | null;
   ai_suggested_confidence?: number | null;
+  // SLA-fält (kolumner på tickets-tabellen, migration i migrations.ts) — returneras rått (snake_case)
+  sla_response_deadline?: string | null;
+  sla_resolution_deadline?: string | null;
+  sla_paused_at?: string | null;
+  sla_paused_duration?: number | null;
+  sla_response_met?: number | null;
+  sla_resolution_met?: number | null;
+  // Sätts på create/update-svaret när bakgrundsåtgärder (t.ex. mailutskick) gav icke-fatala varningar
+  warnings?: string[];
 }
 
 export interface TicketHistoryItem {
@@ -1539,6 +1549,7 @@ export interface TemplateRow {
   id: string;
   name: string;
   description: string | null;
+  template_type: string;
   title_template: string;
   description_template: string;
   priority: string;

@@ -81,6 +81,15 @@ export interface Ticket {
   tags?: Tag[];
   ai_suggested_category_id?: string | null;
   ai_suggested_confidence?: number | null;
+  // SLA-fält (snake_case — speglar tickets-kolumnerna direkt, ingen camelCase-transform)
+  sla_response_deadline?: string | null;
+  sla_resolution_deadline?: string | null;
+  sla_paused_at?: string | null;
+  sla_paused_duration?: number | null;
+  sla_response_met?: number | null;
+  sla_resolution_met?: number | null;
+  // Skrivbart fält i update-payload (PUT /tickets/:id) för att sätta taggar
+  tag_ids?: string[];
 }
 
 export interface Comment {

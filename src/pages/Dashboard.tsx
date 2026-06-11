@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, type Variants } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { Ticket, Clock, CheckCircle, AlertTriangle, ArrowRight, PauseCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { useActiveQueue } from '@/hooks/useActiveQueue';
@@ -26,16 +26,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-const kpiContainer = {
+const kpiContainer: Variants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
 };
-const kpiItem = {
+const kpiItem: Variants = {
   hidden: { opacity: 0, y: 10 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: 'easeOut' } },
 };
 
-const sectionFade = {
+const sectionFade: Variants = {
   hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } },
 };
