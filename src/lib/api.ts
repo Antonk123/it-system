@@ -41,14 +41,10 @@ class ApiClient {
     this.csrfToken = null; // Invalidate cached CSRF token on auth change
   }
 
-  setRefreshToken(refreshToken: string): void {
-    localStorage.setItem('refreshToken', refreshToken);
-  }
-
   clearToken(): void {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('refreshToken'); // rensa ev. gammal token (pre-cookie-migration)
     this.csrfToken = null;
   }
 
@@ -77,20 +73,17 @@ class ApiClient {
   }
 
   private async tryRefresh(): Promise<boolean> {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) return false;
     try {
+      // Refresh-token ligger i en HttpOnly-cookie (ej läsbar för JS).
+      // credentials:'include' skickar cookien; servern roterar och sätter ny cookie.
       const res = await fetch(`${this.baseUrl}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
+        credentials: 'include',
       });
       if (!res.ok) return false;
-      const data = await res.json() as { accessToken: string; refreshToken?: string };
+      const data = await res.json() as { accessToken: string };
       this.setToken(data.accessToken);
-      if (data.refreshToken) {
-        localStorage.setItem('refreshToken', data.refreshToken);
-      }
       return true;
     } catch {
       return false;
@@ -210,9 +203,7 @@ class ApiClient {
       body: { email, password },
     });
     this.setToken(data.token);
-    if (data.refreshToken) {
-      this.setRefreshToken(data.refreshToken);
-    }
+    // Refresh-token kommer som HttpOnly-cookie (request() skickar credentials:'include').
     return data;
   }
 
@@ -259,16 +250,11 @@ class ApiClient {
 
   async logout() {
     try {
-      const refreshToken = localStorage.getItem('refreshToken');
-      if (refreshToken) {
-        // Revoke refresh token on backend
-        await this.request('/auth/logout', {
-          method: 'POST',
-          body: { refreshToken },
-        });
-      }
+      // Refresh-token-cookien skickas automatiskt (credentials:'include');
+      // servern revokerar token och rensar cookien.
+      await this.request('/auth/logout', { method: 'POST' });
     } catch (error) {
-      console.error('Logout error:', error);
+      if (import.meta.env.DEV) console.error('Logout error:', error);
     } finally {
       this.clearToken();
     }

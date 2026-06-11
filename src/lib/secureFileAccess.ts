@@ -10,21 +10,16 @@ async function fetchWithRefresh(url: string, isRetry = false): Promise<Response>
   });
 
   if (response.status === 401 && !isRetry) {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (refreshToken) {
-      const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken }),
-      });
-      if (refreshRes.ok) {
-        const data = await refreshRes.json();
-        localStorage.setItem('auth_token', data.accessToken);
-        if (data.refreshToken) {
-          localStorage.setItem('refreshToken', data.refreshToken);
-        }
-        return fetchWithRefresh(url, true);
-      }
+    // Refresh-token ligger i HttpOnly-cookie — skickas via credentials:'include'.
+    const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+    if (refreshRes.ok) {
+      const data = await refreshRes.json();
+      localStorage.setItem('auth_token', data.accessToken);
+      return fetchWithRefresh(url, true);
     }
   }
 
@@ -70,9 +65,4 @@ export function revokeBlobUrl(fileId: string): void {
     URL.revokeObjectURL(blobUrl);
     blobUrlCache.delete(fileId);
   }
-}
-
-function clearBlobCache(): void {
-  blobUrlCache.forEach(url => URL.revokeObjectURL(url));
-  blobUrlCache.clear();
 }

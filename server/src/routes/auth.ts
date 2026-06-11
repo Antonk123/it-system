@@ -38,6 +38,35 @@ function getRefreshTokenExpiry(): string {
   return date.toISOString();
 }
 
+// Refresh-token lagras i en HttpOnly-cookie (ej läsbar via JS) istället för
+// localStorage → en XSS kan inte längre stjäla den 7-dagars sessionen.
+// Scopad till /api/auth så den bara skickas till refresh/logout. SameSite=strict
+// (refresh sker som same-site-fetch från SPA:n). Cookie-parser är redan monterad.
+const REFRESH_COOKIE = 'refreshToken';
+const REFRESH_COOKIE_PATH = '/api/auth';
+function refreshCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict' as const,
+    path: REFRESH_COOKIE_PATH,
+  };
+}
+function setRefreshCookie(res: Response, token: string): void {
+  res.cookie(REFRESH_COOKIE, token, {
+    ...refreshCookieOptions(),
+    maxAge: REFRESH_TOKEN_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+  });
+}
+function clearRefreshCookie(res: Response): void {
+  res.clearCookie(REFRESH_COOKIE, refreshCookieOptions());
+}
+// Läs refresh-token från cookie (ny klient) med fallback till body (bakåtkompat
+// under rollout / icke-webb-klienter).
+function readRefreshToken(req: Request): string | undefined {
+  return (req.cookies?.[REFRESH_COOKIE] as string | undefined) || req.body?.refreshToken;
+}
+
 // Login with rate limiting (5 attempts per 15 minutes)
 router.post('/login', loginRateLimiter, (req: Request, res: Response) => {
   passport.authenticate('local', { session: false }, (err: Error | null, user: AuthUser | false, info: { message?: string }) => {
@@ -70,6 +99,10 @@ router.post('/login', loginRateLimiter, (req: Request, res: Response) => {
 
       logAudit(user.id, 'login_success', 'session', user.id, null, req.ip);
 
+      // Refresh-token sätts som HttpOnly-cookie — returneras INTE i body
+      // (förhindrar att klient-JS/XSS får tag på den).
+      setRefreshCookie(res, refreshToken);
+
       res.json({
         user: {
           id: user.id,
@@ -78,7 +111,6 @@ router.post('/login', loginRateLimiter, (req: Request, res: Response) => {
         },
         token: accessToken, // For backward compatibility
         accessToken,
-        refreshToken,
       });
     } catch (error) {
       logger.error('Error generating tokens:', { error: String(error) });
@@ -89,7 +121,7 @@ router.post('/login', loginRateLimiter, (req: Request, res: Response) => {
 
 // Refresh access token using refresh token
 router.post('/refresh', refreshRateLimiter, (req: Request, res: Response) => {
-  const { refreshToken } = req.body;
+  const refreshToken = readRefreshToken(req);
 
   if (!refreshToken) {
     return res.status(400).json({ error: 'Refresh token required' });
@@ -163,10 +195,12 @@ router.post('/refresh', refreshRateLimiter, (req: Request, res: Response) => {
     });
     rotateToken();
 
+    // Roterad refresh-token i ny HttpOnly-cookie — ej i body.
+    setRefreshCookie(res, newRefreshToken);
+
     res.json({
       accessToken,
       token: accessToken, // For backward compatibility
-      refreshToken: newRefreshToken,
     });
   } catch (error) {
     logger.error('Error refreshing token:', { error: String(error) });
@@ -176,7 +210,10 @@ router.post('/refresh', refreshRateLimiter, (req: Request, res: Response) => {
 
 // Logout (revoke refresh token)
 router.post('/logout', authenticate, (req: AuthRequest, res: Response) => {
-  const { refreshToken } = req.body;
+  const refreshToken = readRefreshToken(req);
+
+  // Rensa alltid cookien, även om token saknas i DB.
+  clearRefreshCookie(res);
 
   if (!refreshToken) {
     return res.json({ message: 'Logged out successfully' });
