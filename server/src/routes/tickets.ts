@@ -764,9 +764,11 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
     const contactByEmailMap = new Map(contacts.map((c) => [c.email.toLowerCase(), c.id]));
 
     const stmt = db.prepare(`
-      INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, notes, solution)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, notes, solution, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
+
+    const importedBy = req.user!.id;
 
     const contactStmt = db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)');
 
@@ -809,7 +811,8 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
           categoryId,
           requesterId,
           ticket.notes || null,
-          ticket.solution || null
+          ticket.solution || null,
+          importedBy
         );
 
         // FTS5 synkas automatiskt via triggers (migration 050)
@@ -1245,8 +1248,8 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
     // Wrap all inserts in a transaction for atomicity
     const createTransaction = db.transaction(() => {
       db.prepare(`
-        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, template_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, template_id, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         title,
@@ -1259,7 +1262,8 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
         assigned_to || null,
         notes || null,
         solution || null,
-        template_id || null
+        template_id || null,
+        req.user!.id
       );
 
       // Store custom field values if provided

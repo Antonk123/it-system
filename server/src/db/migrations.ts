@@ -1126,4 +1126,19 @@ export const migrations: Migration[] = [
         END`);
     },
   },
+  {
+    id: '058',
+    name: 'add_tickets_created_by_and_updated_at_index',
+    up: (db, { columnExists }) => {
+      // created_by: ägarskap för tidsloggning (time-entries.ts läser kolumnen).
+      // Kolumnen har aldrig existerat — SELECT created_by FROM tickets kastade
+      // "no such column" → POST /api/time-entries gav 500 för alla användare.
+      if (!columnExists('tickets', 'created_by')) {
+        db.prepare('ALTER TABLE tickets ADD COLUMN created_by TEXT REFERENCES users(id) ON DELETE SET NULL').run();
+      }
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_tickets_created_by ON tickets(created_by)').run();
+      // Datumfilter på updated_at krävde full tabellsökning (saknat index).
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_tickets_updated_at ON tickets(updated_at)').run();
+    },
+  },
 ];
