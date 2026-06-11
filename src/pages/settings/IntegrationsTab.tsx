@@ -1,4 +1,5 @@
-import { useState, useEffect, memo } from 'react';
+import { useState, memo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Trash2, Loader2, Key, Copy, Eye, Globe, Inbox } from 'lucide-react';
+import { Plus, Trash2, Loader2, Key, Copy, Eye, Globe, Inbox, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
@@ -60,24 +61,28 @@ const IntegrationsTab = () => {
   const [deleteWebhookId, setDeleteWebhookId] = useState<string | null>(null);
   const [viewDeliveriesId, setViewDeliveriesId] = useState<string | null>(null);
 
-  const [emailInboundStatus, setEmailInboundStatus] = useState<{
+  const {
+    data: emailInboundStatus,
+    isLoading: isEmailStatusLoading,
+    isError: isEmailStatusError,
+  } = useQuery<{
     configured: boolean;
     active: boolean;
     host: string | null;
     user: string | null;
     polling_interval: number;
     auto_create_contact: boolean;
-  } | null>(null);
+  }>({
+    queryKey: ['email-inbound-status'],
+    queryFn: () => api.request('/email-inbound/status'),
+    staleTime: 60 * 1000,
+  });
 
   const [sectionsOpen, setSectionsOpen] = useState({
     apiKeys: false,
     webhooks: false,
     emailInbound: false,
   });
-
-  useEffect(() => {
-    api.request('/email-inbound/status').then(setEmailInboundStatus).catch(() => {});
-  }, []);
 
   return (
     <>
@@ -200,7 +205,19 @@ const IntegrationsTab = () => {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent className="space-y-4">
-                {emailInboundStatus?.configured ? (
+                {isEmailStatusLoading && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Hämtar status...
+                  </div>
+                )}
+                {isEmailStatusError && (
+                  <div className="flex items-center gap-2 text-sm text-destructive">
+                    <AlertTriangle className="w-4 h-4" />
+                    Kunde inte hämta e-post-status
+                  </div>
+                )}
+                {!isEmailStatusLoading && !isEmailStatusError && emailInboundStatus?.configured ? (
                   <div className="space-y-3">
                     <div className="rounded-md border p-3 space-y-2">
                       <div className="flex items-center justify-between">
@@ -226,7 +243,7 @@ const IntegrationsTab = () => {
                       Olästa e-postmeddelanden hämtar och skapar ärenden automatiskt. Avsändaren matchas mot befintliga kontakter.
                     </p>
                   </div>
-                ) : (
+                ) : !isEmailStatusLoading && !isEmailStatusError ? (
                   <div className="space-y-3">
                     <p className="text-sm text-muted-foreground">
                       E-post-ingång är inte konfigurerad. Ange följande miljövariabler på servern:
@@ -241,7 +258,7 @@ const IntegrationsTab = () => {
                       <p>IMAP_AUTO_CREATE_CONTACT=true</p>
                     </div>
                   </div>
-                )}
+                ) : null}
               </CardContent>
             </CollapsibleContent>
           </Card>

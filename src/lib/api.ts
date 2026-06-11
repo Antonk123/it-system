@@ -9,7 +9,7 @@ interface ApiOptions {
   signal?: AbortSignal;
 }
 
-interface PaginatedResponse<T> {
+export interface PaginatedResponse<T> {
   data: T[];
   pagination: {
     page: number;
@@ -263,6 +263,11 @@ class ApiClient {
   // Tickets
   async getTickets(queryString?: string) {
     return this.request<TicketRow[] | PaginatedResponse<TicketRow>>(`/tickets${queryString || ''}`);
+  }
+
+  // Antal ej-stängda ärenden per requester (serverside-aggregat för UserList).
+  async getRequesterOpenCounts() {
+    return this.request<Record<string, number>>('/tickets/requester-open-counts');
   }
 
   async exportTickets(queryString?: string): Promise<void> {
@@ -1269,6 +1274,51 @@ class ApiClient {
 
   async getWebhookDeliveries(webhookId: string) {
     return this.request<WebhookDeliveryRow[]>(`/webhooks/${webhookId}/deliveries`);
+  }
+
+  // Backup
+  async downloadBackup(): Promise<Blob> {
+    const token = this.getToken();
+
+    // Proactive refresh before fetching large binary — same pattern as exportTickets
+    if (token && this.isTokenExpired(token)) {
+      await this.tryRefresh();
+    }
+
+    const headers: Record<string, string> = {};
+    const currentToken = this.getToken();
+    if (currentToken) {
+      headers['Authorization'] = `Bearer ${currentToken}`;
+    }
+
+    const response = await fetch(`${this.baseUrl}/backup`, {
+      method: 'GET',
+      headers,
+      credentials: 'include',
+    });
+
+    if (response.status === 401) {
+      // Attempt one silent refresh, then retry
+      if (await this.tryRefresh()) {
+        const retryToken = this.getToken();
+        const retryHeaders: Record<string, string> = {};
+        if (retryToken) retryHeaders['Authorization'] = `Bearer ${retryToken}`;
+        const retryResponse = await fetch(`${this.baseUrl}/backup`, {
+          method: 'GET',
+          headers: retryHeaders,
+          credentials: 'include',
+        });
+        if (!retryResponse.ok) throw new Error('Backup failed');
+        return retryResponse.blob();
+      }
+      this.clearToken();
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+      throw new Error('Session expired');
+    }
+
+    if (!response.ok) throw new Error('Backup failed');
+    return response.blob();
   }
 }
 

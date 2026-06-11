@@ -14,5 +14,6 @@ export const useStatusCounts = () => {
     staleTime: 30 * 1000,
     gcTime: 2 * 60 * 1000,
     refetchInterval: 60 * 1000,
+    refetchIntervalInBackground: false,
   });
 };

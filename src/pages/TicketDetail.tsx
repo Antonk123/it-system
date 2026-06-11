@@ -3,7 +3,7 @@ import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Link as LinkIcon, Loader2, ListChecks, Plus, Camera, Sparkles, RefreshCw, Check, X, MoreVertical, Bell } from 'lucide-react';
-import { useTickets } from '@/hooks/useTickets';
+import { useTickets, ticketKeys } from '@/hooks/useTickets';
 import { useCategories } from '@/hooks/useCategories';
 import { useUsers } from '@/hooks/useUsers';
 import { useTicketAttachments } from '@/hooks/useTicketAttachments';
@@ -80,7 +80,7 @@ import { api } from '@/lib/api';
 import { STATUS_LABELS } from '@/lib/constants';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const formatFileSize = (bytes: number | null) => {
   if (!bytes) return '';
@@ -95,13 +95,22 @@ const TicketDetail = () => {
   const location = useLocation();
   const queryClient = useQueryClient();
   const { getTicketById, updateTicket, deleteTicket, isLoading: ticketsLoading } = useTickets();
+
+  // Authoritative single-ticket query — preferred over paginated list cache
+  // which may be stale or filtered out.
+  const { data: ticketDetail, isLoading: ticketDetailLoading } = useQuery({
+    queryKey: ticketKeys.detail(id || ''),
+    queryFn: () => api.getTicket(id!),
+    enabled: Boolean(id),
+    staleTime: 1000 * 60 * 2,
+  });
   const { getCategoryLabel } = useCategories();
   const { getUserById } = useUsers();
   const { attachments, fetchAttachments } = useTicketAttachments();
   const { items: checklistItems, fetchChecklists, addChecklistItem, updateChecklistItem, deleteChecklistItem, setItems: setChecklistItems } = useTicketChecklists();
   const { templates: checklistTemplates, fetchTemplates: fetchChecklistTemplates, createTemplate: createChecklistTemplate, applyTemplate: applyChecklistTemplate } = useChecklistTemplates();
-  const { comments, isLoading: commentsLoading, addComment, updateComment, deleteComment } = useTicketComments(id || '');
-  const { links, isLoading: linksLoading, addLink, deleteLink } = useTicketLinks(id || '');
+  const { comments, isLoading: commentsLoading, isError: commentsError, addComment, updateComment, deleteComment } = useTicketComments(id || '');
+  const { links, isLoading: linksLoading, isError: linksError, addLink, deleteLink } = useTicketLinks(id || '');
   const { history, isLoading: historyLoading } = useTicketHistory(id || '');
   const { reminders, fetchReminders, createReminder, deleteReminder, clearSentReminders } = useTicketReminders(id || '');
   const {
@@ -136,10 +145,21 @@ const TicketDetail = () => {
   >([]);
   const [tagsFromAPI, setTagsFromAPI] = useState<{ id: string; name: string; color: string }[]>([]);
 
-  const ticket = id ? getTicketById(id) : null;
+  // Prefer fresh single-ticket data; fall back to list cache for instant display
+  const listTicket = id ? getTicketById(id) : null;
+  const ticket = listTicket ?? null;
   const user = ticket ? getUserById(ticket.requesterId) : null;
 
-  // Tags to display — prefer fresh data from single-ticket API call
+  // Sync field_values and tags from the authoritative single-ticket query
+  useEffect(() => {
+    if (!ticketDetail) return;
+    if (ticketDetail.field_values && ticketDetail.field_values.length > 0) {
+      setTicketFieldValues(ticketDetail.field_values);
+    }
+    if (ticketDetail.tags) setTagsFromAPI(ticketDetail.tags);
+  }, [ticketDetail]);
+
+  // Tags to display — prefer fresh data from single-ticket query
   const effectiveTags = tagsFromAPI.length > 0 ? tagsFromAPI : (ticket?.tags || []);
 
   const refreshTagsFromAPI = (ticketId: string) => {
@@ -156,20 +176,6 @@ const TicketDetail = () => {
       fetchChecklistTemplates();
     }
   }, [id, fetchAttachments, fetchChecklists, fetchReminders, fetchChecklistTemplates]);
-
-  useEffect(() => {
-    if (!id) return;
-    let mounted = true;
-    api.getTicket(id).then((detail) => {
-      if (!mounted) return;
-      if (detail.field_values && detail.field_values.length > 0) {
-        setTicketFieldValues(detail.field_values);
-      }
-      // Always load fresh tags from single-ticket endpoint (list endpoint may miss them)
-      if (detail.tags) setTagsFromAPI(detail.tags);
-    }).catch(() => {});
-    return () => { mounted = false; };
-  }, [id]);
 
   // Fetch AI summary for tickets with enough comments
   useEffect(() => {
@@ -235,7 +241,9 @@ const TicketDetail = () => {
     addRecentlyViewedTicket(ticket.id, ticket.title);
   }, [ticket?.id, ticket?.title]);
 
-  if (ticketsLoading) {
+  // Show skeleton while loading: either list cache is loading, or
+  // detail query is in-flight and there's no list-cache fallback yet.
+  if (ticketsLoading || (ticketDetailLoading && !listTicket)) {
     return (
       <Layout>
         <div className="max-w-3xl mx-auto space-y-6">
@@ -268,8 +276,9 @@ const TicketDetail = () => {
   }
 
   const handleStatusChange = (status: TicketStatus) => {
-    updateTicket(ticket.id, { status });
-    toast.success(`Status uppdaterad till ${STATUS_LABELS[status]}`);
+    updateTicket(ticket.id, { status })
+      .then(() => toast.success(`Status uppdaterad till ${STATUS_LABELS[status]}`))
+      .catch(() => toast.error('Kunde inte uppdatera status'));
   };
 
   const handleTagsChange = (tagIds: string[]) => {
@@ -410,6 +419,7 @@ const TicketDetail = () => {
                           size="icon"
                           variant="outline"
                           onClick={handleCopyLink}
+                          aria-label="Kopiera delningslänk"
                         >
                           <Copy className="w-4 h-4" />
                         </Button>
@@ -880,6 +890,7 @@ const TicketDetail = () => {
               <TicketComments
                 comments={comments}
                 isLoading={commentsLoading}
+                isError={commentsError}
                 onAddComment={addComment}
                 onUpdateComment={updateComment}
                 onDeleteComment={deleteComment}
@@ -906,6 +917,7 @@ const TicketDetail = () => {
               <TicketLinks
                 links={links}
                 isLoading={linksLoading}
+                isError={linksError}
                 currentTicketId={ticket.id}
                 onAddLink={addLink}
                 onDeleteLink={deleteLink}

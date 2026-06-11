@@ -25,6 +25,7 @@ import { useDebounce } from '@/hooks/useDebounce';
 interface TicketLinksProps {
   links: TicketLink[];
   isLoading: boolean;
+  isError?: boolean;
   currentTicketId: string;
   onAddLink: (targetTicketId: string) => Promise<void>;
   onDeleteLink: (linkId: string) => Promise<void>;
@@ -33,6 +34,7 @@ interface TicketLinksProps {
 export const TicketLinks = ({
   links,
   isLoading,
+  isError,
   currentTicketId,
   onAddLink,
   onDeleteLink,
@@ -171,6 +173,10 @@ export const TicketLinks = ({
         <div className="flex items-center justify-center py-4">
           <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
         </div>
+      ) : isError ? (
+        <p className="text-xs text-destructive py-2">
+          Kunde inte hämta länkade ärenden
+        </p>
       ) : links.length === 0 ? (
         <p className="text-xs text-muted-foreground py-2">
           Inga länkade ärenden ännu

@@ -10,17 +10,22 @@ export interface TicketAttachment {
 export const useTicketAttachments = (ticketId?: string) => {
   const [attachments, setAttachments] = useState<TicketAttachment[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
   const fetchAttachments = useCallback(async (id: string) => {
     setIsLoading(true);
+    setIsError(false);
     try {
       const data = await api.getAttachments(id);
       const mapped = data.map((a) => ({
         id: a.id, ticketId: a.ticket_id, fileName: a.file_name, filePath: a.file_path, fileSize: a.file_size, fileType: a.file_type, createdAt: new Date(a.created_at), url: a.url,
       }));
       setAttachments(mapped);
-    } catch (error) { if (import.meta.env.DEV) console.error('Error fetching attachments:', error); }
+    } catch (error) {
+      setIsError(true);
+      if (import.meta.env.DEV) console.error('Error fetching attachments:', error);
+    }
     finally { setIsLoading(false); }
   }, []);
 
@@ -46,5 +51,5 @@ export const useTicketAttachments = (ticketId?: string) => {
     catch (error) { if (import.meta.env.DEV) console.error('Error deleting attachment:', error); return false; }
   }, []);
 
-  return { attachments, isLoading, isUploading, fetchAttachments, uploadAttachment, deleteAttachment };
+  return { attachments, isLoading, isError, isUploading, fetchAttachments, uploadAttachment, deleteAttachment };
 };

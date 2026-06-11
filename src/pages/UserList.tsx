@@ -1,11 +1,11 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { Plus, Pencil, Trash2, Users as UsersIcon, Ticket, Download, Upload, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useUsers } from '@/hooks/useUsers';
 import { useCompanies } from '@/hooks/useCompanies';
-import { useTickets } from '@/hooks/useTickets';
 import { Layout } from '@/components/Layout';
 import { SearchBar } from '@/components/SearchBar';
 import { EmptyState } from '@/components/EmptyState';
@@ -49,7 +49,12 @@ import { User } from '@/types/ticket';
 const UserList = () => {
   const { users, isLoading: usersLoading, addUser, updateUser, deleteUser, refetch } = useUsers();
   const { companies } = useCompanies();
-  const { tickets } = useTickets();
+  // Serverside-aggregat istället för att ladda hela ticket-listan client-side.
+  const { data: openTicketsByUser = {} } = useQuery({
+    queryKey: ['requester-open-counts'],
+    queryFn: () => api.getRequesterOpenCounts(),
+    staleTime: 60_000,
+  });
   const [search, setSearch] = useState('');
   const [companyFilter, setCompanyFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -68,16 +73,6 @@ const UserList = () => {
   const [importPreview, setImportPreview] = useState<any>(null);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const openTicketsByUser = useMemo(() => {
-    const counts: Record<string, number> = {};
-    tickets.forEach(ticket => {
-      if (ticket.requesterId && ticket.status !== 'closed') {
-        counts[ticket.requesterId] = (counts[ticket.requesterId] || 0) + 1;
-      }
-    });
-    return counts;
-  }, [tickets]);
 
   // Auto-open user sheet if highlight param exists
   useEffect(() => {

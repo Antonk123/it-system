@@ -20,15 +20,20 @@ export const useTicketChecklists = (ticketId?: string) => {
   const queryClient = useQueryClient();
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isError, setIsError] = useState(false);
 
   const fetchChecklists = useCallback(async (id?: string) => {
     const targetId = id || ticketId;
     if (!targetId) return;
     setIsLoading(true);
+    setIsError(false);
     try {
       const data = await api.getChecklists(targetId);
       setItems(data as ChecklistItem[]);
-    } catch (error) { if (import.meta.env.DEV) console.error('Error fetching checklists:', error); }
+    } catch (error) {
+      setIsError(true);
+      if (import.meta.env.DEV) console.error('Error fetching checklists:', error);
+    }
     finally { setIsLoading(false); }
   }, [ticketId]);
 
@@ -74,5 +79,5 @@ export const useTicketChecklists = (ticketId?: string) => {
     catch (error) { toast.error('Failed to add checklist items'); return []; }
   }, []);
 
-  return { items, isLoading, fetchChecklists, addChecklistItem, updateChecklistItem, deleteChecklistItem, bulkAddChecklistItems, setItems };
+  return { items, isLoading, isError, fetchChecklists, addChecklistItem, updateChecklistItem, deleteChecklistItem, bulkAddChecklistItems, setItems };
 };

@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { KBImageLightbox } from '@/components/KBImageLightbox';
-import { api, KbArticleRow, LinkedTicketRow, LinkedArticleRow } from '@/lib/api';
+import { api, KbArticleRow } from '@/lib/api';
+import { useKbArticle } from '@/hooks/useKbArticle';
 import { addRecentlyViewedKB } from '@/lib/recentlyViewed';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -37,44 +38,41 @@ const slugify = (text: string): string =>
 const KBArticleDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+
+  const { data: kbData, isLoading, isError } = useKbArticle(id);
+
+  // Local mutable state derived from the query (mutations update these in-place)
   const [article, setArticle] = useState<KbArticleRow | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [shareToken, setShareToken] = useState<string | null>(null);
+
   const [isDeleting, setIsDeleting] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
-  const [shareToken, setShareToken] = useState<string | null>(null);
   const [showShare, setShowShare] = useState(false);
   const [isTogglingShare, setIsTogglingShare] = useState(false);
-  const [linkedTickets, setLinkedTickets] = useState<LinkedTicketRow[]>([]);
-  const [crossRefs, setCrossRefs] = useState<LinkedArticleRow[]>([]);
   const contentRef = useRef<HTMLDivElement>(null);
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const [activeId, setActiveId] = useState<string>('');
 
+  // Seed local state once data arrives
   useEffect(() => {
-    if (!id) return;
-    const fetch = async () => {
-      try {
-        const [data, shareData, ticketsData] = await Promise.all([
-          api.getKbArticle(id),
-          api.getKbArticleShare(id),
-          api.getArticleLinkedTickets(id),
-        ]);
-        setArticle(data);
-        if (data?.id && data?.title) {
-          addRecentlyViewedKB(String(data.id), data.title);
-        }
-        setShareToken(shareData.share_token);
-        setLinkedTickets(ticketsData);
-        api.getKbArticleLinks(id).then(setCrossRefs).catch(() => {});
-      } catch {
-        toast.error('Artikeln hittades inte');
-        navigate('/kb');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetch();
-  }, [id, navigate]);
+    if (!kbData) return;
+    setArticle(kbData.article);
+    setShareToken(kbData.shareToken);
+    if (kbData.article?.id && kbData.article?.title) {
+      addRecentlyViewedKB(String(kbData.article.id), kbData.article.title);
+    }
+  }, [kbData]);
+
+  // Navigate away if the query fails (same behaviour as before)
+  useEffect(() => {
+    if (isError) {
+      toast.error('Artikeln hittades inte');
+      navigate('/kb');
+    }
+  }, [isError, navigate]);
+
+  const linkedTickets = kbData?.linkedTickets ?? [];
+  const crossRefs = kbData?.crossRefs ?? [];
 
   useEffect(() => {
     if (!contentRef.current || !article?.content) return;

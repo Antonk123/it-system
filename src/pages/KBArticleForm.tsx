@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import { api, KbCategoryRow, KbArticleRow, LinkedArticleRow } from '@/lib/api';
+import { api, KbArticleRow, LinkedArticleRow } from '@/lib/api';
+import { useKbCategories } from '@/hooks/useKbCategories';
 import { useTags } from '@/hooks/useTags';
 import { TagMultiSelect } from '@/components/TagMultiSelect';
 import {
@@ -63,7 +64,7 @@ const KBArticleForm = () => {
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const { tags: availableTags } = useTags();
   const [status, setStatus] = useState<'draft' | 'published'>('published');
-  const [categories, setCategories] = useState<KbCategoryRow[]>([]);
+  const { categories } = useKbCategories();
   const [isLoading, setIsLoading] = useState(isEditing);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; category?: string; content?: string }>({});
@@ -78,18 +79,6 @@ const KBArticleForm = () => {
   const [linkSearch, setLinkSearch] = useState('');
 
   const sourceTicketId = searchParams.get('ticket_id');
-
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        const data = await api.getKbCategories();
-        setCategories(data);
-      } catch {
-        // non-critical
-      }
-    };
-    fetchCategories();
-  }, []);
 
   useEffect(() => {
     if (!isEditing || !id) return;

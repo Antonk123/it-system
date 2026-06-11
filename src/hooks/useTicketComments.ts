@@ -1,120 +1,92 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Comment, CommentRow } from '@/types/ticket';
 
+const mapComment = (c: CommentRow): Comment => ({
+  id: c.id,
+  ticketId: c.ticket_id,
+  userId: c.user_id,
+  content: c.content,
+  isInternal: c.is_internal === 1,
+  createdAt: new Date(c.created_at),
+  updatedAt: new Date(c.updated_at),
+  deletedAt: c.deleted_at ? new Date(c.deleted_at) : undefined,
+  userName: c.user_name,
+  userEmail: c.user_email,
+});
+
 export const useTicketComments = (ticketId: string) => {
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const queryKey = ['comments', ticketId];
 
-  const fetchComments = useCallback(async () => {
-    if (!ticketId) return;
-
-    setIsLoading(true);
-    try {
+  const { data: comments = [], isLoading, isError, refetch } = useQuery({
+    queryKey,
+    queryFn: async () => {
       const data = await api.getComments(ticketId) as CommentRow[];
-      const mapped: Comment[] = data.map((c) => ({
-        id: c.id,
-        ticketId: c.ticket_id,
-        userId: c.user_id,
-        content: c.content,
-        isInternal: c.is_internal === 1,
-        createdAt: new Date(c.created_at),
-        updatedAt: new Date(c.updated_at),
-        deletedAt: c.deleted_at ? new Date(c.deleted_at) : undefined,
-        userName: c.user_name,
-        userEmail: c.user_email,
-      }));
-      setComments(mapped);
-    } catch (error) {
-      console.error('Error fetching comments:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [ticketId]);
+      return data.map(mapComment);
+    },
+    enabled: Boolean(ticketId),
+  });
 
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      if (!ticketId) return;
-      setIsLoading(true);
-      try {
-        const data = await api.getComments(ticketId) as CommentRow[];
-        if (!mounted) return;
-        const mapped: Comment[] = data.map((c) => ({
-          id: c.id,
-          ticketId: c.ticket_id,
-          userId: c.user_id,
-          content: c.content,
-          isInternal: c.is_internal === 1,
-          createdAt: new Date(c.created_at),
-          updatedAt: new Date(c.updated_at),
-          deletedAt: c.deleted_at ? new Date(c.deleted_at) : undefined,
-          userName: c.user_name,
-          userEmail: c.user_email,
-        }));
-        setComments(mapped);
-      } catch (error) {
-        if (!mounted) return;
-        console.error('Error fetching comments:', error);
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
-    };
-    load();
-    return () => { mounted = false; };
-  }, [ticketId]);
+  const addCommentMutation = useMutation({
+    mutationFn: async ({ content, isInternal }: { content: string; isInternal: boolean }) => {
+      const data = await api.createComment(ticketId, content, isInternal) as CommentRow;
+      return mapComment(data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error) => {
+      if (import.meta.env.DEV) console.error('Error adding comment:', error);
+    },
+  });
+
+  const updateCommentMutation = useMutation({
+    mutationFn: async ({ commentId, content }: { commentId: string; content: string }) => {
+      const data = await api.updateComment(commentId, content) as CommentRow;
+      return { commentId, content: data.content, updatedAt: new Date(data.updated_at) };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error) => {
+      if (import.meta.env.DEV) console.error('Error updating comment:', error);
+    },
+  });
+
+  const deleteCommentMutation = useMutation({
+    mutationFn: async (commentId: string) => {
+      await api.deleteComment(commentId);
+      return commentId;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error) => {
+      if (import.meta.env.DEV) console.error('Error deleting comment:', error);
+    },
+  });
 
   const addComment = useCallback(async (content: string, isInternal: boolean = true) => {
-    try {
-      const data = await api.createComment(ticketId, content, isInternal) as CommentRow;
-      const newComment: Comment = {
-        id: data.id,
-        ticketId: data.ticket_id,
-        userId: data.user_id,
-        content: data.content,
-        isInternal: data.is_internal === 1,
-        createdAt: new Date(data.created_at),
-        updatedAt: new Date(data.updated_at),
-        userName: data.user_name,
-        userEmail: data.user_email,
-      };
-      setComments((prev) => [...prev, newComment]);
-      return newComment;
-    } catch (error) {
-      console.error('Error adding comment:', error);
-      throw error;
-    }
-  }, [ticketId]);
+    return addCommentMutation.mutateAsync({ content, isInternal });
+  }, [addCommentMutation]);
 
   const updateComment = useCallback(async (commentId: string, content: string) => {
-    try {
-      const data = await api.updateComment(commentId, content) as CommentRow;
-      setComments((prev) =>
-        prev.map((c) =>
-          c.id === commentId
-            ? {
-                ...c,
-                content: data.content,
-                updatedAt: new Date(data.updated_at),
-              }
-            : c
-        )
-      );
-    } catch (error) {
-      console.error('Error updating comment:', error);
-      throw error;
-    }
-  }, []);
+    await updateCommentMutation.mutateAsync({ commentId, content });
+  }, [updateCommentMutation]);
 
   const deleteComment = useCallback(async (commentId: string) => {
-    try {
-      await api.deleteComment(commentId);
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
-    } catch (error) {
-      console.error('Error deleting comment:', error);
-      throw error;
-    }
-  }, []);
+    await deleteCommentMutation.mutateAsync(commentId);
+  }, [deleteCommentMutation]);
 
-  return { comments, isLoading, addComment, updateComment, deleteComment, refetch: fetchComments };
+  return {
+    comments,
+    isLoading,
+    isError,
+    addComment,
+    updateComment,
+    deleteComment,
+    refetch: () => refetch(),
+  };
 };

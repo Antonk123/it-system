@@ -52,13 +52,7 @@ const AdminTab = () => {
   const handleBackup = useCallback(async () => {
     setBackupLoading(true);
     try {
-      const token = localStorage.getItem('auth_token');
-      const baseUrl = import.meta.env.VITE_API_URL || '/api';
-      const response = await fetch(`${baseUrl}/backup`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!response.ok) throw new Error('Backup failed');
-      const blob = await response.blob();
+      const blob = await api.downloadBackup();
       const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
       const dateStr = new Date().toISOString().slice(0, 10);
       const filename = `it-ticket-backup-${dateStr}.zip`;
@@ -240,6 +234,7 @@ const AdminTab = () => {
                           size="icon"
                           variant="ghost"
                           onClick={() => setDeleteUserId(sysUser.id)}
+                          aria-label={`Ta bort användare ${sysUser.displayName || sysUser.email}`}
                         >
                           <Trash2 className="w-4 h-4 text-destructive" />
                         </Button>

@@ -20,11 +20,11 @@ interface UserTicketHistoryProps {
 }
 
 export const UserTicketHistory = ({ userId }: UserTicketHistoryProps) => {
-  const { tickets, isLoading } = useTickets();
+  // Server-side filter på requester_id → laddar bara denna användares ärenden
+  // (status: 'all' inkluderar stängda; högt limit för korrekt statusräkning).
+  const { tickets, isLoading } = useTickets({ requester_id: userId, status: 'all', limit: 1000 });
 
-  const userTickets = useMemo(() => {
-    return tickets.filter((t) => t.requesterId === userId);
-  }, [tickets, userId]);
+  const userTickets = tickets;
 
   const stats = useMemo(() => {
     const open = userTickets.filter((t) => t.status === 'open').length;

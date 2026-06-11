@@ -18,7 +18,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api, KbCategoryRow } from '@/lib/api';
+import { api } from '@/lib/api';
+import { useKbCategories } from '@/hooks/useKbCategories';
 import { migrateContent } from '@/lib/contentMigration';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -101,19 +102,12 @@ function isAcceptedFile(file: File): boolean {
 
 export function KBImportDialog({ open, onOpenChange, defaultCategoryId, onImported }: KBImportDialogProps) {
   const [files, setFiles] = useState<QueuedFile[]>([]);
-  const [categories, setCategories] = useState<KbCategoryRow[]>([]);
+  const { categories } = useKbCategories();
   const [categoryId, setCategoryId] = useState<string>(defaultCategoryId || '');
   const [status, setStatus] = useState<'draft' | 'published'>('published');
   const [isImporting, setIsImporting] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    api.getKbCategories().then(setCategories).catch(() => {
-      toast.error('Kunde inte hämta kategorier');
-    });
-  }, [open]);
 
   useEffect(() => {
     if (defaultCategoryId) setCategoryId(defaultCategoryId);

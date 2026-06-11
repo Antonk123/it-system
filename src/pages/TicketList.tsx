@@ -109,7 +109,7 @@ const TicketList = () => {
   // Fetch with pagination
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const { tickets, pagination, isLoading, updateTicket, bulkUpdateTickets, refetch } = useTickets({
+  const { tickets, pagination, isLoading, isError, updateTicket, bulkUpdateTickets, refetch } = useTickets({
     page,
     limit: pageSize,
     status: selectedStatuses.length > 0 ? selectedStatuses.join(',') : 'all',
@@ -454,7 +454,12 @@ const TicketList = () => {
             <div className={isLoading ? 'opacity-50 pointer-events-none' : ''}>
               {/* Mobile: Card list */}
               <div className="md:hidden space-y-2">
-                {tickets.length === 0 ? (
+                {isError ? (
+                  <div className="text-center py-12 space-y-2">
+                    <p className="text-destructive text-sm">Kunde inte hämta ärenden</p>
+                    <Button variant="outline" size="sm" onClick={refetch}>Försök igen</Button>
+                  </div>
+                ) : tickets.length === 0 ? (
                   <p className="text-center text-muted-foreground py-12">Inga ärenden hittades</p>
                 ) : (
                   tickets.map(ticket => (
@@ -494,7 +499,12 @@ const TicketList = () => {
 
               {/* Desktop: Table or Kanban */}
               <div className="hidden md:block">
-                {viewMode === 'table' ? (
+                {isError ? (
+                  <div className="text-center py-16 space-y-2">
+                    <p className="text-destructive text-sm">Kunde inte hämta ärenden</p>
+                    <Button variant="outline" size="sm" onClick={refetch}>Försök igen</Button>
+                  </div>
+                ) : viewMode === 'table' ? (
                   <>
                     <TicketTable
                       tickets={tickets}

@@ -23,5 +23,6 @@ export const useActivityFeed = (limit = 15) => {
     staleTime: 30 * 1000,
     gcTime: 2 * 60 * 1000,
     refetchInterval: 60 * 1000,
+    refetchIntervalInBackground: false,
   });
 };

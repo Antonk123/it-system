@@ -1,22 +1,69 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ChecklistTemplate } from '@/lib/api';
 import { toast } from 'sonner';
 
-export const useChecklistTemplates = () => {
-  const [templates, setTemplates] = useState<ChecklistTemplate[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+const QUERY_KEY = ['checklist-templates'] as const;
 
-  const fetchTemplates = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const data = await api.getChecklistTemplates();
-      setTemplates(data);
-    } catch {
-      toast.error('Kunde inte hämta checklistmallar');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+export const useChecklistTemplates = () => {
+  const queryClient = useQueryClient();
+
+  const { data: templates = [], isLoading } = useQuery<ChecklistTemplate[]>({
+    queryKey: QUERY_KEY,
+    queryFn: () => api.getChecklistTemplates(),
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // No-op kept for backward compatibility — react-query fetches automatically.
+  // Callers that do `useEffect(() => { fetchTemplates(); }, [fetchTemplates])` are safe:
+  // the effect runs but does nothing extra since the query already ran on mount.
+  const fetchTemplates = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+  }, [queryClient]);
+
+  const createMutation = useMutation({
+    mutationFn: (data: {
+      name: string;
+      description?: string;
+      items: { label: string; parent_label?: string }[];
+    }) => api.createChecklistTemplate(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      toast.success('Mall skapad');
+    },
+    onError: (e: any) => {
+      toast.error(
+        e.message?.includes('already exists')
+          ? 'En mall med det namnet finns redan'
+          : 'Kunde inte skapa mall'
+      );
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: {
+      id: string;
+      data: { name?: string; description?: string; items?: { label: string; parent_label?: string }[] };
+    }) => api.updateChecklistTemplate(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      toast.success('Mall uppdaterad');
+    },
+    onError: () => {
+      toast.error('Kunde inte uppdatera mall');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteChecklistTemplate(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: QUERY_KEY });
+      toast.success('Mall borttagen');
+    },
+    onError: () => {
+      toast.error('Kunde inte ta bort mall');
+    },
+  });
 
   const createTemplate = useCallback(async (data: {
     name: string;
@@ -24,44 +71,30 @@ export const useChecklistTemplates = () => {
     items: { label: string; parent_label?: string }[];
   }) => {
     try {
-      const t = await api.createChecklistTemplate(data);
-      setTemplates(prev => [...prev, t]);
-      toast.success('Mall skapad');
-      return t;
-    } catch (e: any) {
-      toast.error(
-        e.message?.includes('already exists')
-          ? 'En mall med det namnet finns redan'
-          : 'Kunde inte skapa mall'
-      );
+      return await createMutation.mutateAsync(data);
+    } catch {
       return null;
     }
-  }, []);
+  }, [createMutation]);
 
   const updateTemplate = useCallback(async (
     id: string,
     data: { name?: string; description?: string; items?: { label: string; parent_label?: string }[] }
   ) => {
     try {
-      const t = await api.updateChecklistTemplate(id, data);
-      setTemplates(prev => prev.map(x => x.id === id ? t : x));
-      toast.success('Mall uppdaterad');
-      return t;
+      return await updateMutation.mutateAsync({ id, data });
     } catch {
-      toast.error('Kunde inte uppdatera mall');
       return null;
     }
-  }, []);
+  }, [updateMutation]);
 
   const deleteTemplate = useCallback(async (id: string) => {
     try {
-      await api.deleteChecklistTemplate(id);
-      setTemplates(prev => prev.filter(x => x.id !== id));
-      toast.success('Mall borttagen');
+      await deleteMutation.mutateAsync(id);
     } catch {
-      toast.error('Kunde inte ta bort mall');
+      // error toast handled in onError
     }
-  }, []);
+  }, [deleteMutation]);
 
   const applyTemplate = useCallback(async (templateId: string, ticketId: string) => {
     try {

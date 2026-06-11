@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, PlusCircle, Pencil, ChevronDown } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
@@ -85,12 +86,11 @@ const TicketForm = () => {
     assigned_to: '' as string,
     company_id: '' as string,
   });
-  const [rawContacts, setRawContacts] = useState<import('@/lib/api').ContactRow[]>([]);
-
-  // Fetch raw contacts once to get company_id for auto-fill
-  useEffect(() => {
-    api.getContacts().then(setRawContacts).catch(() => {});
-  }, []);
+  const { data: rawContacts = [] } = useQuery<import('@/lib/api').ContactRow[]>({
+    queryKey: ['contacts'],
+    queryFn: () => api.getContacts(),
+    staleTime: 5 * 60 * 1000,
+  });
 
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingChecklistItems, setPendingChecklistItems] = useState<{ id: string; label: string; completed: boolean }[]>([]);
@@ -680,7 +680,8 @@ const TicketForm = () => {
                 </div>
                 {!isEditing && (
                   <div className="space-y-2 sm:w-[240px]">
-                    <Label>Mall</Label>
+                    <Label id="label-template">Mall</Label>
+                    <div aria-labelledby="label-template">
                     <TemplateCombobox
                       templates={templates}
                       selectedTemplate={selectedTemplate}
@@ -707,6 +708,7 @@ const TicketForm = () => {
                         setEditInitialFieldValues([]);
                       }}
                     />
+                    </div>
                   </div>
                 )}
               </div>
@@ -779,7 +781,8 @@ const TicketForm = () => {
               {/* Kategori + Beställare row */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Kategori</Label>
+                  <Label id="label-category">Kategori</Label>
+                  <div aria-labelledby="label-category">
                   <CategoryCombobox
                     categories={categories}
                     value={formData.category}
@@ -790,10 +793,12 @@ const TicketForm = () => {
                     onAddCategory={handleAddCategory}
                     disabled={isSubmitting}
                   />
+                  </div>
                   {errors.category && <p className="text-sm text-destructive mt-1">{errors.category}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label>Beställare *</Label>
+                  <Label id="label-requester">Beställare *</Label>
+                  <div aria-labelledby="label-requester">
                   <UserCombobox
                     users={users}
                     value={formData.requesterId}
@@ -805,6 +810,7 @@ const TicketForm = () => {
                     }}
                     placeholder="Välj användare"
                   />
+                  </div>
                   {users.length === 0 && (
                     <p className="text-sm text-muted-foreground">
                       <a href="/users" className="text-primary hover:underline">Lägg till användare</a> för att tilldela ärenden
@@ -1096,12 +1102,14 @@ const TicketForm = () => {
               )}
 
               <div className="flex items-center justify-end gap-2 pt-4">
-                {uploadProgress && (
-                  <span className="text-sm text-muted-foreground flex items-center gap-2">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    {uploadProgress}
-                  </span>
-                )}
+                <span aria-live="polite" aria-atomic="true" className="text-sm text-muted-foreground flex items-center gap-2">
+                  {uploadProgress && (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      {uploadProgress}
+                    </>
+                  )}
+                </span>
                 <Button type="button" variant="outline" onClick={handleNavigateBack} disabled={isSaving}>
                   Avbryt
                 </Button>

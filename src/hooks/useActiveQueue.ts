@@ -1,39 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, PaginatedResponse, TicketRow } from '@/lib/api';
 import { Ticket, TicketStatus, TicketPriority } from '@/types/ticket';
-
-interface PaginatedResponse<T> {
-  data: T[];
-  pagination: unknown;
-}
-
-interface TicketRow {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  priority: string;
-  category_id: string | null;
-  requester_id: string | null;
-  created_at: string;
-  updated_at: string;
-  resolved_at: string | null;
-  closed_at: string | null;
-  notes: string | null;
-  solution: string | null;
-  template_id: string | null;
-  tags?: unknown[];
-  assigned_to?: string | null;
-  assigned_to_name?: string | null;
-  company_id?: string | null;
-  company_name?: string | null;
-  sla_response_deadline?: string | null;
-  sla_resolution_deadline?: string | null;
-  sla_paused_at?: string | null;
-  sla_paused_duration?: number | null;
-  sla_response_met?: 0 | 1 | null;
-  sla_resolution_met?: 0 | 1 | null;
-}
 
 export const activeQueueKeys = {
   all: ['tickets', 'active-queue'] as const,

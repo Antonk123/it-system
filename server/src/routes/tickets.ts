@@ -324,6 +324,7 @@ interface TicketQueryParams {
   category?: string;
   company_id?: string;
   assigned_to?: string;
+  requester_id?: string;
   search?: string;
   tags?: string;
   tagMode?: string;
@@ -416,6 +417,12 @@ function buildWhereClause(filters: TicketQueryParams) {
   if (filters.assigned_to && filters.assigned_to !== 'all') {
     conditions.push('tickets.assigned_to = ?');
     params.push(filters.assigned_to);
+  }
+
+  // Requester filter (server-side → UserTicketHistory slipper ladda hela listan)
+  if (filters.requester_id && filters.requester_id !== 'all') {
+    conditions.push('tickets.requester_id = ?');
+    params.push(filters.requester_id);
   }
 
   // Tag filtering (OR or AND logic for multiple tags)
@@ -1124,6 +1131,26 @@ router.get('/status-counts', authenticate, (req: AuthRequest, res: Response) => 
   } catch (error) {
     logger.error('Error fetching status counts:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch status counts' });
+  }
+});
+
+// GET /requester-open-counts — antal ej-stängda ärenden per requester (aggregat).
+// UserList använder detta istället för att ladda hela ticket-listan client-side.
+router.get('/requester-open-counts', authenticate, (req: AuthRequest, res: Response) => {
+  try {
+    const rows = db.prepare(`
+      SELECT requester_id, COUNT(*) as count
+      FROM tickets
+      WHERE requester_id IS NOT NULL AND status != 'closed'
+      GROUP BY requester_id
+    `).all() as { requester_id: string; count: number }[];
+
+    const result: Record<string, number> = {};
+    for (const row of rows) result[row.requester_id] = row.count;
+    res.json(result);
+  } catch (error) {
+    logger.error('Error fetching requester open counts:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to fetch requester open counts' });
   }
 });
 

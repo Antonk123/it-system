@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 interface TicketCommentsProps {
   comments: Comment[];
   isLoading: boolean;
+  isError?: boolean;
   onAddComment: (content: string, isInternal: boolean) => Promise<void>;
   onUpdateComment: (commentId: string, content: string) => Promise<void>;
   onDeleteComment: (commentId: string) => Promise<void>;
@@ -17,6 +18,7 @@ interface TicketCommentsProps {
 export const TicketComments = ({
   comments,
   isLoading,
+  isError,
   onAddComment,
   onUpdateComment,
   onDeleteComment,
@@ -75,6 +77,10 @@ export const TicketComments = ({
         <div className="flex justify-center py-2">
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
         </div>
+      ) : isError ? (
+        <p className="text-destructive text-xs text-center py-2">
+          Kunde inte hämta kommentarer
+        </p>
       ) : comments.length === 0 ? (
         <p className="text-muted-foreground text-xs text-center py-2">
           Inga kommentarer ännu

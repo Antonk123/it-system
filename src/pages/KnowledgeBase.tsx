@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { api, KbArticleRow, KbCategoryRow } from '@/lib/api';
+import { api, KbArticleRow } from '@/lib/api';
+import { useKbCategories } from '@/hooks/useKbCategories';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -54,7 +55,7 @@ const KnowledgeBase = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [articles, setArticles] = useState<KbArticleRow[]>([]);
-  const [categories, setCategories] = useState<KbCategoryRow[]>([]);
+  const { categories, refetch: refetchCategories } = useKbCategories();
   const [staleFilter, setStaleFilter] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -93,16 +94,6 @@ const KnowledgeBase = () => {
     return (Date.now() - new Date(ref).getTime()) / (86400 * 1000) > 90;
   };
 
-  const fetchCategories = useCallback(async () => {
-    try {
-      const data = await api.getKbCategories();
-      setCategories(data);
-      return data;
-    } catch {
-      return [];
-    }
-  }, []);
-
   const fetchArticles = useCallback(async () => {
     try {
       const params: { search?: string; category_id?: string; article_type?: string; stale?: boolean } = {};
@@ -121,19 +112,23 @@ const KnowledgeBase = () => {
     }
   }, [search, selectedCategoryId, typeFilter, staleFilter]);
 
-  // Initial load: fetch categories, then set default if needed (run once on mount)
+  // Once categories are loaded set the first one as default (only when no filter is active)
+  const didSetDefaultCategory = useRef(false);
   useEffect(() => {
-    fetchCategories().then((cats) => {
-      if (cats.length > 0 && !searchParams.get('category') && !searchParams.get('search')) {
-        setSearchParams((prev) => {
-          const next = new URLSearchParams(prev);
-          next.set('category', cats[0].id);
-          return next;
-        }, { replace: true });
-      }
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (didSetDefaultCategory.current) return;
+    if (categories.length === 0) return;
+    if (searchParams.get('category') || searchParams.get('search')) {
+      didSetDefaultCategory.current = true;
+      return;
+    }
+    didSetDefaultCategory.current = true;
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('category', categories[0].id);
+      return next;
+    }, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories]);
 
   useEffect(() => {
     setIsLoading(true);
@@ -162,7 +157,7 @@ const KnowledgeBase = () => {
     setIsCreatingCategory(true);
     try {
       await api.createKbCategory(newCategoryName.trim());
-      await fetchCategories();
+      refetchCategories();
       setNewCategoryName('');
       toast.success('Kategori skapad');
     } catch {
@@ -178,7 +173,7 @@ const KnowledgeBase = () => {
     setIsSavingCategoryId(id);
     try {
       await api.updateKbCategory(id, editingCategoryName.trim());
-      await fetchCategories();
+      refetchCategories();
       setEditingCategoryId(null);
       toast.success('Kategori uppdaterad');
     } catch {
@@ -191,7 +186,7 @@ const KnowledgeBase = () => {
   const handleDeleteCategory = async (id: string) => {
     try {
       await api.deleteKbCategory(id);
-      await fetchCategories();
+      refetchCategories();
       if (selectedCategoryId === id) updateParam('category', null);
       toast.success('Kategori raderad');
     } catch {

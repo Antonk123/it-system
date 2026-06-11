@@ -26,7 +26,7 @@ export function useTicketReminders(ticketId: string) {
       const data = await api.getReminders(ticketId);
       setReminders(data);
     } catch (error) {
-      console.error('Error fetching reminders:', error);
+      if (import.meta.env.DEV) console.error('Error fetching reminders:', error);
       toast.error('Kunde inte hämta påminnelser');
     } finally {
       setIsLoading(false);
@@ -39,7 +39,7 @@ export function useTicketReminders(ticketId: string) {
       toast.success('Påminnelse skapad');
       await fetchReminders();
     } catch (error) {
-      console.error('Error creating reminder:', error);
+      if (import.meta.env.DEV) console.error('Error creating reminder:', error);
       toast.error('Kunde inte skapa påminnelse');
     }
   }, [ticketId, fetchReminders]);
@@ -50,7 +50,7 @@ export function useTicketReminders(ticketId: string) {
       toast.success('Påminnelse raderad');
       await fetchReminders();
     } catch (error) {
-      console.error('Error deleting reminder:', error);
+      if (import.meta.env.DEV) console.error('Error deleting reminder:', error);
       toast.error('Kunde inte radera påminnelse');
     }
   }, [ticketId, fetchReminders]);
@@ -61,7 +61,7 @@ export function useTicketReminders(ticketId: string) {
       toast.success(`${result.deleted} skickade påminnelser rensade`);
       await fetchReminders();
     } catch (error) {
-      console.error('Error clearing sent reminders:', error);
+      if (import.meta.env.DEV) console.error('Error clearing sent reminders:', error);
       toast.error('Kunde inte rensa påminnelser');
     }
   }, [ticketId, fetchReminders]);

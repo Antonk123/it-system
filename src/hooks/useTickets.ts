@@ -22,6 +22,7 @@ interface UseTicketsOptions {
   sortDir?: 'asc' | 'desc';
   company_id?: string;
   assigned_to?: string;
+  requester_id?: string;
 }
 
 interface PaginationInfo {
@@ -65,11 +66,12 @@ export const useTickets = (options?: UseTicketsOptions) => {
     if (opts.sortDir) params.append('sortDir', opts.sortDir);
     if (opts.company_id && opts.company_id !== 'all') params.append('company_id', opts.company_id);
     if (opts.assigned_to && opts.assigned_to !== 'all') params.append('assigned_to', opts.assigned_to);
+    if (opts.requester_id && opts.requester_id !== 'all') params.append('requester_id', opts.requester_id);
     return params.toString() ? `?${params.toString()}` : '';
   }, []);
 
   // Fetch tickets with React Query (with caching for performance)
-  const { data: queryData, isLoading } = useQuery({
+  const { data: queryData, isLoading, isError } = useQuery({
     queryKey: ticketKeys.list(options || {}),
     staleTime: 1000 * 60 * 2, // Consider data fresh for 2 minutes
     gcTime: 1000 * 60 * 5, // Keep in cache for 5 minutes (formerly cacheTime)
@@ -314,9 +316,14 @@ export const useTickets = (options?: UseTicketsOptions) => {
       toast.error(error.message || 'Failed to update ticket');
     },
     onSuccess: () => {
-      // Invalidate to refetch fresh data
-      queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
+      // Invalidate the detail cache for fresh data
       queryClient.invalidateQueries({ queryKey: ticketKeys.details() });
+    },
+    onSettled: () => {
+      // Always invalidate all list views so every filter-view converges —
+      // this runs after both success and error, preserving optimistic UX
+      // (the optimistic update in onMutate already gave instant feedback).
+      queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
     },
   });
 
@@ -390,6 +397,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
     tickets,
     pagination,
     isLoading,
+    isError,
     addTicket,
     updateTicket,
     deleteTicket,
