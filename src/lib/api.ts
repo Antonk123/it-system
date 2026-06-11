@@ -1168,6 +1168,14 @@ class ApiClient {
     }>(`/reports/time-summary?year=${year}&month=${month}`);
   }
 
+  async getRequesterAnalytics(year: string, month: string) {
+    const params = new URLSearchParams();
+    if (year && year !== 'all') params.append('year', year);
+    if (month && month !== 'all') params.append('month', month);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return this.request<RequesterAnalyticsRow[]>(`/reports/requester-analytics${qs}`);
+  }
+
   // Push notification subscription
   async getPushVapidKey(): Promise<{ vapidPublicKey: string }> {
     return this.request('/push/vapid-public-key');
@@ -1686,6 +1694,32 @@ export interface InvoicePreview {
   lines: Array<InvoiceLineRow & { entry_count: number }>;
   total_hours: number;
   total_amount: number;
+}
+
+export interface RequesterAnalyticsRow {
+  userId: string;
+  name: string;
+  totalTickets: number;
+  statusBreakdown: {
+    open: number;
+    'in-progress': number;
+    waiting: number;
+    resolved: number;
+    closed: number;
+  };
+  priorityBreakdown: {
+    low: number;
+    medium: number;
+    high: number;
+    critical: number;
+  };
+  completionRate: number;
+  avgResolutionTime: number;
+  agingTickets: number;
+  lastTicketDate: string;
+  ticketVelocity: number;
+  topCategories: Array<{ category: string; count: number }>;
+  topTags: Array<{ tag: string; count: number }>;
 }
 
 // Export singleton instance

@@ -240,4 +240,210 @@ router.get('/time-summary', authenticate, (req: AuthRequest, res) => {
   }
 });
 
+router.get('/requester-analytics', authenticate, (req: AuthRequest, res) => {
+  try {
+    const { year, month } = req.query as { year?: string; month?: string };
+
+    // Build date filter conditions for tickets.created_at
+    const filterConditions: string[] = [];
+    const filterParams: string[] = [];
+
+    if (year && year !== 'all') {
+      const yearNum = parseInt(year, 10);
+      if (isNaN(yearNum) || yearNum < 2000 || yearNum > 2100) {
+        res.status(400).json({ error: 'Invalid year parameter' });
+        return;
+      }
+      filterConditions.push('(t.created_at >= ? AND t.created_at < ?)');
+      filterParams.push(`${yearNum}-01-01`, `${yearNum + 1}-01-01`);
+    }
+
+    if (month && month !== 'all') {
+      const monthNum = parseInt(month, 10);
+      if (isNaN(monthNum) || monthNum < 0 || monthNum > 11) {
+        res.status(400).json({ error: 'Invalid month parameter (expected 0-11)' });
+        return;
+      }
+      const paddedMonth = String(monthNum + 1).padStart(2, '0');
+      filterConditions.push("strftime('%m', t.created_at) = ?");
+      filterParams.push(paddedMonth);
+    }
+
+    const whereClause = filterConditions.length > 0
+      ? `WHERE ${filterConditions.join(' AND ')}`
+      : '';
+
+    // Main aggregation: one row per requester with all needed metrics
+    const rows = db.prepare(`
+      SELECT
+        COALESCE(t.requester_id, 'unassigned')                            AS userId,
+        COALESCE(c.name, 'Ej tilldelad')                                  AS name,
+        COUNT(*)                                                           AS totalTickets,
+        SUM(CASE WHEN t.status = 'open'        THEN 1 ELSE 0 END)        AS statusOpen,
+        SUM(CASE WHEN t.status = 'in-progress' THEN 1 ELSE 0 END)        AS statusInProgress,
+        SUM(CASE WHEN t.status = 'waiting'     THEN 1 ELSE 0 END)        AS statusWaiting,
+        SUM(CASE WHEN t.status = 'resolved'    THEN 1 ELSE 0 END)        AS statusResolved,
+        SUM(CASE WHEN t.status = 'closed'      THEN 1 ELSE 0 END)        AS statusClosed,
+        SUM(CASE WHEN t.priority = 'low'       THEN 1 ELSE 0 END)        AS priorityLow,
+        SUM(CASE WHEN t.priority = 'medium'    THEN 1 ELSE 0 END)        AS priorityMedium,
+        SUM(CASE WHEN t.priority = 'high'      THEN 1 ELSE 0 END)        AS priorityHigh,
+        SUM(CASE WHEN t.priority = 'critical'  THEN 1 ELSE 0 END)        AS priorityCritical,
+        AVG(CASE
+          WHEN (t.status = 'resolved' OR t.status = 'closed') AND t.closed_at IS NOT NULL
+          THEN CAST((julianday(t.closed_at) - julianday(t.created_at)) AS REAL)
+          ELSE NULL
+        END)                                                               AS avgResolutionDays,
+        SUM(CASE
+          WHEN t.status = 'open'
+            AND (julianday('now') - julianday(t.created_at)) > 7
+          THEN 1 ELSE 0
+        END)                                                               AS agingTickets,
+        MAX(t.created_at)                                                  AS lastTicketDate,
+        MIN(t.created_at)                                                  AS firstTicketDate
+      FROM tickets t
+      LEFT JOIN contacts c ON t.requester_id = c.id
+      ${whereClause}
+      GROUP BY COALESCE(t.requester_id, 'unassigned')
+      ORDER BY totalTickets DESC
+      LIMIT 15
+    `).all(...filterParams) as Array<{
+      userId: string;
+      name: string;
+      totalTickets: number;
+      statusOpen: number;
+      statusInProgress: number;
+      statusWaiting: number;
+      statusResolved: number;
+      statusClosed: number;
+      priorityLow: number;
+      priorityMedium: number;
+      priorityHigh: number;
+      priorityCritical: number;
+      avgResolutionDays: number | null;
+      agingTickets: number;
+      lastTicketDate: string;
+      firstTicketDate: string;
+    }>;
+
+    if (rows.length === 0) {
+      res.json([]);
+      return;
+    }
+
+    // Collect requester IDs for subsequent queries (excluding 'unassigned')
+    const requesterIds = rows.map(r => r.userId).filter(id => id !== 'unassigned');
+
+    // Top categories per requester (up to 3 each)
+    // Build: Map<userId, Array<{category, count}>>
+    const categoryMap = new Map<string, Array<{ category: string; count: number }>>();
+
+    if (requesterIds.length > 0) {
+      const placeholders = requesterIds.map(() => '?').join(', ');
+      const catFilterConditions = [...filterConditions];
+      const catFilterParams = [...filterParams];
+      const catWhere = catFilterConditions.length > 0
+        ? `WHERE (${catFilterConditions.join(' AND ')}) AND COALESCE(t.requester_id, 'unassigned') IN (${placeholders})`
+        : `WHERE COALESCE(t.requester_id, 'unassigned') IN (${placeholders})`;
+
+      const catRows = db.prepare(`
+        SELECT
+          COALESCE(t.requester_id, 'unassigned') AS userId,
+          cat.label                               AS category,
+          COUNT(*)                                AS cnt
+        FROM tickets t
+        JOIN categories cat ON t.category_id = cat.id
+        ${catWhere}
+        GROUP BY COALESCE(t.requester_id, 'unassigned'), t.category_id
+        ORDER BY COALESCE(t.requester_id, 'unassigned'), cnt DESC
+      `).all(...catFilterParams, ...requesterIds) as Array<{ userId: string; category: string; cnt: number }>;
+
+      for (const row of catRows) {
+        const existing = categoryMap.get(row.userId) ?? [];
+        if (existing.length < 3) {
+          existing.push({ category: row.category, count: row.cnt });
+          categoryMap.set(row.userId, existing);
+        }
+      }
+    }
+
+    // Top tags per requester (up to 3 each)
+    const tagMap = new Map<string, Array<{ tag: string; count: number }>>();
+
+    if (requesterIds.length > 0) {
+      const placeholders = requesterIds.map(() => '?').join(', ');
+      const tagFilterParams = [...filterParams];
+      const tagWhere = filterConditions.length > 0
+        ? `WHERE (${filterConditions.join(' AND ')}) AND COALESCE(t.requester_id, 'unassigned') IN (${placeholders})`
+        : `WHERE COALESCE(t.requester_id, 'unassigned') IN (${placeholders})`;
+
+      const tagRows = db.prepare(`
+        SELECT
+          COALESCE(t.requester_id, 'unassigned') AS userId,
+          tg.name                                 AS tagName,
+          COUNT(*)                                AS cnt
+        FROM tickets t
+        JOIN ticket_tags tt ON tt.ticket_id = t.id
+        JOIN tags tg ON tg.id = tt.tag_id
+        ${tagWhere}
+        GROUP BY COALESCE(t.requester_id, 'unassigned'), tt.tag_id
+        ORDER BY COALESCE(t.requester_id, 'unassigned'), cnt DESC
+      `).all(...tagFilterParams, ...requesterIds) as Array<{ userId: string; tagName: string; cnt: number }>;
+
+      for (const row of tagRows) {
+        const existing = tagMap.get(row.userId) ?? [];
+        if (existing.length < 3) {
+          existing.push({ tag: row.tagName, count: row.cnt });
+          tagMap.set(row.userId, existing);
+        }
+      }
+    }
+
+    const now = new Date();
+
+    const result = rows.map(r => {
+      const completedCount = (r.statusResolved ?? 0) + (r.statusClosed ?? 0);
+      const completionRate = r.totalTickets > 0 ? (completedCount / r.totalTickets) * 100 : 0;
+
+      // Velocity: tickets per month since first ticket
+      const firstDate = r.firstTicketDate ? new Date(r.firstTicketDate) : now;
+      const daysSinceFirst = Math.max(1, (now.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+      const monthsActive = daysSinceFirst / 30;
+      const ticketVelocity = r.totalTickets / monthsActive;
+
+      return {
+        userId: r.userId,
+        name: r.name,
+        totalTickets: r.totalTickets,
+        statusBreakdown: {
+          open: r.statusOpen ?? 0,
+          'in-progress': r.statusInProgress ?? 0,
+          waiting: r.statusWaiting ?? 0,
+          resolved: r.statusResolved ?? 0,
+          closed: r.statusClosed ?? 0,
+        },
+        priorityBreakdown: {
+          low: r.priorityLow ?? 0,
+          medium: r.priorityMedium ?? 0,
+          high: r.priorityHigh ?? 0,
+          critical: r.priorityCritical ?? 0,
+        },
+        completionRate,
+        avgResolutionTime: r.avgResolutionDays != null
+          ? Math.round(r.avgResolutionDays * 10) / 10
+          : 0,
+        agingTickets: r.agingTickets ?? 0,
+        lastTicketDate: r.lastTicketDate,
+        ticketVelocity,
+        topCategories: categoryMap.get(r.userId) ?? [],
+        topTags: tagMap.get(r.userId) ?? [],
+      };
+    });
+
+    res.json(result);
+  } catch (error) {
+    logger.error('Error generating requester analytics:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to generate requester analytics' });
+  }
+});
+
 export default router;

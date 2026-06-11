@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useMode } from '@/hooks/useMode';
 import { differenceInDays } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, ComposedChart, Line } from 'recharts';
@@ -7,8 +8,8 @@ import { useReportsSummary } from '@/hooks/useReportsSummary';
 import { useUsers } from '@/hooks/useUsers';
 import { useTags } from '@/hooks/useTags';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { RequesterAnalytics } from '@/types/ticket';
 import { useTickets } from '@/hooks/useTickets';
+import { api, RequesterAnalyticsRow } from '@/lib/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -20,7 +21,6 @@ import { StatusFlowChart } from '@/components/StatusFlowChart';
 import { TagAnalytics } from '@/components/TagAnalytics';
 import { TimeSummaryTab } from '@/components/TimeSummaryTab';
 import { KPIDetailDialog } from '@/components/KPIDetailDialog';
-import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { BarChart3, PieChart as PieChartIcon, Calendar, Ticket, Clock, CheckCircle, AlertTriangle, Users, Scale, Download, Printer } from 'lucide-react';
 
@@ -66,7 +66,7 @@ const statusLabels: Record<string, string> = {
 const RequesterTooltip = ({ active, payload }: any) => {
   if (!active || !payload || !payload.length) return null;
 
-  const requester = payload[0].payload as RequesterAnalytics;
+  const requester = payload[0].payload as RequesterAnalyticsRow;
 
   return (
     <div className="bg-popover text-popover-foreground px-4 py-3 rounded-lg shadow-lg border max-w-xs backdrop-blur-xs">
@@ -175,7 +175,15 @@ const Reports = () => {
     return Array.from(yearSet).sort((a, b) => b.localeCompare(a));
   }, [summary?.trend]);
 
-  // Requester analytics - comprehensive metrics per requester (uses raw tickets for per-person breakdown)
+  // Requester analytics — server-side aggregation via /reports/requester-analytics
+  const { data: requesterAnalytics = [] } = useQuery<RequesterAnalyticsRow[]>({
+    queryKey: ['reports', 'requester-analytics', selectedYear, selectedMonth],
+    queryFn: () => api.getRequesterAnalytics(selectedYear, selectedMonth),
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  });
+
+  // yearMonthFilteredTickets is still used for the KPIDetailDialog "total" modal
   const yearMonthFilteredTickets = useMemo(() => {
     let filtered = tickets;
 
@@ -197,120 +205,6 @@ const Reports = () => {
 
     return filtered;
   }, [tickets, selectedYear, selectedMonth]);
-
-  const requesterAnalytics = useMemo(() => {
-    const analytics: Record<string, RequesterAnalytics> = {};
-    const ticketsByRequester: Record<string, typeof yearMonthFilteredTickets> = {};
-    const now = new Date();
-
-    // SINGLE PASS: Group tickets by requester and calculate basic metrics
-    yearMonthFilteredTickets.forEach(ticket => {
-      const user = users.find(u => u.id === ticket.requesterId);
-      const userName = user?.name || 'Ej tilldelad';
-      const userId = ticket.requesterId || 'unassigned';
-
-      // Initialize if first ticket for this requester
-      if (!analytics[userId]) {
-        analytics[userId] = {
-          userId,
-          name: userName,
-          totalTickets: 0,
-          statusBreakdown: { open: 0, 'in-progress': 0, waiting: 0, resolved: 0, closed: 0 },
-          priorityBreakdown: { low: 0, medium: 0, high: 0, critical: 0 },
-          completionRate: 0,
-          avgResolutionTime: 0,
-          agingTickets: 0,
-          lastTicketDate: ticket.createdAt,
-          ticketVelocity: 0,
-          topCategories: [],
-          topTags: [],
-        };
-        ticketsByRequester[userId] = [];
-      }
-
-      const a = analytics[userId];
-      ticketsByRequester[userId].push(ticket);
-
-      // Update counters
-      a.totalTickets++;
-      a.statusBreakdown[ticket.status]++;
-      a.priorityBreakdown[ticket.priority]++;
-
-      // Track latest ticket
-      if (ticket.createdAt > a.lastTicketDate) {
-        a.lastTicketDate = ticket.createdAt;
-      }
-
-      // Count aging tickets inline
-      if (ticket.status === 'open' && differenceInDays(now, ticket.createdAt) > 7) {
-        a.agingTickets++;
-      }
-    });
-
-    // Calculate derived metrics using grouped tickets
-    Object.entries(analytics).forEach(([userId, a]) => {
-      const userTickets = ticketsByRequester[userId];
-
-      // Completion rate
-      const completedCount = a.statusBreakdown.resolved + a.statusBreakdown.closed;
-      a.completionRate = a.totalTickets > 0 ? (completedCount / a.totalTickets) * 100 : 0;
-
-      // Average resolution time (single pass over user's tickets)
-      let totalResolutionDays = 0;
-      let completedTicketCount = 0;
-      let oldestTicketDate = now;
-
-      const categoryMap = new Map<string, number>();
-      const tagMap = new Map<string, number>();
-
-      userTickets.forEach(t => {
-        // Resolution time
-        if ((t.status === 'resolved' || t.status === 'closed') && t.closedAt) {
-          totalResolutionDays += differenceInDays(t.closedAt, t.createdAt);
-          completedTicketCount++;
-        }
-
-        // Oldest ticket for velocity
-        if (t.createdAt < oldestTicketDate) {
-          oldestTicketDate = t.createdAt;
-        }
-
-        // Categories
-        if (t.category) {
-          categoryMap.set(t.category, (categoryMap.get(t.category) || 0) + 1);
-        }
-
-        // Tags
-        t.tags?.forEach(tag => {
-          tagMap.set(tag.name, (tagMap.get(tag.name) || 0) + 1);
-        });
-      });
-
-      // Set average resolution time
-      a.avgResolutionTime = completedTicketCount > 0 ? totalResolutionDays / completedTicketCount : 0;
-
-      // Calculate velocity
-      const monthsActive = Math.max(1, differenceInDays(now, oldestTicketDate) / 30);
-      a.ticketVelocity = a.totalTickets / monthsActive;
-
-      // Top 3 categories
-      a.topCategories = Array.from(categoryMap.entries())
-        .map(([category, count]) => ({ category, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 3);
-
-      // Top 3 tags
-      a.topTags = Array.from(tagMap.entries())
-        .map(([tag, count]) => ({ tag, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 3);
-    });
-
-    // Sort by total tickets and limit to top 15 for performance
-    return Object.values(analytics)
-      .sort((a, b) => b.totalTickets - a.totalTickets)
-      .slice(0, 15);
-  }, [yearMonthFilteredTickets, users]);
 
   // Summary KPIs for requester analytics
   const requesterKPIs = useMemo(() => {
@@ -780,7 +674,7 @@ const Reports = () => {
                 <CardContent>
                   {isLoading ? (
                     <Skeleton className="h-[300px] w-full" />
-                  ) : yearMonthFilteredTickets.length === 0 ? (
+                  ) : ticketsByPriority.length === 0 ? (
                     <div className="h-[200px] flex items-center justify-center text-muted-foreground">
                       Ingen ärendedata tillgänglig
                     </div>
