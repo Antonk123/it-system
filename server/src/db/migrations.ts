@@ -1141,4 +1141,26 @@ export const migrations: Migration[] = [
       db.prepare('CREATE INDEX IF NOT EXISTS idx_tickets_updated_at ON tickets(updated_at)').run();
     },
   },
+  {
+    id: '059',
+    name: 'fix_updated_at_trigger_iso_and_refresh_token_drift',
+    up: (db, { columnExists }) => {
+      // Trigger skrev CURRENT_TIMESTAMP (SQLite-format) och åsidosatte app-kodens
+      // ISO-värde → datumfilter på updated_at missade exakta gränser. Skriv ISO.
+      db.exec('DROP TRIGGER IF EXISTS update_ticket_updated_at');
+      db.exec(`CREATE TRIGGER update_ticket_updated_at
+        AFTER UPDATE ON tickets FOR EACH ROW BEGIN
+          UPDATE tickets SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
+        END`);
+
+      // Schema-drift: fresh-installs där schema.sql skapade refresh_tokens utan
+      // last_used_at + utan index (migration 027 hoppade över pga tableExists).
+      if (!columnExists('refresh_tokens', 'last_used_at')) {
+        db.prepare('ALTER TABLE refresh_tokens ADD COLUMN last_used_at TEXT').run();
+      }
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON refresh_tokens(expires_at)').run();
+    },
+  },
 ];

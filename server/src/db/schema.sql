@@ -155,14 +155,21 @@ CREATE TABLE IF NOT EXISTS kb_article_shares (
 );
 
 -- Refresh tokens (for JWT token rotation)
+-- OBS: måste matcha migration 027 exakt — fresh-install skapar tabellen här och
+-- migration 027 hoppar då över (tableExists-guard). Kolumn + index måste därför
+-- finnas redan här, annars saknas idx_refresh_tokens_token på fresh-installs.
 CREATE TABLE IF NOT EXISTS refresh_tokens (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token TEXT UNIQUE NOT NULL,
   expires_at TEXT NOT NULL,
   revoked INTEGER DEFAULT 0,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  last_used_at TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON refresh_tokens(expires_at);
 
 -- Ticket <-> KB article links
 CREATE TABLE IF NOT EXISTS ticket_kb_links (
@@ -204,12 +211,15 @@ CREATE INDEX IF NOT EXISTS idx_kb_articles_updated ON kb_articles(updated_at);
 CREATE INDEX IF NOT EXISTS idx_ticket_kb_links_ticket ON ticket_kb_links(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_kb_links_article ON ticket_kb_links(article_id);
 
--- Trigger to update updated_at on tickets
+-- Trigger to update updated_at on tickets.
+-- Skriver ISO-8601 (matchar app-kodens new Date().toISOString()) så datumfilter
+-- på updated_at träffar exakta gränser. Tidigare CURRENT_TIMESTAMP gav SQLite-
+-- format ('YYYY-MM-DD HH:MM:SS') som skiljde sig från app-värdet.
 CREATE TRIGGER IF NOT EXISTS update_ticket_updated_at
 AFTER UPDATE ON tickets
 FOR EACH ROW
 BEGIN
-  UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+  UPDATE tickets SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
 END;
 
 -- Trigger to update updated_at on checklists
