@@ -62,13 +62,16 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     // Defense-in-depth: sanitera HTML server-side (TipTap rich-text).
     const safeContent = sanitizeRichText(content.trim());
 
-    db.prepare(`
-      INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(id, req.params.ticketId, req.user.id, safeContent, isInternal ? 1 : 0, now, now);
+    // Slå in INSERT + UPDATE i en transaktion så de lyckas eller misslyckas atomärt
+    db.transaction(() => {
+      db.prepare(`
+        INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(id, req.params.ticketId, req.user!.id, safeContent, isInternal ? 1 : 0, now, now);
 
-    // Update ticket's updated_at timestamp
-    db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now, req.params.ticketId);
+      // Update ticket's updated_at timestamp
+      db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now, req.params.ticketId);
+    })();
 
     const comment = db.prepare(`
       SELECT

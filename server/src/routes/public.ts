@@ -6,6 +6,7 @@ import { aiEnabled, suggestSolutionFromKB, findRelevantKbArticles } from '../lib
 import { stripHtml } from '../lib/htmlUtils.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
 import { publicWriteRateLimiter, publicAiRateLimiter } from '../middleware/rateLimit.js';
+import { authenticate } from '../middleware/auth.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
@@ -335,10 +336,12 @@ router.patch('/ai-suggest/:id', publicWriteRateLimiter, (req: Request, res: Resp
 
 /**
  * GET /api/public/ai-suggest/stats
- * Returnerar deflection-stats senaste 30 dagarna. Används av admin-panelen
- * (kommer senare) men är ok att exponera publikt — bara aggregerade siffror.
+ * Returnerar deflection-stats senaste 30 dagarna. Konsumeras av Dashboard för
+ * alla inloggade användare → kräver authenticate (inte publik längre, trots
+ * att den ligger på public-routern). requireAdmin är fel: Dashboard är ej
+ * admin-only. Ej publik widget — bara dashboard-statistik.
  */
-router.get('/ai-suggest/stats', (_req: Request, res: Response) => {
+router.get('/ai-suggest/stats', authenticate, (_req: Request, res: Response) => {
   try {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const rows = db.prepare(`

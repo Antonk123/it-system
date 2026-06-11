@@ -238,7 +238,7 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
 
     res.json({ message: 'Password changed successfully' });
   } catch (error) {
-    console.error('Error changing password:', error);
+    logger.error('Error changing password:', { error: String(error) });
     res.status(500).json({ error: 'Failed to change password' });
   }
 });
@@ -282,7 +282,7 @@ router.post('/forgot-password', loginRateLimiter, async (req: Request, res: Resp
 
       const baseUrl = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
       if (!baseUrl) {
-        console.warn('[forgot-password] APP_BASE_URL not configured — reset link cannot be built');
+        logger.warn('[forgot-password] APP_BASE_URL not configured — reset link cannot be built');
       } else {
         const resetUrl = `${baseUrl}/reset-password/${token}`;
         try {
@@ -293,11 +293,11 @@ router.post('/forgot-password', loginRateLimiter, async (req: Request, res: Resp
             expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES,
           });
         } catch (err) {
-          console.error('[forgot-password] email send failed:', err);
+          logger.error('[forgot-password] email send failed:', { error: String(err) });
         }
       }
     } catch (err) {
-      console.error('[forgot-password] token issue failed:', err);
+      logger.error('[forgot-password] token issue failed:', { error: String(err) });
     }
   }
 
@@ -350,7 +350,7 @@ router.post('/reset-password', loginRateLimiter, async (req: Request, res: Respo
 
     return res.json({ message: 'Lösenordet har återställts. Logga in med ditt nya lösenord.' });
   } catch (err) {
-    console.error('[reset-password] failed:', err);
+    logger.error('[reset-password] failed:', { error: String(err) });
     return res.status(500).json({ error: 'Kunde inte återställa lösenordet' });
   }
 });

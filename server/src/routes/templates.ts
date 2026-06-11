@@ -141,6 +141,32 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
   }
 });
 
+// PUT /api/templates/reorder - Reorder templates (måste stå FÖRE /:id annars fångas 'reorder' av :id)
+router.put('/reorder', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
+  const { ids } = req.body as { ids: string[] };
+
+  try {
+    if (!Array.isArray(ids)) {
+      return res.status(400).json({ error: 'ids must be an array' });
+    }
+
+    const updateStmt = db.prepare('UPDATE ticket_templates SET position = ? WHERE id = ?');
+    const transaction = db.transaction((templateIds: string[]) => {
+      templateIds.forEach((id, index) => {
+        updateStmt.run(index, id);
+      });
+    });
+
+    transaction(ids);
+
+    const templates = db.prepare('SELECT * FROM ticket_templates ORDER BY position ASC').all() as TemplateRow[];
+    res.json(templates);
+  } catch (error) {
+    logger.error('Error reordering templates:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to reorder templates' });
+  }
+});
+
 // PUT /api/templates/:id - Update template
 router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, description, template_type, title_template, description_template, priority, category_id, notes_template, solution_template } = req.body;
@@ -174,32 +200,6 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
   } catch (error) {
     logger.error('Error updating template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update template' });
-  }
-});
-
-// PUT /api/templates/reorder - Reorder templates
-router.put('/reorder', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
-  const { ids } = req.body as { ids: string[] };
-
-  try {
-    if (!Array.isArray(ids)) {
-      return res.status(400).json({ error: 'ids must be an array' });
-    }
-
-    const updateStmt = db.prepare('UPDATE ticket_templates SET position = ? WHERE id = ?');
-    const transaction = db.transaction((templateIds: string[]) => {
-      templateIds.forEach((id, index) => {
-        updateStmt.run(index, id);
-      });
-    });
-
-    transaction(ids);
-
-    const templates = db.prepare('SELECT * FROM ticket_templates ORDER BY position ASC').all() as TemplateRow[];
-    res.json(templates);
-  } catch (error) {
-    logger.error('Error reordering templates:', { error: String(error) });
-    res.status(500).json({ error: 'Failed to reorder templates' });
   }
 });
 

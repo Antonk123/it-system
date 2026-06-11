@@ -7,6 +7,7 @@ import { randomUUID, randomBytes } from 'crypto';
 import { dispatchWebhook } from './webhookDispatcher.js';
 import { sendTicketReceivedConfirmation } from './email.js';
 import { logger } from './logger.js';
+import { ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE } from '../routes/attachments.js';
 
 interface EmailConfig {
   host: string;
@@ -94,6 +95,12 @@ function findTicketByShortId(subject: string): { id: string } | undefined {
     .get(shortId) as { id: string } | undefined;
 }
 
+/**
+ * Söker efter ett befintligt öppet ärende vars titel matchar det avstrippade
+ * ämnet OCH vars beställare har samma e-postadress som avsändaren.
+ * Utan avsändarkontrollen skulle externa svar på ett ämne som råkar matcha
+ * en befintlig ärendetitel kopplas till fel ärende.
+ */
 function findTicketBySubject(subject: string, fromAddress: string): { id: string } | undefined {
   const stripped = stripReplyPrefix(subject);
   if (!stripped) return undefined;
@@ -149,6 +156,11 @@ function addCommentToTicket(ticketId: string, body: string, fromAddress: string,
   logger.info('Added email comment to ticket', { ticketId, from: fromAddress });
 }
 
+/**
+ * Parsar ett råmail (Buffer) och skapar antingen ett nytt ärende eller lägger till
+ * en kommentar på ett befintligt ärende via trådnings-/ämneslogik.
+ * Bilagor sparas via saveAttachments med MIME- och storleksvalidering.
+ */
 async function processEmail(source: Buffer, config: EmailConfig): Promise<void> {
   // Guard against oversized emails that could OOM the process during parsing.
   // 25 MB is generous — most legitimate emails are well under 10 MB.
@@ -294,7 +306,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     status: 'open',
     priority: 'medium',
     source: 'email',
-  }).catch(console.error);
+  }).catch((err: unknown) => logger.error('dispatchWebhook failed', { error: String(err) }));
 
   sendTicketReceivedConfirmation({
     toEmail: fromAddress,
@@ -331,6 +343,29 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
       continue;
     }
 
+    // Validera MIME-typ och filändelse mot samma whitelist som HTTP-uppladdningar
+    const mime: string = (attachment.contentType || '').toLowerCase().split(';')[0].trim();
+    const extNoDot = path.extname(attachment.filename).replace(/^\./, '').toLowerCase();
+    if (!ALLOWED_MIME_TYPES.includes(mime)) {
+      logger.warn('Skipping mail attachment with disallowed MIME type', { filename: attachment.filename, mime });
+      continue;
+    }
+    if (!ALLOWED_EXTENSIONS.includes(extNoDot)) {
+      logger.warn('Skipping mail attachment with disallowed extension', { filename: attachment.filename, ext: extNoDot });
+      continue;
+    }
+
+    // Kontrollera storleksgräns (samma som HTTP-gränsen)
+    const attachmentSize: number = attachment.size ?? (attachment.content?.length ?? 0);
+    if (attachmentSize > MAX_FILE_SIZE) {
+      logger.warn('Skipping mail attachment exceeding size limit', {
+        filename: attachment.filename,
+        sizeMB: (attachmentSize / 1024 / 1024).toFixed(1),
+        limitMB: MAX_FILE_SIZE / 1024 / 1024,
+      });
+      continue;
+    }
+
     const attachId = randomUUID();
     const ext = path.extname(attachment.filename);
     const storedName = `${attachId}${ext}`;
@@ -356,6 +391,7 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
 
 let pollingTimer: ReturnType<typeof setTimeout> | null = null;
 
+/** Returnerar aktuell konfigurationsstatus för inkommande e-post (IMAP). */
 export function getEmailInboundStatus() {
   const configured = !!(
     process.env.IMAP_HOST &&
@@ -372,6 +408,11 @@ export function getEmailInboundStatus() {
   };
 }
 
+/**
+ * Startar periodisk IMAP-polling för inkommande e-post.
+ * Använder rekursiv setTimeout för att undvika överlappande polls.
+ * Hämtar ny OAuth2-token inför varje poll vid OAuth2-konfiguration.
+ */
 export async function startEmailPolling(): Promise<void> {
   const config = await getEmailConfig();
   if (!config) {
@@ -503,6 +544,7 @@ export async function startEmailPolling(): Promise<void> {
 
 let stopPolling: (() => void) | null = null;
 
+/** Stoppar den aktiva IMAP-pollingen om den körs. */
 export function stopEmailPolling(): void {
   if (stopPolling) {
     stopPolling();

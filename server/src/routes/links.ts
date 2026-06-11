@@ -208,6 +208,22 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Link not found' });
     }
 
+    // Ownership-check: admin får alltid radera. Övriga måste vara assigned_to
+    // eller created_by på något av de länkade ärendena.
+    if (req.user.role !== 'admin') {
+      const userId = req.user.id;
+      const ticketAccess = db.prepare(`
+        SELECT 1 FROM tickets
+        WHERE id IN (?, ?)
+          AND (assigned_to = ? OR created_by = ?)
+        LIMIT 1
+      `).get(existing.source_ticket_id, existing.target_ticket_id, userId, userId);
+
+      if (!ticketAccess) {
+        return res.status(403).json({ error: 'Not authorized to delete this link' });
+      }
+    }
+
     db.prepare('DELETE FROM ticket_links WHERE id = ?').run(req.params.id);
 
     res.json({ message: 'Link deleted' });

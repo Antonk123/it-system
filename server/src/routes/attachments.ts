@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
-import { existsSync, mkdirSync, unlinkSync } from 'fs';
+import { existsSync, mkdirSync, unlinkSync, openSync, readSync, closeSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { db } from '../db/connection.js';
@@ -18,8 +18,11 @@ if (!existsSync(UPLOAD_DIR)) {
   mkdirSync(UPLOAD_DIR, { recursive: true });
 }
 
+/** Max accepted file size (bytes) — same limit enforced by multer */
+export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
 // Whitelist of allowed MIME types
-const ALLOWED_MIME_TYPES = [
+export const ALLOWED_MIME_TYPES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
   'application/pdf',
   'text/plain', 'text/csv',
@@ -35,7 +38,7 @@ const ALLOWED_MIME_TYPES = [
 ];
 
 // Whitelist of allowed file extensions (as backup check)
-const ALLOWED_EXTENSIONS = [
+export const ALLOWED_EXTENSIONS = [
   'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
   'pdf',
   'txt', 'csv', 'eml',
@@ -57,7 +60,7 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
+    fileSize: MAX_FILE_SIZE,
   },
   fileFilter: (_req, file, cb) => {
     const ext = file.originalname.split('.').pop()?.toLowerCase() || '';
@@ -92,6 +95,56 @@ interface TicketOwnerRow {
   assigned_to: string | null;
 }
 
+/**
+ * Lättvikts magic-byte-kontroll: läser de första bytena ur en redan sparad fil
+ * och verifierar att de matchar den deklarerade MIME-typen.
+ * Returnerar false (avvisa) endast om MIME är känd men signaturen inte matchar.
+ * Okända/textbaserade MIME-typer släpps igenom utan kontroll.
+ */
+function hasMagicByteMatch(filePath: string, declaredMime: string): boolean {
+  // Signaturer för kända binära typer
+  const signatures: Array<{ mime: string | string[]; magic: Buffer; offset?: number }> = [
+    { mime: 'application/pdf',                                                    magic: Buffer.from([0x25, 0x50, 0x44, 0x46]) }, // %PDF
+    { mime: 'image/png',                                                          magic: Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) }, // \x89PNG
+    { mime: 'image/jpeg',                                                         magic: Buffer.from([0xFF, 0xD8, 0xFF]) },
+    { mime: 'image/gif',                                                          magic: Buffer.from([0x47, 0x49, 0x46, 0x38]) }, // GIF8
+    { mime: ['application/zip', 'application/x-zip-compressed',
+             'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+             'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+             'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+             magic: Buffer.from([0x50, 0x4B, 0x03, 0x04]) }, // PK\x03\x04
+  ];
+
+  const matchingRule = signatures.find(s =>
+    Array.isArray(s.mime) ? s.mime.includes(declaredMime) : s.mime === declaredMime
+  );
+
+  if (!matchingRule) {
+    // Ingen känd signatur för denna MIME — släpp igenom
+    return true;
+  }
+
+  // Läs bara de första bytena — öppna fd och läs exakt vad vi behöver
+  const readLen = Math.max(matchingRule.magic.length + (matchingRule.offset ?? 0), 16);
+  const header = Buffer.alloc(readLen);
+  try {
+    const fd = openSync(filePath, 'r');
+    try {
+      readSync(fd, header, 0, readLen, 0);
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+
+  const offset = matchingRule.offset ?? 0;
+  for (let i = 0; i < matchingRule.magic.length; i++) {
+    if (header[offset + i] !== matchingRule.magic[i]) return false;
+  }
+  return true;
+}
+
 /** Check if user is admin, ticket requester, or assigned agent */
 function canAccessTicketAttachment(user: { id: string; role: string }, ticketId: string): boolean {
   if (user.role === 'admin') return true;
@@ -107,6 +160,11 @@ function canAccessTicketAttachment(user: { id: string; role: string }, ticketId:
 // Get attachments for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
+    // Authorization: verify user has access to the parent ticket before listing metadata
+    if (!canAccessTicketAttachment(req.user!, req.params.ticketId as string)) {
+      return res.status(403).json({ error: 'Forbidden: you do not have access to this ticket' });
+    }
+
     const attachments = db.prepare(`
       SELECT id, ticket_id, file_name, file_path, file_size, file_type, created_at FROM ticket_attachments WHERE ticket_id = ? ORDER BY created_at ASC
     `).all(req.params.ticketId) as AttachmentRow[];
@@ -136,6 +194,17 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    // Magic-byte-kontroll: verifiera att filens faktiska innehåll matchar deklarerad MIME
+    const uploadedPath = join(UPLOAD_DIR, req.file.filename);
+    if (!hasMagicByteMatch(uploadedPath, req.file.mimetype)) {
+      try { unlinkSync(uploadedPath); } catch { /* ignore cleanup error */ }
+      logger.warn('Magic-byte mismatch for uploaded file', {
+        filename: req.file.originalname,
+        declaredMime: req.file.mimetype,
+      });
+      return res.status(400).json({ error: 'File content does not match the declared file type.' });
     }
 
     try {
@@ -191,12 +260,21 @@ router.get('/file/:id', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    // Sanitize filename to prevent header injection
-    const safeFilename = attachment.file_name.replace(/["\r\n]/g, '');
+    // Sanitera filnamnet strikt: tillåt endast säkra ASCII-tecken i fallback-formen,
+    // och skicka även RFC 5987-kodat namn (filename*) för korrekt hantering av
+    // icke-ASCII, semikolon och andra specialtecken i moderna klienter.
+    const safeAsciiFilename = attachment.file_name
+      .replace(/[^\x20-\x7E]/g, '_')  // ersätt icke-ASCII med _
+      .replace(/[";\\]/g, '_');         // ersätt semikolon, citattecken, backslash
+    const encodedFilename = encodeURIComponent(attachment.file_name);
 
     res.setHeader('Content-Type', attachment.file_type || 'application/octet-stream');
-    // Use 'attachment' instead of 'inline' to force download and prevent execution
-    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+    // Use 'attachment' instead of 'inline' to force download and prevent execution.
+    // filename* (RFC 5987) hanterar icke-ASCII korrekt; filename= är fallback för äldre klienter.
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${safeAsciiFilename}"; filename*=UTF-8''${encodedFilename}`
+    );
     res.sendFile(filePath);
   } catch (error) {
     logger.error('Error serving file:', { error: String(error) });

@@ -19,8 +19,9 @@ router.get('/summary', authenticate, (req: AuthRequest, res) => {
       res.status(400).json({ error: 'Invalid year parameter' });
       return;
     }
-    filterConditions.push("strftime('%Y', created_at) = ?");
-    filterParams.push(year);
+    // Range-filter så att idx_tickets_created_at kan användas (strftime kan inte)
+    filterConditions.push("(created_at >= ? AND created_at < ?)");
+    filterParams.push(`${yearNum}-01-01`, `${yearNum + 1}-01-01`);
   }
 
   if (month && month !== 'all') {
@@ -103,10 +104,12 @@ router.get('/summary', authenticate, (req: AuthRequest, res) => {
   let trendClosedParams: string[];
 
   if (year && year !== 'all') {
-    trendWhereCreated = "WHERE strftime('%Y', created_at) = ?";
-    trendWhereClosed = "WHERE closed_at IS NOT NULL AND strftime('%Y', closed_at) = ?";
-    trendParams = [year];
-    trendClosedParams = [year];
+    const yearNum = parseInt(year, 10);
+    // Range-filter så att index kan användas (strftime kan inte)
+    trendWhereCreated = "WHERE created_at >= ? AND created_at < ?";
+    trendWhereClosed = "WHERE closed_at IS NOT NULL AND closed_at >= ? AND closed_at < ?";
+    trendParams = [`${yearNum}-01-01`, `${yearNum + 1}-01-01`];
+    trendClosedParams = [`${yearNum}-01-01`, `${yearNum + 1}-01-01`];
   } else {
     trendWhereCreated = "WHERE created_at >= date('now', '-12 months')";
     trendWhereClosed = "WHERE closed_at IS NOT NULL AND closed_at >= date('now', '-12 months')";
@@ -191,8 +194,10 @@ router.get('/time-summary', authenticate, (req: AuthRequest, res) => {
   const filterParams: (string)[] = [];
 
   if (year && year !== 'all') {
-    filterConditions.push("strftime('%Y', te.created_at) = ?");
-    filterParams.push(year);
+    const yearNum = parseInt(year, 10);
+    // Range-filter så att index kan användas (strftime kan inte)
+    filterConditions.push("(te.created_at >= ? AND te.created_at < ?)");
+    filterParams.push(`${yearNum}-01-01`, `${yearNum + 1}-01-01`);
   }
 
   if (month && month !== 'all') {

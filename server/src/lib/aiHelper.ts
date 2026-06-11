@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { db } from '../db/connection.js';
 import { v4 as uuidv4 } from 'uuid';
+import { logger } from './logger.js';
 
 /**
  * AI-helper för IT-Ticket.
@@ -77,7 +78,7 @@ function isWithinBudget(): boolean {
     const withinBudget = row.total < AI_MONTHLY_TOKEN_LIMIT;
     budgetCache = { withinBudget, checkedAt: now };
     if (!withinBudget) {
-      console.warn(`⚠️ AI monthly token budget exceeded: ${row.total} / ${AI_MONTHLY_TOKEN_LIMIT}`);
+      logger.warn('AI monthly token budget exceeded', { total: row.total, limit: AI_MONTHLY_TOKEN_LIMIT });
     }
     return withinBudget;
   } catch {
@@ -102,13 +103,13 @@ function logUsage(record: UsageRecord): void {
   // Track consecutive failures for outage alerting
   if (record.ok) {
     if (consecutiveFailures >= FAILURE_ALERT_THRESHOLD) {
-      console.log(`✅ AI API: recovered after ${consecutiveFailures} consecutive failures`);
+      logger.info('AI API: recovered after consecutive failures', { count: consecutiveFailures });
     }
     consecutiveFailures = 0;
   } else {
     consecutiveFailures++;
     if (consecutiveFailures >= FAILURE_ALERT_THRESHOLD) {
-      console.warn(`⚠️ AI API: ${consecutiveFailures} consecutive failures — check ANTHROPIC_API_KEY and service status`);
+      logger.warn('AI API: consecutive failures — check ANTHROPIC_API_KEY and service status', { count: consecutiveFailures });
     }
   }
 
@@ -128,7 +129,7 @@ function logUsage(record: UsageRecord): void {
     );
   } catch (err) {
     // Logging fel ska aldrig bryta huvudflödet
-    console.error('AI usage log failed (non-fatal):', err);
+    logger.error('AI usage log failed (non-fatal)', { err: String(err) });
   }
 }
 
@@ -177,7 +178,9 @@ export async function findRelevantKbArticles(
         role: 'user',
         content: `Du är en IT-support-assistent. En användare beskriver ett problem. Vilka av följande kunskapsbasartiklar KAN vara relevanta?
 
-PROBLEM: ${problemText}
+<user_problem>
+${problemText.slice(0, 4000)}
+</user_problem>
 
 ARTIKLAR:
 ${articleList}
@@ -190,7 +193,7 @@ Svara ENDAST med en JSON-array av artikel-ID:n, t.ex. ["id1", "id2"]. Om ingen a
     if (!match) return [];
     return JSON.parse(match[0]);
   } catch (err) {
-    console.error('AI article selection failed:', err);
+    logger.error('AI article selection failed', { err: String(err) });
     return [];
   }
 }
@@ -303,7 +306,7 @@ Bedöm om du kan hjälpa baserat på KB ovan.`;
     ok = true;
     return result;
   } catch (err) {
-    console.error('AI solution suggestion failed:', err);
+    logger.error('AI solution suggestion failed', { err: String(err) });
     return null;
   } finally {
     logUsage({
@@ -383,7 +386,7 @@ Beskrivning: ${sanitizeForPrompt(description, 800)}`
     ok = true;
     return parsed;
   } catch (err) {
-    console.error('AI categorize failed:', err);
+    logger.error('AI categorize failed', { err: String(err) });
     return null;
   } finally {
     logUsage({
@@ -459,7 +462,7 @@ Skriv ditt svar nu.`;
     ok = true;
     return text.trim();
   } catch (err) {
-    console.error('AI draft reply failed:', err);
+    logger.error('AI draft reply failed', { err: String(err) });
     return null;
   } finally {
     logUsage({
@@ -541,7 +544,7 @@ ${timeline}`
     ok = true;
     return parsed;
   } catch (err) {
-    console.error('AI summary failed:', err);
+    logger.error('AI summary failed', { err: String(err) });
     return null;
   } finally {
     logUsage({
@@ -565,7 +568,7 @@ ${timeline}`
 export function cleanupOldAiUsage(): void {
   const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
   const result = db.prepare('DELETE FROM ai_usage_log WHERE created_at < ?').run(cutoff);
-  console.log(`🧹 AI usage cleanup: ${result.changes} rows older than 90 days deleted`);
+  logger.info('AI usage cleanup completed', { deletedRows: result.changes });
 }
 
 // ─── Kostnadsöversikt (helper för admin-panel senare) ─────────────────────────

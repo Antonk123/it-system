@@ -7,7 +7,7 @@ import multer from 'multer';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 interface ContactRow {
   id: string;
@@ -20,7 +20,7 @@ interface ContactRow {
   created_at: string;
 }
 
-// Get all contacts
+// Get all contacts (max 500 per anrop för att undvika minnesproblem; full paginering hanteras i senare wave)
 router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
   try {
     const contacts = db.prepare(`
@@ -28,6 +28,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
       FROM contacts c
       LEFT JOIN companies co ON c.company_id = co.id
       ORDER BY c.created_at DESC
+      LIMIT 500
     `).all() as ContactRow[];
     res.json(contacts);
   } catch (error) {
@@ -294,7 +295,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Create contact
-router.post('/', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, email, phone, company_id, department } = req.body;
 
   if (!name || !email) {
@@ -321,7 +322,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Update contact
-router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, email, phone, company_id, department } = req.body;
 
   try {

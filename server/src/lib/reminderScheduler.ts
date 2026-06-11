@@ -2,6 +2,7 @@ import cron, { ScheduledTask } from 'node-cron';
 import { db } from '../db/connection.js';
 import { sendTicketReminderEmail } from './email.js';
 import { sendPushToAllSubscriptions } from './push.js';
+import { logger } from './logger.js';
 
 let schedulerTask: ScheduledTask | null = null;
 
@@ -22,23 +23,27 @@ interface DueReminder {
 
 export function startReminderScheduler() {
   if (schedulerTask) {
-    console.warn('Reminder scheduler already running');
+    logger.warn('Reminder scheduler already running');
     return;
   }
 
   // Run every minute: '* * * * *'
   schedulerTask = cron.schedule('* * * * *', async () => {
-    await checkAndSendReminders();
+    try {
+      await checkAndSendReminders();
+    } catch (error) {
+      logger.error('Unhandled error in reminder scheduler tick:', { error: String(error) });
+    }
   });
 
-  console.log('✅ Reminder scheduler started (checking every minute)');
+  logger.info('Reminder scheduler started (checking every minute)');
 }
 
 export function stopReminderScheduler() {
   if (schedulerTask) {
     schedulerTask.stop();
     schedulerTask = null;
-    console.log('Reminder scheduler stopped');
+    logger.info('Reminder scheduler stopped');
   }
 }
 
@@ -61,7 +66,7 @@ async function checkAndSendReminders() {
 
     if (dueReminders.length === 0) return;
 
-    console.log(`Reminders: sending ${dueReminders.length} due reminder(s)`);
+    logger.info(`Reminders: sending ${dueReminders.length} due reminder(s)`);
 
     for (const reminder of dueReminders) {
       try {
@@ -96,16 +101,16 @@ async function checkAndSendReminders() {
           title: `Påminnelse: ${reminder.title}`,
           body: reminder.message || `Ärendet "${reminder.title}" har en påminnelse nu.`,
         }).catch((err) => {
-          console.error(`Push notification failed for reminder ${reminder.id}:`, err);
+          logger.error(`Push notification failed for reminder ${reminder.id}:`, { error: String(err) });
         });
 
-        console.log(`Reminder ${reminder.id} sent for ticket ${reminder.ticket_id}`);
+        logger.info(`Reminder ${reminder.id} sent for ticket ${reminder.ticket_id}`);
       } catch (error) {
-        console.error(`Failed to send reminder ${reminder.id}:`, error);
+        logger.error(`Failed to send reminder ${reminder.id}:`, { error: String(error) });
         // Don't mark as sent if email failed - will retry on next run
       }
     }
   } catch (error) {
-    console.error('Error in reminder scheduler:', error);
+    logger.error('Error in reminder scheduler:', { error: String(error) });
   }
 }

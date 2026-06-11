@@ -91,7 +91,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // POST / — create company
-router.post('/', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const { name, org_number, email, phone, address } = req.body;
     if (!name || !name.trim()) {
@@ -112,7 +112,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // PUT /:id — update company
-router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const existing = db.prepare('SELECT * FROM companies WHERE id = ?').get(req.params.id) as CompanyRow | undefined;
     if (!existing) {

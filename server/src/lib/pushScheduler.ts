@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { db } from '../db/connection.js';
 import { sendPushToAllSubscriptions, isPushEnabled } from './push.js';
+import { logger } from './logger.js';
 
 const AGING_DAYS = parseInt(process.env.PUSH_AGING_DAYS || '7', 10);
 
@@ -24,11 +25,11 @@ async function checkAgingTickets(): Promise<void> {
   `).all(cutoffIso) as { id: string; title: string; updated_at: string }[];
 
   if (tickets.length === 0) {
-    console.log(`Push aging check: no tickets inactive >${AGING_DAYS} days (or all already notified within 24h)`);
+    logger.info(`Push aging check: no tickets inactive >${AGING_DAYS} days (or all already notified within 24h)`);
     return;
   }
 
-  console.log(`Push aging check: ${tickets.length} ticket(s) inactive >${AGING_DAYS} days`);
+  logger.info(`Push aging check: ${tickets.length} ticket(s) inactive >${AGING_DAYS} days`);
 
   const markNotified = db.prepare('UPDATE tickets SET last_aging_notified_at = ? WHERE id = ?');
 
@@ -54,9 +55,9 @@ export function startPushScheduler(): void {
     try {
       await checkAgingTickets();
     } catch (error) {
-      console.error('Push scheduler error:', error);
+      logger.error('Push scheduler error:', { error: String(error) });
     }
   });
 
-  console.log(`Push aging-ticket scheduler enabled (daily at 09:00, threshold: ${AGING_DAYS} days)`);
+  logger.info(`Push aging-ticket scheduler enabled (daily at 09:00, threshold: ${AGING_DAYS} days)`);
 }

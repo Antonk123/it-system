@@ -1,6 +1,7 @@
 import cron from 'node-cron';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
+import { logger } from './logger.js';
 
 interface RecurringTemplate {
   id: string;
@@ -99,7 +100,7 @@ function createTicketFromTemplate(template: RecurringTemplate): void {
 
     if (validTagIds.length < tagIds.length) {
       const removed = tagIds.filter(id => !validTagIds.includes(id));
-      console.warn(`Recurring: removed stale tag IDs for template ${template.name}: ${removed.join(', ')}`);
+      logger.warn(`Recurring: removed stale tag IDs for template ${template.name}: ${removed.join(', ')}`);
     }
   }
 
@@ -153,7 +154,7 @@ function createTicketFromTemplate(template: RecurringTemplate): void {
   });
 
   createTransaction();
-  console.log(`Recurring: created ticket ${ticketId} from template ${template.name}`);
+  logger.info(`Recurring: created ticket ${ticketId} from template ${template.name}`);
 }
 
 /**
@@ -169,13 +170,13 @@ function processRecurringTemplates(): void {
 
   if (dueTemplates.length === 0) return;
 
-  console.log(`Recurring: processing ${dueTemplates.length} due template(s)`);
+  logger.info(`Recurring: processing ${dueTemplates.length} due template(s)`);
 
   for (const template of dueTemplates) {
     try {
       createTicketFromTemplate(template);
     } catch (error) {
-      console.error(`Recurring: failed to create ticket from template ${template.name}:`, error);
+      logger.error(`Recurring: failed to create ticket from template ${template.name}:`, { error: String(error) });
     }
   }
 }
@@ -188,9 +189,9 @@ export function startRecurringScheduler(): void {
     try {
       processRecurringTemplates();
     } catch (error) {
-      console.error('Recurring scheduler error:', error);
+      logger.error('Recurring scheduler error:', { error: String(error) });
     }
   });
 
-  console.log('Recurring ticket scheduler enabled (every minute)');
+  logger.info('Recurring ticket scheduler enabled (every minute)');
 }

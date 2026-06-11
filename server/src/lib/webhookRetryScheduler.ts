@@ -1,12 +1,13 @@
 import cron, { ScheduledTask } from 'node-cron';
 import { processWebhookRetries } from './webhookDispatcher.js';
+import { logger } from './logger.js';
 
 let schedulerTask: ScheduledTask | null = null;
 let running = false;
 
 export function startWebhookRetryScheduler() {
   if (schedulerTask) {
-    console.warn('Webhook retry scheduler already running');
+    logger.warn('Webhook retry scheduler already running');
     return;
   }
 
@@ -21,19 +22,19 @@ export function startWebhookRetryScheduler() {
     try {
       await processWebhookRetries();
     } catch (err) {
-      console.error('Error in webhook retry scheduler:', err);
+      logger.error('Error in webhook retry scheduler:', { error: String(err) });
     } finally {
       running = false;
     }
   });
 
-  console.log('✅ Webhook retry scheduler started (checking every minute)');
+  logger.info('Webhook retry scheduler started (checking every minute)');
 }
 
 export function stopWebhookRetryScheduler() {
   if (schedulerTask) {
     schedulerTask.stop();
     schedulerTask = null;
-    console.log('Webhook retry scheduler stopped');
+    logger.info('Webhook retry scheduler stopped');
   }
 }

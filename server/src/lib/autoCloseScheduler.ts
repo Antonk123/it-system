@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { AUTO_CLOSE_DAYS } from '../config/automation.js';
+import { logger } from './logger.js';
 
 /**
  * Finds all tickets with status "resolved" whose updated_at is older than
@@ -19,11 +20,11 @@ function autoCloseResolvedTickets(): void {
   `).all(cutoffIso) as { id: string; title: string; updated_at: string }[];
 
   if (tickets.length === 0) {
-    console.log(`🔒 Auto-close: no tickets to close (threshold: ${AUTO_CLOSE_DAYS} days)`);
+    logger.info(`Auto-close: no tickets to close (threshold: ${AUTO_CLOSE_DAYS} days)`);
     return;
   }
 
-  console.log(`🔒 Auto-close: closing ${tickets.length} ticket(s) resolved >${AUTO_CLOSE_DAYS} days ago`);
+  logger.info(`Auto-close: closing ${tickets.length} ticket(s) resolved >${AUTO_CLOSE_DAYS} days ago`);
 
   const now = new Date().toISOString();
 
@@ -40,14 +41,14 @@ function autoCloseResolvedTickets(): void {
       VALUES (?, ?, NULL, 'status', 'resolved', 'closed')
     `).run(uuidv4(), ticket.id);
 
-    console.log(`  ✅ Closed ticket ${ticket.id}: "${ticket.title}" (last updated ${ticket.updated_at})`);
+    logger.info(`Auto-close: closed ticket ${ticket.id}: "${ticket.title}" (last updated ${ticket.updated_at})`);
   });
 
   for (const ticket of tickets) {
     try {
       closeTicket(ticket);
     } catch (error) {
-      console.error(`  ❌ Failed to close ticket ${ticket.id}:`, error);
+      logger.error(`Auto-close: failed to close ticket ${ticket.id}:`, { error: String(error) });
     }
   }
 }
@@ -62,9 +63,9 @@ export function startAutoCloseScheduler(): void {
     try {
       autoCloseResolvedTickets();
     } catch (error) {
-      console.error('Auto-close scheduler error:', error);
+      logger.error('Auto-close scheduler error:', { error: String(error) });
     }
   });
 
-  console.log(`✅ Auto-close scheduler enabled (daily at 02:30, threshold: ${AUTO_CLOSE_DAYS} days)`);
+  logger.info(`Auto-close scheduler enabled (daily at 02:30, threshold: ${AUTO_CLOSE_DAYS} days)`);
 }

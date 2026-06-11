@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
 import multer from 'multer';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { db } from '../db/connection.js';
@@ -219,14 +219,24 @@ router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
 // GET /api/kb/articles/:id
 router.get('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const article = db.prepare(`
-      SELECT
-        a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.last_reviewed_at, a.created_at, a.updated_at,
-        c.name as category_name, c.color as category_color
-      FROM kb_articles a
-      LEFT JOIN kb_categories c ON a.category_id = c.id
-      WHERE a.id = ?
-    `).get(req.params.id) as KbArticleRow | undefined;
+    const isAdmin = req.user?.role === 'admin';
+    const article = isAdmin
+      ? db.prepare(`
+          SELECT
+            a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.last_reviewed_at, a.created_at, a.updated_at,
+            c.name as category_name, c.color as category_color
+          FROM kb_articles a
+          LEFT JOIN kb_categories c ON a.category_id = c.id
+          WHERE a.id = ?
+        `).get(req.params.id) as KbArticleRow | undefined
+      : db.prepare(`
+          SELECT
+            a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.last_reviewed_at, a.created_at, a.updated_at,
+            c.name as category_name, c.color as category_color
+          FROM kb_articles a
+          LEFT JOIN kb_categories c ON a.category_id = c.id
+          WHERE a.id = ? AND a.status = 'published'
+        `).get(req.params.id) as KbArticleRow | undefined;
 
     if (!article) return res.status(404).json({ error: 'Article not found' });
 
@@ -371,7 +381,7 @@ router.put('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, res: 
 });
 
 // PATCH /api/kb/articles/:id/review
-router.patch('/articles/:id/review', authenticate, (req: AuthRequest, res: Response) => {
+router.patch('/articles/:id/review', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const existing = db.prepare('SELECT id FROM kb_articles WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Article not found' });
@@ -394,6 +404,34 @@ router.delete('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, re
         .run(existing.rowid, existing.title, stripHtml(existing.content));
       db.prepare('DELETE FROM kb_articles WHERE id = ?').run(req.params.id);
     })();
+
+    // Rensa inbäddade KB-bilder från disk (best-effort, blockerar ej raderingen).
+    // Parsa alla <img src="..."> i artikelns HTML och ta bort filer som pekar på
+    // lokalt uppladdade KB-bilder (/api/kb/images/<kb-…>-filnamn).
+    try {
+      const imgSrcPattern = /<img[^>]+src="([^"]+)"/gi;
+      let match: RegExpExecArray | null;
+      while ((match = imgSrcPattern.exec(existing.content)) !== null) {
+        const src = match[1];
+        // Matcha bara lokalt uppladdade KB-bilder: /api/kb/images/<filename>
+        const localMatch = src.match(/\/api\/kb\/images\/(kb-[^/?#"]+)$/);
+        if (!localMatch) continue;
+        const filename = localMatch[1];
+        // Förhindra path-traversal: filnamnet får inte innehålla sökvägskomponenter.
+        if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) continue;
+        const filePath = join(UPLOAD_DIR, filename);
+        // Radera bara filer som faktiskt ligger i UPLOAD_DIR.
+        if (!filePath.startsWith(UPLOAD_DIR + '/') && filePath !== UPLOAD_DIR) continue;
+        try {
+          if (existsSync(filePath)) unlinkSync(filePath);
+        } catch (unlinkErr) {
+          logger.warn('KB article delete: kunde inte radera inbäddad bild', { filePath, error: String(unlinkErr) });
+        }
+      }
+    } catch (parseErr) {
+      logger.warn('KB article delete: fel vid parsning av inbäddade bilder', { error: String(parseErr) });
+    }
+
     res.json({ message: 'Article deleted' });
   } catch (error) {
     logger.error('Error deleting KB article:', { error: String(error) });

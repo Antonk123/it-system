@@ -38,12 +38,15 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
       'SELECT * FROM recurring_templates ORDER BY created_at DESC'
     ).all() as RecurringTemplateRow[];
 
-    // Batch-load last 10 history entries per template in one query
+    // Batch-load last 10 history entries per template i en query.
+    // LIMIT 100 skyddar mot obegränsad läsning; applikationslogiken nedan
+    // begränsar ytterligare till 10 poster per mall.
     const allHistory = db.prepare(`
       SELECT rth.id, rth.template_id, rth.ticket_id, rth.created_at, tk.title AS ticket_title
       FROM recurring_ticket_history rth
       JOIN tickets tk ON tk.id = rth.ticket_id
       ORDER BY rth.created_at DESC
+      LIMIT 100
     `).all() as (HistoryRow & { template_id: string })[];
     const historyByTemplate = new Map<string, HistoryRow[]>();
     for (const h of allHistory) {

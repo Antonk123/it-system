@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { db } from '../db/connection.js';
+import { stripHtml } from './htmlUtils.js';
 
 interface TicketEmailPayload {
   id: string;
@@ -109,16 +110,6 @@ const escapeHtml = (str: string): string =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
-
-const stripHtml = (html: string): string =>
-  html
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#039;/g, "'");
 
 const markdownToEmailHtml = (text: string): string => {
   const cleanText = stripHtml(text);

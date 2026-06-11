@@ -246,7 +246,9 @@ logger.info('CORS configuration loaded', {
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps or Postman)
+    // Allow requests with no origin (like mobile apps or Postman, curl, health-check scrapers).
+    // This is intentional — blocking no-origin requests would break server-side callers and
+    // container health checks. Credentials are still protected by JWT + CSRF on all mutating routes.
     if (!origin) {
       callback(null, true);
       return;
@@ -371,9 +373,13 @@ const server = app.listen(PORT, () => {
 // Graceful shutdown so SQLite WAL checkpoints cleanly on container stop.
 import { stopEmailPolling } from './lib/emailInbound.js';
 import { closeDatabase } from './db/connection.js';
+import { stopWebhookRetryScheduler } from './lib/webhookRetryScheduler.js';
+import { stopReminderScheduler } from './lib/reminderScheduler.js';
 const gracefulShutdown = (signal: string) => {
   logger.info(`Received ${signal}, shutting down gracefully...`, { signal });
   stopEmailPolling();
+  stopWebhookRetryScheduler();
+  stopReminderScheduler();
   server.close(() => {
     try { closeDatabase(); } catch (err) { logger.error('Error closing DB', { error: String(err) }); }
     process.exit(0);

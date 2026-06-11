@@ -376,10 +376,16 @@ function buildWhereClause(filters: TicketQueryParams) {
     const statusList = filters.status.split(',').map(s => s.trim()).filter(s => s);
 
     if (statusList.length > 1) {
-      // Multi-status: use IN clause
-      const placeholders = statusList.map(() => '?').join(',');
-      conditions.push(`tickets.status IN (${placeholders})`);
-      params.push(...statusList);
+      // Multi-status: filtrera bort ogiltiga värden och använd IN-klausul
+      const validStatuses = statusList.filter(s => VALID_STATUSES.includes(s));
+      if (validStatuses.length === 0) {
+        // Inga giltiga statusvärden — returnera inget resultat
+        conditions.push('1 = 0');
+      } else {
+        const placeholders = validStatuses.map(() => '?').join(',');
+        conditions.push(`tickets.status IN (${placeholders})`);
+        params.push(...validStatuses);
+      }
     } else {
       // Single status
       conditions.push('tickets.status = ?');
@@ -936,6 +942,7 @@ router.get('/export-archive', authenticate, async (req: AuthRequest, res: Respon
         FROM tickets ${joins}
         WHERE ${whereClause}
         ORDER BY tickets.closed_at DESC
+        LIMIT 5000
       `).all(...params) as typeof tickets;
     }
 
@@ -1347,7 +1354,7 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
       warnings.push('E-postnotifiering kunde inte skickas');
     }
 
-    dispatchWebhook('ticket.created', { id: ticket.id, title: ticket.title, status: ticket.status, priority: ticket.priority }).catch(console.error);
+    dispatchWebhook('ticket.created', { id: ticket.id, title: ticket.title, status: ticket.status, priority: ticket.priority }).catch((e) => logger.error('Webhook dispatch error (ticket.created):', { error: String(e) }));
 
     res.status(201).json({ ...ticket, warnings: warnings.length > 0 ? warnings : undefined });
   } catch (error) {
@@ -1571,15 +1578,27 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
 
   try {
     const now = new Date().toISOString();
+    const isAdmin = req.user!.role === 'admin';
+    const userId = req.user!.id;
+
     const historyInsert = db.prepare(
       'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
     );
 
-    const userLabel = (uid: string | null): string | null => {
+    // Lyft userLabel ur loopen — anroparen är densamma för alla rader
+    const callerRow = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(userId) as { email: string; display_name: string | null } | undefined;
+    const callerLabel = callerRow ? (callerRow.display_name || callerRow.email) : null;
+
+    const userLabelById = (uid: string | null): string | null => {
       if (!uid) return null;
+      if (uid === userId) return callerLabel;
       const u = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(uid) as { email: string; display_name: string | null } | undefined;
       return u ? (u.display_name || u.email) : null;
     };
+
+    // Batcha kategori-lookups till en Map för att undvika N+1
+    const allCategories = db.prepare('SELECT id, label FROM categories').all() as { id: string; label: string }[];
+    const categoryLabelMap = new Map(allCategories.map(c => [c.id, c.label]));
 
     const bulkUpdate = db.transaction(() => {
       let updatedCount = 0;
@@ -1588,6 +1607,11 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
         const existing = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(ticketId) as TicketRow | undefined;
         if (!existing) continue;
 
+        // Ownership-check: icke-admin får uppdatera egna (assigned_to===userId)
+        // eller otilldelade (NULL) ärenden — self-service pickup bevaras.
+        // Blockerar enbart modifiering av ANDRAS tilldelade ärenden.
+        if (!isAdmin && existing.assigned_to !== userId && existing.assigned_to !== null) continue;
+
         const safeUpdates: Record<string, unknown> = {};
 
         if (status !== undefined) {
@@ -1595,25 +1619,21 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
           if (status === 'resolved' && !existing.resolved_at) safeUpdates.resolved_at = now;
           if (status === 'closed' && !existing.closed_at) safeUpdates.closed_at = now;
           if (status !== existing.status) {
-            historyInsert.run(uuidv4(), ticketId, req.user!.id, 'status', existing.status as string, status);
+            historyInsert.run(uuidv4(), ticketId, userId, 'status', existing.status as string, status);
           }
         }
         if (priority !== undefined) {
           safeUpdates.priority = priority;
           if (priority !== existing.priority) {
-            historyInsert.run(uuidv4(), ticketId, req.user!.id, 'priority', existing.priority as string, priority);
+            historyInsert.run(uuidv4(), ticketId, userId, 'priority', existing.priority as string, priority);
           }
         }
         if (category_id !== undefined) {
           safeUpdates.category_id = category_id || null;
           if (safeUpdates.category_id !== existing.category_id) {
-            const oldCat = existing.category_id
-              ? (db.prepare('SELECT label FROM categories WHERE id = ?').get(existing.category_id) as { label: string } | undefined)?.label ?? null
-              : null;
-            const newCat = category_id
-              ? (db.prepare('SELECT label FROM categories WHERE id = ?').get(category_id) as { label: string } | undefined)?.label ?? null
-              : null;
-            historyInsert.run(uuidv4(), ticketId, req.user!.id, 'category_id', oldCat, newCat);
+            const oldCat = existing.category_id ? (categoryLabelMap.get(existing.category_id) ?? null) : null;
+            const newCat = category_id ? (categoryLabelMap.get(category_id) ?? null) : null;
+            historyInsert.run(uuidv4(), ticketId, userId, 'category_id', oldCat, newCat);
           }
         }
         if (assigned_to !== undefined) {
@@ -1623,10 +1643,10 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
             historyInsert.run(
               uuidv4(),
               ticketId,
-              req.user!.id,
+              userId,
               'assigned_to',
-              userLabel(existing.assigned_to as string | null),
-              userLabel(newAssignee),
+              userLabelById(existing.assigned_to as string | null),
+              userLabelById(newAssignee),
             );
           }
         }
@@ -1699,7 +1719,7 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: 
 });
 
 // Update ticket
-router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
   let { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id, tag_ids, ai_suggested_category_id } = req.body;
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
@@ -1768,7 +1788,8 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     const allowedFields = [
       'title', 'description', 'status', 'priority', 'category_id',
       'requester_id', 'company_id', 'assigned_to',
-      'notes', 'solution', 'resolved_at', 'closed_at', 'updated_at', 'template_id'
+      'notes', 'solution', 'resolved_at', 'closed_at', 'updated_at', 'template_id',
+      'ai_suggested_category_id',
     ];
 
     // Filter updates to only include whitelisted fields
@@ -1926,10 +1947,10 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 
     // Dispatch webhook for ticket update
     if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
-      dispatchWebhook('ticket.updated', { id: req.params.id, ...safeUpdates }).catch(console.error);
+      dispatchWebhook('ticket.updated', { id: req.params.id, ...safeUpdates }).catch((e) => logger.error('Webhook dispatch error (ticket.updated):', { error: String(e) }));
 
       if (safeUpdates.status === 'closed') {
-        dispatchWebhook('ticket.closed', { id: req.params.id }).catch(console.error);
+        dispatchWebhook('ticket.closed', { id: req.params.id }).catch((e) => logger.error('Webhook dispatch error (ticket.closed):', { error: String(e) }));
       }
     }
 
@@ -1963,7 +1984,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // Delete ticket
-router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
+router.delete('/:id', writeRateLimiter, authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     // Hämta data för FTS-rensning och filbilagor innan radering
     // FTS5 rensas automatiskt via triggers (migration 050)
