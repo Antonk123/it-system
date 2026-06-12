@@ -13,6 +13,9 @@ services:
       - CSRF_SECRET=${CSRF_SECRET}
       - DB_PATH=/app/data/database.sqlite
       - UPLOAD_DIR=/app/data/uploads
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - ADMIN_NAME=${ADMIN_NAME:-}
       - CORS_ORIGIN=${CORS_ORIGIN}
       - APP_BASE_URL=${APP_BASE_URL}
       - BRAND_NAME=${BRAND_NAME:-IT-Support}
