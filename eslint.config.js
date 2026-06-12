@@ -80,6 +80,15 @@ export default tseslint.config(
       "react-refresh/only-export-components": "off",
       "no-restricted-syntax": "off",
       "prefer-const": "off",
+      // ESM-paket ("type":"module"): __dirname/__filename finns inte som globaler.
+      // Bare-användning ger ReferenceError i runtime men passerar tsc (@types/node
+      // deklarerar dem globalt). Lokalt definierade consts skuggar globalen och
+      // flaggas INTE — bara oavsiktlig global-användning fångas. Se bugs.md 2026-06-12.
+      "no-restricted-globals": [
+        "error",
+        { name: "__dirname", message: "ESM saknar __dirname. Definiera lokalt: const __dirname = path.dirname(fileURLToPath(import.meta.url))" },
+        { name: "__filename", message: "ESM saknar __filename. Definiera lokalt: const __filename = fileURLToPath(import.meta.url)" },
+      ],
     },
   },
 );
