@@ -6,6 +6,7 @@ import { doubleCsrf } from 'csrf-csrf';
 import { randomUUID } from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { initializeDatabase } from './db/connection.js';
 import { db } from './db/connection.js';
 import { startReminderScheduler } from './lib/reminderScheduler.js';
@@ -20,6 +21,10 @@ import cron from 'node-cron';
 import archiver from 'archiver';
 import passport from './config/passport.js';
 import { logger } from './lib/logger.js';
+
+// ESM saknar __dirname — härled från import.meta.url (samma mönster som db/connection.ts)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Global error handlers — catch unhandled promises and exceptions
 process.on('unhandledRejection', (reason, _promise) => {
