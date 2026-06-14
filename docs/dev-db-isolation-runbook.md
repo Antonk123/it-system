@@ -134,6 +134,10 @@ Portainer → **Stacks → it-system-dev → Editor**. Klistra in hela
 
 > Efter en stor dependency-ändring på en feature-gren: om dev beter sig konstigt, recreate
 > stacken (färska node_modules-volymer) eller `docker exec it-ticketing-backend-dev sh -c 'cd /app/server && npm ci'`.
+>
+> **Image = `node:22-alpine`** (samma som prod). På `node:20-alpine` saknas prebyggd
+> `better-sqlite3` för musl → `npm install` faller tillbaka på kompilering och kraschar
+> (`gyp ERR! find Python`) på färska node_modules. Node 22 hämtar prebyggd binär → rent.
 
 ## 5. Verifiera (bevis innan klar — bidirektionell isolering)
 
