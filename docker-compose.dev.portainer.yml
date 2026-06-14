@@ -1,0 +1,74 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DEV-stacken — Portainer-stack "it-system-dev" (id 40) på 10.38.195.180.
+#
+# Detta är den VERSIONSSPÅRADE KÄLLAN. Portainer redigeras manuellt i GUI:t och
+# MÅSTE spegla denna fil (samma drift-regel som prod-stacken, se lessons.md /
+# docs/dev-db-isolation-runbook.md). Driv aldrig isär dem.
+#
+# Skillnad mot prod (docker-compose.yml):
+#   • EGEN DB-volym  (it-ticketing-dev-data)        → delar INTE prod-DB:n längre
+#   • EGEN checkout  (/opt/it-system/itticket-dev)  → en git-worktree, så dev kan
+#     köra feature-grenen UTAN att störa prod-build-checkouten (itticket-main/main)
+#   • Hot-reload: backend tsx watch (3003), frontend Vite (5174). Bara `git pull`
+#     i worktree:n behövs — ingen image-rebuild.
+#
+# Env-variabler (${JWT_SECRET} m.fl.) sätts i Portainer-stackens "Environment
+# variables", inte här. Inga hemligheter får checkas in i denna fil.
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+  backend:
+    image: node:20-alpine
+    container_name: it-ticketing-backend-dev
+    working_dir: /app/server
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3003:3001"
+    volumes:
+      - /opt/it-system/itticket-dev:/app          # egen worktree, INTE prod-build-checkouten
+      - it-ticketing-dev-data:/app/data           # egen DB-volym, INTE prod
+      - /app/node_modules                         # anon-volym: skydda host-worktree från npm install
+      - /app/server/node_modules
+    environment:
+      - NODE_ENV=development
+      - JWT_SECRET=${JWT_SECRET}
+      # CSRF_SECRET KRÄVS — backend gör process.exit(1) utan den (server/src/index.ts,
+      # ovillkorligt, ingen dev-fallback). Måste finnas i Portainer-stackens env.
+      - CSRF_SECRET=${CSRF_SECRET}
+      - DB_PATH=/app/data/database.sqlite
+      - UPLOAD_DIR=/app/data/uploads
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      # OBS: dev kör mot en KOPIA av riktig prod-data och billar riktig Anthropic-API.
+      # Sätt AI_MONTHLY_TOKEN_LIMIT (eller lämna ANTHROPIC_API_KEY tom för att stänga av AI i dev).
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AI_MONTHLY_TOKEN_LIMIT=${AI_MONTHLY_TOKEN_LIMIT:-}
+    networks:
+      - ticketing
+    restart: unless-stopped
+
+  frontend:
+    image: node:20-alpine
+    container_name: it-ticketing-frontend-dev
+    working_dir: /app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5174"
+    ports:
+      - "5174:5174"
+    volumes:
+      - /opt/it-system/itticket-dev:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://10.38.195.180:3003/api}
+    depends_on:
+      - backend
+    networks:
+      - ticketing
+    restart: unless-stopped
+
+networks:
+  ticketing:
+    driver: bridge
+
+volumes:
+  it-ticketing-dev-data:
+    external: true
+    name: it-ticketing-dev-data

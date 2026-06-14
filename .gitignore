@@ -21,8 +21,10 @@ CLAUDE.md
 .claude/sessions/
 
 # Dev-miljö specifika filer (hot-reload, dev-setup)
+# OBS: docker-compose.dev.portainer.yml spåras numera medvetet som den
+# versionsspårade källan för dev-Portainer-stacken (it-system-dev / id 40).
+# Portainer-GUI:t måste spegla den filen — se docs/dev-db-isolation-runbook.md.
 docker-compose.dev.yml
-docker-compose.dev.portainer.yml
 
 # Logs
 logs
@@ -44,7 +46,6 @@ dist-ssr
 .idea
 .DS_Store
 ._*
-docker-compose.dev.portainer.yml
 *.suo
 *.ntvs*
 *.njsproj
