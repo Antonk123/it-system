@@ -74,18 +74,22 @@ docker run --rm -v it-ticketing-data:/src:ro -v it-ticketing-dev-data:/dst alpin
 Inget temp skrivs till prod-volymen, inget eget backup-anrop mot live-DB:n. ZIP:en mountas
 read-only via prod-volymen.
 
-### 2b. Verifiera seed-integritet (prod-imagen har better-sqlite3; dev-volym `:ro`)
+### 2b. Verifiera seed-integritet (prod-imagen har better-sqlite3)
+
+`.backup()`-DB:n **bär WAL-flaggan i headern**, så öppna den **RW** — en `:ro`-mount +
+`readonly:true` ger `SQLITE_CANTOPEN` (SQLite kan inte skapa `-shm`). Den `--rm`-containern
+skriver bara i dev-volymen, aldrig prod.
 
 ```bash
-docker run --rm -v it-ticketing-dev-data:/dst:ro --entrypoint node it-ticketing-backend:latest -e \
-  "const D=require('better-sqlite3');const db=new D('/dst/database.sqlite',{readonly:true});console.log('integrity:',db.pragma('integrity_check')[0].integrity_check);console.log('users:',db.prepare('SELECT count(*) c FROM users').get().c);db.close()"
-# förväntat: integrity: ok   |   users: >= 2 (samma som prod vid seed)
-docker run --rm -v it-ticketing-dev-data:/dst:ro alpine:3 sh -c 'echo "uploads: $(ls /dst/uploads | wc -l) filer"'
+docker run --rm -v it-ticketing-dev-data:/dst --entrypoint node it-ticketing-backend:latest -e \
+  "const D=require('better-sqlite3');const db=new D('/dst/database.sqlite');console.log('integrity:',db.pragma('integrity_check')[0].integrity_check);console.log('users:',db.prepare('SELECT count(*) c FROM users').get().c);console.log('tickets:',db.prepare('SELECT count(*) c FROM tickets').get().c);db.pragma('wal_checkpoint(TRUNCATE)');db.close()"
+# förväntat: integrity: ok | users >= 2 | tickets > 0
+# städa WAL-sidofiler så volymen är ren tills dev bootar:
+docker run --rm -v it-ticketing-dev-data:/dst alpine:3 sh -c 'rm -f /dst/database.sqlite-wal /dst/database.sqlite-shm; echo "uploads: $(ls /dst/uploads | wc -l) filer"'
 ```
 
-> DELETE/WAL: `.backup()`-ZIP:en ger en plain (rollback-journal) DB. Dev-backend sätter
-> `journal_mode = WAL` automatiskt vid första boot (connection.ts:20) — att `-wal`/`-shm`
-> saknas i dev-volymen direkt efter seed är **förväntat**, inte ett fel.
+> Dev-backend återskapar `-wal`/`-shm` automatiskt vid första boot (connection.ts:20 sätter
+> `journal_mode = WAL`) — att de saknas i dev-volymen direkt efter seed är **förväntat**.
 
 ## 3. Skapa dev-worktree (frikoppla dev-koden från prod-build-checkouten)
 
@@ -149,12 +153,11 @@ done
 curl -s -o /dev/null -w 'dev :3003 -> %{http_code}\n' --max-time 5 http://10.38.195.180:3003/api/health
 docker logs --tail 30 it-ticketing-backend-dev      # "Server running", inga FATAL/migration-fel
 
-# (d) Bidirektionell isolering — prod-skrivning syns INTE i dev:
-docker run --rm -v it-ticketing-data:/p:ro --entrypoint node it-ticketing-backend:latest -e \
-  "const D=require('better-sqlite3');console.log('prod tickets:',new D('/p/database.sqlite',{readonly:true}).prepare('SELECT count(*) c FROM tickets').get().c)"
-docker run --rm -v it-ticketing-dev-data:/d:ro --entrypoint node it-ticketing-backend:latest -e \
-  "const D=require('better-sqlite3');console.log('dev tickets:',new D('/d/database.sqlite',{readonly:true}).prepare('SELECT count(*) c FROM tickets').get().c)"
-# Skapa sedan ett ärende i dev (:5174) → kör räkningarna igen → dev ökar, prod står still.
+# (d) Bidirektionell isolering — räkna via de KÖRANDE containrarnas egna connections
+#     (RW-mount → inga :ro/WAL-problem):
+docker exec it-ticketing-backend     node -e "const D=require('better-sqlite3');console.log('prod tickets:',new D(process.env.DB_PATH,{readonly:true}).prepare('SELECT count(*) c FROM tickets').get().c)"
+docker exec it-ticketing-backend-dev node -e "const D=require('better-sqlite3');console.log('dev tickets:',new D(process.env.DB_PATH,{readonly:true}).prepare('SELECT count(*) c FROM tickets').get().c)"
+# Skapa sedan ett ärende i dev (:5174) → kör om → dev ökar, prod står still.
 ```
 
 Logga in på <http://10.38.195.180:5174> med **samma konton som prod** (DB:n är kopierad) och
