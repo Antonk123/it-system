@@ -19,6 +19,11 @@ CLAUDE.md
 .claude/agent-memory/
 .claude/session-env/
 .claude/sessions/
+.claude/projects/
+
+# Lokala verktygsartefakter (superpowers/GSD-plugins) — versionshanteras inte
+.superpowers/
+docs/superpowers/
 
 # Dev-miljö specifika filer (hot-reload, dev-setup)
 # OBS: docker-compose.dev.portainer.yml spåras numera medvetet som den
