@@ -56,11 +56,15 @@ export const useUsers = () => {
       };
     },
     onSuccess: (newUser) => {
-      // Optimistically update the cache
+      // Optimistically update the cache for instant feedback...
       queryClient.setQueryData(userKeys.list(), (old: User[] | undefined) => {
         if (!old) return [newUser];
         return [newUser, ...old];
       });
+      // ...then reconcile with the server. The optimistic entry lacks
+      // company_name, and on a PWA the in-memory cache is lost when iOS
+      // suspends the app — without this the new contact "disappears".
+      queryClient.invalidateQueries({ queryKey: userKeys.list() });
     },
     onError: () => {
       toast.error('Failed to create contact');
@@ -88,6 +92,7 @@ export const useUsers = () => {
         if (!old) return old;
         return old.map((u) => (u.id === id ? { ...u, ...updates } : u));
       });
+      queryClient.invalidateQueries({ queryKey: userKeys.list() });
     },
     onError: () => {
       toast.error('Failed to update contact');
@@ -106,6 +111,7 @@ export const useUsers = () => {
         if (!old) return old;
         return old.filter((u) => u.id !== id);
       });
+      queryClient.invalidateQueries({ queryKey: userKeys.list() });
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error deleting user:', error);

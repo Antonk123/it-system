@@ -983,7 +983,7 @@ const TicketDetail = () => {
       </Dialog>
 
       {/* Mobile quick actions — fixed bar above bottom tab bar */}
-      <div className="fixed bottom-14 inset-x-0 md:hidden bg-card border-t p-2 flex gap-2 z-40">
+      <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] inset-x-0 md:hidden bg-card border-t p-2 flex gap-2 z-40">
         <Select value={ticket.status} onValueChange={(s) => handleStatusChange(s as TicketStatus)}>
           <SelectTrigger className="flex-1 h-10">
             <SelectValue />

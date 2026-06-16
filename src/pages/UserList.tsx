@@ -294,7 +294,7 @@ const UserList = () => {
                   Lägg till användare
                 </Button>
               </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingUser ? 'Redigera användare' : 'Lägg till ny användare'}</DialogTitle>
                 <DialogDescription>Skapa eller uppdatera en användare i systemet.</DialogDescription>

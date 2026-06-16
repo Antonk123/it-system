@@ -51,9 +51,10 @@ export default defineConfig(({ mode }) => ({
       },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,woff2}'],
-        // Lazy-laddade vendor-chunks precachas inte — de hämtas on-demand
+        // Lazy-laddade vendor-chunks precachas inte — de hämtas on-demand.
+        // editor-vendor (TipTap) är dock kritisk för svars-/kommentarsflödet
+        // och precachas därför så att det fungerar offline/vid flaky nät i PWA:n.
         globIgnores: [
-          '**/editor-vendor*.js',
           '**/reporting-vendor*.js',
           '**/motion-vendor*.js',
           '**/dnd-vendor*.js',

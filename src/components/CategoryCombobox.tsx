@@ -87,7 +87,7 @@ export const CategoryCombobox = ({
             className="h-8 border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
-        <div className="max-h-60 overflow-y-auto">
+        <div className="max-h-60 overflow-y-auto overscroll-contain">
           {/* Hardcoded "Ingen kategori" option */}
           <div
             role="option"
