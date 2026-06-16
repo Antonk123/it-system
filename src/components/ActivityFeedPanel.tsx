@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import type { ActivityEvent } from '@/hooks/useActivityFeed';
+import { parseServerDate } from '@/lib/date';
 
 interface ActivityFeedPanelProps {
   events: ActivityEvent[] | undefined;
@@ -134,7 +135,7 @@ export const ActivityFeedPanel = ({ events, isLoading }: ActivityFeedPanelProps)
                       )}
                     </p>
                     <p className="font-mono text-[10.5px] text-muted-foreground mt-1 tracking-wide">
-                      {formatDistanceToNow(new Date(event.changed_at), { addSuffix: true, locale: sv })}
+                      {formatDistanceToNow(parseServerDate(event.changed_at), { addSuffix: true, locale: sv })}
                     </p>
                   </div>
                 </div>

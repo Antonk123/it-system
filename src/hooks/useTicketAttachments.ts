@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { fileUploadSchema, getValidationError } from '@/lib/validations';
+import { parseServerDate } from '@/lib/date';
 import { toast } from 'sonner';
 
 export interface TicketAttachment {
@@ -19,7 +20,7 @@ export const useTicketAttachments = (ticketId?: string) => {
     try {
       const data = await api.getAttachments(id);
       const mapped = data.map((a) => ({
-        id: a.id, ticketId: a.ticket_id, fileName: a.file_name, filePath: a.file_path, fileSize: a.file_size, fileType: a.file_type, createdAt: new Date(a.created_at), url: a.url,
+        id: a.id, ticketId: a.ticket_id, fileName: a.file_name, filePath: a.file_path, fileSize: a.file_size, fileType: a.file_type, createdAt: parseServerDate(a.created_at), url: a.url,
       }));
       setAttachments(mapped);
     } catch (error) {
@@ -35,7 +36,7 @@ export const useTicketAttachments = (ticketId?: string) => {
     setIsUploading(true);
     try {
       const data = await api.uploadAttachment(ticketId, file);
-      const newAttachment: TicketAttachment = { id: data.id, ticketId: data.ticket_id, fileName: data.file_name, filePath: data.file_path, fileSize: data.file_size, fileType: data.file_type, createdAt: new Date(data.created_at), url: data.url };
+      const newAttachment: TicketAttachment = { id: data.id, ticketId: data.ticket_id, fileName: data.file_name, filePath: data.file_path, fileSize: data.file_size, fileType: data.file_type, createdAt: parseServerDate(data.created_at), url: data.url };
       setAttachments((prev) => [...prev, newAttachment]);
       return newAttachment;
     } catch (error) {

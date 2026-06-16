@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, PaginatedResponse, TicketRow } from '@/lib/api';
 import { Ticket, TicketStatus, TicketPriority } from '@/types/ticket';
+import { parseServerDate } from '@/lib/date';
 
 export const activeQueueKeys = {
   all: ['tickets', 'active-queue'] as const,
@@ -28,10 +29,10 @@ export const useActiveQueue = (limit = 30) => {
         priority: t.priority as TicketPriority,
         category: t.category_id || undefined,
         requesterId: t.requester_id || '',
-        createdAt: new Date(t.created_at),
-        updatedAt: new Date(t.updated_at),
-        resolvedAt: t.resolved_at ? new Date(t.resolved_at) : undefined,
-        closedAt: t.closed_at ? new Date(t.closed_at) : undefined,
+        createdAt: parseServerDate(t.created_at),
+        updatedAt: parseServerDate(t.updated_at),
+        resolvedAt: t.resolved_at ? parseServerDate(t.resolved_at) : undefined,
+        closedAt: t.closed_at ? parseServerDate(t.closed_at) : undefined,
         notes: t.notes || undefined,
         solution: t.solution || undefined,
         templateId: t.template_id || undefined,

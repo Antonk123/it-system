@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, CustomFieldInput } from '@/lib/api';
 import { Ticket, TicketStatus, TicketPriority } from '@/types/ticket';
 import { ticketInsertSchema, ticketUpdateSchema, getValidationError } from '@/lib/validations';
+import { parseServerDate } from '@/lib/date';
 import { toast } from 'sonner';
 
 interface UseTicketsOptions {
@@ -90,10 +91,10 @@ export const useTickets = (options?: UseTicketsOptions) => {
           priority: t.priority as TicketPriority,
           category: t.category_id || undefined,
           requesterId: t.requester_id || '',
-          createdAt: new Date(t.created_at),
-          updatedAt: new Date(t.updated_at),
-          resolvedAt: t.resolved_at ? new Date(t.resolved_at) : undefined,
-          closedAt: t.closed_at ? new Date(t.closed_at) : undefined,
+          createdAt: parseServerDate(t.created_at),
+          updatedAt: parseServerDate(t.updated_at),
+          resolvedAt: t.resolved_at ? parseServerDate(t.resolved_at) : undefined,
+          closedAt: t.closed_at ? parseServerDate(t.closed_at) : undefined,
           notes: t.notes || undefined,
           solution: t.solution || undefined,
           templateId: t.template_id || undefined,
@@ -126,10 +127,10 @@ export const useTickets = (options?: UseTicketsOptions) => {
           priority: t.priority as TicketPriority,
           category: t.category_id || undefined,
           requesterId: t.requester_id || '',
-          createdAt: new Date(t.created_at),
-          updatedAt: new Date(t.updated_at),
-          resolvedAt: t.resolved_at ? new Date(t.resolved_at) : undefined,
-          closedAt: t.closed_at ? new Date(t.closed_at) : undefined,
+          createdAt: parseServerDate(t.created_at),
+          updatedAt: parseServerDate(t.updated_at),
+          resolvedAt: t.resolved_at ? parseServerDate(t.resolved_at) : undefined,
+          closedAt: t.closed_at ? parseServerDate(t.closed_at) : undefined,
           notes: t.notes || undefined,
           solution: t.solution || undefined,
           templateId: t.template_id || undefined,
@@ -197,8 +198,8 @@ export const useTickets = (options?: UseTicketsOptions) => {
         priority: data.priority as TicketPriority,
         category: data.category_id || undefined,
         requesterId: data.requester_id || '',
-        createdAt: new Date(data.created_at),
-        updatedAt: new Date(data.updated_at),
+        createdAt: parseServerDate(data.created_at),
+        updatedAt: parseServerDate(data.updated_at),
         notes: data.notes || undefined,
         solution: data.solution || undefined,
       };
@@ -259,10 +260,10 @@ export const useTickets = (options?: UseTicketsOptions) => {
         category: freshTicket.category_id || undefined,
         notes: freshTicket.notes || undefined,
         solution: freshTicket.solution || undefined,
-        createdAt: new Date(freshTicket.created_at),
-        updatedAt: new Date(freshTicket.updated_at),
-        resolvedAt: freshTicket.resolved_at ? new Date(freshTicket.resolved_at) : undefined,
-        closedAt: freshTicket.closed_at ? new Date(freshTicket.closed_at) : undefined,
+        createdAt: parseServerDate(freshTicket.created_at),
+        updatedAt: parseServerDate(freshTicket.updated_at),
+        resolvedAt: freshTicket.resolved_at ? parseServerDate(freshTicket.resolved_at) : undefined,
+        closedAt: freshTicket.closed_at ? parseServerDate(freshTicket.closed_at) : undefined,
         tags: (freshTicket as any).tags || [],
         assignedTo: (freshTicket as any).assigned_to ?? null,
         assignedToName: (freshTicket as any).assigned_to_name ?? null,

@@ -10,6 +10,7 @@ import { useTags } from '@/hooks/useTags';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useTickets } from '@/hooks/useTickets';
 import { api, RequesterAnalyticsRow } from '@/lib/api';
+import { parseServerDate } from '@/lib/date';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -925,7 +926,7 @@ const Reports = () => {
             <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
               <TagAnalytics
                 tickets={tickets}
-                tags={tags.map((t) => ({ ...t, createdAt: new Date(t.created_at) }))}
+                tags={tags.map((t) => ({ ...t, createdAt: parseServerDate(t.created_at) }))}
               />
             </div>
           </TabsContent>

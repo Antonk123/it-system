@@ -19,6 +19,7 @@ import { CategoryCombobox } from '@/components/CategoryCombobox';
 import { TemplateCombobox } from '@/components/TemplateCombobox';
 import { DynamicFieldsForm } from '@/components/DynamicFieldsForm';
 import { CustomFieldInput, api } from '@/lib/api';
+import { parseServerDate } from '@/lib/date';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
@@ -183,8 +184,8 @@ const TicketForm = () => {
                 solutionTemplate: freshTemplateRow.solution_template,
                 position: freshTemplateRow.position,
                 createdBy: freshTemplateRow.created_by,
-                createdAt: new Date(freshTemplateRow.created_at),
-                updatedAt: new Date(freshTemplateRow.updated_at),
+                createdAt: parseServerDate(freshTemplateRow.created_at),
+                updatedAt: parseServerDate(freshTemplateRow.updated_at),
                 fields: freshTemplateRow.fields,
               };
 
@@ -266,8 +267,8 @@ const TicketForm = () => {
               solutionTemplate: freshTemplate.solution_template,
               position: freshTemplate.position,
               createdBy: freshTemplate.created_by,
-              createdAt: new Date(freshTemplate.created_at),
-              updatedAt: new Date(freshTemplate.updated_at),
+              createdAt: parseServerDate(freshTemplate.created_at),
+              updatedAt: parseServerDate(freshTemplate.updated_at),
               fields: freshTemplate.fields,
             };
             setSelectedTemplate(mapped);

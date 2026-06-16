@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
 import { useAuth } from '@/contexts/AuthContext';
+import { parseServerDate } from '@/lib/date';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -215,7 +216,7 @@ const AdminTab = () => {
                       )}
                       {sysUser.lastSignIn && (
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Senaste inloggning: {format(new Date(sysUser.lastSignIn), 'PPp', { locale: sv })}
+                          Senaste inloggning: {format(parseServerDate(sysUser.lastSignIn), 'PPp', { locale: sv })}
                         </p>
                       )}
                     </div>

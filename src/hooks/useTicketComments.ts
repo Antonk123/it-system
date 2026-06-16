@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Comment, CommentRow } from '@/types/ticket';
+import { parseServerDate } from '@/lib/date';
 
 const mapComment = (c: CommentRow): Comment => ({
   id: c.id,
@@ -9,9 +10,9 @@ const mapComment = (c: CommentRow): Comment => ({
   userId: c.user_id,
   content: c.content,
   isInternal: c.is_internal === 1,
-  createdAt: new Date(c.created_at),
-  updatedAt: new Date(c.updated_at),
-  deletedAt: c.deleted_at ? new Date(c.deleted_at) : undefined,
+  createdAt: parseServerDate(c.created_at),
+  updatedAt: parseServerDate(c.updated_at),
+  deletedAt: c.deleted_at ? parseServerDate(c.deleted_at) : undefined,
   userName: c.user_name,
   userEmail: c.user_email,
 });
@@ -45,7 +46,7 @@ export const useTicketComments = (ticketId: string) => {
   const updateCommentMutation = useMutation({
     mutationFn: async ({ commentId, content }: { commentId: string; content: string }) => {
       const data = await api.updateComment(commentId, content) as CommentRow;
-      return { commentId, content: data.content, updatedAt: new Date(data.updated_at) };
+      return { commentId, content: data.content, updatedAt: parseServerDate(data.updated_at) };
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });

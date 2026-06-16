@@ -47,6 +47,7 @@ import {
 import { format, formatDistanceToNow } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { parseServerDate } from '@/lib/date';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -426,7 +427,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
               <span>
                 Nästa:{' '}
                 <span className="text-foreground/80">
-                  {formatDistanceToNow(new Date(template.next_run), {
+                  {formatDistanceToNow(parseServerDate(template.next_run), {
                     addSuffix: true,
                     locale: sv,
                   })}
@@ -436,7 +437,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
                 <span>
                   Senast:{' '}
                   <span className="text-foreground/80">
-                    {format(new Date(template.last_run), 'd MMM yyyy', { locale: sv })}
+                    {format(parseServerDate(template.last_run), 'd MMM yyyy', { locale: sv })}
                   </span>
                 </span>
               )}
@@ -549,7 +550,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
                       {entry.ticket_title}
                     </Link>
                     <span className="text-xs text-muted-foreground shrink-0">
-                      {format(new Date(entry.created_at), 'd MMM yyyy', { locale: sv })}
+                      {format(parseServerDate(entry.created_at), 'd MMM yyyy', { locale: sv })}
                     </span>
                   </li>
                 ))}

@@ -2,6 +2,7 @@ import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { History, RefreshCcw, AlertTriangle, Edit2, StickyNote, Lightbulb, Tag, Plus } from 'lucide-react';
 import { TicketHistoryItem } from '@/lib/api';
+import { parseServerDate } from '@/lib/date';
 
 const STATUS_LABELS: Record<string, string> = {
   'open': 'Öppen',
@@ -82,7 +83,7 @@ export const TicketActivity = ({ history, isLoading }: TicketActivityProps) => {
                   <span className="text-foreground">{text}</span>
                   <span className="text-muted-foreground ml-2">
                     {item.user_name ? `av ${item.user_name} · ` : ''}
-                    {format(new Date(item.changed_at), 'PPP HH:mm', { locale: sv })}
+                    {format(parseServerDate(item.changed_at), 'PPP HH:mm', { locale: sv })}
                   </span>
                 </div>
               </div>

@@ -4,6 +4,7 @@ import { Bell, Trash2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TicketReminder } from '@/hooks/useTicketReminders';
+import { parseServerDate } from '@/lib/date';
 
 interface ReminderListProps {
   reminders: TicketReminder[];
@@ -45,7 +46,7 @@ export function ReminderList({ reminders, onDeleteReminder, onClearSent }: Remin
                     <Check className="h-4 w-4 text-[hsl(var(--success))] shrink-0" />
                   )}
                   <span className={reminder.sent === 1 ? 'line-through text-muted-foreground' : 'font-medium'}>
-                    {format(new Date(reminder.reminder_time), 'PPP HH:mm', { locale: sv })}
+                    {format(parseServerDate(reminder.reminder_time), 'PPP HH:mm', { locale: sv })}
                   </span>
                 </div>
                 {reminder.message && (

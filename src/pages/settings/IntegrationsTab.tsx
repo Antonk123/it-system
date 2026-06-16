@@ -21,6 +21,7 @@ import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { Switch } from '@/components/ui/switch';
 import { api } from '@/lib/api';
+import { parseServerDate } from '@/lib/date';
 import { useApiKeys } from '@/hooks/useApiKeys';
 import { useWebhooks, useWebhookDeliveries } from '@/hooks/useWebhooks';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -39,7 +40,7 @@ const WebhookDeliveriesPanel = memo(({ webhookId }: { webhookId: string }) => {
           <span className={`w-2 h-2 rounded-full ${d.response_code && d.response_code >= 200 && d.response_code < 300 ? 'bg-[hsl(var(--success))]' : 'bg-destructive'}`} />
           <span className="font-mono">{d.event}</span>
           <span className="text-muted-foreground ml-auto">
-            {d.response_code || 'Err'} &middot; {d.created_at ? format(new Date(d.created_at), 'd MMM HH:mm', { locale: sv }) : '-'}
+            {d.response_code || 'Err'} &middot; {d.created_at ? format(parseServerDate(d.created_at), 'd MMM HH:mm', { locale: sv }) : '-'}
           </span>
         </div>
       ))}
@@ -169,7 +170,7 @@ const IntegrationsTab = () => {
                         <p className="text-xs text-muted-foreground font-mono">itk_live_{key.key_prefix}...</p>
                         {key.last_used_at && (
                           <p className="text-xs text-muted-foreground">
-                            Senast använd: {format(new Date(key.last_used_at), 'd MMM yyyy HH:mm', { locale: sv })}
+                            Senast använd: {format(parseServerDate(key.last_used_at), 'd MMM yyyy HH:mm', { locale: sv })}
                           </p>
                         )}
                       </div>
@@ -340,7 +341,7 @@ const IntegrationsTab = () => {
                             </div>
                             {wh.last_triggered_at && (
                               <p className="text-xs text-muted-foreground mt-1">
-                                Senast: {format(new Date(wh.last_triggered_at), 'd MMM yyyy HH:mm', { locale: sv })}
+                                Senast: {format(parseServerDate(wh.last_triggered_at), 'd MMM yyyy HH:mm', { locale: sv })}
                               </p>
                             )}
                           </div>

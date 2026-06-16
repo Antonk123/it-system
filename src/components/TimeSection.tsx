@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Clock, X, Plus } from 'lucide-react';
 import { useTimeEntries } from '@/hooks/useTimeEntries';
 import { parseDuration, formatDuration } from '@/lib/duration';
+import { parseServerDate } from '@/lib/date';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
@@ -56,7 +57,7 @@ const TimeSection = ({ ticketId }: TimeSectionProps) => {
               <div className="flex-1 min-w-0">
                 <span className="font-medium">{formatDuration(entry.duration_minutes)}</span>
                 <span className="text-muted-foreground ml-2">
-                  {format(new Date(entry.created_at), 'd MMM yyyy', { locale: sv })}
+                  {format(parseServerDate(entry.created_at), 'd MMM yyyy', { locale: sv })}
                 </span>
                 {entry.note && (
                   <p className="text-muted-foreground text-xs mt-0.5 truncate">{entry.note}</p>

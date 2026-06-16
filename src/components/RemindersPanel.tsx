@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { format, isToday, isTomorrow } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import type { UpcomingReminder } from '@/hooks/useUpcomingReminders';
+import { parseServerDate } from '@/lib/date';
 
 interface RemindersPanelProps {
   reminders: UpcomingReminder[] | undefined;
@@ -70,7 +71,7 @@ export const RemindersPanel = ({ reminders, isLoading }: RemindersPanelProps) =>
                   {reminder.ticket_title}
                 </p>
                 <span className="text-xs font-semibold text-muted-foreground tabular-nums shrink-0">
-                  {formatReminderTime(new Date(reminder.reminder_time))}
+                  {formatReminderTime(parseServerDate(reminder.reminder_time))}
                 </span>
               </div>
             ))}

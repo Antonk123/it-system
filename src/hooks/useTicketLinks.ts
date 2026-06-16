@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, TicketLinkRow } from '@/lib/api';
 import { TicketLink } from '@/types/ticket';
+import { parseServerDate } from '@/lib/date';
 
 const mapLink = (link: TicketLinkRow): TicketLink => ({
   id: link.id,
@@ -9,13 +10,13 @@ const mapLink = (link: TicketLinkRow): TicketLink => ({
   targetTicketId: link.targetTicketId,
   linkType: link.linkType as 'related',
   createdBy: link.createdBy,
-  createdAt: new Date(link.createdAt),
+  createdAt: parseServerDate(link.createdAt),
   linkedTicket: {
     id: link.linkedTicket.id,
     title: link.linkedTicket.title,
     status: link.linkedTicket.status as any,
     priority: link.linkedTicket.priority as any,
-    createdAt: new Date(link.linkedTicket.created_at),
+    createdAt: parseServerDate(link.linkedTicket.created_at),
   },
 });
 

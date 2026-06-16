@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { User } from '@/types/ticket';
 import { contactSchema, contactUpdateSchema, getValidationError } from '@/lib/validations';
+import { parseServerDate } from '@/lib/date';
 import { toast } from 'sonner';
 
 // Query keys for React Query
@@ -27,7 +28,7 @@ export const useUsers = () => {
         department: u.department || undefined,
         company_id: u.company_id || undefined,
         company_name: u.company_name || undefined,
-        createdAt: new Date(u.created_at),
+        createdAt: parseServerDate(u.created_at),
       }));
       return mapped as (User & { company_id?: string; company_name?: string })[];
     },
@@ -52,7 +53,7 @@ export const useUsers = () => {
         name: data.name,
         email: data.email,
         department: data.department || undefined,
-        createdAt: new Date(data.created_at),
+        createdAt: parseServerDate(data.created_at),
       };
     },
     onSuccess: (newUser) => {

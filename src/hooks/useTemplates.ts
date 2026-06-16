@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Template, TemplateRow, TemplateFieldRow } from '@/types/ticket';
 import { templateSchema, templateUpdateSchema, getValidationError } from '@/lib/validations';
+import { parseServerDate } from '@/lib/date';
 import { toast } from 'sonner';
 
 // Query keys for React Query
@@ -33,8 +34,8 @@ export const useTemplates = () => {
         solutionTemplate: t.solution_template,
         position: t.position,
         createdBy: t.created_by,
-        createdAt: new Date(t.created_at),
-        updatedAt: new Date(t.updated_at),
+        createdAt: parseServerDate(t.created_at),
+        updatedAt: parseServerDate(t.updated_at),
         fields: (t.fields as TemplateFieldRow[] | undefined) || [],
       }));
       return mapped;
@@ -73,8 +74,8 @@ export const useTemplates = () => {
         solutionTemplate: data.solution_template,
         position: data.position,
         createdBy: data.created_by,
-        createdAt: new Date(data.created_at),
-        updatedAt: new Date(data.updated_at),
+        createdAt: parseServerDate(data.created_at),
+        updatedAt: parseServerDate(data.updated_at),
       };
     },
     onSuccess: (newTemplate) => {
@@ -157,8 +158,8 @@ export const useTemplates = () => {
         solutionTemplate: t.solution_template,
         position: t.position,
         createdBy: t.created_by,
-        createdAt: new Date(t.created_at),
-        updatedAt: new Date(t.updated_at),
+        createdAt: parseServerDate(t.created_at),
+        updatedAt: parseServerDate(t.updated_at),
       }));
     },
     onSuccess: (newTemplates) => {
