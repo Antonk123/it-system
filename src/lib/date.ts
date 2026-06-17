@@ -10,6 +10,19 @@
  * This helper marks naive SQLite timestamps as UTC so they render in local time,
  * while leaving already-zoned ISO strings untouched (no double conversion).
  */
+
+/**
+ * Format an ISO/Date value as a Swedish locale date string.
+ *
+ * Uses `sv-SE` locale. Pass `options` to control the output format, e.g.:
+ *   - short: `{ year: 'numeric', month: 'short', day: 'numeric' }` → "17 jun 2026"
+ *   - long:  `{ year: 'numeric', month: 'long',  day: 'numeric' }` → "17 juni 2026"
+ *   - omit options for the browser default ("2026-06-17")
+ */
+export function formatDate(iso: string | Date, options?: Intl.DateTimeFormatOptions): string {
+  const date = typeof iso === 'string' ? parseServerDate(iso) ?? new Date(iso) : iso;
+  return date.toLocaleDateString('sv-SE', options);
+}
 export function parseServerDate(value: string | number | Date): Date;
 export function parseServerDate(value: null | undefined): null;
 export function parseServerDate(value: string | number | Date | null | undefined): Date | null;

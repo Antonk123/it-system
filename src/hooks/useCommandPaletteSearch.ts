@@ -1,12 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { api, TicketRow, KbArticleRow, ContactRow } from '@/lib/api';
-
-interface PaginatedResponse<T> {
-  data: T[];
-  total: number;
-  page: number;
-  limit: number;
-}
+import { api, TicketRow, KbArticleRow, ContactRow, PaginatedResponse } from '@/lib/api';
 
 export interface SearchResult {
   id: string;

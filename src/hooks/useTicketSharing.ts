@@ -8,7 +8,7 @@ export const useTicketSharing = () => {
 
   const getExistingShare = useCallback(async (ticketId: string) => {
     try { const { share_token } = await api.getShareToken(ticketId); return share_token; }
-    catch (error) { console.error('Error fetching existing share:', error); return null; }
+    catch (error) { if (import.meta.env.DEV) console.error('Error fetching existing share:', error); return null; }
   }, []);
 
   const createShareLink = useCallback(async (ticketId: string): Promise<string | null> => {

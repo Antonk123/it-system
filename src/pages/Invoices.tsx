@@ -23,6 +23,7 @@ import {
 import { useCompanies } from '@/hooks/useCompanies';
 import { useInvoices, useInvoiceDetail } from '@/hooks/useBilling';
 import { api, InvoicePreview, InvoiceRow } from '@/lib/api';
+import { formatDate } from '@/lib/date';
 import { toast } from 'sonner';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -38,10 +39,6 @@ const STATUS_VARIANTS: Record<string, 'secondary' | 'default' | 'destructive' | 
   paid: 'outline',
   cancelled: 'destructive',
 };
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('sv-SE');
-}
 
 function formatAmount(amount: number, currency: string) {
   return `${amount.toLocaleString('sv-SE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`;

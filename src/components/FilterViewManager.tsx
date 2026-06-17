@@ -300,6 +300,7 @@ export function FilterViewManager({
                         : 'text-muted-foreground/40 hover:text-muted-foreground'
                     )}
                     title={view.isDefault ? 'Standardvy' : 'Sätt som standard'}
+                    aria-label={view.isDefault ? 'Standardvy' : 'Sätt som standard'}
                   >
                     <Star className={cn('w-4 h-4', view.isDefault && 'fill-current')} />
                   </button>

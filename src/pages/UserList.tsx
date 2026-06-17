@@ -445,12 +445,13 @@ const UserList = () => {
                         size="icon"
                         className="h-8 w-8"
                         onClick={() => handleEdit(user)}
+                        aria-label="Redigera användare"
                       >
                         <Pencil className="w-4 h-4" />
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" aria-label="Ta bort användare">
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </AlertDialogTrigger>

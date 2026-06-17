@@ -89,6 +89,22 @@ export default tseslint.config(
         { name: "__dirname", message: "ESM saknar __dirname. Definiera lokalt: const __dirname = path.dirname(fileURLToPath(import.meta.url))" },
         { name: "__filename", message: "ESM saknar __filename. Definiera lokalt: const __filename = fileURLToPath(import.meta.url)" },
       ],
+      // Tvinga användning av logger-instansen i server-koden — raw console.*
+      // fångas inte av centraliserad loggning (strukturerat JSON, nivåfiltrering).
+      "no-console": "error",
+    },
+  },
+  {
+    // logger.ts implementerar console.*-wrappern — måste tillåtas direkt.
+    // cleanup-refresh-tokens.ts och migrations.ts är standalone-scripts som
+    // körs utan logger-context och behöver console.* för diagnostik.
+    files: [
+      "server/src/lib/logger.ts",
+      "server/src/db/cleanup-refresh-tokens.ts",
+      "server/src/db/migrations.ts",
+    ],
+    rules: {
+      "no-console": "off",
     },
   },
 );

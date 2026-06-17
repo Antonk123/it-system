@@ -44,7 +44,7 @@ function loadState(): FilterViewsState {
       };
     }
   } catch (error) {
-    console.error('Failed to load filter views:', error);
+    if (import.meta.env.DEV) console.error('Failed to load filter views:', error);
   }
   return { views: [BUILT_IN_VIEW], activeViewId: null };
 }
@@ -123,7 +123,7 @@ export function useFilterViews() {
         })
       );
     } catch (error) {
-      console.error('Failed to save filter views:', error);
+      if (import.meta.env.DEV) console.error('Failed to save filter views:', error);
     }
   }, [state]);
 

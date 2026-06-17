@@ -4,6 +4,7 @@ import { BookOpen, Folder, AlertCircle, Calendar } from 'lucide-react';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { KBImageLightbox } from '@/components/KBImageLightbox';
 import { api, KbArticleRow } from '@/lib/api';
+import { formatDate } from '@/lib/date';
 
 const SharedKBArticle = () => {
   const { token } = useParams<{ token: string }>();
@@ -19,9 +20,6 @@ const SharedKBArticle = () => {
       .catch(() => setError('Länken är ogiltig eller har tagits bort.'))
       .finally(() => setIsLoading(false));
   }, [token]);
-
-  const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString('sv-SE', { year: 'numeric', month: 'long', day: 'numeric' });
 
   if (isLoading) {
     return (
@@ -99,7 +97,7 @@ const SharedKBArticle = () => {
             </h1>
             <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
               <Calendar className="w-3.5 h-3.5" />
-              <span>Uppdaterad {formatDate(article.updated_at)}</span>
+              <span>Uppdaterad {formatDate(article.updated_at, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
             </div>
           </div>
         </div>

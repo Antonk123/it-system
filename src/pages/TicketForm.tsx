@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, PlusCircle, Pencil, ChevronDown } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
@@ -87,12 +86,6 @@ const TicketForm = () => {
     assigned_to: '' as string,
     company_id: '' as string,
   });
-  const { data: rawContacts = [] } = useQuery<import('@/lib/api').ContactRow[]>({
-    queryKey: ['contacts'],
-    queryFn: () => api.getContacts(),
-    staleTime: 5 * 60 * 1000,
-  });
-
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingChecklistItems, setPendingChecklistItems] = useState<{ id: string; label: string; completed: boolean }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -805,8 +798,8 @@ const TicketForm = () => {
                     users={users}
                     value={formData.requesterId}
                     onValueChange={(v) => {
-                      const contact = rawContacts.find(c => c.id === v);
-                      const autoCompany = contact?.company_id || '';
+                      const contact = users.find(u => u.id === v);
+                      const autoCompany = (contact as any)?.company_id || '';
                       setFormData(prev => ({ ...prev, requesterId: v, company_id: autoCompany || prev.company_id }));
                       setErrors(prev => { const p = { ...prev }; delete p['requesterId']; return p; });
                     }}

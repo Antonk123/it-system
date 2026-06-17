@@ -58,6 +58,9 @@ export default defineConfig(({ mode }) => ({
           '**/reporting-vendor*.js',
           '**/motion-vendor*.js',
           '**/dnd-vendor*.js',
+          // markdown-vendor (react-markdown, rehype, remark, unified, …) is only
+          // used in the ticket-detail rich-text preview — lazy-loaded on demand.
+          '**/markdown-vendor*.js',
         ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },

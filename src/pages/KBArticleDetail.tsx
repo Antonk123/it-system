@@ -9,6 +9,7 @@ import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { KBImageLightbox } from '@/components/KBImageLightbox';
 import { api, KbArticleRow } from '@/lib/api';
 import { useKbArticle } from '@/hooks/useKbArticle';
+import { formatDate } from '@/lib/date';
 import { addRecentlyViewedKB } from '@/lib/recentlyViewed';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -172,9 +173,6 @@ const KBArticleDetail = () => {
     }
   };
 
-  const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString('sv-SE', { year: 'numeric', month: 'long', day: 'numeric' });
-
   if (isLoading) {
     return (
       <Layout>
@@ -309,11 +307,11 @@ const KBArticleDetail = () => {
             )}
             <span className="flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5" />
-              Uppdaterad {formatDate(article.updated_at)}
+              Uppdaterad {formatDate(article.updated_at, { year: 'numeric', month: 'long', day: 'numeric' })}
             </span>
             <span className="flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5" />
-              Skapad {formatDate(article.created_at)}
+              Skapad {formatDate(article.created_at, { year: 'numeric', month: 'long', day: 'numeric' })}
             </span>
             <Button
               variant="ghost"
@@ -324,7 +322,7 @@ const KBArticleDetail = () => {
             >
               <CheckCircle className="w-3.5 h-3.5" />
               {article.last_reviewed_at
-                ? `Granskad ${formatDate(article.last_reviewed_at)}`
+                ? `Granskad ${formatDate(article.last_reviewed_at, { year: 'numeric', month: 'long', day: 'numeric' })}`
                 : 'Markera som granskad'}
             </Button>
           </div>

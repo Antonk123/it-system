@@ -52,8 +52,44 @@ function sanitizeForPrompt(text: string, maxLength = 1500): string {
 // blir för generiska, sätt AI_MODEL_SMART=claude-sonnet-4-6 för att uppgradera
 // draft + summary till en starkare modell. Kategorisering använder alltid
 // default-modellen — den uppgiften behöver aldrig mer än Haiku.
-const MODEL_DEFAULT = process.env.AI_MODEL || 'claude-haiku-4-5-20251001';
-const MODEL_SMART = process.env.AI_MODEL_SMART || MODEL_DEFAULT;
+
+// Kända Claude-modell-ID:n. Om AI_MODEL/AI_MODEL_SMART inte matchar listan
+// loggas en varning och default-värdet används — skyddar mot runtime 400 vid
+// felstavning.
+const KNOWN_CLAUDE_MODELS = new Set([
+  // Haiku-familjen
+  'claude-haiku-4-5-20251001',
+  'claude-haiku-4-5',
+  'claude-haiku-4',
+  'claude-3-haiku-20240307',
+  'claude-3-5-haiku-20241022',
+  // Sonnet-familjen
+  'claude-sonnet-4-6',
+  'claude-sonnet-4-5',
+  'claude-sonnet-4',
+  'claude-3-5-sonnet-20241022',
+  'claude-3-5-sonnet-20240620',
+  'claude-3-sonnet-20240229',
+  // Opus-familjen
+  'claude-opus-4-5',
+  'claude-opus-4',
+  'claude-3-opus-20240229',
+]);
+
+const FALLBACK_MODEL_DEFAULT = 'claude-haiku-4-5-20251001';
+
+function resolveModel(envVar: string, envValue: string | undefined, fallback: string): string {
+  if (!envValue) return fallback;
+  if (KNOWN_CLAUDE_MODELS.has(envValue)) return envValue;
+  logger.warn(`Okänt AI-modell-ID i ${envVar} — faller tillbaka till default`, {
+    given: envValue,
+    fallback,
+  });
+  return fallback;
+}
+
+const MODEL_DEFAULT = resolveModel('AI_MODEL', process.env.AI_MODEL, FALLBACK_MODEL_DEFAULT);
+const MODEL_SMART = resolveModel('AI_MODEL_SMART', process.env.AI_MODEL_SMART, MODEL_DEFAULT);
 
 export const aiEnabled = (): boolean => client !== null;
 
