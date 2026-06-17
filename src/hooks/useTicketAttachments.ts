@@ -60,7 +60,9 @@ export const useTicketAttachments = (initialTicketId?: string) => {
       return attachmentId;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey });
+      // Invalidera alla attachment-queries (prefix) — undviker stale closure-key
+      // om användaren bytt ärende medan delete var in-flight.
+      queryClient.invalidateQueries({ queryKey: ['attachments'] });
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error deleting attachment:', error);

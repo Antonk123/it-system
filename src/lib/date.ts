@@ -21,6 +21,8 @@
  */
 export function formatDate(iso: string | Date, options?: Intl.DateTimeFormatOptions): string {
   const date = typeof iso === 'string' ? parseServerDate(iso) ?? new Date(iso) : iso;
+  // Guard mot tomma/ogiltiga timestamps → undvik "Invalid Date" i UI:t.
+  if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleDateString('sv-SE', options);
 }
 export function parseServerDate(value: string | number | Date): Date;

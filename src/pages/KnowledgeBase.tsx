@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { api, KbArticleRow } from '@/lib/api';
 import { useKbCategories } from '@/hooks/useKbCategories';
 import { useKbArticles } from '@/hooks/useKbArticles';
+import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate } from '@/lib/date';
 import { toast } from 'sonner';
 import {
@@ -65,10 +66,13 @@ const KnowledgeBase = () => {
   const search = searchParams.get('search') || '';
 
   const isSearching = search.length > 0;
+  // Debounce the query input so typing doesn't fire one fetch per keystroke
+  // (the URL/input value updates immediately; only the fetch is delayed).
+  const debouncedSearch = useDebounce(search, 200);
 
   const { articles, isLoading, refetch: refetchArticles } = useKbArticles({
-    search: search || undefined,
-    category_id: !search && selectedCategoryId ? selectedCategoryId : undefined,
+    search: debouncedSearch || undefined,
+    category_id: !debouncedSearch && selectedCategoryId ? selectedCategoryId : undefined,
     article_type: typeFilter !== 'all' ? typeFilter : undefined,
     stale: staleFilter || undefined,
   });

@@ -67,7 +67,9 @@ export const useTicketChecklists = (initialTicketId?: string) => {
       return { id, updates };
     },
     onSuccess: ({ updates }) => {
-      queryClient.invalidateQueries({ queryKey });
+      // Invalidera alla checklist-queries (prefix) — undviker stale closure-key
+      // om användaren bytt ärende medan mutationen var in-flight.
+      queryClient.invalidateQueries({ queryKey: ['checklists'] });
       // Refresh ticket list so checklist progress column stays in sync
       if ('completed' in updates) {
         queryClient.invalidateQueries({ queryKey: ['tickets'] });
@@ -85,7 +87,7 @@ export const useTicketChecklists = (initialTicketId?: string) => {
       return id;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey });
+      queryClient.invalidateQueries({ queryKey: ['checklists'] });
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error deleting checklist item:', error);

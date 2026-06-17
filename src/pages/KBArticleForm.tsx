@@ -10,7 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { api, LinkedArticleRow } from '@/lib/api';
 import { useKbCategories } from '@/hooks/useKbCategories';
-import { useKbArticles } from '@/hooks/useKbArticles';
+import { useQueryClient } from '@tanstack/react-query';
+import { useKbArticles, kbArticlesKeys } from '@/hooks/useKbArticles';
+import { kbArticleKeys } from '@/hooks/useKbArticle';
 import { useTags } from '@/hooks/useTags';
 import { TagMultiSelect } from '@/components/TagMultiSelect';
 import {
@@ -50,6 +52,7 @@ const VALID_ARTICLE_TYPES = ['how-to', 'solution'] as const;
 const KBArticleForm = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const isEditing = Boolean(id);
 
@@ -175,6 +178,8 @@ const KBArticleForm = () => {
       };
       if (isEditing && id) {
         await api.updateKbArticle(id, payload);
+        queryClient.invalidateQueries({ queryKey: kbArticlesKeys.all });
+        queryClient.invalidateQueries({ queryKey: kbArticleKeys.detail(id) });
         toast.success('Artikel uppdaterad');
         navigate(`/kb/${id}`);
       } else {
@@ -186,6 +191,10 @@ const KBArticleForm = () => {
             // Non-fatal: article was created, link just failed
             console.warn('Could not auto-link article to source ticket');
           }
+        }
+        queryClient.invalidateQueries({ queryKey: kbArticlesKeys.all });
+        if (sourceTicketId) {
+          queryClient.invalidateQueries({ queryKey: ['ticket-kb-links', sourceTicketId] });
         }
         toast.success('Artikel skapad');
         navigate(`/kb/${created.id}`);
