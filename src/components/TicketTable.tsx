@@ -10,6 +10,7 @@ import { SLABadge } from './SLABadge';
 import { CategoryBadge } from './CategoryBadge';
 import { TagBadges } from './TagBadges';
 import { cn } from '@/lib/utils';
+import { getInitials, hashColor } from '@/lib/avatar';
 import { Progress } from '@/components/ui/progress';
 import { useCategories } from '@/hooks/useCategories';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -329,6 +330,7 @@ export const TicketTable = memo(function TicketTable({
             <TableHead className="font-semibold text-foreground/90">{renderSortButton('Status', 'status', enableStatusSort)}</TableHead>
             <TableHead className="font-semibold text-foreground/90">{renderSortButton('Prioritet', 'priority', enablePrioritySort)}</TableHead>
             <TableHead className="font-semibold text-foreground/90">Förlopp</TableHead>
+            <TableHead className="font-semibold text-foreground/90 hidden lg:table-cell">Tilldelad</TableHead>
             <TableHead className="font-semibold text-foreground/90">Beställare</TableHead>
           </TableRow>
         </TableHeader>
@@ -430,6 +432,26 @@ export const TicketTable = memo(function TicketTable({
                       )}>
                         {progress.completed}/{progress.total}
                       </span>
+                    </div>
+                  );
+                })()}
+              </TableCell>
+              {/* Tilldelad: Avatar + name */}
+              <TableCell className={cn(compact && "py-2", "hidden lg:table-cell")}>
+                {(() => {
+                  const assigneeName = ticket.assignedToName || (ticket.assignedTo ? getUserName(ticket.assignedTo) : null);
+                  if (!assigneeName) {
+                    return <span className="text-sm italic text-muted-foreground">ej tilldelad</span>;
+                  }
+                  return (
+                    <div className="flex items-center gap-2">
+                      <div className={cn(
+                        'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0',
+                        hashColor(assigneeName)
+                      )}>
+                        {getInitials(assigneeName)}
+                      </div>
+                      <span className="text-sm font-medium">{assigneeName}</span>
                     </div>
                   );
                 })()}
