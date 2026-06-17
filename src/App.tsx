@@ -3,7 +3,6 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigationType } from "react-router-dom";
-import { AnimatePresence } from "framer-motion";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -123,8 +122,13 @@ const AppRoutes = () => {
     <ErrorBoundary>
     <Suspense fallback={<RouteFallback />}>
       <ScrollToTopOnNavigate />
-      <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
+      {/* Ingen route-nivå AnimatePresence: route-elementen definierar inga exit-
+          varianter, så den animerade inget. Sidornas egna enter-animationer
+          (motion.div initial/animate) fungerar via key={pathname}-remount, och
+          in-page-exit (TicketList/KnowledgeBase) har lokala AnimatePresence.
+          Att slippa den statiska framer-importen lyfter motion-vendor ur den
+          eager-preloadade startgrafen (laddas lazy med sidorna som behöver den). */}
+      <Routes location={location} key={location.pathname}>
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
           <Route path="/reset-password/:token" element={<PublicRoute><ResetPassword /></PublicRoute>} />
@@ -150,8 +154,7 @@ const AppRoutes = () => {
           <Route path="/kb/:id" element={<ProtectedRoute><KBArticleDetail /></ProtectedRoute>} />
           <Route path="/kb/:id/edit" element={<ProtectedRoute><KBArticleForm /></ProtectedRoute>} />
           <Route path="*" element={<NotFound />} />
-        </Routes>
-      </AnimatePresence>
+      </Routes>
     </Suspense>
     </ErrorBoundary>
   );
