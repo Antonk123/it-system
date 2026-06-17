@@ -4,6 +4,7 @@ import { api, CustomFieldInput } from '@/lib/api';
 import { Ticket, TicketStatus, TicketPriority } from '@/types/ticket';
 import { ticketInsertSchema, ticketUpdateSchema, getValidationError } from '@/lib/validations';
 import { parseServerDate } from '@/lib/date';
+import { mapTicketRow } from '@/lib/mapTicket';
 import { toast } from 'sonner';
 
 interface UseTicketsOptions {
@@ -83,75 +84,11 @@ export const useTickets = (options?: UseTicketsOptions) => {
       // Check response format
       if (Array.isArray(response)) {
         // Legacy format (no pagination)
-        const mapped: Ticket[] = response.map((t) => ({
-          id: t.id,
-          title: t.title,
-          description: t.description,
-          status: t.status as TicketStatus,
-          priority: t.priority as TicketPriority,
-          category: t.category_id || undefined,
-          requesterId: t.requester_id || '',
-          createdAt: parseServerDate(t.created_at),
-          updatedAt: parseServerDate(t.updated_at),
-          resolvedAt: t.resolved_at ? parseServerDate(t.resolved_at) : undefined,
-          closedAt: t.closed_at ? parseServerDate(t.closed_at) : undefined,
-          notes: t.notes || undefined,
-          solution: t.solution || undefined,
-          templateId: t.template_id || undefined,
-          tags: (t.tags || []) as any,
-          assignedTo: (t as any).assigned_to ?? null,
-          assignedToName: (t as any).assigned_to_name ?? null,
-          companyId: (t as any).company_id ?? null,
-          companyName: (t as any).company_name ?? null,
-          assigned_to: (t as any).assigned_to ?? null,
-          assigned_to_name: (t as any).assigned_to_name ?? null,
-          company_id: (t as any).company_id ?? null,
-          company_name: (t as any).company_name ?? null,
-          sla_response_deadline: t.sla_response_deadline ?? null,
-          sla_resolution_deadline: t.sla_resolution_deadline ?? null,
-          sla_paused_at: t.sla_paused_at ?? null,
-          sla_paused_duration: t.sla_paused_duration ?? 0,
-          sla_response_met: t.sla_response_met ?? null,
-          sla_resolution_met: t.sla_resolution_met ?? null,
-          ai_suggested_category_id: t.ai_suggested_category_id ?? null,
-          ai_suggested_confidence: t.ai_suggested_confidence ?? null,
-        }));
+        const mapped: Ticket[] = response.map(mapTicketRow);
         return { tickets: mapped, pagination: null };
       } else {
         // Paginated format
-        const mapped: Ticket[] = response.data.map((t) => ({
-          id: t.id,
-          title: t.title,
-          description: t.description,
-          status: t.status as TicketStatus,
-          priority: t.priority as TicketPriority,
-          category: t.category_id || undefined,
-          requesterId: t.requester_id || '',
-          createdAt: parseServerDate(t.created_at),
-          updatedAt: parseServerDate(t.updated_at),
-          resolvedAt: t.resolved_at ? parseServerDate(t.resolved_at) : undefined,
-          closedAt: t.closed_at ? parseServerDate(t.closed_at) : undefined,
-          notes: t.notes || undefined,
-          solution: t.solution || undefined,
-          templateId: t.template_id || undefined,
-          tags: (t.tags || []) as any,
-          assignedTo: (t as any).assigned_to ?? null,
-          assignedToName: (t as any).assigned_to_name ?? null,
-          companyId: (t as any).company_id ?? null,
-          companyName: (t as any).company_name ?? null,
-          assigned_to: (t as any).assigned_to ?? null,
-          assigned_to_name: (t as any).assigned_to_name ?? null,
-          company_id: (t as any).company_id ?? null,
-          company_name: (t as any).company_name ?? null,
-          sla_response_deadline: t.sla_response_deadline ?? null,
-          sla_resolution_deadline: t.sla_resolution_deadline ?? null,
-          sla_paused_at: t.sla_paused_at ?? null,
-          sla_paused_duration: t.sla_paused_duration ?? 0,
-          sla_response_met: t.sla_response_met ?? null,
-          sla_resolution_met: t.sla_resolution_met ?? null,
-          ai_suggested_category_id: t.ai_suggested_category_id ?? null,
-          ai_suggested_confidence: t.ai_suggested_confidence ?? null,
-        }));
+        const mapped: Ticket[] = response.data.map(mapTicketRow);
         return { tickets: mapped, pagination: response.pagination };
       }
     },

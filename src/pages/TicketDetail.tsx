@@ -77,8 +77,7 @@ import {
 } from '@/components/ui/dialog';
 import { TicketStatus } from '@/types/ticket';
 import { api } from '@/lib/api';
-import type { TicketRow } from '@/lib/api';
-import { parseServerDate } from '@/lib/date';
+import { mapTicketRow } from '@/lib/mapTicket';
 import { STATUS_LABELS } from '@/lib/constants';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -90,42 +89,6 @@ const formatFileSize = (bytes: number | null) => {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
-
-/** Map raw TicketRow (snake_case, string dates) → frontend Ticket type. */
-const mapTicketRow = (t: TicketRow): import('@/types/ticket').Ticket => ({
-  id: t.id,
-  title: t.title,
-  description: t.description,
-  status: t.status as import('@/types/ticket').TicketStatus,
-  priority: t.priority as import('@/types/ticket').TicketPriority,
-  category: t.category_id || undefined,
-  requesterId: t.requester_id || '',
-  companyId: t.company_id ?? null,
-  companyName: t.company_name ?? null,
-  assignedTo: t.assigned_to ?? null,
-  assignedToName: t.assigned_to_name ?? null,
-  createdAt: parseServerDate(t.created_at),
-  updatedAt: parseServerDate(t.updated_at),
-  resolvedAt: t.resolved_at ? parseServerDate(t.resolved_at) : undefined,
-  closedAt: t.closed_at ? parseServerDate(t.closed_at) : undefined,
-  notes: t.notes || undefined,
-  solution: t.solution || undefined,
-  templateId: t.template_id || undefined,
-  tags: (t.tags || []) as any,
-  ai_suggested_category_id: t.ai_suggested_category_id ?? null,
-  ai_suggested_confidence: t.ai_suggested_confidence ?? null,
-  sla_response_deadline: t.sla_response_deadline ?? null,
-  sla_resolution_deadline: t.sla_resolution_deadline ?? null,
-  sla_paused_at: t.sla_paused_at ?? null,
-  sla_paused_duration: t.sla_paused_duration ?? null,
-  sla_response_met: t.sla_response_met ?? null,
-  sla_resolution_met: t.sla_resolution_met ?? null,
-  // Extra snake_case fields consumed via (ticket as any) in the template
-  assigned_to: t.assigned_to ?? null,
-  assigned_to_name: t.assigned_to_name ?? null,
-  company_id: t.company_id ?? null,
-  company_name: t.company_name ?? null,
-} as any);
 
 const TicketDetail = () => {
   const { id } = useParams();
