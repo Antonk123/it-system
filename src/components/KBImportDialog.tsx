@@ -20,7 +20,7 @@ import {
 } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { useKbCategories } from '@/hooks/useKbCategories';
-import { migrateContent } from '@/lib/contentMigration';
+import { migrateContent, cleanImportedMarkdownTables } from '@/lib/contentMigration';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -215,7 +215,7 @@ export function KBImportDialog({ open, onOpenChange, defaultCategoryId, onImport
       setFiles(prev => prev.map(f => f.id === file.id ? { ...f, status: 'uploading' } : f));
 
       try {
-        const html = migrateContent(file.rawContent);
+        const html = migrateContent(cleanImportedMarkdownTables(file.rawContent));
         await api.createKbArticle({
           title: file.title.trim(),
           content: html,

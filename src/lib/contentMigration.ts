@@ -1,17 +1,21 @@
-import TurndownService from 'turndown';
+import MarkdownIt from 'markdown-it';
 
-// Initialize Turndown (HTML to Markdown converter)
-// Note: We're using it in "reverse" - we'll detect Markdown and convert to HTML
-const turndownService = new TurndownService({
-  headingStyle: 'atx',
-  codeBlockStyle: 'fenced',
-});
+// Initialize markdown-it with table support (enabled by default in v14)
+const md = new MarkdownIt({ html: false, linkify: true, breaks: true });
 
 /**
  * Detect if content appears to be Markdown based on common patterns
  */
 export function isMarkdownContent(content: string): boolean {
   if (!content || typeof content !== 'string') return false;
+
+  // Content that already starts with an HTML tag is not Markdown
+  if (content.trim().startsWith('<')) return false;
+
+  // A GFM table separator row is a strong single-pattern indicator
+  // (e.g. "| --- | --- |" or ":---" or "---:")
+  const hasTableSeparator = /^\s*\|?\s*:?-{2,}[^|]*\|/m.test(content);
+  if (hasTableSeparator) return true;
 
   // Check for common Markdown patterns
   const markdownPatterns = [
@@ -32,52 +36,40 @@ export function isMarkdownContent(content: string): boolean {
 }
 
 /**
- * Convert Markdown to HTML
- * Uses a simple approach: split by Markdown patterns and convert to HTML
+ * Convert Markdown to HTML using markdown-it.
+ * Supports GFM tables, headings, bold, italic, links, code blocks, lists, blockquotes.
  */
 export function markdownToHtml(markdown: string): string {
   if (!markdown || typeof markdown !== 'string') return '';
+  return md.render(markdown);
+}
 
-  let html = markdown;
+/**
+ * Clean up table cells in imported Markdown that contain placeholder values
+ * produced by Excel→Markdown exporters (NaN, NULL, None, undefined, nan, null).
+ * Only cells inside pipe-delimited table rows are touched — running text is preserved.
+ */
+export function cleanImportedMarkdownTables(markdown: string): string {
+  if (!markdown || typeof markdown !== 'string') return markdown;
 
-  // Convert headings
-  html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-  html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-  html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+  const PLACEHOLDER = /^(NaN|nan|NULL|null|undefined|None)$/;
 
-  // Convert bold and italic
-  html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+  return markdown
+    .split('\n')
+    .map(line => {
+      // Only process lines that contain a pipe character (table rows)
+      if (!line.includes('|')) return line;
 
-  // Convert inline code
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  // Convert code blocks
-  html = html.replace(/```([a-z]*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-
-  // Convert links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-
-  // Convert unordered lists
-  html = html.replace(/^\* (.+)$/gim, '<li>$1</li>');
-  html = html.replace(/^- (.+)$/gim, '<li>$1</li>');
-  html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
-
-  // Convert ordered lists
-  html = html.replace(/^\d+\. (.+)$/gim, '<li>$1</li>');
-
-  // Convert blockquotes
-  html = html.replace(/^> (.+)$/gim, '<blockquote>$1</blockquote>');
-
-  // Convert line breaks to paragraphs
-  html = html.split('\n\n').map(para => {
-    // Don't wrap if already has HTML tags
-    if (para.match(/^<[a-z]/i)) return para;
-    return `<p>${para.replace(/\n/g, '<br>')}</p>`;
-  }).join('');
-
-  return html;
+      // Split on pipes, clean matching cells, rejoin
+      return line
+        .split('|')
+        .map(cell => {
+          const trimmed = cell.trim();
+          return PLACEHOLDER.test(trimmed) ? cell.replace(trimmed, '') : cell;
+        })
+        .join('|');
+    })
+    .join('\n');
 }
 
 /**
