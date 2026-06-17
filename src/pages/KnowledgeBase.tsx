@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle, Upload } from 'lucide-react';
@@ -10,6 +10,8 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { api, KbArticleRow } from '@/lib/api';
 import { useKbCategories } from '@/hooks/useKbCategories';
+import { useKbArticles } from '@/hooks/useKbArticles';
+import { formatDate } from '@/lib/date';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -54,10 +56,8 @@ const KnowledgeBase = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [articles, setArticles] = useState<KbArticleRow[]>([]);
   const { categories, refetch: refetchCategories } = useKbCategories();
   const [staleFilter, setStaleFilter] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
 
   // Derive state from URL params
   const selectedCategoryId = searchParams.get('category') || '';
@@ -66,7 +66,14 @@ const KnowledgeBase = () => {
 
   const isSearching = search.length > 0;
 
-  const updateParam = useCallback((key: string, value: string | null) => {
+  const { articles, isLoading, refetch: refetchArticles } = useKbArticles({
+    search: search || undefined,
+    category_id: !search && selectedCategoryId ? selectedCategoryId : undefined,
+    article_type: typeFilter !== 'all' ? typeFilter : undefined,
+    stale: staleFilter || undefined,
+  });
+
+  const updateParam = (key: string, value: string | null) => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       if (value === null || value === '' || value === 'all') {
@@ -76,7 +83,7 @@ const KnowledgeBase = () => {
       }
       return next;
     }, { replace: true });
-  }, [setSearchParams]);
+  };
 
   // Import dialog state
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -93,24 +100,6 @@ const KnowledgeBase = () => {
     const ref = article.last_reviewed_at || article.created_at;
     return (Date.now() - new Date(ref).getTime()) / (86400 * 1000) > 90;
   };
-
-  const fetchArticles = useCallback(async () => {
-    try {
-      const params: { search?: string; category_id?: string; article_type?: string; stale?: boolean } = {};
-      if (search) {
-        params.search = search;
-        // Global search: do NOT pass category_id
-      } else if (selectedCategoryId) {
-        params.category_id = selectedCategoryId;
-      }
-      if (typeFilter !== 'all') params.article_type = typeFilter;
-      if (staleFilter) params.stale = true;
-      const data = await api.getKbArticles(params);
-      setArticles(data);
-    } catch {
-      toast.error('Kunde inte hämta artiklar');
-    }
-  }, [search, selectedCategoryId, typeFilter, staleFilter]);
 
   // Once categories are loaded set the first one as default (only when no filter is active)
   const didSetDefaultCategory = useRef(false);
@@ -129,15 +118,6 @@ const KnowledgeBase = () => {
     }, { replace: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categories]);
-
-  useEffect(() => {
-    setIsLoading(true);
-    const timer = setTimeout(async () => {
-      await fetchArticles();
-      setIsLoading(false);
-    }, 200);
-    return () => clearTimeout(timer);
-  }, [fetchArticles]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -193,9 +173,6 @@ const KnowledgeBase = () => {
       toast.error('Kunde inte radera kategori');
     }
   };
-
-  const formatDate = (iso: string) =>
-    new Date(iso).toLocaleDateString('sv-SE', { year: 'numeric', month: 'short', day: 'numeric' });
 
   const getPreview = (html: string, maxLen = 120) => {
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
@@ -538,7 +515,7 @@ const KnowledgeBase = () => {
                             )}
                             <span className="text-xs text-muted-foreground flex items-center gap-1">
                               <Clock className="w-3 h-3" />
-                              {formatDate(article.updated_at)}
+                              {formatDate(article.updated_at, { year: 'numeric', month: 'short', day: 'numeric' })}
                             </span>
                           </div>
                         </div>
@@ -555,7 +532,7 @@ const KnowledgeBase = () => {
         open={showImportDialog}
         onOpenChange={setShowImportDialog}
         defaultCategoryId={selectedCategoryId}
-        onImported={fetchArticles}
+        onImported={refetchArticles}
       />
     </Layout>
   );

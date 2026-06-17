@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useState, useCallback, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ChecklistRow } from '@/lib/api';
 import { checklistItemSchema, getValidationError } from '@/lib/validations';
 import { toast } from 'sonner';
@@ -16,26 +16,94 @@ export interface ChecklistItem {
   updated_at: string;
 }
 
-export const useTicketChecklists = (ticketId?: string) => {
+export const useTicketChecklists = (initialTicketId?: string) => {
   const queryClient = useQueryClient();
-  const [items, setItems] = useState<ChecklistItem[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isError, setIsError] = useState(false);
+  // Internal query ID — updated when fetchChecklists(id) is called
+  const [queryTicketId, setQueryTicketId] = useState<string | undefined>(initialTicketId);
+  const queryKey = useMemo(() => ['checklists', queryTicketId], [queryTicketId]);
 
+  const { data: items = [], isLoading, isError } = useQuery({
+    queryKey,
+    queryFn: async () => {
+      const data = await api.getChecklists(queryTicketId!);
+      return data as ChecklistItem[];
+    },
+    enabled: Boolean(queryTicketId),
+  });
+
+  // fetchChecklists(id?) — sets active ticket ID (triggers query) and invalidates cache
   const fetchChecklists = useCallback(async (id?: string) => {
-    const targetId = id || ticketId;
+    const targetId = id || queryTicketId;
     if (!targetId) return;
-    setIsLoading(true);
-    setIsError(false);
-    try {
-      const data = await api.getChecklists(targetId);
-      setItems(data as ChecklistItem[]);
-    } catch (error) {
-      setIsError(true);
-      if (import.meta.env.DEV) console.error('Error fetching checklists:', error);
-    }
-    finally { setIsLoading(false); }
-  }, [ticketId]);
+    setQueryTicketId(targetId);
+    await queryClient.invalidateQueries({ queryKey: ['checklists', targetId] });
+  }, [queryClient, queryTicketId]);
+
+  // setItems — direct cache override (used by applyChecklistTemplate consumer)
+  const setItems = useCallback((newItems: ChecklistItem[]) => {
+    queryClient.setQueryData(queryKey, newItems);
+  }, [queryClient, queryKey]);
+
+  const addItemMutation = useMutation({
+    mutationFn: async ({
+      targetTicketId, label, options,
+    }: { targetTicketId: string; label: string; options?: { parent_id?: string | null; due_date?: string | null } }) => {
+      const data = await api.createChecklistItem(targetTicketId, label, options);
+      return data as ChecklistItem;
+    },
+    onSuccess: (_data, { targetTicketId }) => {
+      queryClient.invalidateQueries({ queryKey: ['checklists', targetTicketId] });
+    },
+    onError: () => {
+      toast.error('Failed to add checklist item');
+    },
+  });
+
+  const updateItemMutation = useMutation({
+    mutationFn: async ({
+      id, updates,
+    }: { id: string; updates: Partial<Pick<ChecklistItem, 'label' | 'completed' | 'due_date' | 'parent_id'>> }) => {
+      await api.updateChecklistItem(id, updates);
+      return { id, updates };
+    },
+    onSuccess: ({ updates }) => {
+      queryClient.invalidateQueries({ queryKey });
+      // Refresh ticket list so checklist progress column stays in sync
+      if ('completed' in updates) {
+        queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      }
+    },
+    onError: (error) => {
+      if (import.meta.env.DEV) console.error('Error updating checklist item:', error);
+      toast.error('Kunde inte uppdatera checklistpunkt');
+    },
+  });
+
+  const deleteItemMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.deleteChecklistItem(id);
+      return id;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (error) => {
+      if (import.meta.env.DEV) console.error('Error deleting checklist item:', error);
+      toast.error('Kunde inte ta bort checklistpunkt');
+    },
+  });
+
+  const bulkAddMutation = useMutation({
+    mutationFn: async ({ targetTicketId, labels }: { targetTicketId: string; labels: string[] }) => {
+      return await api.bulkCreateChecklistItems(targetTicketId, labels) as ChecklistItem[];
+    },
+    onSuccess: (_data, { targetTicketId }) => {
+      queryClient.invalidateQueries({ queryKey: ['checklists', targetTicketId] });
+    },
+    onError: () => {
+      toast.error('Failed to add checklist items');
+    },
+  });
 
   const addChecklistItem = useCallback(async (
     targetTicketId: string,
@@ -45,39 +113,39 @@ export const useTicketChecklists = (ticketId?: string) => {
     const validation = checklistItemSchema.safeParse({ label });
     if (!validation.success) { toast.error(getValidationError(validation.error) || 'Invalid checklist item'); return null; }
     try {
-      const data = await api.createChecklistItem(targetTicketId, validation.data.label, options);
-      setItems(prev => [...prev, data as ChecklistItem]);
-      return data;
-    } catch (error) { toast.error('Failed to add checklist item'); return null; }
-  }, []);
+      return await addItemMutation.mutateAsync({ targetTicketId, label: validation.data.label, options });
+    } catch {
+      return null;
+    }
+  }, [addItemMutation]);
 
   const updateChecklistItem = useCallback(async (
     id: string,
     updates: Partial<Pick<ChecklistItem, 'label' | 'completed' | 'due_date' | 'parent_id'>>
   ) => {
     try {
-      await api.updateChecklistItem(id, updates);
-      setItems(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
-      // Refresh ticket list so checklist progress column stays in sync
-      if ('completed' in updates) {
-        queryClient.invalidateQueries({ queryKey: ['tickets'] });
-      }
-    } catch (error) { if (import.meta.env.DEV) console.error('Error updating checklist item:', error); toast.error('Kunde inte uppdatera checklistpunkt'); }
-  }, [queryClient]);
+      await updateItemMutation.mutateAsync({ id, updates });
+    } catch {
+      // errors handled in mutation onError
+    }
+  }, [updateItemMutation]);
 
   const deleteChecklistItem = useCallback(async (id: string) => {
     try {
-      await api.deleteChecklistItem(id);
-      // Also remove children
-      setItems(prev => prev.filter(item => item.id !== id && item.parent_id !== id));
-    } catch (error) { if (import.meta.env.DEV) console.error('Error deleting checklist item:', error); toast.error('Kunde inte ta bort checklistpunkt'); }
-  }, []);
+      await deleteItemMutation.mutateAsync(id);
+    } catch {
+      // errors handled in mutation onError
+    }
+  }, [deleteItemMutation]);
 
-  const bulkAddChecklistItems = useCallback(async (targetTicketId: string, labels: string[]) => {
+  const bulkAddChecklistItems = useCallback(async (targetTicketId: string, labels: string[]): Promise<ChecklistItem[]> => {
     if (labels.length === 0) return [];
-    try { return await api.bulkCreateChecklistItems(targetTicketId, labels) as ChecklistItem[]; }
-    catch (error) { toast.error('Failed to add checklist items'); return []; }
-  }, []);
+    try {
+      return await bulkAddMutation.mutateAsync({ targetTicketId, labels });
+    } catch {
+      return [];
+    }
+  }, [bulkAddMutation]);
 
   return { items, isLoading, isError, fetchChecklists, addChecklistItem, updateChecklistItem, deleteChecklistItem, bulkAddChecklistItems, setItems };
 };

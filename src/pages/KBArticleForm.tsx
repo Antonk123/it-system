@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import { api, KbArticleRow, LinkedArticleRow } from '@/lib/api';
+import { api, LinkedArticleRow } from '@/lib/api';
 import { useKbCategories } from '@/hooks/useKbCategories';
+import { useKbArticles } from '@/hooks/useKbArticles';
 import { useTags } from '@/hooks/useTags';
 import { TagMultiSelect } from '@/components/TagMultiSelect';
 import {
@@ -74,7 +75,7 @@ const KBArticleForm = () => {
 
   // Cross-ref state (only used in edit mode)
   const [crossRefs, setCrossRefs] = useState<LinkedArticleRow[]>([]);
-  const [allArticles, setAllArticles] = useState<KbArticleRow[]>([]);
+  const { articles: allArticles } = useKbArticles({}, isEditing);
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState('');
 
@@ -91,9 +92,8 @@ const KBArticleForm = () => {
         setArticleType(article.article_type || 'none');
         setSelectedTagIds((article.tags || []).map(t => t.id));
         setStatus(article.status || 'published');
-        // Also fetch cross-refs and all articles for the picker
+        // Fetch cross-refs for the link picker
         api.getKbArticleLinks(id).then(setCrossRefs).catch(() => {});
-        api.getKbArticles().then(setAllArticles).catch(() => {});
       } catch {
         toast.error('Kunde inte ladda artikel');
         navigate('/kb');
