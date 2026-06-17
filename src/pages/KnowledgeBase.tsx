@@ -13,6 +13,7 @@ import { useKbCategories } from '@/hooks/useKbCategories';
 import { useKbArticles } from '@/hooks/useKbArticles';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate } from '@/lib/date';
+import { escapeHtml } from '@/lib/html';
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -47,10 +48,14 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 function highlightTerms(text: string, query: string): string {
-  if (!query.trim()) return text;
+  // Escapa ALLTID texten innan vi injicerar via dangerouslySetInnerHTML —
+  // getPreview strippar taggar men escapar inte entiteter, så rå <, > eller &
+  // i artikelinnehållet skulle annars tolkas som markup (DOM-XSS).
+  const safe = escapeHtml(text);
+  if (!query.trim()) return safe;
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`(${escaped})`, 'gi');
-  return text.replace(re, '<mark>$1</mark>');
+  return safe.replace(re, '<mark>$1</mark>');
 }
 
 const KnowledgeBase = () => {
@@ -485,7 +490,8 @@ const KnowledgeBase = () => {
                               isSearching ? (
                                 <p
                                   className="text-sm text-muted-foreground mt-1 line-clamp-2"
-                                  // Safe: getPreview returns plain text, highlightTerms only adds <mark> with regex-escaped query
+                                  // Säkert: highlightTerms HTML-escapar texten innan den lägger på <mark>,
+                                  // så bara <mark>-taggarna är riktig HTML (söktermen är dessutom regex-escapad).
                                   dangerouslySetInnerHTML={{ __html: highlightTerms(getPreview(article.content), search) }}
                                 />
                               ) : (

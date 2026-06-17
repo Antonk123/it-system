@@ -6,16 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { api, KbArticleRow } from '@/lib/api';
+import { escapeHtml } from '@/lib/html';
 import { toast } from 'sonner';
-
-// Escapar HTML-specialtecken i en textsträng.
-// Används för att säkra FTS5-snippet innan vi renderar highlight-markeringar.
-const escapeHtml = (text: string): string =>
-  text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 
 // FTS5-snippet innehåller platshållare __MARK_START__ / __MARK_END__ från backend.
 // Steg: escape all text → återställ highlight-taggarna som riktig HTML.
