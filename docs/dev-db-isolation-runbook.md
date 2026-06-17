@@ -1,5 +1,22 @@
 # Runbook: Isolera dev-miljön (egen DB-volym + egen worktree)
 
+> ## ⚠️ DELVIS ERSATT 2026-06-17 — worktreet är borttaget
+> Workflowet ändrades till **merga rakt till main** (inga feature-grenar). Då tappade
+> dev-worktreet sitt enda syfte (köra en egen gren), så det är borttaget. **DB-isoleringen
+> (egen volym `it-ticketing-dev-data`) gäller fortfarande och är hela poängen.**
+>
+> **Ny modell:** dev-containrarna (stack 40) bind-mountar **prod-checkouten**
+> `/opt/it-system/itticket-main` (på `main`) — samma som prod-bygget. `git pull` där tar
+> in ändringar till både dev (tsx/Vite hot-reload) och prod-build-källan, men **prod ser
+> inget förrän du bygger ny image + deployar**. Så main testas i lugn och ro på dev först.
+>
+> - **Sync dev till senaste main:** `git -C /opt/it-system/itticket-main pull --ff-only`
+> - Avsnitt 3 nedan ("Skapa dev-worktree") och worktree-raderna i tabellen/teardown är
+>   **historik** — hoppa över dem. Bind-mounten är nu `itticket-main:/app` i båda tjänsterna.
+> - Engångs-migrering (utförd 2026-06-17): peka om Portainer-stack 40:s två bind-paths
+>   `itticket-dev` → `itticket-main`, recreate, sedan
+>   `git -C /opt/it-system/itticket-main worktree remove --force /opt/it-system/itticket-dev`.
+
 **Mål:** Dev-stacken (`it-system-dev`, Portainer id 40) ska sluta dela prod-DB:n
 (`it-ticketing-data`) och sluta sitta fast på `main`. Efteråt:
 

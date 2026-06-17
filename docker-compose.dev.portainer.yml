@@ -6,11 +6,15 @@
 # docs/dev-db-isolation-runbook.md). Driv aldrig isär dem.
 #
 # Skillnad mot prod (docker-compose.yml):
-#   • EGEN DB-volym  (it-ticketing-dev-data)        → delar INTE prod-DB:n längre
-#   • EGEN checkout  (/opt/it-system/itticket-dev)  → en git-worktree, så dev kan
-#     köra feature-grenen UTAN att störa prod-build-checkouten (itticket-main/main)
+#   • EGEN DB-volym  (it-ticketing-dev-data)        → delar INTE prod-DB:n. Detta är
+#     den enda isolering som behövs — dev får ALDRIG skriva i prod-DB:n.
+#   • DELAR checkout med prod-bygget (/opt/it-system/itticket-main, på main).
+#     `git pull` där tar in ändringar till BÅDE dev och prod-build-källan, men PROD
+#     ser inget förrän du bygger ny image + deployar. Så main kan testas i lugn och
+#     ro på dev innan prod-deploy. (Det gamla worktreet itticket-dev är borttaget —
+#     det behövdes bara när dev körde en egen feature-gren; vi mergar nu rakt till main.)
 #   • Hot-reload: backend tsx watch (3003), frontend Vite (5174). Bara `git pull`
-#     i worktree:n behövs — ingen image-rebuild.
+#     i itticket-main behövs — ingen image-rebuild för dev.
 #
 # Env-variabler (${JWT_SECRET} m.fl.) sätts i Portainer-stackens "Environment
 # variables", inte här. Inga hemligheter får checkas in i denna fil.
@@ -25,9 +29,9 @@ services:
     ports:
       - "3003:3001"
     volumes:
-      - /opt/it-system/itticket-dev:/app          # egen worktree, INTE prod-build-checkouten
+      - /opt/it-system/itticket-main:/app         # DELAD med prod-bygget (main). DB-isoleras via dev-volymen nedan.
       - it-ticketing-dev-data:/app/data           # egen DB-volym, INTE prod
-      - /app/node_modules                         # anon-volym: skydda host-worktree från npm install
+      - /app/node_modules                         # anon-volym: skydda host-checkouten från npm install
       - /app/server/node_modules
     environment:
       - NODE_ENV=development
@@ -54,7 +58,7 @@ services:
     ports:
       - "5174:5174"
     volumes:
-      - /opt/it-system/itticket-dev:/app
+      - /opt/it-system/itticket-main:/app
       - /app/node_modules
     environment:
       - VITE_API_URL=${VITE_API_URL:-http://10.38.195.180:3003/api}
