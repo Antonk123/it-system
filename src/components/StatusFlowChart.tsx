@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { subMonths, startOfMonth, endOfMonth, format } from 'date-fns';
-import { Ticket } from '@/types/ticket';
+import { format, parse } from 'date-fns';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useStatusFlow } from '@/hooks/useStatusFlow';
 import { cn } from '@/lib/utils';
 
 interface StatusFlowChartProps {
-  tickets: Ticket[];
   className?: string;
   height?: number;
   timePeriod?: 'monthly';
@@ -53,36 +53,29 @@ const StatusFlowTooltip = ({ active, payload, label }: any) => {
 };
 
 export const StatusFlowChart = ({
-  tickets,
   className,
   height = 300,
-  timePeriod = 'monthly',
 }: StatusFlowChartProps) => {
-  // Calculate month-status data
-  const monthStatusData = useMemo(() => {
-    const months: MonthStatusData[] = [];
+  // Server-side aggregation over the full dataset (no 1000-row cap). Returns one
+  // row per YYYY-MM for the trailing 12 months; we map the key to the same short
+  // month label the chart used before (date-fns 'MMM') so it renders identically.
+  const { data: statusFlow, isLoading } = useStatusFlow();
 
-    for (let i = 11; i >= 0; i--) {
-      const monthDate = subMonths(new Date(), i);
-      const monthStart = startOfMonth(monthDate);
-      const monthEnd = endOfMonth(monthDate);
+  const monthStatusData = useMemo<MonthStatusData[]>(() => {
+    if (!statusFlow) return [];
+    return statusFlow.map(row => ({
+      month: format(parse(row.month, 'yyyy-MM', new Date()), 'MMM'),
+      open: row.open,
+      'in-progress': row['in-progress'],
+      waiting: row.waiting,
+      resolved: row.resolved,
+      closed: row.closed,
+    }));
+  }, [statusFlow]);
 
-      const monthTickets = tickets.filter(t =>
-        t.createdAt >= monthStart && t.createdAt <= monthEnd
-      );
-
-      months.push({
-        month: format(monthDate, 'MMM'),
-        open: monthTickets.filter(t => t.status === 'open').length,
-        'in-progress': monthTickets.filter(t => t.status === 'in-progress').length,
-        waiting: monthTickets.filter(t => t.status === 'waiting').length,
-        resolved: monthTickets.filter(t => t.status === 'resolved').length,
-        closed: monthTickets.filter(t => t.status === 'closed').length,
-      });
-    }
-
-    return months;
-  }, [tickets]);
+  if (isLoading) {
+    return <Skeleton className="w-full" style={{ height }} />;
+  }
 
   const gradients = {
     open: 'gradient-status-open',

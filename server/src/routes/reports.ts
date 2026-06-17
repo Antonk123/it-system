@@ -5,6 +5,14 @@ import { logger } from '../lib/logger.js';
 
 const router = Router();
 
+// Minimal, nameable structural type for the bits of the DB the extracted
+// aggregation helpers use. Avoids leaking the un-nameable BetterSqlite3.Database
+// type into exported function signatures (TS4076) and lets tests pass an
+// in-memory better-sqlite3 instance, which satisfies this shape structurally.
+interface AggregationDb {
+  prepare(sql: string): { all(...params: unknown[]): unknown[] };
+}
+
 router.get('/summary', authenticate, (req: AuthRequest, res) => {
   try {
   const { year, month } = req.query as { year?: string; month?: string };
@@ -443,6 +451,118 @@ router.get('/requester-analytics', authenticate, (req: AuthRequest, res) => {
   } catch (error) {
     logger.error('Error generating requester analytics:', { error: String(error) });
     res.status(500).json({ error: 'Failed to generate requester analytics' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /reports/status-flow
+// 12-month per-status series. For each of the last 12 calendar months (by
+// created_at), count tickets grouped by their CURRENT status. Mirrors the
+// client-side StatusFlowChart aggregation but counts the FULL dataset (no
+// 1000-row cap). Returns one row per month keyed by YYYY-MM; the client maps
+// the key to a short month label so formatting stays identical.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface StatusFlowRow {
+  month: string; // YYYY-MM
+  open: number;
+  'in-progress': number;
+  waiting: number;
+  resolved: number;
+  closed: number;
+}
+
+// Pure aggregation extracted so it can be unit-tested against an in-memory DB.
+// `now` is injectable to keep the 12-month window deterministic in tests.
+export function computeStatusFlow(database: AggregationDb = db, now: Date = new Date()): StatusFlowRow[] {
+  // Build the 12-month window keyed by YYYY-MM, ending with the current month.
+  // We generate the keys in JS so months with zero tickets still appear (the
+  // client previously always emitted 12 buckets via subMonths()).
+  const buckets: { month: string }[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    buckets.push({ month: key });
+  }
+  const earliestStart = `${buckets[0].month}-01`;
+
+  // Aggregate counts per month + status for tickets created within the window.
+  const rows = database.prepare(`
+    SELECT strftime('%Y-%m', created_at) AS month,
+           SUM(CASE WHEN status = 'open'        THEN 1 ELSE 0 END) AS open,
+           SUM(CASE WHEN status = 'in-progress' THEN 1 ELSE 0 END) AS inProgress,
+           SUM(CASE WHEN status = 'waiting'     THEN 1 ELSE 0 END) AS waiting,
+           SUM(CASE WHEN status = 'resolved'    THEN 1 ELSE 0 END) AS resolved,
+           SUM(CASE WHEN status = 'closed'      THEN 1 ELSE 0 END) AS closed
+    FROM tickets
+    WHERE created_at >= ?
+    GROUP BY month
+  `).all(earliestStart) as Array<{
+    month: string;
+    open: number;
+    inProgress: number;
+    waiting: number;
+    resolved: number;
+    closed: number;
+  }>;
+
+  const byMonth = new Map(rows.map(r => [r.month, r]));
+
+  return buckets.map(({ month }) => {
+    const r = byMonth.get(month);
+    return {
+      month,
+      open: r?.open ?? 0,
+      'in-progress': r?.inProgress ?? 0,
+      waiting: r?.waiting ?? 0,
+      resolved: r?.resolved ?? 0,
+      closed: r?.closed ?? 0,
+    };
+  });
+}
+
+router.get('/status-flow', authenticate, (_req: AuthRequest, res) => {
+  try {
+    res.json(computeStatusFlow());
+  } catch (error) {
+    logger.error('Error generating status flow:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to generate status flow' });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /reports/tag-analytics
+// Tag-frequency counts across the FULL dataset (no 1000-row cap). Returns one
+// row per tag that is attached to at least one ticket, with the canonical tag
+// id/name/color and the number of tickets carrying it. Mirrors the client-side
+// TagCloud / TagDistributionChart counting.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface TagAnalyticsRow {
+  id: string;
+  name: string;
+  color: string;
+  count: number;
+}
+
+// Pure aggregation extracted so it can be unit-tested against an in-memory DB.
+export function computeTagAnalytics(database: AggregationDb = db): TagAnalyticsRow[] {
+  return database.prepare(`
+    SELECT tg.id    AS id,
+           tg.name  AS name,
+           tg.color AS color,
+           COUNT(tt.ticket_id) AS count
+    FROM tags tg
+    JOIN ticket_tags tt ON tt.tag_id = tg.id
+    GROUP BY tg.id
+    ORDER BY count DESC, tg.name ASC
+  `).all() as TagAnalyticsRow[];
+}
+
+router.get('/tag-analytics', authenticate, (_req: AuthRequest, res) => {
+  try {
+    res.json(computeTagAnalytics());
+  } catch (error) {
+    logger.error('Error generating tag analytics:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to generate tag analytics' });
   }
 });
 

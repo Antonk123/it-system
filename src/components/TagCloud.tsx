@@ -1,23 +1,22 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Ticket, Tag } from '@/types/ticket';
+import { TagAnalyticsRow } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface TagCloudProps {
-  tickets: Ticket[];
-  tags: Tag[];
+  // Pre-counted tag frequencies from the server (/reports/tag-analytics).
+  tags: TagAnalyticsRow[];
   onTagClick?: (tagId: string) => void;
   className?: string;
 }
 
 interface TagCloudData {
-  tag: Tag;
+  tag: TagAnalyticsRow;
   count: number;
   sizeLevel: 1 | 2 | 3 | 4 | 5;
 }
 
 export const TagCloud = ({
-  tickets,
   tags,
   onTagClick,
   className,
@@ -26,34 +25,13 @@ export const TagCloud = ({
   const [hoveredTag, setHoveredTag] = useState<TagCloudData | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
 
-  // Calculate tag cloud data with size levels
+  // Derive size levels from the server-supplied counts.
   const tagCloudData = useMemo(() => {
-    const tagCounts = new Map<string, number>();
-    const tagLookup = new Map<string, Tag>();
+    const max = Math.max(...tags.map(t => t.count), 1);
 
-    // Build counts and collect tag objects from tickets
-    tickets.forEach(ticket => {
-      ticket.tags?.forEach(tag => {
-        tagCounts.set(tag.id, (tagCounts.get(tag.id) || 0) + 1);
-        if (!tagLookup.has(tag.id)) {
-          tagLookup.set(tag.id, tag);
-        }
-      });
-    });
-
-    // Prefer canonical tag data from tags prop where available
-    tags.forEach(tag => {
-      if (tagLookup.has(tag.id)) {
-        tagLookup.set(tag.id, tag);
-      }
-    });
-
-    const counts = Array.from(tagCounts.values());
-    const max = Math.max(...counts, 1);
-
-    return Array.from(tagLookup.values())
+    return tags
       .map(tag => {
-        const count = tagCounts.get(tag.id) || 0;
+        const count = tag.count;
         // Calculate size level based on percentage of max
         const percentage = count / max;
         let sizeLevel: 1 | 2 | 3 | 4 | 5;
@@ -66,7 +44,7 @@ export const TagCloud = ({
         return { tag, count, sizeLevel };
       })
       .sort((a, b) => b.count - a.count);
-  }, [tickets, tags]);
+  }, [tags]);
 
   // Get text size class based on size level
   const getSizeClass = (level: 1 | 2 | 3 | 4 | 5) => {

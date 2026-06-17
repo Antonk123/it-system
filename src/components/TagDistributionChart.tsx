@@ -1,12 +1,12 @@
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarRectangleItem } from 'recharts';
 import { useNavigate } from 'react-router-dom';
-import { Ticket, Tag } from '@/types/ticket';
+import { TagAnalyticsRow } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface TagDistributionChartProps {
-  tickets: Ticket[];
-  tags: Tag[];
+  // Pre-counted tag frequencies from the server (/reports/tag-analytics).
+  tags: TagAnalyticsRow[];
   onTagClick?: (tagId: string) => void;
   topN?: number;
   className?: string;
@@ -41,7 +41,6 @@ const TagDistTooltip = ({ active, payload }: any) => {
 };
 
 export const TagDistributionChart = ({
-  tickets,
   tags,
   onTagClick,
   topN = 10,
@@ -49,38 +48,18 @@ export const TagDistributionChart = ({
 }: TagDistributionChartProps) => {
   const navigate = useNavigate();
 
-  // Calculate tag distribution data
+  // Shape the server-supplied counts for recharts and take the top N.
   const tagDistData = useMemo(() => {
-    const tagCounts = new Map<string, number>();
-    const tagLookup = new Map<string, Tag>();
-
-    // Build counts and collect tag objects from tickets
-    tickets.forEach(ticket => {
-      ticket.tags?.forEach(tag => {
-        tagCounts.set(tag.id, (tagCounts.get(tag.id) || 0) + 1);
-        if (!tagLookup.has(tag.id)) {
-          tagLookup.set(tag.id, tag);
-        }
-      });
-    });
-
-    // Prefer canonical tag data from tags prop where available
-    tags.forEach(tag => {
-      if (tagLookup.has(tag.id)) {
-        tagLookup.set(tag.id, tag);
-      }
-    });
-
-    return Array.from(tagLookup.values())
+    return tags
       .map(tag => ({
         name: tag.name,
-        count: tagCounts.get(tag.id) || 0,
+        count: tag.count,
         tagId: tag.id,
         color: tag.color,
       }))
       .sort((a, b) => b.count - a.count)
       .slice(0, topN);
-  }, [tickets, tags, topN]);
+  }, [tags, topN]);
 
   const gradients = useMemo(() => {
     return tagDistData.map(tag => ({

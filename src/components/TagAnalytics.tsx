@@ -1,26 +1,32 @@
-import { Ticket, Tag } from '@/types/ticket';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { TagCloud } from '@/components/TagCloud';
 import { TagDistributionChart } from '@/components/TagDistributionChart';
+import { useTagAnalytics } from '@/hooks/useTagAnalytics';
 import { cn } from '@/lib/utils';
 
 interface TagAnalyticsProps {
-  tickets: Ticket[];
-  tags: Tag[];
   onTagClick?: (tagId: string) => void;
   className?: string;
 }
 
 export const TagAnalytics = ({
-  tickets,
-  tags,
   onTagClick,
   className,
 }: TagAnalyticsProps) => {
-  // Check if there are any tags
-  const hasTags = tickets.some(t => t.tags && t.tags.length > 0);
+  // Server-side tag-frequency counts over the full dataset (no 1000-row cap).
+  const { data: tagData = [], isLoading } = useTagAnalytics();
 
-  if (!hasTags) {
+  if (isLoading) {
+    return (
+      <div className={cn('grid gap-6 lg:grid-cols-2', className)}>
+        <Skeleton className="h-80 w-full" />
+        <Skeleton className="h-80 w-full" />
+      </div>
+    );
+  }
+
+  if (tagData.length === 0) {
     return (
       <div className={cn('grid gap-6', className)}>
         <Card>
@@ -53,8 +59,7 @@ export const TagAnalytics = ({
         </CardHeader>
         <CardContent>
           <TagCloud
-            tickets={tickets}
-            tags={tags}
+            tags={tagData}
             onTagClick={onTagClick}
           />
         </CardContent>
@@ -72,8 +77,7 @@ export const TagAnalytics = ({
         </CardHeader>
         <CardContent>
           <TagDistributionChart
-            tickets={tickets}
-            tags={tags}
+            tags={tagData}
             onTagClick={onTagClick}
             topN={10}
           />

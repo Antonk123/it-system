@@ -1177,6 +1177,14 @@ class ApiClient {
     return this.request<RequesterAnalyticsRow[]>(`/reports/requester-analytics${qs}`);
   }
 
+  async getStatusFlow() {
+    return this.request<StatusFlowRow[]>('/reports/status-flow');
+  }
+
+  async getTagAnalytics() {
+    return this.request<TagAnalyticsRow[]>('/reports/tag-analytics');
+  }
+
   // Push notification subscription
   async getPushVapidKey(): Promise<{ vapidPublicKey: string }> {
     return this.request('/push/vapid-public-key');
@@ -1731,6 +1739,27 @@ export interface RequesterAnalyticsRow {
   ticketVelocity: number;
   topCategories: Array<{ category: string; count: number }>;
   topTags: Array<{ tag: string; count: number }>;
+}
+
+// One row per month (YYYY-MM) over the trailing 12-month window. Counts are
+// per-current-status of tickets created in that month — server-side aggregation
+// over the full dataset (replaces the old client-side StatusFlowChart compute).
+export interface StatusFlowRow {
+  month: string; // YYYY-MM
+  open: number;
+  'in-progress': number;
+  waiting: number;
+  resolved: number;
+  closed: number;
+}
+
+// One row per tag attached to at least one ticket. count = number of tickets
+// carrying the tag, aggregated server-side over the full dataset.
+export interface TagAnalyticsRow {
+  id: string;
+  name: string;
+  color: string;
+  count: number;
 }
 
 // Export singleton instance

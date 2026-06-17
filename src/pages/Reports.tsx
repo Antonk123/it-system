@@ -6,11 +6,9 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend
 import { Layout } from '@/components/Layout';
 import { useReportsSummary } from '@/hooks/useReportsSummary';
 import { useUsers } from '@/hooks/useUsers';
-import { useTags } from '@/hooks/useTags';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useTickets } from '@/hooks/useTickets';
 import { api, RequesterAnalyticsRow } from '@/lib/api';
-import { parseServerDate } from '@/lib/date';
+import { mapTicketRow } from '@/lib/mapTicket';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -150,9 +148,7 @@ const RequesterTooltip = ({ active, payload }: any) => {
 };
 
 const Reports = () => {
-  const { tickets } = useTickets({ limit: 1000, status: 'all' });
   const { users } = useUsers();
-  const { tags } = useTags();
   const isMobile = useIsMobile();
   const mode = useMode();
   const [selectedUserId, setSelectedUserId] = useState<string>('all');
@@ -162,6 +158,22 @@ const Reports = () => {
 
   // Fetch all report summary data from the new endpoint
   const { data: summary, isLoading, isError, error } = useReportsSummary(selectedYear, selectedMonth);
+
+  // Raw ticket rows are only needed for the KPIDetailDialog drill-down modals.
+  // Fetch them LAZILY — only once a modal is opened — instead of eagerly on page
+  // load. (All chart aggregation now comes from server-side report endpoints, so
+  // the page no longer pulls up to 1000 raw tickets just to render charts.)
+  const { data: drilldownTickets = [] } = useQuery({
+    queryKey: ['reports', 'drilldown-tickets'],
+    enabled: kpiModalOpen !== null,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const response = await api.getTickets('?limit=1000&status=all');
+      const rows = Array.isArray(response) ? response : response.data;
+      return rows.map(mapTicketRow);
+    },
+  });
 
   // Get available years from summary trend data
   const availableYears = useMemo(() => {
@@ -186,7 +198,7 @@ const Reports = () => {
 
   // yearMonthFilteredTickets is still used for the KPIDetailDialog "total" modal
   const yearMonthFilteredTickets = useMemo(() => {
-    let filtered = tickets;
+    let filtered = drilldownTickets;
 
     if (selectedYear !== 'all') {
       const year = parseInt(selectedYear);
@@ -205,7 +217,7 @@ const Reports = () => {
     }
 
     return filtered;
-  }, [tickets, selectedYear, selectedMonth]);
+  }, [drilldownTickets, selectedYear, selectedMonth]);
 
   // Summary KPIs for requester analytics
   const requesterKPIs = useMemo(() => {
@@ -349,14 +361,14 @@ const Reports = () => {
   }, [summary]);
   const agingTickets = summary?.agingTickets ?? 0;
 
-  // agingTicketsData still needs raw tickets for the detail modal
+  // agingTicketsData still needs raw tickets for the detail modal (lazily fetched)
   const agingTicketsData = useMemo(() => {
-    return tickets.filter(t => {
+    return drilldownTickets.filter(t => {
       if (t.status !== 'open') return false;
       const daysSinceCreated = differenceInDays(new Date(), t.createdAt);
       return daysSinceCreated > 7;
     });
-  }, [tickets]);
+  }, [drilldownTickets]);
 
   // Monthly trend data for KPICard sparklines (from summary.trend)
   const monthlyTrendData = useMemo(() => {
@@ -510,7 +522,7 @@ const Reports = () => {
         />
 
         {/* Empty state when no tickets exist */}
-        {!isLoading && !isError && totalTickets === 0 && tickets.length === 0 && (
+        {!isLoading && !isError && totalTickets === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />
             <p className="text-lg font-medium text-muted-foreground">Inga ärenden att visa statistik för</p>
@@ -800,7 +812,7 @@ const Reports = () => {
                 </p>
               </CardHeader>
               <CardContent>
-                <StatusFlowChart tickets={tickets} height={isMobile ? 250 : 300} />
+                <StatusFlowChart height={isMobile ? 250 : 300} />
               </CardContent>
             </Card>
           </TabsContent>
@@ -924,10 +936,7 @@ const Reports = () => {
           {/* ── Flik 4: Taggar ── */}
           <TabsContent value="taggar" className="space-y-5 mt-5">
             <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
-              <TagAnalytics
-                tickets={tickets}
-                tags={tags.map((t) => ({ ...t, createdAt: parseServerDate(t.created_at) }))}
-              />
+              <TagAnalytics />
             </div>
           </TabsContent>
 
