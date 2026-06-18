@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, CustomFieldInput } from '@/lib/api';
+import { api, CustomFieldInput, TicketRow } from '@/lib/api';
 import { Ticket, TicketStatus, TicketPriority } from '@/types/ticket';
 import { ticketInsertSchema, ticketUpdateSchema, getValidationError } from '@/lib/validations';
 import { parseServerDate } from '@/lib/date';
@@ -34,6 +34,27 @@ interface PaginationInfo {
   totalPages: number;
   hasNext: boolean;
   hasPrev: boolean;
+}
+
+// Apply a camelCase Partial<Ticket> patch onto a raw snake_case TicketRow.
+// Lets the single-ticket detail cache be patched optimistically so the UI
+// reflects a status/category/solution change instantly, instead of waiting for
+// a network round-trip — the difference between "instant" and 30s on a slow
+// VPN/5G link.
+function applyOptimisticRow(row: TicketRow, updates: Partial<Ticket> & { tag_ids?: string[] }): TicketRow {
+  const next = { ...row } as TicketRow & Record<string, unknown>;
+  const u = updates as Partial<Ticket> & { assigned_to?: string | null; company_id?: string | null };
+  if (u.title !== undefined) next.title = u.title;
+  if (u.description !== undefined) next.description = u.description;
+  if (u.status !== undefined) next.status = u.status;
+  if (u.priority !== undefined) next.priority = u.priority;
+  if (u.category !== undefined) next.category_id = u.category === 'none' ? null : u.category ?? null;
+  if (u.requesterId !== undefined) next.requester_id = u.requesterId || null;
+  if (u.notes !== undefined) next.notes = u.notes ?? null;
+  if (u.solution !== undefined) next.solution = u.solution ?? null;
+  if (u.assigned_to !== undefined) next.assigned_to = u.assigned_to || null;
+  if (u.company_id !== undefined) next.company_id = u.company_id || null;
+  return next;
 }
 
 // Query keys for React Query
@@ -179,53 +200,28 @@ export const useTickets = (options?: UseTicketsOptions) => {
         updateData.tag_ids = tagIds || updates.tag_ids || [];
       }
 
-      const updateResult = await api.updateTicket(id, { ...(updateData as any), customFields: customFields || undefined });
+      // Single round-trip: the PUT response IS the fresh ticket row (+ tags).
+      // We deliberately no longer follow with a second GET /tickets/:id — that
+      // doubled latency on slow links (VPN/5G) for every status/category/solution
+      // change, since the detail page then also had to wait for a third refetch.
+      const updated = await api.updateTicket(id, { ...(updateData as any), customFields: customFields || undefined }) as TicketRow & { warnings?: string[] };
 
-      if (updateResult?.warnings) {
-        updateResult.warnings.forEach((w: string) => toast.warning(w));
+      if (updated?.warnings) {
+        updated.warnings.forEach((w: string) => toast.warning(w));
       }
 
-      // Fetch fresh data from server
-      const freshTicket = await api.getTicket(id);
-      return {
-        id: freshTicket.id,
-        title: freshTicket.title,
-        description: freshTicket.description,
-        status: freshTicket.status as TicketStatus,
-        priority: freshTicket.priority as TicketPriority,
-        requesterId: freshTicket.requester_id || '',
-        category: freshTicket.category_id || undefined,
-        notes: freshTicket.notes || undefined,
-        solution: freshTicket.solution || undefined,
-        createdAt: parseServerDate(freshTicket.created_at),
-        updatedAt: parseServerDate(freshTicket.updated_at),
-        resolvedAt: freshTicket.resolved_at ? parseServerDate(freshTicket.resolved_at) : undefined,
-        closedAt: freshTicket.closed_at ? parseServerDate(freshTicket.closed_at) : undefined,
-        tags: (freshTicket as any).tags || [],
-        assignedTo: (freshTicket as any).assigned_to ?? null,
-        assignedToName: (freshTicket as any).assigned_to_name ?? null,
-        companyId: (freshTicket as any).company_id ?? null,
-        companyName: (freshTicket as any).company_name ?? null,
-        assigned_to: (freshTicket as any).assigned_to ?? null,
-        assigned_to_name: (freshTicket as any).assigned_to_name ?? null,
-        company_id: (freshTicket as any).company_id ?? null,
-        company_name: (freshTicket as any).company_name ?? null,
-        sla_response_deadline: freshTicket.sla_response_deadline ?? null,
-        sla_resolution_deadline: freshTicket.sla_resolution_deadline ?? null,
-        sla_paused_at: freshTicket.sla_paused_at ?? null,
-        sla_paused_duration: freshTicket.sla_paused_duration ?? 0,
-        sla_response_met: freshTicket.sla_response_met ?? null,
-        sla_resolution_met: freshTicket.sla_resolution_met ?? null,
-      };
+      return { id, updated, hadCustomFields: !!(customFields && customFields.length > 0) };
     },
-    onMutate: async ({ id, updates, customFields: _cf }) => {
-      // Cancel any outgoing refetches
+    onMutate: async ({ id, updates }) => {
+      // Cancel outgoing refetches for both the lists and this ticket's detail.
       await queryClient.cancelQueries({ queryKey: ticketKeys.lists() });
+      await queryClient.cancelQueries({ queryKey: ticketKeys.detail(id) });
 
-      // Snapshot the previous value
-      const previousTickets = queryClient.getQueryData(ticketKeys.list(options || {}));
+      // Snapshot previous values for rollback
+      const previousList = queryClient.getQueryData(ticketKeys.list(options || {}));
+      const previousDetail = queryClient.getQueryData<TicketRow>(ticketKeys.detail(id));
 
-      // Optimistically update to the new value
+      // Optimistic list update (instant feedback in list views)
       queryClient.setQueryData(ticketKeys.list(options || {}), (old: any) => {
         if (!old) return old;
         return {
@@ -244,23 +240,43 @@ export const useTickets = (options?: UseTicketsOptions) => {
         };
       });
 
-      return { previousTickets };
+      // Optimistic detail update — the TicketDetail page reads from this query,
+      // so without this the user saw NO change until a full network refetch.
+      queryClient.setQueryData<TicketRow | undefined>(ticketKeys.detail(id), (old) =>
+        old ? applyOptimisticRow(old, updates) : old
+      );
+
+      return { previousList, previousDetail, id };
     },
     onError: (error: Error, _variables, context) => {
-      // Rollback on error
-      if (context?.previousTickets) {
-        queryClient.setQueryData(ticketKeys.list(options || {}), context.previousTickets);
+      // Rollback both caches on error
+      if (context?.previousList !== undefined) {
+        queryClient.setQueryData(ticketKeys.list(options || {}), context.previousList);
+      }
+      if (context?.id && context?.previousDetail !== undefined) {
+        queryClient.setQueryData(ticketKeys.detail(context.id), context.previousDetail);
       }
       toast.error(error.message || 'Failed to update ticket');
     },
-    onSuccess: () => {
-      // Invalidate the detail cache for fresh data
-      queryClient.invalidateQueries({ queryKey: ticketKeys.details() });
+    onSuccess: ({ id, updated, hadCustomFields }) => {
+      // Seed the detail cache with the authoritative row from the PUT response,
+      // preserving field_values (the PUT response omits them). This reconciles
+      // the optimistic state WITHOUT another network round-trip.
+      queryClient.setQueryData<TicketRow>(ticketKeys.detail(id), (old) => ({
+        ...(old as TicketRow),
+        ...updated,
+        field_values: (old as any)?.field_values ?? (updated as any).field_values ?? [],
+      }));
+      // Custom fields changed → field_values are stale; refetch the detail once.
+      if (hadCustomFields) {
+        queryClient.invalidateQueries({ queryKey: ticketKeys.detail(id) });
+      }
     },
     onSettled: () => {
-      // Always invalidate all list views so every filter-view converges —
-      // this runs after both success and error, preserving optimistic UX
-      // (the optimistic update in onMutate already gave instant feedback).
+      // Mark all list views stale so every filter-view converges. Default
+      // refetchType only refetches *active* (mounted) lists immediately —
+      // inactive ones refetch lazily on next mount, so this doesn't spam the
+      // network on a slow link. The optimistic update already gave instant UX.
       queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
     },
   });
