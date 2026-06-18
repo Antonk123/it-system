@@ -60,7 +60,7 @@ Standardflöde: lokal utveckling → push → Anton bygger images via SSH → **
    - Frontend: `docker build -t it-ticketing-frontend:latest -f Dockerfile.client .`
 6. Anton redeployar via Portainer
 
-**Dev-miljön** är Portainer-stack `it-system-dev` (id 40), definierad i `docker-compose.dev.portainer.yml` (versionsspårad källa — Portainer-GUI:t måste spegla den). Den har **egen DB-volym** (`it-ticketing-dev-data`) och **egen checkout** (`/opt/it-system/itticket-dev`, en git-worktree) — den delar alltså INTE prod-DB:n och sitter inte fast på `main`. Test av en gren i dev: `cd /opt/it-system/itticket-dev && git checkout <gren> && git pull --ff-only`; tsx watch + Vite hot-reloadar, ingen rebuild. Se `docs/dev-db-isolation-runbook.md`.
+**Dev-miljön** är Portainer-stack `it-system-dev` (id 40), definierad i `docker-compose.dev.portainer.yml` (versionsspårad källa — Portainer-GUI:t måste spegla den). Den har **egen DB-volym** (`it-ticketing-dev-data`) → delar INTE prod-DB:n, men **delar prod-byggets checkout** `/opt/it-system/itticket-main` (på `main`; worktreet `itticket-dev` togs bort 2026-06-17 när vi gick över till merga-rakt-till-main). Synka dev till senaste main: `git -C /opt/it-system/itticket-main pull --ff-only` (eller `reset --hard origin/main`); tsx watch + Vite hot-reloadar, ingen rebuild. Prod ser inget förrän ny image byggs + deployas. Se `docs/dev-db-isolation-runbook.md`.
 
 ## Projektspecifika regler
 
