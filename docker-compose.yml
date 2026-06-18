@@ -9,6 +9,11 @@ services:
       - it-ticketing-data:/app/data
     environment:
       - NODE_ENV=production
+      # Frontend serveras över HTTP på LAN (8082:80). Webbläsare lagrar INTE
+      # Secure-cookies på icke-HTTPS-origins → CSRF-/refresh-cookies tappas och
+      # ärenden går inte att spara (särskilt i installerad PWA på telefon).
+      # Sätt COOKIE_SECURE=true om du terminerar TLS framför appen.
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
       - JWT_SECRET=${JWT_SECRET}
       - CSRF_SECRET=${CSRF_SECRET}
       - DB_PATH=/app/data/database.sqlite
