@@ -25,6 +25,9 @@ CLAUDE.md
 .superpowers/
 docs/superpowers/
 
+# GSD-sketcher (throwaway UI-mockups) — versionshanteras inte
+.planning/sketches/
+
 # Dev-miljö specifika filer (hot-reload, dev-setup)
 # OBS: docker-compose.dev.portainer.yml spåras numera medvetet som den
 # versionsspårade källan för dev-Portainer-stacken (it-system-dev / id 40).
