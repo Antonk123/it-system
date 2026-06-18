@@ -162,15 +162,16 @@ layer(base);
       transform: translate(-50%, -50%) rotate(442deg);
     }
   }
-  /* Full continuous rotation — glow travels around the entire perimeter
-     (vs search-glow-slow which rocks 180° back-and-forth via `alternate`). */
+  /* Full continuous rotation — glow travels around the entire perimeter.
+     IMPORTANT: rotate ONLY, no translate. Centering is done by the element's
+     Tailwind `-translate-x-1/2 -translate-y-1/2` (which compiles to the standalone
+     `translate:` property in TW v4). Putting translate() here too would STACK on
+     top of that property → double-shift → gradient centre lands far up-left and the
+     glow appears stuck in the corner. transform-origin (centre) keeps rotation about
+     the card centre. */
   @keyframes glow-rotate {
-    from {
-      transform: translate(-50%, -50%) rotate(0deg);
-    }
-    to {
-      transform: translate(-50%, -50%) rotate(360deg);
-    }
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
   }
 }
 
