@@ -1,190 +1,161 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-03-22
+**Analysis Date:** 2026-06-18
 
 ## Naming Patterns
 
 **Files:**
-- Components: PascalCase (e.g., `FileUpload.tsx`, `TicketTagSelector.tsx`)
-- Pages: PascalCase (e.g., `Settings.tsx`, `Archive.tsx`, `Dashboard.tsx`)
-- Hooks: camelCase with `use` prefix (e.g., `useCategories.ts`, `useTickets.ts`)
-- Utilities: camelCase (e.g., `api.ts`, `validations.ts`, `utils.ts`)
-- Types: separate files in `src/types/` with descriptive names (e.g., `ticket.ts`, `filterView.ts`)
-- Contexts: PascalCase with `Context` suffix (e.g., `AuthContext.tsx`)
-- UI primitives: PascalCase, co-located in `src/components/ui/` (e.g., `button.tsx`, `dialog.tsx`)
+- React components: PascalCase (e.g., `CategoryBadge.tsx`, `TicketDetail.tsx`)
+- React hooks: camelCase with `use` prefix (e.g., `useTickets.ts`, `useCategories.ts`)
+- Utility/lib files: camelCase (e.g., `validations.ts`, `contentMigration.ts`)
+- Backend route modules: camelCase, plural noun (e.g., `tickets.ts`, `comments.ts`, `kb.ts`)
+- Backend lib modules: camelCase, descriptive (e.g., `slaHelper.ts`, `automationHelper.ts`, `emailInbound.ts`)
+- Test files: same name as source with `.test.ts` suffix (co-located)
 
 **Functions:**
-- Component functions: PascalCase (e.g., `FileUpload`, `ProtectedRoute`, `AppearanceInitializer`)
-- Hook functions: camelCase with `use` prefix (e.g., `useAuth`, `useCategories`, `addCategory`)
-- Utility functions: camelCase (e.g., `formatFileSize`, `getFileIcon`, `stripHtml`)
-- Query/mutation helper functions: camelCase with descriptive names (e.g., `getCategoryLabel`, `reorderCategories`)
-- Private helper functions within ApiClient class: camelCase with `private` modifier (e.g., `getToken()`, `getCsrfToken()`)
+- Frontend React components: PascalCase named exports (`export const CategoryBadge = ...`)
+- Frontend hooks: camelCase (`export const useTickets = ...`)
+- Backend handlers: arrow functions assigned to `router.get/post/put/delete()`
+- Pure helpers: camelCase named exports
+- Event handlers in components: `handle` prefix (`handleClick`, `handleKeyDown`)
 
 **Variables:**
-- React hooks state: camelCase with setter naming (e.g., `const [user, setUser] = useState()`)
-- Constants: UPPER_SNAKE_CASE for module-level constants (e.g., `API_BASE_URL`, `MUTATING_METHODS`, `DEFAULT_NEW_TAG_COLOR`)
-- Query client configuration: camelCase (e.g., `queryClient`, `staleTime`)
-- Type/interface properties: camelCase (e.g., `isAuthenticated`, `createdAt`, `requesterId`)
-- Record keys: single quoted for special enum values (e.g., `'open'`, `'in-progress'`)
+- camelCase throughout both frontend and backend
+- DB column names: `snake_case` (SQLite convention, e.g., `ticket_id`, `created_at`)
+- Type/interface fields bridging DB↔frontend: DB rows use `snake_case`, mapped TypeScript types use `camelCase`
 
-**Types & Interfaces:**
-- Types: PascalCase (e.g., `Ticket`, `User`, `Comment`, `TicketStatus`, `TicketPriority`)
-- Type unions for status/priority: string literal unions in type declarations (e.g., `export type TicketStatus = 'open' | 'in-progress' | 'waiting' | 'resolved' | 'closed'`)
-- Interfaces for objects: PascalCase with descriptive suffix (e.g., `AuthContextType`, `ApiOptions`, `PaginatedResponse<T>`, `Category`)
-- Row/database types: suffix with `Row` for database representations (e.g., `CommentRow`, `TemplateRow`, `TicketLinkRow`)
-- Hook return types: typically object shapes with descriptive property names (e.g., `{ isAuthenticated, isLoading, user, signIn, signOut }`)
+**Types:**
+- Interfaces: PascalCase with `I`-prefix absent (e.g., `UseTicketsOptions`, `AuthRequest`, `Migration`)
+- Type aliases: PascalCase (e.g., `TicketStatus`, `TicketPriority`, `LogLevel`)
+- Enums: not used — string literal union types preferred (`'open' | 'in-progress' | ...`)
 
 ## Code Style
 
 **Formatting:**
-- No Prettier configuration file in root — relies on ESLint defaults and IDE settings
-- File structure: imports at top, then component/function definitions, then exports
-- Imports are organized but not strictly segregated (internal and external mixed)
-- Inline comments for complex logic (e.g., CSRF token handling, optimistic updates)
+- No Prettier config present — formatting is not enforced by tooling
+- TypeScript 5.8 (frontend), TypeScript 5.7 (backend)
+- ESM throughout (`"type": "module"` in both `package.json` files)
 
 **Linting:**
-- ESLint configured in `eslint.config.js` with Flat Config format
-- Extends: `@eslint/js` recommended + TypeScript ESLint recommended
-- Plugins: `react-hooks`, `react-refresh`
-- Key rule overrides:
-  - `@typescript-eslint/no-unused-vars`: "off" (disabled to allow flexibility)
-  - `react-refresh/only-export-components`: "warn" with `allowConstantExport: true`
-- TypeScript compiler options:
-  - `noImplicitAny`: false (allows implicit `any` types)
-  - `noUnusedParameters`: false
-  - `noUnusedLocals`: false
-  - `strictNullChecks`: false (lenient null handling)
-  - `skipLibCheck`: true (skip type checking of dependencies)
+- ESLint 9 flat config: `eslint.config.js` at repo root
+- Frontend: `typescript-eslint` recommended + `eslint-plugin-react-hooks` + `eslint-plugin-react-refresh`
+- Backend: `no-console: error` (must use `logger` from `server/src/lib/logger.ts`)
+- Backend: `no-restricted-globals` blocks bare `__dirname`/`__filename` (ESM; must define locally via `fileURLToPath`)
+- `@typescript-eslint/no-unused-vars`: off; `@typescript-eslint/no-explicit-any`: off
+
+## API Call Rule (Frontend — ENFORCED)
+
+**All HTTP calls from frontend must go through `src/lib/api.ts` `api.request()` method or its wrappers.**
+
+`no-restricted-syntax` ESLint rules block:
+- `fetch('/api/...')` with a string literal starting `/api`
+- `fetch(\`${API_BASE_URL}...\`)` template literals using `API_BASE_URL`
+
+Reason: `api.request()` in `src/lib/api.ts` provides CSRF token injection, `Authorization` header, and 401 → refresh-token retry automatically. Raw fetch misses these and causes 403 in production.
+
+Exceptions in `eslint.config.js`:
+- `src/lib/api.ts` itself (implements the wrapper, needs raw fetch)
+- `src/lib/secureFileAccess.ts` (calls `/auth/refresh` which is CSRF-exempt)
 
 ## Import Organization
 
-**Order:**
-1. External React/library imports (e.g., `react`, `@tanstack/react-query`, `react-router-dom`)
-2. UI component imports from `@radix-ui/` and custom UI components
-3. Icons (from `lucide-react`)
-4. Custom hooks and utilities (using `@/` alias)
-5. Types and interfaces (from `@/types/`)
-6. Local component imports
+**Order (frontend):**
+1. React/framework imports (`react`, `react-router-dom`, `date-fns`)
+2. Third-party libraries (`lucide-react`, `@tanstack/react-query`, etc.)
+3. Internal hooks (`@/hooks/...`)
+4. Internal components (`@/components/...`)
+5. Internal lib/utils (`@/lib/...`)
+6. Types (`@/types/...`)
 
 **Path Aliases:**
-- `@/` points to `./src/` (configured in `tsconfig.json`)
-- Used consistently across all imports for cleaner relative path references
-- Example: `import { api } from '@/lib/api'` instead of relative paths
+- `@/*` → `./src/*` (defined in `tsconfig.app.json` and root `tsconfig.json`)
+- Backend has no path aliases — uses relative imports with `.js` extension (ESM resolution)
 
-**Example import block:**
+**Backend import note:**
+Backend imports always use `.js` extension even for `.ts` source files (TypeScript ESM convention):
 ```typescript
-import { useState, useCallback, memo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, X, Tag as TagIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { api } from '@/lib/api';
-import { useCategories } from '@/hooks/useCategories';
-import { Category } from '@/types/ticket';
+import { db } from '../db/connection.js';
+import { logger } from '../lib/logger.js';
 ```
+
+## TypeScript Strictness
+
+**Frontend (`tsconfig.app.json`):**
+- `strict: false` but `strictNullChecks: true` explicitly set
+- `noImplicitAny: false`, `noUnusedLocals: false`
+- The app build is checked with null-safety but not full strict mode
+
+**Root `tsconfig.json` (references only):**
+- `strictNullChecks: false` — this applies to the node/tool config layer, NOT the app source
+- App source is always compiled via `tsconfig.app.json`
+
+**Backend (`server/tsconfig.json`):**
+- `strict: true` — full strict mode including `strictNullChecks`
 
 ## Error Handling
 
-**Patterns:**
-- API errors: thrown as `Error` objects with descriptive messages
-- Error messages extracted from response JSON: `error.error || error.message || 'Default message'`
-- Validation errors: caught and re-thrown with context using Zod's `safeParse()` and `getValidationError()`
-- Try-catch in async functions with error logging in DEV mode: `if (import.meta.env.DEV) console.error()`
-- Toast notifications for user-facing errors: `toast.error('Failed to create category')`
-- CSRF errors: special handling in ApiClient with automatic retry (clear stale token, fetch new one, retry)
-- Graceful fallbacks: return `null` or empty defaults on error (e.g., `return { error: error instanceof Error ? error.message : 'Login failed' }`)
+**Backend routes:**
+- All route handlers wrapped in `try/catch`
+- Errors logged via `logger.error('message', { error: String(error) })` then HTTP 500 returned
+- Pattern: `res.status(500).json({ error: 'Human-readable message' })`
+- Specific error codes returned for known failures (400 for bad input, 401 for auth, 403 for CSRF/permission)
 
-**Example:**
+**Frontend:**
+- React Query handles async error state; `isError` returned from `useQuery`
+- User-facing errors shown via `sonner` toast (`toast.error(...)`)
+- `ErrorBoundary` component at `src/components/ErrorBoundary.tsx` for unexpected render errors
+
+## Logging (Backend)
+
+**Framework:** Custom structured logger at `server/src/lib/logger.ts`
+
+**Pattern:**
 ```typescript
-catch (error) {
-  if (import.meta.env.DEV) console.error('Error deleting category:', error);
-  toast.error('Failed to create category');
-  return null;
-}
+import { logger } from '../lib/logger.js';
+
+logger.info('Ticket created', { ticketId, userId });
+logger.error('Failed to fetch tickets', { error: String(error), query: req.query });
+logger.warn('SLA deadline missed', { ticketId, deadline });
 ```
 
-## Logging
+**Output format:** JSON with `{ timestamp, level, message, ...meta }` — one entry per `console.log/error/warn` call. Structured fields passed as second argument (`meta: Record<string, unknown>`).
 
-**Framework:** `console` (standard browser console)
+**Enforcement:** `no-console: error` in ESLint for all `server/**/*.ts` files. Exceptions: `server/src/lib/logger.ts` (implements the wrapper), `server/src/db/migrations.ts`, `server/src/db/cleanup-refresh-tokens.ts` (standalone scripts).
 
-**Patterns:**
-- Errors logged only in DEV mode: `if (import.meta.env.DEV) console.error(...)`
-- Async operation debugging uses `console.error()` for exception tracking
-- No persistent logging framework (Sentry, etc.)
-- Toast notifications used for user-facing messaging instead of console logs
+## Input Sanitization (Backend)
 
-## Comments
+- Rich HTML content: `sanitizeRichText()` from `server/src/lib/htmlSanitizer.ts` (uses `sanitize-html`)
+- Plain text fields: `sanitizePlainText()` from the same module
+- Applied at route handler level before DB writes, e.g. `sanitizePlainText(title.trim())`, `sanitizeRichText(content)`
 
-**When to Comment:**
-- Complex authentication/CSRF token handling with detailed explanations
-- Fallback strategies and edge case handling
-- Intent of optimistic updates in React Query mutations
-- API response handling nuances (e.g., 204 no-content, content-type checking)
-- Lazy loading and caching strategies
+## Validation
 
-**JSDoc/TSDoc:**
-- Used sparingly
-- Type interfaces documented with inline comments for complex fields
-- Analytics interface example shows field meaning in comments:
+**Frontend:** Zod schemas in `src/lib/validations.ts` — `ticketInsertSchema`, `ticketUpdateSchema`, `contactSchema`, `companySchema`, `categorySchema`, etc. Parsed with `.parse()` or checked via `getValidationError()` helper.
+
+**Backend:** Input validated ad-hoc in route handlers (no central schema layer for backend). Common pattern: check required fields, return `res.status(400).json({ error: '...' })` early if invalid.
+
+## Database Access
+
+**Backend:** All DB access via `better-sqlite3` synchronous API through the singleton `db` exported from `server/src/db/connection.ts`.
+
+**Migrations:** Must be added to the `migrations` array in `server/src/db/migrations.ts`. `runMigrations()` runs at server startup via `initializeDatabase()`. Standalone `npx tsx` migration scripts are NOT run at startup.
+
+**Pattern:**
 ```typescript
-/**
- * Lazily fetch and cache the CSRF token. The token is bound to the current
- * auth session via the Authorization header (see backend getSessionIdentifier).
- */
-private async getCsrfToken(): Promise<string>
+const row = db.prepare('SELECT * FROM tickets WHERE id = ?').get(id);
+db.prepare('UPDATE tickets SET status = ? WHERE id = ?').run(status, id);
 ```
 
-## Function Design
+## Component Design
 
-**Size:**
-- Short focused functions (under 40 lines common)
-- Component callbacks extracted as named functions for clarity
-- Hook logic kept to React patterns (useCallback, useMutation, useQuery)
+**React components:** Functional only, no class components. Named exports preferred (`export const Foo = ...`). Default exports only for pages in `src/pages/`.
 
-**Parameters:**
-- Props interfaces defined inline for smaller components, exported for reusables
-- Destructured in function signatures: `({ attachments, pendingFiles, onFilesSelect }: FileUploadProps)`
-- Options objects for flexible method signatures: `async request<T>(endpoint: string, options: ApiOptions = {})`
+**Hooks:** Custom hooks in `src/hooks/` — each wraps React Query calls for a single resource domain (e.g., `useTickets.ts`, `useCategories.ts`). Query keys defined as factory objects in the same file (e.g., `ticketKeys.all`, `ticketKeys.list(filters)`).
 
-**Return Values:**
-- Hooks typically return object destructuring: `{ categories, isLoading, addCategory, ... }`
-- Async functions return typed Promises: `async uploadFile<T>(endpoint: string, file: File): Promise<T>`
-- Callbacks return early on validation failure: `return { error: 'message' }` or `return null`
-- Components return JSX or null for conditional rendering
+## Git Hooks
 
-## Module Design
-
-**Exports:**
-- Named exports for utilities, types, hooks, and constants
-- Default export for React components/pages
-- API client exported as singleton instance: `export const api = new ApiClient(API_BASE_URL)`
-
-**Barrel Files:**
-- Not used extensively; imports are explicit from specific files
-- UI components are not re-exported from a central barrel
-
-**API Client Pattern:**
-- Class-based wrapper around native `fetch()` API
-- Instance methods for domain operations: `getTickets()`, `createTicket()`, etc.
-- Private methods for shared concerns: `getToken()`, `getCsrfToken()`, `request<T>()`
-- Encapsulates auth token lifecycle and CSRF protection
-
-**Example API client method structure:**
-```typescript
-async importTicketsPreview(file: File) {
-  const token = this.getToken();
-  const formData = new FormData();
-  // Build request
-  const response = await fetch(...);
-  // Handle response
-}
-```
-
-**Hook Pattern with React Query:**
-- Query keys centralized at top of hook file: `export const categoryKeys = { all: [...], lists: () => [...], ... }`
-- Mutations wrapped with success/error callbacks for cache updates (optimistic updates)
-- Callback helpers extracted using `useCallback()` for dependency safety
-- Separation of concerns: query keys, queries, mutations, then callback helpers
+**Pre-commit:** Husky + lint-staged runs `eslint` on staged `*.{ts,tsx}` files. Config in root `package.json` under `"lint-staged"`. Never skip with `--no-verify`.
 
 ---
 
-*Convention analysis: 2026-03-22*
+*Convention analysis: 2026-06-18*

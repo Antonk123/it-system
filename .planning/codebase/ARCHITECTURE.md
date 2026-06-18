@@ -1,213 +1,214 @@
 # Architecture
 
-**Analysis Date:** 2026-03-22
+**Analysis Date:** 2026-06-18
 
 ## Pattern Overview
 
-**Overall:** Full-stack monolithic application with client-server separation
+**Overall:** Monorepo with a React SPA frontend and an Express REST API backend, connected over HTTP. No shared code between the two halves — frontend types are duplicated from backend types by convention.
 
 **Key Characteristics:**
-- React SPA frontend with client-side routing
-- Express.js backend with SQLite database
-- API-driven separation between client and server
-- Session-based authentication with JWT tokens
-- Scheduler-driven background jobs (reminders, auto-close)
-- Component-based UI architecture with shared UI library (shadcn)
+- Strict app/boot split on the backend: `server/src/app.ts` is a pure `createApp()` factory (no side-effects), `server/src/index.ts` owns DB init, schedulers, and `app.listen()`.
+- Frontend uses a hooks-as-data-layer pattern: all server I/O flows through `@tanstack/react-query` hooks in `src/hooks/`, which delegate to the single `ApiClient` in `src/lib/api.ts`.
+- SQLite is the only data store — no Redis, no secondary DB, no ORM. All queries are raw better-sqlite3 prepared statements.
+- Background work runs as in-process cron schedulers (node-cron) launched in `server/src/index.ts`.
 
 ## Layers
 
-**Frontend (Client) - Presentation Layer:**
-- Purpose: User interface and client-side logic
-- Location: `src/`
-- Contains: React components, pages, hooks, contexts, utilities
-- Depends on: Express API via `src/lib/api.ts`
-- Used by: Browser clients, PWA
+**Backend — Boot layer:**
+- Purpose: Start the process, initialise DB, wire schedulers, call `createApp()`, then `listen()`.
+- Location: `server/src/index.ts`
+- Contains: `initializeDatabase()`, all `cron.schedule()` calls, graceful-shutdown handlers, VAPID/email init.
+- Depends on: `server/src/app.ts`, `server/src/db/connection.ts`, every `lib/*Scheduler.ts`.
+- Used by: Nothing (process entry point).
 
-**API Layer - Express Routes:**
-- Purpose: RESTful endpoints for CRUD and business logic
+**Backend — App factory:**
+- Purpose: Construct and configure the Express app with all middleware, CSRF, and routes — importable without side-effects for use in supertest.
+- Location: `server/src/app.ts`
+- Contains: `createApp()` — Helmet, CORS, JSON body parser, cookie-parser, Passport init, conditional CSRF middleware, health/csrf-token endpoints, all 26 `app.use('/api/…')` route mounts, global error handler.
+- Depends on: `server/src/routes/*.ts`, `server/src/config/passport.ts`, `server/src/lib/logger.ts`.
+- Used by: `server/src/index.ts`, test files via supertest.
+
+**Backend — Route handlers (27 files):**
+- Purpose: HTTP endpoint definitions grouped by domain resource. Each file exports a Router.
 - Location: `server/src/routes/`
-- Contains: Route handlers for tickets, auth, categories, attachments, KB, etc.
-- Depends on: Database, middleware (auth, CSRF, rate limiting), business logic helpers
-- Used by: Frontend via HTTP, external integrations
+- Contains: Request validation, DB queries via `db` singleton, calls to lib helpers.
+- Note: `server/src/routes/template-fields.ts` is mounted as a nested router inside `server/src/routes/templates.ts` (`router.use('/:templateId/fields', templateFieldsRouter)`), not directly in `app.ts`. The remaining 26 routers are mounted in `createApp()`.
+- Depends on: `server/src/db/connection.ts`, `server/src/middleware/auth.ts`, lib helpers.
+- Used by: `server/src/app.ts`.
 
-**Database Layer - SQLite:**
-- Purpose: Persistent data storage with schema and migrations
-- Location: `server/src/db/`
-- Contains: Schema definition, connection management, migration scripts
-- Depends on: better-sqlite3 driver
-- Used by: All routes and services
+**Backend — Middleware:**
+- Purpose: Authentication (JWT + API key) and rate limiting.
+- Location: `server/src/middleware/`
+- Files: `auth.ts` — `authenticate`, `requireAdmin`, `getUser`; `rateLimit.ts` — `createRateLimiter`, pre-built `loginRateLimiter`, `writeRateLimiter`, `publicWriteRateLimiter`, `publicAiRateLimiter`.
+- Auth strategy: API-key check runs first (`Bearer itk_live_…` prefix); if absent or invalid, falls through to Passport JWT strategy.
+- Depends on: `server/src/db/connection.ts`, `server/src/lib/logger.ts`.
 
-**Business Logic - Utility Libraries:**
-- Purpose: Shared logic for email, automation, scheduling
+**Backend — Domain helpers (lib/):**
+- Purpose: Reusable business logic called from route handlers. Each file is narrowly scoped.
 - Location: `server/src/lib/`
-- Contains: Email service, reminder scheduler, auto-close scheduler, automation helpers
-- Depends on: Database, nodemailer, node-cron
-- Used by: Routes and scheduled tasks
+- Key files:
+  - `aiHelper.ts` — four AI features (KB deflection, category suggestion, reply draft, ticket summary) via Anthropic SDK. Lazy-initialised; all functions return `null` on failure so core flows are never blocked. Usage logged to `ai_usage_log` table for cost tracking. Monthly token-budget circuit breaker (configurable via `AI_MONTHLY_TOKEN_LIMIT`).
+  - `ticketQuery.ts` — `buildWhereClause`, `buildOrderByClause`, `validatePaginationParams` — extracted from `tickets.ts` to keep the route file navigable.
+  - `slaHelper.ts` — `applySLAToTicket`, `handleSLAStatusChange`, `recalculateSLAOnPriorityChange`.
+  - `automationHelper.ts` — `applyAutoTags`, `detectAutoPriority`.
+  - `auditLog.ts` — `logAudit` fire-and-forget helper writing to `audit_log` table.
+  - `webhookDispatcher.ts` — HMAC-signed outbound delivery with exponential-backoff retry queue (up to 5 attempts).
+  - `emailInbound.ts` — IMAP polling (ImapFlow) with M365 OAuth2 (`@azure/msal-node`) or basic-auth, converts emails to tickets.
+  - `email.ts` — outbound SMTP notifications.
+  - `logger.ts` — structured JSON logger (`{timestamp, level, message, ...meta}`) output to stdout/stderr. Custom implementation (not a third-party library). Imported throughout the codebase.
+  - `push.ts` + `pushScheduler.ts` — Web Push (VAPID) for PWA notifications.
+  - `htmlSanitizer.ts`, `htmlUtils.ts` — sanitise user-supplied HTML before DB storage.
+  - `passwordPolicy.ts` — password strength validation.
+  - `offsiteBackup.ts` — configurable off-site backup stub (driven by `OFFSITE_BACKUP_CMD` env var).
+- Depends on: `server/src/db/connection.ts`, `server/src/lib/logger.ts`.
 
-**Configuration & Security:**
-- Purpose: Authentication strategy, rate limiting, CSRF protection
-- Location: `server/src/config/`, `server/src/middleware/`
-- Contains: Passport strategies (local + JWT), CORS, rate limiter
-- Depends on: Express, bcryptjs, jsonwebtoken
-- Used by: Express middleware chain
+**Backend — Database layer:**
+- Purpose: Schema bootstrap, migration runner, raw DB singleton.
+- Location: `server/src/db/`
+- Files:
+  - `connection.ts` — exports `db: DatabaseType` (module-level singleton), `initializeDatabase()` (runs `schema.sql` then `runMigrations()`), `closeDatabase()`. WAL mode + `foreign_keys = ON` set at init.
+  - `schema.sql` — 17 base tables (tickets, users, contacts, categories, kb_articles, kb_categories, kb_article_shares, ticket_attachments, ticket_checklists, ticket_comments, ticket_shares, ticket_links, tags, ticket_tags, ticket_reminders, refresh_tokens, ticket_kb_links).
+  - `migrations.ts` — 59 migrations (ids `001`–`059`) in a single exported `migrations: Migration[]` array. `runMigrations()` in `connection.ts` iterates the array and records applied migrations in `schema_migrations`. Each migration runs in a transaction.
+  - `cleanup-refresh-tokens.ts` — standalone helper called by cron.
+- Depends on: nothing (foundational layer).
+
+**Backend — Schedulers:**
+- Purpose: Periodic background tasks, all started in `server/src/index.ts`.
+- Location: `server/src/lib/`
+- Files: `reminderScheduler.ts`, `autoCloseScheduler.ts`, `recurringScheduler.ts`, `webhookRetryScheduler.ts`, `pushScheduler.ts`.
+- Patterns: Most use `node-cron`; email polling uses a custom interval loop via `ImapFlow`.
+
+**Frontend — Pages:**
+- Purpose: Top-level route components. Each maps to a URL in `src/App.tsx`.
+- Location: `src/pages/`
+- Contains: 23 page components + `src/pages/settings/` (4 tab components: AdminTab, GeneralTab, IntegrationsTab, TicketsTab).
+- Pattern: Pages compose hooks + components; they do not call `api.*` directly.
+
+**Frontend — Hooks (data layer):**
+- Purpose: All server communication. Each hook wraps `useQuery`/`useMutation` from `@tanstack/react-query` and calls `api.request()`.
+- Location: `src/hooks/`
+- Contains: 34+ hook files (`useTickets.ts`, `useKbArticles.ts`, `useSLAPolicies.ts`, `useDashboardOverview.ts`, etc.).
+- Key pattern: Query keys are co-located as exported const objects (e.g. `ticketKeys`) to enable targeted cache invalidation.
+
+**Frontend — ApiClient:**
+- Purpose: Single point of egress. Handles JWT attachment, CSRF token lazy-fetch and caching, 401 → refresh-token retry.
+- Location: `src/lib/api.ts`
+- Exports: `api` singleton, `ApiClient` class, `PaginatedResponse<T>`, `AuthUser`.
+- Enforced: ESLint `no-restricted-syntax` blocks raw `fetch('/api/…')` calls project-wide.
+
+**Frontend — Components:**
+- Purpose: Reusable UI. Two sub-levels: domain components and primitive shadcn/ui components.
+- Location: `src/components/` (66 domain components) + `src/components/ui/` (27 shadcn/ui primitives).
+- Notable: `CommandPalette.tsx`, `KanbanView.tsx`, `UnifiedFilterBar.tsx`, `QuickCaptureFAB.tsx`.
+
+**Frontend — Context:**
+- Purpose: Auth state shared across the tree.
+- Location: `src/contexts/AuthContext.tsx`
+- Exports: `AuthProvider`, `useAuth`. Stores `AuthUser | null`, exposes `signIn`, `signOut`.
 
 ## Data Flow
 
-**Ticket Creation (Public):**
-1. User submits form on `PublicTicketForm` (React page)
-2. Frontend calls `api.createPublicTicket()` via `POST /api/public/tickets`
-3. Route handler: `server/src/routes/public.ts` → validates input
-4. Applies auto-tags via `automationHelper.ts` → detects priority
-5. Inserts ticket to SQLite `tickets` table
-6. Returns ticket ID + share token
-7. Email notification sent via `email.ts` (if SMTP configured)
+**Authenticated browser request:**
+1. Component calls a `src/hooks/use*.ts` hook.
+2. Hook invokes `api.request(method, path, body)` in `src/lib/api.ts`.
+3. `ApiClient` attaches `Authorization: Bearer <jwt>` and, for mutating methods, `x-csrf-token` header.
+4. Express receives request → CORS → Helmet → JSON parser → `authenticate` middleware.
+5. `authenticate` tries API-key auth first (`Bearer itk_live_…`); on `no_key`, falls through to Passport JWT strategy.
+6. Route handler validates input, queries SQLite via `db` prepared statements, calls lib helpers.
+7. Response JSON flows back; React Query updates cache and triggers re-render.
 
-**Ticket List View (Authenticated):**
-1. Page: `src/pages/TicketList.tsx` reads URL search params
-2. Calls `useTickets()` hook with filter options
-3. Hook uses React Query → calls `api.getTickets(queryString)`
-4. Frontend makes `GET /api/tickets?page=1&status=open&...`
-5. Route handler: `server/src/routes/tickets.ts` → builds SQL with filters
-6. Paginated response: `{ data: Ticket[], pagination: { page, limit, total, ... } }`
-7. Hook maps response to type `Ticket[]`, React Query caches with 2min staleTime
-8. Component renders `TicketTable` or `KanbanView` based on `viewMode` state
+**Email → ticket ingest:**
+1. `emailInbound.ts` polls IMAP on configurable interval (default 60 s).
+2. M365 OAuth2 or basic-auth; `simpleParser` parses raw message.
+3. Contact looked up/created; ticket row inserted; `dispatchWebhook` fires `ticket.created` event; confirmation email sent via `email.ts`.
 
-**Authentication Flow:**
-1. User submits email/password on `Login` page
-2. Calls `api.login(email, password)` → `POST /api/auth/login`
-3. Passport local strategy validates credentials (bcryptjs hash compare)
-4. On success: generates JWT token + refresh token, returns `{ user, token, refreshToken }`
-5. Frontend stores in localStorage: `auth_token`, `refreshToken`, `token` (for axios)
-6. API client automatically includes `Authorization: Bearer ${token}` on requests
-7. `setupTokenRefreshInterceptor()` in `src/main.tsx` auto-refreshes expired tokens
-8. All subsequent requests use middleware `authenticate` to verify JWT
+**AI deflection (public portal):**
+1. Visitor types problem description on `/submit-ticket`.
+2. Frontend calls `POST /api/public/ai-suggest` (no auth, rate-limited at 10/min via `publicAiRateLimiter`).
+3. `aiHelper.suggestSolutionFromKB` embeds search terms, queries `kb_articles` with FTS5, builds conservative Claude prompt, returns suggestion or `null`.
+4. If suggestion shown and accepted, no ticket is created; otherwise visitor submits ticket normally.
 
-**Background Task Execution:**
-1. Daily 02:30 UTC: `autoCloseScheduler` triggers
-2. Queries tickets with `status='resolved'` and age > AUTO_CLOSE_DAYS env var
-3. Updates status to 'closed', sets `closed_at` timestamp
-4. Sends `sendTicketClosedEmail()` to requester
-5. Daily 03:00 UTC: `cleanupRefreshTokens` removes expired tokens from DB
-6. On demand: Reminder scheduler runs when ticket reminders are queued
+**Scheduled backup:**
+1. `cron.schedule('0 4 * * *', …)` in `server/src/index.ts` fires at 04:00.
+2. `db.backup(tmpPath)` creates WAL-safe snapshot; `PRAGMA integrity_check` verifies it.
+3. ZIP bundles `data/database.sqlite` + `data/uploads/`; stored in `data/backups/`.
+4. Optional off-site upload via `offsiteBackup.ts`. Retention window enforced (default 7 days, env `BACKUP_RETENTION_DAYS`).
 
-**Knowledge Base (KB) Rendering:**
-1. Editor: `KBArticleForm` uses Tiptap (rich text editor)
-2. Stores HTML + markdown in `kb_articles` table
-3. Reader: `KBArticleDetail` hydrates from DB, renders with `HtmlRenderer`
-4. Sanitizes HTML with dompurify to prevent XSS
-5. Images embedded as Base64 or uploaded to attachments via `uploadKbImage`
+**State Management:**
+- Server state: `@tanstack/react-query` cache — all mutations call `queryClient.invalidateQueries` on success.
+- UI state: `useState`/`useReducer` local to components.
+- Auth: `AuthContext` (React Context).
+- No Redux, Zustand, or global state library.
 
 ## Key Abstractions
 
-**ApiClient (Singleton):**
-- Purpose: Encapsulates HTTP communication with CSRF protection
-- Examples: `src/lib/api.ts`
-- Pattern: Singleton class with static methods for each endpoint
-- Handles: Token management, CSRF token fetching/caching, automatic retries on CSRF failure, error mapping
+**Migration:**
+- Purpose: Incremental DB schema change, idempotent (guards via `tableExists`/`columnExists` helpers).
+- Examples: `server/src/db/migrations.ts` (ids `001`–`059`).
+- Pattern: Each migration is `{ id: string, name: string, up(db, helpers): void }`. New migrations appended at the end of the array; never inserted mid-array.
 
-**React Query Integration:**
-- Purpose: Server state management with caching
-- Examples: `useTickets()`, `useUsers()`, `useCategories()`
-- Pattern: Typed query keys (`ticketKeys.list()`) for automatic invalidation
-- Caching: staleTime=5min, gcTime=10min for tickets; short TTL for mutations
+**ApiClient:**
+- Purpose: CSRF + auth-token lifecycle management for all frontend→backend calls.
+- Location: `src/lib/api.ts`.
+- Pattern: `api.request<T>(method, path, body?)` is the sole public surface for data-mutating calls; GET helpers are named wrapper methods on the same class.
 
-**Ticket Filtering & Search:**
-- Purpose: Complex multi-field filtering via URL params
-- Examples: `TicketList.tsx` reads `search`, `status[]`, `priority`, `category`, `tags[]`, `dateFrom/To`
-- Pattern: URL-driven state (persistent across page refresh), built query string in hook
-- Server-side: SQL WHERE clauses + LIKE for search, JOIN for tags/categories
+**Query key factories:**
+- Purpose: Structured cache invalidation in React Query.
+- Examples: `ticketKeys` in `src/hooks/useTickets.ts`; similar pattern in all hook files.
+- Pattern: `{ all, lists, list(filters), details, detail(id) }` hierarchy; invalidate by parent key to bust related queries.
 
-**Custom Fields (Dynamic Schema):**
-- Purpose: Per-tenant field customization without schema changes
-- Pattern: `field_values` JSON column in tickets + `ticket_custom_fields` definition table
-- Frontend: `DynamicField.tsx` renders based on field type (text, select, checkbox, date)
-- Server: Stores as JSON, validates against template definition
-
-**View Management (Filter Presets):**
-- Purpose: Save and apply complex filter combinations
-- Examples: `useFilterViews()` hook, `FilterViewManager.tsx`
-- Pattern: Stored in localStorage as `filterViews_*`, synced to server optionally
-- Includes: Named views with snapshots of all active filters
+**Route factory (Express):**
+- Purpose: Each route file creates its own `Router` and exports it as default; mounted in `createApp()`.
+- Examples: `server/src/routes/tickets.ts`, `server/src/routes/kb.ts`.
+- Pattern: `const router = Router()` at top, `export default router` at bottom.
 
 ## Entry Points
 
-**Frontend:**
-- Location: `src/main.tsx`
-- Triggers: `index.html` loads via Vite dev server or built bundle
-- Responsibilities:
-  - Mounts React root component
-  - Sets up token refresh interceptor
-  - Initializes theme from localStorage
-
-**App Component:**
-- Location: `src/App.tsx`
-- Triggers: Rendered by main.tsx
-- Responsibilities:
-  - Wraps with providers (Theme, QueryClient, Router, Auth)
-  - Defines protected/public routes
-  - Renders route matching via React Router
-
-**Backend Entry Point:**
+**Backend process:**
 - Location: `server/src/index.ts`
-- Triggers: Node process starts via `npm run dev` (tsx watch) or `npm start` (compiled)
-- Responsibilities:
-  - Initializes Express app
-  - Loads environment variables
-  - Mounts middleware (security, CORS, auth, rate limiting)
-  - Registers route groups
-  - Starts scheduler: reminder, auto-close, token cleanup
-  - Listens on `process.env.PORT || 3001`
+- Triggers: `node` / `tsx` process start (Docker `CMD`).
+- Responsibilities: DB init → scheduler start → `createApp()` → `app.listen(PORT)` → email polling start.
+
+**Express app factory:**
+- Location: `server/src/app.ts` — `export function createApp()`
+- Triggers: Called by `server/src/index.ts` and by test files.
+- Responsibilities: All middleware registration, route mounting, error handler. No side-effects.
+
+**Frontend SPA:**
+- Location: `index.html` → `src/main.tsx` → `src/App.tsx`
+- Triggers: Vite dev server or nginx serving `dist/`.
+- Responsibilities: `AuthProvider` wrapper, React Router `BrowserRouter`, lazy-loaded route components.
+
+**Public ticket form (unauthenticated):**
+- Location: `src/pages/PublicTicketForm.tsx`
+- Route: `/submit-ticket`
+- Backend: `server/src/routes/public.ts` — CSRF-exempt, rate-limited at 30 req/min.
 
 ## Error Handling
 
-**Strategy:** Async/await with try-catch at route level; error codes standardized
+**Strategy:** Fail loudly at startup for missing secrets (`process.exit(1)`); fail gracefully at runtime for non-critical features (AI, webhooks, audit log).
 
 **Patterns:**
-- Routes catch errors, return 400/401/403/500 with `{ error: string }`
-- Frontend catches API errors in mutation handlers, displays via `toast.error()`
-- Database errors propagate to route handler, logged to console
-- Validation errors: Zod schemas in frontend + server-side Zod re-validation
-- CSRF failures: Auto-retry once after clearing stale token
-
-**Specific Examples:**
-- Login failure: Returns 401 with "Incorrect email or password"
-- Rate limit exceeded: Returns 429 (via express-rate-limit)
-- Invalid CSRF: Returns 403, frontend clears token and retries
-- Database constraint violation: Returns 400 with constraint message
+- Missing `CSRF_SECRET` → `process.exit(1)` in `server/src/app.ts` (unconditional, no `NODE_ENV` gate, no fallback).
+- Missing `JWT_SECRET` → `process.exit(1)` in `server/src/config/passport.ts`.
+- AI functions always return `null` on error — callers must handle `null`.
+- `auditLog.ts` catches DB errors internally — audit failure never propagates to caller.
+- Webhook delivery failures are queued for retry with exponential backoff (1, 5, 30, 120, 360 min) via `webhookRetryScheduler.ts`.
+- Global Express error handler in `createApp()` forwards `err.status` 4xx to client; logs and returns 500 for all other errors.
+- `process.on('unhandledRejection')` and `process.on('uncaughtException')` both log via `logger.error`; uncaughtException exits.
 
 ## Cross-Cutting Concerns
 
-**Logging:**
-- Console.log for startup events (scheduler enabled, CORS config)
-- Server logs to stdout (captured by Docker logs)
-- No structured logging configured; no log aggregation
+**Logging:** `server/src/lib/logger.ts` — custom structured JSON logger, emits `{timestamp, level, message, ...meta}` to stdout/stderr. Used in routes, middleware, db layer, lib helpers, and schedulers throughout the codebase.
 
-**Validation:**
-- Frontend: Zod schemas in `src/lib/validations.ts` (ticketInsertSchema, ticketUpdateSchema)
-- Server: Validates in route handlers before DB operations
-- Types: TypeScript enforces at compile time; runtime validation via Zod
+**Validation:** Input validated in route handlers using inline checks; `server/src/lib/htmlSanitizer.ts` sanitises rich-text fields before DB writes; frontend validates forms via `src/lib/validations.ts`.
 
-**Authentication:**
-- Passport with local + JWT strategies
-- Session stored in JWT token (stateless)
-- Refresh tokens in DB for invalidation
-- CSRF token fetched lazily, cached in memory
+**Authentication:** Dual-credential: JWT (15-min access token via Passport JWT strategy) + rolling refresh tokens (httpOnly cookie). API keys (`itk_live_…` prefix, SHA-256 stored) checked first in `authenticate` middleware; scoped to `read` or `read+write`.
 
-**Authorization:**
-- User role (admin/user) checked in routes via `user.role` from JWT payload
-- Public endpoints allow anonymous access (e.g., `/api/public/tickets`)
-- Protected endpoints require valid JWT via `authenticate` middleware
+**CSRF:** Double Submit Cookie (csrf-csrf library). Exempt: `/api/auth/login`, `/api/auth/refresh`, `/api/public/*`. Frontend fetches token once per session via `GET /api/csrf-token`, cached in `ApiClient`.
 
-**CORS:**
-- Configured for localhost dev (5173, 8082) + environment variable
-- Credentials allowed (includes cookies for CSRF)
-- No wildcard origins with credentials
-
-**Rate Limiting:**
-- Applied per IP address
-- Rate limiter config in `server/src/middleware/rateLimit.ts`
-- Prevents brute force on auth endpoints
+**Rate limiting:** In-memory per-IP. Four pre-built limiters in `server/src/middleware/rateLimit.ts`; applied per-route or per-router.
 
 ---
 
-*Architecture analysis: 2026-03-22*
+*Architecture analysis: 2026-06-18*
