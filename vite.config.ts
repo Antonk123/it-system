@@ -21,6 +21,10 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',
+      // We register the SW ourselves (src/registerSW.ts) to add periodic update
+      // checks + auto-reload. Disable the plugin's own bare registration so the
+      // SW isn't registered twice.
+      injectRegister: false,
       strategies: 'injectManifest',
       srcDir: 'src',
       filename: 'sw.ts',
