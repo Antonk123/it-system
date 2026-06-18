@@ -4,17 +4,14 @@
 <meta charset="utf-8" />
 <title>IT-Ticket — Ärendehantering för svenska SMB:s</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="description" content="AI-driven ärendehantering byggd från perspektivet av en svensk IT-administratör. Installerad hos er på en eftermiddag." />
+<meta name="description" content="Ärendehanterare byggd av en IT-administratör, för IT-administratörer. Egen Docker-instans hos er. Boka en 15-min demo." />
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<!-- Distinkt val: IBM Plex Sans + Plex Mono. Svensk teknisk känsla, inte Inter. -->
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@500;600&display=swap" rel="stylesheet">
 
 <style>
   :root {
-    /* Färgpalett: djup skogsgrön + crème + brännbar koppar.
-       Inget blått, inget lila — dem har alla SaaS-bolag. */
     --bg: #f4efe6;
     --bg-deep: #0f1f1a;
     --ink: #0f1f1a;
@@ -40,9 +37,7 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  .container { max-width: 1080px; margin: 0 auto; padding: 0 28px; }
-  section { padding: 96px 0; border-bottom: 1px solid var(--line); }
-  section:last-of-type { border-bottom: none; }
+  .container { max-width: 920px; margin: 0 auto; padding: 0 24px; }
 
   /* ─── NAV ─── */
   nav {
@@ -52,35 +47,32 @@
   }
   nav .container {
     display: flex; align-items: center; justify-content: space-between;
-    padding-top: 18px; padding-bottom: 18px;
+    padding-top: 16px; padding-bottom: 16px;
   }
   .logo {
     font-family: 'IBM Plex Mono', monospace; font-weight: 600;
-    font-size: 16px; letter-spacing: -0.01em; color: var(--ink);
-    text-decoration: none;
+    font-size: 15px; color: var(--ink); text-decoration: none;
   }
   .logo::before { content: '▸ '; color: var(--copper); }
   nav a.cta {
-    font-family: 'IBM Plex Mono', monospace; font-size: 14px;
-    color: var(--ink); text-decoration: none; padding: 8px 16px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 13px;
+    color: var(--ink); text-decoration: none; padding: 7px 14px;
     border: 1.5px solid var(--ink); border-radius: 999px;
     transition: all 0.18s;
   }
   nav a.cta:hover { background: var(--ink); color: var(--paper); }
 
   /* ─── HERO ─── */
-  .hero { padding: 120px 0 110px; }
+  .hero { padding: 100px 0 80px; }
   .hero .eyebrow {
-    font-family: 'IBM Plex Mono', monospace; font-size: 13px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
     color: var(--copper); text-transform: uppercase; letter-spacing: 0.18em;
-    margin-bottom: 28px;
-    animation: fadeIn 0.8s ease-out;
+    margin-bottom: 24px;
   }
   .hero h1 {
     font-family: 'IBM Plex Serif', serif; font-weight: 500;
-    font-size: clamp(40px, 6vw, 72px); line-height: 1.04; letter-spacing: -0.02em;
-    margin-bottom: 32px; max-width: 14ch;
-    animation: fadeIn 0.9s ease-out 0.1s both;
+    font-size: clamp(36px, 5.5vw, 60px); line-height: 1.05; letter-spacing: -0.02em;
+    margin-bottom: 28px; max-width: 18ch;
   }
   .hero h1 em {
     font-style: italic; color: var(--copper);
@@ -88,262 +80,130 @@
     padding: 0 0.1em;
   }
   .hero .lead {
-    font-size: 21px; line-height: 1.55; color: var(--ink-soft);
-    max-width: 56ch; margin-bottom: 44px;
-    animation: fadeIn 1s ease-out 0.2s both;
+    font-size: 19px; line-height: 1.55; color: var(--ink-soft);
+    max-width: 56ch; margin-bottom: 36px;
   }
-  .hero-actions {
-    display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
-    animation: fadeIn 1.1s ease-out 0.3s both;
-  }
+  .hero-actions { display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
   .btn-primary {
-    display: inline-block; padding: 16px 28px; background: var(--ink);
+    display: inline-block; padding: 14px 24px; background: var(--ink);
     color: var(--paper); border-radius: 999px; text-decoration: none;
-    font-weight: 500; font-size: 16px; transition: all 0.2s;
+    font-weight: 500; font-size: 15px; transition: all 0.2s;
   }
   .btn-primary:hover { background: var(--copper); transform: translateY(-2px); }
   .btn-secondary {
-    font-family: 'IBM Plex Mono', monospace; font-size: 14px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 13px;
     color: var(--ink); text-decoration: none; border-bottom: 1.5px solid var(--ink);
     padding-bottom: 2px; transition: all 0.2s;
   }
   .btn-secondary:hover { color: var(--copper); border-bottom-color: var(--copper); }
 
-  .hero-meta {
-    margin-top: 60px; padding-top: 28px; border-top: 1px solid var(--line);
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px;
-    font-family: 'IBM Plex Mono', monospace; font-size: 13px;
-    animation: fadeIn 1.2s ease-out 0.4s both;
-  }
-  .hero-meta div b {
-    display: block; color: var(--copper); font-size: 22px; font-weight: 600;
-    font-family: 'IBM Plex Serif', serif; margin-bottom: 4px;
-  }
-  .hero-meta div span { color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.1em; }
-
-  /* ─── SECTION HEADERS ─── */
+  /* ─── SECTIONS ─── */
+  section { padding: 72px 0; border-top: 1px solid var(--line); }
   .section-eyebrow {
-    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    font-family: 'IBM Plex Mono', monospace; font-size: 11px;
     color: var(--copper); text-transform: uppercase; letter-spacing: 0.2em;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
   .section-title {
     font-family: 'IBM Plex Serif', serif; font-weight: 500;
-    font-size: clamp(28px, 4vw, 44px); line-height: 1.15; letter-spacing: -0.015em;
-    max-width: 18ch; margin-bottom: 24px;
+    font-size: clamp(26px, 3.5vw, 38px); line-height: 1.15; letter-spacing: -0.015em;
+    max-width: 22ch; margin-bottom: 20px;
   }
   .section-lead {
-    font-size: 19px; color: var(--ink-soft); max-width: 60ch; margin-bottom: 56px;
+    font-size: 17px; color: var(--ink-soft); max-width: 60ch; margin-bottom: 40px;
   }
 
-  /* ─── AI FEATURES (det viktigaste avsnittet) ─── */
-  .features { background: var(--bg-deep); color: var(--paper); }
-  .features .section-eyebrow { color: var(--highlight); }
-  .features .section-title { color: var(--paper); }
-  .features .section-lead { color: rgba(250, 246, 238, 0.75); }
-
-  .feature-list {
-    display: grid; gap: 0; counter-reset: feat;
+  /* ─── DEMO LIST ─── */
+  .demo-list { list-style: none; counter-reset: dm; }
+  .demo-list > li {
+    counter-increment: dm; padding: 22px 0;
+    border-top: 1px solid var(--line);
+    display: grid; grid-template-columns: 40px 1fr; gap: 24px;
   }
-  .feature {
-    display: grid; grid-template-columns: 80px 1fr; gap: 32px;
-    padding: 36px 0; border-top: 1px solid rgba(250, 246, 238, 0.14);
-    align-items: start;
-  }
-  .feature:last-child { border-bottom: 1px solid rgba(250, 246, 238, 0.14); }
-  .feature-num {
-    font-family: 'IBM Plex Mono', monospace; font-size: 13px;
-    color: var(--highlight); padding-top: 6px;
-  }
-  .feature-num::before { counter-increment: feat; content: '0' counter(feat); }
-  .feature h3 {
-    font-family: 'IBM Plex Serif', serif; font-weight: 500;
-    font-size: 26px; margin-bottom: 10px; letter-spacing: -0.01em;
-  }
-  .feature p { color: rgba(250, 246, 238, 0.78); max-width: 60ch; }
-  .feature .demo {
-    margin-top: 18px; padding: 14px 18px;
-    background: rgba(239, 224, 163, 0.08);
-    border-left: 2px solid var(--highlight);
-    font-family: 'IBM Plex Mono', monospace; font-size: 13px;
-    line-height: 1.7; color: rgba(250, 246, 238, 0.85);
-  }
-  .demo .label { color: var(--highlight); display: block; font-size: 11px;
-    text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 6px; }
-
-  @media (max-width: 720px) {
-    .feature { grid-template-columns: 1fr; gap: 12px; }
-    .feature-num { padding-top: 0; }
-  }
-
-  /* ─── DIFF (jämförelse) ─── */
-  .diff-grid {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 0;
-    border: 1px solid var(--line); border-radius: 12px; overflow: hidden;
-  }
-  .diff-grid > div { padding: 36px 32px; }
-  .diff-grid > div:first-child {
-    background: var(--paper); border-right: 1px solid var(--line);
-  }
-  .diff-grid > div:last-child {
-    background: var(--moss); color: var(--paper);
-  }
-  .diff-grid h4 {
+  .demo-list > li:first-child { border-top: none; padding-top: 0; }
+  .demo-list > li::before {
+    content: '0' counter(dm);
     font-family: 'IBM Plex Mono', monospace; font-size: 12px;
-    text-transform: uppercase; letter-spacing: 0.18em; margin-bottom: 20px;
-    opacity: 0.7;
+    color: var(--copper); padding-top: 4px;
   }
-  .diff-grid h3 {
-    font-family: 'IBM Plex Serif', serif; font-weight: 500; font-size: 24px;
-    margin-bottom: 24px; letter-spacing: -0.01em;
+  .demo-list h3 {
+    font-family: 'IBM Plex Serif', serif; font-weight: 500;
+    font-size: 21px; margin-bottom: 6px; letter-spacing: -0.01em;
   }
-  .diff-grid ul { list-style: none; }
-  .diff-grid li {
-    padding: 10px 0 10px 26px; position: relative; font-size: 16px;
-    border-top: 1px solid currentColor; opacity: 0.85;
+  .demo-list p { color: var(--ink-soft); max-width: 60ch; font-size: 16px; }
+
+  /* ─── TECH ─── */
+  .tech { background: var(--bg-deep); color: var(--paper); border-top: none; }
+  .tech .section-eyebrow { color: var(--highlight); }
+  .tech .section-title { color: var(--paper); }
+  .tech .section-lead { color: rgba(250, 246, 238, 0.75); }
+  .tech-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
   }
-  .diff-grid li:first-child { border-top: none; }
-  .diff-grid > div:first-child li::before {
-    content: '✕'; position: absolute; left: 0; color: var(--ink-mute);
+  .tech-item {
+    padding: 18px 20px;
+    border: 1px solid rgba(250, 246, 238, 0.14);
+    border-radius: 10px;
+    background: rgba(250, 246, 238, 0.02);
   }
-  .diff-grid > div:last-child li::before {
-    content: '✓'; position: absolute; left: 0; color: var(--highlight);
+  .tech-item h4 {
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    color: var(--highlight); text-transform: uppercase; letter-spacing: 0.15em;
+    margin-bottom: 8px;
   }
-  @media (max-width: 720px) {
-    .diff-grid { grid-template-columns: 1fr; }
-    .diff-grid > div:first-child { border-right: none; border-bottom: 1px solid var(--line); }
+  .tech-item p {
+    font-size: 15px; color: rgba(250, 246, 238, 0.85); line-height: 1.5;
   }
 
   /* ─── PRIS ─── */
   .price-card {
     background: var(--paper); border: 1.5px solid var(--ink);
-    border-radius: 16px; padding: 48px 40px; max-width: 640px;
-    position: relative;
-  }
-  .price-card .stamp {
-    position: absolute; top: -14px; right: 32px;
-    background: var(--copper); color: var(--paper);
-    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
-    text-transform: uppercase; letter-spacing: 0.15em;
-    padding: 6px 14px; border-radius: 999px;
+    border-radius: 14px; padding: 36px 32px; max-width: 580px;
   }
   .price-row {
     display: flex; justify-content: space-between; align-items: baseline;
-    padding: 18px 0; border-top: 1px solid var(--line);
+    padding: 14px 0; border-top: 1px solid var(--line);
   }
   .price-row:first-of-type { border-top: none; }
   .price-row .label {
-    font-family: 'IBM Plex Mono', monospace; font-size: 14px; color: var(--ink-soft);
+    font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: var(--ink-soft);
   }
   .price-row .amount {
-    font-family: 'IBM Plex Serif', serif; font-size: 28px; font-weight: 500;
+    font-family: 'IBM Plex Serif', serif; font-size: 24px; font-weight: 500;
   }
-  .price-row .amount small { font-size: 14px; color: var(--ink-mute); margin-left: 4px; }
-  .price-included { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
-  .price-included h5 {
-    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
-    text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 14px;
-    color: var(--ink-mute);
-  }
-  .price-included ul { list-style: none; columns: 2; column-gap: 32px; }
-  .price-included li { padding: 6px 0 6px 22px; position: relative; font-size: 15px; }
-  .price-included li::before { content: '·'; position: absolute; left: 0;
-    color: var(--copper); font-size: 24px; line-height: 1; top: 4px; }
-  @media (max-width: 600px) { .price-included ul { columns: 1; } }
+  .price-row .amount small { font-size: 13px; color: var(--ink-mute); margin-left: 4px; }
+  .price-foot { margin-top: 20px; font-size: 14px; color: var(--ink-mute); }
 
-  /* ─── TIMELINE ─── */
-  .timeline {
-    list-style: none; counter-reset: step;
-    border-left: 2px solid var(--line); padding-left: 32px;
-    max-width: 720px;
+  /* ─── FAQ ─── */
+  .faq-item { padding: 20px 0; border-top: 1px solid var(--line); }
+  .faq-item:first-child { border-top: none; padding-top: 0; }
+  .faq-item h4 {
+    font-family: 'IBM Plex Sans', sans-serif; font-weight: 600;
+    font-size: 17px; margin-bottom: 8px; color: var(--ink);
   }
-  .timeline li {
-    padding: 16px 0 28px; position: relative; counter-increment: step;
-  }
-  .timeline li::before {
-    content: counter(step); position: absolute; left: -47px; top: 14px;
-    width: 30px; height: 30px; background: var(--copper); color: var(--paper);
-    border-radius: 50%; display: flex; align-items: center; justify-content: center;
-    font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500;
-  }
-  .timeline strong {
-    font-family: 'IBM Plex Mono', monospace; font-size: 13px;
-    text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-soft);
-    display: block; margin-bottom: 6px;
-  }
-  .timeline h4 {
-    font-family: 'IBM Plex Serif', serif; font-weight: 500;
-    font-size: 22px; margin-bottom: 8px;
-  }
-  .timeline p { color: var(--ink-soft); font-size: 16px; max-width: 56ch; }
-
-  /* ─── CASE ─── */
-  .case {
-    background: var(--moss-soft); border-radius: 16px; padding: 56px 48px;
-  }
-  .case blockquote {
-    font-family: 'IBM Plex Serif', serif; font-style: italic;
-    font-size: 26px; line-height: 1.4; max-width: 28ch; margin-bottom: 28px;
-    color: var(--ink); letter-spacing: -0.01em;
-  }
-  .case blockquote::before {
-    content: '"'; font-size: 80px; line-height: 0.5; vertical-align: -0.4em;
-    color: var(--copper); margin-right: 6px; font-family: 'IBM Plex Serif', serif;
-  }
-  .case .author {
-    font-family: 'IBM Plex Mono', monospace; font-size: 13px;
-    color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.12em;
-  }
-  .case-stats {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px;
-    margin-top: 40px; padding-top: 32px; border-top: 1px solid rgba(15, 31, 26, 0.15);
-  }
-  .case-stats div b {
-    display: block; font-family: 'IBM Plex Serif', serif; font-size: 36px;
-    font-weight: 500; color: var(--moss); letter-spacing: -0.02em;
-  }
-  .case-stats div span {
-    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
-    text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-soft);
-  }
-  @media (max-width: 600px) {
-    .case-stats { grid-template-columns: 1fr; }
-    .case { padding: 36px 28px; }
-  }
+  .faq-item p { color: var(--ink-soft); max-width: 64ch; font-size: 16px; }
 
   /* ─── CTA ─── */
-  .cta-section { text-align: center; padding: 120px 0; }
+  .cta-section { text-align: center; padding: 96px 0; }
   .cta-section h2 {
     font-family: 'IBM Plex Serif', serif; font-weight: 500;
-    font-size: clamp(32px, 5vw, 56px); line-height: 1.1; letter-spacing: -0.02em;
-    margin-bottom: 24px; max-width: 18ch; margin-left: auto; margin-right: auto;
+    font-size: clamp(28px, 4vw, 44px); line-height: 1.1; letter-spacing: -0.02em;
+    margin-bottom: 16px; max-width: 18ch; margin-left: auto; margin-right: auto;
   }
   .cta-section p {
-    font-size: 19px; color: var(--ink-soft); margin-bottom: 36px;
+    font-size: 17px; color: var(--ink-soft); margin-bottom: 28px;
     max-width: 50ch; margin-left: auto; margin-right: auto;
   }
 
   /* ─── FOOTER ─── */
   footer {
-    padding: 48px 0; text-align: center;
-    font-family: 'IBM Plex Mono', monospace; font-size: 13px;
+    padding: 36px 0; text-align: center;
+    font-family: 'IBM Plex Mono', monospace; font-size: 12px;
     color: var(--ink-mute); border-top: 1px solid var(--line);
   }
   footer a { color: var(--ink-soft); text-decoration: none; }
   footer a:hover { color: var(--copper); }
-
-  /* ─── ANIMATIONS ─── */
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  /* ─── SUBTLE BACKGROUND TEXTURE PÅ HERO ─── */
-  .hero {
-    background-image:
-      radial-gradient(circle at 100% 0%, rgba(184, 92, 44, 0.08), transparent 40%),
-      radial-gradient(circle at 0% 100%, rgba(58, 86, 65, 0.08), transparent 40%);
-  }
 </style>
 </head>
 <body>
@@ -351,108 +211,95 @@
 <nav>
   <div class="container">
     <a href="#" class="logo">IT-Ticket</a>
-    <a href="#boka" class="cta">Boka 15 min</a>
+    <a href="#boka" class="cta">Boka demo</a>
   </div>
 </nav>
 
 <section class="hero">
   <div class="container">
-    <div class="eyebrow">Ärendehantering · byggd för svenska SMB:s</div>
-    <h1>Ditt IT-system förtjänar bättre än <em>en mejlkedja från 2019</em>.</h1>
+    <div class="eyebrow">Ärendehantering · för svensk IT-administration</div>
+    <h1>Byggt av en IT-admin. För <em>er som faktiskt sköter IT:t</em>.</h1>
     <p class="lead">
-      IT-Ticket är en AI-driven ärendehanterare byggd från perspektivet av en svensk IT-administratör — för att den var. Installerad hos er på en eftermiddag. Ingen per-användare-licens. Ingen amerikansk översättning som halkar efter.
+      Inget Zendesk-bloat. Ingen översättning som halkar efter. Ingen per-användare-licens. En egen Docker-instans hos er, med svensk språkförståelse hela vägen genom AI:n och M365-integration via OAuth2. Boka 15 min så loggar jag in i mitt eget system live och visar.
     </p>
     <div class="hero-actions">
-      <a href="#boka" class="btn-primary">Boka en 15-minuters demo →</a>
-      <a href="#features" class="btn-secondary">Se vad som ingår</a>
-    </div>
-    <div class="hero-meta">
-      <div><b>1 dag</b><span>Tid till driftsatt</span></div>
-      <div><b>~40 %</b><span>Ärenden lösta innan de skapas</span></div>
-      <div><b>0 SEK</b><span>Per-användare-licens</span></div>
+      <a href="#boka" class="btn-primary">Boka 15 min live-demo →</a>
+      <a href="#vad-du-ser" class="btn-secondary">Vad ingår i demon?</a>
     </div>
   </div>
 </section>
 
-<section class="features" id="features">
+<section id="vad-du-ser">
   <div class="container">
-    <div class="section-eyebrow">AI som faktiskt hjälper</div>
-    <h2 class="section-title">Ärenden som löser sig själva. På riktigt.</h2>
-    <p class="section-lead">Vi har inte slängt in AI för att kunna säga ordet på framsidan. Varje funktion är kopplad till ett konkret moment där du eller dina kollegor lägger tid manuellt idag.</p>
+    <div class="section-eyebrow">Demon — så här ser den ut</div>
+    <h2 class="section-title">Jag visar systemet i drift, inte en pitch-deck.</h2>
+    <p class="section-lead">15–20 minuter, live i mitt eget Prefabmastarna-system. Ingen påklistrad demo-data — det är hur jag använder systemet dagligen. Ni klickar runt själva i slutet om ni vill.</p>
 
-    <div class="feature-list">
-      <div class="feature">
-        <div class="feature-num"></div>
+    <ol class="demo-list">
+      <li>
         <div>
-          <h3>Användaren får hjälp direkt — innan ärendet ens skapas</h3>
-          <p>När Linnea skriver "min Outlook startar inte" i supportformuläret söker AI:n i er kunskapsbas och föreslår en lösning direkt. Om den fungerar klickar hon "Det löste problemet" — inget ärende skapas, ingen tid förlorad. Vi mäter det: <em>deflection rate</em>. Hos oss ligger den på 40 %.</p>
-          <div class="demo">
-            <span class="label">Exempel — från det publika formuläret</span>
-            <b>Linnea:</b> "Min Outlook startar inte och visar fel om certifikat"<br/>
-            <b>AI:</b> "Prova dessa steg: 1. Öppna Kontrollpanelen → Credential Manager... [hämtat från er KB-artikel 'Outlook-certifikatfel']"<br/>
-            <b>Linnea:</b> ✓ Det löste problemet → <em>inget ärende skapat</em>
-          </div>
+          <h3>Publika formuläret med AI som löser problem direkt</h3>
+          <p>Användare beskriver problem → AI söker er kunskapsbas → föreslår lösning på svenska → användare klickar "Det löste det" och inget ärende skapas. Eller "Behöver mer hjälp" och ärendet skapas som vanligt. Jag visar live med riktiga ärenden från min vardag.</p>
         </div>
-      </div>
-
-      <div class="feature">
-        <div class="feature-num"></div>
+      </li>
+      <li>
         <div>
-          <h3>AI-utkast på svar — baserat på er egna kunskapsbas</h3>
-          <p>När ett ärende ändå skapas läser AI:n era interna dokument och utkastar ett svar på svenska. Du läser, justerar, sparar som lösning. Lösningstiden faller med 50 %.</p>
-          <div class="demo">
-            <span class="label">Exempel — ett klick i ärendedetaljen</span>
-            "Hej! Verkar som att din Outlook-kalender inte synkar med Teams. Det löses oftast genom att... [steg 1, 2, 3 hämtade från er KB]. Hör av dig om det inte löste problemet."
-          </div>
+          <h3>Ärendevyer — kanban, lista, dashboard</h3>
+          <p>Hur det ser ut när er IT-vardag faktiskt levs i systemet. Filter, anpassade vyer, sökning över allt med FTS5. Inget av detta är fluff — alla funktioner jag visar använder jag dagligen.</p>
         </div>
-      </div>
-
-      <div class="feature">
-        <div class="feature-num"></div>
+      </li>
+      <li>
         <div>
-          <h3>Sammanfattning av långa ärenden</h3>
-          <p>När ett ärende har 12 kommentarer och tre personer involverade får du en tre-raders sammanfattning högst upp: <em>status, blockerare, senaste händelse</em>. Inget mer scrollande för att förstå var det står.</p>
-          <div class="demo">
-            <span class="label">Exempel — automatiskt på ärenden med &gt; 5 kommentarer</span>
-            <b>Status:</b> Inväntar svar från leverantör om reservdel.<br/>
-            <b>Blockerare:</b> Leveransdatum från Dustin oklart.<br/>
-            <b>Senaste:</b> Markus mejlade Dustin i tisdags, inget svar.
-          </div>
+          <h3>AI-utkast på svar baserat på er KB</h3>
+          <p>När ärende ändå skapas: ett klick → AI utkastar svar baserat på era egna interna dokument. Granska, justera, spara som lösning. Aldrig auto-skickat.</p>
         </div>
-      </div>
-    </div>
+      </li>
+      <li>
+        <div>
+          <h3>E-post in/ut med M365 OAuth2 + trådning</h3>
+          <p>Inkommande mejl blir ärenden. Svar på utgående mejl trådas tillbaka som kommentarer. OAuth2 mot Exchange Online — utan det räcker inte längre. Bekräftelsemejl med ärendenummer skickas automatiskt.</p>
+        </div>
+      </li>
+      <li>
+        <div>
+          <h3>Kunskapsbas, tidsrapportering, fakturering, push, webhooks</h3>
+          <p>Allt som faktiskt behövs i ett IT-system för en svensk SMB, utan plugin-marketplaces och separata moduler. Jag visar det ni vill se mest av — säg till.</p>
+        </div>
+      </li>
+    </ol>
   </div>
 </section>
 
-<section>
+<section class="tech">
   <div class="container">
-    <div class="section-eyebrow">Jämfört med</div>
-    <h2 class="section-title">Det ni har idag → IT-Ticket</h2>
+    <div class="section-eyebrow">För er som vill veta hur det är byggt</div>
+    <h2 class="section-title">Tekniska faktum, inga buzzwords.</h2>
+    <p class="section-lead">Om ni granskar produkter ni installerar — bra. Här är det som faktiskt är relevant.</p>
 
-    <div class="diff-grid">
-      <div>
-        <h4>Idag</h4>
-        <h3>Mejlkedjor i Outlook + Excel</h3>
-        <ul>
-          <li>Ingen översikt över öppna ärenden</li>
-          <li>Inget av detta är sökbart om 6 månader</li>
-          <li>Lösningar dokumenteras inte — samma fråga löses fyra gånger</li>
-          <li>Ingen rapportering till ledningen om hur mycket tid IT lägger var</li>
-          <li>Onboarding av en ny IT-person: börja om från noll</li>
-          <li>Ingen integration mellan ärenden och rutiner</li>
-        </ul>
+    <div class="tech-grid">
+      <div class="tech-item">
+        <h4>Self-hosted</h4>
+        <p>En Docker-instans på er Proxmox, Hetzner, eller vad ni nu kör. Inga API-anrop till oss. Backupar er data, inte vår.</p>
       </div>
-      <div>
-        <h4>Med IT-Ticket</h4>
-        <h3>Allt på ett ställe — inklusive AI</h3>
-        <ul>
-          <li>AI löser enkla problem direkt — innan ärende skapas</li>
-          <li>Fulltextsökning över alla ärenden + kunskapsbas</li>
-          <li>AI utkastar svar baserat på era egna dokument</li>
-          <li>Dashboard, tidsrapportering, fakturaunderlag</li>
-          <li>Återkommande ärenden, mejl-in, push-notiser</li>
-          <li>Webhooks, API-nycklar, publikt formulär</li>
-        </ul>
+      <div class="tech-item">
+        <h4>Stack</h4>
+        <p>React + TypeScript + Vite frontend. Node.js + Express backend. SQLite via better-sqlite3 med FTS5 för sök. Allt körs i en behållare.</p>
+      </div>
+      <div class="tech-item">
+        <h4>AI-provider</h4>
+        <p>Claude API (Anthropic) som default. Konfigurerbart via env. Tokens loggas per-installation för kostnadsuppföljning.</p>
+      </div>
+      <div class="tech-item">
+        <h4>M365 OAuth2</h4>
+        <p>XOAUTH2 via Azure MSAL för IMAP mot Exchange Online. Fallback till lösenord om ni inte vill gå OAuth-vägen.</p>
+      </div>
+      <div class="tech-item">
+        <h4>Säkerhet</h4>
+        <p>JWT + refresh-rotation, CSRF Double-Submit-Cookie, rate limits, helmet headers, bcrypt-hashade lösenord. Alla skrivningar via authenticerad användare.</p>
+      </div>
+      <div class="tech-item">
+        <h4>GDPR &amp; data</h4>
+        <p>Er data ligger i er Docker-volym. AI-anrop går till Anthropic (EU-routing möjlig). Vi har ingen tillgång till er produktionsdata utan tillstånd.</p>
       </div>
     </div>
   </div>
@@ -460,12 +307,10 @@
 
 <section style="background: var(--paper);">
   <div class="container">
-    <div class="section-eyebrow">Pris — transparent</div>
+    <div class="section-eyebrow">Pris</div>
     <h2 class="section-title">En engångskostnad. En tydlig månadsavgift. Inget per-användare.</h2>
-    <p class="section-lead">Vi tjänar inte mer på att ni är fler personer som loggar in. Vi tjänar på att systemet faktiskt fungerar och ni stannar.</p>
 
     <div class="price-card">
-      <div class="stamp">Pilot-erbjudande</div>
       <div class="price-row">
         <div class="label">Setup, installation, utbildning</div>
         <div class="amount">35 000 SEK <small>engång</small></div>
@@ -474,84 +319,50 @@
         <div class="label">Underhåll, uppdateringar, AI-API</div>
         <div class="amount">1 500 SEK <small>/månad</small></div>
       </div>
-      <div class="price-included">
-        <h5>Allt detta ingår</h5>
-        <ul>
-          <li>Egen Docker-instans hos er eller hos oss</li>
-          <li>Datan stannar hos er — alltid</li>
-          <li>Daglig backup + en dokumenterad återställningsrutin</li>
-          <li>Alla framtida uppdateringar</li>
-          <li>AI-API-kostnad (täcker 95 % av kunder)</li>
-          <li>1 timmes onboarding-utbildning för teamet</li>
-          <li>30 dagars Slack-/mejlsupport efter installation</li>
-          <li>Inga per-användare-licenser, någonsin</li>
-        </ul>
-      </div>
+      <p class="price-foot">
+        Egen Docker-instans, daglig backup, alla framtida uppdateringar, AI-API-kostnad inkluderad,
+        1 timmes onboarding, 30 dagars Slack/mejl-support efter installation, ingen per-användare-licens.
+      </p>
     </div>
   </div>
 </section>
 
 <section>
   <div class="container">
-    <div class="section-eyebrow">Installation</div>
-    <h2 class="section-title">Från första kontakt till första ärendet — ungefär en arbetsdag.</h2>
+    <div class="section-eyebrow">Vanliga frågor från IT-admins</div>
+    <h2 class="section-title">Det ni brukar fråga.</h2>
 
-    <ol class="timeline">
-      <li>
-        <strong>Dag 0 · 15 min</strong>
-        <h4>Demo-samtal</h4>
-        <p>Vi går igenom era flöden, jag visar systemet live, ni avgör om det passar. Ingen säljpresentation.</p>
-      </li>
-      <li>
-        <strong>Dag 1–3 · 1 timme tillsammans</strong>
-        <h4>Kartläggning &amp; konfiguration</h4>
-        <p>Ni listar era kategorier, prioriteter och mallar. Vi sätter upp er instans i bakgrunden.</p>
-      </li>
-      <li>
-        <strong>Dag 4 · 4 timmar</strong>
-        <h4>Installation hos er</h4>
-        <p>Docker upp, AI-nyckel kopplad, första admin-användare skapad. Vi importerar er befintliga data om ni vill.</p>
-      </li>
-      <li>
-        <strong>Dag 4 · 1 timme</strong>
-        <h4>Utbildning för teamet</h4>
-        <p>Walkthrough på svenska, frågestund, alla loggar in och provar. Inspelning skickas så ni kan visa nyanställda.</p>
-      </li>
-      <li>
-        <strong>Dag 5</strong>
-        <h4>Första ärendet i drift</h4>
-        <p>Ni jobbar i systemet. Jag är på Slack/mejl i 30 dagar för att fånga småfel direkt.</p>
-      </li>
-    </ol>
-  </div>
-</section>
-
-<section>
-  <div class="container">
-    <div class="section-eyebrow">Bakgrund — hur den blev till</div>
-    <h2 class="section-title">Byggt på riktigt, inte i en pitch-deck.</h2>
-
-    <div class="case">
-      <blockquote>
-        Jag är ensam IT-administratör på en svensk tillverkare. Jag byggde IT-Ticket åt mig själv för att Zendesk var överkörd och Excel var underkörd. Efter ett år av användning är det den näst viktigaste produkten i min vardag, efter Outlook.
-      </blockquote>
-      <div class="author">— Anton Kaarle, byggare av IT-Ticket</div>
-
-      <div class="case-stats">
-        <div><b>800+</b><span>Ärenden hanterade</span></div>
-        <div><b>12 tim</b><span>Sparad per vecka</span></div>
-        <div><b>1 år</b><span>I produktion innan release</span></div>
-      </div>
+    <div class="faq-item">
+      <h4>Kan jag testa själv innan demo?</h4>
+      <p>Mejla mig så fixar jag inloggning till en sandbox-instans där ni kan klicka runt själva utan att jag står bakom axeln. Sandbox är read-only mot riktig data; ni kan skapa egna testärenden.</p>
+    </div>
+    <div class="faq-item">
+      <h4>Vad händer om jag är missnöjd?</h4>
+      <p>Säg upp avtalet. Ni får er data exporterad som SQLite-fil + JSON. Inga utträdes-avgifter, ingen lock-in. Er Docker-instans kan ni köra vidare själva eller stänga av.</p>
+    </div>
+    <div class="faq-item">
+      <h4>Krävs det att vi har en M365-prenumeration?</h4>
+      <p>Nej. Mejl-integrationen funkar mot vilken IMAP-server som helst. M365 OAuth2 är specifikt stödd eftersom det är den vanligaste setupen hos svenska SMB:s. Vill ni ha Gmail eller en egen mailserver så funkar det med standard IMAP-lösenord.</p>
+    </div>
+    <div class="faq-item">
+      <h4>Vad händer om AI-leverantören går ner?</h4>
+      <p>Alla AI-funktioner är designade non-blocking — kärnflödet (skapa, lösa, stänga ärenden, e-post in/ut) påverkas inte. AI-knapparna visas helt enkelt inte tills tjänsten är tillbaka.</p>
+    </div>
+    <div class="faq-item">
+      <h4>Hur ofta uppdateras systemet?</h4>
+      <p>Jag pushar uppdateringar veckovis till stabil branch. Ni får ett mejl när det finns en uppdatering och kan välja när ni vill köra `git pull && docker-compose up -d --build`. Eller låt mig göra det åt er — det ingår i månadsavgiften.</p>
     </div>
   </div>
 </section>
 
 <section class="cta-section" id="boka">
   <div class="container">
-    <div class="section-eyebrow">Nästa steg</div>
-    <h2>15 minuter. Ingen säljare. Bara systemet.</h2>
-    <p>Boka ett samtal så loggar jag in i mitt eget system live och visar exakt hur AI-funktionerna fungerar i en riktig miljö med riktiga ärenden. Ni avgör om det passar er.</p>
+    <h2>15 minuter. Live i ett riktigt system.</h2>
+    <p>Jag är själv IT-administratör på heltid. Jag ringer inte för att stänga deals — jag visar produkten, ni avgör om den passar er. Eller mejla för en sandbox-inlogg om ni vill klicka runt själva först.</p>
     <a href="https://calendly.com/anton-itticket/demo" class="btn-primary">Boka demo →</a>
+    <p style="margin-top: 20px; font-size: 14px;">
+      Eller maila <a href="mailto:anton@itticket.se" style="color: var(--copper); text-decoration: none;">anton@itticket.se</a>
+    </p>
   </div>
 </section>
 
