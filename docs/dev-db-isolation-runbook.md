@@ -28,9 +28,12 @@
 > ```
 > Kör samma reset innan en prod-`docker build` så bygget utgår från ren main.
 >
-> **Riktig fix (PÅ HOLD per Anton):** byt dev-kommandot `npm install` → `npm ci` i
-> `docker-compose.dev.portainer.yml` (npm ci rör inte lockfilen). Kräver en Portainer-recreate
-> av stack 40, därför uppskjutet tills stacken ändå recreatas. Se minnet `dev-npm-ci-pending`.
+> **Riktig fix (TILLÄMPAD 2026-06-18 i källan):** dev-kommandot bytt `npm install` → `npm ci`
+> i `docker-compose.dev.portainer.yml` för båda tjänsterna (npm ci rör inte lockfilen).
+> Lockfilerna verifierade i synk (`npm ci --dry-run`, rot + server, båda "up to date").
+> **Träder i kraft först när Portainer-stack 40 speglar källan + recreatas** — tills dess kör
+> de körande containrarna fortf. `npm install`. Efter recreate: bekräfta att gotchan är borta
+> med `git -C /opt/it-system/itticket-main status` (ska vara ren, ingen lockfile-write-back).
 
 **Mål:** Dev-stacken (`it-system-dev`, Portainer id 40) ska sluta dela prod-DB:n
 (`it-ticketing-data`) och sluta sitta fast på `main`. Efteråt:
