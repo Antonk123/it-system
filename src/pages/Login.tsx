@@ -49,7 +49,7 @@ const Login = () => {
         <div className="absolute -inset-1 rounded-2xl overflow-hidden blur-[3px] opacity-60 pointer-events-none">
           <div className="absolute w-[999px] h-[999px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
                           bg-[conic-gradient(hsl(var(--search-glow-base)),hsl(var(--search-glow-primary-deep))_5%,hsl(var(--search-glow-base))_38%,hsl(var(--search-glow-base))_50%,hsl(var(--search-glow-accent-vivid))_60%,hsl(var(--search-glow-base))_87%)]
-                          animate-search-glow-slow" />
+                          animate-glow-rotate" />
         </div>
 
         <div className="relative rounded-2xl border border-primary/20 bg-card/95 backdrop-blur-xl shadow-2xl shadow-primary/5 p-8 sm:p-10">

@@ -84,6 +84,7 @@ layer(base);
   --animate-spin-slow: spin 4s linear infinite;
   --animate-search-glow-slow: search-glow-slow 2s ease-in-out infinite alternate;
   --animate-search-glow-focus: search-glow-focus 4s ease-in-out infinite;
+  --animate-glow-rotate: glow-rotate 6s linear infinite;
 
   --transition-duration-2000: 2000ms;
 
@@ -159,6 +160,16 @@ layer(base);
     }
     to {
       transform: translate(-50%, -50%) rotate(442deg);
+    }
+  }
+  /* Full continuous rotation — glow travels around the entire perimeter
+     (vs search-glow-slow which rocks 180° back-and-forth via `alternate`). */
+  @keyframes glow-rotate {
+    from {
+      transform: translate(-50%, -50%) rotate(0deg);
+    }
+    to {
+      transform: translate(-50%, -50%) rotate(360deg);
     }
   }
 }
