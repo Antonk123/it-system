@@ -603,8 +603,8 @@ class ApiClient {
     field_name: string;
     field_label: string;
     field_type: string;
-    placeholder?: string;
-    default_value?: string;
+    placeholder?: string | null;
+    default_value?: string | null;
     required?: boolean | number; // skickas som 0/1 (SQLite-flagga); backend coercar truthiness
     options?: string[];
     position?: number;
@@ -619,8 +619,8 @@ class ApiClient {
     field_name: string;
     field_label: string;
     field_type: string;
-    placeholder: string;
-    default_value: string;
+    placeholder: string | null;
+    default_value: string | null;
     required: boolean | number; // skickas som 0/1 (SQLite-flagga)
     options: string[];
   }>) {

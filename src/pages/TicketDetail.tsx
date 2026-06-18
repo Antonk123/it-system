@@ -264,9 +264,12 @@ const TicketDetail = () => {
     );
   }
 
-  // Show "not found" only after the detail query has settled and returned nothing.
-  // While ticketDetailLoading is true we already show the skeleton above (or we have listTicket).
-  if (!ticket && !ticketDetailLoading) {
+  // At this point the loading guard above has handled the in-flight cases
+  // (list cache loading, or detail query in-flight with no list-cache fallback).
+  // Any remaining null ticket means the detail query has settled and returned
+  // nothing (or the list-cache fallback was also absent) — show "not found".
+  // This single guard also narrows `ticket` to non-null for all handlers below.
+  if (!ticket) {
     return (
       <Layout>
         <div className="text-center py-16">

@@ -3,9 +3,9 @@ import { Clock, AlertTriangle, CheckCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface SLABadgeProps {
-  deadline: string | null;
-  met: number | null;
-  pausedAt: string | null;
+  deadline: string | null | undefined;
+  met: number | null | undefined;
+  pausedAt: string | null | undefined;
   label?: string;
   className?: string;
   ticketStatus?: string;
@@ -16,8 +16,10 @@ export function SLABadge({ deadline, met, pausedAt, label, className, ticketStat
 
   const isClosedOrResolved = ticketStatus === 'closed' || ticketStatus === 'resolved';
 
-  // Already resolved
-  if (met !== null) {
+  // Already resolved (met is a number: 1 = OK, 0 = breached).
+  // Loose != null treats null and undefined alike — an undefined met means
+  // "not resolved", so it falls through to the paused/active branches below.
+  if (met != null) {
     // På stängda/lösta ärenden — dämpa "Bruten" till historik-färg istället för alarm-rött.
     // SLA-status är fakta att rapportera på, inte ett aktivt larm.
     if (isClosedOrResolved && met === 0) {

@@ -158,7 +158,9 @@ export interface Template {
   description: string | null;
   type: TemplateType;
   titleTemplate: string;
-  descriptionTemplate: string;
+  // Null for dynamic templates (no static body) — backend & validation schema
+  // both accept null; standard templates always carry a string.
+  descriptionTemplate: string | null;
   priority: TicketPriority;
   category: string | null;
   notesTemplate: string | null;

@@ -686,7 +686,7 @@ const TicketForm = () => {
                         setFormData({
                           ...formData,
                           title: template.titleTemplate,
-                          description: hasFields ? '' : template.descriptionTemplate,
+                          description: hasFields ? '' : (template.descriptionTemplate ?? ''),
                           priority: template.priority,
                           category: template.category || 'none',
                           notes: hasFields ? '' : (template.notesTemplate || ''),

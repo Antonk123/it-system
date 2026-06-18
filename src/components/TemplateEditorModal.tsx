@@ -29,8 +29,9 @@ interface TemplateEditorModalProps {
   onOpenChange: (open: boolean) => void;
   template: Template | null;
   categories: Category[];
-  // Returnerar den skapade mallen (minst { id }) så nya dynamiska fält kan kopplas direkt efter create
-  onSave: (templateData: Omit<Template, 'id' | 'position' | 'createdBy' | 'createdAt' | 'updatedAt'>) => Promise<{ id: string } | void>;
+  // Returnerar den skapade mallen (minst { id }) så nya dynamiska fält kan kopplas direkt efter create.
+  // null returneras vid fel — handleSubmit hoppar då över fält-skapande (truthy-koll på newTemplate).
+  onSave: (templateData: Omit<Template, 'id' | 'position' | 'createdBy' | 'createdAt' | 'updatedAt'>) => Promise<{ id: string } | null | void>;
   onUpdate: (id: string, updates: Partial<Template>) => void;
 }
 
@@ -104,7 +105,7 @@ export const TemplateEditorModal = ({
           name: template.name,
           description: template.description || '',
           titleTemplate: template.titleTemplate,
-          descriptionTemplate: template.descriptionTemplate,
+          descriptionTemplate: template.descriptionTemplate || '',
           priority: template.priority,
           category: template.category || 'none',
           notesTemplate: template.notesTemplate || '',
