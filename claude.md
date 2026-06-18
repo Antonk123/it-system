@@ -36,7 +36,8 @@ Affärsmodell: open source + betald support/managed hosting. Ingen multi-tenancy
 
 | Tjänst | Intern port | Extern port |
 |--------|-------------|-------------|
-| Backend (Express API) | 3001 | 3002 |
+| Backend (Express API, prod) | 3001 | 3002 |
+| Backend (dev, tsx watch) | 3001 | 3003 |
 | Frontend (nginx/prod) | 80 | 8082 |
 | Frontend (Vite/dev) | 5173 | 5174 |
 
@@ -44,7 +45,7 @@ Affärsmodell: open source + betald support/managed hosting. Ingen multi-tenancy
 
 `JWT_SECRET`, `CSRF_SECRET`, `ADMIN_PASSWORD`, `ANTHROPIC_API_KEY`, `VAPID_*`, `SMTP_*`, `IMAP_*` (host/port/user/secure/poll, samt OAuth: `IMAP_TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`).
 
-Backend `process.exit(1)` om `CSRF_SECRET` eller `JWT_SECRET` saknas i prod. Portainer-stack-filen är **separat** från repo-versionen — nya env-rader måste läggas till manuellt i Portainer GUI (se `Projekt/IT-System/lessons.md`).
+Backend `process.exit(1)` om `CSRF_SECRET` saknas — **ovillkorligt, även i dev** (server/src/index.ts, ingen NODE_ENV-gate, ingen fallback). Gäller även `JWT_SECRET` i prod. Portainer-stack-filen är **separat** från repo-versionen — nya env-rader måste läggas till manuellt i Portainer GUI (se `Projekt/IT-System/lessons.md`).
 
 ## Deployment
 
@@ -59,7 +60,7 @@ Standardflöde: lokal utveckling → push → Anton bygger images via SSH → **
    - Frontend: `docker build -t it-ticketing-frontend:latest -f Dockerfile.client .`
 6. Anton redeployar via Portainer
 
-**Dev-miljön** kräver bara `git pull` — Dockerfile.dev.client kör Vite i watch-mode, ingen rebuild behövs.
+**Dev-miljön** är Portainer-stack `it-system-dev` (id 40), definierad i `docker-compose.dev.portainer.yml` (versionsspårad källa — Portainer-GUI:t måste spegla den). Den har **egen DB-volym** (`it-ticketing-dev-data`) och **egen checkout** (`/opt/it-system/itticket-dev`, en git-worktree) — den delar alltså INTE prod-DB:n och sitter inte fast på `main`. Test av en gren i dev: `cd /opt/it-system/itticket-dev && git checkout <gren> && git pull --ff-only`; tsx watch + Vite hot-reloadar, ingen rebuild. Se `docs/dev-db-isolation-runbook.md`.
 
 ## Projektspecifika regler
 
