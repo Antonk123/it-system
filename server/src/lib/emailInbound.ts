@@ -551,3 +551,14 @@ export function stopEmailPolling(): void {
     stopPolling = null;
   }
 }
+
+// Exponerat enbart för enhetstester (privata för modulens normala konsumenter).
+export const __test__ = {
+  findTicketByMessageId,
+  findTicketByShortId,
+  findTicketBySubject,
+  resolveOrCreateContact,
+  addCommentToTicket,
+  stripReplyPrefix,
+  processEmail,
+};
