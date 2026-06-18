@@ -6,6 +6,7 @@ import { doubleCsrf } from 'csrf-csrf';
 import { randomUUID } from 'crypto';
 import passport from './config/passport.js';
 import { logger } from './lib/logger.js';
+import { cookieSecure } from './config/cookies.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -155,7 +156,7 @@ export function createApp() {
     cookieName: 'csrf-token',
     cookieOptions: {
       sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
+      secure: cookieSecure(),
       path: '/',
       httpOnly: true,
     },

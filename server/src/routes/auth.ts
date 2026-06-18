@@ -12,6 +12,7 @@ import { sendPasswordResetEmail } from '../lib/email.js';
 import { validatePassword } from '../lib/passwordPolicy.js';
 import { logAudit } from '../lib/auditLog.js';
 import { logger } from '../lib/logger.js';
+import { cookieSecure } from '../config/cookies.js';
 
 /**
  * Rate limiter for token refresh endpoint.
@@ -47,7 +48,7 @@ const REFRESH_COOKIE_PATH = '/api/auth';
 function refreshCookieOptions() {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: cookieSecure(),
     sameSite: 'strict' as const,
     path: REFRESH_COOKIE_PATH,
   };

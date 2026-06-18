@@ -9,6 +9,9 @@ services:
       - it-ticketing-data:/app/data
     environment:
       - NODE_ENV=production
+      # Serveras över HTTP på LAN → Secure-cookies tappas av webbläsaren.
+      # Sätt COOKIE_SECURE=true om du kör bakom HTTPS. Se docker-compose.yml.
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
       - JWT_SECRET=${JWT_SECRET}
       - CSRF_SECRET=${CSRF_SECRET}
       - DB_PATH=/app/data/database.sqlite
