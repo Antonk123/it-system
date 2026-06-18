@@ -1,417 +1,175 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-03-22
+**Analysis Date:** 2026-04-29
+**Last re-verified:** 2026-06-18
 
 ## Tech Debt
 
-### 1. Debug Logging Left in Production Code
-- **Issue:** Unfiltered console.log statements (388 total) remain in deployed code, including sensitive debug data
-- **Files:** `server/src/routes/tickets.ts:664-704` (IMPORT CONFIRM DEBUG, ticket details), plus 37 other route files with console statements
-- **Impact:** Performance overhead, information leakage in logs, makes logs harder to parse for real errors
-- **Fix approach:**
-  - Implement structured logging middleware with log levels (debug, info, warn, error)
-  - Use environment-based log filtering: only log debug/verbose in development
-  - Consider winston or pino for production logging
-  - Add pre-commit hook to catch `console.log` statements
+**Monolithic Route Files:**
+- Issue: `server/src/routes/tickets.ts` is 1644 lines — handles CRUD, CSV import/export, dashboard overview, activity feed, status counts, reminders, bulk operations, and history all in one file. (Down from 2152; CSV/query helpers extracted 2026-06-18 — see note below.)
+- Files: `server/src/routes/tickets.ts`
+- Impact: Hard to navigate, high merge conflict risk, cognitive overhead for any ticket-related change.
+- Fix approach: Move dashboard endpoints (`/dashboard-overview`, `/activity-feed`, `/status-counts`, `/upcoming-reminders`) into `server/src/routes/dashboard.ts`. Keep core CRUD in tickets.ts.
+- ~~Extract CSV import/export into a helper~~ PARTIALLY RESOLVED 2026-06-18: CSV import/export logic now lives in `server/src/lib/ticketImportExport.ts` (`parseCSV`, `generateCSV`, `escapeCSVField`) and query/filter building in `server/src/lib/ticketQuery.ts`; tickets.ts imports them. Dashboard-endpoint split remains open.
 
-### 2. Excessive SELECT * Queries (Performance Regression)
-- **Issue:** Export endpoint uses `SELECT *` for large datasets despite optimization comments elsewhere
-- **Files:** `server/src/routes/tickets.ts:798` (export endpoint)
-- **Impact:** 30-40% unnecessary data transfer for bulk operations, slow CSV generation
-- **Fix approach:**
-  - Replace with explicit column lists matching `TICKET_COLUMNS` pattern
-  - All SELECT statements should use columnar approach already established in file
+**Monolithic Frontend Pages:**
+- Issue: Several page components are large with mixed concerns (state, layout, API calls, dialogs).
+- Files: `src/pages/settings/TicketsTab.tsx` (1230 lines), `src/pages/TicketForm.tsx` (1125 lines), `src/components/ui/rich-text-editor.tsx` (1033 lines), `src/components/TemplateEditorModal.tsx` (964 lines), `src/pages/Reports.tsx` (956 lines)
+- Impact: Slow to understand, hard to modify without side effects, poor reusability.
+- Fix approach: Break `TicketsTab.tsx` into sub-components per concern (categories, tags, statuses, fields). Extract form logic from TicketForm into custom hooks.
+- ~~`src/pages/Settings.tsx` (1774 lines)~~ RESOLVED 2026-06-18: Settings.tsx is now a 55-line shell that composes tab components under `src/pages/settings/` (`GeneralTab` 267, `AdminTab` 346, `IntegrationsTab` 430, `TicketsTab` 1230). The remaining large file is `TicketsTab.tsx` (now cited above).
 
-### 3. Weak Type Safety with 'any' Type
-- **Issue:** 14 instances of `any` in database results, especially in ticket routes with complex joins
-- **Files:** `server/src/routes/tickets.ts` (multiple lines with `any[] type casting`), `server/src/db/connection.ts`
-- **Impact:**
-  - Runtime type errors not caught at compile time
-  - Brittle CSV export and import functions
-  - Makes refactoring risky
-- **Fix approach:**
-  - Define strict TypeScript interfaces for all db.prepare() results
-  - Use `.all() as TypeRow[]` pattern consistently
-  - Run tsc --strict in build pipeline to catch type issues
+**Excessive `any` Types in Backend:**
+- Issue: Database query results are frequently cast as `any` or use inline interfaces across route files. (tickets.ts itself is now down to ~2 `any` uses after the 2026-06-18 helper extraction, so it is no longer the worst offender — broader route-file usage remains.)
+- Files: `server/src/routes/contacts.ts`, and most route files
+- Impact: Loses TypeScript safety, masks potential runtime errors, makes refactoring risky.
+- Fix approach: Create shared type definitions in `server/src/types/` for all database row types. Replace `any` with proper types in route handlers.
 
-### 4. Hardcoded Database Path Without Validation
-- **Issue:** `DB_PATH` uses relative path fallback but doesn't validate directory existence
-- **Files:** `server/src/db/connection.ts:10`
-- **Impact:** Silent failure if data directory doesn't exist, corrupt database in wrong location
-- **Fix approach:**
-  - Validate directory exists on startup
-  - Create directory if missing with proper error handling
-  - Add explicit file permissions check
+**`SELECT *` Usage:**
+- Issue: `SELECT *` is still used across route files (e.g. `checklistTemplates.ts` and `templates.ts` ~8 each, `companies.ts`/`sla.ts`/`checklists.ts`/`template-fields.ts` ~5 each), despite tickets.ts explicitly optimizing with column lists. Inconsistent approach.
+- Files: `server/src/routes/sla.ts`, `server/src/routes/templates.ts`, `server/src/routes/checklists.ts`, `server/src/routes/checklistTemplates.ts`, `server/src/routes/companies.ts`, `server/src/routes/template-fields.ts`, and others
+- Impact: Transfers unnecessary data, breaks if columns are added/renamed, masks which columns are actually needed.
+- Fix approach: Follow the pattern in `server/src/routes/tickets.ts` (`TICKET_COLUMNS`, line ~47) — define explicit column lists per table.
 
----
+**Duplicate CSV Helper Functions:**
+- Issue: `escapeCSVField()` is still duplicated: a shared exported copy lives in `server/src/lib/ticketImportExport.ts` (line ~46), but `server/src/routes/contacts.ts` (line ~41) keeps its own private copy.
+- Files: `server/src/lib/ticketImportExport.ts` (line 46), `server/src/routes/contacts.ts` (line 41)
+- Impact: Bug fixes must be applied in two places.
+- Fix approach: Import `escapeCSVField` from `server/src/lib/ticketImportExport.ts` in contacts.ts and delete the private copy.
+- Note 2026-06-18: tickets.ts no longer has its own copy — it imports from `ticketImportExport.ts`. Only the contacts.ts duplication remains.
 
 ## Known Bugs
 
-### 1. CSV Import Debug Logging Exposed
-- **Symptoms:** Debug logs show category maps, contact maps, and processing details on every import
-- **Files:** `server/src/routes/tickets.ts:664-681, 698-704`
-- **Trigger:** POST `/api/tickets/import` with any CSV
-- **Workaround:** Remove debug statements manually from code, restart server
-- **Priority:** High (security/information disclosure)
-
-### 2. Missing Null Handling in Export
-- **Symptoms:** CSV export may produce malformed rows if `category_id` or `requester_id` don't exist
-- **Files:** `server/src/routes/tickets.ts:666-68` (lookup map construction without null checks)
-- **Trigger:** Export tickets with deleted contacts or categories
-- **Workaround:** Ensure all categories and contacts are preserved before export
-- **Priority:** Medium (data integrity)
-
-### 3. Uncontrolled Error Handling in CSV Parsing
-- **Symptoms:** CSV import fails silently if parsing errors occur; partial imports succeed
-- **Files:** `server/src/routes/tickets.ts:93-115` (parseCSVLine function has no error handling)
-- **Trigger:** Malformed CSV with unterminated quotes or mixed line endings
-- **Workaround:** Validate CSV format before upload; test with small files first
-- **Priority:** Medium (reliability)
-
----
+No explicit bugs found via TODO/FIXME markers (codebase has zero TODO/FIXME comments). No obvious broken logic detected during analysis.
 
 ## Security Considerations
 
-### 1. Excessive Debug Output (Information Disclosure)
-- **Risk:** Debug logs on import endpoint expose:
-  - Contact email addresses and names
-  - Category mappings
-  - Requester identification
-  - Internal data structure (categoryMap keys, etc.)
-- **Files:** `server/src/routes/tickets.ts:664-681`
-- **Current mitigation:** Logs only visible in console (not exposed via API), but WILL be in Docker logs
-- **Recommendations:**
-  - Remove all console.log statements from production code
-  - Implement structured logging with log levels
-  - Only log debug info when NODE_ENV=development explicitly
-  - Sanitize any error messages shown to users
+**~~CSRF Secret Fallback~~ RESOLVED 2026-06-18:**
+- Was: claimed a hardcoded fallback `'csrf-dev-secret-change-in-production'` at `server/src/index.ts` (line 152) with no runtime enforcement.
+- Now FALSE: the CSRF_SECRET check lives in `server/src/app.ts` (`createApp`, lines 137-139): `if (!process.env.CSRF_SECRET) { logger.error('FATAL: ...'); process.exit(1); }` — unconditional, no dev fallback, no `NODE_ENV` gate. `getSecret` reads `process.env.CSRF_SECRET!` directly. There is no `csrf-dev-secret-*` string anywhere in the codebase.
 
-### 2. CSRF Protection - Incomplete Coverage
-- **Risk:** CSRF token caching in client (ApiClient.csrfToken) doesn't invalidate on auth change
-- **Files:** `src/lib/api.ts:38` (sets to null on auth change), but pattern may leak across contexts
-- **Current mitigation:** Token IS invalidated on logout/auth changes
-- **Recommendations:**
-  - Clear CSRF token explicitly on logout
-  - Add per-request token refresh for high-value operations (admin actions)
-  - Consider setting CSRF_SECRET from environment (currently uses dev default)
+**Default Admin Credentials:**
+- Risk: `server/src/db/init.ts` creates a default admin (`ADMIN_EMAIL` env or fallback `admin@example.com`). Concern downgraded — see resolved note below.
+- Files: `server/src/db/init.ts` (lines ~14-33)
+- Current mitigation: Startup now **requires** `ADMIN_PASSWORD` — if unset, init logs an error and does not hardcode a password. Only runs if no admin exists. Email (not password) is logged.
+- ~~hardcoded password `admin123` logged to stdout~~ RESOLVED 2026-06-18: there is no `admin123` literal; password comes from `ADMIN_PASSWORD` (required) and is never logged.
+- Remaining recommendation (low): force a password change on first login.
 
-### 3. Rate Limiting Present But Not Enforced Consistently
-- **Risk:** Rate limiter imported but not clear if applied to all sensitive endpoints
-- **Files:** `server/src/middleware/rateLimit.ts` exists, but usage across routes not verified
-- **Current mitigation:** Helmet + CORS configured, login endpoint should have rate limit
-- **Recommendations:**
-  - Audit all auth endpoints to ensure rate limiting is applied
-  - Add rate limiting to file upload endpoints (currently 10MB limit only)
-  - Document which endpoints are rate-limited and the thresholds
+**~~Public Ticket Endpoint — No Rate Limiting~~ RESOLVED 2026-06-18:**
+- Was: `POST /api/public/tickets` had no rate limiting.
+- Now: `server/src/routes/public.ts` imports `publicWriteRateLimiter` and `publicAiRateLimiter` from `../middleware/rateLimit.js` and applies `publicWriteRateLimiter` to `POST /tickets` (line ~87). Length validation (name 100, title 200, description 5000) still applies.
 
-### 4. File Upload Path Traversal Risk
-- **Risk:** Upload directory is configurable via env var but may not validate path safety
-- **Files:** `server/src/routes/tickets.ts:14` (UPLOAD_DIR config), `server/src/routes/attachments.ts`
-- **Current mitigation:** Uses multer with memoryStorage, files stored with UUID names
-- **Recommendations:**
-  - Validate upload directory is within expected location
-  - Use absolute paths only
-  - Add virus scanning or file type validation beyond MIME type
+**~~Refresh Tokens Stored in localStorage~~ RESOLVED 2026-06-18:**
+- Was: refresh tokens were stored in `localStorage` (XSS-accessible).
+- Now: refresh tokens live in an httpOnly cookie — `server/src/routes/auth.ts` (`REFRESH_COOKIE = 'refreshToken'`, `httpOnly: true`, set via `setRefreshCookie`, read via `readRefreshToken`/`req.cookies`). The frontend only *clears* a legacy `localStorage.removeItem('refreshToken')` key (`src/lib/api.ts` line 47, commented "pre-cookie-migration") and never stores one. This is exactly the recommended fix.
 
----
+**File Upload — No Path Traversal Guard:**
+- Risk: Attachment file paths stored in the database are joined with `UPLOAD_DIR` and served via `res.sendFile()` without verifying the result stays within the upload directory.
+- Files: `server/src/routes/attachments.ts` (`join(UPLOAD_DIR, attachment.file_path)` at lines ~257 and ~305; sent at line ~278)
+- Current mitigation: Multer generates filenames server-side (`Date.now()-random.ext`), so stored paths are currently safe.
+- Recommendations: Add `path.resolve()` + `startsWith(UPLOAD_DIR)` check to prevent any future regression.
 
 ## Performance Bottlenecks
 
-### 1. Missing N+1 Optimization for KB Articles
-- **Problem:** KB routes fetch category data then iterate to build hierarchy
-- **Files:** `server/src/routes/kb.ts:67-100` (KB category hierarchy construction)
-- **Cause:** Separate queries for articles and categories, then application-level joins
-- **Improvement path:**
-  - Use single LEFT JOIN query to fetch articles with category data
-  - Cache category/article relationships in memory for subsequent requests
+**Search Query — multiple LEFT JOINs:**
+- Problem: When a search term is provided, the ticket list query JOINs across relation tables (contacts, categories, tags, field_values) to search relation fields.
+- Files: `server/src/lib/ticketQuery.ts` (query/filter building extracted from tickets.ts 2026-06-18; FTS condition at line ~205)
+- Cause: FTS5 handles ticket content efficiently, but relation field search falls back to LIKE with multiple JOINs.
+- Improvement path: Not a problem at current single-user scale. If slow: index relation fields in FTS5, or denormalize searchable fields.
 
-### 2. React Component Re-renders (No Memoization)
-- **Problem:** TicketList (513 lines), TicketTable (557 lines), TicketDetail (536 lines) lack React.memo and useCallback
-- **Files:** `src/pages/TicketList.tsx`, `src/components/TicketTable.tsx`, `src/pages/TicketDetail.tsx`
-- **Cause:** 7 useState/useEffect hooks in TicketList alone; child components re-render on parent changes
-- **Improvement path:**
-  - Wrap TicketCard, TicketRow with React.memo()
-  - Use useCallback for filter/sort handlers
-  - Consider context or state management to isolate re-renders
-  - Estimated gain: 30-50% fewer re-renders per page
+**CSV Export Builds Full String in Memory:**
+- Problem: `generateCSV()` builds the entire CSV as a single string before sending the response.
+- Files: `server/src/lib/ticketImportExport.ts` (`generateCSV`, extracted from tickets.ts 2026-06-18)
+- Cause: No streaming; concatenates all rows into one string.
+- Improvement path: Use `res.write()` to stream rows. For 10k tickets (~2-3MB), current approach is fine but won't scale.
 
-### 3. No Virtualization for Large Lists
-- **Problem:** Pagination implemented but no row virtualization for >200 tickets per page
-- **Files:** `src/pages/TicketList.tsx` (PaginationControls used but no react-window/react-virtual)
-- **Cause:** All rows rendered to DOM regardless of viewport
-- **Improvement path:**
-  - Implement react-window or TanStack Virtual
-  - Handle dynamic row heights for variable ticket sizes
-  - Estimated gain: 3-5x faster render for >200 tickets
-
-### 4. Inefficient CSV Generation
-- **Problem:** Large exports build entire CSV string in memory before response
-- **Files:** `server/src/routes/tickets.ts:49-90` (generateCSV function)
-- **Cause:** No streaming; builds complete string then writes
-- **Improvement path:**
-  - Use streaming response (res.write) instead of building full string
-  - For 10k tickets: ~2-3MB CSV loaded in memory vs streamed directly
-
----
+**Migrations File Growth:**
+- Problem: `server/src/db/migrations.ts` is 1166 lines and growing. Every schema change appends a new migration.
+- Files: `server/src/db/migrations.ts`
+- Cause: Append-only migration array with no squashing.
+- Improvement path: Periodically squash old migrations into the base schema (`server/src/db/schema.sql`) and reset the migrations array.
 
 ## Fragile Areas
 
-### 1. Database Transaction Handling
-- **Files:** `server/src/routes/tickets.ts:692-750` (CSV import with db.transaction)
-- **Why fragile:**
-  - All-or-nothing transaction means ANY error fails entire import
-  - No logging of which ticket failed or why
-  - Categories/contacts may be created even if ticket insert fails
-  - Transaction doesn't catch pre-insert validation errors
-- **Safe modification:**
-  - Add detailed try-catch inside transaction with row-level error logging
-  - Provide partial success response: "created 45/50 tickets, failed 5"
-  - Validate categories/contacts exist BEFORE transaction
-- **Test coverage:** CSV import tests missing; manual testing only
+**~~FTS5 Index Synchronization~~ RESOLVED 2026-06-18:**
+- Was: every ticket create/update had to manually sync the `tickets_fts` shadow table inline in route handlers, so any new write path could forget it and produce stale search results.
+- Now: FTS sync is handled by SQLite triggers (`tickets_fts_ai`, `tickets_fts_au`, `tickets_fts_ad`) on the `tickets` table, defined in `server/src/db/migrations.ts` (lines ~991-1130) — exactly the recommended fix. No manual inline `INSERT INTO tickets_fts` remains in route handlers (`public.ts` no longer touches FTS at all). `ticketQuery.ts` only reads via `tickets_fts MATCH`.
+- Test coverage: `server/src/lib/ticketQuery.test.ts` covers the FTS query path.
 
-### 2. Automation Rules Engine
-- **Files:** `server/src/config/automation.ts`, `server/src/lib/automationHelper.ts`
-- **Why fragile:**
-  - Auto-tagging rules hardcoded; no way to modify without code change
-  - No conflict detection if rules override user's manual priority
-  - Auto-close scheduler runs daily but doesn't validate ticket state
-- **Safe modification:**
-  - Move rules to database table so they're editable
-  - Add rule conflict resolver
-  - Add dry-run mode for testing rules before applying
-- **Test coverage:** No unit tests for automation logic
+**Email Configuration Scattered:**
+- Files: `server/src/lib/email.ts` (`getEmailConfig` lines ~19-32, `createTransporter` lines ~35-51), `server/src/lib/emailInbound.ts` (`getEmailConfig` from line ~52)
+- Why fragile: Email configuration is read from env vars in two separate places with different validation logic. `getEmailConfig()` in email.ts requires `SMTP_HOST + EMAIL_FROM + EMAIL_TO`, while `createTransporter()` in the same file only checks `SMTP_HOST`. Inbound email has its own `getEmailConfig()` with IMAP checks.
+- Safe modification: Centralize all email config into a single validation module that exports both SMTP and IMAP configs.
+- Test coverage: Inbound parsing now has `server/src/lib/emailInbound.test.ts`; the SMTP/IMAP config split itself is still untested.
 
-### 3. Socket Connections in Email Service
-- **Files:** `server/src/lib/email.ts:459` (nodemailer with SMTP connection)
-- **Why fragile:**
-  - SMTP timeout not explicitly configured
-  - Failed emails don't retry with backoff
-  - No connection pooling (new connection per email)
-- **Safe modification:**
-  - Configure explicit timeout and retry strategy
-  - Implement connection reuse or pooling
-  - Add queue-based delivery (bull or similar)
-- **Test coverage:** No email delivery tests; integration only
+**~~Webhook Dispatcher — No Retry Logic~~ RESOLVED 2026-06-18:**
+- Was: failed webhook deliveries were recorded with `response_code = 0`/`attempts = 1` and never retried.
+- Now: `server/src/lib/webhookDispatcher.ts` implements exponential backoff (`nextRetryAt`, `RETRY_DELAYS_MINUTES` = 1m/5m/30m/2h, `MAX_WEBHOOK_ATTEMPTS`) and a dedicated retry scheduler exists at `server/src/lib/webhookRetryScheduler.ts`. Deliveries are retried until the attempt cap, then dropped.
 
-### 4. Cascading Delete Behavior
-- **Files:** `server/src/db/connection.ts:15` (foreign keys enabled)
-- **Why fragile:**
-  - Cascade deletes on FK relationships could silently delete related data
-  - No audit trail of cascades
-  - User could accidentally delete all tickets by deleting a category
-- **Safe modification:**
-  - Add soft-delete (is_deleted flag) instead of hard delete
-  - Log all deletes with affected record IDs
-  - Require confirmation for deletes affecting >5 records
-- **Test coverage:** No delete-scenario tests
-
----
+**Public Ticket Endpoint — Contact Auto-Creation:**
+- Files: `server/src/routes/public.ts` (lines ~141-146)
+- Why fragile: The public endpoint auto-creates contacts if an email doesn't exist. Deduplication is on email only; repeated submissions with the same email but a different name keep the original contact name. (Rate limiting is now applied — see resolved security item above.)
+- Safe modification: Consider updating the existing contact name if email matches but name differs, or flagging the mismatch.
+- Test coverage: No tests for the auto-create branch.
 
 ## Scaling Limits
 
-### 1. SQLite Concurrency Ceiling
-- **Current capacity:** SQLite handles ~100 concurrent requests, then locks
-- **Limit:** Breaks at >1000 tickets with multiple users writing simultaneously
-- **Scaling path:**
-  - Monitor with `PRAGMA database_list`
-  - At 5k+ tickets, migrate to PostgreSQL
-  - No plan yet; single-user system so not urgent
+**SQLite Single-Writer:**
+- Current capacity: Single user, low write volume. WAL mode and performance pragmas enabled.
+- Limit: SQLite handles one writer at a time. Under heavy concurrent writes, writers serialize.
+- Scaling path: Not a concern for single-user system. If multi-user is ever needed, migrate to PostgreSQL.
 
-### 2. In-Memory CSV Import
-- **Current capacity:** 10MB max file size (multer limit)
-- **Limit:** ~100k rows CSV; exceeding causes heap OOM
-- **Scaling path:**
-  - Implement streaming CSV parser (csv-parser, papaparse)
-  - Split large imports into chunks
-  - Store in temp file instead of memory
+**In-Memory Rate Limiter:**
+- Current capacity: Works for single-instance deployment.
+- Limit: Rate limit state is lost on server restart. Multiple server instances would not share state.
+- Files: `server/src/middleware/rateLimit.ts`
+- Scaling path: Use Redis-backed rate limiter if horizontal scaling is needed.
 
-### 3. Local File Storage
-- **Current capacity:** Disk limited by container/server space
-- **Limit:** No archival or cleanup for old uploads/attachments
-- **Scaling path:**
-  - Implement S3/cloud storage integration
-  - Add cron job to archive old attachments
-  - Add cleanup threshold in admin settings
-
----
+**Local File Storage:**
+- Current capacity: Disk-limited by container/server space. 10MB per file upload limit.
+- Limit: No archival, no cleanup of orphaned files, no storage quota monitoring.
+- Files: `server/src/routes/attachments.ts` (UPLOAD_DIR)
+- Scaling path: Add storage monitoring. Consider S3 if volume grows.
 
 ## Dependencies at Risk
 
-### 1. TipTap Rich Text Editor
-- **Risk:** Heavy dependency tree (48 sub-dependencies); large bundle impact
-- **Impact:** Knowledge Base editor performance, initial load time
-- **Migration plan:**
-  - Evaluate Slate or ProseMirror directly (more modular)
-  - Or use Markdown instead of WYSIWYG
-  - Current plan: assess in next review if performance issues arise
-
-### 2. Supabase JS Client
-- **Risk:** Imported but not used (appears in package.json, not in code)
-- **Impact:** Dead code in bundle; authentication handled via custom JWT instead
-- **Migration plan:**
-  - Remove `@supabase/supabase-js` from package.json and lock file
-  - No replacement needed; custom auth already works
-
-### 3. axios Imported But Duplicate Fetch
-- **Risk:** axios in dependencies (^1.13.6) but `ApiClient` uses fetch instead
-- **Impact:** Dead code (96KB uncompressed in bundle)
-- **Migration plan:**
-  - Remove axios or consolidate to single HTTP client
-  - Fetch-based ApiClient is already complete; prefer to remove axios
-
----
+No critical dependency risks identified. The stack uses mature, well-maintained packages (Express, better-sqlite3, React, Vite, Tailwind). No deprecated packages detected.
 
 ## Missing Critical Features
 
-### 1. No Backup/Restore Strategy
-- **Problem:** SQLite database is single file; no backup automation
-- **Blocks:** Production deployment; data loss catastrophic
-- **Roadmap status:** Listed in todo.md as "Backup & Maintenance" (LOW priority) but should be CRITICAL
+**~~No Automated Backup Schedule~~ RESOLVED 2026-06-18:**
+- Was: only manual backup via `GET /api/backup`.
+- Now: `server/src/index.ts` runs an automatic daily backup at 04:00 (DB + uploads zipped into the same restorable format) with `BACKUP_RETENTION_DAYS` retention, plus an optional off-site upload hook (`server/src/lib/offsiteBackup.ts`, driven by `OFFSITE_BACKUP_CMD`).
 
-### 2. No Audit Trail
-- **Problem:** No way to see who changed what or when
-- **Blocks:** Cannot track data modifications for compliance
-- **Roadmap status:** Not mentioned; multi-user feature excluded but needed for single-user traceability
-
-### 3. No Search Indexing
-- **Problem:** Full-text search on titles/descriptions is unoptimized (LIKE % queries)
-- **Blocks:** Slow searches with >1000 tickets
-- **Roadmap status:** Listed as "Advanced search" but implementation is surface-level
-
----
+**No Input Validation Library (backend):**
+- Problem: Backend request-body validation is done manually with inline `if` checks across route files. `zod` is a dependency but is only used on the **frontend** (`src/lib/validations.ts`); no server route imports it.
+- Blocks: Consistent backend validation, clear error messages, type inference from schemas.
 
 ## Test Coverage Gaps
 
-### 1. CSV Import/Export Untested
-- **What's not tested:**
-  - Malformed CSV handling
-  - Category/contact mapping logic
-  - Transaction rollback scenarios
-  - Duplicate ID detection
-- **Files:** `server/src/routes/tickets.ts:600-800`
-- **Risk:** Silent data corruption, partial imports without feedback
-- **Priority:** High
+**~~Near-Zero Backend Test Coverage~~ DOWNGRADED 2026-06-18:**
+- Was: the backend had zero test files.
+- Now: a Vitest suite exists — supertest HTTP integration tests in `server/src/app.test.ts` plus unit tests: `server/src/lib/emailInbound.test.ts`, `server/src/lib/ticketQuery.test.ts`, `server/src/lib/ticketImportExport.test.ts`, `server/src/lib/automationHelper.test.ts`, `server/src/lib/slaHelper.test.ts`, `server/src/lib/passwordPolicy.test.ts`, `server/src/lib/aiHelper.test.ts`, `server/src/lib/htmlUtils.test.ts`, `server/src/scripts/repair-kb-tables.test.ts`, and `server/src/routes/reports.test.ts`.
+- Still untested: many route files, schedulers, the email config split, webhook dispatch end-to-end.
+- Priority: Medium (was High).
 
-### 2. Automation Rules Untested
-- **What's not tested:**
-  - Auto-tagging rule matching
-  - Priority override logic
-  - Rule conflicts
-  - Scheduler execution
-- **Files:** `server/src/config/automation.ts`, `server/src/lib/automationHelper.ts`
-- **Risk:** Rules may silently fail or apply incorrectly
-- **Priority:** High
+**Frontend Tests — utility-only:**
+- What's not tested: pages, components, hooks, and the API client. Coverage is utility-level only.
+- Files (now): `src/lib/contentMigration.test.ts`, `src/lib/duration.test.ts`, `src/lib/html.test.ts`, `src/lib/date.test.ts`, `src/lib/validations.test.ts`, `src/lib/secureFileAccess.test.ts`. Components/pages remain untested.
+- Risk: UI regressions, broken form validation, auth flow issues.
+- Priority: Medium
 
-### 3. Database Migrations Untested
-- **What's not tested:**
-  - Column additions/removals
-  - Index creation
-  - Data backfill correctness
-- **Files:** `server/src/db/*.ts` (11 migration scripts)
-- **Risk:** Migrations could fail or corrupt data
-- **Priority:** Medium
+**No E2E Tests:**
+- What's not tested: Complete user flows (login, create ticket, update, close, export, public form submission).
+- Files: No E2E test framework configured.
+- Risk: UI/API contract mismatches go undetected.
+- Priority: Medium — single-user system with manual QA, but still risky for regressions.
 
-### 4. Email Sending Untested
-- **What's not tested:**
-  - SMTP connection failures
-  - Retry logic
-  - Template rendering
-- **Files:** `server/src/lib/email.ts`
-- **Risk:** Emails silently fail to send
-- **Priority:** Medium
+## Resolved This Session (2026-06-18)
 
-### 5. CSRF Token Lifecycle Untested
-- **What's not tested:**
-  - Token expiration
-  - Concurrent request handling
-  - Auth change token invalidation
-- **Files:** `src/lib/api.ts`, `server/src/index.ts`
-- **Risk:** CSRF protection may fail under load
-- **Priority:** Medium
+- **KB preview DOM-XSS:** the KB list/search preview rendered user content via `dangerouslySetInnerHTML` without escaping. Fixed with `escapeHtml()` in `src/lib/html.ts`, now applied before injecting highlight `<mark>` tags in `src/pages/KnowledgeBase.tsx` and `src/components/KBLinksSection.tsx`. (Covered by `src/lib/html.test.ts`.)
+- **Frontend `strictNullChecks` off:** now ENABLED in `tsconfig.app.json` (`"strictNullChecks": true`). Note `"strict": false` and `"noImplicitAny": false` are still off — full strict mode remains a future tightening.
 
 ---
 
-## Code Quality Issues
-
-### 1. Inconsistent Error Handling
-- **Issue:** Some routes throw errors, others return JSON error responses
-- **Files:** Mixed pattern across `server/src/routes/*.ts`
-- **Fix:** Standardize on centralized error handler (exists in `index.ts` but not used everywhere)
-
-### 2. Missing Input Validation
-- **Issue:** No zod/joi schemas for request bodies in most routes
-- **Files:** All routes lack systematic validation
-- **Fix:** Create reusable validators, apply to all routes
-
-### 3. No TypeScript Strict Mode
-- **Issue:** tsconfig allows implicit any; type safety weak
-- **Files:** `tsconfig.json` doesn't enable strict mode
-- **Fix:** Enable `"strict": true` and fix resulting errors
-
-### 4. Comments Out of Sync with Code
-- **Issue:** "DEBUG" comments in deployed code; architectural comments too generic
-- **Files:** `server/src/routes/tickets.ts`, `src/components/RadialProgressRings.tsx:166`
-- **Fix:** Remove debug comments, replace generic comments with specific patterns
-
----
-
-## Architectural Concerns
-
-### 1. Monolithic Ticket Routes File
-- **Issue:** `server/src/routes/tickets.ts` is 1,467 lines; handles list, detail, create, update, delete, import, export
-- **Impact:** Difficult to test, maintain, and understand
-- **Improvement:** Split into sub-routes (GET, POST, bulk operations, export)
-
-### 2. Mixed Concerns in API Client
-- **Issue:** `src/lib/api.ts` handles auth token, CSRF, request/response logic, all error handling
-- **Impact:** Hard to test, hard to reuse
-- **Improvement:** Separate concerns into middleware/interceptors
-
-### 3. Database Connection Module Too Clever
-- **Issue:** `server/src/db/connection.ts` does initialization, migrations, schema checks, pragmas
-- **Impact:** Hard to test, hard to version control schema changes
-- **Improvement:** Separate schema validation from connection setup
-
----
-
-## Environmental Concerns
-
-### 1. NODE_ENV Not Validated
-- **Issue:** Code checks for `process.env.NODE_ENV === 'production'` but never validates it's set
-- **Files:** `server/src/index.ts:135` (CSRF cookie secure flag)
-- **Impact:** May default to development behavior in production
-- **Fix:** Validate NODE_ENV is set to known value at startup
-
-### 2. CSRF_SECRET Not Enforced in Production
-- **Issue:** `server/src/index.ts:129` uses hardcoded default if not set
-- **Files:** `server/src/index.ts:129`
-- **Impact:** All instances share same secret in production
-- **Fix:** Require CSRF_SECRET env var in production, throw at startup if missing
-
-### 3. Database Backup Strategy Missing
-- **Issue:** No env var or config for backup location/frequency
-- **Files:** Not implemented
-- **Impact:** Data loss risk
-- **Fix:** Add DB_BACKUP_PATH and BACKUP_SCHEDULE env vars
-
----
-
-## Summary Table
-
-| Category | Count | Severity | Impact |
-|----------|-------|----------|--------|
-| Tech Debt | 4 | Medium | Maintainability, performance |
-| Known Bugs | 3 | High | Data integrity, reliability |
-| Security | 4 | High | Information disclosure, CSRF gaps |
-| Performance | 4 | Medium | Large lists, CSV operations |
-| Fragile Areas | 4 | Medium | Automation, email, transactions |
-| Scaling Limits | 3 | Low | Future growth blocking |
-| Dependencies | 3 | Low | Bundle size, dead code |
-| Missing Features | 3 | High | Production readiness |
-| Test Gaps | 5 | High | Risk of silent failures |
-| Code Quality | 4 | Medium | Maintainability |
-| **TOTAL** | **37** | - | - |
-
----
-
-*Concerns audit: 2026-03-22*
+*Concerns audit: 2026-04-29; re-verified against HEAD 2026-06-18*

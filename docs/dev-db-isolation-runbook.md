@@ -17,6 +17,21 @@
 >   `itticket-dev` → `itticket-main`, recreate, sedan
 >   `git -C /opt/it-system/itticket-main worktree remove --force /opt/it-system/itticket-dev`.
 
+> ## ⚠️ Gotcha: lockfile-write-back blockerar `git pull` (sedan dev delar prod-checkouten)
+> Dev-containrarna kör `npm install` vid start, vilket **skriver tillbaka** `package-lock.json`
+> (och `server/package-lock.json`) i den delade checkouten `itticket-main`. Då avbryts
+> `git pull --ff-only` med "Your local changes ... would be overwritten".
+>
+> **Workaround (sync dev/prod-build-källan till senaste main):**
+> ```bash
+> git -C /opt/it-system/itticket-main reset --hard origin/main   # untracked (t.ex. data/) bevaras
+> ```
+> Kör samma reset innan en prod-`docker build` så bygget utgår från ren main.
+>
+> **Riktig fix (PÅ HOLD per Anton):** byt dev-kommandot `npm install` → `npm ci` i
+> `docker-compose.dev.portainer.yml` (npm ci rör inte lockfilen). Kräver en Portainer-recreate
+> av stack 40, därför uppskjutet tills stacken ändå recreatas. Se minnet `dev-npm-ci-pending`.
+
 **Mål:** Dev-stacken (`it-system-dev`, Portainer id 40) ska sluta dela prod-DB:n
 (`it-ticketing-data`) och sluta sitta fast på `main`. Efteråt:
 

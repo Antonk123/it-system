@@ -31,9 +31,7 @@ const ADMIN_PASSWORD = 'Sup3r-Str0ng-Test-Pw!';
 // module-level imports — we use Node's built-in createRequire to pull os/path
 // synchronously inside the factory.
 const { DB_PATH } = vi.hoisted(() => {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { tmpdir } = require('node:os') as typeof import('node:os');
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { join } = require('node:path') as typeof import('node:path');
   const dbPath = join(tmpdir(), `itticket-test-${process.pid}-${Date.now()}.sqlite`);
   process.env.DB_PATH = dbPath;
