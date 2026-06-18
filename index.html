@@ -2,7 +2,12 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover is required for env(safe-area-inset-*) to resolve to
+         real values in the installed PWA. The layout (mobile header, bottom tab
+         bar, action bars) already pads for these insets; without cover they were
+         silently 0, so content slid under the iOS notch/status bar and home
+         indicator. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <link rel="icon" href="/favicon.png?v=pfm-1" type="image/png" />
     <link rel="shortcut icon" href="/favicon.png?v=pfm-1" type="image/png" />
     <link rel="apple-touch-icon" href="/favicon.png?v=pfm-1" />
