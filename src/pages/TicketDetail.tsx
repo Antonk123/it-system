@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
@@ -112,7 +112,11 @@ const TicketDetail = () => {
   const { templates: checklistTemplates, fetchTemplates: fetchChecklistTemplates, createTemplate: createChecklistTemplate, applyTemplate: applyChecklistTemplate } = useChecklistTemplates();
   const { comments, isLoading: commentsLoading, isError: commentsError, addComment, updateComment, deleteComment } = useTicketComments(id || '');
   const { links, isLoading: linksLoading, isError: linksError, addLink, deleteLink } = useTicketLinks(id || '');
-  const { history, isLoading: historyLoading } = useTicketHistory(id || '');
+  // Defer non-critical, below-the-fold data until the browser is idle after the
+  // first paint, so it doesn't compete with the ticket + comments fetch on a
+  // slow link (VPN/5G).
+  const [deferSecondary, setDeferSecondary] = useState(false);
+  const { history, isLoading: historyLoading } = useTicketHistory(id || '', deferSecondary);
   const { reminders, fetchReminders, createReminder, deleteReminder, clearSentReminders } = useTicketReminders(id || '');
   const {
     isLoading: isShareLoading,
@@ -174,10 +178,40 @@ const TicketDetail = () => {
     if (id) {
       fetchAttachments(id);
       fetchChecklists(id);
-      fetchReminders();
+    }
+  }, [id, fetchAttachments, fetchChecklists]);
+
+  // Flip `deferSecondary` on once the browser is idle after first paint.
+  useEffect(() => {
+    const ric = (window as Window & {
+      requestIdleCallback?: (cb: () => void) => number;
+      cancelIdleCallback?: (h: number) => void;
+    });
+    let handle: number;
+    if (ric.requestIdleCallback) {
+      handle = ric.requestIdleCallback(() => setDeferSecondary(true));
+      return () => ric.cancelIdleCallback?.(handle);
+    }
+    handle = window.setTimeout(() => setDeferSecondary(true), 800);
+    return () => clearTimeout(handle);
+  }, []);
+
+  // Reminders back a section that only renders when data exists — safe to defer.
+  useEffect(() => {
+    if (id && deferSecondary) fetchReminders();
+  }, [id, deferSecondary, fetchReminders]);
+
+  // Checklist templates are only needed once the checklist UI is shown (it has
+  // an "apply/save template" action). Don't fetch them for tickets without a
+  // checklist on initial load. Fetch once when the section first becomes visible.
+  const checklistVisible = checklistItems.length > 0 || checklistOpen;
+  const templatesFetchedRef = useRef(false);
+  useEffect(() => {
+    if (checklistVisible && !templatesFetchedRef.current) {
+      templatesFetchedRef.current = true;
       fetchChecklistTemplates();
     }
-  }, [id, fetchAttachments, fetchChecklists, fetchReminders, fetchChecklistTemplates]);
+  }, [checklistVisible, fetchChecklistTemplates]);
 
   // Fetch AI summary for tickets with enough comments
   useEffect(() => {
