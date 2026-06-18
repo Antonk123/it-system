@@ -63,7 +63,12 @@
   nav a.cta:hover { background: var(--ink); color: var(--paper); }
 
   /* ─── HERO ─── */
-  .hero { padding: 100px 0 80px; }
+  .hero {
+    padding: 100px 0 80px;
+    background:
+      radial-gradient(circle at 100% 0%, rgba(184, 92, 44, 0.08), transparent 42%),
+      radial-gradient(circle at 0% 100%, rgba(58, 86, 65, 0.08), transparent 42%);
+  }
   .hero .eyebrow {
     font-family: 'IBM Plex Mono', monospace; font-size: 12px;
     color: var(--copper); text-transform: uppercase; letter-spacing: 0.18em;
@@ -96,6 +101,19 @@
     padding-bottom: 2px; transition: all 0.2s;
   }
   .btn-secondary:hover { color: var(--copper); border-bottom-color: var(--copper); }
+
+  /* ─── ANIMATIONS ─── */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .hero .eyebrow { animation: fadeIn 0.8s ease-out both; }
+  .hero h1       { animation: fadeIn 0.9s ease-out 0.1s both; }
+  .hero .lead    { animation: fadeIn 1s   ease-out 0.2s both; }
+  .hero-actions  { animation: fadeIn 1.1s ease-out 0.3s both; }
+  @media (prefers-reduced-motion: reduce) {
+    .hero .eyebrow, .hero h1, .hero .lead, .hero-actions { animation: none; }
+  }
 
   /* ─── SECTIONS ─── */
   section { padding: 72px 0; border-top: 1px solid var(--line); }
