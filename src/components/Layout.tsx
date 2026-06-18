@@ -245,6 +245,9 @@ export const Layout = ({
       <aside className={cn(
         "fixed lg:static inset-y-0 left-0 z-50 flex flex-col transition-[width,transform,background-color] duration-300 ease-in-out",
         "bg-sidebar border-r border-sidebar-border",
+        // Keep the off-canvas drawer's top/bottom content clear of the iOS
+        // notch and home indicator (0 on desktop / non-notched devices).
+        "pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
         // Mobile
         sidebarOpen ? "translate-x-0 w-64 shadow-2xl" : "-translate-x-full lg:translate-x-0",
         // Desktop collapsible
@@ -253,7 +256,7 @@ export const Layout = ({
       )}>
         {/* Close button for mobile */}
         <button
-          className="lg:hidden absolute top-3 right-3 text-sidebar-foreground hover:text-primary transition-colors z-20 inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-sidebar-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+          className="lg:hidden absolute top-[calc(env(safe-area-inset-top,0px)+0.75rem)] right-3 text-sidebar-foreground hover:text-primary transition-colors z-20 inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-sidebar-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => setSidebarOpen(false)}
           aria-label="Stäng meny"
         >
