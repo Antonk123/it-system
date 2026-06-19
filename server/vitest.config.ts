@@ -9,5 +9,20 @@ export default defineConfig({
     // varje test mot STALE kod och kan dölja regressioner.
     include: ['src/**/*.test.ts'],
     exclude: [...configDefaults.exclude, 'dist/**'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary'],
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/db/migrations.ts'],
+      // Regressionsspärr (ratchet): satta strax UNDER nuvarande täckning (~33 %)
+      // så de fångar tapp utan att fälla bygget idag. Höj i takt med fler tester.
+      // Kör med `npm test -- --coverage`.
+      thresholds: {
+        statements: 27,
+        branches: 18,
+        functions: 28,
+        lines: 27,
+      },
+    },
   },
 });
