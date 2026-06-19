@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { canAccessTicket } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
@@ -79,6 +80,9 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
+    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
 
     // Get max position
     const maxPos = db.prepare(`
@@ -134,6 +138,9 @@ router.post('/ticket/:ticketId/bulk', authenticate, (req: AuthRequest, res: Resp
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
+    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
 
     const insertStmt = db.prepare(`
       INSERT INTO ticket_checklists (id, ticket_id, label, position, parent_id, due_date)
@@ -178,6 +185,9 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (!existing) {
       return res.status(404).json({ error: 'Checklist item not found' });
     }
+    if (!canAccessTicket(req.user!, existing.ticket_id)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
 
     const updates: string[] = [];
     const values: (string | number | null)[] = [];
@@ -215,11 +225,15 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 // Delete checklist item
 router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const result = db.prepare('DELETE FROM ticket_checklists WHERE id = ?').run(req.params.id);
-
-    if (result.changes === 0) {
+    const existing = db.prepare('SELECT ticket_id FROM ticket_checklists WHERE id = ?').get(req.params.id) as { ticket_id: string } | undefined;
+    if (!existing) {
       return res.status(404).json({ error: 'Checklist item not found' });
     }
+    if (!canAccessTicket(req.user!, existing.ticket_id)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
+
+    db.prepare('DELETE FROM ticket_checklists WHERE id = ?').run(req.params.id);
 
     res.json({ message: 'Checklist item deleted' });
   } catch (error) {

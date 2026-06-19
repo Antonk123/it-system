@@ -270,7 +270,13 @@ router.post('/change-password', authenticate, async (req: AuthRequest, res: Resp
     }
 
     const newHash = await bcrypt.hash(newPassword, 10);
-    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, req.user!.id);
+    // Update the hash and revoke every existing refresh token for this user in
+    // one transaction, so a password change logs out all other sessions/devices
+    // (OWASP session-management). Mirrors the reset-password handler below.
+    db.transaction(() => {
+      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, req.user!.id);
+      db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE user_id = ?').run(req.user!.id);
+    })();
 
     logAudit(req.user!.id, 'password_change', 'user', req.user!.id, null, req.ip);
 

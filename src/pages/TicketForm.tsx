@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, PlusCircle, Pencil, ChevronDown } from 'lucide-react';
-import { useTickets } from '@/hooks/useTickets';
+import { useQuery } from '@tanstack/react-query';
+import { useTickets, ticketKeys } from '@/hooks/useTickets';
+import { mapTicketRow } from '@/lib/mapTicket';
 import { useUsers } from '@/hooks/useUsers';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
 import { useCompanies } from '@/hooks/useCompanies';
@@ -77,7 +79,19 @@ const TicketForm = () => {
   useEffect(() => { fetchChecklistTemplates(); }, [fetchChecklistTemplates]);
 
   const isEditing = !!id;
-  const existingTicket = isEditing ? getTicketById(id) : null;
+  // Authoritative single-ticket fetch: getTicketById only sees the (max-1000)
+  // list cache, so on direct-URL edit navigation it returns undefined and the
+  // form renders blank. A dedicated detail query (same pattern as TicketDetail)
+  // guarantees the ticket loads regardless of list-cache warmth; the list cache
+  // is a synchronous fallback while the query is in flight.
+  const { data: ticketDetailRow } = useQuery({
+    queryKey: ticketKeys.detail(id || ''),
+    queryFn: () => api.getTicket(id!),
+    enabled: isEditing && !!id,
+  });
+  const existingTicket = isEditing
+    ? ((ticketDetailRow ? mapTicketRow(ticketDetailRow) : null) ?? getTicketById(id))
+    : null;
 
   const [formData, setFormData] = useState({
     title: '',

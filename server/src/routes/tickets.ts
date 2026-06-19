@@ -8,6 +8,7 @@ import ExcelJS from 'exceljs';
 import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail, sendTicketAssignedEmail } from '../lib/email.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { canAccessTicket } from '../lib/ticketAccess.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
 import { applySLAToTicket, handleSLAStatusChange } from '../lib/slaHelper.js';
 import { writeRateLimiter, createRateLimiter } from '../middleware/rateLimit.js';
@@ -209,7 +210,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Import tickets - Preview
-router.post('/import/preview', authenticate, upload.single('file'), (req: AuthRequest, res: Response) => {
+router.post('/import/preview', authenticate, requireAdmin, upload.single('file'), (req: AuthRequest, res: Response) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
@@ -250,7 +251,7 @@ router.post('/import/preview', authenticate, upload.single('file'), (req: AuthRe
 });
 
 // Import tickets - Confirm
-router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const { tickets } = req.body;
 
@@ -1262,10 +1263,13 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
       return res.status(404).json({ error: 'Ticket not found' });
     }
 
-    // Self-service ticket-picking: every authenticated user can change the assignee.
-    // History-log persists who changed what (rad 1773), and the audit trail is
-    // sufficient for a small internal IT-support team. Locking this to admin
-    // creates more friction than it prevents.
+    // Authorization: admins, the requester, the assignee or the creator may edit
+    // (canAccessTicket). Unassigned tickets stay open for self-service pickup —
+    // any authenticated agent may claim/work a ticket sitting in the queue. This
+    // blocks a non-owner from rewriting a ticket already assigned to a colleague.
+    if (existing.assigned_to !== null && !canAccessTicket(req.user!, req.params.id as string)) {
+      return res.status(403).json({ error: 'Du har inte behörighet att ändra detta ärende' });
+    }
 
     // When customFields are provided, compose description from them (same logic as POST)
     let finalDescription: string | undefined = description;
