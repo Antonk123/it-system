@@ -1,3 +1,5 @@
+import { toast } from 'sonner';
+
 // Service worker registration with reliable auto-update.
 //
 // The default registration that vite-plugin-pwa injects only calls
@@ -16,6 +18,24 @@
 //      skipWaiting + clients.claim), reload once so the fresh bundle loads.
 //      Guarded so the very first install (no previous controller) does not
 //      trigger a spurious reload.
+//   3. Deferred reload — if the user has unsaved work (e.g. an open ticket form),
+//      the reload waits until they save/leave so an update never discards input.
+
+// Module-level signal the UI mirrors its dirty state into (see TicketForm).
+let unsavedWork = false;
+let pendingReload = false;
+let notifiedDeferred = false;
+
+/** Called by forms to defer SW auto-reload while there is unsaved input. */
+export function setHasUnsavedWork(value: boolean): void {
+  unsavedWork = value;
+  // Once work is saved/discarded, perform any reload that was deferred.
+  if (!value && pendingReload) {
+    pendingReload = false;
+    window.location.reload();
+  }
+}
+
 export function registerServiceWorker(): void {
   if (!('serviceWorker' in navigator)) return;
 
@@ -30,6 +50,16 @@ export function registerServiceWorker(): void {
         let refreshing = false;
         navigator.serviceWorker.addEventListener('controllerchange', () => {
           if (refreshing || !hadController) return;
+          // Defer the reload while the user has unsaved work so a mid-edit update
+          // never discards their input; it reloads as soon as the work clears.
+          if (unsavedWork) {
+            pendingReload = true;
+            if (!notifiedDeferred) {
+              notifiedDeferred = true;
+              toast('En ny version finns — appen laddas om när du sparat.', { duration: 6000 });
+            }
+            return;
+          }
           refreshing = true;
           window.location.reload();
         });

@@ -37,6 +37,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { TicketPriority, TicketStatus, Template } from '@/types/ticket';
 import { toast } from 'sonner';
 import { ticketInsertSchema, ticketUpdateSchema } from '@/lib/validations';
+import { setHasUnsavedWork } from '@/registerSW';
+
+// New-ticket draft is persisted here so a SW auto-reload, accidental refresh, or
+// iOS PWA suspend never loses what was typed on a phone. Cleared on successful create.
+const NEW_TICKET_DRAFT_KEY = 'it-ticket:new-ticket-draft';
 
 const TicketForm = () => {
   const { id } = useParams();
@@ -339,6 +344,40 @@ const TicketForm = () => {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges, isSubmitting]);
 
+  // Restore a previously-saved new-ticket draft on mount (mobile reliability).
+  useEffect(() => {
+    if (isEditing) return;
+    try {
+      const raw = localStorage.getItem(NEW_TICKET_DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (draft && typeof draft === 'object' && (draft.title || draft.description || draft.requesterId || draft.notes || draft.solution)) {
+        setFormData((prev) => ({ ...prev, ...draft }));
+        toast.info('Återställde ditt osparade utkast');
+      }
+    } catch { /* corrupt draft — ignore */ }
+  }, [isEditing]);
+
+  // Autosave the new-ticket draft (debounced). Edit forms have server state → skip.
+  useEffect(() => {
+    if (isEditing) return;
+    const hasData = formData.title || formData.description || formData.requesterId || formData.notes || formData.solution;
+    const t = window.setTimeout(() => {
+      try {
+        if (hasData) localStorage.setItem(NEW_TICKET_DRAFT_KEY, JSON.stringify(formData));
+        else localStorage.removeItem(NEW_TICKET_DRAFT_KEY);
+      } catch { /* quota / private mode — non-fatal */ }
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [formData, isEditing]);
+
+  // Mirror dirty state to the SW registrar so an auto-update defers its reload
+  // until the user has saved/left, instead of discarding an in-progress ticket.
+  useEffect(() => {
+    setHasUnsavedWork(hasUnsavedChanges);
+    return () => setHasUnsavedWork(false);
+  }, [hasUnsavedChanges]);
+
   // Badge counts for collapsible sections
   const detailsBadgeCount = useMemo(() => {
     let count = 0;
@@ -492,6 +531,7 @@ const TicketForm = () => {
           }
 
           setHasUnsavedChanges(false);
+          try { localStorage.removeItem(NEW_TICKET_DRAFT_KEY); } catch { /* draft cleared */ }
 
           if (failedFiles.length > 0) {
             setFailedUploads({ files: failedFiles, ticketId: newTicket.id });
