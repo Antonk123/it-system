@@ -608,10 +608,10 @@ const TicketDetail = () => {
                     </span>
                   )}
                 </p>
-                <Button variant="ghost" size="sm" className="gap-1 text-xs h-7" onClick={handleAcceptAiCategory}>
+                <Button variant="ghost" size="sm" className="gap-1 text-xs min-h-[44px]" onClick={handleAcceptAiCategory}>
                   <Check className="w-3 h-3" /> Acceptera
                 </Button>
-                <Button variant="ghost" size="sm" className="gap-1 text-xs h-7 text-muted-foreground" onClick={handleDismissAiCategory}>
+                <Button variant="ghost" size="sm" className="gap-1 text-xs min-h-[44px] text-muted-foreground" onClick={handleDismissAiCategory}>
                   <X className="w-3 h-3" /> Ignorera
                 </Button>
               </div>
@@ -966,10 +966,12 @@ const TicketDetail = () => {
             </div>
           </CardContent>
         </Card>
+        {/* Spacer so the last content clears the fixed mobile quick-action bar */}
+        <div aria-hidden className="h-16 md:hidden" />
       </div>
       {/* Template name dialog */}
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Spara som mall</DialogTitle>
             <DialogDescription>Ge mallen ett tydligt namn så du hittar den lätt senare.</DialogDescription>

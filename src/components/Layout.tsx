@@ -376,7 +376,7 @@ export const Layout = ({
       <div data-print-hide>
         <QuickCaptureFAB className={cn(
           "left-4 lg:transition-[left] lg:duration-300",
-          "bottom-[72px] lg:bottom-6",
+          "bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-6",
           sidebarCollapsed ? "lg:left-20" : "lg:left-68"
         )} />
       </div>

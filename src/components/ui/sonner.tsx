@@ -11,6 +11,9 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme={resolvedTheme as ToasterProps["theme"]}
       className="toaster group"
+      // Lift mobile toasts above the fixed BottomTabBar (~3.5rem) + home indicator
+      // so save/error confirmations aren't clipped or hidden behind the nav.
+      mobileOffset={{ bottom: 'calc(4.5rem + env(safe-area-inset-bottom, 0px))' }}
       toastOptions={{
         classNames: {
           toast:

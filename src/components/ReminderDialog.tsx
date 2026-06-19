@@ -88,7 +88,7 @@ export function ReminderDialog({ onCreateReminder, open: controlledOpen, onOpenC
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="sm:max-w-[425px] overflow-hidden">
+      <DialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Skapa påminnelse</DialogTitle>
         </DialogHeader>
