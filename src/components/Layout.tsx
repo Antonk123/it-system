@@ -294,7 +294,7 @@ export const Layout = ({
         <div data-print-hide className="lg:hidden sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] flex items-center gap-4 shadow-sm">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="p-2 rounded-lg hover:bg-primary/10 transition-colors"
+            className="p-3 -m-1 rounded-lg hover:bg-primary/10 active:bg-primary/20 transition-colors"
             aria-label="Öppna meny"
           >
             <Menu className="w-6 h-6" />

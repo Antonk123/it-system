@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { api } from '@/lib/api';
@@ -19,6 +19,7 @@ interface QuickCaptureFABProps {
 export const QuickCaptureFAB = ({ className }: QuickCaptureFABProps) => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
 
   const [open, setOpen] = useState(false);
@@ -78,6 +79,12 @@ export const QuickCaptureFAB = ({ className }: QuickCaptureFABProps) => {
     }
   };
 
+  // Hide the mobile FAB on the ticket-detail view — that page has its own fixed
+  // bottom action bar (status/time/photo); two stacked bottom bars would overlap.
+  // (Edit `/tickets/:id/edit` and create `/tickets/new` don't match → FAB stays.)
+  const onTicketDetailMobile =
+    /^\/tickets\/[^/]+$/.test(location.pathname) && location.pathname !== '/tickets/new';
+
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <Tooltip>
@@ -85,7 +92,7 @@ export const QuickCaptureFAB = ({ className }: QuickCaptureFABProps) => {
           <PopoverTrigger asChild>
             <Button
               size="icon"
-              className={cn("fixed bottom-6 z-50 h-14 w-14 rounded-full shadow-lg bg-primary text-primary-foreground hover:scale-105 hover:shadow-xl active:scale-95 transition-transform duration-200 flex", className)}
+              className={cn("fixed bottom-6 z-50 h-14 w-14 rounded-full shadow-lg bg-primary text-primary-foreground hover:scale-105 hover:shadow-xl active:scale-95 transition-transform duration-200", onTicketDetailMobile ? "hidden lg:flex" : "flex", className)}
               aria-label="Snabbt ärende"
             >
               <Plus className="h-6 w-6" />

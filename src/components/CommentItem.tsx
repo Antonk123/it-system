@@ -80,7 +80,7 @@ export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) =
               variant="ghost"
               size="sm"
               onClick={() => setIsEditing(true)}
-              className="h-9 w-9 md:h-8 md:w-8 p-0"
+              className="h-11 w-11 md:h-9 md:w-9 p-0"
               aria-label="Redigera kommentar"
             >
               <Pencil className="w-3.5 h-3.5" />
@@ -90,7 +90,7 @@ export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) =
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-9 w-9 md:h-8 md:w-8 p-0 text-destructive hover:text-destructive"
+                  className="h-11 w-11 md:h-9 md:w-9 p-0 text-destructive hover:text-destructive"
                   aria-label="Ta bort kommentar"
                 >
                   <Trash2 className="w-3.5 h-3.5" />

@@ -304,6 +304,8 @@ const UserList = () => {
                   <Label htmlFor="name">Namn *</Label>
                   <Input
                     id="name"
+                    autoComplete="name"
+                    autoCapitalize="words"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     placeholder="Johan Andersson"
@@ -339,6 +341,7 @@ const UserList = () => {
                   <Label htmlFor="department">Avdelning</Label>
                   <Input
                     id="department"
+                    autoCapitalize="words"
                     value={formData.department}
                     onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                     placeholder="T.ex. Tillverkning - Norsjö"

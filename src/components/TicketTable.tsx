@@ -138,7 +138,7 @@ export const TicketTable = memo(function TicketTable({
       <button
         type="button"
         onClick={() => onSortChange?.(key)}
-        className="flex items-center gap-2 text-left hover:text-foreground/80 transition-colors"
+        className="flex items-center gap-2 text-left hover:text-foreground/80 active:opacity-70 transition-colors min-h-[36px] py-1"
       >
         <span>{label}</span>
         <ArrowUpDown className={`h-3 w-3 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`} />

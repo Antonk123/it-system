@@ -235,10 +235,12 @@ const TicketDetail = () => {
     }).finally(() => setAiSummaryLoading(false));
   };
 
-  const handleAcceptAiCategory = () => {
+  const handleAcceptAiCategory = async () => {
     if (!ticket?.ai_suggested_category_id) return;
-    updateTicket(ticket.id, { category: ticket.ai_suggested_category_id });
-    toast.success('Kategori accepterad');
+    try {
+      await updateTicket(ticket.id, { category: ticket.ai_suggested_category_id });
+      toast.success('Kategori accepterad');
+    } catch { /* useTickets onError already shows an error toast + rolls back */ }
   };
 
   const handleDismissAiCategory = () => {
@@ -262,13 +264,16 @@ const TicketDetail = () => {
     }
   };
 
-  const handleUseDraftAsSolution = () => {
+  const handleUseDraftAsSolution = async () => {
     if (!ticket || !aiDraft) return;
-    updateTicket(ticket.id, { solution: aiDraft });
-    setAiDraft(null);
-    setAiDraftKbTitles([]);
-    setAiDraftAttachments([]);
-    toast.success('Lösning sparad');
+    try {
+      await updateTicket(ticket.id, { solution: aiDraft });
+      // Only clear the draft + confirm once the save actually succeeded.
+      setAiDraft(null);
+      setAiDraftKbTitles([]);
+      setAiDraftAttachments([]);
+      toast.success('Lösning sparad');
+    } catch { /* useTickets onError already shows an error toast + rolls back */ }
   };
 
   // Track recently viewed tickets
@@ -717,7 +722,7 @@ const TicketDetail = () => {
               <div className="pt-4 border-t">
                 <button
                   onClick={() => setChecklistOpen(true)}
-                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground active:opacity-70 transition-colors min-h-[44px] px-2 -mx-2"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <ListChecks className="w-3.5 h-3.5" />
@@ -775,7 +780,7 @@ const TicketDetail = () => {
                             {formatFileSize(attachment.fileSize)}
                           </p>
                         </div>
-                        <Download className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        <Download className="w-4 h-4 text-muted-foreground opacity-60 group-hover:opacity-100 group-active:opacity-100 transition-opacity" />
                       </SecureDownloadLink>
                     );
                   })}
