@@ -39,6 +39,9 @@ const upload = multer({
 // Fynd 6: Rate limit för backup-download (max 10 nedladdningar per 15 min per IP).
 const backupDownloadLimiter = createRateLimiter(15 * 60 * 1000, 10);
 
+// Fynd restore-missing-rate-limit: Rate limit för restore (max 5 försök per 15 min per IP).
+const restoreLimiter = createRateLimiter(15 * 60 * 1000, 5);
+
 const router = Router();
 
 router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (req: AuthRequest, res: Response) => {
@@ -87,7 +90,7 @@ router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (req: A
   }
 });
 
-router.post('/restore', authenticate, requireAdmin, upload.single('file'), async (req: AuthRequest, res: Response) => {
+router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.single('file'), async (req: AuthRequest, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Ingen fil skickades. Ladda upp en backup-ZIP.' });
   }
@@ -104,7 +107,20 @@ router.post('/restore', authenticate, requireAdmin, upload.single('file'), async
     mkdirSync(extractDir, { recursive: true });
 
     // Fynd 2: Zip-slip-skydd — validera varje entry innan extraktion.
+    // Fynd unzipper-pipe-close-race: Samla finish-löften per entry och awaita
+    // Promise.all innan vi resolvear, så att copyFileSync inte racear mot
+    // ännu-skrivande WriteStreams (Parse 'close' kommer före sista 'finish').
     await new Promise<void>((resolveP, rejectP) => {
+      const writeFinishPromises: Promise<void>[] = [];
+      let rejected = false;
+
+      const reject = (err: Error) => {
+        if (!rejected) {
+          rejected = true;
+          rejectP(err);
+        }
+      };
+
       createReadStream(uploadedZip)
         .pipe(unzipper.Parse())
         .on('entry', (entry: unzipper.Entry) => {
@@ -112,7 +128,7 @@ router.post('/restore', authenticate, requireAdmin, upload.single('file'), async
           if (!entryPath.startsWith(extractDirNorm)) {
             // Skadlig entry — avbryt och städa
             entry.autodrain();
-            rejectP(new Error(`Zip-slip-försök detekterat: ${entry.path}`));
+            reject(new Error(`Zip-slip-försök detekterat: ${entry.path}`));
             return;
           }
           // Säker entry — extrahera till korrekt sökväg
@@ -122,12 +138,22 @@ router.post('/restore', authenticate, requireAdmin, upload.single('file'), async
             mkdirSync(entryPath, { recursive: true });
             entry.autodrain();
           } else {
-            entry.pipe(createWriteStream(entryPath))
-              .on('error', rejectP);
+            const ws = createWriteStream(entryPath);
+            // Spåra varje streams finish-händelse så att 'close' på Parse
+            // inte resolvear innan alla filer har skrivits klart till disk.
+            const finishP = new Promise<void>((res, rej) => {
+              ws.on('finish', res);
+              ws.on('error', rej);
+            });
+            writeFinishPromises.push(finishP);
+            entry.pipe(ws).on('error', reject);
           }
         })
-        .on('close', resolveP)
-        .on('error', rejectP);
+        .on('close', () => {
+          // Vänta tills alla WriteStreams har skrivit klart innan vi fortsätter.
+          Promise.all(writeFinishPromises).then(() => resolveP(), reject);
+        })
+        .on('error', reject);
     });
 
     const restoredDb = join(extractDir, 'data', 'database.sqlite');
@@ -181,6 +207,10 @@ router.post('/restore', authenticate, requireAdmin, upload.single('file'), async
 
     rmSync(tmpDir, { recursive: true, force: true });
     try { unlinkSync(uploadedZip); } catch { /* ignore */ }
+
+    // Fynd pre-restore-backup-not-cleaned-up: Ta bort rollback-filen efter lyckad
+    // återställning så att den inte ligger kvar och tar diskutrymme i onödan.
+    try { unlinkSync(dbBackup); } catch { /* ignore — filen kanske redan är borta */ }
 
     // Fynd 1: Skicka svar och schemalägg process.exit(0) så Docker (restart: unless-stopped)
     // startar om containern med den nya DB:n i ett rent tillstånd.

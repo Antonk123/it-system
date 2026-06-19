@@ -106,7 +106,7 @@ const GeneralTab = () => {
         toast.success('Push-notiser avaktiverade');
       }
     } catch (error) {
-      console.error('Push toggle error:', error);
+      if (import.meta.env.DEV) console.error('Push toggle error:', error);
       toast.error('Kunde inte aktivera notiser. Försök igen.');
     } finally {
       setPushLoading(false);

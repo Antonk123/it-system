@@ -20,25 +20,34 @@ function matchesWord(text: string, keyword: string): boolean {
  * Applies auto-tags to a newly created ticket based on TAG_RULES.
  * Only matches against the title (not description) using word-boundary matching.
  * Only applies tags that already exist — never creates new ones.
+ *
+ * Optimering: alla taggnamn laddas i en Map<name,id> med en enda SELECT innan
+ * loopen, så vi gör inte en DB-query per TAG_RULE-träff utan bara ett platt
+ * Map-lookup. Den per-tagg-query för befintlig länk (ticket_tags) behålls —
+ * den körs bara för regler som faktiskt matchar och tag-id:t är känt.
  */
 export function applyAutoTags(ticketId: string, title: string, _description: string): void {
+  // Förhämta alla taggar i en Map för O(1)-lookup — ersätter ett SELECT per regel
+  const allTags = db.prepare('SELECT id, name FROM tags').all() as { id: string; name: string }[];
+  const tagMap = new Map<string, string>(allTags.map((t) => [t.name, t.id]));
+
   const addedTagNames = new Set<string>();
 
   for (const rule of TAG_RULES) {
     if (!matchesWord(title, rule.keyword)) continue;
     if (addedTagNames.has(rule.tagName)) continue;
 
-    // Only use existing tags — never create new ones
-    const tag = db.prepare('SELECT id FROM tags WHERE name = ?').get(rule.tagName) as { id: string } | undefined;
-    if (!tag) continue;
+    // Slå upp tag-id i den förhämtade Map:en — ingen extra DB-query
+    const tagId = tagMap.get(rule.tagName);
+    if (!tagId) continue;
 
     // Link tag to ticket (ignore if already linked)
-    const exists = db.prepare('SELECT 1 FROM ticket_tags WHERE ticket_id = ? AND tag_id = ?').get(ticketId, tag.id);
+    const exists = db.prepare('SELECT 1 FROM ticket_tags WHERE ticket_id = ? AND tag_id = ?').get(ticketId, tagId);
     if (!exists) {
       db.prepare('INSERT INTO ticket_tags (id, ticket_id, tag_id) VALUES (?, ?, ?)').run(
         uuidv4(),
         ticketId,
-        tag.id
+        tagId
       );
       logger.info('Auto-tag applied', { tag: rule.tagName, ticketId });
     }

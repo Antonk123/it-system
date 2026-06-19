@@ -24,8 +24,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 // Animation variants
 // ---------------------------------------------------------------------------
 
-const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
 const kpiContainer: Variants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.07, delayChildren: 0.05 } },
@@ -65,6 +63,9 @@ function getGreetingName(email: string | undefined): string {
 // ---------------------------------------------------------------------------
 
 const Dashboard = () => {
+  // Beräknas inuti komponenten — inte på modulnivå — för att undvika SSR/test-krasch
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   // Smal fetch: bara aktiva ärenden, sorterade på priority, max 30 — driver TicketQueueTable
   const { data: activeQueue, isLoading: isQueueLoading, isError: isQueueError, refetch: refetchQueue } = useActiveQueue(30);
   const { getUserById } = useUsers();

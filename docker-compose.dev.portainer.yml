@@ -65,6 +65,9 @@ services:
       - /opt/it-system/itticket-main:/app
       - /app/node_modules
     environment:
+      # OBS: IP-adressen nedan är ett fallback — i Portainer sätts VITE_API_URL som
+      # en Portainer-hanterad env-variabel (Environment variables i stack-GUI:t) och
+      # skriver över detta default. Ändra aldrig IP:n här utan i Portainer-stacken.
       - VITE_API_URL=${VITE_API_URL:-http://10.38.195.180:3003/api}
     depends_on:
       - backend

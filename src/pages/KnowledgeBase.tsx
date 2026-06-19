@@ -31,8 +31,6 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 
-const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
 const listContainer: Variants = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.05 } },
@@ -59,6 +57,9 @@ function highlightTerms(text: string, query: string): string {
 }
 
 const KnowledgeBase = () => {
+  // Beräknas inuti komponenten — inte på modulnivå — för att undvika SSR/test-krasch
+  const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);

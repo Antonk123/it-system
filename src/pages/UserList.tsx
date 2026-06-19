@@ -163,7 +163,7 @@ const UserList = () => {
       await api.exportContacts();
       toast.success('Användare exporterade till Excel');
     } catch (error) {
-      console.error('Export failed:', error);
+      if (import.meta.env.DEV) console.error('Export failed:', error);
       toast.error('Misslyckades att exportera användare');
     }
   };
@@ -189,7 +189,7 @@ const UserList = () => {
       setImportPreview(preview);
       setIsImportDialogOpen(true);
     } catch (error: any) {
-      console.error('Preview failed:', error);
+      if (import.meta.env.DEV) console.error('Preview failed:', error);
       toast.error(error.message || 'Misslyckades att förhandsgranska import');
     } finally {
       setIsImporting(false);
@@ -224,7 +224,7 @@ const UserList = () => {
       setImportPreview(null);
       refetch();
     } catch (error: any) {
-      console.error('Import failed:', error);
+      if (import.meta.env.DEV) console.error('Import failed:', error);
       toast.error(error.message || 'Misslyckades att importera användare');
     } finally {
       setIsImporting(false);

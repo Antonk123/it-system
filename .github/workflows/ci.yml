@@ -29,6 +29,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
       - run: cd server && npm ci
       - run: cd server && npx tsc --noEmit
       - run: cd server && npm test

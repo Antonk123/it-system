@@ -160,6 +160,29 @@ function addCommentToTicket(ticketId: string, body: string, fromAddress: string,
  * Parsar ett råmail (Buffer) och skapar antingen ett nytt ärende eller lägger till
  * en kommentar på ett befintligt ärende via trådnings-/ämneslogik.
  * Bilagor sparas via saveAttachments med MIME- och storleksvalidering.
+ *
+ * Tråd- och dedupliceringsordning (i prioritetsordning):
+ *
+ * 1. **Message-ID-match** — om mailets `In-Reply-To`- eller `References`-header
+ *    innehåller ett message-id som matchar ett befintligt ärendes
+ *    `email_message_id`, kopplas mailet till det ärendet som en kommentar.
+ *
+ * 2. **Kort-id i ämnesraden** — om ämnet innehåller ett mönster `[#XXXXXXXX]`
+ *    (8 hex-tecken) som matchar de första 8 tecknen av ett ärendes UUID,
+ *    används det ärendet.
+ *
+ * 3. **Ämne + avsändare på öppet ärende** — om ämnet börjar med ett
+ *    svarsprefix (Re/Sv/Fwd/Fw/VS) och det finns ett öppet ärende med exakt
+ *    matchande titel OCH vars beställare har samma e-postadress som avsändaren,
+ *    kopplas mailet till det ärendet. Avsändarkontrollen förhindrar att externa
+ *    svar på ett slumpmässigt matchande ämne kopplas till fel ärende.
+ *
+ * 4. **~60-sekunders nära-dubblett-fönster** — om inget av ovan matchar men
+ *    ett ärende med samma titel och avsändare skapades inom de senaste 60
+ *    sekunderna, läggs mailet till som kommentar på det ärendet i stället för
+ *    att skapa ett nytt (skyddar mot snabba e-postklienter som skickar dubbelt).
+ *
+ * Om ingen av de fyra ovan stämmer skapas ett nytt ärende.
  */
 async function processEmail(source: Buffer, config: EmailConfig): Promise<void> {
   // Guard against oversized emails that could OOM the process during parsing.

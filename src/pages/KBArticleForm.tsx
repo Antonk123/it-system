@@ -189,7 +189,7 @@ const KBArticleForm = () => {
             await api.linkKbArticleToTicket(sourceTicketId, created.id);
           } catch {
             // Non-fatal: article was created, link just failed
-            console.warn('Could not auto-link article to source ticket');
+            if (import.meta.env.DEV) console.warn('Could not auto-link article to source ticket');
           }
         }
         queryClient.invalidateQueries({ queryKey: kbArticlesKeys.all });

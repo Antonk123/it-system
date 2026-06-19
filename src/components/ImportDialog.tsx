@@ -85,7 +85,7 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
         toast.success(`${result.valid} ärenden redo att importeras`);
       }
     } catch (error) {
-      console.error('Preview failed:', error);
+      if (import.meta.env.DEV) console.error('Preview failed:', error);
       toast.error('Misslyckades att förhandsgranska CSV-filen');
       setFile(null);
     } finally {
@@ -118,7 +118,7 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
         toast.error('Import misslyckades');
       }
     } catch (error) {
-      console.error('Import failed:', error);
+      if (import.meta.env.DEV) console.error('Import failed:', error);
       toast.error('Misslyckades att importera ärenden');
     } finally {
       setImporting(false);

@@ -896,6 +896,11 @@ router.post('/:id/ai-draft', aiRateLimiter, authenticate, async (req: AuthReques
     return res.status(503).json({ error: 'AI är inte konfigurerat på denna installation (ANTHROPIC_API_KEY saknas)' });
   }
   try {
+    // Behörighetskontroll: bara ägare/admin/tilldeln får generera utkast
+    if (!canAccessTicket(req.user!, req.params.id)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
+
     const ticket = db.prepare(`
       SELECT id, title, description FROM tickets WHERE id = ?
     `).get(req.params.id) as { id: string; title: string; description: string } | undefined;
@@ -1047,6 +1052,11 @@ router.get('/:id/ai-summary', aiRateLimiter, authenticate, async (req: AuthReque
 // Get ticket history
 router.get('/:id/history', authenticate, (req: AuthRequest, res: Response) => {
   try {
+    // Behörighetskontroll: samma äganderegel som PUT /:id
+    if (!canAccessTicket(req.user!, req.params.id)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
+
     const history = db.prepare(`
       SELECT th.id, th.ticket_id, th.user_id, th.field_name, th.old_value, th.new_value, th.changed_at,
              COALESCE(u.display_name, u.email) as user_name
@@ -1069,6 +1079,11 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
 
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: 'ids must be a non-empty array' });
+  }
+
+  // Skydda mot DoS via extremt stora batcher
+  if (ids.length > 500) {
+    return res.status(400).json({ error: 'För många ärenden i en batch (max 500)' });
   }
 
   const { status, priority, category_id, assigned_to } = updates || {};

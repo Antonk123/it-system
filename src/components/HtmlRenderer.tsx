@@ -1,13 +1,17 @@
 import DOMPurify from 'dompurify';
 import { cn } from '@/lib/utils';
 
-// Block external img src once at module load to prevent tracking pixels
+// Block external img src once at module load to prevent tracking pixels,
+// and force rel=noopener noreferrer på target=_blank-länkar (reverse tabnabbing).
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'IMG') {
     const src = node.getAttribute('src') || '';
     if (src && !src.startsWith('/') && !src.startsWith(window.location.origin)) {
       node.removeAttribute('src');
     }
+  }
+  if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
+    node.setAttribute('rel', 'noopener noreferrer');
   }
 });
 

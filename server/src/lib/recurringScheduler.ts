@@ -1,7 +1,9 @@
-import cron from 'node-cron';
+import cron, { ScheduledTask } from 'node-cron';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { logger } from './logger.js';
+
+let schedulerTask: ScheduledTask | null = null;
 
 interface RecurringTemplate {
   id: string;
@@ -185,7 +187,7 @@ function processRecurringTemplates(): void {
  * Registers the recurring ticket scheduler to run every minute.
  */
 export function startRecurringScheduler(): void {
-  cron.schedule('* * * * *', () => {
+  schedulerTask = cron.schedule('* * * * *', () => {
     try {
       processRecurringTemplates();
     } catch (error) {
@@ -194,4 +196,9 @@ export function startRecurringScheduler(): void {
   });
 
   logger.info('Recurring ticket scheduler enabled (every minute)');
+}
+
+export function stopRecurringScheduler(): void {
+  schedulerTask?.stop();
+  schedulerTask = null;
 }

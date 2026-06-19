@@ -51,8 +51,11 @@ router.get('/templates', (_req: Request, res: Response) => {
     const templates = db.prepare('SELECT id, name, description, title_template, description_template, priority, category_id FROM ticket_templates ORDER BY position ASC, name ASC').all() as TemplateRow[];
 
     // Attach fields to each template
-    // Batch-load all fields in one query, then group by template_id
-    const allFields = db.prepare('SELECT * FROM template_fields ORDER BY position ASC').all() as (Record<string, unknown> & { template_id: string })[];
+    // Batch-load alla fält i en fråga — explicit kolumnlista exponerar bara det
+    // som publika formuläret behöver; interna/känsliga kolumner hålls dolda.
+    const allFields = db.prepare(
+      'SELECT id, template_id, field_name, field_label, field_type, placeholder, required, options, position FROM template_fields ORDER BY position ASC'
+    ).all() as (Record<string, unknown> & { template_id: string })[];
     const fieldsByTemplate = new Map<string, typeof allFields>();
     for (const field of allFields) {
       const list = fieldsByTemplate.get(field.template_id) || [];

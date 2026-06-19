@@ -237,9 +237,6 @@ CREATE INDEX IF NOT EXISTS idx_ticket_reminders_ticket ON ticket_reminders(ticke
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_user ON ticket_reminders(user_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_time ON ticket_reminders(reminder_time);
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_sent ON ticket_reminders(sent);
-CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
-CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
-CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON refresh_tokens(expires_at);
 CREATE INDEX IF NOT EXISTS idx_kb_article_shares_token ON kb_article_shares(share_token);
 CREATE INDEX IF NOT EXISTS idx_kb_article_shares_article ON kb_article_shares(article_id);
 CREATE INDEX IF NOT EXISTS idx_kb_articles_category ON kb_articles(category_id);

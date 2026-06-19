@@ -1,9 +1,11 @@
-import cron from 'node-cron';
+import cron, { ScheduledTask } from 'node-cron';
 import { db } from '../db/connection.js';
 import { sendPushToAllSubscriptions, isPushEnabled } from './push.js';
 import { logger } from './logger.js';
 
 const AGING_DAYS = parseInt(process.env.PUSH_AGING_DAYS || '7', 10);
+
+let schedulerTask: ScheduledTask | null = null;
 
 async function checkAgingTickets(): Promise<void> {
   if (!isPushEnabled()) return;
@@ -51,7 +53,7 @@ async function checkAgingTickets(): Promise<void> {
 
 export function startPushScheduler(): void {
   // Run daily at 09:00 - when the user is likely at their desk
-  cron.schedule('0 9 * * *', async () => {
+  schedulerTask = cron.schedule('0 9 * * *', async () => {
     try {
       await checkAgingTickets();
     } catch (error) {
@@ -60,4 +62,9 @@ export function startPushScheduler(): void {
   });
 
   logger.info(`Push aging-ticket scheduler enabled (daily at 09:00, threshold: ${AGING_DAYS} days)`);
+}
+
+export function stopPushScheduler(): void {
+  schedulerTask?.stop();
+  schedulerTask = null;
 }

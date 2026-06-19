@@ -163,7 +163,7 @@ const Reports = () => {
   // Fetch them LAZILY — only once a modal is opened — instead of eagerly on page
   // load. (All chart aggregation now comes from server-side report endpoints, so
   // the page no longer pulls up to 1000 raw tickets just to render charts.)
-  const { data: drilldownTickets = [] } = useQuery({
+  const { data: drilldownTickets = [], isError: isDrilldownError } = useQuery({
     queryKey: ['reports', 'drilldown-tickets'],
     enabled: kpiModalOpen !== null,
     staleTime: 60 * 1000,
@@ -189,7 +189,7 @@ const Reports = () => {
   }, [summary?.trend]);
 
   // Requester analytics — server-side aggregation via /reports/requester-analytics
-  const { data: requesterAnalytics = [] } = useQuery<RequesterAnalyticsRow[]>({
+  const { data: requesterAnalytics = [], isError: isRequesterError } = useQuery<RequesterAnalyticsRow[]>({
     queryKey: ['reports', 'requester-analytics', selectedYear, selectedMonth],
     queryFn: () => api.getRequesterAnalytics(selectedYear, selectedMonth),
     staleTime: 5 * 60 * 1000,
@@ -423,7 +423,9 @@ const Reports = () => {
 
       toast.success(`Excel-export klar: ${filterDesc}`);
     } catch (error) {
-      console.error('Export failed:', error);
+      if (import.meta.env.DEV) {
+        console.error('Export failed:', error);
+      }
       toast.error('Kunde inte exportera rapportdata');
     }
   };
@@ -507,7 +509,7 @@ const Reports = () => {
           open={kpiModalOpen === 'aging'}
           onOpenChange={(open) => setKpiModalOpen(open ? 'aging' : null)}
           title="Gamla ärenden"
-          description={`Ärenden som har varit öppna i mer än 7 dagar (${agingTickets} totalt)`}
+          description={isDrilldownError ? 'Kunde inte ladda data' : `Ärenden som har varit öppna i mer än 7 dagar (${agingTickets} totalt)`}
           tickets={agingTicketsData}
           users={users}
         />
@@ -516,7 +518,7 @@ const Reports = () => {
           open={kpiModalOpen === 'total'}
           onOpenChange={(open) => setKpiModalOpen(open ? 'total' : null)}
           title="Alla ärenden"
-          description={`Alla ärenden i aktuell vy (${totalTickets} totalt)`}
+          description={isDrilldownError ? 'Kunde inte ladda data' : `Alla ärenden i aktuell vy (${totalTickets} totalt)`}
           tickets={yearMonthFilteredTickets}
           users={users}
         />
@@ -886,7 +888,11 @@ const Reports = () => {
                   )}
 
                   {/* Stacked Bar Chart */}
-                  {requesterAnalytics.length === 0 ? (
+                  {isRequesterError ? (
+                    <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+                      Kunde inte ladda data
+                    </div>
+                  ) : requesterAnalytics.length === 0 ? (
                     <div className="h-[300px] flex items-center justify-center text-muted-foreground">
                       Ingen ärendedata tillgänglig
                     </div>

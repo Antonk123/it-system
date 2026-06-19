@@ -1,11 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { componentTagger } from "lovable-tagger";
 import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(() => ({
   server: {
     host: "::",
     port: 5173,
@@ -18,7 +17,6 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
-    mode === "development" && componentTagger(),
     VitePWA({
       registerType: 'autoUpdate',
       // We register the SW ourselves (src/registerSW.ts) to add periodic update
@@ -119,7 +117,12 @@ export default defineConfig(({ mode }) => ({
             id.includes('hast') ||
             id.includes('micromark') ||
             id.includes('unified') ||
-            id.includes('unist')
+            id.includes('unist') ||
+            // markdown-it och dess beroenden samlas i markdown-vendor-chunken
+            id.includes('node_modules/markdown-it/') ||
+            id.includes('node_modules/linkify-it/') ||
+            id.includes('node_modules/mdurl/') ||
+            id.includes('node_modules/punycode/')
           ) {
             return 'markdown-vendor';
           }

@@ -1,8 +1,10 @@
-import cron from 'node-cron';
+import cron, { ScheduledTask } from 'node-cron';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { AUTO_CLOSE_DAYS } from '../config/automation.js';
 import { logger } from './logger.js';
+
+let schedulerTask: ScheduledTask | null = null;
 
 /**
  * Finds all tickets with status "resolved" whose updated_at is older than
@@ -59,7 +61,7 @@ function autoCloseResolvedTickets(): void {
  * or overridden via the AUTO_CLOSE_DAYS environment variable.
  */
 export function startAutoCloseScheduler(): void {
-  cron.schedule('30 2 * * *', () => {
+  schedulerTask = cron.schedule('30 2 * * *', () => {
     try {
       autoCloseResolvedTickets();
     } catch (error) {
@@ -68,4 +70,9 @@ export function startAutoCloseScheduler(): void {
   });
 
   logger.info(`Auto-close scheduler enabled (daily at 02:30, threshold: ${AUTO_CLOSE_DAYS} days)`);
+}
+
+export function stopAutoCloseScheduler(): void {
+  schedulerTask?.stop();
+  schedulerTask = null;
 }

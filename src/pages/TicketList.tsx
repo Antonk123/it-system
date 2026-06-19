@@ -226,7 +226,7 @@ const TicketList = () => {
       await api.exportTickets(queryString);
       toast.success('Excel-export lyckades!');
     } catch (error) {
-      console.error('Export failed:', error);
+      if (import.meta.env.DEV) console.error('Export failed:', error);
       toast.error('Misslyckades att exportera ärenden');
     }
   }, [selectedStatuses, priorityFilter, categoryFilter, search, tagsFilter, tagMode, dateFrom, dateTo, dateField, checklistFilter, companyFilter]);

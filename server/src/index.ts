@@ -7,11 +7,11 @@ import { db } from './db/connection.js';
 import { startReminderScheduler } from './lib/reminderScheduler.js';
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
 import { cleanupOldAiUsage } from './lib/aiHelper.js';
-import { startAutoCloseScheduler } from './lib/autoCloseScheduler.js';
-import { startRecurringScheduler } from './lib/recurringScheduler.js';
+import { startAutoCloseScheduler, stopAutoCloseScheduler } from './lib/autoCloseScheduler.js';
+import { startRecurringScheduler, stopRecurringScheduler } from './lib/recurringScheduler.js';
 import { startWebhookRetryScheduler } from './lib/webhookRetryScheduler.js';
 import { initWebPush } from './lib/push.js';
-import { startPushScheduler } from './lib/pushScheduler.js';
+import { startPushScheduler, stopPushScheduler } from './lib/pushScheduler.js';
 import cron from 'node-cron';
 import archiver from 'archiver';
 import { logger } from './lib/logger.js';
@@ -21,8 +21,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Global error handlers — catch unhandled promises and exceptions
+// Räkna avvisningar för att varna om de upprepas ovanligt ofta (möjligt läckage).
+let _unhandledRejectionCount = 0;
+const UNHANDLED_REJECTION_WARN_THRESHOLD = 10;
 process.on('unhandledRejection', (reason, _promise) => {
-  logger.error('Unhandled promise rejection', { reason: String(reason) });
+  _unhandledRejectionCount++;
+  logger.error('Unhandled promise rejection', { reason: String(reason), total: _unhandledRejectionCount });
+  if (_unhandledRejectionCount >= UNHANDLED_REJECTION_WARN_THRESHOLD) {
+    logger.warn(
+      `Unhandled rejections har nått ${_unhandledRejectionCount} — möjligt löfte-läckage, undersök applikationsloggar`,
+      { total: _unhandledRejectionCount }
+    );
+  }
 });
 
 process.on('uncaughtException', (error) => {
@@ -52,7 +62,7 @@ startReminderScheduler();
 logger.info('Reminder scheduler enabled');
 
 // Daily cleanup of expired/revoked refresh tokens at 03:00
-cron.schedule('0 3 * * *', () => {
+const refreshTokenCleanupTask = cron.schedule('0 3 * * *', () => {
   try {
     cleanupRefreshTokens();
   } catch (error) {
@@ -62,7 +72,7 @@ cron.schedule('0 3 * * *', () => {
 logger.info('Refresh token cleanup scheduled (daily at 03:00)');
 
 // Daily cleanup of old AI usage logs (older than 90 days) at 03:15
-cron.schedule('15 3 * * *', () => {
+const aiUsageCleanupTask = cron.schedule('15 3 * * *', () => {
   try {
     cleanupOldAiUsage();
   } catch (error) {
@@ -81,7 +91,7 @@ const BACKUP_DIR = path.join(path.dirname(process.env.DB_PATH || BACKUP_DB_DEFAU
 const BACKUP_UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../data/uploads');
 const BACKUP_RETENTION_DAYS = Math.max(1, parseInt(process.env.BACKUP_RETENTION_DAYS || '7', 10));
 
-cron.schedule('0 4 * * *', async () => {
+const backupTask = cron.schedule('0 4 * * *', async () => {
   const tmpDbPath = path.join(BACKUP_DIR, `tmp-${Date.now()}.sqlite`);
   let tmpDbCreated = false;
 
@@ -182,9 +192,20 @@ import { stopWebhookRetryScheduler } from './lib/webhookRetryScheduler.js';
 import { stopReminderScheduler } from './lib/reminderScheduler.js';
 const gracefulShutdown = (signal: string) => {
   logger.info(`Received ${signal}, shutting down gracefully...`, { signal });
+
+  // Stoppa e-postpolling och schemaläggare definierade i externa moduler
   stopEmailPolling();
   stopWebhookRetryScheduler();
   stopReminderScheduler();
+  stopRecurringScheduler();
+  stopAutoCloseScheduler();
+  stopPushScheduler();
+
+  // Stoppa inline cron-jobb definierade i denna fil
+  refreshTokenCleanupTask.stop();
+  aiUsageCleanupTask.stop();
+  backupTask.stop();
+
   server.close(() => {
     try { closeDatabase(); } catch (err) { logger.error('Error closing DB', { error: String(err) }); }
     process.exit(0);

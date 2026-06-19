@@ -37,8 +37,7 @@ class ApiClient {
 
   setToken(token: string): void {
     localStorage.setItem('auth_token', token);
-    localStorage.setItem('token', token); // For axios interceptor
-    this.csrfToken = null; // Invalidate cached CSRF token on auth change
+    this.csrfToken = null; // Invalidera cachad CSRF-token vid auth-byte
   }
 
   clearToken(): void {

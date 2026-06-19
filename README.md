@@ -87,7 +87,8 @@ Alla endpoints ligger under `/api`. Autentisering via JWT Bearer-token. CSRF-sky
 | `GET /api/attachments/ticket/:ticketId` | Bilagor per ärende |
 | `GET /api/links` | Länkade ärenden |
 | `GET /api/shares` | Publika dela-länkar |
-| `GET /api/checklists` | Checklistor och mall-checklistor |
+| `GET /api/checklists` | Checklistor |
+| `GET /api/checklist-templates` | Checklistmallar (separat router) |
 | `POST /api/push/subscribe` | Web push-prenumerationer |
 | `POST /api/public/ai-suggest` | Publik deflection-AI (oautentiserad portal) |
 | `POST /api/email-inbound/*` | Inkommande e-post → ärende |

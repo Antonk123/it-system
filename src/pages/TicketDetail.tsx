@@ -168,10 +168,9 @@ const TicketDetail = () => {
   // Tags to display — prefer fresh data from single-ticket query
   const effectiveTags = tagsFromAPI.length > 0 ? tagsFromAPI : (ticket?.tags || []);
 
+  // Ogiltigförklarar detail-queryn så befintlig useQuery refetchar och cachen förblir auktoritativ.
   const refreshTagsFromAPI = (ticketId: string) => {
-    api.getTicket(ticketId).then((detail) => {
-      if (detail.tags) setTagsFromAPI(detail.tags);
-    }).catch(() => {});
+    queryClient.invalidateQueries({ queryKey: ticketKeys.detail(ticketId) });
   };
 
   useEffect(() => {
