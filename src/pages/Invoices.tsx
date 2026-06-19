@@ -114,10 +114,10 @@ function InvoiceDetailDialog({ invoiceId, open, onClose, onStatusChange, onDelet
               <table className="w-full text-sm">
                 <thead className="bg-muted/50">
                   <tr>
-                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Beskrivning</th>
-                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Timmar</th>
-                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Pris/h</th>
-                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Belopp</th>
+                    <th scope="col" className="text-left px-3 py-2 font-medium text-muted-foreground">Beskrivning</th>
+                    <th scope="col" className="text-right px-3 py-2 font-medium text-muted-foreground">Timmar</th>
+                    <th scope="col" className="text-right px-3 py-2 font-medium text-muted-foreground">Pris/h</th>
+                    <th scope="col" className="text-right px-3 py-2 font-medium text-muted-foreground">Belopp</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -308,9 +308,9 @@ const Invoices = () => {
                   <table className="w-full text-sm">
                     <thead className="bg-muted/50">
                       <tr>
-                        <th className="text-left px-3 py-2 font-medium text-muted-foreground">Ärende</th>
-                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">Timmar</th>
-                        <th className="text-right px-3 py-2 font-medium text-muted-foreground">Belopp</th>
+                        <th scope="col" className="text-left px-3 py-2 font-medium text-muted-foreground">Ärende</th>
+                        <th scope="col" className="text-right px-3 py-2 font-medium text-muted-foreground">Timmar</th>
+                        <th scope="col" className="text-right px-3 py-2 font-medium text-muted-foreground">Belopp</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
