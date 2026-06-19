@@ -1,4 +1,4 @@
-import { precacheAndRoute } from 'workbox-precaching';
+import { precacheAndRoute, matchPrecache } from 'workbox-precaching';
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -14,6 +14,18 @@ self.addEventListener('install', () => {
 });
 self.addEventListener('activate', (event) => {
   event.waitUntil(self.clients.claim());
+});
+
+// SPA navigation fallback: serve the cached app shell for deep links
+// (e.g. /tickets/123) so the installed PWA loads from cache on flaky LAN / brief
+// offline instead of a browser error page. Network-first so online navigations
+// still hit the server; ONLY real document navigations are intercepted — API/XHR
+// requests (request.mode !== 'navigate') are untouched.
+self.addEventListener('fetch', (event) => {
+  if (event.request.mode !== 'navigate') return;
+  event.respondWith(
+    fetch(event.request).catch(async () => (await matchPrecache('/index.html')) ?? Response.error())
+  );
 });
 
 // NOTE: Runtime caching for /api/* intentionally omitted.

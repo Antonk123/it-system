@@ -32,10 +32,12 @@ export default defineConfig(({ mode }) => ({
       manifest: {
         name: 'IT-Ticket System',
         short_name: 'IT-Ticket',
-        description: 'IT arendehantering & asset management',
+        description: 'IT ärendehantering & asset management',
+        lang: 'sv',
         theme_color: '#ff9e4d',
         background_color: '#0f0f14',
         display: 'standalone',
+        orientation: 'portrait-primary',
         scope: '/',
         start_url: '/',
         icons: [
@@ -58,9 +60,11 @@ export default defineConfig(({ mode }) => ({
         // Lazy-laddade vendor-chunks precachas inte — de hämtas on-demand.
         // editor-vendor (TipTap) är dock kritisk för svars-/kommentarsflödet
         // och precachas därför så att det fungerar offline/vid flaky nät i PWA:n.
+        // motion-vendor (framer-motion) precachas OCKSÅ: det importeras STATISKT av
+        // app-skalet (Index/Layout), så att exkludera det gav blank skärm vid första
+        // laddning efter SW-uppdatering på flaky nät.
         globIgnores: [
           '**/reporting-vendor*.js',
-          '**/motion-vendor*.js',
           '**/dnd-vendor*.js',
           // markdown-vendor (react-markdown, rehype, remark, unified, …) is only
           // used in the ticket-detail rich-text preview — lazy-loaded on demand.
