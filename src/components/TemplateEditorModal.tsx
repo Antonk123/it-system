@@ -718,8 +718,9 @@ export const TemplateEditorModal = ({
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Fältnamn * <span className="text-xs text-muted-foreground">(tekniskt namn, t.ex. "antal_enheter")</span></Label>
+                        <Label htmlFor="field-name">Fältnamn * <span className="text-xs text-muted-foreground">(tekniskt namn, t.ex. "antal_enheter")</span></Label>
                         <Input
+                          id="field-name"
                           value={fieldFormData.field_name}
                           onChange={(e) => setFieldFormData({ ...fieldFormData, field_name: e.target.value })}
                           placeholder="antal_enheter"
@@ -728,8 +729,9 @@ export const TemplateEditorModal = ({
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Fältetikett * <span className="text-xs text-muted-foreground">(visas för användaren)</span></Label>
+                        <Label htmlFor="field-label">Fältetikett * <span className="text-xs text-muted-foreground">(visas för användaren)</span></Label>
                         <Input
+                          id="field-label"
                           value={fieldFormData.field_label}
                           onChange={(e) => setFieldFormData({ ...fieldFormData, field_label: e.target.value })}
                           placeholder="Antal enheter"
@@ -740,9 +742,9 @@ export const TemplateEditorModal = ({
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label>Fälttyp</Label>
+                        <Label htmlFor="field-type">Fälttyp</Label>
                         <Select value={fieldFormData.field_type} onValueChange={(value: any) => setFieldFormData({ ...fieldFormData, field_type: value })}>
-                          <SelectTrigger>
+                          <SelectTrigger id="field-type">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -787,8 +789,9 @@ export const TemplateEditorModal = ({
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Placeholder</Label>
+                        <Label htmlFor="field-placeholder">Placeholder</Label>
                         <Input
+                          id="field-placeholder"
                           value={fieldFormData.placeholder}
                           onChange={(e) => setFieldFormData({ ...fieldFormData, placeholder: e.target.value })}
                           placeholder="T.ex. Ange antal..."
@@ -871,8 +874,9 @@ export const TemplateEditorModal = ({
                     )}
 
                     <div className="space-y-2">
-                      <Label>Standardvärde</Label>
+                      <Label htmlFor="field-default-value">Standardvärde</Label>
                       <Input
+                        id="field-default-value"
                         value={fieldFormData.default_value}
                         onChange={(e) => setFieldFormData({ ...fieldFormData, default_value: e.target.value })}
                         placeholder="Standardvärde (valfritt)"

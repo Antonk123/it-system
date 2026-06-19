@@ -9,6 +9,8 @@ import { db } from '../db/connection.js';
 import { stripHtml } from '../lib/htmlUtils.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { canAccessTicket } from '../lib/ticketAccess.js';
+import { hasMagicByteMatch } from './attachments.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
 import { logger } from '../lib/logger.js';
 
@@ -178,7 +180,7 @@ router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
         SELECT
           a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.last_reviewed_at, a.created_at, a.updated_at,
           c.name as category_name, c.color as category_color,
-          snippet(kb_articles_fts, 1, '<mark>', '</mark>', '...', 25) AS snippet
+          snippet(kb_articles_fts, 1, '__MARK_START__', '__MARK_END__', '...', 25) AS snippet
         FROM kb_articles_fts fts
         JOIN kb_articles a ON a.rowid = fts.rowid
         LEFT JOIN kb_categories c ON a.category_id = c.id
@@ -466,6 +468,10 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
 router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   const { articleId } = req.body;
   if (!articleId) return res.status(400).json({ error: 'articleId is required' });
+  // Kontrollera att användaren har behörighet till ärendet
+  if (!canAccessTicket(req.user!, req.params.ticketId)) {
+    return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+  }
   try {
     const article = db.prepare('SELECT id FROM kb_articles WHERE id = ?').get(articleId);
     if (!article) return res.status(404).json({ error: 'Article not found' });
@@ -488,6 +494,10 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 
 // DELETE /api/kb/ticket/:ticketId/:articleId
 router.delete('/ticket/:ticketId/:articleId', authenticate, (req: AuthRequest, res: Response) => {
+  // Kontrollera att användaren har behörighet till ärendet
+  if (!canAccessTicket(req.user!, req.params.ticketId)) {
+    return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+  }
   try {
     const link = db.prepare(
       'SELECT id FROM ticket_kb_links WHERE ticket_id = ? AND article_id = ?'
@@ -528,7 +538,7 @@ router.get('/articles/:id/links', authenticate, async (req: AuthRequest, res: Re
 });
 
 // POST /api/kb/articles/:id/links — create directional link
-router.post('/articles/:id/links', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/articles/:id/links', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const { targetArticleId } = req.body;
@@ -556,7 +566,7 @@ router.post('/articles/:id/links', authenticate, async (req: AuthRequest, res: R
 });
 
 // DELETE /api/kb/articles/:id/links/:targetId — remove link (bidirectional)
-router.delete('/articles/:id/links/:targetId', authenticate, async (req: AuthRequest, res: Response) => {
+router.delete('/articles/:id/links/:targetId', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const { id, targetId } = req.params;
     const result = db.prepare(`
@@ -586,7 +596,7 @@ router.get('/articles/:id/share', authenticate, (req: AuthRequest, res: Response
 });
 
 // POST /api/kb/articles/:id/share — create share token (idempotent)
-router.post('/articles/:id/share', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/articles/:id/share', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const existing = db.prepare('SELECT share_token FROM kb_article_shares WHERE article_id = ?').get(req.params.id) as { share_token: string } | undefined;
     if (existing) return res.json({ share_token: existing.share_token });
@@ -608,7 +618,7 @@ router.post('/articles/:id/share', authenticate, (req: AuthRequest, res: Respons
 });
 
 // DELETE /api/kb/articles/:id/share — revoke share token
-router.delete('/articles/:id/share', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/articles/:id/share', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const result = db.prepare('DELETE FROM kb_article_shares WHERE article_id = ?').run(req.params.id);
     if (result.changes === 0) return res.status(404).json({ error: 'Share not found' });
@@ -646,8 +656,8 @@ router.get('/public/:token', (_req: Request, res: Response) => {
 
 // ─── KB Image Upload ──────────────────────────────────────────────────────────
 
-// POST /api/kb/upload-image — upload image for KB article (authenticated)
-router.post('/upload-image', authenticate, (req: AuthRequest, res: Response) => {
+// POST /api/kb/upload-image — upload image för KB-artikel (endast admin)
+router.post('/upload-image', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   uploadImage.single('image')(req, res, (err) => {
     if (err) {
       logger.error('KB image upload error:', err.message);
@@ -655,6 +665,11 @@ router.post('/upload-image', authenticate, (req: AuthRequest, res: Response) => 
     }
     if (!req.file) {
       return res.status(400).json({ error: 'No image uploaded' });
+    }
+    // Verifiera magiska bytes mot deklarerad MIME — samma skydd som ticket-bilagor.
+    if (!hasMagicByteMatch(req.file.path, req.file.mimetype)) {
+      try { unlinkSync(req.file.path); } catch { /* ignore */ }
+      return res.status(400).json({ error: 'Filinnehållet matchar inte filtypen' });
     }
     res.status(201).json({ url: `/api/kb/images/${req.file.filename}` });
   });

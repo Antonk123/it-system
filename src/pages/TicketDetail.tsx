@@ -99,7 +99,7 @@ const TicketDetail = () => {
 
   // Authoritative single-ticket query — preferred over paginated list cache
   // which may be stale or filtered out.
-  const { data: ticketDetail, isLoading: ticketDetailLoading } = useQuery({
+  const { data: ticketDetail, isLoading: ticketDetailLoading, isError: ticketDetailError } = useQuery({
     queryKey: ticketKeys.detail(id || ''),
     queryFn: () => api.getTicket(id!),
     enabled: Boolean(id),
@@ -117,7 +117,7 @@ const TicketDetail = () => {
   // slow link (VPN/5G).
   const [deferSecondary, setDeferSecondary] = useState(false);
   const { history, isLoading: historyLoading } = useTicketHistory(id || '', deferSecondary);
-  const { reminders, fetchReminders, createReminder, deleteReminder, clearSentReminders } = useTicketReminders(id || '');
+  const { reminders, createReminder, deleteReminder, clearSentReminders } = useTicketReminders(id || '');
   const {
     isLoading: isShareLoading,
     shareUrl,
@@ -195,11 +195,6 @@ const TicketDetail = () => {
     handle = window.setTimeout(() => setDeferSecondary(true), 800);
     return () => clearTimeout(handle);
   }, []);
-
-  // Reminders back a section that only renders when data exists — safe to defer.
-  useEffect(() => {
-    if (id && deferSecondary) fetchReminders();
-  }, [id, deferSecondary, fetchReminders]);
 
   // Checklist templates are only needed once the checklist UI is shown (it has
   // an "apply/save template" action). Don't fetch them for tickets without a
@@ -298,6 +293,21 @@ const TicketDetail = () => {
           </div>
           <Skeleton className="h-48 w-full" />
           <Skeleton className="h-32 w-full" />
+        </div>
+      </Layout>
+    );
+  }
+
+  // Visa ett tydligt felmeddelande om query misslyckades och inget fallback finns i list-cache.
+  if (ticketDetailError && !ticket) {
+    return (
+      <Layout>
+        <div className="text-center py-16">
+          <p className="text-foreground font-medium">Kunde inte hämta ärendet</p>
+          <p className="text-muted-foreground text-sm mt-1">Kontrollera din anslutning och försök igen.</p>
+          <Link to="/tickets">
+            <Button className="mt-4">Tillbaka till ärenden</Button>
+          </Link>
         </div>
       </Layout>
     );

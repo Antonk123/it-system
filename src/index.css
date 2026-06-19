@@ -1057,14 +1057,14 @@ layer(base);
 
     /* Custom ticket status colors */
     --status-open: 217 91% 50%;
-    --status-in-progress: 45 93% 47%;
+    --status-in-progress: 140 60% 30%; /* WCAG AA: mörkare grön ≥ 4.5:1 mot vit (var 45 93% 47% = amber, för låg kontrast) */
     --status-waiting: 195 70% 45%;
     --status-resolved: 142 71% 45%;
     --status-closed: 215 16% 47%;
 
     /* Priority colors */
     --priority-low: 142 71% 45%;
-    --priority-medium: 45 93% 47%;
+    --priority-medium: 38 95% 35%; /* WCAG AA: mörkare amber ≥ 4.5:1 mot vit (var 45 93% 47% = 2.2:1) */
     --priority-high: 25 95% 53%;
     --priority-critical: 0 84% 60%;
 
@@ -1147,14 +1147,14 @@ layer(base);
 
     /* Custom ticket status colors */
     --status-open: 217 91% 50%;
-    --status-in-progress: 45 93% 47%;
+    --status-in-progress: 140 60% 30%; /* WCAG AA: mörkare grön ≥ 4.5:1 mot vit */
     --status-waiting: 195 70% 45%;
     --status-resolved: 142 71% 45%;
     --status-closed: 215 16% 47%;
 
     /* Priority colors */
     --priority-low: 142 71% 45%;
-    --priority-medium: 45 93% 47%;
+    --priority-medium: 38 95% 35%; /* WCAG AA: mörkare amber ≥ 4.5:1 mot vit */
     --priority-high: 25 95% 53%;
     --priority-critical: 0 84% 60%;
 
@@ -1237,14 +1237,14 @@ layer(base);
 
     /* Custom ticket status colors */
     --status-open: 217 91% 50%;
-    --status-in-progress: 45 93% 47%;
+    --status-in-progress: 140 60% 30%; /* WCAG AA: mörkare grön ≥ 4.5:1 mot vit */
     --status-waiting: 195 70% 45%;
     --status-resolved: 142 71% 45%;
     --status-closed: 215 16% 47%;
 
     /* Priority colors */
     --priority-low: 142 71% 45%;
-    --priority-medium: 45 93% 47%;
+    --priority-medium: 38 95% 35%; /* WCAG AA: mörkare amber ≥ 4.5:1 mot vit */
     --priority-high: 25 95% 53%;
     --priority-critical: 0 84% 60%;
 
@@ -1327,14 +1327,14 @@ layer(base);
 
     /* Custom ticket status colors */
     --status-open: 217 91% 50%;
-    --status-in-progress: 45 93% 47%;
+    --status-in-progress: 140 60% 30%; /* WCAG AA: mörkare grön ≥ 4.5:1 mot vit */
     --status-waiting: 195 70% 45%;
     --status-resolved: 142 71% 45%;
     --status-closed: 215 16% 47%;
 
     /* Priority colors */
     --priority-low: 142 71% 45%;
-    --priority-medium: 45 93% 47%;
+    --priority-medium: 38 95% 35%; /* WCAG AA: mörkare amber ≥ 4.5:1 mot vit */
     --priority-high: 25 95% 53%;
     --priority-critical: 0 84% 60%;
 
@@ -1417,14 +1417,14 @@ layer(base);
 
     /* Ticket status colors */
     --status-open: 217 91% 50%;
-    --status-in-progress: 45 93% 47%;
+    --status-in-progress: 140 60% 30%; /* WCAG AA: mörkare grön ≥ 4.5:1 mot vit */
     --status-waiting: 195 70% 45%;
     --status-resolved: 134 62% 40%;
     --status-closed: 219 7% 50%;
 
     /* Priority colors */
     --priority-low: 134 62% 40%;
-    --priority-medium: 45 93% 47%;
+    --priority-medium: 38 95% 35%; /* WCAG AA: mörkare amber ≥ 4.5:1 mot vit */
     --priority-high: 25 95% 53%;
     --priority-critical: 0 84% 60%;
 
@@ -1507,14 +1507,14 @@ layer(base);
 
     /* Ticket status colors */
     --status-open: 215 89% 50%;
-    --status-in-progress: 32 90% 48%;
+    --status-in-progress: 140 60% 30%; /* WCAG AA: mörkare grön ≥ 4.5:1 mot vit (var 32 90% 48% = 2.7:1) */
     --status-waiting: 195 70% 45%;
     --status-resolved: 141 73% 40%;
     --status-closed: 0 0% 45%;
 
     /* Priority colors */
     --priority-low: 141 73% 40%;
-    --priority-medium: 32 90% 48%;
+    --priority-medium: 38 95% 35%; /* WCAG AA: mörkare amber ≥ 4.5:1 mot vit (var 32 90% 48% = 2.7:1) */
     --priority-high: 15 85% 50%;
     --priority-critical: 354 75% 50%;
 

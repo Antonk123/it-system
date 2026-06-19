@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { canAccessTicket } from '../lib/ticketAccess.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
 import { existsSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -99,6 +100,9 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
+    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
 
     const id = uuidv4();
     const shareToken = randomBytes(12).toString('hex');
@@ -118,6 +122,9 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 // Delete share link
 router.delete('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
+    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
     const result = db.prepare('DELETE FROM ticket_shares WHERE ticket_id = ?').run(req.params.ticketId);
     
     if (result.changes === 0) {

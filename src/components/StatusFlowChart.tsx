@@ -4,6 +4,7 @@ import { format, parse } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useStatusFlow } from '@/hooks/useStatusFlow';
 import { cn } from '@/lib/utils';
+import { AlertTriangle } from 'lucide-react';
 
 interface StatusFlowChartProps {
   className?: string;
@@ -59,7 +60,7 @@ export const StatusFlowChart = ({
   // Server-side aggregation over the full dataset (no 1000-row cap). Returns one
   // row per YYYY-MM for the trailing 12 months; we map the key to the same short
   // month label the chart used before (date-fns 'MMM') so it renders identically.
-  const { data: statusFlow, isLoading } = useStatusFlow();
+  const { data: statusFlow, isLoading, isError } = useStatusFlow();
 
   const monthStatusData = useMemo<MonthStatusData[]>(() => {
     if (!statusFlow) return [];
@@ -75,6 +76,18 @@ export const StatusFlowChart = ({
 
   if (isLoading) {
     return <Skeleton className="w-full" style={{ height }} />;
+  }
+
+  if (isError) {
+    return (
+      <div
+        className={cn('w-full flex flex-col items-center justify-center gap-3 text-muted-foreground', className)}
+        style={{ height }}
+      >
+        <AlertTriangle className="w-8 h-8 text-destructive/70" />
+        <span>Kunde inte ladda data</span>
+      </div>
+    );
   }
 
   const gradients = {

@@ -213,45 +213,60 @@ export const useTickets = (options?: UseTicketsOptions) => {
       return { id, updated, hadCustomFields: !!(customFields && customFields.length > 0) };
     },
     onMutate: async ({ id, updates }) => {
-      // Cancel outgoing refetches for both the lists and this ticket's detail.
+      // Cancel outgoing refetches för alla list-instanser och denna tickets detail.
       await queryClient.cancelQueries({ queryKey: ticketKeys.lists() });
       await queryClient.cancelQueries({ queryKey: ticketKeys.detail(id) });
 
-      // Snapshot previous values for rollback
-      const previousList = queryClient.getQueryData(ticketKeys.list(options || {}));
+      // Snapshot ALLA monterade list-cacher för rollback (inte bara den stängda nyckeln)
+      const previousLists = queryClient.getQueriesData<unknown>({ queryKey: ticketKeys.lists() });
       const previousDetail = queryClient.getQueryData<TicketRow>(ticketKeys.detail(id));
 
-      // Optimistic list update (instant feedback in list views)
-      queryClient.setQueryData(ticketKeys.list(options || {}), (old: any) => {
-        if (!old) return old;
-        return {
-          ...old,
-          tickets: old.tickets.map((t: Ticket) => {
-            if (t.id === id) {
-              return {
-                ...t,
-                ...updates,
-                // Handle category "none" value
-                category: updates.category === 'none' ? undefined : (updates.category !== undefined ? updates.category : t.category),
-              };
-            }
-            return t;
-          }),
-        };
-      });
+      // Optimistisk list-uppdatering på ALLA monterade list-instanser (alla filtersvyer)
+      queryClient.setQueriesData<unknown>(
+        {
+          predicate: (query) => {
+            const key = query.queryKey;
+            // Matcha alla nycklar med formen ['tickets', 'list', ...filters]
+            return (
+              Array.isArray(key) &&
+              key[0] === 'tickets' &&
+              key[1] === 'list'
+            );
+          },
+        },
+        (old: any) => {
+          if (!old) return old;
+          return {
+            ...old,
+            tickets: old.tickets.map((t: Ticket) => {
+              if (t.id === id) {
+                return {
+                  ...t,
+                  ...updates,
+                  // Hantera category "none" → ingen kategori
+                  category: updates.category === 'none' ? undefined : (updates.category !== undefined ? updates.category : t.category),
+                };
+              }
+              return t;
+            }),
+          };
+        }
+      );
 
-      // Optimistic detail update — the TicketDetail page reads from this query,
-      // so without this the user saw NO change until a full network refetch.
+      // Optimistisk detail-uppdatering — TicketDetail läser från denna query,
+      // utan detta såg användaren INGEN förändring förrän hela nätverksanropet var klart.
       queryClient.setQueryData<TicketRow | undefined>(ticketKeys.detail(id), (old) =>
         old ? applyOptimisticRow(old, updates) : old
       );
 
-      return { previousList, previousDetail, id };
+      return { previousLists, previousDetail, id };
     },
     onError: (error: Error, _variables, context) => {
-      // Rollback both caches on error
-      if (context?.previousList !== undefined) {
-        queryClient.setQueryData(ticketKeys.list(options || {}), context.previousList);
+      // Återställ ALLA list-cacher och detail-cachen vid fel
+      if (context?.previousLists) {
+        for (const [queryKey, data] of context.previousLists) {
+          queryClient.setQueryData(queryKey, data);
+        }
       }
       if (context?.id && context?.previousDetail !== undefined) {
         queryClient.setQueryData(ticketKeys.detail(context.id), context.previousDetail);

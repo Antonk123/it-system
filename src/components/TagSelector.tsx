@@ -91,6 +91,7 @@ export function TagSelector({ selectedTagIds = [], preloadedTags, onTagsChange, 
                 type="button"
                 onClick={() => handleRemoveTag(tag.id)}
                 className="hover:opacity-80 transition-opacity"
+                aria-label={`Ta bort tagg ${tag.name}`}
               >
                 <X size={14} />
               </button>

@@ -4,6 +4,7 @@ import { TagCloud } from '@/components/TagCloud';
 import { TagDistributionChart } from '@/components/TagDistributionChart';
 import { useTagAnalytics } from '@/hooks/useTagAnalytics';
 import { cn } from '@/lib/utils';
+import { AlertTriangle } from 'lucide-react';
 
 interface TagAnalyticsProps {
   onTagClick?: (tagId: string) => void;
@@ -15,13 +16,33 @@ export const TagAnalytics = ({
   className,
 }: TagAnalyticsProps) => {
   // Server-side tag-frequency counts over the full dataset (no 1000-row cap).
-  const { data: tagData = [], isLoading } = useTagAnalytics();
+  const { data: tagData = [], isLoading, isError } = useTagAnalytics();
 
   if (isLoading) {
     return (
       <div className={cn('grid gap-6 lg:grid-cols-2', className)}>
         <Skeleton className="h-80 w-full" />
         <Skeleton className="h-80 w-full" />
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className={cn('grid gap-6', className)}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-xl font-semibold font-serif">
+              Tag Analytics
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col items-center justify-center h-64 gap-3 text-muted-foreground">
+              <AlertTriangle className="w-8 h-8 text-destructive/70" />
+              <span>Kunde inte ladda data</span>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     );
   }

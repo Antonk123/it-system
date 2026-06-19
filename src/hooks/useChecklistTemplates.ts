@@ -8,7 +8,7 @@ const QUERY_KEY = ['checklist-templates'] as const;
 export const useChecklistTemplates = () => {
   const queryClient = useQueryClient();
 
-  const { data: templates = [], isLoading } = useQuery<ChecklistTemplate[]>({
+  const { data: templates = [], isLoading, isError } = useQuery<ChecklistTemplate[]>({
     queryKey: QUERY_KEY,
     queryFn: () => api.getChecklistTemplates(),
     staleTime: 5 * 60 * 1000,
@@ -107,5 +107,5 @@ export const useChecklistTemplates = () => {
     }
   }, []);
 
-  return { templates, isLoading, fetchTemplates, createTemplate, updateTemplate, deleteTemplate, applyTemplate };
+  return { templates, isLoading, isError, fetchTemplates, createTemplate, updateTemplate, deleteTemplate, applyTemplate };
 };

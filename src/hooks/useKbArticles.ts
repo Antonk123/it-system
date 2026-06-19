@@ -23,7 +23,7 @@ export const kbArticlesKeys = {
 export const useKbArticles = (params: KbArticlesParams = {}, enabled = true) => {
   const queryClient = useQueryClient();
 
-  const { data: articles = [], isLoading } = useQuery<KbArticleRow[]>({
+  const { data: articles = [], isLoading, isError } = useQuery<KbArticleRow[]>({
     queryKey: kbArticlesKeys.list(params),
     queryFn: () => api.getKbArticles(params),
     enabled,
@@ -34,5 +34,5 @@ export const useKbArticles = (params: KbArticlesParams = {}, enabled = true) => 
     queryClient.invalidateQueries({ queryKey: kbArticlesKeys.all });
   };
 
-  return { articles, isLoading, refetch };
+  return { articles, isLoading, isError, refetch };
 };

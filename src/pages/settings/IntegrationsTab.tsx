@@ -61,6 +61,8 @@ const IntegrationsTab = () => {
   const [newWebhookEvents, setNewWebhookEvents] = useState<string[]>([]);
   const [deleteWebhookId, setDeleteWebhookId] = useState<string | null>(null);
   const [viewDeliveriesId, setViewDeliveriesId] = useState<string | null>(null);
+  // Spårar vilket webhook-id som håller på att uppdateras (toggle in-flight)
+  const [updatingWebhookId, setUpdatingWebhookId] = useState<string | null>(null);
 
   const {
     data: emailInboundStatus,
@@ -348,8 +350,12 @@ const IntegrationsTab = () => {
                           <div className="flex items-center gap-1">
                             <Switch
                               checked={!!wh.active}
+                              disabled={updatingWebhookId === wh.id}
                               onCheckedChange={(checked) => {
-                                updateWebhook({ id: wh.id, active: checked }).catch(() => toast.error('Kunde inte uppdatera'));
+                                setUpdatingWebhookId(wh.id);
+                                updateWebhook({ id: wh.id, active: checked })
+                                  .catch(() => toast.error('Kunde inte uppdatera'))
+                                  .finally(() => setUpdatingWebhookId(null));
                               }}
                             />
                             <Button size="icon" variant="ghost" onClick={() => setViewDeliveriesId(viewDeliveriesId === wh.id ? null : wh.id)} aria-label={`Visa leveranshistorik för webhook ${wh.url}`}>

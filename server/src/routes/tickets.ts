@@ -1123,8 +1123,15 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
     const bulkUpdate = db.transaction(() => {
       let updatedCount = 0;
 
+      // Pre-fetch alla berörda ärenden i en enda query för att undvika N+1
+      const placeholders = ids.map(() => '?').join(',');
+      const existingRows = db.prepare(
+        `SELECT ${TICKET_COLUMNS} FROM tickets WHERE id IN (${placeholders})`
+      ).all(...ids) as TicketRow[];
+      const existingMap = new Map<string, TicketRow>(existingRows.map(row => [row.id, row]));
+
       for (const ticketId of ids) {
-        const existing = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(ticketId) as TicketRow | undefined;
+        const existing = existingMap.get(ticketId);
         if (!existing) continue;
 
         // Ownership-check: icke-admin får uppdatera egna (assigned_to===userId)
@@ -1202,11 +1209,21 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: 
     const bulkDelete = db.transaction(() => {
       let deletedCount = 0;
 
+      // Pre-fetch alla filbilagor i en enda query för att undvika N+1
+      const placeholders = ids.map(() => '?').join(',');
+      const allAttachments = db.prepare(
+        `SELECT ticket_id, file_path FROM ticket_attachments WHERE ticket_id IN (${placeholders})`
+      ).all(...ids) as { ticket_id: string; file_path: string }[];
+      const attachmentsByTicket = new Map<string, { file_path: string }[]>();
+      for (const att of allAttachments) {
+        const list = attachmentsByTicket.get(att.ticket_id) ?? [];
+        list.push({ file_path: att.file_path });
+        attachmentsByTicket.set(att.ticket_id, list);
+      }
+
       for (const ticketId of ids) {
-        // Hämta filbilagor innan radering
-        const attachments = db.prepare(
-          'SELECT file_path FROM ticket_attachments WHERE ticket_id = ?'
-        ).all(ticketId) as { file_path: string }[];
+        // Hämta förpopulerade filbilagor från Map
+        const attachments = attachmentsByTicket.get(ticketId) ?? [];
 
         // FTS5 rensas automatiskt via triggers (migration 050)
         const result = db.prepare('DELETE FROM tickets WHERE id = ?').run(ticketId);

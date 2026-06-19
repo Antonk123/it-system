@@ -105,6 +105,7 @@ router.get('/export', authenticate, async (_req: AuthRequest, res: Response) => 
       FROM contacts c
       LEFT JOIN companies co ON c.company_id = co.id
       ORDER BY c.created_at DESC
+      LIMIT 10000
     `).all() as ContactRow[];
 
     if (contacts.length === 0) {
@@ -242,23 +243,29 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
 
     const insertStmt = db.prepare('INSERT INTO contacts (id, name, email, phone, company_id) VALUES (?, ?, ?, ?, ?)');
 
+    // Wrappa varje rad i en egen transaktion — om kontakt-insertet misslyckas
+    // rullas eventuell ny company-rad också tillbaka (förhindrar orphan-rader).
+    const insertRow = db.transaction((contact: typeof contacts[number]) => {
+      const id = uuidv4();
+
+      // Match or create company
+      let companyId: string | null = null;
+      if (contact.company && contact.company.trim()) {
+        const normalizedName = contact.company.trim().toLowerCase();
+        companyId = companyNameMap.get(normalizedName) || null;
+        if (!companyId) {
+          companyId = uuidv4();
+          insertCompanyStmt.run(companyId, contact.company.trim());
+          companyNameMap.set(normalizedName, companyId);
+        }
+      }
+
+      insertStmt.run(id, contact.name, contact.email, contact.phone || null, companyId);
+    });
+
     for (const contact of contacts) {
       try {
-        const id = uuidv4();
-
-        // Match or create company
-        let companyId: string | null = null;
-        if (contact.company && contact.company.trim()) {
-          const normalizedName = contact.company.trim().toLowerCase();
-          companyId = companyNameMap.get(normalizedName) || null;
-          if (!companyId) {
-            companyId = uuidv4();
-            insertCompanyStmt.run(companyId, contact.company.trim());
-            companyNameMap.set(normalizedName, companyId);
-          }
-        }
-
-        insertStmt.run(id, contact.name, contact.email, contact.phone || null, companyId);
+        insertRow(contact);
         created++;
       } catch (err) {
         failed++;
@@ -357,12 +364,18 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
       }
     }
 
+    // Returnera 400 om inga giltiga fält skickades (istället för tyst noop)
+    if (Object.keys(safeUpdates).length === 0) {
+      return res.status(400).json({ error: 'Inga giltiga fält att uppdatera' });
+    }
+
+    // Sätt updated_at på samma sätt som companies.ts gör
+    safeUpdates.updated_at = new Date().toISOString();
+
     const setClauses = Object.keys(safeUpdates).map(key => `${key} = ?`).join(', ');
     const values = Object.values(safeUpdates);
 
-    if (setClauses) {
-      db.prepare(`UPDATE contacts SET ${setClauses} WHERE id = ?`).run(...values, req.params.id);
-    }
+    db.prepare(`UPDATE contacts SET ${setClauses} WHERE id = ?`).run(...values, req.params.id);
 
     const contact = db.prepare(`
       SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.department, c.created_at

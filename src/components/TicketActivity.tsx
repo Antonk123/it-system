@@ -61,7 +61,9 @@ interface TicketActivityProps {
 
 export const TicketActivity = ({ history, isLoading }: TicketActivityProps) => {
   return (
-    <div>
+    <div aria-busy={isLoading}>
+      {/* Skärmläsar-tillkännagivande för asynkron laddning */}
+      <span aria-live="polite" className="sr-only">{isLoading ? 'Laddar…' : ''}</span>
       <div className="flex items-center gap-2 mb-3">
         <History className="w-4 h-4 text-muted-foreground" />
         <h3 className="font-medium text-foreground">Aktivitetslogg</h3>

@@ -17,7 +17,7 @@ export const useUsers = () => {
   const queryClient = useQueryClient();
 
   // Fetch users (contacts) with React Query
-  const { data: users = [], isLoading } = useQuery({
+  const { data: users = [], isLoading, isError } = useQuery({
     queryKey: userKeys.list(),
     queryFn: async () => {
       const data = await api.getContacts();
@@ -151,5 +151,5 @@ export const useUsers = () => {
     queryClient.invalidateQueries({ queryKey: userKeys.list() });
   }, [queryClient]);
 
-  return { users, isLoading, addUser, updateUser, deleteUser, getUserById, refetch };
+  return { users, isLoading, isError, addUser, updateUser, deleteUser, getUserById, refetch };
 };

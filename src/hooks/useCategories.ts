@@ -16,7 +16,7 @@ export const useCategories = () => {
   const queryClient = useQueryClient();
 
   // Fetch categories with React Query
-  const { data: categories = [], isLoading } = useQuery({
+  const { data: categories = [], isLoading, isError } = useQuery({
     queryKey: categoryKeys.list(),
     queryFn: async () => {
       const data = await api.getCategories();
@@ -141,5 +141,5 @@ export const useCategories = () => {
     queryClient.invalidateQueries({ queryKey: categoryKeys.list() });
   }, [queryClient]);
 
-  return { categories, isLoading, addCategory, updateCategory, deleteCategory, reorderCategories, getCategoryLabel, refetch };
+  return { categories, isLoading, isError, addCategory, updateCategory, deleteCategory, reorderCategories, getCategoryLabel, refetch };
 };

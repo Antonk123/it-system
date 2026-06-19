@@ -16,7 +16,7 @@ import { useBillingRate } from '@/hooks/useBilling';
 const CompanyDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { company, isLoading } = useCompanyDetail(id!);
+  const { company, isLoading, isError } = useCompanyDetail(id!);
   const { updateCompany } = useCompanies();
   const [rateInput, setRateInput] = useState('');
   const { rate, upsertRate } = useBillingRate(id!);
@@ -74,6 +74,21 @@ const CompanyDetail = () => {
             ))}
           </div>
           <Skeleton className="h-48 rounded-lg" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center py-24 gap-4">
+          <Building2 className="w-12 h-12 text-destructive" />
+          <p className="text-muted-foreground">Kunde inte ladda företaget</p>
+          <Button variant="outline" onClick={() => navigate('/companies')}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Tillbaka till företag
+          </Button>
         </div>
       </Layout>
     );

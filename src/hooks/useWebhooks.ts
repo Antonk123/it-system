@@ -10,7 +10,7 @@ export const webhookKeys = {
 export const useWebhooks = () => {
   const queryClient = useQueryClient();
 
-  const { data: webhooks = [], isLoading } = useQuery({
+  const { data: webhooks = [], isLoading, isError } = useQuery({
     queryKey: webhookKeys.list(),
     queryFn: () => api.getWebhooks(),
   });
@@ -41,6 +41,7 @@ export const useWebhooks = () => {
   return {
     webhooks,
     isLoading,
+    isError,
     createWebhook: createMutation.mutateAsync,
     updateWebhook: updateMutation.mutateAsync,
     deleteWebhook: deleteMutation.mutateAsync,

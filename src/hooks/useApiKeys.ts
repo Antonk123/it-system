@@ -9,7 +9,7 @@ export const apiKeyKeys = {
 export const useApiKeys = () => {
   const queryClient = useQueryClient();
 
-  const { data: apiKeys = [], isLoading } = useQuery({
+  const { data: apiKeys = [], isLoading, isError } = useQuery({
     queryKey: apiKeyKeys.list(),
     queryFn: () => api.getApiKeys(),
   });
@@ -32,6 +32,7 @@ export const useApiKeys = () => {
   return {
     apiKeys,
     isLoading,
+    isError,
     createApiKey: createMutation.mutateAsync,
     deleteApiKey: deleteMutation.mutateAsync,
     isCreating: createMutation.isPending,

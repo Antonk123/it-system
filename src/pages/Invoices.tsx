@@ -53,10 +53,21 @@ function InvoiceDetailDialog({ invoiceId, open, onClose, onStatusChange, onDelet
   onDelete: (id: string) => Promise<boolean>;
 }) {
   const { invoice, isLoading } = useInvoiceDetail(invoiceId);
+  // Förhindra dubbeltryck under pågående statusuppdatering
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const handleDelete = async () => {
     const ok = await onDelete(invoiceId);
     if (ok) onClose();
+  };
+
+  const handleStatusChange = async (id: string, status: string) => {
+    setIsUpdatingStatus(true);
+    try {
+      await onStatusChange(id, status);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
   return (
@@ -139,12 +150,12 @@ function InvoiceDetailDialog({ invoiceId, open, onClose, onStatusChange, onDelet
             {/* Actions */}
             <div className="flex gap-2 flex-wrap pt-1">
               {invoice.status === 'draft' && (
-                <Button size="sm" onClick={() => onStatusChange(invoice.id, 'sent')} className="gap-2">
+                <Button size="sm" onClick={() => handleStatusChange(invoice.id, 'sent')} disabled={isUpdatingStatus} className="gap-2">
                   <Send className="h-3.5 w-3.5" /> Markera skickad
                 </Button>
               )}
               {invoice.status === 'sent' && (
-                <Button size="sm" variant="outline" onClick={() => onStatusChange(invoice.id, 'paid')} className="gap-2">
+                <Button size="sm" variant="outline" onClick={() => handleStatusChange(invoice.id, 'paid')} disabled={isUpdatingStatus} className="gap-2">
                   <CheckCircle className="h-3.5 w-3.5" /> Markera betald
                 </Button>
               )}
@@ -361,11 +372,11 @@ const Invoices = () => {
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr>
-                      <th className="text-left px-3 py-2 font-medium text-muted-foreground">Företag</th>
-                      <th className="text-left px-3 py-2 font-medium text-muted-foreground">Period</th>
-                      <th className="text-right px-3 py-2 font-medium text-muted-foreground">Timmar</th>
-                      <th className="text-right px-3 py-2 font-medium text-muted-foreground">Belopp</th>
-                      <th className="text-left px-3 py-2 font-medium text-muted-foreground">Status</th>
+                      <th scope="col" className="text-left px-3 py-2 font-medium text-muted-foreground">Företag</th>
+                      <th scope="col" className="text-left px-3 py-2 font-medium text-muted-foreground">Period</th>
+                      <th scope="col" className="text-right px-3 py-2 font-medium text-muted-foreground">Timmar</th>
+                      <th scope="col" className="text-right px-3 py-2 font-medium text-muted-foreground">Belopp</th>
+                      <th scope="col" className="text-left px-3 py-2 font-medium text-muted-foreground">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y">
@@ -373,7 +384,15 @@ const Invoices = () => {
                       <tr
                         key={inv.id}
                         className="hover:bg-muted/30 cursor-pointer transition-colors"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => setSelectedInvoiceId(inv.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setSelectedInvoiceId(inv.id);
+                          }
+                        }}
                       >
                         <td className="px-3 py-2 font-medium">{inv.company_name ?? '—'}</td>
                         <td className="px-3 py-2 text-muted-foreground">

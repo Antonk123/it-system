@@ -34,12 +34,17 @@ let consecutiveFailures = 0;
 const FAILURE_ALERT_THRESHOLD = 5;
 
 /**
- * Strip prompt-injection patterns from KB content before embedding in prompts.
- * Removes lines that look like system/instruction directives and truncates.
+ * Strip prompt-injection patterns from användarinnehåll/KB innan det bäddas
+ * in i prompts. Tar bort rader som ser ut som system/instruktionsdirektiv,
+ * rensar kontrolltecken och trunkerar till maxLength.
  */
 function sanitizeForPrompt(text: string, maxLength = 1500): string {
   const injectionPatterns = /^\s*(\[SYSTEM\]|\[INST\]|\[\/INST\]|<<SYS>>|<\/s>|<\|im_start\|>|<\|im_end\|>|### Instruction|### System|SYSTEM:|ASSISTANT:|USER:)/im;
-  const lines = text.split('\n').filter(line => !injectionPatterns.test(line));
+  // Ta bort kontrolltecken (utom tab \x09 och radmatningar \x0A \x0D) — avsiktligt
+  // mönster mot prompt-injektion; control-regex är just det vi vill ha här.
+  // eslint-disable-next-line no-control-regex
+  const stripped = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  const lines = stripped.split('\n').filter(line => !injectionPatterns.test(line));
   return lines.join('\n').slice(0, maxLength);
 }
 

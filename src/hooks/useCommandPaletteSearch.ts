@@ -1,5 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { api, TicketRow, KbArticleRow, ContactRow, PaginatedResponse } from '@/lib/api';
+import { useDebounce } from './useDebounce';
 
 export interface SearchResult {
   id: string;
@@ -15,97 +17,87 @@ interface UseCommandPaletteSearchReturn {
   setSearch: (value: string) => void;
 }
 
+// Kontakter laddas en gång och filtreras lokalt — separat fråga med lång staleTime.
+const contactsQuery = {
+  queryKey: ['command-palette-contacts'] as const,
+  queryFn: () => api.getContacts(),
+  staleTime: 1000 * 60 * 5, // 5 minuter
+};
+
 export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
   const [search, setSearch] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
-  const contactsCacheRef = useRef<ContactRow[] | null>(null);
-  // Guards against stale in-flight requests clobbering newer results when the
-  // user types fast or clears the input mid-fetch.
-  const latestQueryRef = useRef('');
+  // Debounca söktermen 250 ms för att undvika onödiga API-anrop vid snabb inmatning.
+  const term = useDebounce(search.trim(), 250);
 
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+  // Hämta tickets + KB-artiklar baserat på debouncat sökterm.
+  const searchEnabled = term.length > 0;
+  const { data: searchData, isFetching: isSearchFetching } = useQuery({
+    queryKey: ['command-palette-search', term] as const,
+    queryFn: async () => {
+      const [ticketResponse, kbArticles] = await Promise.all([
+        api.getTickets('?page=1&limit=6&status=all&search=' + encodeURIComponent(term)),
+        api.getKbArticles({ search: term }),
+      ]);
 
-    const term = search.trim();
-    latestQueryRef.current = term;
+      const rows: TicketRow[] = Array.isArray(ticketResponse)
+        ? (ticketResponse as TicketRow[])
+        : (ticketResponse as unknown as PaginatedResponse<TicketRow>).data;
 
-    if (!term) {
-      setResults([]);
-      setIsSearching(false);
-      return;
-    }
+      const ticketResults: SearchResult[] = rows.slice(0, 5).map(t => ({
+        id: t.id,
+        title: t.title,
+        type: 'ticket',
+        subtitle: t.status,
+      }));
 
-    setIsSearching(true);
+      const kbResults: SearchResult[] = (kbArticles as KbArticleRow[]).slice(0, 5).map(a => ({
+        id: a.id,
+        title: a.title,
+        type: 'kb',
+        subtitle: a.article_type ?? undefined,
+      }));
 
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const contactsPromise = contactsCacheRef.current
-          ? Promise.resolve(contactsCacheRef.current)
-          : api.getContacts();
+      return { ticketResults, kbResults };
+    },
+    enabled: searchEnabled,
+    staleTime: 0, // sökresultat ska alltid vara färska
+  });
 
-        const [ticketResponse, kbArticles, contacts] = await Promise.all([
-          api.getTickets('?page=1&limit=6&status=all&search=' + encodeURIComponent(term)),
-          api.getKbArticles({ search: term }),
-          contactsPromise,
-        ]);
+  // Kontakter hämtas separat och filtreras lokalt mot det debounca söktermen.
+  const { data: contacts = [] } = useQuery<ContactRow[]>({
+    ...contactsQuery,
+    // Hämta kontakter så fort söktermen är aktiv så att listan är redo.
+    enabled: searchEnabled,
+  });
 
-        // If the user changed the query while this fetch was in flight,
-        // discard the stale result.
-        if (latestQueryRef.current !== term) return;
-
-        contactsCacheRef.current = contacts;
-
-        const rows: TicketRow[] = Array.isArray(ticketResponse)
-          ? (ticketResponse as TicketRow[])
-          : (ticketResponse as unknown as PaginatedResponse<TicketRow>).data;
-
-        const ticketResults: SearchResult[] = rows.slice(0, 5).map(t => ({
-          id: t.id,
-          title: t.title,
-          type: 'ticket',
-          subtitle: t.status,
-        }));
-
-        const kbResults: SearchResult[] = (kbArticles as KbArticleRow[]).slice(0, 5).map(a => ({
-          id: a.id,
-          title: a.title,
-          type: 'kb',
-          subtitle: a.article_type ?? undefined,
-        }));
-
+  const contactResults: SearchResult[] = searchEnabled
+    ? (() => {
         const lower = term.toLowerCase();
-        const contactResults: SearchResult[] = contacts
-          .filter(c => c.name.toLowerCase().includes(lower)
-            || c.email.toLowerCase().includes(lower)
-            || (c.company_name && c.company_name.toLowerCase().includes(lower)))
+        return contacts
+          .filter(
+            c =>
+              c.name.toLowerCase().includes(lower) ||
+              c.email.toLowerCase().includes(lower) ||
+              (c.company_name && c.company_name.toLowerCase().includes(lower)),
+          )
           .slice(0, 5)
           .map(c => ({
             id: c.id,
             title: c.name || c.email,
-            type: 'contact',
+            type: 'contact' as const,
             subtitle: c.company_name || undefined,
           }));
+      })()
+    : [];
 
-        setResults([...ticketResults, ...contactResults, ...kbResults]);
-      } catch {
-        if (latestQueryRef.current === term) setResults([]);
-      } finally {
-        if (latestQueryRef.current === term) setIsSearching(false);
-      }
-    }, 250);
+  const results: SearchResult[] = searchEnabled && searchData
+    ? [...searchData.ticketResults, ...contactResults, ...searchData.kbResults]
+    : [];
 
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [search]);
-
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, []);
+  // isSearching är sant medan debounce väntar (input skiljer sig från term)
+  // eller medan react-query hämtar data.
+  const isDebouncing = search.trim() !== term && search.trim().length > 0;
+  const isSearching = isDebouncing || (searchEnabled && isSearchFetching);
 
   return { results, isSearching, search, setSearch };
 }

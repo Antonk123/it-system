@@ -201,6 +201,14 @@ BACKEND_PORT=${BACKEND_PORT}
 CORS_ORIGIN=${CORS_ORIGINS}
 APP_BASE_URL=${APP_URL}
 
+# --- Varumärke ---
+BRAND_NAME=${COMPANY_NAME}
+
+# --- Admin ---
+ADMIN_EMAIL=${ADMIN_EMAIL}
+ADMIN_PASSWORD=${ADMIN_PASSWORD}
+ADMIN_NAME=${ADMIN_NAME}
+
 # --- Säkerhet ---
 JWT_SECRET=${JWT_SECRET}
 CSRF_SECRET=${CSRF_SECRET}
@@ -238,10 +246,17 @@ services:
       - it-ticketing-data:/app/data
     environment:
       - NODE_ENV=production
+      - COOKIE_SECURE=${COOKIE_SECURE:-false}
       - JWT_SECRET=${JWT_SECRET}
       - CSRF_SECRET=${CSRF_SECRET}
       - DB_PATH=/app/data/database.sqlite
       - UPLOAD_DIR=/app/data/uploads
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - ADMIN_NAME=${ADMIN_NAME:-}
+      - BRAND_NAME=${BRAND_NAME:-IT-Support}
+      - AUTO_CLOSE_DAYS=${AUTO_CLOSE_DAYS:-30}
+      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
       - CORS_ORIGIN=${CORS_ORIGIN}
       - APP_BASE_URL=${APP_BASE_URL}
       - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
@@ -250,12 +265,26 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - AI_MODEL=${AI_MODEL:-}
       - AI_MODEL_SMART=${AI_MODEL_SMART:-}
+      - AI_MAX_SUMMARY_COMMENTS=${AI_MAX_SUMMARY_COMMENTS:-}
+      - AI_MONTHLY_TOKEN_LIMIT=${AI_MONTHLY_TOKEN_LIMIT:-}
       - SMTP_HOST=${SMTP_HOST:-}
       - SMTP_PORT=${SMTP_PORT:-587}
       - SMTP_USER=${SMTP_USER:-}
       - SMTP_PASS=${SMTP_PASS:-}
       - EMAIL_FROM=${EMAIL_FROM:-}
       - EMAIL_TO=${EMAIL_TO:-}
+      - IMAP_HOST=${IMAP_HOST:-}
+      - IMAP_PORT=${IMAP_PORT:-993}
+      - IMAP_USER=${IMAP_USER:-}
+      - IMAP_PASS=${IMAP_PASS:-}
+      - IMAP_SECURE=${IMAP_SECURE:-true}
+      - IMAP_POLL_INTERVAL=${IMAP_POLL_INTERVAL:-60}
+      - IMAP_AUTO_CREATE_CONTACT=${IMAP_AUTO_CREATE_CONTACT:-true}
+      - IMAP_TENANT_ID=${IMAP_TENANT_ID:-}
+      - IMAP_CLIENT_ID=${IMAP_CLIENT_ID:-}
+      - IMAP_CLIENT_SECRET=${IMAP_CLIENT_SECRET:-}
+      - OFFSITE_BACKUP_CMD=${OFFSITE_BACKUP_CMD:-}
+      - PUSH_AGING_DAYS=${PUSH_AGING_DAYS:-7}
     logging:
       driver: "json-file"
       options:

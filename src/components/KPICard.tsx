@@ -1,9 +1,13 @@
-import { ReactNode } from 'react';
+import { ReactNode, lazy, Suspense } from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { AnimatedNumber } from '@/components/AnimatedNumber';
-import { SparklineChart } from '@/components/SparklineChart';
 import { cn } from '@/lib/utils';
+
+// Lazy-load SparklineChart så att recharts bara laddas när sparklineData faktiskt finns
+const SparklineChart = lazy(() =>
+  import('@/components/SparklineChart').then((m) => ({ default: m.SparklineChart }))
+);
 
 interface KPICardProps {
   label: string;
@@ -47,6 +51,16 @@ export const KPICard = ({
       : 'text-[hsl(var(--destructive))]'
     : '';
 
+  // Tangentbordshanterare för klickbara kort
+  const handleKeyDown = onClick
+    ? (e: React.KeyboardEvent<HTMLDivElement>) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick();
+        }
+      }
+    : undefined;
+
   return (
     <Card
         className={cn(
@@ -62,6 +76,9 @@ export const KPICard = ({
             : undefined
         }
         onClick={onClick}
+        {...(onClick
+          ? { role: 'button', tabIndex: 0, onKeyDown: handleKeyDown }
+          : {})}
       >
         <CardContent className="p-4">
           <div className="flex items-start justify-between mb-3">
@@ -96,11 +113,14 @@ export const KPICard = ({
 
           {sparklineData && sparklineData.length > 0 && (
             <div className="mt-3 -mx-2">
-              <SparklineChart
-                data={sparklineData}
-                color="hsl(var(--primary))"
-                height={32}
-              />
+              {/* Suspense krävs av React.lazy — ingen synlig fallback för sparkline */}
+              <Suspense fallback={null}>
+                <SparklineChart
+                  data={sparklineData}
+                  color="hsl(var(--primary))"
+                  height={32}
+                />
+              </Suspense>
             </div>
           )}
         </CardContent>

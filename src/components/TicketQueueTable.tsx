@@ -61,7 +61,9 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName }: TicketQueu
     .slice(0, 10);
 
   return (
-    <Card>
+    <Card aria-busy={isLoading}>
+      {/* Skärmläsar-tillkännagivande för asynkron laddning */}
+      <span aria-live="polite" className="sr-only">{isLoading ? 'Laddar…' : ''}</span>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="flex items-center gap-2">
           <p className="text-sm font-semibold text-foreground">Aktiv kö</p>

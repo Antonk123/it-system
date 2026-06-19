@@ -101,7 +101,7 @@ interface TicketOwnerRow {
  * Returnerar false (avvisa) endast om MIME är känd men signaturen inte matchar.
  * Okända/textbaserade MIME-typer släpps igenom utan kontroll.
  */
-function hasMagicByteMatch(filePath: string, declaredMime: string): boolean {
+export function hasMagicByteMatch(filePath: string, declaredMime: string): boolean {
   // Signaturer för kända binära typer
   const signatures: Array<{ mime: string | string[]; magic: Buffer; offset?: number }> = [
     { mime: 'application/pdf',                                                    magic: Buffer.from([0x25, 0x50, 0x44, 0x46]) }, // %PDF

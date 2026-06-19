@@ -7,6 +7,9 @@ services:
       - "3002:3001"
     volumes:
       - it-ticketing-data:/app/data
+      # Separat volym för backuper — OBS: skapa volymen manuellt i Portainer GUI
+      # innan deploy (Volumes → Add volume → it-ticketing-backups, driver: local).
+      - it-ticketing-backups:/app/data/backups
     environment:
       - NODE_ENV=production
       # Frontend serveras över HTTP på LAN (8082:80). Webbläsare lagrar INTE
@@ -50,6 +53,8 @@ services:
       - IMAP_CLIENT_ID=${IMAP_CLIENT_ID:-}
       - IMAP_CLIENT_SECRET=${IMAP_CLIENT_SECRET:-}
       - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
+      - OFFSITE_BACKUP_CMD=${OFFSITE_BACKUP_CMD:-}
+      - PUSH_AGING_DAYS=${PUSH_AGING_DAYS:-7}
     logging:
       driver: "json-file"
       options:
@@ -80,4 +85,8 @@ networks:
 
 volumes:
   it-ticketing-data:
+    external: true
+  # Dedikerad volym för backuper — separerad från live-DB:n.
+  # Skapa manuellt i Portainer GUI innan deploy: Volumes → Add volume → it-ticketing-backups.
+  it-ticketing-backups:
     external: true

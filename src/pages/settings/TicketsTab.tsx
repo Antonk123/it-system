@@ -1,5 +1,9 @@
-import { useState, useCallback, memo, useEffect, useMemo } from 'react';
-import { TemplateEditorModal } from '@/components/TemplateEditorModal';
+import { useState, useCallback, memo, useEffect, useMemo, lazy, Suspense } from 'react';
+
+// Lazy-ladda TemplateEditorModal så TipTap-vendor-chunken inte laddas förrän dialogen öppnas
+const TemplateEditorModal = lazy(() =>
+  import('@/components/TemplateEditorModal').then((m) => ({ default: m.TemplateEditorModal }))
+);
 import { useCategories } from '@/hooks/useCategories';
 import { useTags } from '@/hooks/useTags';
 import { useTemplates } from '@/hooks/useTemplates';
@@ -202,7 +206,7 @@ const PRIO_ORDER = ['critical', 'high', 'medium', 'low'] as const;
 
 const TicketsTab = () => {
   const { categories, addCategory, updateCategory, deleteCategory, reorderCategories } = useCategories();
-  const { tags, createTag, updateTag, deleteTag } = useTags();
+  const { tags, createTag, updateTag, deleteTag, isCreating: isCreatingTag } = useTags();
   const { templates, addTemplate, updateTemplate, deleteTemplate, reorderTemplates } = useTemplates();
   const {
     templates: checklistTemplates,
@@ -215,6 +219,10 @@ const TicketsTab = () => {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  // Lokal pending-flagga för kategoriläggning (useCategories exponerar inte isPending)
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  // Bekräftelsedialog för att ta bort kategori
+  const [deleteCategoryId, setDeleteCategoryId] = useState<string | null>(null);
 
   const [newTagName, setNewTagName] = useState('');
   const [newTagColor, setNewTagColor] = useState('#3b82f6');
@@ -234,6 +242,9 @@ const TicketsTab = () => {
   const [clTemplateItems, setClTemplateItems] = useState<{ label: string; isChild: boolean; parentIndex: number | null }[]>([]);
   const [clNewItemLabel, setClNewItemLabel] = useState('');
   const [deleteClTemplateId, setDeleteClTemplateId] = useState<string | null>(null);
+  // Inline-input för sub-item per parent-index (null = inget öppet)
+  const [addingSubItemFor, setAddingSubItemFor] = useState<number | null>(null);
+  const [clNewSubItemLabel, setClNewSubItemLabel] = useState('');
   const [isSavingCl, setIsSavingCl] = useState(false);
 
   const [sectionsOpen, setSectionsOpen] = useState({
@@ -394,14 +405,21 @@ const TicketsTab = () => {
 
   useEffect(() => { fetchChecklistTemplates(); }, [fetchChecklistTemplates]);
 
-  const handleAddCategory = useCallback(() => {
+  const handleAddCategory = useCallback(async () => {
     if (!newCategoryName.trim()) {
       toast.error('Ange ett kategorinamn');
       return;
     }
-    addCategory(newCategoryName.trim());
-    setNewCategoryName('');
-    toast.success('Kategori tillagd');
+    setIsAddingCategory(true);
+    try {
+      await addCategory(newCategoryName.trim());
+      setNewCategoryName('');
+      toast.success('Kategori tillagd');
+    } catch {
+      toast.error('Kunde inte skapa kategori');
+    } finally {
+      setIsAddingCategory(false);
+    }
   }, [newCategoryName, addCategory]);
 
   const handleStartEdit = useCallback((id: string, label: string) => {
@@ -409,16 +427,20 @@ const TicketsTab = () => {
     setEditingName(label);
   }, []);
 
-  const handleSaveEdit = useCallback(() => {
+  const handleSaveEdit = useCallback(async () => {
     if (!editingName.trim()) {
       toast.error('Kategorinamnet kan inte vara tomt');
       return;
     }
     if (editingId) {
-      updateCategory(editingId, editingName.trim());
-      setEditingId(null);
-      setEditingName('');
-      toast.success('Kategori uppdaterad');
+      try {
+        await updateCategory(editingId, editingName.trim());
+        setEditingId(null);
+        setEditingName('');
+        toast.success('Kategori uppdaterad');
+      } catch {
+        toast.error('Kunde inte uppdatera kategori');
+      }
     }
   }, [editingName, editingId, updateCategory]);
 
@@ -427,10 +449,16 @@ const TicketsTab = () => {
     setEditingName('');
   }, []);
 
-  const handleDeleteCategory = useCallback((id: string) => {
-    deleteCategory(id);
-    toast.success('Kategori borttagen');
-  }, [deleteCategory]);
+  const handleDeleteCategory = useCallback(async () => {
+    if (!deleteCategoryId) return;
+    try {
+      await deleteCategory(deleteCategoryId);
+      setDeleteCategoryId(null);
+      toast.success('Kategori borttagen');
+    } catch {
+      toast.error('Kunde inte ta bort kategori');
+    }
+  }, [deleteCategory, deleteCategoryId]);
 
   const handleMoveCategory = useCallback((id: string, direction: 'up' | 'down') => {
     const index = categories.findIndex((cat) => cat.id === id);
@@ -629,9 +657,10 @@ const TicketsTab = () => {
                 placeholder="Nytt kategorinamn..."
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()}
+                onKeyDown={(e) => e.key === 'Enter' && !isAddingCategory && handleAddCategory()}
+                disabled={isAddingCategory}
               />
-              <Button onClick={handleAddCategory} className="shrink-0">
+              <Button onClick={handleAddCategory} className="shrink-0" disabled={isAddingCategory}>
                 <Plus className="w-4 h-4 mr-2" />
                 Lägg till
               </Button>
@@ -650,7 +679,7 @@ const TicketsTab = () => {
                   onStartEdit={handleStartEdit}
                   onSaveEdit={handleSaveEdit}
                   onCancelEdit={handleCancelEdit}
-                  onDelete={handleDeleteCategory}
+                  onDelete={setDeleteCategoryId}
                   setEditingName={setEditingName}
                 />
               ))}
@@ -687,7 +716,8 @@ const TicketsTab = () => {
                   placeholder="Nytt taggnamn..."
                   value={newTagName}
                   onChange={(e) => setNewTagName(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddTag()}
+                  onKeyDown={(e) => e.key === 'Enter' && !isCreatingTag && handleAddTag()}
+                  disabled={isCreatingTag}
                 />
               </div>
               <Popover>
@@ -716,7 +746,7 @@ const TicketsTab = () => {
                   </div>
                 </PopoverContent>
               </Popover>
-              <Button onClick={handleAddTag} className="shrink-0">
+              <Button onClick={handleAddTag} className="shrink-0" disabled={isCreatingTag}>
                 <Plus className="w-4 h-4 mr-2" />
                 Lägg till
               </Button>
@@ -897,33 +927,88 @@ const TicketsTab = () => {
                     />
                     <div className="space-y-1">
                       {clTemplateItems.map((item, idx) => (
-                        <div key={idx} className={`flex items-center gap-2 ${item.isChild ? 'ml-6' : ''}`}>
-                          {item.isChild && <CornerDownRight className="h-3 w-3 text-muted-foreground shrink-0" />}
-                          <span className="flex-1 text-sm border rounded px-2 py-1 bg-muted/30">{item.label}</span>
-                          {!item.isChild && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7"
-                              title="Lägg till deluppgift under denna"
-                              aria-label="Lägg till deluppgift"
-                              onClick={() => {
-                                const sub = window.prompt('Deluppgiftens text:');
-                                if (sub?.trim()) {
+                        <div key={idx}>
+                          <div className={`flex items-center gap-2 ${item.isChild ? 'ml-6' : ''}`}>
+                            {item.isChild && <CornerDownRight className="h-3 w-3 text-muted-foreground shrink-0" />}
+                            <span className="flex-1 text-sm border rounded px-2 py-1 bg-muted/30">{item.label}</span>
+                            {!item.isChild && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                title="Lägg till deluppgift under denna"
+                                aria-label="Lägg till deluppgift"
+                                onClick={() => {
+                                  setAddingSubItemFor(idx);
+                                  setClNewSubItemLabel('');
+                                }}
+                              >
+                                <CornerDownRight className="h-3 w-3" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleClDeleteItem(idx)} aria-label="Ta bort checklistepunkt">
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                          {/* Inline-input för sub-item direkt under aktuell parent */}
+                          {addingSubItemFor === idx && (
+                            <div className="flex items-center gap-2 ml-6 mt-1">
+                              <CornerDownRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <Input
+                                placeholder="Deluppgiftens text..."
+                                value={clNewSubItemLabel}
+                                onChange={(e) => setClNewSubItemLabel(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && clNewSubItemLabel.trim()) {
+                                    setClTemplateItems(prev => {
+                                      const next = [...prev];
+                                      next.splice(idx + 1, 0, { label: clNewSubItemLabel.trim(), isChild: true, parentIndex: idx });
+                                      return next;
+                                    });
+                                    setAddingSubItemFor(null);
+                                    setClNewSubItemLabel('');
+                                  }
+                                  if (e.key === 'Escape') {
+                                    setAddingSubItemFor(null);
+                                    setClNewSubItemLabel('');
+                                  }
+                                }}
+                                className="flex-1 h-7 text-sm"
+                                autoFocus
+                              />
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                disabled={!clNewSubItemLabel.trim()}
+                                aria-label="Bekräfta deluppgift"
+                                onClick={() => {
+                                  if (!clNewSubItemLabel.trim()) return;
                                   setClTemplateItems(prev => {
                                     const next = [...prev];
-                                    next.splice(idx + 1, 0, { label: sub.trim(), isChild: true, parentIndex: idx });
+                                    next.splice(idx + 1, 0, { label: clNewSubItemLabel.trim(), isChild: true, parentIndex: idx });
                                     return next;
                                   });
-                                }
-                              }}
-                            >
-                              <CornerDownRight className="h-3 w-3" />
-                            </Button>
+                                  setAddingSubItemFor(null);
+                                  setClNewSubItemLabel('');
+                                }}
+                              >
+                                <Check className="h-3 w-3 text-[hsl(var(--success))]" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                aria-label="Avbryt deluppgift"
+                                onClick={() => {
+                                  setAddingSubItemFor(null);
+                                  setClNewSubItemLabel('');
+                                }}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
                           )}
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleClDeleteItem(idx)} aria-label="Ta bort checklistepunkt">
-                            <X className="h-3 w-3" />
-                          </Button>
                         </div>
                       ))}
                     </div>
@@ -1164,6 +1249,23 @@ const TicketsTab = () => {
           </Card>
         </Collapsible>
 
+      <AlertDialog open={!!deleteCategoryId} onOpenChange={() => setDeleteCategoryId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Ta bort kategori?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Kategorin tas bort permanent. Ärenden som använder kategorin påverkas inte men förlorar sin kategorikoppling. Denna åtgärd kan inte ångras.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <AlertDialog open={!!deleteTagId} onOpenChange={() => setDeleteTagId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1215,14 +1317,17 @@ const TicketsTab = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      <TemplateEditorModal
-        open={templateModalOpen}
-        onOpenChange={handleTemplateModalClose}
-        template={editingTemplate}
-        categories={categories}
-        onSave={addTemplate}
-        onUpdate={updateTemplate}
-      />
+      {/* Suspense-wrapper säkerställer att TipTap-chunken laddas lazily när dialogen öppnas */}
+      <Suspense fallback={null}>
+        <TemplateEditorModal
+          open={templateModalOpen}
+          onOpenChange={handleTemplateModalClose}
+          template={editingTemplate}
+          categories={categories}
+          onSave={addTemplate}
+          onUpdate={updateTemplate}
+        />
+      </Suspense>
     </>
   );
 };

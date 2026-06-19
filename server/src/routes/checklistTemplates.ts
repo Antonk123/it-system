@@ -1,7 +1,8 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { canAccessTicket } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
@@ -51,7 +52,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
 });
 
 // POST /api/checklist-templates — create template
-router.post('/', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, description, items } = req.body;
 
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
@@ -93,7 +94,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // PUT /api/checklist-templates/:id — update template
-router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, description, items } = req.body;
 
   try {
@@ -135,7 +136,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // DELETE /api/checklist-templates/:id
-router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
+router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const result = db.prepare('DELETE FROM checklist_templates WHERE id = ?').run(req.params.id);
     if (result.changes === 0) return res.status(404).json({ error: 'Template not found' });
@@ -154,6 +155,9 @@ router.post('/:id/apply', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const ticket = db.prepare('SELECT id FROM tickets WHERE id = ?').get(ticketId);
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
+    if (!canAccessTicket(req.user!, ticketId as string)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
 
     const template = db.prepare('SELECT id FROM checklist_templates WHERE id = ?').get(req.params.id);
     if (!template) return res.status(404).json({ error: 'Template not found' });

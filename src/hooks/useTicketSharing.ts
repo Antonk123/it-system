@@ -4,6 +4,8 @@ import { toast } from 'sonner';
 
 export const useTicketSharing = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isPending, setIsPending] = useState(false);
+  const [isError, setIsError] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
 
   const getExistingShare = useCallback(async (ticketId: string) => {
@@ -13,20 +15,24 @@ export const useTicketSharing = () => {
 
   const createShareLink = useCallback(async (ticketId: string): Promise<string | null> => {
     setIsLoading(true);
+    setIsPending(true);
+    setIsError(false);
     try {
       const { share_token } = await api.createShareToken(ticketId);
       const url = `${window.location.origin}/shared/${share_token}`;
       setShareUrl(url);
       return url;
-    } catch (error) { toast.error('Kunde inte skapa delningslänk'); return null; }
-    finally { setIsLoading(false); }
+    } catch (error) { toast.error('Kunde inte skapa delningslänk'); setIsError(true); return null; }
+    finally { setIsLoading(false); setIsPending(false); }
   }, []);
 
   const deleteShareLink = useCallback(async (ticketId: string): Promise<boolean> => {
     setIsLoading(true);
+    setIsPending(true);
+    setIsError(false);
     try { await api.deleteShareToken(ticketId); setShareUrl(null); toast.success('Delningslänk borttagen'); return true; }
-    catch (error) { toast.error('Kunde inte ta bort delningslänk'); return false; }
-    finally { setIsLoading(false); }
+    catch (error) { toast.error('Kunde inte ta bort delningslänk'); setIsError(true); return false; }
+    finally { setIsLoading(false); setIsPending(false); }
   }, []);
 
   const copyToClipboard = useCallback(async (url: string) => {
@@ -34,5 +40,5 @@ export const useTicketSharing = () => {
     catch (error) { toast.error('Kunde inte kopiera länk'); }
   }, []);
 
-  return { isLoading, shareUrl, createShareLink, deleteShareLink, getExistingShare, copyToClipboard, setShareUrl };
+  return { isLoading, isPending, isError, shareUrl, createShareLink, deleteShareLink, getExistingShare, copyToClipboard, setShareUrl };
 };

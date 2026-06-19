@@ -160,12 +160,12 @@ const CompanyList = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Org.nummer</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Öppna ärenden</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Totalt</th>
-                  <th className="px-4 py-3" />
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Org.nummer</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">Öppna ärenden</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Totalt</th>
+                  <th scope="col" className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
@@ -208,12 +208,12 @@ const CompanyList = () => {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Org.nummer</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Öppna ärenden</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Totalt</th>
-                  <th className="px-4 py-3" />
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Org.nummer</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">Öppna ärenden</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Totalt</th>
+                  <th scope="col" className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody>
@@ -221,7 +221,16 @@ const CompanyList = () => {
                   <tr
                     key={company.id}
                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer transition-colors"
+                    role="button"
+                    tabIndex={0}
                     onClick={() => navigate(`/companies/${company.id}`)}
+                    onKeyDown={(e) => {
+                      // Tangentbordsnavigering: Enter/Space navigerar till företagssidan
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        navigate(`/companies/${company.id}`);
+                      }
+                    }}
                   >
                     <td className="px-4 py-3 font-medium text-foreground">{company.name}</td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">

@@ -22,7 +22,9 @@ export const RemindersPanel = ({ reminders, isLoading }: RemindersPanelProps) =>
   const navigate = useNavigate();
 
   return (
-    <Card>
+    <Card aria-busy={isLoading}>
+      {/* Skärmläsar-tillkännagivande för asynkron laddning */}
+      <span aria-live="polite" className="sr-only">{isLoading ? 'Laddar…' : ''}</span>
       <CardHeader className="flex flex-row items-start justify-between pb-2">
         <div className="flex items-start gap-2">
           <Bell className="w-3.5 h-3.5 text-primary mt-0.5 shrink-0" />

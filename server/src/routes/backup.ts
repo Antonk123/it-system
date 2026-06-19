@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
-import { db } from '../db/connection.js';
+import { db, closeDatabase } from '../db/connection.js';
 import archiver from 'archiver';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -157,6 +157,10 @@ router.post('/restore', authenticate, requireAdmin, upload.single('file'), async
       const shmFile = `${DB_PATH}-shm`;
 
       db.pragma('wal_checkpoint(TRUNCATE)');
+
+      // Stäng databashandtaget innan vi skriver över filen — process.exit(0)
+      // nedan startar om processen med ett nytt handtag mot den återställda DB:n.
+      closeDatabase();
 
       copyFileSync(restoredDb, DB_PATH);
       if (existsSync(walFile)) unlinkSync(walFile);

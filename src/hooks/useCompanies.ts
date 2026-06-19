@@ -15,7 +15,7 @@ export const companyKeys = {
 export const useCompanies = () => {
   const queryClient = useQueryClient();
 
-  const { data: companies = [], isLoading } = useQuery({
+  const { data: companies = [], isLoading, isError } = useQuery({
     queryKey: companyKeys.list(),
     queryFn: () => api.getCompanies(),
     staleTime: 1000 * 60 * 5,
@@ -90,16 +90,16 @@ export const useCompanies = () => {
     [deleteMutation]
   );
 
-  return { companies, isLoading, createCompany, updateCompany, deleteCompany };
+  return { companies, isLoading, isError, createCompany, updateCompany, deleteCompany };
 };
 
 export const useCompanyDetail = (id: string) => {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: companyKeys.detail(id),
     queryFn: () => api.getCompany(id),
     staleTime: 1000 * 60 * 2,
     enabled: !!id,
   });
 
-  return { company: data, isLoading };
+  return { company: data, isLoading, isError };
 };

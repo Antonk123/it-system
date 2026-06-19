@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -16,60 +16,76 @@ export interface TicketReminder {
 }
 
 export function useTicketReminders(ticketId: string) {
-  const [reminders, setReminders] = useState<TicketReminder[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
 
-  const fetchReminders = useCallback(async () => {
-    if (!ticketId) return;
-    setIsLoading(true);
-    try {
-      const data = await api.getReminders(ticketId);
-      setReminders(data as TicketReminder[]);
-    } catch (error) {
-      if (import.meta.env.DEV) console.error('Error fetching reminders:', error);
-      toast.error('Kunde inte hämta påminnelser');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [ticketId]);
+  // Hämta påminnelser via react-query — auto-fetch när ticketId finns
+  const {
+    data: reminders = [],
+    isLoading,
+    isError,
+  } = useQuery<TicketReminder[]>({
+    queryKey: ['reminders', ticketId],
+    queryFn: () => api.getReminders(ticketId) as Promise<TicketReminder[]>,
+    enabled: !!ticketId,
+  });
 
-  const createReminder = useCallback(async (reminderTime: string, message?: string) => {
-    try {
-      await api.createReminder(ticketId, { reminder_time: reminderTime, message });
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ['reminders', ticketId] });
+
+  const createMutation = useMutation({
+    mutationFn: ({ reminderTime, message }: { reminderTime: string; message?: string }) =>
+      api.createReminder(ticketId, { reminder_time: reminderTime, message }),
+    onSuccess: () => {
       toast.success('Påminnelse skapad');
-      await fetchReminders();
-    } catch (error) {
+      invalidate();
+    },
+    onError: (error: unknown) => {
       if (import.meta.env.DEV) console.error('Error creating reminder:', error);
       toast.error('Kunde inte skapa påminnelse');
-    }
-  }, [ticketId, fetchReminders]);
+    },
+  });
 
-  const deleteReminder = useCallback(async (reminderId: string) => {
-    try {
-      await api.deleteReminder(ticketId, reminderId);
+  const deleteMutation = useMutation({
+    mutationFn: (reminderId: string) => api.deleteReminder(ticketId, reminderId),
+    onSuccess: () => {
       toast.success('Påminnelse raderad');
-      await fetchReminders();
-    } catch (error) {
+      invalidate();
+    },
+    onError: (error: unknown) => {
       if (import.meta.env.DEV) console.error('Error deleting reminder:', error);
       toast.error('Kunde inte radera påminnelse');
-    }
-  }, [ticketId, fetchReminders]);
+    },
+  });
 
-  const clearSentReminders = useCallback(async () => {
-    try {
-      const result = await api.clearSentReminders(ticketId);
+  const clearSentMutation = useMutation({
+    mutationFn: () => api.clearSentReminders(ticketId),
+    onSuccess: (result: { deleted: number }) => {
       toast.success(`${result.deleted} skickade påminnelser rensade`);
-      await fetchReminders();
-    } catch (error) {
+      invalidate();
+    },
+    onError: (error: unknown) => {
       if (import.meta.env.DEV) console.error('Error clearing sent reminders:', error);
       toast.error('Kunde inte rensa påminnelser');
-    }
-  }, [ticketId, fetchReminders]);
+    },
+  });
+
+  // Behåll Promise<void>-kontraktet som konsumenterna (ReminderDialog/-List) väntar.
+  const createReminder = async (reminderTime: string, message?: string): Promise<void> => {
+    await createMutation.mutateAsync({ reminderTime, message });
+  };
+
+  const deleteReminder = async (reminderId: string): Promise<void> => {
+    await deleteMutation.mutateAsync(reminderId);
+  };
+
+  const clearSentReminders = async (): Promise<void> => {
+    await clearSentMutation.mutateAsync();
+  };
 
   return {
     reminders,
     isLoading,
-    fetchReminders,
+    isError,
     createReminder,
     deleteReminder,
     clearSentReminders,

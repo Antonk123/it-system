@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigationType 
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 
 const Index = lazy(() => import("./pages/Index"));
 const TicketList = lazy(() => import("./pages/TicketList"));
@@ -103,6 +103,12 @@ const RouteFallback = () => (
   </div>
 );
 
+/** Omsluter ett route-element med en scoped ErrorBoundary så att en krassch
+ *  på en enskild route inte dödar hela navigeringen. */
+const withBoundary = (element: ReactNode) => (
+  <ErrorBoundary>{element}</ErrorBoundary>
+);
+
 /** Scrollar till toppen vid framåtnavigering (PUSH/REPLACE).
  *  Vid back/forward (POP) låter vi browsern hantera scroll-position. */
 const ScrollToTopOnNavigate = () => {
@@ -129,31 +135,31 @@ const AppRoutes = () => {
           Att slippa den statiska framer-importen lyfter motion-vendor ur den
           eager-preloadade startgrafen (laddas lazy med sidorna som behöver den). */}
       <Routes location={location} key={location.pathname}>
-          <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
-          <Route path="/reset-password/:token" element={<PublicRoute><ResetPassword /></PublicRoute>} />
-          <Route path="/submit-ticket" element={<PublicTicketForm />} />
-          <Route path="/shared/:token" element={<SharedTicket />} />
-          <Route path="/kb/shared/:token" element={<SharedKBArticle />} />
-          <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-          <Route path="/tickets" element={<ProtectedRoute><TicketList /></ProtectedRoute>} />
-          <Route path="/my-tickets" element={<ProtectedRoute><TicketList /></ProtectedRoute>} />
-          <Route path="/tickets/new" element={<ProtectedRoute><TicketForm /></ProtectedRoute>} />
-          <Route path="/tickets/:id" element={<ProtectedRoute><TicketDetail /></ProtectedRoute>} />
-          <Route path="/tickets/:id/edit" element={<ProtectedRoute><TicketForm /></ProtectedRoute>} />
-          <Route path="/recurring" element={<ProtectedRoute><Recurring /></ProtectedRoute>} />
-          <Route path="/companies" element={<ProtectedRoute><CompanyList /></ProtectedRoute>} />
-          <Route path="/companies/:id" element={<ProtectedRoute><CompanyDetail /></ProtectedRoute>} />
-          <Route path="/invoices" element={<ProtectedRoute><Invoices /></ProtectedRoute>} />
-          <Route path="/archive" element={<ProtectedRoute><Archive /></ProtectedRoute>} />
-          <Route path="/users" element={<ProtectedRoute><UserList /></ProtectedRoute>} />
-          <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-          <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-          <Route path="/kb" element={<ProtectedRoute><KnowledgeBase /></ProtectedRoute>} />
-          <Route path="/kb/new" element={<ProtectedRoute><KBArticleForm /></ProtectedRoute>} />
-          <Route path="/kb/:id" element={<ProtectedRoute><KBArticleDetail /></ProtectedRoute>} />
-          <Route path="/kb/:id/edit" element={<ProtectedRoute><KBArticleForm /></ProtectedRoute>} />
-          <Route path="*" element={<NotFound />} />
+          <Route path="/login" element={withBoundary(<PublicRoute><Login /></PublicRoute>)} />
+          <Route path="/forgot-password" element={withBoundary(<PublicRoute><ForgotPassword /></PublicRoute>)} />
+          <Route path="/reset-password/:token" element={withBoundary(<PublicRoute><ResetPassword /></PublicRoute>)} />
+          <Route path="/submit-ticket" element={withBoundary(<PublicTicketForm />)} />
+          <Route path="/shared/:token" element={withBoundary(<SharedTicket />)} />
+          <Route path="/kb/shared/:token" element={withBoundary(<SharedKBArticle />)} />
+          <Route path="/" element={withBoundary(<ProtectedRoute><Index /></ProtectedRoute>)} />
+          <Route path="/tickets" element={withBoundary(<ProtectedRoute><TicketList /></ProtectedRoute>)} />
+          <Route path="/my-tickets" element={withBoundary(<ProtectedRoute><TicketList /></ProtectedRoute>)} />
+          <Route path="/tickets/new" element={withBoundary(<ProtectedRoute><TicketForm /></ProtectedRoute>)} />
+          <Route path="/tickets/:id" element={withBoundary(<ProtectedRoute><TicketDetail /></ProtectedRoute>)} />
+          <Route path="/tickets/:id/edit" element={withBoundary(<ProtectedRoute><TicketForm /></ProtectedRoute>)} />
+          <Route path="/recurring" element={withBoundary(<ProtectedRoute><Recurring /></ProtectedRoute>)} />
+          <Route path="/companies" element={withBoundary(<ProtectedRoute><CompanyList /></ProtectedRoute>)} />
+          <Route path="/companies/:id" element={withBoundary(<ProtectedRoute><CompanyDetail /></ProtectedRoute>)} />
+          <Route path="/invoices" element={withBoundary(<ProtectedRoute><Invoices /></ProtectedRoute>)} />
+          <Route path="/archive" element={withBoundary(<ProtectedRoute><Archive /></ProtectedRoute>)} />
+          <Route path="/users" element={withBoundary(<ProtectedRoute><UserList /></ProtectedRoute>)} />
+          <Route path="/reports" element={withBoundary(<ProtectedRoute><Reports /></ProtectedRoute>)} />
+          <Route path="/settings" element={withBoundary(<ProtectedRoute><Settings /></ProtectedRoute>)} />
+          <Route path="/kb" element={withBoundary(<ProtectedRoute><KnowledgeBase /></ProtectedRoute>)} />
+          <Route path="/kb/new" element={withBoundary(<ProtectedRoute><KBArticleForm /></ProtectedRoute>)} />
+          <Route path="/kb/:id" element={withBoundary(<ProtectedRoute><KBArticleDetail /></ProtectedRoute>)} />
+          <Route path="/kb/:id/edit" element={withBoundary(<ProtectedRoute><KBArticleForm /></ProtectedRoute>)} />
+          <Route path="*" element={withBoundary(<NotFound />)} />
       </Routes>
     </Suspense>
     </ErrorBoundary>

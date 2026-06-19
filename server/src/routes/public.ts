@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { sendTicketCreatedEmail } from '../lib/email.js';
@@ -233,7 +233,7 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
  * Body: { problemText: string, userEmail?: string }
  * Svar: { deflectionId, hasSolution, solution, confidence, kbReferences }
  */
-router.post('/ai-suggest', publicAiRateLimiter, (req: Request, res: Response) => {
+router.post('/ai-suggest', publicAiRateLimiter, async (req: Request, res: Response, next: NextFunction) => {
   const { problemText, userEmail } = req.body as { problemText?: string; userEmail?: string };
 
   if (!problemText || typeof problemText !== 'string' || problemText.trim().length < 10) {
@@ -248,59 +248,59 @@ router.post('/ai-suggest', publicAiRateLimiter, (req: Request, res: Response) =>
   }
 
   const handle = async () => {
-    try {
-      // Steg 1: Hämta alla publicerade KB-titlar, låt AI välja relevanta
-      const allArticles = db.prepare(
-        `SELECT id, title FROM kb_articles WHERE status = 'published'`
-      ).all() as { id: string; title: string }[];
+    // Steg 1: Hämta alla publicerade KB-titlar, låt AI välja relevanta
+    const allArticles = db.prepare(
+      `SELECT id, title FROM kb_articles WHERE status = 'published'`
+    ).all() as { id: string; title: string }[];
 
-      const relevantIds = await findRelevantKbArticles(problemText, allArticles);
+    const relevantIds = await findRelevantKbArticles(problemText, allArticles);
 
-      // Steg 2: Hämta fullständigt innehåll för de valda artiklarna
-      let kbHits: { id: string; title: string; content: string }[] = [];
-      if (relevantIds.length > 0) {
-        const placeholders = relevantIds.map(() => '?').join(',');
-        kbHits = db.prepare(
-          `SELECT id, title, content FROM kb_articles WHERE id IN (${placeholders}) AND status = 'published'`
-        ).all(...relevantIds) as { id: string; title: string; content: string }[];
-      }
-
-      const articlesForAI = kbHits.map(a => ({
-        title: a.title,
-        content: stripHtml(a.content),
-      }));
-
-      const suggestion = await suggestSolutionFromKB(problemText, articlesForAI);
-
-      // Logga deflection oavsett utfall — det är data värd att ha
-      const deflectionId = uuidv4();
-      db.prepare(`
-        INSERT INTO ai_deflections (id, problem_text, suggestion_text, kb_article_ids, confidence, outcome, user_email)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        deflectionId,
-        problemText.slice(0, 5000),
-        suggestion?.solution ?? null,
-        JSON.stringify(kbHits.map(a => a.id)),
-        suggestion?.confidence ?? 0,
-        suggestion?.hasSolution ? 'shown' : 'no_solution',
-        userEmail || null
-      );
-
-      res.json({
-        deflectionId,
-        hasSolution: suggestion?.hasSolution ?? false,
-        solution: suggestion?.solution ?? null,
-        confidence: suggestion?.confidence ?? 0,
-        kbReferences: kbHits.map(a => ({ id: a.id, title: a.title })),
-      });
-    } catch (err) {
-      logger.error('Error in ai-suggest:', { error: String(err) });
-      res.status(500).json({ error: 'Kunde inte generera förslag' });
+    // Steg 2: Hämta fullständigt innehåll för de valda artiklarna
+    let kbHits: { id: string; title: string; content: string }[] = [];
+    if (relevantIds.length > 0) {
+      const placeholders = relevantIds.map(() => '?').join(',');
+      kbHits = db.prepare(
+        `SELECT id, title, content FROM kb_articles WHERE id IN (${placeholders}) AND status = 'published'`
+      ).all(...relevantIds) as { id: string; title: string; content: string }[];
     }
+
+    const articlesForAI = kbHits.map(a => ({
+      title: a.title,
+      content: stripHtml(a.content),
+    }));
+
+    const suggestion = await suggestSolutionFromKB(problemText, articlesForAI);
+
+    // Logga deflection oavsett utfall — det är data värd att ha
+    const deflectionId = uuidv4();
+    db.prepare(`
+      INSERT INTO ai_deflections (id, problem_text, suggestion_text, kb_article_ids, confidence, outcome, user_email)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      deflectionId,
+      problemText.slice(0, 5000),
+      suggestion?.solution ?? null,
+      JSON.stringify(kbHits.map(a => a.id)),
+      suggestion?.confidence ?? 0,
+      suggestion?.hasSolution ? 'shown' : 'no_solution',
+      userEmail || null
+    );
+
+    res.json({
+      deflectionId,
+      hasSolution: suggestion?.hasSolution ?? false,
+      solution: suggestion?.solution ?? null,
+      confidence: suggestion?.confidence ?? 0,
+      kbReferences: kbHits.map(a => ({ id: a.id, title: a.title })),
+    });
   };
 
-  handle().catch(err => logger.error('AI suggest handle error', { error: String(err) }));
+  try {
+    await handle();
+  } catch (err) {
+    logger.error('Error in ai-suggest:', { error: String(err) });
+    next(err);
+  }
 });
 
 /**

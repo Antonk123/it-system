@@ -108,11 +108,12 @@ export default defineConfig(({ mode }) => ({
             return 'dnd-vendor';
           }
 
+          // dompurify exkluderas med avsikt — den importeras statiskt av HtmlRenderer
+          // och behöver finnas i det generella vendor-chunken (precachas av SW).
           if (
             id.includes('react-markdown') ||
             id.includes('rehype') ||
             id.includes('remark') ||
-            id.includes('dompurify') ||
             id.includes('turndown') ||
             id.includes('mdast') ||
             id.includes('hast') ||

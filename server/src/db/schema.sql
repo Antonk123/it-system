@@ -9,6 +9,20 @@ CREATE TABLE IF NOT EXISTS users (
   last_login TEXT
 );
 
+-- Companies (kopplas till contacts och tickets via company_id; skapas i migration 028)
+CREATE TABLE IF NOT EXISTS companies (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  org_number TEXT,
+  email TEXT,
+  phone TEXT,
+  address TEXT,
+  -- Tillagd via migration (guard: columnExists):
+  sla_disabled INTEGER NOT NULL DEFAULT 0,  -- migration 045
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Contacts (ticket requesters without login)
 CREATE TABLE IF NOT EXISTS contacts (
   id TEXT PRIMARY KEY,
@@ -16,6 +30,9 @@ CREATE TABLE IF NOT EXISTS contacts (
   email TEXT NOT NULL,
   phone TEXT,
   company TEXT,
+  -- Tillagda via migrationer (alla guards: columnExists):
+  company_id TEXT REFERENCES companies(id) ON DELETE SET NULL,  -- migration 028
+  department TEXT,                                               -- migration 036
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -42,7 +59,26 @@ CREATE TABLE IF NOT EXISTS tickets (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
   resolved_at TEXT,
-  closed_at TEXT
+  closed_at TEXT,
+  -- Tillagda via migrationer (alla guards: columnExists):
+  template_id TEXT,                                                                     -- migration 004
+  company_id TEXT REFERENCES companies(id) ON DELETE SET NULL,                          -- migration 029
+  assigned_to TEXT REFERENCES users(id) ON DELETE SET NULL,                             -- migration 029
+  sla_response_deadline TEXT,                                                           -- migration 031
+  sla_resolution_deadline TEXT,                                                         -- migration 031
+  sla_paused_at TEXT,                                                                   -- migration 031
+  sla_paused_duration INTEGER DEFAULT 0,                                                -- migration 031
+  sla_response_met INTEGER,                                                             -- migration 031
+  sla_resolution_met INTEGER,                                                           -- migration 031
+  ai_suggested_category_id TEXT REFERENCES categories(id) ON DELETE SET NULL,          -- migration 037
+  ai_suggested_confidence REAL,                                                         -- migration 037
+  ai_draft_response TEXT,                                                               -- migration 037
+  ai_draft_updated_at TEXT,                                                             -- migration 037
+  ai_summary_json TEXT,                                                                 -- migration 037
+  ai_summary_updated_at TEXT,                                                           -- migration 037
+  email_message_id TEXT,                                                                -- migration 040
+  last_aging_notified_at TEXT,                                                          -- migration 044
+  created_by TEXT REFERENCES users(id) ON DELETE SET NULL                              -- migration 058
 );
 
 -- Ticket attachments

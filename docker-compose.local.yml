@@ -48,6 +48,8 @@ services:
       - IMAP_TENANT_ID=${IMAP_TENANT_ID:-}
       - IMAP_CLIENT_ID=${IMAP_CLIENT_ID:-}
       - IMAP_CLIENT_SECRET=${IMAP_CLIENT_SECRET:-}
+      - OFFSITE_BACKUP_CMD=${OFFSITE_BACKUP_CMD:-}
+      - PUSH_AGING_DAYS=${PUSH_AGING_DAYS:-7}
     logging:
       driver: "json-file"
       options:

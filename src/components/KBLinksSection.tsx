@@ -16,30 +16,19 @@ const MARK_END = '__MARK_END__';
 
 /**
  * Tar ett FTS5-snippet med platshållare och returnerar säker HTML med <mark>-taggar.
- * Backend ersätter FTS5:s standardmarkeringar med MARK_START/MARK_END innan det
- * skickas till klienten — se getKbArticles() i api/routes/kb.ts.
- * Om backend INTE använder platshållare (dvs. snippet redan innehåller <mark>):
- * extrahera text, escape:a, sätt tillbaka <mark>.
+ * Backend skickar alltid __MARK_START__ / __MARK_END__ som markeringstoken —
+ * se snippet()-anropet i server/src/routes/kb.ts.
+ * Steg: dela på MARK_START → escape varje del → återställ highlight som <mark>.
  */
 const safeSnippetHtml = (snippet: string): string => {
-  if (snippet.includes(MARK_START)) {
-    // Ny väg: platshållare → escape → återställ som <mark>
-    return snippet
-      .split(MARK_START)
-      .map((part, i) => {
-        if (i === 0) return escapeHtml(part);
-        const [highlighted, rest] = part.split(MARK_END);
-        return `<mark>${escapeHtml(highlighted ?? '')}</mark>${escapeHtml(rest ?? '')}`;
-      })
-      .join('');
-  }
-  // Fallback: snippet innehåller redan <mark> (äldre backend) —
-  // strippa ut mark-taggarna, escape:a texten, sätt tillbaka <mark>.
-  const stripped = snippet.replace(/<\/?mark>/g, '\x00');
-  const parts = stripped.split('\x00');
-  // Udda index = highlight-text, jämna = vanlig text
-  return parts
-    .map((part, i) => (i % 2 === 1 ? `<mark>${escapeHtml(part)}</mark>` : escapeHtml(part)))
+  // Platshållare → escape → återställ som <mark>
+  return snippet
+    .split(MARK_START)
+    .map((part, i) => {
+      if (i === 0) return escapeHtml(part);
+      const [highlighted, rest] = part.split(MARK_END);
+      return `<mark>${escapeHtml(highlighted ?? '')}</mark>${escapeHtml(rest ?? '')}`;
+    })
     .join('');
 };
 

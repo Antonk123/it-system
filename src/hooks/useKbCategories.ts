@@ -14,7 +14,7 @@ export const kbCategoryKeys = {
 export const useKbCategories = () => {
   const queryClient = useQueryClient();
 
-  const { data: categories = [], isLoading } = useQuery<KbCategoryRow[]>({
+  const { data: categories = [], isLoading, isError } = useQuery<KbCategoryRow[]>({
     queryKey: kbCategoryKeys.list(),
     queryFn: () => api.getKbCategories(),
     staleTime: 1000 * 60 * 5, // KB categories rarely change — 5 min
@@ -24,5 +24,5 @@ export const useKbCategories = () => {
     queryClient.invalidateQueries({ queryKey: kbCategoryKeys.list() });
   };
 
-  return { categories, isLoading, refetch };
+  return { categories, isLoading, isError, refetch };
 };

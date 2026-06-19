@@ -7,7 +7,7 @@ import { randomUUID, randomBytes } from 'crypto';
 import { dispatchWebhook } from './webhookDispatcher.js';
 import { sendTicketReceivedConfirmation } from './email.js';
 import { logger } from './logger.js';
-import { ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE } from '../routes/attachments.js';
+import { ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE, hasMagicByteMatch } from '../routes/attachments.js';
 
 interface EmailConfig {
   host: string;
@@ -381,6 +381,14 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
     try {
       fs.mkdirSync(uploadDir, { recursive: true });
       fs.writeFileSync(filePath, attachment.content);
+      // Verifiera magiska bytes mot deklarerad MIME — samma skydd som HTTP-uppladdningar.
+      // En avsändarstyrd Content-Type kan ljuga; vägra filer vars innehåll inte matchar.
+      if (!hasMagicByteMatch(filePath, mime)) {
+        try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+        db.prepare('DELETE FROM ticket_attachments WHERE id = ?').run(attachId);
+        logger.warn('Skipping mail attachment failing magic-byte check', { filename: attachment.filename, mime });
+        continue;
+      }
     } catch (writeErr) {
       // File write failed — remove the DB row to stay consistent
       db.prepare('DELETE FROM ticket_attachments WHERE id = ?').run(attachId);

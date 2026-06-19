@@ -17,7 +17,7 @@ export const useTemplates = () => {
   const queryClient = useQueryClient();
 
   // Fetch templates with React Query
-  const { data: templates = [], isLoading } = useQuery({
+  const { data: templates = [], isLoading, isError } = useQuery({
     queryKey: templateKeys.list(),
     queryFn: async () => {
       const data = await api.getTemplates();
@@ -212,6 +212,7 @@ export const useTemplates = () => {
   return {
     templates,
     isLoading,
+    isError,
     addTemplate,
     updateTemplate,
     deleteTemplate,

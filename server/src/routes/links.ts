@@ -6,6 +6,10 @@ import { logger } from '../lib/logger.js';
 
 const router = Router();
 
+// Whitelist av tillåtna länktyper — UI:t skickar bara 'related', men API:t är
+// öppet så vi validerar mot en känd mängd istället för att lagra godtyckliga strängar.
+const VALID_LINK_TYPES = ['related', 'blocks', 'blocked_by', 'duplicate', 'parent', 'child'];
+
 interface TicketLinkRow {
   id: string;
   source_ticket_id: string;
@@ -110,6 +114,10 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 
   if (!targetTicketId || typeof targetTicketId !== 'string') {
     return res.status(400).json({ error: 'Target ticket ID is required' });
+  }
+
+  if (typeof linkType !== 'string' || !VALID_LINK_TYPES.includes(linkType)) {
+    return res.status(400).json({ error: 'Invalid link type' });
   }
 
   if (!req.user) {

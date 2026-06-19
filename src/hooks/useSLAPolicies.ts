@@ -12,7 +12,7 @@ export const slaKeys = {
 export const useSLAPolicies = (companyId?: string) => {
   const queryClient = useQueryClient();
 
-  const { data: policies = [], isLoading } = useQuery({
+  const { data: policies = [], isLoading, isError } = useQuery({
     queryKey: slaKeys.list(companyId),
     queryFn: () => api.getSLAPolicies(companyId),
     staleTime: 1000 * 60 * 5,
@@ -38,5 +38,5 @@ export const useSLAPolicies = (companyId?: string) => {
     [upsertMutation]
   );
 
-  return { policies, isLoading, upsertPolicies };
+  return { policies, isLoading, isError, upsertPolicies };
 };
