@@ -276,3 +276,16 @@ FOR EACH ROW
 BEGIN
   UPDATE ticket_comments SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
 END;
+
+-- Enrads-konfig (id=1) för det automatiska backup-schemat (paus/tid/retention +
+-- senaste-körning-status). Källa till sanning i runtime; seedas av migration 061.
+CREATE TABLE IF NOT EXISTS backup_config (
+  id              INTEGER PRIMARY KEY CHECK (id = 1),
+  enabled         INTEGER NOT NULL DEFAULT 1,
+  time            TEXT    NOT NULL DEFAULT '04:00',
+  retention_days  INTEGER NOT NULL DEFAULT 7,
+  last_run_at     TEXT,
+  last_status     TEXT,
+  last_size_bytes INTEGER,
+  updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);

@@ -1183,4 +1183,29 @@ export const migrations: Migration[] = [
         END`);
     },
   },
+  {
+    id: '061',
+    name: 'create_backup_config',
+    up: (db) => {
+      // Enrads-konfig (id=1) för det automatiska backup-schemat — gör paus/tid/
+      // retention redigerbart i runtime (systemets första runtime-settings).
+      // Seedas med nuvarande beteende så inget ändras förrän någon redigerar.
+      db.exec(`CREATE TABLE IF NOT EXISTS backup_config (
+        id              INTEGER PRIMARY KEY CHECK (id = 1),
+        enabled         INTEGER NOT NULL DEFAULT 1,
+        time            TEXT    NOT NULL DEFAULT '04:00',
+        retention_days  INTEGER NOT NULL DEFAULT 7,
+        last_run_at     TEXT,
+        last_status     TEXT,
+        last_size_bytes INTEGER,
+        updated_at      TEXT    NOT NULL
+      )`);
+      // Retention seedas från env om satt (bevarar ev. befintlig override).
+      const retention = Math.max(1, parseInt(process.env.BACKUP_RETENTION_DAYS || '7', 10) || 7);
+      db.prepare(
+        `INSERT OR IGNORE INTO backup_config (id, enabled, time, retention_days, updated_at)
+         VALUES (1, 1, '04:00', ?, ?)`,
+      ).run(retention, new Date().toISOString());
+    },
+  },
 ];

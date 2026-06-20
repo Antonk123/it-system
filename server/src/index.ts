@@ -1,9 +1,5 @@
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import { createApp } from './app.js';
 import { initializeDatabase } from './db/connection.js';
-import { db } from './db/connection.js';
 import { startReminderScheduler } from './lib/reminderScheduler.js';
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
 import { cleanupOldAiUsage } from './lib/aiHelper.js';
@@ -12,13 +8,9 @@ import { startRecurringScheduler, stopRecurringScheduler } from './lib/recurring
 import { startWebhookRetryScheduler } from './lib/webhookRetryScheduler.js';
 import { initWebPush } from './lib/push.js';
 import { startPushScheduler, stopPushScheduler } from './lib/pushScheduler.js';
+import { startBackupScheduler, stopBackupScheduler } from './lib/backupScheduler.js';
 import cron from 'node-cron';
-import archiver from 'archiver';
 import { logger } from './lib/logger.js';
-
-// ESM saknar __dirname — härled från import.meta.url (samma mönster som db/connection.ts)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Global error handlers — catch unhandled promises and exceptions
 // Räkna avvisningar för att varna om de upprepas ovanligt ofta (möjligt läckage).
@@ -41,7 +33,6 @@ process.on('uncaughtException', (error) => {
 });
 
 import { startEmailPolling } from './lib/emailInbound.js';
-import { uploadBackupOffsite } from './lib/offsiteBackup.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -81,85 +72,9 @@ const aiUsageCleanupTask = cron.schedule('15 3 * * *', () => {
 });
 logger.info('AI usage log cleanup scheduled (daily at 03:15)');
 
-// Daily automatic backup at 04:00 — keeps last BACKUP_RETENTION_DAYS snapshots.
-// Each snapshot is a ZIP containing data/database.sqlite + data/uploads, so it can
-// be restored directly via POST /api/backup/restore (matches manual-download format).
-// Pre-ZIP, PRAGMA integrity_check runs against the snapshot — a corrupted DB never
-// reaches retention.
-const BACKUP_DB_DEFAULT = path.join(__dirname, '../../data/database.sqlite');
-const BACKUP_DIR = path.join(path.dirname(process.env.DB_PATH || BACKUP_DB_DEFAULT), 'backups');
-const BACKUP_UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(__dirname, '../../data/uploads');
-const BACKUP_RETENTION_DAYS = Math.max(1, parseInt(process.env.BACKUP_RETENTION_DAYS || '7', 10));
-
-const backupTask = cron.schedule('0 4 * * *', async () => {
-  const tmpDbPath = path.join(BACKUP_DIR, `tmp-${Date.now()}.sqlite`);
-  let tmpDbCreated = false;
-
-  try {
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const backupPath = path.join(BACKUP_DIR, `backup-${dateStr}.zip`);
-
-    // 1. Snapshot DB to tmp file (online backup, WAL-safe)
-    await db.backup(tmpDbPath);
-    tmpDbCreated = true;
-
-    // 2. Verify snapshot integrity — corrupt files never roll into retention
-    const Database = (await import('better-sqlite3')).default;
-    const verifyDb = new Database(tmpDbPath, { readonly: true });
-    try {
-      const result = verifyDb.pragma('integrity_check') as Array<{ integrity_check: string }>;
-      const passed = result.length === 1 && result[0].integrity_check === 'ok';
-      if (!passed) {
-        throw new Error(`integrity_check failed: ${JSON.stringify(result)}`);
-      }
-    } finally {
-      verifyDb.close();
-    }
-
-    // 3. Bundle DB + uploads into ZIP (same structure as manual download → directly restorable)
-    await new Promise<void>((resolve, reject) => {
-      const output = fs.createWriteStream(backupPath);
-      const archive = archiver('zip', { zlib: { level: 6 } });
-      output.on('close', () => resolve());
-      output.on('error', reject);
-      archive.on('error', reject);
-      archive.pipe(output);
-      archive.file(tmpDbPath, { name: 'data/database.sqlite' });
-      if (fs.existsSync(BACKUP_UPLOAD_DIR)) {
-        archive.directory(BACKUP_UPLOAD_DIR, 'data/uploads');
-      }
-      archive.finalize();
-    });
-
-    fs.unlinkSync(tmpDbPath);
-    tmpDbCreated = false;
-    logger.info('Automatic backup completed', { path: backupPath });
-
-    // 3b. Off-site upload (non-fatal stub — configure via OFFSITE_BACKUP_CMD)
-    try {
-      await uploadBackupOffsite(backupPath);
-    } catch (offSiteErr) {
-      logger.error('Off-site backup threw unexpectedly', { error: String(offSiteErr) });
-    }
-
-    // 4. Retention — keep newest N, delete older .zip and any legacy .sqlite snapshots
-    const files = fs.readdirSync(BACKUP_DIR)
-      .filter((f: string) => f.startsWith('backup-') && (f.endsWith('.zip') || f.endsWith('.sqlite')))
-      .sort()
-      .reverse();
-    for (const old of files.slice(BACKUP_RETENTION_DAYS)) {
-      fs.unlinkSync(path.join(BACKUP_DIR, old));
-      logger.info('Deleted old backup', { file: old });
-    }
-  } catch (error) {
-    if (tmpDbCreated) {
-      try { fs.unlinkSync(tmpDbPath); } catch { /* ignore */ }
-    }
-    logger.error('Automatic backup failed', { error: String(error) });
-  }
-});
-logger.info(`Automatic backup scheduled (daily at 04:00, retain ${BACKUP_RETENTION_DAYS})`);
+// Automatisk backup — schema (paus/tid/retention) styrs av backup_config-raden
+// (migration 061) och kan redigeras i admin-UI:t. Logik i lib/backupScheduler.ts.
+startBackupScheduler();
 
 // Auto-close resolved tickets (daily at 02:30, configurable via AUTO_CLOSE_DAYS env var)
 startAutoCloseScheduler();
@@ -204,7 +119,7 @@ const gracefulShutdown = (signal: string) => {
   // Stoppa inline cron-jobb definierade i denna fil
   refreshTokenCleanupTask.stop();
   aiUsageCleanupTask.stop();
-  backupTask.stop();
+  stopBackupScheduler();
 
   server.close(() => {
     try { closeDatabase(); } catch (err) { logger.error('Error closing DB', { error: String(err) }); }

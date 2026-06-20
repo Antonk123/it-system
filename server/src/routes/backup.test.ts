@@ -44,6 +44,7 @@ import archiver from 'archiver';
 import { PassThrough } from 'node:stream';
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
 import { createApp } from '../app.js';
+import { stopBackupScheduler } from '../lib/backupScheduler.js';
 
 let app: ReturnType<typeof createApp>;
 
@@ -211,6 +212,11 @@ beforeAll(async () => {
 
 afterAll(() => {
   try {
+    stopBackupScheduler();
+  } catch {
+    /* ignore */
+  }
+  try {
     closeDatabase();
   } catch {
     /* ignore */
@@ -224,6 +230,13 @@ afterAll(() => {
         /* ignore */
       }
     }
+  }
+  // run-now-testet skriver verkliga backup-filer till dirname(DB_PATH)/backups.
+  try {
+    const { dirname, join } = require('node:path') as typeof import('node:path');
+    rmSync(join(dirname(DB_PATH), 'backups'), { recursive: true, force: true });
+  } catch {
+    /* ignore */
   }
 });
 
@@ -374,5 +387,127 @@ describe('POST /api/backup/restore', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/tabeller/i);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/backup/config — schemainställningar
+// ---------------------------------------------------------------------------
+
+describe('GET /api/backup/config', () => {
+  it('returns 401 when no token is provided', async () => {
+    const res = await request(app).get('/api/backup/config');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 403 for a non-admin user', async () => {
+    const res = await userAgent
+      .get('/api/backup/config')
+      .set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 200 with the config shape for an admin', async () => {
+    const res = await adminAgent
+      .get('/api/backup/config')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(typeof res.body.enabled).toBe('boolean');
+    expect(res.body.time).toMatch(/^\d{2}:\d{2}$/);
+    expect(typeof res.body.retentionDays).toBe('number');
+    expect(res.body).toHaveProperty('lastRunAt');
+    expect(res.body).toHaveProperty('lastStatus');
+    expect(res.body).toHaveProperty('nextRunAt');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PUT /api/backup/config
+// ---------------------------------------------------------------------------
+
+describe('PUT /api/backup/config', () => {
+  it('returns 403 for a non-admin user', async () => {
+    const csrfRes = await userAgent.get('/api/csrf-token').set('Authorization', `Bearer ${userToken}`);
+    const userCsrf: string = csrfRes.body.csrfToken;
+    const res = await userAgent
+      .put('/api/backup/config')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('x-csrf-token', userCsrf)
+      .send({ enabled: true, time: '03:00', retentionDays: 7 });
+    expect(res.status).toBe(403);
+  });
+
+  it('returns 400 for an invalid time', async () => {
+    const res = await adminAgent
+      .put('/api/backup/config')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .send({ enabled: true, time: '25:00', retentionDays: 7 });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 for an invalid retentionDays', async () => {
+    const res = await adminAgent
+      .put('/api/backup/config')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .send({ enabled: true, time: '03:00', retentionDays: 0 });
+    expect(res.status).toBe(400);
+  });
+
+  it('persists a valid config and reflects it on GET', async () => {
+    const put = await adminAgent
+      .put('/api/backup/config')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .send({ enabled: false, time: '02:30', retentionDays: 14 });
+    expect(put.status).toBe(200);
+    expect(put.body).toMatchObject({ enabled: false, time: '02:30', retentionDays: 14 });
+
+    const get = await adminAgent
+      .get('/api/backup/config')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(get.body).toMatchObject({ enabled: false, time: '02:30', retentionDays: 14 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/backup/run-now
+// ---------------------------------------------------------------------------
+
+describe('POST /api/backup/run-now', () => {
+  it('returns 401 or 403 when no token is provided', async () => {
+    const res = await request(app).post('/api/backup/run-now');
+    expect([401, 403]).toContain(res.status);
+  });
+
+  it('returns 403 for a non-admin user', async () => {
+    const csrfRes = await userAgent.get('/api/csrf-token').set('Authorization', `Bearer ${userToken}`);
+    const userCsrf: string = csrfRes.body.csrfToken;
+    const res = await userAgent
+      .post('/api/backup/run-now')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('x-csrf-token', userCsrf);
+    expect(res.status).toBe(403);
+  });
+
+  it('runs a backup and returns 200 with success status for an admin', async () => {
+    const res = await adminAgent
+      .post('/api/backup/run-now')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken);
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('success');
+    expect(res.body.lastSizeBytes).toBeGreaterThan(0);
+  });
+
+  it('rejects a concurrent run-now with 409 (in-flight guard)', async () => {
+    const fire = () =>
+      adminAgent
+        .post('/api/backup/run-now')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('x-csrf-token', adminCsrfToken);
+    const [a, b] = await Promise.all([fire(), fire()]);
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
   });
 });

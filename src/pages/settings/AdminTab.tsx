@@ -27,6 +27,7 @@ import {
 import { Trash2, Users, Mail, Shield, Loader2, HardDriveDownload, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { BackupScheduleSection } from '@/components/settings/BackupScheduleSection';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 
@@ -266,6 +267,7 @@ const AdminTab = () => {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent className="space-y-4">
+                <BackupScheduleSection />
                 <p className="text-sm text-muted-foreground">
                   ZIP-filen innehåller en WAL-säker ögonblicksbild av databasen samt alla uppladdade filer. Spara filen på en säker plats.
                 </p>

@@ -11,6 +11,13 @@ import multer from 'multer';
 import unzipper from 'unzipper';
 import { logger } from '../lib/logger.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
+import {
+  getBackupConfig,
+  runBackup,
+  isBackupRunning,
+  reconfigureBackupScheduler,
+  type BackupConfig,
+} from '../lib/backupScheduler.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -231,6 +238,63 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
     try { unlinkSync(uploadedZip); } catch { /* ignore */ }
     res.status(500).json({ error: 'Återställning misslyckades. Kontrollera att ZIP-filen är en giltig backup.' });
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Backup-schema (config) — paus/tid/retention + manuell "kör nu".
+// Källa till sanning: backup_config-raden (migration 061). Alla admin-only.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// Nästa körning härleds ur tid + enabled (lokaltid). null om pausad.
+function computeNextRunAt(cfg: BackupConfig): string | null {
+  if (!cfg.enabled) return null;
+  const [h, m] = cfg.time.split(':').map(Number);
+  const next = new Date();
+  next.setHours(h, m, 0, 0);
+  if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
+  return next.toISOString();
+}
+
+router.get('/config', authenticate, requireAdmin, (_req: AuthRequest, res: Response) => {
+  const cfg = getBackupConfig();
+  res.json({ ...cfg, nextRunAt: computeNextRunAt(cfg) });
+});
+
+router.put('/config', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
+  const { enabled, time, retentionDays } = (req.body ?? {}) as Partial<{ enabled: boolean; time: string; retentionDays: number }>;
+
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled måste vara en boolean' });
+  }
+  if (typeof time !== 'string' || !TIME_RE.test(time)) {
+    return res.status(400).json({ error: 'time måste vara HH:MM (00:00–23:59)' });
+  }
+  if (!Number.isInteger(retentionDays) || (retentionDays as number) < 1 || (retentionDays as number) > 3650) {
+    return res.status(400).json({ error: 'retentionDays måste vara ett heltal mellan 1 och 3650' });
+  }
+
+  db.prepare('UPDATE backup_config SET enabled = ?, time = ?, retention_days = ?, updated_at = ? WHERE id = 1')
+    .run(enabled ? 1 : 0, time, retentionDays, new Date().toISOString());
+
+  // Slå igenom utan omstart: stoppa gammal task, schemalägg ny (eller ingen om pausad).
+  reconfigureBackupScheduler();
+
+  const cfg = getBackupConfig();
+  return res.json({ ...cfg, nextRunAt: computeNextRunAt(cfg) });
+});
+
+router.post('/run-now', authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {
+  if (isBackupRunning()) {
+    return res.status(409).json({ error: 'En backup pågår redan' });
+  }
+  const result = await runBackup();
+  if (result.status === 'failed') {
+    return res.status(500).json({ status: 'failed', error: 'Backup misslyckades' });
+  }
+  const cfg = getBackupConfig();
+  return res.json({ status: result.status, lastRunAt: cfg.lastRunAt, lastSizeBytes: cfg.lastSizeBytes });
 });
 
 export default router;

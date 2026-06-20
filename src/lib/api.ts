@@ -1348,6 +1348,24 @@ class ApiClient {
     if (!response.ok) throw new Error('Backup failed');
     return response.blob();
   }
+
+  // Backup schedule
+  async getBackupConfig() {
+    return this.request<BackupConfig>('/backup/config');
+  }
+
+  async updateBackupConfig(body: { enabled: boolean; time: string; retentionDays: number }) {
+    return this.request<BackupConfig>('/backup/config', {
+      method: 'PUT',
+      body,
+    });
+  }
+
+  async runBackupNow() {
+    return this.request<{ status: string; lastRunAt: string | null; lastSizeBytes: number | null }>('/backup/run-now', {
+      method: 'POST',
+    });
+  }
 }
 
 // Types
@@ -1663,6 +1681,16 @@ export interface WebhookRow {
   active: number;
   created_at: string;
   last_triggered_at: string | null;
+}
+
+export interface BackupConfig {
+  enabled: boolean;
+  time: string; // "HH:MM"
+  retentionDays: number;
+  lastRunAt: string | null;
+  lastStatus: 'success' | 'failed' | null;
+  lastSizeBytes: number | null;
+  nextRunAt: string | null;
 }
 
 export interface WebhookDeliveryRow {
