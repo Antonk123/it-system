@@ -566,4 +566,114 @@ router.get('/tag-analytics', authenticate, (_req: AuthRequest, res) => {
   }
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /reports/kpi-tickets
+// Server-aggregated drill-down rows for the KPI detail modals on the Reports
+// page. Replaces a client-side ?limit=1000 fetch + in-memory filtering. Returns
+// raw TicketRow shape (snake_case) — exactly what mapTicketRow() consumes — so
+// the modal keeps every column/badge (assigned_to_name, all SLA fields, tags[]).
+//   scope=total → created_at filtered by year/month (same range-filter as
+//                 /summary so idx_tickets_created_at applies, strftime for month).
+//   scope=aging → open tickets older than 7 days, ALWAYS unfiltered by year/month
+//                 (mirrors summary.agingTickets). Capped at LIMIT 200 — the modal
+//                 is an overview, full extraction goes through Export Excel.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Column list identical to tickets.ts TICKET_COLUMNS — keep in sync, otherwise
+// the modal loses assigned_to_name (Tilldelad) or SLA badges. assigned_to_name
+// is a correlated subquery (not a JOIN) so non-admins can render it too.
+const KPI_TICKET_COLUMNS = [
+  'tickets.id', 'tickets.title', 'tickets.description', 'tickets.status', 'tickets.priority',
+  'tickets.category_id', 'tickets.requester_id', 'tickets.company_id', 'tickets.assigned_to',
+  '(SELECT COALESCE(display_name, email) FROM users WHERE id = tickets.assigned_to) AS assigned_to_name',
+  'tickets.notes', 'tickets.solution', 'tickets.template_id',
+  'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at',
+  'tickets.ai_suggested_category_id', 'tickets.ai_suggested_confidence',
+  'tickets.sla_response_deadline', 'tickets.sla_resolution_deadline',
+  'tickets.sla_response_met', 'tickets.sla_resolution_met',
+  'tickets.sla_paused_at', 'tickets.sla_paused_duration',
+].join(', ');
+
+const KPI_TICKET_LIMIT = 200;
+
+// Pure aggregation extracted so it can be unit-tested against an in-memory DB.
+// Throws on invalid year/month so the route can map them to a 400.
+export function computeKpiTickets(
+  database: AggregationDb = db,
+  scope: 'total' | 'aging',
+  filters: { year?: string; month?: string } = {},
+): Record<string, unknown>[] {
+  let where = '';
+  const params: string[] = [];
+
+  if (scope === 'aging') {
+    // Mirror summary.agingTickets — ALWAYS unfiltered by year/month.
+    where = "WHERE status = 'open' AND julianday('now') - julianday(created_at) > 7";
+  } else {
+    const conds: string[] = [];
+    if (filters.year && filters.year !== 'all') {
+      const yearNum = parseInt(filters.year, 10);
+      if (isNaN(yearNum) || yearNum < 2000 || yearNum > 2100) throw new Error('Invalid year parameter');
+      // Range-filter så att idx_tickets_created_at kan användas (strftime kan inte)
+      conds.push('(created_at >= ? AND created_at < ?)');
+      params.push(`${yearNum}-01-01`, `${yearNum + 1}-01-01`);
+    }
+    if (filters.month && filters.month !== 'all') {
+      // Frontend sends 0-based month index (0=Jan, 11=Dec); strftime('%m') is 1-based.
+      const monthNum = parseInt(filters.month, 10);
+      if (isNaN(monthNum) || monthNum < 0 || monthNum > 11) throw new Error('Invalid month parameter (expected 0-11)');
+      conds.push("strftime('%m', created_at) = ?");
+      params.push(String(monthNum + 1).padStart(2, '0'));
+    }
+    where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : '';
+  }
+
+  const tickets = database.prepare(`
+    SELECT ${KPI_TICKET_COLUMNS}
+    FROM tickets
+    ${where}
+    ORDER BY created_at DESC
+    LIMIT ${KPI_TICKET_LIMIT}
+  `).all(...params) as Array<{ id: string } & Record<string, unknown>>;
+
+  if (tickets.length === 0) return [];
+
+  // Batch-fetch tags for all returned tickets (same pattern as tickets.ts GET /).
+  const ticketIds = tickets.map(t => t.id);
+  const placeholders = ticketIds.map(() => '?').join(',');
+  const tagRows = database.prepare(`
+    SELECT tt.ticket_id, t.id, t.name, t.color
+    FROM tags t
+    JOIN ticket_tags tt ON t.id = tt.tag_id
+    WHERE tt.ticket_id IN (${placeholders})
+    ORDER BY t.name
+  `).all(...ticketIds) as Array<{ ticket_id: string; id: string; name: string; color: string }>;
+
+  const tagsByTicket: Record<string, Array<{ id: string; name: string; color: string }>> = {};
+  for (const row of tagRows) {
+    (tagsByTicket[row.ticket_id] ??= []).push({ id: row.id, name: row.name, color: row.color });
+  }
+
+  return tickets.map(t => ({ ...t, tags: tagsByTicket[t.id] ?? [] }));
+}
+
+router.get('/kpi-tickets', authenticate, (req: AuthRequest, res) => {
+  try {
+    const { scope, year, month } = req.query as { scope?: string; year?: string; month?: string };
+    if (scope !== 'total' && scope !== 'aging') {
+      res.status(400).json({ error: 'Invalid scope (expected total|aging)' });
+      return;
+    }
+    res.json(computeKpiTickets(db, scope, { year, month }));
+  } catch (error) {
+    const msg = String(error);
+    if (msg.includes('Invalid year') || msg.includes('Invalid month')) {
+      res.status(400).json({ error: msg.replace('Error: ', '') });
+      return;
+    }
+    logger.error('Error generating KPI tickets:', { error: msg });
+    res.status(500).json({ error: 'Failed to generate KPI tickets' });
+  }
+});
+
 export default router;

@@ -1184,6 +1184,18 @@ class ApiClient {
     return this.request<TagAnalyticsRow[]>('/reports/tag-analytics');
   }
 
+  // KPI drill-down rows for the Reports detail modals. Server-aggregated +
+  // LIMIT-capped (replaces the old client-side ?limit=1000 fetch). For 'aging'
+  // the server ignores year/month, so only forward them for 'total'.
+  async getKpiTickets(scope: 'total' | 'aging', year?: string, month?: string) {
+    const params = new URLSearchParams({ scope });
+    if (scope === 'total') {
+      if (year && year !== 'all') params.append('year', year);
+      if (month && month !== 'all') params.append('month', month);
+    }
+    return this.request<TicketRow[]>(`/reports/kpi-tickets?${params.toString()}`);
+  }
+
   // Push notification subscription
   async getPushVapidKey(): Promise<{ vapidPublicKey: string }> {
     return this.request('/push/vapid-public-key');

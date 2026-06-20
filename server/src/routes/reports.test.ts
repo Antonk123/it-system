@@ -28,7 +28,7 @@ vi.mock('../lib/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-import { computeStatusFlow, computeTagAnalytics } from './reports.js';
+import { computeStatusFlow, computeTagAnalytics, computeKpiTickets } from './reports.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Schema + fixtures
@@ -38,8 +38,34 @@ function createSchema(db: InstanceType<typeof Database>) {
   db.exec(`
     CREATE TABLE tickets (
       id TEXT PRIMARY KEY,
+      title TEXT,
+      description TEXT,
       status TEXT NOT NULL DEFAULT 'open',
-      created_at TEXT NOT NULL
+      priority TEXT,
+      category_id TEXT,
+      requester_id TEXT,
+      company_id TEXT,
+      assigned_to TEXT,
+      notes TEXT,
+      solution TEXT,
+      template_id TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT,
+      resolved_at TEXT,
+      closed_at TEXT,
+      ai_suggested_category_id TEXT,
+      ai_suggested_confidence REAL,
+      sla_response_deadline TEXT,
+      sla_resolution_deadline TEXT,
+      sla_response_met INTEGER,
+      sla_resolution_met INTEGER,
+      sla_paused_at TEXT,
+      sla_paused_duration INTEGER
+    );
+    CREATE TABLE users (
+      id TEXT PRIMARY KEY,
+      display_name TEXT,
+      email TEXT
     );
     CREATE TABLE tags (
       id TEXT PRIMARY KEY,
@@ -222,5 +248,117 @@ describe('computeTagAnalytics', () => {
 
     const result = computeTagAnalytics(memDb);
     expect(result).toEqual([{ id: 'big', name: 'recurring', color: '#3b82f6', count: 1200 }]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// kpi-tickets
+//
+// Drill-down rows for the Reports KPI detail modals. Server-side replacement for
+// the old client-side ?limit=1000 fetch + in-memory filtering. Two scopes:
+//   'total' → created_at filtered by year/month
+//   'aging' → status='open' AND age > 7d, ALWAYS ignoring year/month
+// We assert column parity (assigned_to_name + tags[]), the LIMIT cap, and that
+// the aging semantics ignore year/month even when supplied.
+// ─────────────────────────────────────────────────────────────────────────────
+
+function insertUser(db: InstanceType<typeof Database>, id: string, displayName: string, email = '') {
+  db.prepare(`INSERT INTO users (id, display_name, email) VALUES (?, ?, ?)`).run(id, displayName, email);
+}
+
+// Insert a ticket with the columns the KPI helper cares about.
+function insertKpiTicket(
+  db: InstanceType<typeof Database>,
+  id: string,
+  status: string,
+  createdAt: string,
+  assignedTo: string | null = null,
+) {
+  db.prepare(
+    `INSERT INTO tickets (id, title, status, created_at, assigned_to) VALUES (?, ?, ?, ?, ?)`,
+  ).run(id, `Ticket ${id}`, status, createdAt, assignedTo);
+}
+
+// A created_at `daysAgo` days before the REAL current time. The aging WHERE
+// uses SQLite's julianday('now') (actual wall clock, not the NOW fixture), so
+// aging fixtures must be anchored to real time to stay deterministic.
+function dateDaysAgo(daysAgo: number): string {
+  const d = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} 12:00:00`;
+}
+
+describe('computeKpiTickets', () => {
+  it("scope='total' with no filter returns all rows (created_at DESC) with assigned_to_name + tags[]", () => {
+    insertUser(memDb, 'u1', 'Anna Andersson');
+    insertKpiTicket(memDb, 'a', 'open', dateIn(2), 'u1'); // older
+    insertKpiTicket(memDb, 'b', 'resolved', dateIn(0)); // newer, unassigned
+    insertTag(memDb, 't1', 'network', '#ff0000');
+    attachTag(memDb, 'a', 't1');
+
+    const result = computeKpiTickets(memDb, 'total');
+
+    expect(result).toHaveLength(2);
+    // created_at DESC → newest first
+    expect(result[0].id).toBe('b');
+    expect(result[1].id).toBe('a');
+
+    const a = result.find(r => r.id === 'a')!;
+    expect(a.assigned_to_name).toBe('Anna Andersson'); // correlated subquery resolved
+    expect(a.tags).toEqual([{ id: 't1', name: 'network', color: '#ff0000' }]);
+
+    const b = result.find(r => r.id === 'b')!;
+    expect(b.assigned_to_name).toBeNull(); // unassigned → subquery returns NULL
+    expect(b.tags).toEqual([]); // ticket without tags gets empty array
+  });
+
+  it("scope='total' with year/month only returns tickets in that range", () => {
+    // NOW = 2026-06-15 → monthsAgo 0 == 2026-06, 5 == 2026-01, 6 == 2025-12.
+    insertKpiTicket(memDb, 'jun', 'open', dateIn(0)); // 2026-06
+    insertKpiTicket(memDb, 'jan', 'open', dateIn(5)); // 2026-01
+    insertKpiTicket(memDb, 'dec25', 'open', dateIn(6)); // 2025-12 (different year)
+
+    // Whole year 2026 → jun + jan, not dec25.
+    const year2026 = computeKpiTickets(memDb, 'total', { year: '2026' });
+    expect(year2026.map(r => r.id).sort()).toEqual(['jan', 'jun']);
+
+    // June 2026 only (month index 5, 0-based) → just jun.
+    const june = computeKpiTickets(memDb, 'total', { year: '2026', month: '5' });
+    expect(june.map(r => r.id)).toEqual(['jun']);
+  });
+
+  it('throws on invalid year/month so the route can map to 400', () => {
+    expect(() => computeKpiTickets(memDb, 'total', { year: '1999' })).toThrow('Invalid year');
+    expect(() => computeKpiTickets(memDb, 'total', { year: 'abc' })).toThrow('Invalid year');
+    expect(() => computeKpiTickets(memDb, 'total', { month: '12' })).toThrow('Invalid month');
+  });
+
+  it("scope='aging' only returns open tickets older than 7 days and IGNORES year/month", () => {
+    insertKpiTicket(memDb, 'old-open', 'open', dateDaysAgo(10)); // qualifies
+    insertKpiTicket(memDb, 'fresh-open', 'open', dateDaysAgo(3)); // too new
+    insertKpiTicket(memDb, 'old-closed', 'closed', dateDaysAgo(30)); // wrong status
+
+    // Passing year/month must NOT narrow the aging set (regression guard).
+    const result = computeKpiTickets(memDb, 'aging', { year: '2099', month: '0' });
+
+    expect(result.map(r => r.id)).toEqual(['old-open']);
+    expect(result[0].tags).toEqual([]);
+  });
+
+  it('caps results at LIMIT 200 even with 250 matching tickets (the whole point)', () => {
+    const insert = memDb.prepare(
+      `INSERT INTO tickets (id, title, status, created_at) VALUES (?, ?, ?, ?)`,
+    );
+    const seed = memDb.transaction(() => {
+      for (let i = 0; i < 250; i++) {
+        // Pad index so created_at ordering is stable/distinct.
+        insert.run(`tk-${String(i).padStart(3, '0')}`, `T${i}`, 'open', dateIn(0, (i % 28) + 1));
+      }
+    });
+    seed();
+
+    expect(memDb.prepare('SELECT COUNT(*) AS c FROM tickets').get()).toEqual({ c: 250 });
+
+    const result = computeKpiTickets(memDb, 'total');
+    expect(result).toHaveLength(200);
   });
 });

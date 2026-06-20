@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useMode } from '@/hooks/useMode';
-import { differenceInDays } from 'date-fns';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, Legend, ComposedChart, Line } from 'recharts';
 import { Layout } from '@/components/Layout';
 import { useReportsSummary } from '@/hooks/useReportsSummary';
@@ -159,20 +158,25 @@ const Reports = () => {
   // Fetch all report summary data from the new endpoint
   const { data: summary, isLoading, isError, error } = useReportsSummary(selectedYear, selectedMonth);
 
-  // Raw ticket rows are only needed for the KPIDetailDialog drill-down modals.
-  // Fetch them LAZILY — only once a modal is opened — instead of eagerly on page
-  // load. (All chart aggregation now comes from server-side report endpoints, so
-  // the page no longer pulls up to 1000 raw tickets just to render charts.)
-  const { data: drilldownTickets = [], isError: isDrilldownError } = useQuery({
-    queryKey: ['reports', 'drilldown-tickets'],
-    enabled: kpiModalOpen !== null,
+  // Drill-down rows for the KPIDetailDialog modals come from the server-side
+  // /reports/kpi-tickets endpoint (LIMIT-capped, year/month filtered server-side)
+  // and are fetched LAZILY — only once the matching modal is opened. One query
+  // per scope so each carries its own filter semantics and cache key.
+  //   'total' → filtered by selectedYear/selectedMonth (queryKey includes them).
+  //   'aging' → server ignores year/month, so neither is in the key.
+  const { data: totalDrilldown = [], isError: isTotalDrilldownError } = useQuery({
+    queryKey: ['reports', 'kpi-tickets', 'total', selectedYear, selectedMonth],
+    enabled: kpiModalOpen === 'total',
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
-    queryFn: async () => {
-      const response = await api.getTickets('?limit=1000&status=all');
-      const rows = Array.isArray(response) ? response : response.data;
-      return rows.map(mapTicketRow);
-    },
+    queryFn: async () => (await api.getKpiTickets('total', selectedYear, selectedMonth)).map(mapTicketRow),
+  });
+  const { data: agingDrilldown = [], isError: isAgingDrilldownError } = useQuery({
+    queryKey: ['reports', 'kpi-tickets', 'aging'],
+    enabled: kpiModalOpen === 'aging',
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
+    queryFn: async () => (await api.getKpiTickets('aging')).map(mapTicketRow),
   });
 
   // Get available years from summary trend data
@@ -195,29 +199,6 @@ const Reports = () => {
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
-
-  // yearMonthFilteredTickets is still used for the KPIDetailDialog "total" modal
-  const yearMonthFilteredTickets = useMemo(() => {
-    let filtered = drilldownTickets;
-
-    if (selectedYear !== 'all') {
-      const year = parseInt(selectedYear);
-      filtered = filtered.filter((ticket) => {
-        const createdYear = new Date(ticket.createdAt).getFullYear();
-        return createdYear === year;
-      });
-    }
-
-    if (selectedMonth !== 'all') {
-      const month = parseInt(selectedMonth);
-      filtered = filtered.filter((ticket) => {
-        const createdMonth = new Date(ticket.createdAt).getMonth();
-        return createdMonth === month;
-      });
-    }
-
-    return filtered;
-  }, [drilldownTickets, selectedYear, selectedMonth]);
 
   // Summary KPIs for requester analytics
   const requesterKPIs = useMemo(() => {
@@ -361,15 +342,6 @@ const Reports = () => {
   }, [summary]);
   const agingTickets = summary?.agingTickets ?? 0;
 
-  // agingTicketsData still needs raw tickets for the detail modal (lazily fetched)
-  const agingTicketsData = useMemo(() => {
-    return drilldownTickets.filter(t => {
-      if (t.status !== 'open') return false;
-      const daysSinceCreated = differenceInDays(new Date(), t.createdAt);
-      return daysSinceCreated > 7;
-    });
-  }, [drilldownTickets]);
-
   // Monthly trend data for KPICard sparklines (from summary.trend)
   const monthlyTrendData = useMemo(() => {
     if (!summary?.trend) return [];
@@ -509,8 +481,8 @@ const Reports = () => {
           open={kpiModalOpen === 'aging'}
           onOpenChange={(open) => setKpiModalOpen(open ? 'aging' : null)}
           title="Gamla ärenden"
-          description={isDrilldownError ? 'Kunde inte ladda data' : `Ärenden som har varit öppna i mer än 7 dagar (${agingTickets} totalt)`}
-          tickets={agingTicketsData}
+          description={isAgingDrilldownError ? 'Kunde inte ladda data' : `Ärenden som har varit öppna i mer än 7 dagar (${agingTickets} totalt${agingDrilldown.length < agingTickets ? `, visar senaste ${agingDrilldown.length}` : ''})`}
+          tickets={agingDrilldown}
           users={users}
         />
 
@@ -518,8 +490,8 @@ const Reports = () => {
           open={kpiModalOpen === 'total'}
           onOpenChange={(open) => setKpiModalOpen(open ? 'total' : null)}
           title="Alla ärenden"
-          description={isDrilldownError ? 'Kunde inte ladda data' : `Alla ärenden i aktuell vy (${totalTickets} totalt)`}
-          tickets={yearMonthFilteredTickets}
+          description={isTotalDrilldownError ? 'Kunde inte ladda data' : `Alla ärenden i aktuell vy (${totalTickets} totalt${totalDrilldown.length < totalTickets ? `, visar senaste ${totalDrilldown.length}` : ''})`}
+          tickets={totalDrilldown}
           users={users}
         />
 

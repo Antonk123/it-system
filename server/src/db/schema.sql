@@ -255,18 +255,24 @@ BEGIN
   UPDATE tickets SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
 END;
 
--- Trigger to update updated_at on checklists
+-- Trigger to update updated_at on checklists.
+-- Skriver ISO-8601 (matchar app-kodens new Date().toISOString()) så datumfilter
+-- på updated_at träffar exakta gränser. Tidigare CURRENT_TIMESTAMP gav SQLite-
+-- format ('YYYY-MM-DD HH:MM:SS') som skiljde sig från app-värdet.
 CREATE TRIGGER IF NOT EXISTS update_checklist_updated_at
 AFTER UPDATE ON ticket_checklists
 FOR EACH ROW
 BEGIN
-  UPDATE ticket_checklists SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+  UPDATE ticket_checklists SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
 END;
 
--- Trigger to update updated_at on comments
+-- Trigger to update updated_at on comments.
+-- Skriver ISO-8601 (matchar app-kodens new Date().toISOString()) så datumfilter
+-- på updated_at träffar exakta gränser. Tidigare CURRENT_TIMESTAMP gav SQLite-
+-- format ('YYYY-MM-DD HH:MM:SS') som skiljde sig från app-värdet.
 CREATE TRIGGER IF NOT EXISTS update_comment_updated_at
 AFTER UPDATE ON ticket_comments
 FOR EACH ROW
 BEGIN
-  UPDATE ticket_comments SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
+  UPDATE ticket_comments SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
 END;

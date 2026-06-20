@@ -1163,4 +1163,24 @@ export const migrations: Migration[] = [
       db.prepare('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON refresh_tokens(expires_at)').run();
     },
   },
+  {
+    id: '060',
+    name: 'fix_checklist_and_comment_updated_at_trigger_iso',
+    up: (db) => {
+      // Speglar migration 059: triggrarna skrev CURRENT_TIMESTAMP (SQLite-format)
+      // och åsidosatte app-kodens ISO-värde → datumfilter på updated_at missade
+      // exakta gränser. Skriv ISO.
+      db.exec('DROP TRIGGER IF EXISTS update_checklist_updated_at');
+      db.exec(`CREATE TRIGGER update_checklist_updated_at
+        AFTER UPDATE ON ticket_checklists FOR EACH ROW BEGIN
+          UPDATE ticket_checklists SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
+        END`);
+
+      db.exec('DROP TRIGGER IF EXISTS update_comment_updated_at');
+      db.exec(`CREATE TRIGGER update_comment_updated_at
+        AFTER UPDATE ON ticket_comments FOR EACH ROW BEGIN
+          UPDATE ticket_comments SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
+        END`);
+    },
+  },
 ];
