@@ -277,11 +277,22 @@ export const useTickets = (options?: UseTicketsOptions) => {
       // Seed the detail cache with the authoritative row from the PUT response,
       // preserving field_values (the PUT response omits them). This reconciles
       // the optimistic state WITHOUT another network round-trip.
-      queryClient.setQueryData<TicketRow>(ticketKeys.detail(id), (old) => ({
-        ...(old as TicketRow),
-        ...updated,
-        field_values: (old as any)?.field_values ?? (updated as any).field_values ?? [],
-      }));
+      //
+      // OBS: seeda BARA om detail-cachen redan finns (`old`). Annars (t.ex. en
+      // status-ändring gjord från listan på ett ärende vars detaljvy aldrig
+      // öppnats) skulle vi skapa en post utan field_values och markera den färsk
+      // → templated ärende visar rå markdown i stället för fältblocket tills
+      // staleTime går ut. Saknas cachen: rör den inte — detaljmonteringen gör en
+      // färsk GET (som inkluderar field_values).
+      queryClient.setQueryData<TicketRow>(ticketKeys.detail(id), (old) =>
+        old
+          ? {
+              ...old,
+              ...updated,
+              field_values: (old as any).field_values ?? (updated as any).field_values ?? [],
+            }
+          : old,
+      );
       // Custom fields changed → field_values are stale; refetch the detail once.
       if (hadCustomFields) {
         queryClient.invalidateQueries({ queryKey: ticketKeys.detail(id) });

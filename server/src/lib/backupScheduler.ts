@@ -22,7 +22,7 @@ export interface BackupConfig {
 }
 
 export interface RunResult {
-  status: 'success' | 'failed';
+  status: 'success' | 'failed' | 'skipped';
   path?: string;
   sizeBytes?: number;
   error?: string;
@@ -95,6 +95,14 @@ export async function runBackup(
   database: DatabaseType = defaultDb,
   opts: { backupDir?: string; uploadDir?: string } = {},
 ): Promise<RunResult> {
+  // In-flight-guard: hoppa över en överlappande körning (cron-vs-manuell eller
+  // cron-vs-cron). Annars öppnar två runBackup samma backup-<datum>.zip parallellt
+  // → interfolierade writes → korrupt zip. Synkron check+set före första await
+  // gör guarden race-fri i Nodes enkeltrådade modell.
+  if (running) {
+    logger.warn('Backup already in progress — skipping overlapping run');
+    return { status: 'skipped' };
+  }
   running = true;
   const backupDir = opts.backupDir ?? defaultBackupDir();
   const uploadDir = opts.uploadDir ?? defaultUploadDir();

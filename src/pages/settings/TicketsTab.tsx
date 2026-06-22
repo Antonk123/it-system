@@ -412,11 +412,15 @@ const TicketsTab = () => {
     }
     setIsAddingCategory(true);
     try {
-      await addCategory(newCategoryName.trim());
-      setNewCategoryName('');
-      toast.success('Kategori tillagd');
-    } catch {
-      toast.error('Kunde inte skapa kategori');
+      // addCategory sväljer fel internt och returnerar null (mutationens onError
+      // visar då redan ett felmeddelande). Visa därför success BARA om vi fick
+      // tillbaka en kategori — annars blev det en falsk "tillagd"-bekräftelse +
+      // dubbel-toast tillsammans med onError.
+      const created = await addCategory(newCategoryName.trim());
+      if (created) {
+        setNewCategoryName('');
+        toast.success('Kategori tillagd');
+      }
     } finally {
       setIsAddingCategory(false);
     }

@@ -1052,8 +1052,16 @@ router.get('/:id/ai-summary', aiRateLimiter, authenticate, async (req: AuthReque
 // Get ticket history
 router.get('/:id/history', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    // Behörighetskontroll: samma äganderegel som PUT /:id
-    if (!canAccessTicket(req.user!, req.params.id)) {
+    // Behörighetskontroll: spegla PUT /:id EXAKT. Otilldelade ärenden är öppna
+    // för self-service-pickup (vilken agent som helst kan visa+redigera dem), så
+    // historiken måste vara lika öppen — annars blir aktivitetspanelen tom på
+    // köärenden som en icke-ägande agent öppnar. Tilldelade ärenden kräver
+    // admin/requester/assignee/creator.
+    const t = db.prepare('SELECT assigned_to FROM tickets WHERE id = ?').get(req.params.id) as { assigned_to: string | null } | undefined;
+    if (!t) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    if (t.assigned_to !== null && !canAccessTicket(req.user!, req.params.id)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 

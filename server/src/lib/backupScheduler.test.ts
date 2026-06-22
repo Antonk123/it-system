@@ -99,6 +99,27 @@ describe('runBackup', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  it('skips an overlapping run while one is already in flight (in-flight guard)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sched-overlap-'));
+    const backupDir = join(dir, 'backups');
+    const db = makeSourceDb(join(dir, 'db.sqlite'), 7);
+
+    expect(isBackupRunning()).toBe(false);
+    // Starta en körning utan att awaita — `running` sätts synkront.
+    const first = runBackup(db, { backupDir, uploadDir: join(dir, 'nouploads') });
+    // En andra körning som fyrar medan den första är i flykt ska hoppas över
+    // (annars skriver båda till samma backup-<datum>.zip → korrupt fil).
+    const second = await runBackup(db, { backupDir, uploadDir: join(dir, 'nouploads') });
+    expect(second.status).toBe('skipped');
+
+    const firstResult = await first;
+    expect(firstResult.status).toBe('success');
+    expect(isBackupRunning()).toBe(false);
+
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it('prunes to retention_days newest snapshots, deleting older ones', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'sched-ret-'));
     const backupDir = join(dir, 'backups');

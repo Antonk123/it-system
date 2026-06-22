@@ -116,7 +116,6 @@ router.get('/export', authenticate, async (_req: AuthRequest, res: Response) => 
       FROM contacts c
       LEFT JOIN companies co ON c.company_id = co.id
       ORDER BY c.created_at DESC
-      LIMIT 10000
     `).all() as ContactRow[];
 
     if (contacts.length === 0) {
@@ -362,8 +361,10 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
     if (company_id !== undefined) updates.company_id = company_id || null;
     if (department !== undefined) updates.department = department || null;
 
-    // Whitelist of allowed field names to prevent SQL injection
-    const allowedFields = ['name', 'email', 'phone', 'company_id', 'department', 'updated_at'];
+    // Whitelist of allowed field names to prevent SQL injection.
+    // OBS: contacts-tabellen har INGEN updated_at-kolumn (till skillnad från
+    // companies) — sätt den aldrig, annars kastar UPDATE 'no such column'.
+    const allowedFields = ['name', 'email', 'phone', 'company_id', 'department'];
 
     // Filter updates to only include whitelisted fields
     const safeUpdates: Record<string, unknown> = {};
@@ -379,9 +380,6 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
     if (Object.keys(safeUpdates).length === 0) {
       return res.status(400).json({ error: 'Inga giltiga fält att uppdatera' });
     }
-
-    // Sätt updated_at på samma sätt som companies.ts gör
-    safeUpdates.updated_at = new Date().toISOString();
 
     const setClauses = Object.keys(safeUpdates).map(key => `${key} = ?`).join(', ');
     const values = Object.values(safeUpdates);

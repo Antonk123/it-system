@@ -64,7 +64,7 @@ export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
   });
 
   // Kontakter hämtas separat och filtreras lokalt mot det debounca söktermen.
-  const { data: contacts = [] } = useQuery<ContactRow[]>({
+  const { data: contacts = [], isFetching: isContactsFetching } = useQuery<ContactRow[]>({
     ...contactsQuery,
     // Hämta kontakter så fort söktermen är aktiv så att listan är redo.
     enabled: searchEnabled,
@@ -95,9 +95,11 @@ export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
     : [];
 
   // isSearching är sant medan debounce väntar (input skiljer sig från term)
-  // eller medan react-query hämtar data.
+  // eller medan react-query hämtar data. Inkludera ÄVEN kontaktfrågans hämtning —
+  // annars (kall kontakt-cache) hinner tickets/KB returnera först och en sökning
+  // som bara matchar kontakter visar "Inga resultat" tills kontakterna poppar in.
   const isDebouncing = search.trim() !== term && search.trim().length > 0;
-  const isSearching = isDebouncing || (searchEnabled && isSearchFetching);
+  const isSearching = isDebouncing || (searchEnabled && (isSearchFetching || isContactsFetching));
 
   return { results, isSearching, search, setSearch };
 }

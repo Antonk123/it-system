@@ -110,6 +110,13 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
   // Normalisera extractDir med avslutande separator för zip-slip-kontroll
   const extractDirNorm = resolve(extractDir) + '/';
 
+  // Spåra om vi hunnit stänga DB-handtaget. Om något fel inträffar EFTER
+  // closeDatabase() är det delade `db`-handtaget permanent stängt → varje
+  // efterföljande request kastar "database connection is not open". Då måste
+  // vi tvinga omstart (Docker restart: unless-stopped) i stället för att lämna
+  // servern brickad — rollbacken nedan har redan återställt pre-restore-DB:n.
+  let dbClosed = false;
+
   try {
     mkdirSync(extractDir, { recursive: true });
 
@@ -194,6 +201,7 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
       // Stäng databashandtaget innan vi skriver över filen — process.exit(0)
       // nedan startar om processen med ett nytt handtag mot den återställda DB:n.
       closeDatabase();
+      dbClosed = true;
 
       copyFileSync(restoredDb, DB_PATH);
       if (existsSync(walFile)) unlinkSync(walFile);
@@ -237,6 +245,15 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
     rmSync(tmpDir, { recursive: true, force: true });
     try { unlinkSync(uploadedZip); } catch { /* ignore */ }
     res.status(500).json({ error: 'Återställning misslyckades. Kontrollera att ZIP-filen är en giltig backup.' });
+
+    // Om felet inträffade efter att DB-handtaget stängts är processen oanvändbar
+    // (inläsningar mot stängt handtag). Rollbacken har återställt pre-restore-DB:n,
+    // så starta om så Docker reser servern med ett rent handtag i stället för att
+    // lämna den brickad tills någon SSH:ar in.
+    if (dbClosed) {
+      logger.error('Restore failed efter closeDatabase() — tvingar omstart för att återställa DB-handtaget.');
+      setTimeout(() => process.exit(1), 1500);
+    }
   }
 });
 

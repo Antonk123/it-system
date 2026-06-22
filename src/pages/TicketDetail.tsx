@@ -954,7 +954,10 @@ const TicketDetail = () => {
 
             {/* Activity Log */}
             <div className="pt-4 border-t">
-              <TicketActivity history={history} isLoading={historyLoading} />
+              {/* Visa laddningstillstånd även under defer-fönstret (innan
+                  requestIdleCallback flippar deferSecondary) — annars visar
+                  panelen felaktigt "Ingen aktivitet registrerad" en stund. */}
+              <TicketActivity history={history} isLoading={historyLoading || !deferSecondary} />
             </div>
 
             {/* Linked KB Articles */}
