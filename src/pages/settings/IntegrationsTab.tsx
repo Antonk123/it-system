@@ -54,7 +54,17 @@ const IntegrationsTab = () => {
   const { webhooks, createWebhook, updateWebhook, deleteWebhook, isCreating: isCreatingWebhook } = useWebhooks();
 
   const [newApiKeyName, setNewApiKeyName] = useState('');
+  const [newApiKeyWrite, setNewApiKeyWrite] = useState(false);
   const [createdApiKey, setCreatedApiKey] = useState<string | null>(null);
+
+  // Tolka en nyckels permissions-sträng ('["read"]' / '["read","write"]').
+  const keyCanWrite = (permissions: string): boolean => {
+    try {
+      return (JSON.parse(permissions || '[]') as string[]).includes('write');
+    } catch {
+      return false;
+    }
+  };
   const [deleteApiKeyId, setDeleteApiKeyId] = useState<string | null>(null);
 
   const [newWebhookUrl, setNewWebhookUrl] = useState('');
@@ -105,39 +115,51 @@ const IntegrationsTab = () => {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent className="space-y-4">
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Nyckelnamn (t.ex. CI/CD)"
-                    value={newApiKeyName}
-                    onChange={(e) => setNewApiKeyName(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newApiKeyName.trim()) {
-                        createApiKey({ name: newApiKeyName.trim() }).then((result) => {
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Nyckelnamn (t.ex. CI/CD)"
+                      value={newApiKeyName}
+                      onChange={(e) => setNewApiKeyName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newApiKeyName.trim()) {
+                          createApiKey({ name: newApiKeyName.trim(), permissions: newApiKeyWrite ? ['read', 'write'] : ['read'] }).then((result) => {
+                            if (result.key) {
+                              setCreatedApiKey(result.key);
+                            }
+                            setNewApiKeyName('');
+                            setNewApiKeyWrite(false);
+                            toast.success('API-nyckel skapad');
+                          }).catch(() => toast.error('Kunde inte skapa nyckel'));
+                        }
+                      }}
+                      className="flex-1"
+                    />
+                    <Button
+                      onClick={() => {
+                        if (!newApiKeyName.trim()) { toast.error('Ange ett namn'); return; }
+                        createApiKey({ name: newApiKeyName.trim(), permissions: newApiKeyWrite ? ['read', 'write'] : ['read'] }).then((result) => {
                           if (result.key) {
                             setCreatedApiKey(result.key);
                           }
                           setNewApiKeyName('');
+                          setNewApiKeyWrite(false);
                           toast.success('API-nyckel skapad');
                         }).catch(() => toast.error('Kunde inte skapa nyckel'));
-                      }
-                    }}
-                    className="flex-1"
-                  />
-                  <Button
-                    onClick={() => {
-                      if (!newApiKeyName.trim()) { toast.error('Ange ett namn'); return; }
-                      createApiKey({ name: newApiKeyName.trim() }).then((result) => {
-                        if (result.key) {
-                          setCreatedApiKey(result.key);
-                        }
-                        setNewApiKeyName('');
-                        toast.success('API-nyckel skapad');
-                      }).catch(() => toast.error('Kunde inte skapa nyckel'));
-                    }}
-                    disabled={isCreatingApiKey}
-                  >
-                    {isCreatingApiKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                  </Button>
+                      }}
+                      disabled={isCreatingApiKey}
+                    >
+                      {isCreatingApiKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                    </Button>
+                  </div>
+                  <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                    <Checkbox
+                      checked={newApiKeyWrite}
+                      onCheckedChange={(c) => setNewApiKeyWrite(c === true)}
+                      aria-label="Ge nyckeln skrivrättigheter"
+                    />
+                    Skrivrättigheter — kan skapa och ändra (annars endast läsning)
+                  </label>
                 </div>
 
                 {createdApiKey && (
@@ -168,7 +190,12 @@ const IntegrationsTab = () => {
                   {apiKeys.map((key) => (
                     <div key={key.id} className="flex items-center gap-3 p-3">
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">{key.name}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-sm truncate">{key.name}</p>
+                          <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${keyCanWrite(key.permissions) ? 'bg-amber-500/15 text-amber-500' : 'bg-muted text-muted-foreground'}`}>
+                            {keyCanWrite(key.permissions) ? 'Läs + Skriv' : 'Läs'}
+                          </span>
+                        </div>
                         <p className="text-xs text-muted-foreground font-mono">itk_live_{key.key_prefix}...</p>
                         {key.last_used_at && (
                           <p className="text-xs text-muted-foreground">
