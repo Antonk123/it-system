@@ -11,6 +11,12 @@ FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
+# tzdata: krävs för att TZ-env (t.ex. TZ=Europe/Stockholm) ska kunna lösa
+# namngivna tidszoner. Utan den faller Node tyst tillbaka till UTC på alpine,
+# så schemalagda jobb (backup, auto-close, push-aging, recurring) kör på fel
+# väggklocka — t.ex. "04:00" i UI:t blir 06:00 svensk tid.
+RUN apk add --no-cache tzdata
+
 COPY server/package*.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 

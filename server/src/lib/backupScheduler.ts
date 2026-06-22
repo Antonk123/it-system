@@ -14,7 +14,7 @@ const __dirname = dirname(__filename);
 
 export interface BackupConfig {
   enabled: boolean;
-  time: string; // 'HH:MM' 24h, serverns lokaltid
+  time: string; // 'HH:MM' 24h i containerns lokaltid (styrs av TZ-env; prod = Europe/Stockholm, kräver tzdata i imagen — annars UTC)
   retentionDays: number;
   lastRunAt: string | null;
   lastStatus: 'success' | 'failed' | null;
@@ -190,7 +190,7 @@ export function startBackupScheduler(database: DatabaseType = defaultDb): void {
   task = cron.schedule(timeToCron(cfg.time), () => {
     void runBackup(database);
   });
-  logger.info(`Automatic backup scheduled (daily at ${cfg.time}, retain ${cfg.retentionDays})`);
+  logger.info(`Automatic backup scheduled (daily at ${cfg.time} ${process.env.TZ ?? 'UTC'}, retain ${cfg.retentionDays})`);
 }
 
 // Anropas efter config-PUT så tid/paus slår igenom utan omstart.

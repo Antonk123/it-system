@@ -29,7 +29,7 @@ services:
     # den delade checkouten (itticket-main), så `git pull --ff-only` slutar blockeras.
     # Kräver att lockfilen är i synk med package.json (den är det) — annars failar boot
     # med flit, vilket är önskat. Gäller även frontend nedan.
-    command: sh -c "npm ci && npm run dev"
+    command: sh -c "apk add --no-cache tzdata && npm ci && npm run dev"   # tzdata: så TZ-env löser namngiven zon (alpine saknar den) → dev speglar prods schematider
     ports:
       - "3003:3001"
     volumes:
@@ -39,6 +39,8 @@ services:
       - /app/server/node_modules
     environment:
       - NODE_ENV=development
+      # Spegla prods tidszon så schemalagda jobb testas på rätt lokal väggklocka.
+      - TZ=${TZ:-Europe/Stockholm}
       - JWT_SECRET=${JWT_SECRET}
       # CSRF_SECRET KRÄVS — backend gör process.exit(1) utan den (server/src/index.ts,
       # ovillkorligt, ingen dev-fallback). Måste finnas i Portainer-stackens env.

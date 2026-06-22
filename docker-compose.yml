@@ -12,6 +12,10 @@ services:
       - it-ticketing-backups:/app/data/backups
     environment:
       - NODE_ENV=production
+      # Tidszon för alla schemalagda jobb (backup-tid, auto-close, push-aging,
+      # recurring) och lokaltidsbaserad logik. Kräver tzdata i imagen (se
+      # Dockerfile.server). Sätt till din zon — utan den körs allt i UTC.
+      - TZ=${TZ:-Europe/Stockholm}
       # Frontend serveras över HTTP på LAN (8082:80). Webbläsare lagrar INTE
       # Secure-cookies på icke-HTTPS-origins → CSRF-/refresh-cookies tappas och
       # ärenden går inte att spara (särskilt i installerad PWA på telefon).
