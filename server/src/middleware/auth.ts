@@ -31,13 +31,25 @@ type ApiKeyAuthResult =
   | { kind: 'authenticated'; user: AuthUser };
 
 /**
+ * True if the request carries an API-key bearer token (Bearer itk_live_…).
+ * Single source of truth for the prefix — used both here and by the CSRF layer
+ * (app.ts) to exempt API-key requests from CSRF (they are authenticated by the
+ * key itself, not by a session cookie, so CSRF is irrelevant for them).
+ */
+export function isApiKeyRequest(req: Pick<Request, 'headers'>): boolean {
+  return req.headers.authorization?.startsWith('Bearer itk_live_') ?? false;
+}
+
+/**
  * Try to authenticate via API key (Bearer itk_live_xxx).
  * Returns a tagged result so callers can distinguish "not an API-key request"
  * from "valid key but lacks permission for this verb".
  */
 function tryApiKeyAuth(req: Request): ApiKeyAuthResult {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer itk_live_')) return { kind: 'no_key' };
+  // `|| !authHeader` är redundant i praktiken (isApiKeyRequest kräver headern) men
+  // ger TS narrowing till string nedan utan non-null-assertion.
+  if (!isApiKeyRequest(req) || !authHeader) return { kind: 'no_key' };
 
   const rawKey = authHeader.substring('Bearer '.length);
   const prefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);

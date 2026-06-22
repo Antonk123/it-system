@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import passport from './config/passport.js';
 import { logger } from './lib/logger.js';
 import { cookieSecure } from './config/cookies.js';
+import { isApiKeyRequest } from './middleware/auth.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -169,6 +170,14 @@ export function createApp() {
   const csrfExemptPrefixes = ['/api/auth/login', '/api/auth/refresh', '/api/public/'];
 
   const conditionalCsrf = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // API-nyckel-requests (Authorization: Bearer itk_live_…) autentiseras
+    // kryptografiskt av nyckeln, inte av en session-cookie. CSRF (double-submit-
+    // cookie) skyddar bara mot cookie-ridning — en angripare kan inte få offrets
+    // webbläsare att sätta en custom Authorization-header med offrets nyckel, så
+    // CSRF är irrelevant för bearer-token-auth. Utan detta undantag blockeras ALLA
+    // skrivanrop med API-nyckel av CSRF (EBADCSRFTOKEN) → `write`-scopen blir död.
+    // (En ogiltig itk_live_-nyckel avvisas ändå av authenticate med 401.)
+    if (isApiKeyRequest(req)) return next();
     if (csrfExemptPrefixes.some((p) => req.path === p || req.path.startsWith(p))) return next();
     doubleCsrfProtection(req, res, next);
   };

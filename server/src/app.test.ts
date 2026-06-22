@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { existsSync, rmSync } from 'fs';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'crypto';
 
 /**
  * HTTP integration tests against the real Express app (createApp()).
@@ -175,6 +175,71 @@ describe('CSRF enforcement', () => {
 
     expect(res.status).toBe(403);
     // csrf-csrf surfaces EBADCSRFTOKEN via the error handler's `code` field.
+    expect(res.body.code === 'EBADCSRFTOKEN' || /csrf/i.test(res.body.error ?? '')).toBe(true);
+  });
+});
+
+describe('CSRF exemption for API-key requests (Bearer itk_live_…)', () => {
+  // API keys authenticate cryptographically via the Authorization header, not a
+  // session cookie, so CSRF is irrelevant for them. Without the exemption EVERY
+  // write with an API key failed on EBADCSRFTOKEN → the `write` scope was dead.
+  const RAW_WRITE_KEY = 'itk_live_wkeyAAAA0123456789abcdef01234567';
+  const RAW_READ_KEY = 'itk_live_rkeyBBBB0123456789abcdef01234567';
+
+  beforeAll(() => {
+    const mkKey = (raw: string, permissions: string[]) => {
+      const prefix = raw.substring('itk_live_'.length, 'itk_live_'.length + 8);
+      const hash = createHash('sha256').update(raw).digest('hex');
+      db.prepare(
+        `INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(randomUUID(), `key-${prefix}`, prefix, hash, adminId, JSON.stringify(permissions), null);
+    };
+    mkKey(RAW_WRITE_KEY, ['read', 'write']);
+    mkKey(RAW_READ_KEY, ['read']);
+  });
+
+  it('lets a WRITE-scoped API key POST without any CSRF token (201) — CSRF is bypassed, write allowed', async () => {
+    const res = await request(app)
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${RAW_WRITE_KEY}`)
+      // create kräver description ELLER customFields (tickets.ts:722).
+      .send({ title: 'Created via API key', description: 'via api key', priority: 'low' });
+
+    expect(res.status).toBe(201);
+    expect(typeof res.body.id).toBe('string');
+    expect(res.body.title).toBe('Created via API key');
+  });
+
+  it('blocks a READ-only API key write on SCOPE, not CSRF (403, scope message)', async () => {
+    const res = await request(app)
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${RAW_READ_KEY}`)
+      .send({ title: 'should be blocked by scope', status: 'open', priority: 'low' });
+
+    expect(res.status).toBe(403);
+    // The rejection must be the scope guard, NOT the CSRF double-submit check.
+    expect(res.body.code).not.toBe('EBADCSRFTOKEN');
+    expect(res.body.error).toMatch(/skrivrättigheter/i);
+  });
+
+  it('still allows a READ-only API key to GET (200)', async () => {
+    const res = await request(app)
+      .get('/api/tickets?limit=1')
+      .set('Authorization', `Bearer ${RAW_READ_KEY}`);
+    expect(res.status).toBe(200);
+  });
+
+  it('does NOT exempt a non-itk_live_ Bearer token (JWT) — CSRF still required (403)', async () => {
+    // CSRF runs before auth, so a non-API-key Bearer token (e.g. a JWT) must still
+    // hit the double-submit check. Proves the exemption is specific to itk_live_
+    // and didn't accidentally disable CSRF for all Bearer requests. No login needed
+    // (CSRF rejects before the token is ever validated) — keeps under the login cap.
+    const res = await request(app)
+      .post('/api/tickets')
+      .set('Authorization', 'Bearer eyJhbGciOiJIUzI1NiJ9.not-an-api-key.sig')
+      .send({ title: 'jwt without csrf', status: 'open', priority: 'low' });
+
+    expect(res.status).toBe(403);
     expect(res.body.code === 'EBADCSRFTOKEN' || /csrf/i.test(res.body.error ?? '')).toBe(true);
   });
 });
