@@ -16,14 +16,25 @@ const JWT_SECRET: string = (() => {
     logger.error('Generate one with: openssl rand -base64 32');
     process.exit(1);
   }
-  // A short secret is brute-forceable — reject anything weaker than 32 chars
-  // rather than booting with a token-forging risk.
+  // A short secret is brute-forceable (HS256 token forging). Fail CLOSED by
+  // default. The relaxation requires TWO explicit conditions — opt-in flag AND a
+  // whitelisted non-prod NODE_ENV ('development'|'test', never "!= production") —
+  // so neither a misconfigured prod with NODE_ENV unset, nor ALLOW_WEAK_SECRETS=1
+  // leaking into prod, can fail open. (Missing secret above always exits too.)
   if (secret.length < MIN_SECRET_LENGTH) {
-    logger.error(
-      `FATAL: JWT_SECRET is too short (${secret.length} chars) — must be at least ${MIN_SECRET_LENGTH}.`
-    );
-    logger.error('Generate a strong one with: openssl rand -base64 32');
-    process.exit(1);
+    const allowWeak =
+      process.env.ALLOW_WEAK_SECRETS === '1' &&
+      (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test');
+    if (allowWeak) {
+      logger.warn(
+        `JWT_SECRET is short (${secret.length} chars) — allowed only because ALLOW_WEAK_SECRETS=1 in NODE_ENV=${process.env.NODE_ENV}. Recommend at least ${MIN_SECRET_LENGTH}.`
+      );
+    } else {
+      logger.error(
+        `FATAL: JWT_SECRET is too short (${secret.length} chars) — must be at least ${MIN_SECRET_LENGTH}. (Overridable only with NODE_ENV=development|test + ALLOW_WEAK_SECRETS=1.) Generate with: openssl rand -base64 32`
+      );
+      process.exit(1);
+    }
   }
   return secret;
 })();

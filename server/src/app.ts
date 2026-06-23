@@ -141,12 +141,25 @@ export function createApp() {
     logger.error('FATAL: CSRF_SECRET must be set (no dev fallback — generate with `openssl rand -hex 64`)');
     process.exit(1);
   }
-  // A short CSRF secret weakens the double-submit signing — require >= 32 chars.
+  // A short CSRF secret weakens the double-submit signing. Fail CLOSED by
+  // default. The relaxation requires TWO explicit conditions — opt-in flag AND a
+  // whitelisted non-prod NODE_ENV — so neither a misconfigured prod (NODE_ENV
+  // unset) nor ALLOW_WEAK_SECRETS=1 leaking into prod can fail open. (Missing
+  // secret above always exits too.)
   if (process.env.CSRF_SECRET.length < 32) {
-    logger.error(
-      `FATAL: CSRF_SECRET is too short (${process.env.CSRF_SECRET.length} chars) — must be at least 32. Generate with \`openssl rand -hex 64\`.`
-    );
-    process.exit(1);
+    const allowWeak =
+      process.env.ALLOW_WEAK_SECRETS === '1' &&
+      (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test');
+    if (allowWeak) {
+      logger.warn(
+        `CSRF_SECRET is short (${process.env.CSRF_SECRET.length} chars) — allowed only because ALLOW_WEAK_SECRETS=1 in NODE_ENV=${process.env.NODE_ENV}. Recommend at least 32.`
+      );
+    } else {
+      logger.error(
+        `FATAL: CSRF_SECRET is too short (${process.env.CSRF_SECRET.length} chars) — must be at least 32. (Overridable only with NODE_ENV=development|test + ALLOW_WEAK_SECRETS=1.) Generate with \`openssl rand -hex 64\`.`
+      );
+      process.exit(1);
+    }
   }
 
   const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({

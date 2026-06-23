@@ -13,7 +13,7 @@ import { randomUUID } from 'crypto';
  *
  * Harness mirrors checklists.test.ts: vi.hoisted() sets a UNIQUE DB_PATH
  * (suffix -users) BEFORE any import that pulls in db/connection.ts, plus
- * NODE_ENV=test and CSRF_SECRET / JWT_SECRET (≥32 chars, app exits otherwise).
+ * NODE_ENV=test and CSRF_SECRET / JWT_SECRET (≥32 chars; short exits unless ALLOW_WEAK_SECRETS=1).
  *
  * Login is rate-limited (5 attempts / 15 min / IP). We log in each user
  * exactly once (admin + non-admin) and reuse the persistent csrf-agent.
