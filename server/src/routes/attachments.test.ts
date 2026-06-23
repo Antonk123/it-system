@@ -76,11 +76,20 @@ let userCsrfToken: string;
 let otherAgent: ReturnType<typeof request.agent>;
 let otherToken: string;
 
+// Creator: created_by on a ticket but NOT requester/assignee. Proves the
+// consolidated canAccessTicket grants the ticket creator attachment access
+// (the file-local helper used to reject this case).
+let creatorAgent: ReturnType<typeof request.agent>;
+let creatorToken: string;
+
 /** Ticket owned by `assignedUserId` (via assigned_to). */
 let ticketId: string;
 let adminUserId: string;
 let assignedUserId: string;
 let otherUserId: string;
+let creatorUserId: string;
+/** Ticket whose only relationship to `creatorUserId` is created_by (unassigned). */
+let creatorTicketId: string;
 
 // ─── Setup / Teardown ─────────────────────────────────────────────────────────
 
@@ -97,10 +106,12 @@ beforeAll(async () => {
   adminUserId = randomUUID();
   assignedUserId = randomUUID();
   otherUserId = randomUUID();
+  creatorUserId = randomUUID();
 
   const adminHash = await bcrypt.hash('Admin-P@ss1234!', 10);
   const userHash = await bcrypt.hash('User-P@ss1234!', 10);
   const otherHash = await bcrypt.hash('Other-P@ss1234!', 10);
+  const creatorHash = await bcrypt.hash('Creator-P@ss1234!', 10);
 
   db.prepare(
     `INSERT INTO users (id, email, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?)`
@@ -114,6 +125,10 @@ beforeAll(async () => {
     `INSERT INTO users (id, email, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?)`
   ).run(otherUserId, 'other@attachtest.local', otherHash, 'user', 'Other User');
 
+  db.prepare(
+    `INSERT INTO users (id, email, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?)`
+  ).run(creatorUserId, 'creator@attachtest.local', creatorHash, 'user', 'Creator User');
+
   // Seed a ticket assigned to `assignedUserId`.
   // SQLite doesn't enforce FK by default so we can use a user UUID for
   // requester_id even though it nominally references contacts(id).
@@ -121,6 +136,13 @@ beforeAll(async () => {
   db.prepare(
     `INSERT INTO tickets (id, title, description, status, assigned_to) VALUES (?, ?, ?, ?, ?)`
   ).run(ticketId, 'Attachment Test Ticket', 'Used by attachments.test.ts', 'open', assignedUserId);
+
+  // Ticket whose ONLY relationship to creatorUser is created_by (no assignee,
+  // no requester) — the case the file-local helper rejected before consolidation.
+  creatorTicketId = randomUUID();
+  db.prepare(
+    `INSERT INTO tickets (id, title, description, status, created_by) VALUES (?, ?, ?, ?, ?)`
+  ).run(creatorTicketId, 'Creator Ticket', 'Created by creatorUser', 'open', creatorUserId);
 
   app = createApp();
 
@@ -159,6 +181,14 @@ beforeAll(async () => {
     .send({ email: 'other@attachtest.local', password: 'Other-P@ss1234!' });
   expect(otherLogin.status).toBe(200);
   otherToken = otherLogin.body.accessToken;
+
+  // ── Creator session (4th login; login cap is 5/15min, so we stay under) ──
+  creatorAgent = request.agent(app);
+  const creatorLogin = await creatorAgent
+    .post('/api/auth/login')
+    .send({ email: 'creator@attachtest.local', password: 'Creator-P@ss1234!' });
+  expect(creatorLogin.status).toBe(200);
+  creatorToken = creatorLogin.body.accessToken;
 });
 
 afterAll(() => {
@@ -386,7 +416,16 @@ describe('GET /api/attachments/ticket/:ticketId — list attachments (authorizat
     expect(Array.isArray(res.body)).toBe(true);
   });
 
-  it('returns 403 for a user who is not admin/requester/assignee', async () => {
+  it('returns 200 for the ticket creator (created_by) — consolidated canAccessTicket', async () => {
+    const res = await creatorAgent
+      .get(`/api/attachments/ticket/${creatorTicketId}`)
+      .set('Authorization', `Bearer ${creatorToken}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  it('returns 403 for a user who is not admin/requester/assignee/creator', async () => {
     const res = await otherAgent
       .get(`/api/attachments/ticket/${ticketId}`)
       .set('Authorization', `Bearer ${otherToken}`);
