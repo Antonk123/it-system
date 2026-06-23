@@ -22,6 +22,9 @@ if (!existsSync(UPLOAD_DIR)) {
 /** Max accepted file size (bytes) — same limit enforced by multer */
 export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 
+/** Max number of attachments allowed per ticket */
+const MAX_ATTACHMENTS_PER_TICKET = 50;
+
 // Whitelist of allowed MIME types
 export const ALLOWED_MIME_TYPES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
@@ -204,6 +207,16 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
       return res.status(403).json({ error: 'Forbidden: you do not have access to this ticket' });
     }
 
+    // Enforce per-ticket attachment cap to prevent unbounded growth.
+    const { c: attachmentCount } = db.prepare(
+      'SELECT COUNT(*) AS c FROM ticket_attachments WHERE ticket_id = ?'
+    ).get(req.params.ticketId) as { c: number };
+    if (attachmentCount >= MAX_ATTACHMENTS_PER_TICKET) {
+      // Remove the file multer already wrote to disk before rejecting.
+      try { unlinkSync(uploadedPath); } catch { /* ignore cleanup error */ }
+      return res.status(400).json({ error: 'Maximum attachments reached' });
+    }
+
     const id = uuidv4();
     db.prepare(`
       INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type)
@@ -250,16 +263,26 @@ router.get('/file/:id', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'File not found' });
     }
 
+    // Truncera filnamnet till 200 tecken innan headern byggs — håller
+    // Content-Disposition inom rimliga header-storleksgränser även för
+    // patologiskt långa originalfilnamn.
+    const truncatedFilename = attachment.file_name.slice(0, 200);
+
     // Sanitera filnamnet strikt: tillåt endast säkra ASCII-tecken i fallback-formen,
     // och skicka även RFC 5987-kodat namn (filename*) för korrekt hantering av
     // icke-ASCII, semikolon och andra specialtecken i moderna klienter.
-    const safeAsciiFilename = attachment.file_name
+    const safeAsciiFilename = truncatedFilename
       .replace(/[^\x20-\x7E]/g, '_')  // ersätt icke-ASCII med _
       .replace(/[";\\]/g, '_');         // ersätt semikolon, citattecken, backslash
-    const encodedFilename = encodeURIComponent(attachment.file_name);
+    const encodedFilename = encodeURIComponent(truncatedFilename);
 
     res.setHeader('Content-Type', attachment.file_type || 'application/octet-stream');
-    // Use 'attachment' instead of 'inline' to force download and prevent execution.
+    // SÄKERHETSINVARIANT: ALLA bilagor serveras med Content-Disposition: attachment
+    // (aldrig 'inline'), ovillkorligt för varje filtyp. Detta tvingar nedladdning i
+    // stället för rendering i webbläsaren. Det är ENDA anledningen till att SVG är
+    // säkert att tillåta i ALLOWED_MIME_TYPES: en SVG som aldrig renderas inline kan
+    // inte exekvera inbäddad <script>/onload-XSS i appens origin. Ändra ALDRIG detta
+    // till 'inline' utan att först ta bort SVG (och andra aktiva format) från whitelisten.
     // filename* (RFC 5987) hanterar icke-ASCII korrekt; filename= är fallback för äldre klienter.
     res.setHeader(
       'Content-Disposition',

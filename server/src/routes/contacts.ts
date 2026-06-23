@@ -48,16 +48,6 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
   }
 });
 
-// CSV Helper: Escape field for CSV
-function escapeCSVField(field: any): string {
-  if (field === null || field === undefined) return '';
-  const str = String(field);
-  if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
 // CSV Helper: Parse CSV line
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
@@ -234,6 +224,8 @@ router.post('/import/preview', authenticate, upload.single('file'), (req: AuthRe
 });
 
 // Import contacts - Confirm (must come before /:id route)
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) => {
   const { contacts } = req.body;
 
@@ -241,41 +233,101 @@ router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) =
     return res.status(400).json({ error: 'Invalid contacts data' });
   }
 
-  let created = 0;
-  let failed = 0;
-  const errors: string[] = [];
-
   try {
-    // Load existing companies for name matching
+    // Load existing companies for name matching (case-insensitive).
     const existingCompanies = db.prepare('SELECT id, name FROM companies').all() as { id: string; name: string }[];
     const companyNameMap = new Map(existingCompanies.map(c => [c.name.toLowerCase(), c.id]));
-    const insertCompanyStmt = db.prepare('INSERT INTO companies (id, name) VALUES (?, ?)');
 
-    const insertStmt = db.prepare('INSERT INTO contacts (id, name, email, phone, company_id) VALUES (?, ?, ?, ?, ?)');
+    // --- Pass 1: validate EVERY row before inserting anything (all-or-nothing).
+    // Ackumulera per-rad fel med radnummer så att klienten får en tydlig
+    // rapport istället för att dåliga rader tyst hoppas över eller delvis sparas.
+    const rowErrors: { row: number; errors: string[] }[] = [];
 
-    // Wrappa varje rad i en egen transaktion — om kontakt-insertet misslyckas
-    // rullas eventuell ny company-rad också tillbaka (förhindrar orphan-rader).
-    const insertRow = db.transaction((contact: typeof contacts[number]) => {
-      const id = uuidv4();
+    contacts.forEach((contact: { name?: string; email?: string; company?: string }, idx: number) => {
+      // Radnummer för användaren: 1-baserat (matchar CSV-radordningen i preview).
+      const rowNumber = idx + 1;
+      const errors: string[] = [];
 
-      // Match or create company
-      let companyId: string | null = null;
-      if (contact.company && contact.company.trim()) {
-        const normalizedName = contact.company.trim().toLowerCase();
-        companyId = companyNameMap.get(normalizedName) || null;
-        if (!companyId) {
-          companyId = uuidv4();
-          insertCompanyStmt.run(companyId, contact.company.trim());
-          companyNameMap.set(normalizedName, companyId);
-        }
+      const name = typeof contact.name === 'string' ? contact.name.trim() : '';
+      const email = typeof contact.email === 'string' ? contact.email.trim() : '';
+
+      // Name: required, length 1–100.
+      if (name.length < 1) {
+        errors.push('Namn saknas');
+      } else if (name.length > 100) {
+        errors.push('Namn för långt (max 100 tecken)');
       }
 
-      insertStmt.run(id, contact.name, contact.email, contact.phone || null, companyId);
+      // Email: required, must match basic email format.
+      if (email.length < 1) {
+        errors.push('Email saknas');
+      } else if (!EMAIL_REGEX.test(email)) {
+        errors.push('Ogiltig e-postadress');
+      }
+
+      // Company (if referenced) must resolve — antingen finns den redan eller
+      // så skapar vi den i pass 2. Tomt företag är giltigt (null).
+      // Ingen extra resolve-kontroll behövs eftersom pass 2 alltid kan skapa
+      // saknade företag, men vi validerar att ett angivet namn inte är blankt-only.
+      if (contact.company !== undefined && contact.company !== null && typeof contact.company !== 'string') {
+        errors.push('Ogiltigt företagsnamn');
+      }
+
+      if (errors.length > 0) {
+        rowErrors.push({ row: rowNumber, errors });
+      }
     });
+
+    if (rowErrors.length > 0) {
+      // Hard validation errors — avbryt helt, spara inga rader (all-or-nothing).
+      return res.status(400).json({
+        success: false,
+        created: 0,
+        failed: contacts.length,
+        rowErrors,
+        error: 'Importen avbröts: valideringsfel i en eller flera rader',
+      });
+    }
+
+    // --- Pass 2a: resolve/create alla refererade företag UTANFÖR per-rad-
+    // transaktionen. Eftersom companies.name saknar UNIQUE-constraint duger
+    // inte INSERT OR IGNORE för dedup — vi dedupar via companyNameMap istället.
+    // Att skapa företag separat förhindrar orphan-företag om ett kontakt-insert
+    // senare skulle misslyckas (företaget är då redan giltigt och återanvändbart).
+    const insertCompanyStmt = db.prepare('INSERT INTO companies (id, name) VALUES (?, ?)');
+    const ensureCompanies = db.transaction((rows: typeof contacts) => {
+      for (const contact of rows) {
+        if (contact.company && contact.company.trim()) {
+          const normalizedName = contact.company.trim().toLowerCase();
+          if (!companyNameMap.has(normalizedName)) {
+            const companyId = uuidv4();
+            insertCompanyStmt.run(companyId, contact.company.trim());
+            companyNameMap.set(normalizedName, companyId);
+          }
+        }
+      }
+    });
+    ensureCompanies(contacts);
+
+    // --- Pass 2b: insert kontakter. Alla rader är redan validerade och alla
+    // företag finns redan i companyNameMap — varje rad transaktioneras isolerat.
+    const insertStmt = db.prepare('INSERT INTO contacts (id, name, email, phone, company_id) VALUES (?, ?, ?, ?, ?)');
+
+    const insertContact = db.transaction((contact: typeof contacts[number]) => {
+      const id = uuidv4();
+      const companyId = (contact.company && contact.company.trim())
+        ? companyNameMap.get(contact.company.trim().toLowerCase()) || null
+        : null;
+      insertStmt.run(id, contact.name.trim(), contact.email.trim(), contact.phone?.trim() || null, companyId);
+    });
+
+    let created = 0;
+    let failed = 0;
+    const errors: string[] = [];
 
     for (const contact of contacts) {
       try {
-        insertRow(contact);
+        insertContact(contact);
         created++;
       } catch (err) {
         failed++;

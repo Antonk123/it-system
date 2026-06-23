@@ -60,9 +60,12 @@ router.post('/:ticketId', authenticate, (req: AuthRequest, res) => {
       duration_minutes === undefined ||
       typeof duration_minutes !== 'number' ||
       !Number.isInteger(duration_minutes) ||
-      duration_minutes <= 0
+      duration_minutes <= 0 ||
+      duration_minutes > 1440
     ) {
-      res.status(400).json({ error: 'duration_minutes must be a positive integer' });
+      // 1440 = 24h sanity-tak: blockerar orimliga/felinmatade värden men
+      // tillåter legitima långa registreringar upp till ett helt dygn.
+      res.status(400).json({ error: 'duration_minutes must be a positive integer between 1 and 1440 (max 24h)' });
       return;
     }
 

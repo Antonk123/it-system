@@ -108,7 +108,9 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     }
 
     const id = uuidv4();
-    const shareToken = randomBytes(12).toString('hex');
+    // 16 bytes = 128-bit entropi (32 hex-tecken). share_token-kolumnen har ingen
+    // längdbegränsning (TEXT UNIQUE), så befintliga 24-teckens-tokens förblir giltiga.
+    const shareToken = randomBytes(16).toString('hex');
 
     db.prepare(`
       INSERT INTO ticket_shares (id, ticket_id, share_token, created_by)

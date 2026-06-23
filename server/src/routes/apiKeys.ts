@@ -57,6 +57,12 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'expires_at måste ligga i framtiden' });
     }
     normalizedExpiresAt = parsed.toISOString();
+  } else {
+    // Inget utgångsdatum angivet → default till 1 år från skapande.
+    // Undviker oavsiktligt eviga nycklar; klienten kan ange ett eget datum.
+    const oneYearFromNow = new Date();
+    oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+    normalizedExpiresAt = oneYearFromNow.toISOString();
   }
 
   try {

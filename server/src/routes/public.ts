@@ -158,6 +158,18 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
       }
     }
 
+    // Validate template exists if provided. Coerce to NULL on miss instead of
+    // 400 — en publik inlämnare ska inte blockeras av ett trasigt template_id.
+    let templateId: string | null = null;
+    if (template_id) {
+      const tpl = db.prepare('SELECT id FROM ticket_templates WHERE id = ?').get(template_id);
+      if (tpl) {
+        templateId = template_id;
+      } else {
+        logger.warn('Public ticket submitted with unknown template_id — coercing to NULL', { template_id: String(template_id) });
+      }
+    }
+
     // Create ticket
     const ticketId = uuidv4();
 
@@ -175,7 +187,7 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
     db.prepare(`
       INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, template_id)
       VALUES (?, ?, ?, 'open', ?, ?, ?, ?)
-    `).run(ticketId, title, finalDescription, ticketPriority, categoryId, contact.id, template_id || null);
+    `).run(ticketId, title, finalDescription, ticketPriority, categoryId, contact.id, templateId);
 
     // FTS5 synkas automatiskt via triggers (migration 050)
 

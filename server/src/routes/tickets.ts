@@ -45,6 +45,15 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || join(__dirname, '../../data/uploads
 // Use 'tickets.' prefix for all columns to avoid ambiguity when JOINs are present.
 // assigned_to_name is a correlated subquery so non-admins can render the assignee
 // display-name without needing access to the admin-only GET /api/users endpoint.
+//
+// PERF NOTE (audit #4 — intentionally NOT converted to a LEFT JOIN): this string
+// is a shared column-list reused across 9 query sites with differing FROM clauses.
+// Several sites append dynamic `joins` from buildWhereClause() (ticketQuery.ts) and
+// rely on SELECT DISTINCT to dedupe tag-join row multiplication. A column-list
+// constant cannot itself carry a JOIN, so converting would require threading
+// `LEFT JOIN users` into every FROM clause here AND coordinating with the joins
+// emitted by buildWhereClause() in another file. That breadth/regression risk
+// outweighs the perf gain of a single per-row subquery, so it is left as-is.
 const TICKET_COLUMNS = [
   'tickets.id', 'tickets.title', 'tickets.description', 'tickets.status', 'tickets.priority',
   'tickets.category_id', 'tickets.requester_id', 'tickets.company_id', 'tickets.assigned_to',
@@ -364,7 +373,12 @@ router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
     // Build WHERE clause from filters
     const { whereClause, params, joins } = buildWhereClause(query);
 
-    // Pagination for export — default 10000, max 50000
+    // Pagination for export — default 10000, max 50000.
+    // INTENTIONALLY MINIMAL (audit #5): the result set is buffered fully in memory
+    // via generateXLSX before sending. The 50000 cap bounds memory/time; a true
+    // streaming rewrite (e.g. ExcelJS streaming workbook + chunked DB cursor) was
+    // deemed too risky to change here and is left as-is. `offset` allows callers
+    // to page through larger sets across multiple requests if ever needed.
     const MAX_EXPORT_LIMIT = 50000;
     const DEFAULT_EXPORT_LIMIT = 10000;
     const rawLimit = parseInt(String(req.query.limit || ''), 10);
@@ -1121,7 +1135,6 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
 
   try {
     const now = new Date().toISOString();
-    const isAdmin = req.user!.role === 'admin';
     const userId = req.user!.id;
 
     const historyInsert = db.prepare(
@@ -1145,6 +1158,7 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
 
     const bulkUpdate = db.transaction(() => {
       let updatedCount = 0;
+      const skipped: string[] = [];
 
       // Pre-fetch alla berörda ärenden i en enda query för att undvika N+1
       const placeholders = ids.map(() => '?').join(',');
@@ -1157,10 +1171,14 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
         const existing = existingMap.get(ticketId);
         if (!existing) continue;
 
-        // Ownership-check: icke-admin får uppdatera egna (assigned_to===userId)
-        // eller otilldelade (NULL) ärenden — self-service pickup bevaras.
-        // Blockerar enbart modifiering av ANDRAS tilldelade ärenden.
-        if (!isAdmin && existing.assigned_to !== userId && existing.assigned_to !== null) continue;
+        // Behörighetsfilter (matchar PUT /:id): otilldelade ärenden står öppna
+        // för self-service pickup; i övrigt krävs access via canAccessTicket
+        // (admin / requester / assignee / creator). Otillgängliga ärenden tas
+        // inte tyst med — de rapporteras i `skipped`.
+        if (existing.assigned_to !== null && !canAccessTicket(req.user!, ticketId)) {
+          skipped.push(ticketId);
+          continue;
+        }
 
         const safeUpdates: Record<string, unknown> = {};
 
@@ -1209,11 +1227,13 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
         updatedCount++;
       }
 
-      return updatedCount;
+      return { updatedCount, skipped };
     });
 
-    const count = bulkUpdate();
-    return res.json({ updated: count });
+    const { updatedCount, skipped } = bulkUpdate();
+    // Bakåtkompatibelt: `updated` (antal) behålls oförändrat. `skipped` läggs
+    // till med ID:n för ärenden anroparen saknar behörighet till.
+    return res.json({ updated: updatedCount, skipped });
   } catch (error) {
     logger.error('Bulk update error:', { error: String(error) });
     return res.status(500).json({ error: 'Failed to bulk update tickets' });
@@ -1271,7 +1291,15 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: 
     });
 
     const count = bulkDelete();
-    return res.json({ deleted: count });
+    // Concurrent-guard: `result.changes` per rad räknas exakt, så ärenden som
+    // redan hunnit raderas av en samtidig operation (eller aldrig fanns) ger
+    // changes=0 och räknas inte med — `deleted` är alltid det faktiska antalet
+    // borttagna rader. Ett benignt race 500:ar alltså aldrig endpointen. Om
+    // färre raderades än begärt rapporteras differensen i `alreadyGone`.
+    const alreadyGone = ids.length - count;
+    const response: { deleted: number; alreadyGone?: number } = { deleted: count };
+    if (alreadyGone > 0) response.alreadyGone = alreadyGone;
+    return res.json(response);
   } catch (error) {
     logger.error('Bulk delete error:', { error: String(error) });
     return res.status(500).json({ error: 'Failed to bulk delete tickets' });
@@ -1287,6 +1315,23 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
   }
   if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
     return res.status(400).json({ error: 'Invalid priority value' });
+  }
+
+  // Input-längdvalidering före sanitering — matchar publika formulärets caps
+  // (se public.ts). Bara fält som faktiskt skickas valideras (undefined = rör
+  // inte). Mäter rå inkommande längd så att senare HTML-sanitering inte döljer
+  // en överstor payload.
+  if (typeof title === 'string' && title.length > 200) {
+    return res.status(400).json({ error: 'Title must be 200 characters or less' });
+  }
+  if (typeof description === 'string' && description.length > 5000) {
+    return res.status(400).json({ error: 'Description must be 5000 characters or less' });
+  }
+  if (typeof notes === 'string' && notes.length > 5000) {
+    return res.status(400).json({ error: 'Notes must be 5000 characters or less' });
+  }
+  if (typeof solution === 'string' && solution.length > 5000) {
+    return res.status(400).json({ error: 'Solution must be 5000 characters or less' });
   }
 
   // Defense-in-depth: sanitera HTML server-side. Bara fält som faktiskt skickas
