@@ -1,3 +1,17 @@
+/**
+ * Database migrations.
+ *
+ * Migrations run in array order at startup via runMigrations() in
+ * connection.ts (called from initializeDatabase(), after schema.sql is exec'd).
+ * Each migration runs exactly once, keyed by its `id` in the schema_migrations
+ * table — already-applied ids are skipped, and each up() runs inside a
+ * transaction (a failure stops startup, leaving later migrations unapplied).
+ *
+ * Forward-only: there is no down()/rollback. Never edit a shipped migration's
+ * body to "fix" existing DBs — add a NEW migration that corrects state.
+ * Idempotency comes from CREATE ... IF NOT EXISTS / DROP ... IF EXISTS and the
+ * tableExists / columnExists helpers; guard column-dependent DDL accordingly.
+ */
 import type { Database as DatabaseType } from 'better-sqlite3';
 import { randomUUID } from 'crypto';
 import { stripHtml } from '../lib/htmlUtils.js';
@@ -1206,6 +1220,51 @@ export const migrations: Migration[] = [
         `INSERT OR IGNORE INTO backup_config (id, enabled, time, retention_days, updated_at)
          VALUES (1, 1, '04:00', ?, ?)`,
       ).run(retention, new Date().toISOString());
+    },
+  },
+  {
+    id: '062',
+    name: 'composite_indexes_and_fts5_delete_trigger_consistency',
+    up: (db, { tableExists, columnExists }) => {
+      // --- Sammansatta index för WHERE + ORDER BY ---
+      // Listvyer filtrerar på status och sorterar på updated_at DESC. Ett separat
+      // index på enbart status vore redundant — det sammansatta (status, updated_at)
+      // täcker status-bara filter via leftmost-prefix.
+      if (columnExists('tickets', 'status') && columnExists('tickets', 'updated_at')) {
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_tickets_status_updated ON tickets(status, updated_at DESC)').run();
+      }
+      // kb_articles.status + last_reviewed_at adderas av migration 015/018 — guarda
+      // för fresh-installs där schema.sql körts men kolumnen ännu inte finns.
+      if (columnExists('kb_articles', 'status') && columnExists('kb_articles', 'updated_at')) {
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_kb_articles_status_updated ON kb_articles(status, updated_at DESC)').run();
+      }
+      if (columnExists('kb_articles', 'last_reviewed_at')) {
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_kb_articles_last_reviewed ON kb_articles(last_reviewed_at)').run();
+      }
+
+      // --- FTS5 delete-trigger-konsistens (täcker migration 052s äldre form) ---
+      // tickets_fts byggs om med contentless_delete=1 i migration 052, vilket
+      // kräver "DELETE FROM <fts> WHERE rowid = OLD.rowid" istället för det
+      // deprecade VALUES('delete', ...)-kommandot. Migration 057 fixade detta
+      // redan, men vi DROP+CREATE igen för idempotent, deterministisk slutstate
+      // oavsett migrationshistorik. (kb_articles_fts saknar sync-triggers — den
+      // synkas manuellt i routes/kb.ts och ska INTE få triggers här, annars
+      // dubbel-raderas rader.)
+      if (!tableExists('tickets_fts')) return;
+      db.exec('DROP TRIGGER IF EXISTS tickets_fts_au');
+      db.exec('DROP TRIGGER IF EXISTS tickets_fts_ad');
+
+      db.exec(`CREATE TRIGGER tickets_fts_au
+        AFTER UPDATE OF title, description, notes, solution ON tickets FOR EACH ROW BEGIN
+          DELETE FROM tickets_fts WHERE rowid = OLD.rowid;
+          INSERT INTO tickets_fts(rowid, title, description, notes, solution)
+          VALUES (NEW.rowid, NEW.title, COALESCE(NEW.description, ''), COALESCE(NEW.notes, ''), COALESCE(NEW.solution, ''));
+        END`);
+
+      db.exec(`CREATE TRIGGER tickets_fts_ad
+        AFTER DELETE ON tickets FOR EACH ROW BEGIN
+          DELETE FROM tickets_fts WHERE rowid = OLD.rowid;
+        END`);
     },
   },
 ];

@@ -218,6 +218,9 @@ CREATE TABLE IF NOT EXISTS ticket_kb_links (
 
 -- Create indexes
 CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
+-- Sammansatt index för listvyer som filtrerar på status och sorterar updated_at DESC.
+-- Täcker även status-bara filter via leftmost-prefix (inget separat status-index behövs utöver idx_tickets_status).
+CREATE INDEX IF NOT EXISTS idx_tickets_status_updated ON tickets(status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tickets_priority ON tickets(priority);
 CREATE INDEX IF NOT EXISTS idx_tickets_category ON tickets(category_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_requester ON tickets(requester_id);
@@ -241,6 +244,9 @@ CREATE INDEX IF NOT EXISTS idx_kb_article_shares_token ON kb_article_shares(shar
 CREATE INDEX IF NOT EXISTS idx_kb_article_shares_article ON kb_article_shares(article_id);
 CREATE INDEX IF NOT EXISTS idx_kb_articles_category ON kb_articles(category_id);
 CREATE INDEX IF NOT EXISTS idx_kb_articles_updated ON kb_articles(updated_at);
+-- OBS: idx_kb_articles_status_updated och idx_kb_articles_last_reviewed skapas i
+-- migration 062, INTE här. kb_articles.status/last_reviewed_at adderas av migration
+-- 015/018 som körs EFTER schema.sql — kolumnerna finns inte när detta exekveras.
 CREATE INDEX IF NOT EXISTS idx_ticket_kb_links_ticket ON ticket_kb_links(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_kb_links_article ON ticket_kb_links(article_id);
 
