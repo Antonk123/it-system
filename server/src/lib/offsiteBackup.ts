@@ -20,7 +20,19 @@ import { logger } from './logger.js';
  *
  * NOTE for ops: add the following line to your .env (see .env.example):
  *   # OFFSITE_BACKUP_CMD=rclone copy {file} remote:itticket/
+ *
+ * Fynd backup-audit-7: håll en in-memory-räknare över misslyckade offsite-uppladdningar
+ * (kan exporteras/visas senare). Om OFFSITE_BACKUP_REQUIRED === 'true' är en misslyckad
+ * uppladdning fatal — vi kastar så att anroparen kan markera hela backupen som failed.
+ * Annars är beteendet oförändrat (icke-fatalt: logga och fortsätt).
  */
+let offsiteFailureCount = 0;
+
+/** Antal misslyckade offsite-uppladdningar sedan processtart (in-memory, ingen DB). */
+export function getOffsiteFailureCount(): number {
+  return offsiteFailureCount;
+}
+
 export async function uploadBackupOffsite(filePath: string): Promise<void> {
   const cmdTemplate = process.env.OFFSITE_BACKUP_CMD;
 
@@ -51,7 +63,23 @@ export async function uploadBackupOffsite(filePath: string): Promise<void> {
     });
     logger.info('Off-site backup completed', { file: filePath });
   } catch (err) {
-    // Non-fatal — log and return so the local backup cron is never interrupted.
-    logger.error('Off-site backup failed (non-fatal)', { file: filePath, error: String(err) });
+    offsiteFailureCount += 1;
+    const required = process.env.OFFSITE_BACKUP_REQUIRED === 'true';
+    if (required) {
+      // Fatal: operatören har markerat offsite som obligatorisk. Logga ERROR och kasta
+      // så att anroparen behandlar hela backupen som misslyckad.
+      logger.error('Off-site backup failed (REQUIRED — backupen markeras som misslyckad)', {
+        file: filePath,
+        error: String(err),
+        failureCount: offsiteFailureCount,
+      });
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+    // Non-fatal — log at ERROR and return so the local backup cron is never interrupted.
+    logger.error('Off-site backup failed (non-fatal)', {
+      file: filePath,
+      error: String(err),
+      failureCount: offsiteFailureCount,
+    });
   }
 }

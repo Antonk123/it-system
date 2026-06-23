@@ -4,7 +4,7 @@ import { db, closeDatabase } from '../db/connection.js';
 import archiver from 'archiver';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync, unlinkSync, mkdirSync, createReadStream, createWriteStream, copyFileSync, rmSync } from 'fs';
+import { existsSync, unlinkSync, mkdirSync, createReadStream, createWriteStream, copyFileSync, rmSync, openSync, readSync, closeSync } from 'fs';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import multer from 'multer';
@@ -117,6 +117,14 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
   // servern brickad — rollbacken nedan har redan återställt pre-restore-DB:n.
   let dbClosed = false;
 
+  // Fynd backup-audit-2: Markera valideringsfel så att den yttre catchen kan svara 400
+  // (ogiltig uppladdning) i stället för 500 (serverfel).
+  const validationError = (msg: string): Error => {
+    const e = new Error(msg) as Error & { isValidationError?: boolean };
+    e.isValidationError = true;
+    return e;
+  };
+
   try {
     mkdirSync(extractDir, { recursive: true });
 
@@ -138,11 +146,31 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
       createReadStream(uploadedZip)
         .pipe(unzipper.Parse())
         .on('entry', (entry: unzipper.Entry) => {
+          // Fynd backup-audit-2: Validera varje entry innan extraktion.
+          // (a) Zip-slip / path-traversal: normaliserad sökväg måste ligga under extractDir
+          //     och får inte vara absolut eller innehålla '..'-segment.
+          const rawPath = entry.path;
+          const normalizedRel = rawPath.replace(/\\/g, '/');
+          const isAbsolute = normalizedRel.startsWith('/');
+          const hasDotDot = normalizedRel.split('/').includes('..');
           const entryPath = resolve(extractDir, entry.path);
-          if (!entryPath.startsWith(extractDirNorm)) {
+          if (isAbsolute || hasDotDot || !entryPath.startsWith(extractDirNorm)) {
             // Skadlig entry — avbryt och städa
             entry.autodrain();
-            reject(new Error(`Zip-slip-försök detekterat: ${entry.path}`));
+            reject(validationError(`Zip-slip-försök detekterat: ${entry.path}`));
+            return;
+          }
+          // (b) Allowlist: backupen skapas med exakt 'data/database.sqlite' och 'data/uploads/*'
+          //     (se GET '/' och backupScheduler runBackup). Avvisa allt annat.
+          const relForCheck = normalizedRel.replace(/\/+$/, ''); // ta bort ev. avslutande '/'
+          const isAllowed =
+            relForCheck === 'data' ||
+            relForCheck === 'data/database.sqlite' ||
+            relForCheck === 'data/uploads' ||
+            relForCheck.startsWith('data/uploads/');
+          if (!isAllowed) {
+            entry.autodrain();
+            reject(validationError(`Oväntad entry i backup-ZIP: ${entry.path}`));
             return;
           }
           // Säker entry — extrahera till korrekt sökväg
@@ -176,6 +204,24 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
       return res.status(400).json({ error: 'Ogiltig backup: data/database.sqlite saknas i ZIP-filen.' });
     }
 
+    // Fynd backup-audit-2: Verifiera SQLite-magic-header ("SQLite format 3\0", 16 bytes)
+    // innan vi ens öppnar den med better-sqlite3 och sedan ersätter live-DB:n.
+    {
+      const SQLITE_MAGIC = Buffer.from('SQLite format 3\0', 'latin1'); // 16 bytes
+      const header = Buffer.alloc(16);
+      const fd = openSync(restoredDb, 'r');
+      let bytesRead = 0;
+      try {
+        bytesRead = readSync(fd, header, 0, 16, 0);
+      } finally {
+        closeSync(fd);
+      }
+      if (bytesRead < 16 || !header.equals(SQLITE_MAGIC)) {
+        try { unlinkSync(uploadedZip); } catch { /* ignore */ }
+        return res.status(400).json({ error: 'Ogiltig backup: data/database.sqlite är inte en giltig SQLite-databas.' });
+      }
+    }
+
     const Database = (await import('better-sqlite3')).default;
     const testDb = new Database(restoredDb, { readonly: true });
     try {
@@ -196,7 +242,10 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
       const walFile = `${DB_PATH}-wal`;
       const shmFile = `${DB_PATH}-shm`;
 
-      db.pragma('wal_checkpoint(TRUNCATE)');
+      // Fynd backup-audit-1: RESTART (inte TRUNCATE) väntar in pågående läsare/skrivare
+      // innan checkpointen slutförs. Det undviker att vi skriver över DB-filen mitt i en
+      // annan transaktions partiella skrivning → korruption under restore.
+      db.pragma('wal_checkpoint(RESTART)');
 
       // Stäng databashandtaget innan vi skriver över filen — process.exit(0)
       // nedan startar om processen med ett nytt handtag mot den återställda DB:n.
@@ -241,9 +290,17 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
     }, 1500);
 
   } catch (error) {
-    logger.error('Restore failed:', { error: String(error) });
     rmSync(tmpDir, { recursive: true, force: true });
     try { unlinkSync(uploadedZip); } catch { /* ignore */ }
+
+    // Fynd backup-audit-2: Valideringsfel (zip-slip, oväntad entry) är klientfel → 400.
+    // Dessa kastas innan DB-handtaget stängts, så ingen omstart behövs.
+    if ((error as { isValidationError?: boolean })?.isValidationError) {
+      logger.warn('Restore avvisad: ogiltig backup-ZIP', { error: String(error) });
+      return res.status(400).json({ error: 'Ogiltig backup-ZIP: filen innehåller oväntade eller osäkra poster.' });
+    }
+
+    logger.error('Restore failed:', { error: String(error) });
     res.status(500).json({ error: 'Återställning misslyckades. Kontrollera att ZIP-filen är en giltig backup.' });
 
     // Om felet inträffade efter att DB-handtaget stängts är processen oanvändbar
@@ -265,12 +322,19 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 // Nästa körning härleds ur tid + enabled (lokaltid). null om pausad.
+// Fynd backup-audit-3: garantera att returvärdet alltid ligger STRIKT i framtiden.
+// setHours arbetar i lokaltid; vid DST-övergångar (vår/höst) kan en dag vara 23/25h
+// och en enkel "+1 dag" räcker inte alltid för att passera now. Vi loopar därför tills
+// tiden är > now (max ett par iterationer) så att ingen körning schemaläggs i det
+// förflutna eller dubbelt på samma UTC-dag.
 function computeNextRunAt(cfg: BackupConfig): string | null {
   if (!cfg.enabled) return null;
   const [h, m] = cfg.time.split(':').map(Number);
   const next = new Date();
   next.setHours(h, m, 0, 0);
-  if (next.getTime() <= Date.now()) next.setDate(next.getDate() + 1);
+  while (next.getTime() <= Date.now()) {
+    next.setDate(next.getDate() + 1);
+  }
   return next.toISOString();
 }
 

@@ -317,9 +317,11 @@ describe('POST /api/backup/restore', () => {
   });
 
   it('returns 400 when a ZIP does not contain data/database.sqlite', async () => {
-    // A valid ZIP but with no data/database.sqlite inside.
+    // A valid ZIP with an allowlisted entry (data/uploads/*) but no
+    // data/database.sqlite, so it passes the entry allowlist and then hits
+    // the missing-database check.
     const emptyZip = await buildZipBuffer([
-      { name: 'somefile.txt', content: 'hello' },
+      { name: 'data/uploads/keep.txt', content: 'hello' },
     ]);
 
     const res = await adminAgent
@@ -332,13 +334,14 @@ describe('POST /api/backup/restore', () => {
     expect(res.body.error).toMatch(/database\.sqlite/i);
   });
 
-  it('returns 500 when the ZIP contains a zip-slip entry (../ path)', async () => {
+  it('returns 400 when the ZIP contains a zip-slip entry (../ path)', async () => {
     // archiver normalises paths (strips `../`), so we build raw ZIP bytes that
     // preserve the traversal path verbatim. buildRawZipSlip() writes a minimal
     // valid ZIP with a single stored entry whose filename starts with `../`.
     // unzipper passes that path directly to the backup.ts `entry.path` check,
-    // which triggers the zip-slip guard and rejects the extraction promise.
-    // The outer catch block returns 500.
+    // which triggers the zip-slip guard. Post audit-v3 the guard tags this as a
+    // validationError, so the outer catch returns 400 (client error) rather
+    // than 500 — a malicious/invalid ZIP is a bad request, not a server fault.
     const zipSlipZip = buildRawZipSlip(
       '../../../etc/evil',
       Buffer.from('malicious content'),
@@ -353,8 +356,9 @@ describe('POST /api/backup/restore', () => {
         contentType: 'application/zip',
       });
 
-    // The zip-slip guard rejects → promise rejects → outer catch → 500
-    expect(res.status).toBe(500);
+    // The zip-slip guard rejects with a validationError → outer catch → 400.
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/oväntade eller osäkra/i);
   });
 
   it('returns 400 when the database.sqlite inside the ZIP lacks required tables', async () => {

@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import archiver from 'archiver';
 import Database from 'better-sqlite3';
 import type { Database as DatabaseType } from 'better-sqlite3';
-import { existsSync, mkdirSync, unlinkSync, createWriteStream, statSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, unlinkSync, createWriteStream, statSync, readdirSync, chmodSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { db as defaultDb } from '../db/connection.js';
@@ -118,6 +118,8 @@ export async function runBackup(
 
   try {
     mkdirSync(backupDir, { recursive: true });
+    // Fynd backup-audit-6: logga att backup-katalogen är redo (skapad/verifierad).
+    logger.info('Backup directory ready', { path: backupDir });
     const dateStr = new Date().toISOString().slice(0, 10);
     const backupPath = join(backupDir, `backup-${dateStr}.zip`);
 
@@ -150,24 +152,45 @@ export async function runBackup(
       archive.finalize();
     });
 
+    // Fynd backup-audit-5: arkivet är nu fullständigt skrivet (output 'close' har
+    // triggat ovan). Sätt 0o644 så en offsite-uppladdningsprocess som kör som en
+    // annan användare kan läsa filen. Icke-fatalt — logga bara varning vid fel.
+    try {
+      chmodSync(backupPath, 0o644);
+    } catch (chmodErr) {
+      logger.warn('Kunde inte sätta läsrättigheter (0o644) på backup-filen', { path: backupPath, error: String(chmodErr) });
+    }
+
     cleanupTmp();
     const sizeBytes = statSync(backupPath).size;
     logger.info('Automatic backup completed', { path: backupPath, sizeBytes });
 
-    // 3b. Off-site-upload (icke-fatal stub — konfigureras via OFFSITE_BACKUP_CMD)
-    try {
+    // 3b. Off-site-upload (konfigureras via OFFSITE_BACKUP_CMD).
+    // Fynd backup-audit-7: uploadBackupOffsite kastar bara när OFFSITE_BACKUP_REQUIRED === 'true'
+    // (då behandlas en misslyckad uppladdning som fatal). I så fall låter vi felet propagera
+    // till den yttre catchen så att hela backupen markeras som 'failed'. Annars (icke-required)
+    // har funktionen redan loggat felet och returnerat normalt — backupen förblir lyckad.
+    if (process.env.OFFSITE_BACKUP_REQUIRED === 'true') {
       await uploadBackupOffsite(backupPath);
-    } catch (offSiteErr) {
-      logger.error('Off-site backup threw unexpectedly', { error: String(offSiteErr) });
+    } else {
+      try {
+        await uploadBackupOffsite(backupPath);
+      } catch (offSiteErr) {
+        logger.error('Off-site backup threw unexpectedly', { error: String(offSiteErr) });
+      }
     }
 
-    // 4. Retention — behåll nyaste N, radera äldre .zip/.sqlite-snapshots
+    // 4. Retention — behåll nyaste N, radera äldre .zip/.sqlite-snapshots.
+    // Fynd backup-audit-4: läs retentionDays EN gång och ta EN ögonblicksbild av
+    // fillistan i början av passet. Loopen itererar bara över denna frusna snapshot
+    // (readdirSync görs aldrig om mitt i loopen), så en samtidig config-/filändring
+    // kan inte ge inkonsekventa raderingsbeslut.
     const retentionDays = getBackupConfig(database).retentionDays;
-    const files = readdirSync(backupDir)
+    const retentionSnapshot = readdirSync(backupDir)
       .filter((f) => f.startsWith('backup-') && (f.endsWith('.zip') || f.endsWith('.sqlite')))
       .sort()
       .reverse();
-    for (const old of files.slice(retentionDays)) {
+    for (const old of retentionSnapshot.slice(retentionDays)) {
       try {
         unlinkSync(join(backupDir, old));
         logger.info('Deleted old backup', { file: old });
@@ -190,6 +213,16 @@ export async function runBackup(
 let task: ReturnType<typeof cron.schedule> | null = null;
 
 export function startBackupScheduler(database: DatabaseType = defaultDb): void {
+  // Fynd backup-audit-6: säkerställ + logga backup-katalogen redan vid schedulerstart,
+  // inte först vid första körningen.
+  const backupDir = defaultBackupDir();
+  try {
+    mkdirSync(backupDir, { recursive: true });
+    logger.info('Backup directory ready', { path: backupDir });
+  } catch (e) {
+    logger.warn('Kunde inte skapa/verifiera backup-katalogen vid start', { path: backupDir, error: String(e) });
+  }
+
   const cfg = getBackupConfig(database);
   if (!cfg.enabled) {
     logger.info('Automatic backup disabled (paused via UI)');
