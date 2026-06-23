@@ -3,11 +3,17 @@ import { existsSync, rmSync } from 'fs';
 import { randomUUID } from 'crypto';
 
 /**
- * IDOR authorization test for GET /api/checklists/ticket/:ticketId.
+ * IDOR authorization tests for the checklists routes.
  *
- * A logged-in stranger must not be able to read a ticket's checklist items.
- * Owner (created_by) → 200; stranger → 403; no token → 401.
+ * GET /api/checklists/ticket/:ticketId — a logged-in stranger must not read a
+ * ticket's checklist items (owner/admin → 200, stranger → 403, no token → 401).
  *
+ * POST /api/checklists/progress — the batch endpoint must not leak checklist
+ * counts for tickets the caller cannot access; it returns progress only for the
+ * accessible subset of the requested ids.
+ *
+ * NOTE: the login endpoint is rate-limited to 5 attempts / 15 min per IP, so we
+ * log in each user exactly once (persistent csrf-agent) and reuse it.
  * UNIQUE DB_PATH suffix (-checklists) so parallel suites don't collide.
  */
 
@@ -27,23 +33,31 @@ import bcrypt from 'bcryptjs';
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
 import { createApp } from '../app.js';
 
+type Session = { agent: ReturnType<typeof request.agent>; token: string; csrf: string };
+
 let app: ReturnType<typeof createApp>;
 
-let adminToken: string;
-let ownerToken: string;
-let strangerToken: string;
+let admin: Session;
+let owner: Session;
+let stranger: Session;
 
 let adminId: string;
 let ownerId: string;
 let strangerId: string;
 
-let ticketId: string;
+let ticketId: string;          // owned by `owner`, has one checklist item
+let strangerTicketId: string;  // owned by `stranger`, has one checklist item
 
-async function loginToken(email: string, password: string) {
+// One login per user (login is rate-limited to 5/15min per IP). The persistent
+// agent keeps the csrf cookie; the x-csrf-token header is needed for POST.
+async function login(email: string, password: string): Promise<Session> {
   const agent = request.agent(app);
-  const login = await agent.post('/api/auth/login').send({ email, password });
-  expect(login.status).toBe(200);
-  return login.body.accessToken as string;
+  const res = await agent.post('/api/auth/login').send({ email, password });
+  expect(res.status).toBe(200);
+  const token = res.body.accessToken as string;
+  const csrfRes = await agent.get('/api/csrf-token').set('Authorization', `Bearer ${token}`);
+  expect(csrfRes.status).toBe(200);
+  return { agent, token, csrf: csrfRes.body.csrfToken as string };
 }
 
 beforeAll(async () => {
@@ -67,16 +81,22 @@ beforeAll(async () => {
   ticketId = randomUUID();
   db.prepare(`INSERT INTO tickets (id, title, description, status, assigned_to, created_by) VALUES (?, ?, ?, ?, ?, ?)`)
     .run(ticketId, 'Checklists Test Ticket', 'owner ticket', 'open', null, ownerId);
-
-  // Seed one checklist item so the owner's 200 returns a non-empty list.
   db.prepare(`INSERT INTO ticket_checklists (id, ticket_id, label, position) VALUES (?, ?, ?, ?)`)
     .run(randomUUID(), ticketId, 'Item 1', 0);
 
+  // A ticket owned by the stranger (with a checklist item), so the batch-progress
+  // test can prove the filter keeps accessible tickets while dropping others.
+  strangerTicketId = randomUUID();
+  db.prepare(`INSERT INTO tickets (id, title, description, status, assigned_to, created_by) VALUES (?, ?, ?, ?, ?, ?)`)
+    .run(strangerTicketId, 'Stranger Own Ticket', 'stranger ticket', 'open', null, strangerId);
+  db.prepare(`INSERT INTO ticket_checklists (id, ticket_id, label, position) VALUES (?, ?, ?, ?)`)
+    .run(randomUUID(), strangerTicketId, 'Stranger Item', 0);
+
   app = createApp();
 
-  adminToken = await loginToken('admin@checkliststest.local', 'Admin-P@ss1234!');
-  ownerToken = await loginToken('owner@checkliststest.local', 'Owner-P@ss1234!');
-  strangerToken = await loginToken('stranger@checkliststest.local', 'Stranger-P@ss1234!');
+  admin = await login('admin@checkliststest.local', 'Admin-P@ss1234!');
+  owner = await login('owner@checkliststest.local', 'Owner-P@ss1234!');
+  stranger = await login('stranger@checkliststest.local', 'Stranger-P@ss1234!');
 });
 
 afterAll(() => {
@@ -91,7 +111,7 @@ describe('GET /api/checklists/ticket/:ticketId — authorization', () => {
   it('returns 200 for the ticket owner (created_by)', async () => {
     const res = await request(app)
       .get(`/api/checklists/ticket/${ticketId}`)
-      .set('Authorization', `Bearer ${ownerToken}`);
+      .set('Authorization', `Bearer ${owner.token}`);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
   });
@@ -99,7 +119,7 @@ describe('GET /api/checklists/ticket/:ticketId — authorization', () => {
   it('returns 200 for an admin', async () => {
     const res = await request(app)
       .get(`/api/checklists/ticket/${ticketId}`)
-      .set('Authorization', `Bearer ${adminToken}`);
+      .set('Authorization', `Bearer ${admin.token}`);
     expect(res.status).toBe(200);
     expect(Array.isArray(res.body)).toBe(true);
   });
@@ -107,12 +127,48 @@ describe('GET /api/checklists/ticket/:ticketId — authorization', () => {
   it('returns 403 for a logged-in stranger (no relationship to the ticket)', async () => {
     const res = await request(app)
       .get(`/api/checklists/ticket/${ticketId}`)
-      .set('Authorization', `Bearer ${strangerToken}`);
+      .set('Authorization', `Bearer ${stranger.token}`);
     expect(res.status).toBe(403);
   });
 
   it('returns 401 when no auth token is provided', async () => {
     const res = await request(app).get(`/api/checklists/ticket/${ticketId}`);
     expect(res.status).toBe(401);
+  });
+});
+
+describe('POST /api/checklists/progress — batch authorization (IDOR)', () => {
+  it('returns progress for the owner\'s own ticket', async () => {
+    const res = await owner.agent.post('/api/checklists/progress')
+      .set('Authorization', `Bearer ${owner.token}`).set('x-csrf-token', owner.csrf)
+      .send({ ticketIds: [ticketId] });
+    expect(res.status).toBe(200);
+    expect(res.body[ticketId]).toBeDefined();
+    expect(res.body[ticketId].total).toBe(1);
+  });
+
+  it('returns progress for an admin', async () => {
+    const res = await admin.agent.post('/api/checklists/progress')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ ticketIds: [ticketId] });
+    expect(res.status).toBe(200);
+    expect(res.body[ticketId]).toBeDefined();
+  });
+
+  it('does NOT leak progress of a ticket the caller cannot access', async () => {
+    const res = await stranger.agent.post('/api/checklists/progress')
+      .set('Authorization', `Bearer ${stranger.token}`).set('x-csrf-token', stranger.csrf)
+      .send({ ticketIds: [ticketId] });
+    expect(res.status).toBe(200);
+    expect(res.body[ticketId]).toBeUndefined();
+  });
+
+  it('filters a mixed batch to only the accessible tickets', async () => {
+    const res = await stranger.agent.post('/api/checklists/progress')
+      .set('Authorization', `Bearer ${stranger.token}`).set('x-csrf-token', stranger.csrf)
+      .send({ ticketIds: [ticketId, strangerTicketId] });
+    expect(res.status).toBe(200);
+    expect(res.body[ticketId]).toBeUndefined();        // not accessible → omitted
+    expect(res.body[strangerTicketId]).toBeDefined();  // own ticket → present
   });
 });

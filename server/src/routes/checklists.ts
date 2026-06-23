@@ -33,13 +33,27 @@ router.post('/progress', authenticate, (req: AuthRequest, res: Response) => {
   }
 
   try {
-    const placeholders = ticketIds.map(() => '?').join(',');
+    // Authz: only expose progress for tickets the caller may access. Reusing the
+    // shared canAccessTicket (admin short-circuits without a DB hit) closes the
+    // batch-IDOR where any logged-in user could probe checklist counts of any
+    // ticket. Inaccessible ids are silently dropped — batch semantics, and the
+    // client only ever sends ids from an already access-scoped ticket list.
+    // The typeof guard also hardens against non-string ids reaching the query.
+    const accessibleIds = (ticketIds as unknown[]).filter(
+      (id): id is string => typeof id === 'string' && canAccessTicket(req.user!, id)
+    );
+
+    if (accessibleIds.length === 0) {
+      return res.json({});
+    }
+
+    const placeholders = accessibleIds.map(() => '?').join(',');
     const rows = db.prepare(`
       SELECT ticket_id, COUNT(*) as total, SUM(completed) as completed
       FROM ticket_checklists
       WHERE ticket_id IN (${placeholders})
       GROUP BY ticket_id
-    `).all(...ticketIds) as { ticket_id: string; total: number; completed: number }[];
+    `).all(...accessibleIds) as { ticket_id: string; total: number; completed: number }[];
 
     const result: Record<string, { total: number; completed: number }> = {};
     rows.forEach(row => {
