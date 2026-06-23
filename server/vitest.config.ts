@@ -14,14 +14,16 @@ export default defineConfig({
       reporter: ['text-summary'],
       include: ['src/**/*.ts'],
       exclude: ['src/**/*.test.ts', 'src/db/migrations.ts'],
-      // Regressionsspärr (ratchet): satta strax UNDER nuvarande täckning (~33 %)
-      // så de fångar tapp utan att fälla bygget idag. Höj i takt med fler tester.
+      // Regressionsspärr (ratchet): satta strax UNDER nuvarande täckning så de
+      // fångar tapp utan att fälla bygget idag. Höj i takt med fler tester.
       // Kör med `npm test -- --coverage`.
+      // audit-v3: täckning höjd ~33 %→~42 % (auth/tickets/apiKeys/webhooks/users/
+      // recurring/attachments route-tester) → ratchet höjd från 27/18/28/27.
       thresholds: {
-        statements: 27,
-        branches: 18,
-        functions: 28,
-        lines: 27,
+        statements: 38,
+        branches: 33,
+        functions: 38,
+        lines: 38,
       },
     },
   },

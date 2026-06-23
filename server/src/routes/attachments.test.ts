@@ -60,6 +60,7 @@ import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
 import { createApp } from '../app.js';
+import { ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS } from './attachments.js';
 
 // ─── Shared state ─────────────────────────────────────────────────────────────
 
@@ -564,5 +565,175 @@ describe('DELETE /api/attachments/:id', () => {
       .set('x-csrf-token', adminCsrfToken);
 
     expect(res.status).toBe(404);
+  });
+});
+
+// ─── APPENDED (audit-v3 LOW + count-limit MEDIUM) ─────────────────────────────
+
+/**
+ * Per-MIME fixtures. For every entry we send a buffer with the correct magic
+ * bytes (so hasMagicByteMatch passes) plus a representative allowed extension,
+ * and assert the upload is accepted (201).
+ *
+ * Magic-byte rules live in attachments.ts::hasMagicByteMatch — only PDF / PNG /
+ * JPEG / GIF / the PK-zip family (zip + OOXML docx/xlsx/pptx) have a signature.
+ * Every other allowed MIME type (svg, webp, txt, csv, eml, legacy Office,
+ * rar, 7z) is a pass-through, so any byte content is accepted.
+ */
+const PK_ZIP = Buffer.from([0x50, 0x4b, 0x03, 0x04]); // PK\x03\x04
+const PDF_SIG = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]); // %PDF-1.4
+const PNG_SIG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const JPEG_SIG = Buffer.from([0xff, 0xd8, 0xff, 0xe0]);
+const GIF_SIG = Buffer.from([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]); // GIF89a
+
+type Fixture = { mime: string; ext: string; magic: Buffer };
+
+/** A representative (mime, ext, magic) triple per allowed MIME type. */
+const MIME_FIXTURES: Fixture[] = [
+  { mime: 'image/jpeg', ext: 'jpg', magic: JPEG_SIG },
+  { mime: 'image/png', ext: 'png', magic: PNG_SIG },
+  { mime: 'image/gif', ext: 'gif', magic: GIF_SIG },
+  { mime: 'image/webp', ext: 'webp', magic: Buffer.from('RIFF....WEBP') }, // pass-through (no rule)
+  { mime: 'image/svg+xml', ext: 'svg', magic: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>') }, // pass-through
+  { mime: 'application/pdf', ext: 'pdf', magic: PDF_SIG },
+  { mime: 'text/plain', ext: 'txt', magic: Buffer.from('hello world') }, // pass-through
+  { mime: 'text/csv', ext: 'csv', magic: Buffer.from('a,b,c\n1,2,3') }, // pass-through
+  { mime: 'message/rfc822', ext: 'eml', magic: Buffer.from('From: a@b\r\nSubject: x\r\n\r\nhi') }, // pass-through
+  { mime: 'application/msword', ext: 'doc', magic: Buffer.from([0xd0, 0xcf, 0x11, 0xe0]) }, // pass-through
+  { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: 'docx', magic: PK_ZIP },
+  { mime: 'application/vnd.ms-excel', ext: 'xls', magic: Buffer.from([0xd0, 0xcf, 0x11, 0xe0]) }, // pass-through
+  { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: 'xlsx', magic: PK_ZIP },
+  { mime: 'application/vnd.ms-powerpoint', ext: 'ppt', magic: Buffer.from([0xd0, 0xcf, 0x11, 0xe0]) }, // pass-through
+  { mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ext: 'pptx', magic: PK_ZIP },
+  { mime: 'application/zip', ext: 'zip', magic: PK_ZIP },
+  { mime: 'application/x-zip-compressed', ext: 'zip', magic: PK_ZIP },
+  { mime: 'application/x-rar-compressed', ext: 'rar', magic: Buffer.from('Rar!\x1a\x07\x00') }, // pass-through
+  { mime: 'application/x-7z-compressed', ext: '7z', magic: Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]) }, // pass-through
+];
+
+describe('POST /api/attachments — full ALLOWED_MIME_TYPES / ALLOWED_EXTENSIONS coverage', () => {
+  // A dedicated ticket so these uploads don't push the shared ticket toward the
+  // per-ticket attachment cap.
+  let coverageTicketId: string;
+
+  beforeAll(() => {
+    coverageTicketId = randomUUID();
+    db.prepare(
+      `INSERT INTO tickets (id, title, description, status, assigned_to) VALUES (?, ?, ?, ?, ?)`
+    ).run(coverageTicketId, 'MIME Coverage Ticket', 'mime coverage', 'open', assignedUserId);
+  });
+
+  it('has a fixture for every entry in ALLOWED_MIME_TYPES', () => {
+    // Guards against the allowlist drifting away from the parametrized table.
+    const covered = new Set(MIME_FIXTURES.map((f) => f.mime));
+    for (const mime of ALLOWED_MIME_TYPES) {
+      expect(covered.has(mime)).toBe(true);
+    }
+    // And every fixture extension is itself an allowed extension.
+    for (const f of MIME_FIXTURES) {
+      expect(ALLOWED_EXTENSIONS).toContain(f.ext);
+    }
+  });
+
+  it.each(MIME_FIXTURES)('accepts $mime (.$ext) with correct magic bytes', async ({ mime, ext, magic }) => {
+    const buf = Buffer.concat([magic, Buffer.alloc(16)]);
+    const res = await adminAgent
+      .post(`/api/attachments/ticket/${coverageTicketId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .attach('file', buf, { filename: `fixture.${ext}`, contentType: mime });
+
+    expect(res.status).toBe(201);
+    expect(res.body.file_type).toBe(mime);
+    expect(res.body.file_name).toBe(`fixture.${ext}`);
+  });
+
+  it('rejects a MIME type that is NOT in ALLOWED_MIME_TYPES (image/bmp → 400)', async () => {
+    const res = await adminAgent
+      .post(`/api/attachments/ticket/${coverageTicketId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .attach('file', Buffer.from('BM'), { filename: 'image.bmp', contentType: 'image/bmp' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not allowed/i);
+  });
+
+  it('rejects an allowed MIME with a disallowed extension (image/png as .bin → 400)', async () => {
+    const buf = Buffer.concat([PNG_SIG, Buffer.alloc(16)]);
+    const res = await adminAgent
+      .post(`/api/attachments/ticket/${coverageTicketId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .attach('file', buf, { filename: 'image.bin', contentType: 'image/png' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not allowed/i);
+  });
+});
+
+describe('POST /api/attachments — per-ticket count limit (MAX_ATTACHMENTS_PER_TICKET = 50)', () => {
+  let fullTicketId: string;
+
+  beforeAll(() => {
+    // A ticket the admin can access (assigned to assignedUserId; admin bypasses
+    // anyway). Seed exactly 50 attachment rows directly (cheap — no real uploads)
+    // so the next upload trips the cap.
+    fullTicketId = randomUUID();
+    db.prepare(
+      `INSERT INTO tickets (id, title, description, status, assigned_to) VALUES (?, ?, ?, ?, ?)`
+    ).run(fullTicketId, 'Full Ticket', 'at the attachment cap', 'open', assignedUserId);
+
+    const insert = db.prepare(
+      `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type) VALUES (?, ?, ?, ?, ?, ?)`
+    );
+    const seed = db.transaction(() => {
+      for (let i = 0; i < 50; i++) {
+        insert.run(randomUUID(), fullTicketId, `seed-${i}.png`, `seed-${i}.png`, 48, 'image/png');
+      }
+    });
+    seed();
+  });
+
+  it('seeded exactly the cap (50 rows)', () => {
+    const { c } = db
+      .prepare('SELECT COUNT(*) AS c FROM ticket_attachments WHERE ticket_id = ?')
+      .get(fullTicketId) as { c: number };
+    expect(c).toBe(50);
+  });
+
+  it('rejects the 51st upload with 400 "Maximum attachments reached" and does not add a row', async () => {
+    const before = db
+      .prepare('SELECT COUNT(*) AS c FROM ticket_attachments WHERE ticket_id = ?')
+      .get(fullTicketId) as { c: number };
+
+    const res = await adminAgent
+      .post(`/api/attachments/ticket/${fullTicketId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .attach('file', VALID_PNG_BUFFER, { filename: 'over-limit.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Maximum attachments reached');
+
+    const after = db
+      .prepare('SELECT COUNT(*) AS c FROM ticket_attachments WHERE ticket_id = ?')
+      .get(fullTicketId) as { c: number };
+    expect(after.c).toBe(before.c); // still 50 — nothing inserted
+  });
+
+  it('still allows uploads to a different ticket under the cap (201)', async () => {
+    const freshTicketId = randomUUID();
+    db.prepare(
+      `INSERT INTO tickets (id, title, description, status, assigned_to) VALUES (?, ?, ?, ?, ?)`
+    ).run(freshTicketId, 'Fresh Ticket', 'under cap', 'open', assignedUserId);
+
+    const res = await adminAgent
+      .post(`/api/attachments/ticket/${freshTicketId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .attach('file', VALID_PNG_BUFFER, { filename: 'ok.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(201);
   });
 });
