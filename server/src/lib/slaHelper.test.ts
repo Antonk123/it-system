@@ -16,6 +16,8 @@ vi.mock('../db/connection.js', () => {
   const proxy = {
     prepare: (...args: Parameters<InstanceType<typeof Database>['prepare']>) =>
       memDb.prepare(...args),
+    transaction: (...args: Parameters<InstanceType<typeof Database>['transaction']>) =>
+      memDb.transaction(...args),
     pragma: vi.fn(),
     exec: vi.fn(),
   };

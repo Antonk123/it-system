@@ -33,6 +33,33 @@ const client = apiKey ? new Anthropic({ apiKey }) : null;
 let consecutiveFailures = 0;
 const FAILURE_ALERT_THRESHOLD = 5;
 
+// ─── Circuit breaker (graceful degradation vid längre AI-avbrott) ─────────────
+// Efter CIRCUIT_FAILURE_THRESHOLD konsekutiva fel "öppnas" kretsen: alla
+// AI-funktioner returnerar null (kontraktet de redan har vid otillgänglighet)
+// under CIRCUIT_COOLDOWN_MS. Detta slutar slänga pengar/tid på en nere tjänst
+// och låter kärnflödena fortsätta opåverkade. Kretsen återställs vid första
+// lyckade anrop (se logUsage) eller automatiskt när cooldownen löpt ut (då
+// släpps EN probe-förfrågan igenom; lyckas den nollställs räknaren).
+const CIRCUIT_FAILURE_THRESHOLD = 5;
+const CIRCUIT_COOLDOWN_MS = 5 * 60 * 1000; // 5 minuter
+let circuitOpenedAt: number | null = null;
+
+/**
+ * Returnerar true om kretsen är öppen (AI-anrop ska hoppas över just nu).
+ * Stänger kretsen automatiskt när cooldownen löpt ut så att en probe kan ske.
+ */
+function isCircuitOpen(): boolean {
+  if (circuitOpenedAt === null) return false;
+  if (Date.now() - circuitOpenedAt >= CIRCUIT_COOLDOWN_MS) {
+    // Cooldown klar — släpp igenom en probe-förfrågan. Lyckas den nollställs
+    // allt i logUsage; misslyckas den öppnas kretsen igen där.
+    circuitOpenedAt = null;
+    logger.info('AI circuit breaker: cooldown elapsed, allowing probe request');
+    return false;
+  }
+  return true;
+}
+
 /**
  * Strip prompt-injection patterns from användarinnehåll/KB innan det bäddas
  * in i prompts. Tar bort rader som ser ut som system/instruktionsdirektiv,
@@ -83,9 +110,20 @@ const KNOWN_CLAUDE_MODELS = new Set([
 
 const FALLBACK_MODEL_DEFAULT = 'claude-haiku-4-5-20251001';
 
+// Räknare för hur många gånger en konfigurerad modell ej matchade KNOWN_CLAUDE_MODELS
+// och vi föll tillbaka till default. Ökar bara vid uppstart (resolveModel körs en
+// gång per env-var) men exponeras för att kunna ytas i en framtida status-endpoint.
+let modelFallbackCount = 0;
+
+/** Antal modell-fallbacks som skett (felstavad/okänd AI_MODEL eller AI_MODEL_SMART). */
+export function getModelFallbackCount(): number {
+  return modelFallbackCount;
+}
+
 function resolveModel(envVar: string, envValue: string | undefined, fallback: string): string {
   if (!envValue) return fallback;
   if (KNOWN_CLAUDE_MODELS.has(envValue)) return envValue;
+  modelFallbackCount++;
   logger.warn(`Okänt AI-modell-ID i ${envVar} — faller tillbaka till default`, {
     given: envValue,
     fallback,
@@ -141,16 +179,29 @@ interface UsageRecord {
 }
 
 function logUsage(record: UsageRecord): void {
-  // Track consecutive failures for outage alerting
+  // Track consecutive failures for outage alerting + circuit breaker
   if (record.ok) {
     if (consecutiveFailures >= FAILURE_ALERT_THRESHOLD) {
       logger.info('AI API: recovered after consecutive failures', { count: consecutiveFailures });
     }
     consecutiveFailures = 0;
+    // Lyckat anrop (inkl. lyckad probe efter cooldown) — stäng kretsen.
+    if (circuitOpenedAt !== null) {
+      circuitOpenedAt = null;
+      logger.info('AI circuit breaker: closed after successful call');
+    }
   } else {
     consecutiveFailures++;
     if (consecutiveFailures >= FAILURE_ALERT_THRESHOLD) {
       logger.warn('AI API: consecutive failures — check ANTHROPIC_API_KEY and service status', { count: consecutiveFailures });
+    }
+    // Öppna kretsen vid tröskeln (eller håll den öppen om en probe nyss föll).
+    if (consecutiveFailures >= CIRCUIT_FAILURE_THRESHOLD) {
+      circuitOpenedAt = Date.now();
+      logger.warn('AI circuit breaker: opened — pausing AI calls for cooldown', {
+        consecutiveFailures,
+        cooldownMs: CIRCUIT_COOLDOWN_MS,
+      });
     }
   }
 
@@ -210,6 +261,7 @@ export async function findRelevantKbArticles(
   articles: { id: string; title: string }[]
 ): Promise<string[]> {
   if (!client || articles.length === 0) return [];
+  if (isCircuitOpen()) return [];
   try {
     const articleList = articles.map((a, i) => `${i + 1}. [${a.id}] ${a.title}`).join('\n');
     const msg = await client.messages.create({
@@ -266,6 +318,7 @@ export async function suggestSolutionFromKB(
 ): Promise<SolutionSuggestion | null> {
   if (!client) return null;
   if (!isWithinBudget()) return null;
+  if (isCircuitOpen()) return null;
 
   const start = Date.now();
   let inputTokens = 0;
@@ -387,6 +440,7 @@ export async function suggestCategory(
 ): Promise<CategorySuggestion | null> {
   if (!client || categories.length === 0) return null;
   if (!isWithinBudget()) return null;
+  if (isCircuitOpen()) return null;
 
   const start = Date.now();
   let inputTokens = 0;
@@ -460,6 +514,7 @@ export async function draftReply(
 ): Promise<string | null> {
   if (!client) return null;
   if (!isWithinBudget()) return null;
+  if (isCircuitOpen()) return null;
 
   const start = Date.now();
   let inputTokens = 0;
@@ -542,6 +597,7 @@ export async function summarizeTicket(
 ): Promise<TicketSummary | null> {
   if (!client) return null;
   if (!isWithinBudget()) return null;
+  if (isCircuitOpen()) return null;
 
   const start = Date.now();
   let inputTokens = 0;

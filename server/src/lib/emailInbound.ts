@@ -23,6 +23,19 @@ function useOAuth2(): boolean {
   return !!(process.env.IMAP_CLIENT_ID && process.env.IMAP_CLIENT_SECRET && process.env.IMAP_TENANT_ID);
 }
 
+/**
+ * Explicit boolean-parsning av env-vars. Bevarar exakt den tidigare semantiken
+ * `value !== 'false'`: variabeln är PÅ som standard och stängs bara av med det
+ * uttryckliga (skiftlägesokänsliga) värdet "false". Allt annat (unset, "0",
+ * "no", "FALSE"→"false" osv.) tolkas mot defaultvärdet `def`.
+ *
+ * OBS: medvetet `!== 'false'` snarare än `=== 'true'` — annars skulle "1"/"yes"
+ * (som tidigare gav true) och "FALSE" (skiftlägeskänsligt → tidigare true)
+ * tyst byta innebörd. Defaulten för båda nedanstående variabler är `true`.
+ */
+const envBool = (v: string | undefined, def: boolean): boolean =>
+  v == null ? def : v.toLowerCase() !== 'false';
+
 let msalClient: ConfidentialClientApplication | null = null;
 
 function getMsalClient(): ConfidentialClientApplication {
@@ -58,10 +71,12 @@ async function getEmailConfig(): Promise<EmailConfig | null> {
   const base = {
     host,
     port: parseInt(process.env.IMAP_PORT || '993'),
-    secure: process.env.IMAP_SECURE !== 'false',
+    // Default true: IMAP körs nästan alltid över TLS (port 993). Stäng av med IMAP_SECURE=false.
+    secure: envBool(process.env.IMAP_SECURE, true),
     user,
     pollingInterval: parseInt(process.env.IMAP_POLL_INTERVAL || '60'),
-    autoCreateContact: process.env.IMAP_AUTO_CREATE_CONTACT !== 'false',
+    // Default true: okända avsändare får automatiskt en kontakt. Stäng av med IMAP_AUTO_CREATE_CONTACT=false.
+    autoCreateContact: envBool(process.env.IMAP_AUTO_CREATE_CONTACT, true),
   };
 
   if (useOAuth2()) {
@@ -435,7 +450,7 @@ export function getEmailInboundStatus() {
     host: process.env.IMAP_HOST || null,
     user: process.env.IMAP_USER || null,
     polling_interval: parseInt(process.env.IMAP_POLL_INTERVAL || '60'),
-    auto_create_contact: process.env.IMAP_AUTO_CREATE_CONTACT !== 'false',
+    auto_create_contact: envBool(process.env.IMAP_AUTO_CREATE_CONTACT, true),
   };
 }
 
@@ -556,8 +571,14 @@ export async function startEmailPolling(): Promise<void> {
   const scheduleNext = () => {
     if (stopped) return;
     pollingTimer = setTimeout(async () => {
-      await poll();
-      scheduleNext();
+      // Garantera att nästa poll alltid schemaläggs — även om poll() (mot
+      // förmodan) kastar utanför sitt egna try/catch. Utan finally:n kunde
+      // ett oväntat fel döda hela poll-loopen tyst tills processen startas om.
+      try {
+        await poll();
+      } finally {
+        scheduleNext();
+      }
     }, intervalMs);
   };
 

@@ -86,8 +86,12 @@ function createTicketFromTemplate(template: RecurringTemplate): void {
     const parsed = JSON.parse(template.tags || '[]');
     if (Array.isArray(parsed)) {
       tagIds = parsed;
+    } else {
+      logger.warn(`Recurring: template ${template.id} (${template.name}) has non-array tags JSON — ignoring tags`, { tags: template.tags });
     }
   } catch {
+    // Korrupt tags-JSON: skapa ärendet utan taggar men varna så admin kan rätta mallen.
+    logger.warn(`Recurring: template ${template.id} (${template.name}) has unparseable tags JSON — ignoring tags`, { tags: template.tags });
     tagIds = [];
   }
 
@@ -102,7 +106,7 @@ function createTicketFromTemplate(template: RecurringTemplate): void {
 
     if (validTagIds.length < tagIds.length) {
       const removed = tagIds.filter(id => !validTagIds.includes(id));
-      logger.warn(`Recurring: removed stale tag IDs for template ${template.name}: ${removed.join(', ')}`);
+      logger.warn(`Recurring: removed stale tag IDs for template ${template.id} (${template.name}): ${removed.join(', ')}`);
     }
   }
 

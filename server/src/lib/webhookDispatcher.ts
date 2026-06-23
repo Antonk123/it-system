@@ -1,6 +1,7 @@
 import { db } from '../db/connection.js';
 import { randomUUID, createHmac } from 'crypto';
 import { isSafeWebhookUrl } from './webhookValidator.js';
+import { logger } from './logger.js';
 
 interface WebhookRow {
   id: string;
@@ -95,6 +96,12 @@ async function attemptDelivery(
 
       db.prepare('UPDATE webhooks SET last_triggered_at = ? WHERE id = ?')
         .run(nowIso, webhook.id);
+
+      logger.info('Webhook delivered successfully', {
+        webhook_id: webhook.id,
+        event: delivery.event,
+        status: response.status,
+      });
       return;
     }
 
