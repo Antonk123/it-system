@@ -7,12 +7,22 @@ import { logger } from '../lib/logger.js';
 
 // CRITICAL: JWT_SECRET must be set in environment variables
 // Never use a hardcoded fallback in production
+const MIN_SECRET_LENGTH = 32;
 const JWT_SECRET: string = (() => {
   const secret = process.env.JWT_SECRET;
   if (!secret) {
     logger.error('FATAL: JWT_SECRET environment variable is not set!');
     logger.error('Please set JWT_SECRET to a strong random value.');
     logger.error('Generate one with: openssl rand -base64 32');
+    process.exit(1);
+  }
+  // A short secret is brute-forceable — reject anything weaker than 32 chars
+  // rather than booting with a token-forging risk.
+  if (secret.length < MIN_SECRET_LENGTH) {
+    logger.error(
+      `FATAL: JWT_SECRET is too short (${secret.length} chars) — must be at least ${MIN_SECRET_LENGTH}.`
+    );
+    logger.error('Generate a strong one with: openssl rand -base64 32');
     process.exit(1);
   }
   return secret;

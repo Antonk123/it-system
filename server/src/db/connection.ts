@@ -87,12 +87,33 @@ function runMigrations(): void {
   }
 }
 
+// Kärntabeller som ALLTID måste finnas efter schema + migrations. Saknas någon
+// är databasen i ett inkonsekvent läge (t.ex. avbruten migration) och servern
+// ska vägra starta hellre än att köra mot ett trasigt schema.
+const REQUIRED_TABLES = ['users', 'tickets'] as const;
+
+function verifySchemaIntegrity(): void {
+  const missing = REQUIRED_TABLES.filter((name) => !tableExists(name));
+  if (missing.length > 0) {
+    logger.error('Schema integrity check failed — required tables missing after migrations', {
+      missing,
+    });
+    throw new Error(
+      `Database schema integrity check failed: missing table(s) ${missing.join(', ')}. ` +
+        'Schema or migrations did not complete correctly — refusing to start.'
+    );
+  }
+  logger.info('Schema integrity check passed', { verified: REQUIRED_TABLES });
+}
+
 export function initializeDatabase() {
   const schemaPath = join(__dirname, 'schema.sql');
   const schema = readFileSync(schemaPath, 'utf-8');
   // schema.sql contains multi-statement DDL — exec handles multiple statements at once
   db.exec(schema);
   runMigrations();
+  // Fail fast if a core table is missing (catches partial/aborted migrations).
+  verifySchemaIntegrity();
   logger.info('Database initialized successfully');
 }
 

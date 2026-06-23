@@ -8,6 +8,7 @@ import passport from './config/passport.js';
 import { logger } from './lib/logger.js';
 import { cookieSecure } from './config/cookies.js';
 import { isApiKeyRequest } from './middleware/auth.js';
+import { db } from './db/connection.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -140,6 +141,13 @@ export function createApp() {
     logger.error('FATAL: CSRF_SECRET must be set (no dev fallback — generate with `openssl rand -hex 64`)');
     process.exit(1);
   }
+  // A short CSRF secret weakens the double-submit signing — require >= 32 chars.
+  if (process.env.CSRF_SECRET.length < 32) {
+    logger.error(
+      `FATAL: CSRF_SECRET is too short (${process.env.CSRF_SECRET.length} chars) — must be at least 32. Generate with \`openssl rand -hex 64\`.`
+    );
+    process.exit(1);
+  }
 
   const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
     getSecret: () => process.env.CSRF_SECRET!,
@@ -174,19 +182,36 @@ export function createApp() {
     // kryptografiskt av nyckeln, inte av en session-cookie. CSRF (double-submit-
     // cookie) skyddar bara mot cookie-ridning — en angripare kan inte få offrets
     // webbläsare att sätta en custom Authorization-header med offrets nyckel, så
-    // CSRF är irrelevant för bearer-token-auth. Utan detta undantag blockeras ALLA
-    // skrivanrop med API-nyckel av CSRF (EBADCSRFTOKEN) → `write`-scopen blir död.
+    // CSRF är irrelevant för bearer-token-auth. Därför hoppar vi över CSRF för
+    // dessa: de bär ingen ambient cookie-autentisering att rida på. Utan detta
+    // undantag blockeras ALLA skrivanrop med API-nyckel av CSRF (EBADCSRFTOKEN)
+    // → `write`-scopen blir död.
     // (En ogiltig itk_live_-nyckel avvisas ändå av authenticate med 401.)
-    if (isApiKeyRequest(req)) return next();
+    if (isApiKeyRequest(req)) {
+      logger.debug('CSRF bypassed for API-key request (authenticated via key, not cookie)', {
+        method: req.method,
+        path: req.path,
+      });
+      return next();
+    }
     if (csrfExemptPrefixes.some((p) => req.path === p || req.path.startsWith(p))) return next();
     doubleCsrfProtection(req, res, next);
   };
 
   app.use(conditionalCsrf);
 
-  // Health check
+  // Health check — verifies the process is up AND the DB is reachable. A trivial
+  // `SELECT 1` proves the SQLite handle responds; on failure we return 503 so
+  // orchestrators/load-balancers can stop routing to an unhealthy instance.
+  // Happy path keeps the existing 200 { status: 'ok', timestamp } shape.
   app.get('/api/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    try {
+      db.prepare('SELECT 1').get();
+      res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    } catch (err) {
+      logger.error('Health check failed — DB not reachable', { error: String(err) });
+      res.status(503).json({ status: 'error', timestamp: new Date().toISOString() });
+    }
   });
 
   // Expose CSRF token for SPA — frontend calls this once and caches the token
