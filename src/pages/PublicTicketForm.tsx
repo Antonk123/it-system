@@ -155,6 +155,7 @@ const PublicTicketForm = () => {
     setCustomFieldValues([]);
     setIsSuccess(false);
     setError(null);
+    setAiSuggestion(null);
   };
 
   const inputClass = "h-11 rounded-xl bg-input border-border text-foreground placeholder:text-muted-foreground hover:bg-input/80 hover:border-primary/40 focus-visible:ring-primary/30 focus-visible:border-primary/60 transition-all duration-200";

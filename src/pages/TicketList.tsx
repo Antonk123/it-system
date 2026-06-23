@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Search } from 'lucide-react';
+import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Search, Loader2 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
@@ -451,7 +451,13 @@ const TicketList = () => {
             animate={prefersReducedMotion ? false : 'visible'}
             variants={listContainer}
           >
-            <div className={isLoading ? 'opacity-50 pointer-events-none' : ''}>
+            <div className={cn('relative', isLoading && 'opacity-50 pointer-events-none')}>
+              {/* Refetch overlay — rows already shown, a new page/filter is loading */}
+              {isLoading && tickets.length > 0 && (
+                <div className="pointer-events-none absolute inset-0 z-10 flex items-start justify-center pt-24">
+                  <Loader2 className="h-7 w-7 animate-spin text-primary" aria-label="Laddar ärenden" />
+                </div>
+              )}
               {/* Mobile: Card list */}
               <div className="md:hidden space-y-2">
                 {isError ? (
@@ -518,6 +524,10 @@ const TicketList = () => {
                       selectedIds={selectedIds}
                       onSelectionChange={setSelectedIds}
                       onBulkAction={handleBulkAction}
+                      // Only the table view shows the checklist column, so only it
+                      // needs the checklist-progress fetch. (Kanban uses KanbanView,
+                      // not TicketTable, so there's no false-case here.)
+                      checklistVisible={true}
                     />
                     {pagination && pagination.totalPages > 1 && (
                       <PaginationControls

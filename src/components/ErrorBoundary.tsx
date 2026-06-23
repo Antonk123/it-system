@@ -3,6 +3,11 @@ import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
+  // Optional custom fallback for component-level wrapping. When provided, it is
+  // rendered instead of the default full-page fallback (which is meant for
+  // route-level boundaries). A small inline fallback keeps a crash in one
+  // widget from taking down the surrounding page.
+  fallback?: ReactNode;
 }
 
 interface State {
@@ -30,6 +35,10 @@ class ErrorBoundary extends Component<Props, State> {
 
   render() {
     if (this.state.hasError) {
+      // Component-level boundary: render the caller-provided inline fallback.
+      if (this.props.fallback !== undefined) {
+        return this.props.fallback;
+      }
       return (
         <div className="min-h-dvh flex items-center justify-center bg-background p-4">
           <div className="max-w-md w-full text-center space-y-6">

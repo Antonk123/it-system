@@ -206,11 +206,55 @@ const KBArticleForm = () => {
   };
 
   if (isLoading) {
+    // Skeleton mirrors the real form layout (header, title input, category,
+    // type/status row, tags, content editor) so the page doesn't visibly
+    // reflow when data arrives.
     return (
       <Layout>
-        <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-4">
-          <div className="h-8 w-48 bg-muted animate-pulse rounded" />
-          <div className="h-64 bg-muted animate-pulse rounded-lg" />
+        <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-6">
+          {/* Header */}
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-24 bg-muted animate-pulse rounded-md" />
+            <div className="h-6 w-40 bg-muted animate-pulse rounded" />
+          </div>
+
+          <div className="space-y-5">
+            {/* Title */}
+            <div className="space-y-2">
+              <div className="h-4 w-16 bg-muted animate-pulse rounded" />
+              <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
+            </div>
+
+            {/* Category */}
+            <div className="space-y-2">
+              <div className="h-4 w-20 bg-muted animate-pulse rounded" />
+              <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
+            </div>
+
+            {/* Type + Status row */}
+            <div className="flex gap-3">
+              <div className="space-y-2 flex-1">
+                <div className="h-4 w-12 bg-muted animate-pulse rounded" />
+                <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
+              </div>
+              <div className="space-y-2">
+                <div className="h-4 w-14 bg-muted animate-pulse rounded" />
+                <div className="h-10 w-[160px] bg-muted animate-pulse rounded-md" />
+              </div>
+            </div>
+
+            {/* Tags */}
+            <div className="space-y-2">
+              <div className="h-4 w-16 bg-muted animate-pulse rounded" />
+              <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
+            </div>
+
+            {/* Content editor */}
+            <div className="space-y-2">
+              <div className="h-4 w-20 bg-muted animate-pulse rounded" />
+              <div className="h-[300px] w-full bg-muted animate-pulse rounded-md" />
+            </div>
+          </div>
         </div>
       </Layout>
     );

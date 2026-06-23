@@ -1002,6 +1002,8 @@ const TicketDetail = () => {
               onChange={(e) => setTemplateName(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && templateName.trim()) {
+                  // Prevent implicit form submit / double-fire of the create action
+                  e.preventDefault();
                   const items = pendingTemplateItems
                     .filter(i => !i.parent_id)
                     .flatMap(parent => {

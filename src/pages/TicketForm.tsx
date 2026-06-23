@@ -19,6 +19,7 @@ import { UserCombobox } from '@/components/UserCombobox';
 import { CategoryCombobox } from '@/components/CategoryCombobox';
 import { TemplateCombobox } from '@/components/TemplateCombobox';
 import { DynamicFieldsForm } from '@/components/DynamicFieldsForm';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import { CustomFieldInput, api } from '@/lib/api';
 import { parseServerDate } from '@/lib/date';
 import { Button } from '@/components/ui/button';
@@ -120,6 +121,11 @@ const TicketForm = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // Dynamic template-field errors, keyed by field_name. The ticket zod schema
+  // doesn't validate template fields per-field (it submits a placeholder
+  // description when dynamic fields are present), so this is a best-effort
+  // required-field check computed on submit and fed to DynamicFieldsForm.
+  const [dynamicFieldErrors, setDynamicFieldErrors] = useState<Record<string, string>>({});
   const [failedUploads, setFailedUploads] = useState<{ files: File[]; ticketId: string } | null>(null);
   const [isRetrying, setIsRetrying] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
@@ -468,6 +474,31 @@ const TicketForm = () => {
       return;
     }
 
+    // Best-effort validation of required dynamic template fields. The ticket
+    // zod schema can't see these (placeholder description), so check required
+    // fields here and surface inline errors via DynamicFieldsForm's `errors`.
+    if (selectedTemplate?.fields && selectedTemplate.fields.length > 0) {
+      const valueByName = new Map(customFieldValues.map((v) => [v.fieldName, (v.fieldValue ?? '').trim()]));
+      const dynErrors: Record<string, string> = {};
+      selectedTemplate.fields.forEach((field) => {
+        if (field.required && !valueByName.get(field.field_name)) {
+          dynErrors[field.field_name] = `${field.field_label} krävs`;
+        }
+      });
+      setDynamicFieldErrors(dynErrors);
+      if (Object.keys(dynErrors).length > 0) {
+        toast.error('Rätta felen i formuläret');
+        requestAnimationFrame(() => {
+          const firstErrorEl = document.querySelector('[aria-invalid="true"]') as HTMLElement | null;
+          firstErrorEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          firstErrorEl?.focus?.();
+        });
+        return;
+      }
+    } else if (Object.keys(dynamicFieldErrors).length > 0) {
+      setDynamicFieldErrors({});
+    }
+
     // If dynamic fields are used, use a placeholder so Zod validation passes.
     // The backend composes the real description from customFields.
     let submitFormData = { ...formData };
@@ -485,20 +516,27 @@ const TicketForm = () => {
         fieldErrors[key] = err.message;
       });
       setErrors(fieldErrors);
-      // Open collapsed sections if errors exist there (create mode). Status
-      // isn't rendered in create mode, so only auto-open on priority — opening
-      // the details panel for a non-existent status field used to scroll to
-      // nothing and confuse users about which field needed attention.
-      if (!isEditing && fieldErrors.priority) {
+      // Open collapsed sections if an errored field lives inside them (create
+      // mode) BEFORE scrolling — otherwise the field is unmounted and scroll
+      // targets nothing. Status isn't rendered in create mode, so only
+      // priority (inside the Detaljer collapsible) needs auto-opening here.
+      const needDetailsOpen = !isEditing && !!fieldErrors.priority;
+      if (needDetailsOpen) {
         setDetailsOpen(true);
       }
       toast.error('Rätta felen i formuläret');
-      // Scroll to first error field
-      requestAnimationFrame(() => {
+      // Scroll to first error field. Defer two frames when we just opened a
+      // collapsible so its content mounts before we try to scroll to it.
+      const scrollToFirstError = () => {
         const firstErrorEl = document.querySelector('[aria-invalid="true"]') as HTMLElement | null;
         firstErrorEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         firstErrorEl?.focus?.();
-      });
+      };
+      if (needDetailsOpen) {
+        requestAnimationFrame(() => requestAnimationFrame(scrollToFirstError));
+      } else {
+        requestAnimationFrame(scrollToFirstError);
+      }
       return;
     }
 
@@ -611,11 +649,14 @@ const TicketForm = () => {
   }, [failedUploads, uploadAttachment, navigate]);
 
   const handleSkipFailedUploads = useCallback(() => {
-    if (!failedUploads) return;
+    // Guard against skipping mid-retry: a retry in flight may still resolve and
+    // navigate, so ignore the skip until the retry settles (button is also
+    // disabled, this is belt-and-suspenders against a queued click).
+    if (!failedUploads || isRetrying) return;
     const ticketId = failedUploads.ticketId;
     setFailedUploads(null);
     navigate(`/tickets/${ticketId}`);
-  }, [failedUploads, navigate]);
+  }, [failedUploads, isRetrying, navigate]);
 
   const handleNavigateBack = () => {
     const goBack = () => {
@@ -787,11 +828,20 @@ const TicketForm = () => {
                 </div>
               ) : selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0 ? (
                 <div>
-                  <DynamicFieldsForm
-                    fields={selectedTemplate.fields}
-                    onValuesChange={handleCustomFieldsChange}
-                    initialValues={editInitialFieldValues.length > 0 ? editInitialFieldValues : undefined}
-                  />
+                  <ErrorBoundary
+                    fallback={
+                      <p className="text-sm text-destructive border border-destructive/30 rounded-md p-3">
+                        Kunde inte visa mallfälten. Rensa mallen och skriv en fri beskrivning istället.
+                      </p>
+                    }
+                  >
+                    <DynamicFieldsForm
+                      fields={selectedTemplate.fields}
+                      onValuesChange={handleCustomFieldsChange}
+                      initialValues={editInitialFieldValues.length > 0 ? editInitialFieldValues : undefined}
+                      errors={dynamicFieldErrors}
+                    />
+                  </ErrorBoundary>
 
                   {/* Ytterligare information section */}
                   <div className="mt-6 border-t pt-4">
@@ -801,14 +851,20 @@ const TicketForm = () => {
                     <p className="text-xs text-muted-foreground mb-2">
                       Lägg till extra detaljer som inte passar i standardfälten ovan
                     </p>
-                    <RichTextEditor
-                      value={formData.notes || ''}
-                      onChange={(html) => {
-                        setFormData({ ...formData, notes: html });
-                      }}
-                      placeholder="Övrig information, kommentarer, specialfall..."
-                      minHeight="100px"
-                    />
+                    <ErrorBoundary
+                      fallback={
+                        <p className="text-sm text-destructive">Textredigeraren kunde inte laddas.</p>
+                      }
+                    >
+                      <RichTextEditor
+                        value={formData.notes || ''}
+                        onChange={(html) => {
+                          setFormData({ ...formData, notes: html });
+                        }}
+                        placeholder="Övrig information, kommentarer, specialfall..."
+                        minHeight="100px"
+                      />
+                    </ErrorBoundary>
                   </div>
 
                   <button
@@ -833,13 +889,21 @@ const TicketForm = () => {
                     Beskrivning *
                   </Label>
                   <div className={errors.description ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
-                    <RichTextEditor
-                      value={formData.description}
-                      onChange={(html) => { setFormData({ ...formData, description: html }); setErrors(prev => { const p = { ...prev }; delete p['description']; return p; }); }}
-                      placeholder="Detaljerad beskrivning av problemet..."
-                      minHeight="150px"
-                      required
-                    />
+                    <ErrorBoundary
+                      fallback={
+                        <p className="text-sm text-destructive border border-destructive/30 rounded-md p-3">
+                          Textredigeraren kunde inte laddas. Ladda om sidan och försök igen.
+                        </p>
+                      }
+                    >
+                      <RichTextEditor
+                        value={formData.description}
+                        onChange={(html) => { setFormData({ ...formData, description: html }); setErrors(prev => { const p = { ...prev }; delete p['description']; return p; }); }}
+                        placeholder="Detaljerad beskrivning av problemet..."
+                        minHeight="150px"
+                        required
+                      />
+                    </ErrorBoundary>
                   </div>
                   {errors.description && <p className="text-sm text-destructive mt-1">{errors.description}</p>}
                 </div>

@@ -19,8 +19,16 @@ import { StatusFlowChart } from '@/components/StatusFlowChart';
 import { TagAnalytics } from '@/components/TagAnalytics';
 import { TimeSummaryTab } from '@/components/TimeSummaryTab';
 import { KPIDetailDialog } from '@/components/KPIDetailDialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { BarChart3, PieChart as PieChartIcon, Calendar, Ticket, Clock, CheckCircle, AlertTriangle, Users, Scale, Download, Printer } from 'lucide-react';
+import { BarChart3, PieChart as PieChartIcon, Calendar, Ticket, Clock, CheckCircle, AlertTriangle, Users, Scale, Download, Printer, RefreshCw, Loader2 } from 'lucide-react';
 
 const COLORS = [
   'hsl(var(--primary))',
@@ -154,6 +162,9 @@ const Reports = () => {
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [kpiModalOpen, setKpiModalOpen] = useState<string | null>(null);
+  // Controlled tab so we can defer the heavy requester-analytics query until
+  // the "Personer" tab is actually opened (it doesn't run on page load).
+  const [activeTab, setActiveTab] = useState('översikt');
 
   // Fetch all report summary data from the new endpoint
   const { data: summary, isLoading, isError, error } = useReportsSummary(selectedYear, selectedMonth);
@@ -164,14 +175,24 @@ const Reports = () => {
   // per scope so each carries its own filter semantics and cache key.
   //   'total' → filtered by selectedYear/selectedMonth (queryKey includes them).
   //   'aging' → server ignores year/month, so neither is in the key.
-  const { data: totalDrilldown = [], isError: isTotalDrilldownError } = useQuery({
+  const {
+    data: totalDrilldown = [],
+    isError: isTotalDrilldownError,
+    refetch: refetchTotalDrilldown,
+    isFetching: isTotalDrilldownFetching,
+  } = useQuery({
     queryKey: ['reports', 'kpi-tickets', 'total', selectedYear, selectedMonth],
     enabled: kpiModalOpen === 'total',
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
     queryFn: async () => (await api.getKpiTickets('total', selectedYear, selectedMonth)).map(mapTicketRow),
   });
-  const { data: agingDrilldown = [], isError: isAgingDrilldownError } = useQuery({
+  const {
+    data: agingDrilldown = [],
+    isError: isAgingDrilldownError,
+    refetch: refetchAgingDrilldown,
+    isFetching: isAgingDrilldownFetching,
+  } = useQuery({
     queryKey: ['reports', 'kpi-tickets', 'aging'],
     enabled: kpiModalOpen === 'aging',
     staleTime: 60 * 1000,
@@ -196,6 +217,9 @@ const Reports = () => {
   const { data: requesterAnalytics = [], isError: isRequesterError } = useQuery<RequesterAnalyticsRow[]>({
     queryKey: ['reports', 'requester-analytics', selectedYear, selectedMonth],
     queryFn: () => api.getRequesterAnalytics(selectedYear, selectedMonth),
+    // Deferred: only fetched once the "Personer" tab is opened, so the report
+    // landing page doesn't pay for this aggregation up front.
+    enabled: activeTab === 'personer',
     staleTime: 5 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   });
@@ -476,24 +500,72 @@ const Reports = () => {
           </Alert>
         )}
 
-        {/* KPI Detail Modals */}
+        {/* KPI Detail Modals — on error, a retry dialog replaces the table dialog */}
         <KPIDetailDialog
-          open={kpiModalOpen === 'aging'}
+          open={kpiModalOpen === 'aging' && !isAgingDrilldownError}
           onOpenChange={(open) => setKpiModalOpen(open ? 'aging' : null)}
           title="Gamla ärenden"
-          description={isAgingDrilldownError ? 'Kunde inte ladda data' : `Ärenden som har varit öppna i mer än 7 dagar (${agingTickets} totalt${agingDrilldown.length < agingTickets ? `, visar senaste ${agingDrilldown.length}` : ''})`}
+          description={`Ärenden som har varit öppna i mer än 7 dagar (${agingTickets} totalt${agingDrilldown.length < agingTickets ? `, visar senaste ${agingDrilldown.length}` : ''})`}
           tickets={agingDrilldown}
           users={users}
         />
 
         <KPIDetailDialog
-          open={kpiModalOpen === 'total'}
+          open={kpiModalOpen === 'total' && !isTotalDrilldownError}
           onOpenChange={(open) => setKpiModalOpen(open ? 'total' : null)}
           title="Alla ärenden"
-          description={isTotalDrilldownError ? 'Kunde inte ladda data' : `Alla ärenden i aktuell vy (${totalTickets} totalt${totalDrilldown.length < totalTickets ? `, visar senaste ${totalDrilldown.length}` : ''})`}
+          description={`Alla ärenden i aktuell vy (${totalTickets} totalt${totalDrilldown.length < totalTickets ? `, visar senaste ${totalDrilldown.length}` : ''})`}
           tickets={totalDrilldown}
           users={users}
         />
+
+        {/* Retry dialog — shown when a drill-down query fails. Lets the user
+            refetch without losing the modal context. */}
+        <Dialog
+          open={
+            (kpiModalOpen === 'aging' && isAgingDrilldownError) ||
+            (kpiModalOpen === 'total' && isTotalDrilldownError)
+          }
+          onOpenChange={(open) => { if (!open) setKpiModalOpen(null); }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                {kpiModalOpen === 'aging' ? 'Gamla ärenden' : 'Alla ärenden'}
+              </DialogTitle>
+              <DialogDescription>
+                Kunde inte ladda ärendelistan. Kontrollera anslutningen och försök igen.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col items-center justify-center py-8 gap-4">
+              <AlertTriangle className="h-10 w-10 text-destructive" />
+              <Button
+                onClick={() => {
+                  if (kpiModalOpen === 'aging') refetchAgingDrilldown();
+                  else if (kpiModalOpen === 'total') refetchTotalDrilldown();
+                }}
+                disabled={
+                  (kpiModalOpen === 'aging' && isAgingDrilldownFetching) ||
+                  (kpiModalOpen === 'total' && isTotalDrilldownFetching)
+                }
+                className="gap-2"
+              >
+                {((kpiModalOpen === 'aging' && isAgingDrilldownFetching) ||
+                  (kpiModalOpen === 'total' && isTotalDrilldownFetching)) ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Försök igen
+              </Button>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setKpiModalOpen(null)}>
+                Stäng
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Empty state when no tickets exist */}
         {!isLoading && !isError && totalTickets === 0 && (
@@ -504,7 +576,7 @@ const Reports = () => {
           </div>
         )}
 
-        <Tabs defaultValue="översikt">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           {/* Mobile: horizontal scroll. Desktop: 5-col grid. */}
           <TabsList className="w-full h-auto flex overflow-x-auto whitespace-nowrap md:grid md:grid-cols-5">
             <TabsTrigger value="översikt" className="shrink-0 md:shrink">Översikt</TabsTrigger>
