@@ -1,7 +1,11 @@
 # IT-Ticket — Handoff till Claude Code
 
-> Statusöverlämning från Cowork-session, uppdaterad 2026-05-08 (efter pivot).
+> Statusöverlämning från Cowork-session, uppdaterad 2026-06-23.
 > Klistra in detta i Claude Code som kontext när du återupptar arbetet.
+>
+> **OBS (2026-06-23):** Detta dokument är delvis historiskt — AI-funktionerna nedan
+> är sedan länge byggda och deployade. Aktuellt projektläge spåras i Obsidian-vaultet
+> (`Projekt/IT-System/`) samt git-historiken, inte här.
 
 ---
 

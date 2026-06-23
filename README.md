@@ -60,6 +60,8 @@ All konfiguration sker via `.env`. Se [`.env.example`](.env.example) för dokume
 
 ## API-översikt
 
+Fullständig endpoint-referens finns i [`docs/API.md`](docs/API.md).
+
 Alla endpoints ligger under `/api`. Autentisering via JWT Bearer-token. CSRF-skydd via `X-CSRF-Token`-header.
 
 | Endpoint | Beskrivning |

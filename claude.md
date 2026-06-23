@@ -41,6 +41,8 @@ Affärsmodell: open source + betald support/managed hosting. Ingen multi-tenancy
 | Frontend (nginx/prod) | 80 | 8082 |
 | Frontend (Vite/dev) | 5173 | 5174 |
 
+`Dockerfile.client` bakar in `VITE_API_URL` som build-time `ARG` — den kan alltså **inte** sättas vid container-runtime, bara vid image-bygget. För runtime-flexibilitet krävs en JS-config som injiceras i `index.html`.
+
 ### Kritiska env-vars (prod)
 
 `JWT_SECRET`, `CSRF_SECRET`, `ADMIN_PASSWORD`, `ANTHROPIC_API_KEY`, `VAPID_*`, `SMTP_*`, `IMAP_*` (host/port/user/secure/poll, samt OAuth: `IMAP_TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`).
