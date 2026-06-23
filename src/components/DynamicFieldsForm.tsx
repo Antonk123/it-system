@@ -6,9 +6,12 @@ interface DynamicFieldsFormProps {
   fields: TemplateFieldRow[];
   onValuesChange: (values: CustomFieldInput[]) => void;
   initialValues?: CustomFieldInput[];
+  // Validation errors supplied by the parent form, keyed by field_name.
+  // Additive/optional — when omitted, behavior is unchanged.
+  errors?: Record<string, string>;
 }
 
-export const DynamicFieldsForm = ({ fields, onValuesChange, initialValues }: DynamicFieldsFormProps) => {
+export const DynamicFieldsForm = ({ fields, onValuesChange, initialValues, errors: externalErrors }: DynamicFieldsFormProps) => {
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -62,7 +65,7 @@ export const DynamicFieldsForm = ({ fields, onValuesChange, initialValues }: Dyn
               field={field}
               value={fieldValues[field.field_name] || ''}
               onChange={(value) => handleFieldChange(field.field_name, value)}
-              error={errors[field.field_name]}
+              error={externalErrors?.[field.field_name] ?? errors[field.field_name]}
             />
           ))}
         </div>

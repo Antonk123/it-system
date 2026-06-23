@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, X, Check, Type } from 'lucide-react';
 import { DynamicField } from '@/components/DynamicField';
+import { safeJsonParse } from '@/lib/safeJsonParse';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -194,7 +195,7 @@ export const TemplateEditorModal = ({
               placeholder: field.placeholder,
               default_value: field.default_value,
               required: field.required,
-              options: field.options ? JSON.parse(field.options) : null,
+              options: safeJsonParse<string[] | undefined>(field.options, undefined),
               position: field.position,
             });
           }
@@ -242,7 +243,7 @@ export const TemplateEditorModal = ({
           placeholder: fieldFormData.placeholder.trim() || null,
           default_value: fieldFormData.default_value.trim() || null,
           required: fieldFormData.required ? 1 : 0,
-          options: fieldFormData.options ? JSON.parse(fieldFormData.options) : null,
+          options: safeJsonParse<string[] | undefined>(fieldFormData.options, undefined),
           position: fields.length,
         });
         setFields([...fields, newField]);
@@ -315,7 +316,7 @@ export const TemplateEditorModal = ({
         placeholder: fieldFormData.placeholder.trim() || null,
         default_value: fieldFormData.default_value.trim() || null,
         required: fieldFormData.required ? 1 : 0,
-        options: fieldFormData.options ? JSON.parse(fieldFormData.options) : null,
+        options: safeJsonParse<string[] | undefined>(fieldFormData.options, undefined),
       });
       setFields(fields.map(f => f.id === editingFieldId ? updatedField : f));
       resetFieldForm();

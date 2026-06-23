@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Comment } from '@/types/ticket';
 import { Button } from '@/components/ui/button';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { MessageSquare, Loader2 } from 'lucide-react';
 import { CommentItem } from './CommentItem';
+import { hasVisibleText } from '@/lib/textValidation';
 import { toast } from 'sonner';
 
 interface TicketCommentsProps {
@@ -15,21 +16,16 @@ interface TicketCommentsProps {
   onDeleteComment: (commentId: string) => Promise<void>;
 }
 
-export const TicketComments = ({
+export const TicketComments = memo(function TicketComments({
   comments,
   isLoading,
   isError,
   onAddComment,
   onUpdateComment,
   onDeleteComment,
-}: TicketCommentsProps) => {
+}: TicketCommentsProps) {
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Strip HTML tags before checking — TipTap's empty doc "<p></p>" otherwise
-  // passes .trim() and lets users post blank comments.
-  const hasVisibleText = (html: string) =>
-    html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,4 +95,4 @@ export const TicketComments = ({
       )}
     </div>
   );
-};
+});

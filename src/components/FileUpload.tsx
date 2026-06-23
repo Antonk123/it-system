@@ -116,7 +116,7 @@ export const FileUpload = ({
           onChange={handleFileChange}
           className="hidden"
           disabled={disabled}
-          accept="image/*,.pdf,.doc,.docx,.txt,.xlsx,.xls,.csv"
+          accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.eml,.zip,.rar,.7z"
         />
         <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
         <p className="text-sm text-muted-foreground mb-2">

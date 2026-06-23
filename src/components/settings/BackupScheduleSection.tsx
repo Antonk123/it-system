@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ const formatBytes = (bytes: number | null): string => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
-export function BackupScheduleSection() {
+export const BackupScheduleSection = memo(function BackupScheduleSection() {
   const { config, isLoading, isError, updateConfig } = useBackupConfig();
   const runNow = useRunBackupNow();
 
@@ -123,4 +123,4 @@ export function BackupScheduleSection() {
       </div>
     </div>
   );
-}
+});

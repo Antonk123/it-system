@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import {
   DndContext,
   DragEndEvent,
@@ -24,7 +24,7 @@ interface KanbanViewProps {
 
 const STATUSES: TicketStatus[] = ['open', 'in-progress', 'waiting', 'resolved', 'closed'];
 
-export function KanbanView({ tickets, users, onStatusChange, onTicketClick }: KanbanViewProps) {
+export const KanbanView = memo(function KanbanView({ tickets, users, onStatusChange, onTicketClick }: KanbanViewProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -103,4 +103,4 @@ export function KanbanView({ tickets, users, onStatusChange, onTicketClick }: Ka
       </DragOverlay>
     </DndContext>
   );
-}
+});

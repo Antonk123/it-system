@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Comment } from '@/types/ticket';
+import { hasVisibleText } from '@/lib/textValidation';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -27,13 +28,7 @@ interface CommentItemProps {
   onDelete: (commentId: string) => Promise<void>;
 }
 
-// Visible-text-check that strips HTML tags. TipTap stores empty content as
-// "<p></p>" which has non-zero length but no visible body — naive .trim() lets
-// these slip through and creates blank comments in the thread.
-const hasVisibleText = (html: string) =>
-  html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
-
-export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) => {
+export const CommentItem = memo(function CommentItem({ comment, onUpdate, onDelete }: CommentItemProps) {
   const { user } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
@@ -151,4 +146,4 @@ export const CommentItem = ({ comment, onUpdate, onDelete }: CommentItemProps) =
       )}
     </div>
   );
-};
+});

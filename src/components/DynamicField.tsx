@@ -4,6 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { TemplateFieldRow } from '@/lib/api';
+import { safeJsonParse } from '@/lib/safeJsonParse';
 
 interface DynamicFieldProps {
   field: TemplateFieldRow;
@@ -13,6 +14,12 @@ interface DynamicFieldProps {
 }
 
 export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProps) => {
+  const errorId = `${field.field_name}-error`;
+  // a11y: when an error is present, associate it with the control and mark invalid.
+  const a11yProps = error
+    ? { 'aria-describedby': errorId, 'aria-invalid': true }
+    : {};
+
   const renderField = () => {
     switch (field.field_type) {
       case 'text':
@@ -23,10 +30,13 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder || ''}
             required={field.required === 1}
+            {...a11yProps}
           />
         );
 
       case 'textarea':
+        // RichTextEditor has a typed prop surface (no aria-* passthrough); it
+        // exposes an `error` boolean for invalid styling instead.
         return (
           <RichTextEditor
             value={value}
@@ -35,6 +45,7 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
             minHeight="150px"
             required={field.required === 1}
             id={field.field_name}
+            error={!!error}
           />
         );
 
@@ -47,14 +58,15 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder || ''}
             required={field.required === 1}
+            {...a11yProps}
           />
         );
 
       case 'select': {
-        const options = field.options ? JSON.parse(field.options) : [];
+        const options = safeJsonParse<string[]>(field.options, []);
         return (
           <Select value={value} onValueChange={onChange} required={field.required === 1}>
-            <SelectTrigger id={field.field_name}>
+            <SelectTrigger id={field.field_name} {...a11yProps}>
               <SelectValue placeholder={field.placeholder || 'Välj...'} />
             </SelectTrigger>
             <SelectContent>
@@ -75,6 +87,7 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
               id={field.field_name}
               checked={value === 'Ja' || value === 'true'}
               onCheckedChange={(checked) => onChange(checked ? 'Ja' : 'Nej')}
+              {...a11yProps}
             />
           </div>
         );
@@ -88,6 +101,7 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
             onChange={(e) => onChange(e.target.value)}
             placeholder={field.placeholder || ''}
             required={field.required === 1}
+            {...a11yProps}
           />
         );
 
@@ -98,6 +112,7 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
             value={value}
             onChange={(e) => onChange(e.target.value)}
             aria-label={field.field_label}
+            {...a11yProps}
           />
         );
     }
@@ -109,7 +124,7 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
         {field.field_label} {field.required === 1 && '*'}
       </Label>
       {renderField()}
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p id={errorId} className="text-sm text-destructive">{error}</p>}
     </div>
   );
 };
