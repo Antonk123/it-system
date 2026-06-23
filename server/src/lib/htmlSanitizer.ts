@@ -19,7 +19,13 @@ const RICH_TEXT_CONFIG: sanitizeHtml.IOptions = {
   },
   allowedSchemes: ['http', 'https', 'mailto', 'tel'],
   allowedSchemesByTag: {
-    img: ['http', 'https', 'data'],  // tillåt data: URI bara på img
+    // Endast http/https på bilder. data:-URI:er borttagna (audit-v3): de kan
+    // bära XSS-payloads och kringgå CSP i vissa browsers, och INGEN legitim väg
+    // skapar dem — TipTap-editorn kör allowBase64:false och laddar upp bilder
+    // till en URL (rich-text-editor.tsx), och e-post-inbound konverterar HTML
+    // till text och strippar data:image (emailInbound.ts). Ren härdning, ingen
+    // beteendeförändring.
+    img: ['http', 'https'],
   },
   // Strippar EVENT-handlers, javascript:-URLs, <script>, <style> etc by default.
   // Transformera <a> så target=_blank får rel=noopener noreferrer automatiskt:
