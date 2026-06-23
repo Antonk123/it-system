@@ -1,5 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, KbArticleRow } from '@/lib/api';
+import { kbArticleKeys } from '@/hooks/useKbArticle';
 
 export interface KbArticlesParams {
   search?: string;
@@ -31,7 +32,10 @@ export const useKbArticles = (params: KbArticlesParams = {}, enabled = true) => 
   });
 
   const refetch = () => {
-    queryClient.invalidateQueries({ queryKey: kbArticlesKeys.all });
+    // Granular: refetch only this instance's filtered list plus article details,
+    // instead of blowing away every cached filter combination via `.all`.
+    queryClient.invalidateQueries({ queryKey: kbArticlesKeys.list(params) });
+    queryClient.invalidateQueries({ queryKey: kbArticleKeys.all });
   };
 
   return { articles, isLoading, isError, refetch };

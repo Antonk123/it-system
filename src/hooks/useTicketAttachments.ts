@@ -9,6 +9,14 @@ export interface TicketAttachment {
   id: string; ticketId: string; fileName: string; filePath: string; fileSize: number | null; fileType: string | null; createdAt: Date; url: string;
 }
 
+// Query-key factory — invalidate the SPECIFIC ticket(id) key derived from the
+// mutated attachment's own ticketId, never a generic ['attachments'] prefix nor
+// a closure-captured (possibly stale) queryTicketId.
+export const attachmentKeys = {
+  all: ['attachments'] as const,
+  ticket: (id: string) => ['attachments', id] as const,
+};
+
 const mapAttachment = (a: {
   id: string; ticket_id: string; file_name: string; file_path: string;
   file_size: number | null; file_type: string | null; created_at: string; url: string;
@@ -21,7 +29,7 @@ export const useTicketAttachments = (initialTicketId?: string) => {
   const queryClient = useQueryClient();
   // Internal query ID — updated when fetchAttachments(id) is called
   const [queryTicketId, setQueryTicketId] = useState<string | undefined>(initialTicketId);
-  const queryKey = ['attachments', queryTicketId];
+  const queryKey = queryTicketId ? attachmentKeys.ticket(queryTicketId) : attachmentKeys.all;
 
   const { data: attachments = [], isLoading, isError } = useQuery({
     queryKey,
@@ -38,7 +46,7 @@ export const useTicketAttachments = (initialTicketId?: string) => {
   // fetchAttachments(id) — sets active ticket ID (triggers query) and refetches if same ID
   const fetchAttachments = useCallback(async (id: string) => {
     setQueryTicketId(id);
-    await queryClient.invalidateQueries({ queryKey: ['attachments', id] });
+    await queryClient.invalidateQueries({ queryKey: attachmentKeys.ticket(id) });
   }, [queryClient]);
 
   const uploadMutation = useMutation({
@@ -47,7 +55,7 @@ export const useTicketAttachments = (initialTicketId?: string) => {
       return mapAttachment(data as Parameters<typeof mapAttachment>[0]);
     },
     onSuccess: (_data, { ticketId }) => {
-      queryClient.invalidateQueries({ queryKey: ['attachments', ticketId] });
+      queryClient.invalidateQueries({ queryKey: attachmentKeys.ticket(ticketId) });
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error uploading file:', error);
@@ -55,14 +63,15 @@ export const useTicketAttachments = (initialTicketId?: string) => {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (attachmentId: string) => {
+    mutationFn: async ({ attachmentId }: { attachmentId: string; ticketId: string }) => {
       await api.deleteAttachment(attachmentId);
       return attachmentId;
     },
-    onSuccess: () => {
-      // Invalidera alla attachment-queries (prefix) — undviker stale closure-key
-      // om användaren bytt ärende medan delete var in-flight.
-      queryClient.invalidateQueries({ queryKey: ['attachments'] });
+    onSuccess: (_data, { ticketId }) => {
+      // Scope to the SPECIFIC ticket the attachment belonged to (carried through
+      // the mutation variables), not a generic prefix nor a stale closure key —
+      // correct even if the user switched tickets while delete was in-flight.
+      queryClient.invalidateQueries({ queryKey: attachmentKeys.ticket(ticketId) });
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error deleting attachment:', error);
@@ -85,7 +94,7 @@ export const useTicketAttachments = (initialTicketId?: string) => {
 
   const deleteAttachment = useCallback(async (attachment: TicketAttachment): Promise<boolean> => {
     try {
-      await deleteMutation.mutateAsync(attachment.id);
+      await deleteMutation.mutateAsync({ attachmentId: attachment.id, ticketId: attachment.ticketId });
       return true;
     } catch {
       return false;

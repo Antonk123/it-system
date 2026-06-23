@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -44,53 +44,81 @@ export const useSystemUsers = (options: { enabled?: boolean } = {}) => {
     queryClient.invalidateQueries({ queryKey: systemUserKeys.list() });
   }, [queryClient]);
 
+  // Mutations drive cache invalidation via their onSuccess lifecycle — the
+  // wrapper functions no longer invalidate manually.
+  const inviteMutation = useMutation({
+    mutationFn: ({ email, role, displayName }: { email: string; role: 'admin' | 'user'; displayName?: string }) =>
+      api.createSystemUser(email, role, displayName),
+    onSuccess: (result) => {
+      toast.success(
+        result.temporaryPassword
+          ? `Användare skapad. Temporärt lösenord: ${result.temporaryPassword}`
+          : 'Användare skapad',
+      );
+      queryClient.invalidateQueries({ queryKey: systemUserKeys.list() });
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'Kunde inte skapa användare');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (userId: string) => api.deleteSystemUser(userId),
+    onSuccess: () => {
+      toast.success('Användare borttagen');
+      queryClient.invalidateQueries({ queryKey: systemUserKeys.list() });
+    },
+    onError: () => {
+      toast.error('Kunde inte ta bort användare');
+    },
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: 'admin' | 'user' }) =>
+      api.updateSystemUserRole(userId, role),
+    onSuccess: () => {
+      toast.success('Roll uppdaterad');
+      queryClient.invalidateQueries({ queryKey: systemUserKeys.list() });
+    },
+    onError: () => {
+      toast.error('Kunde inte uppdatera roll');
+    },
+  });
+
   const inviteUser = useCallback(
     async (email: string, role: 'admin' | 'user' = 'user', displayName?: string) => {
       try {
-        const result = await api.createSystemUser(email, role, displayName);
-        toast.success(
-          result.temporaryPassword
-            ? `Användare skapad. Temporärt lösenord: ${result.temporaryPassword}`
-            : 'Användare skapad',
-        );
-        await invalidate();
+        await inviteMutation.mutateAsync({ email, role, displayName });
         return true;
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Kunde inte skapa användare');
+      } catch {
         return false;
       }
     },
-    [invalidate],
+    [inviteMutation],
   );
 
   const deleteUser = useCallback(
     async (userId: string) => {
       try {
-        await api.deleteSystemUser(userId);
-        toast.success('Användare borttagen');
-        await invalidate();
+        await deleteMutation.mutateAsync(userId);
         return true;
       } catch {
-        toast.error('Kunde inte ta bort användare');
         return false;
       }
     },
-    [invalidate],
+    [deleteMutation],
   );
 
   const updateRole = useCallback(
     async (userId: string, role: 'admin' | 'user') => {
       try {
-        await api.updateSystemUserRole(userId, role);
-        toast.success('Roll uppdaterad');
-        await invalidate();
+        await updateRoleMutation.mutateAsync({ userId, role });
         return true;
       } catch {
-        toast.error('Kunde inte uppdatera roll');
         return false;
       }
     },
-    [invalidate],
+    [updateRoleMutation],
   );
 
   return {

@@ -1,8 +1,10 @@
+import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Tag } from '@/types/ticket';
+import { toast } from 'sonner';
 
-const tagKeys = {
+export const tagKeys = {
   all: ['tags'] as const,
   list: () => [...tagKeys.all, 'list'] as const,
 };
@@ -22,6 +24,7 @@ export function useTags() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: tagKeys.list() });
     },
+    onError: () => toast.error('Kunde inte skapa tagg'),
   });
 
   // Update tag
@@ -31,6 +34,7 @@ export function useTags() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: tagKeys.list() });
     },
+    onError: () => toast.error('Kunde inte uppdatera tagg'),
   });
 
   // Delete tag
@@ -39,16 +43,34 @@ export function useTags() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: tagKeys.list() });
     },
+    onError: () => toast.error('Kunde inte ta bort tagg'),
   });
+
+  // Wrapped callbacks (useCompanies convention). Preserve the existing contract:
+  // return the resolved value and re-throw on error so callers' try/catch still works.
+  const createTag = useCallback(
+    (tagData: { name: string; color?: string }) => createTagMutation.mutateAsync(tagData),
+    [createTagMutation],
+  );
+
+  const updateTag = useCallback(
+    (vars: { id: string; name: string; color?: string }) => updateTagMutation.mutateAsync(vars),
+    [updateTagMutation],
+  );
+
+  const deleteTag = useCallback(
+    (id: string) => deleteTagMutation.mutateAsync(id),
+    [deleteTagMutation],
+  );
 
   return {
     tags,
     isLoading,
     error,
     refetch,
-    createTag: createTagMutation.mutateAsync,
-    updateTag: updateTagMutation.mutateAsync,
-    deleteTag: deleteTagMutation.mutateAsync,
+    createTag,
+    updateTag,
+    deleteTag,
     isCreating: createTagMutation.isPending,
     isUpdating: updateTagMutation.isPending,
     isDeleting: deleteTagMutation.isPending,

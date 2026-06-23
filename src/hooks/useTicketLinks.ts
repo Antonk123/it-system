@@ -4,6 +4,13 @@ import { api, TicketLinkRow } from '@/lib/api';
 import { TicketLink } from '@/types/ticket';
 import { parseServerDate } from '@/lib/date';
 
+// Query-key factory — invalidate the SPECIFIC ticket(id) key rather than a
+// generic ['ticket-links'] prefix, avoiding matches against unrelated queries.
+export const ticketLinkKeys = {
+  all: ['ticket-links'] as const,
+  ticket: (id: string) => ['ticket-links', id] as const,
+};
+
 const mapLink = (link: TicketLinkRow): TicketLink => ({
   id: link.id,
   sourceTicketId: link.sourceTicketId,
@@ -22,7 +29,7 @@ const mapLink = (link: TicketLinkRow): TicketLink => ({
 
 export const useTicketLinks = (ticketId: string) => {
   const queryClient = useQueryClient();
-  const queryKey = ['ticket-links', ticketId];
+  const queryKey = ticketLinkKeys.ticket(ticketId);
 
   const { data: links = [], isLoading, isError, refetch } = useQuery({
     queryKey,

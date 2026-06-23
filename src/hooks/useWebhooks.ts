@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, WebhookRow, WebhookDeliveryRow } from '@/lib/api';
 
@@ -38,13 +39,33 @@ export const useWebhooks = () => {
     },
   });
 
+  // Wrapped callbacks (useCompanies convention). Error toasts are intentionally
+  // NOT added here: every consumer call site already handles errors via
+  // .catch(() => toast.error(...)), so a hook-level toast would duplicate them.
+  // The contract (resolve on success, reject on error) is preserved.
+  const createWebhook = useCallback(
+    (data: { url: string; events: string[] }) => createMutation.mutateAsync(data),
+    [createMutation],
+  );
+
+  const updateWebhook = useCallback(
+    (vars: { id: string; url?: string; events?: string[]; active?: boolean }) =>
+      updateMutation.mutateAsync(vars),
+    [updateMutation],
+  );
+
+  const deleteWebhook = useCallback(
+    (id: string) => deleteMutation.mutateAsync(id),
+    [deleteMutation],
+  );
+
   return {
     webhooks,
     isLoading,
     isError,
-    createWebhook: createMutation.mutateAsync,
-    updateWebhook: updateMutation.mutateAsync,
-    deleteWebhook: deleteMutation.mutateAsync,
+    createWebhook,
+    updateWebhook,
+    deleteWebhook,
     isCreating: createMutation.isPending,
   };
 };

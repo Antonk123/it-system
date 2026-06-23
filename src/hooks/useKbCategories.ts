@@ -1,5 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, KbCategoryRow } from '@/lib/api';
+import { kbArticlesKeys } from '@/hooks/useKbArticles';
+import { kbArticleKeys } from '@/hooks/useKbArticle';
 
 export const kbCategoryKeys = {
   all: ['kb-categories'] as const,
@@ -22,6 +24,11 @@ export const useKbCategories = () => {
 
   const refetch = () => {
     queryClient.invalidateQueries({ queryKey: kbCategoryKeys.list() });
+    // KB category mutations live in the KnowledgeBase page and call this refetch
+    // after create/update/delete. Also invalidate article list + detail caches so
+    // article views reflect renamed/removed categories.
+    queryClient.invalidateQueries({ queryKey: kbArticlesKeys.all });
+    queryClient.invalidateQueries({ queryKey: kbArticleKeys.all });
   };
 
   return { categories, isLoading, isError, refetch };

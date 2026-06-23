@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { api, AuthUser } from '@/lib/api';
 import { clearRecentlyViewed } from '@/lib/recentlyViewed';
 
@@ -13,6 +14,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -54,8 +56,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = useCallback(async () => {
     await api.logout();
     clearRecentlyViewed();
+    // Drop all cached server data so the next signed-in user never sees the
+    // previous user's tickets/companies/etc. from a stale react-query cache.
+    queryClient.clear();
     setUser(null);
-  }, []);
+  }, [queryClient]);
 
   const value = useMemo(() => ({
     isAuthenticated: !!user,

@@ -29,15 +29,14 @@ export function useTicketReminders(ticketId: string) {
     enabled: !!ticketId,
   });
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ['reminders', ticketId] });
+  const remindersKey = ['reminders', ticketId];
 
   const createMutation = useMutation({
     mutationFn: ({ reminderTime, message }: { reminderTime: string; message?: string }) =>
       api.createReminder(ticketId, { reminder_time: reminderTime, message }),
     onSuccess: () => {
       toast.success('Påminnelse skapad');
-      invalidate();
+      queryClient.invalidateQueries({ queryKey: remindersKey });
     },
     onError: (error: unknown) => {
       if (import.meta.env.DEV) console.error('Error creating reminder:', error);
@@ -49,7 +48,7 @@ export function useTicketReminders(ticketId: string) {
     mutationFn: (reminderId: string) => api.deleteReminder(ticketId, reminderId),
     onSuccess: () => {
       toast.success('Påminnelse raderad');
-      invalidate();
+      queryClient.invalidateQueries({ queryKey: remindersKey });
     },
     onError: (error: unknown) => {
       if (import.meta.env.DEV) console.error('Error deleting reminder:', error);
@@ -61,7 +60,7 @@ export function useTicketReminders(ticketId: string) {
     mutationFn: () => api.clearSentReminders(ticketId),
     onSuccess: (result: { deleted: number }) => {
       toast.success(`${result.deleted} skickade påminnelser rensade`);
-      invalidate();
+      queryClient.invalidateQueries({ queryKey: remindersKey });
     },
     onError: (error: unknown) => {
       if (import.meta.env.DEV) console.error('Error clearing sent reminders:', error);

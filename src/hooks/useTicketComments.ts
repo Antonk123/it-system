@@ -4,6 +4,13 @@ import { api } from '@/lib/api';
 import { Comment, CommentRow } from '@/types/ticket';
 import { parseServerDate } from '@/lib/date';
 
+// Query-key factory — invalidate the SPECIFIC ticket(id) key (not a generic
+// ['comments'] prefix) so unrelated comment queries are never blown away.
+export const commentKeys = {
+  all: ['comments'] as const,
+  ticket: (id: string) => ['comments', id] as const,
+};
+
 const mapComment = (c: CommentRow): Comment => ({
   id: c.id,
   ticketId: c.ticket_id,
@@ -19,7 +26,7 @@ const mapComment = (c: CommentRow): Comment => ({
 
 export const useTicketComments = (ticketId: string) => {
   const queryClient = useQueryClient();
-  const queryKey = ['comments', ticketId];
+  const queryKey = commentKeys.ticket(ticketId);
 
   const { data: comments = [], isLoading, isError, refetch } = useQuery({
     queryKey,

@@ -138,7 +138,7 @@ class ApiClient {
         throw new Error('Session expired');
       }
 
-      const error = await response.json().catch(() => ({ error: 'Request failed' }));
+      const error = await response.json().catch(() => ({ error: `Request failed (${response.status})` }));
 
       // On CSRF failure: clear stale token and retry once
       if (response.status === 403 && !isRetry && this.isCsrfError(error)) {

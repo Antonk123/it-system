@@ -16,11 +16,21 @@ export interface ChecklistItem {
   updated_at: string;
 }
 
+// Query-key factory — invalidate the SPECIFIC ticket(id) key to avoid matching
+// unrelated checklist queries or relying on stale closure-captured IDs.
+export const checklistKeys = {
+  all: ['checklists'] as const,
+  ticket: (id: string) => ['checklists', id] as const,
+};
+
 export const useTicketChecklists = (initialTicketId?: string) => {
   const queryClient = useQueryClient();
   // Internal query ID — updated when fetchChecklists(id) is called
   const [queryTicketId, setQueryTicketId] = useState<string | undefined>(initialTicketId);
-  const queryKey = useMemo(() => ['checklists', queryTicketId], [queryTicketId]);
+  const queryKey = useMemo(
+    () => (queryTicketId ? checklistKeys.ticket(queryTicketId) : checklistKeys.all),
+    [queryTicketId],
+  );
 
   const { data: items = [], isLoading, isError } = useQuery({
     queryKey,
@@ -36,7 +46,7 @@ export const useTicketChecklists = (initialTicketId?: string) => {
     const targetId = id || queryTicketId;
     if (!targetId) return;
     setQueryTicketId(targetId);
-    await queryClient.invalidateQueries({ queryKey: ['checklists', targetId] });
+    await queryClient.invalidateQueries({ queryKey: checklistKeys.ticket(targetId) });
   }, [queryClient, queryTicketId]);
 
   // setItems — direct cache override (used by applyChecklistTemplate consumer)
@@ -52,7 +62,7 @@ export const useTicketChecklists = (initialTicketId?: string) => {
       return data as ChecklistItem;
     },
     onSuccess: (_data, { targetTicketId }) => {
-      queryClient.invalidateQueries({ queryKey: ['checklists', targetTicketId] });
+      queryClient.invalidateQueries({ queryKey: checklistKeys.ticket(targetTicketId) });
     },
     onError: () => {
       toast.error('Failed to add checklist item');
@@ -66,14 +76,13 @@ export const useTicketChecklists = (initialTicketId?: string) => {
       await api.updateChecklistItem(id, updates);
       return { id, updates };
     },
-    onSuccess: ({ updates }) => {
-      // Invalidera alla checklist-queries (prefix) — undviker stale closure-key
-      // om användaren bytt ärende medan mutationen var in-flight.
-      queryClient.invalidateQueries({ queryKey: ['checklists'] });
-      // Refresh ticket list so checklist progress column stays in sync
-      if ('completed' in updates) {
-        queryClient.invalidateQueries({ queryKey: ['tickets'] });
-      }
+    onSuccess: () => {
+      // Scope invalidation to the active ticket's checklist (avoids matching
+      // unrelated checklist queries / stale closure keys).
+      queryClient.invalidateQueries({ queryKey: queryKey });
+      // Refresh ticket list so checklist progress column stays in sync —
+      // run on every update for consistent behaviour (not only on completed-toggle).
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error updating checklist item:', error);
@@ -87,7 +96,10 @@ export const useTicketChecklists = (initialTicketId?: string) => {
       return id;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['checklists'] });
+      // Scope to the active ticket's checklist; also refresh ticket list so the
+      // progress column reflects the removed item.
+      queryClient.invalidateQueries({ queryKey: queryKey });
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error deleting checklist item:', error);
@@ -100,7 +112,7 @@ export const useTicketChecklists = (initialTicketId?: string) => {
       return await api.bulkCreateChecklistItems(targetTicketId, labels) as ChecklistItem[];
     },
     onSuccess: (_data, { targetTicketId }) => {
-      queryClient.invalidateQueries({ queryKey: ['checklists', targetTicketId] });
+      queryClient.invalidateQueries({ queryKey: checklistKeys.ticket(targetTicketId) });
     },
     onError: () => {
       toast.error('Failed to add checklist items');
