@@ -117,7 +117,8 @@ export async function runBackup(
   };
 
   try {
-    mkdirSync(backupDir, { recursive: true });
+    // 0o700: backup-katalogen innehåller fulla DB-dumpar → endast ägaren.
+    mkdirSync(backupDir, { recursive: true, mode: 0o700 });
     // Fynd backup-audit-6: logga att backup-katalogen är redo (skapad/verifierad).
     logger.info('Backup directory ready', { path: backupDir });
     const dateStr = new Date().toISOString().slice(0, 10);
@@ -152,13 +153,15 @@ export async function runBackup(
       archive.finalize();
     });
 
-    // Fynd backup-audit-5: arkivet är nu fullständigt skrivet (output 'close' har
-    // triggat ovan). Sätt 0o644 så en offsite-uppladdningsprocess som kör som en
-    // annan användare kan läsa filen. Icke-fatalt — logga bara varning vid fel.
+    // Fynd backup-audit-5 + commit-säkerhetsgranskning: arkivet är nu fullständigt
+    // skrivet (output 'close' har triggat ovan). Backup-ZIP:en innehåller HELA
+    // databasen (inkl. hemligheter) → minsta-rättighet 0o600 (endast ägaren).
+    // OFFSITE_BACKUP_CMD spawnas av samma Node-process (samma uid) och kan läsa
+    // 0o600. Gör INTE filen world-readable. Icke-fatalt — logga bara vid fel.
     try {
-      chmodSync(backupPath, 0o644);
+      chmodSync(backupPath, 0o600);
     } catch (chmodErr) {
-      logger.warn('Kunde inte sätta läsrättigheter (0o644) på backup-filen', { path: backupPath, error: String(chmodErr) });
+      logger.warn('Kunde inte sätta läsrättigheter (0o600) på backup-filen', { path: backupPath, error: String(chmodErr) });
     }
 
     cleanupTmp();
@@ -217,7 +220,7 @@ export function startBackupScheduler(database: DatabaseType = defaultDb): void {
   // inte först vid första körningen.
   const backupDir = defaultBackupDir();
   try {
-    mkdirSync(backupDir, { recursive: true });
+    mkdirSync(backupDir, { recursive: true, mode: 0o700 });
     logger.info('Backup directory ready', { path: backupDir });
   } catch (e) {
     logger.warn('Kunde inte skapa/verifiera backup-katalogen vid start', { path: backupDir, error: String(e) });
