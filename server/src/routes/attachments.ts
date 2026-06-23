@@ -214,6 +214,12 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
       return res.status(404).json({ error: 'Ticket not found' });
     }
 
+    if (!canAccessTicketAttachment(req.user!, req.params.ticketId as string)) {
+      // Unauthorized: remove the file multer already wrote to disk, then reject.
+      try { unlinkSync(uploadedPath); } catch { /* ignore cleanup error */ }
+      return res.status(403).json({ error: 'Forbidden: you do not have access to this ticket' });
+    }
+
     const id = uuidv4();
     db.prepare(`
       INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type)

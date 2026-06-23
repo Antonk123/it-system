@@ -314,6 +314,55 @@ describe('POST /api/attachments/ticket/:ticketId — magic-byte mismatch', () =>
   });
 });
 
+describe('POST /api/attachments/ticket/:ticketId — upload authorization', () => {
+  it('returns 201 for the assigned user (authorized non-admin)', async () => {
+    const res = await userAgent
+      .post(`/api/attachments/ticket/${ticketId}`)
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('x-csrf-token', userCsrfToken)
+      .attach('file', VALID_PNG_BUFFER, { filename: 'owner-upload.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.ticket_id).toBe(ticketId);
+  });
+
+  it('returns 403 for a stranger and does NOT create an attachment row', async () => {
+    const otherCsrf = await otherAgent
+      .get('/api/csrf-token')
+      .set('Authorization', `Bearer ${otherToken}`);
+    expect(otherCsrf.status).toBe(200);
+    const otherCsrfToken = otherCsrf.body.csrfToken;
+
+    const before = db
+      .prepare('SELECT COUNT(*) as n FROM ticket_attachments WHERE ticket_id = ?')
+      .get(ticketId) as { n: number };
+
+    const res = await otherAgent
+      .post(`/api/attachments/ticket/${ticketId}`)
+      .set('Authorization', `Bearer ${otherToken}`)
+      .set('x-csrf-token', otherCsrfToken)
+      .attach('file', VALID_PNG_BUFFER, { filename: 'stranger-upload.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/forbidden/i);
+
+    const after = db
+      .prepare('SELECT COUNT(*) as n FROM ticket_attachments WHERE ticket_id = ?')
+      .get(ticketId) as { n: number };
+    expect(after.n).toBe(before.n);
+  });
+
+  it('rejects an unauthenticated upload (no CSRF + no token → 403 from CSRF-before-auth)', async () => {
+    // CSRF middleware runs before `authenticate` (see app.ts), so a mutating
+    // upload with neither a CSRF token nor a Bearer token is rejected at the
+    // CSRF layer (403 EBADCSRFTOKEN). Mirrors app.test.ts's canonical behavior.
+    const res = await request(app)
+      .post(`/api/attachments/ticket/${ticketId}`)
+      .attach('file', VALID_PNG_BUFFER, { filename: 'noauth.png', contentType: 'image/png' });
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('GET /api/attachments/ticket/:ticketId — list attachments (authorization)', () => {
   it('returns 200 and the attachment list for an admin', async () => {
     const res = await adminAgent

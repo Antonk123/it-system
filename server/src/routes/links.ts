@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { canAccessTicket } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
@@ -40,6 +41,9 @@ interface TicketLinkWithDetails {
 // GET /api/links/ticket/:ticketId - Fetch all links for a ticket (bidirectional)
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
+    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
     // Get links where ticket is either source or target
     const links = db.prepare(`
       SELECT
@@ -139,6 +143,12 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     const targetTicket = db.prepare('SELECT id FROM tickets WHERE id = ?').get(targetTicketId);
     if (!targetTicket) {
       return res.status(404).json({ error: 'Target ticket not found' });
+    }
+
+    // Authz: must be able to access BOTH tickets to link them (closes IDOR).
+    if (!canAccessTicket(req.user, req.params.ticketId as string) ||
+        !canAccessTicket(req.user, targetTicketId)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
     // Check if link already exists in either direction

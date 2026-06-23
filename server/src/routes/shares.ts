@@ -77,6 +77,9 @@ interface ChecklistRow {
 // Get existing share token for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
+    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
     const share = db.prepare('SELECT id, ticket_id, share_token, created_by, created_at FROM ticket_shares WHERE ticket_id = ?').get(req.params.ticketId) as ShareRow | undefined;
     res.json({ share_token: share?.share_token || null });
   } catch (error) {

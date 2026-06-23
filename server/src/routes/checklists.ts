@@ -56,6 +56,9 @@ router.post('/progress', authenticate, (req: AuthRequest, res: Response) => {
 // Get checklists for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
+    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
     const items = db.prepare(`
       SELECT * FROM ticket_checklists WHERE ticket_id = ? ORDER BY position ASC
     `).all(req.params.ticketId) as ChecklistRow[];
