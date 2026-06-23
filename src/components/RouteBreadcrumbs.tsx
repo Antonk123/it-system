@@ -64,7 +64,10 @@ export function RouteBreadcrumbs() {
   if (crumbs.length === 0) return null;
 
   return (
-    <Breadcrumb>
+    // Breadcrumb renderar <nav> (svensk etikett), BreadcrumbList <ol>,
+    // BreadcrumbItem <li> och BreadcrumbPage sätter aria-current="page" på
+    // den sista (aktuella) noden.
+    <Breadcrumb aria-label="Brödsmulor">
       <BreadcrumbList>
         {crumbs.map((crumb, i) => (
           <Fragment key={i}>

@@ -22,6 +22,8 @@ export function KBImageLightbox({ containerRef, contentKey }: KBImageLightboxPro
   const [active, setActive] = useState<ActiveImage | null>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+  // Element som hade fokus innan lightboxen öppnades — fokus återställs dit vid stängning.
+  const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const close = useCallback(() => setActive(null), []);
 
@@ -66,14 +68,25 @@ export function KBImageLightbox({ containerRef, contentKey }: KBImageLightboxPro
     };
   }, [active, close]);
 
-  // Flytta fokus till stäng-knappen när lightboxen öppnas
+  // Flytta fokus till stäng-knappen när lightboxen öppnas och återställ fokus
+  // till det tidigare aktiva elementet när den stängs (om det fortfarande
+  // finns kvar i DOM:en).
   useEffect(() => {
     if (!active) return;
+    // Spara fokus innan vi flyttar det in i dialogen.
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
     // rAF säkerställer att portalen renderas innan vi försöker fokusera
     const id = requestAnimationFrame(() => {
       closeButtonRef.current?.focus();
     });
-    return () => cancelAnimationFrame(id);
+    return () => {
+      cancelAnimationFrame(id);
+      const prev = previousFocusRef.current;
+      if (prev && document.contains(prev)) {
+        prev.focus();
+      }
+      previousFocusRef.current = null;
+    };
   }, [active]);
 
   // Focus-trap: Tab cyklar inom dialogen

@@ -62,6 +62,12 @@ interface TicketTableProps {
   selectedIds?: string[];
   onSelectionChange?: (ids: string[]) => void;
   onBulkAction?: (ids: string[], updates: BulkUpdates) => Promise<void>;
+  /**
+   * Whether the "Förlopp" (checklist progress) column is shown. When false we
+   * skip the per-page checklist-progress fetch entirely (perf). Defaults to
+   * true to preserve existing callers' behavior.
+   */
+  checklistVisible?: boolean;
 }
 
 export const TicketTable = memo(function TicketTable({
@@ -80,6 +86,7 @@ export const TicketTable = memo(function TicketTable({
   selectedIds = [],
   onSelectionChange,
   onBulkAction,
+  checklistVisible = true,
 }: TicketTableProps) {
   const { categories } = useCategories();
   const [checklistProgress, setChecklistProgress] = useState<ChecklistProgress[]>([]);
@@ -100,6 +107,10 @@ export const TicketTable = memo(function TicketTable({
   const ticketIdsKey = useMemo(() => tickets.map(t => t.id).join(','), [tickets]);
 
   useEffect(() => {
+    // Skip the fetch entirely when the checklist/progress column is hidden —
+    // no point loading per-ticket progress the user can't see.
+    if (!checklistVisible) return;
+
     const controller = new AbortController();
     const { signal } = controller;
 
@@ -126,7 +137,7 @@ export const TicketTable = memo(function TicketTable({
 
     fetchChecklistProgress();
     return () => controller.abort();
-  }, [ticketIdsKey]);
+  }, [ticketIdsKey, checklistVisible]);
 
   const renderSortButton = (label: string, key: 'status' | 'priority' | 'category', enabled: boolean) => {
     if (!enabled) {
@@ -347,6 +358,7 @@ export const TicketTable = memo(function TicketTable({
                 "hover:bg-linear-to-r hover:from-primary/5 hover:to-accent/5",
                 "border-b border-border/30 last:border-0",
                 "relative group",
+                "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
                 selectedIds.includes(ticket.id) && "bg-primary/5"
               )}
               role="button"

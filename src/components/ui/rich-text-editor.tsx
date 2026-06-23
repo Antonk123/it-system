@@ -52,6 +52,21 @@ const ResizableImageView = ({
 
   const setSize = (pct: string) => updateAttributes({ width: pct });
 
+  // Keyboard alternative to the drag handle: Shift+Arrow nudges the width in
+  // 5% steps. Reads the current rendered percentage (falling back to 100% when
+  // `width` is unset / "auto") so the first keypress resizes relative to what
+  // the user actually sees.
+  const onDragHandleKeyDown = (e: React.KeyboardEvent) => {
+    if (!e.shiftKey) return;
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const current = width && width.endsWith('%') ? parseInt(width, 10) : 100;
+    const base = Number.isFinite(current) ? current : 100;
+    const delta = e.key === 'ArrowRight' ? 5 : -5;
+    const next = Math.min(100, Math.max(10, base + delta));
+    updateAttributes({ width: `${next}%` });
+  };
+
   const onDragHandleMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     isDragging.current = true;
@@ -120,8 +135,19 @@ const ResizableImageView = ({
                 <button
                   key={size}
                   type="button"
+                  aria-label={`Sätt bildbredd till ${size}`}
+                  aria-pressed={width === size}
                   onMouseDown={(e) => { e.preventDefault(); setSize(size); }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setSize(size);
+                    }
+                  }}
+                  className="focus-visible:ring-2 focus-visible:ring-primary"
                   style={{
+                    minWidth: 28,
+                    minHeight: 24,
                     padding: '2px 7px',
                     fontSize: '11px',
                     fontWeight: 500,
@@ -151,10 +177,21 @@ const ResizableImageView = ({
               }}
             />
 
-            {/* Drag handle (bottom-right corner) */}
+            {/* Drag handle (bottom-right corner). Mouse users drag it; keyboard
+                users focus it and use Shift+Arrow (or the preset buttons above)
+                to resize. */}
             <div
               contentEditable={false}
+              role="slider"
+              tabIndex={0}
+              aria-label="Ändra bildstorlek"
+              aria-valuemin={10}
+              aria-valuemax={100}
+              aria-valuenow={width && width.endsWith('%') ? parseInt(width, 10) : 100}
+              aria-valuetext={width && width.endsWith('%') ? width : '100%'}
               onMouseDown={onDragHandleMouseDown}
+              onKeyDown={onDragHandleKeyDown}
+              className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
               style={{
                 position: 'absolute',
                 bottom: -5,

@@ -102,7 +102,7 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName }: TicketQueu
                   return (
                     <tr
                       key={ticket.id}
-                      className="border-b border-border/35 last:border-b-0 cursor-pointer hover:bg-muted/35 transition-colors"
+                      className="border-b border-border/35 last:border-b-0 cursor-pointer hover:bg-muted/35 transition-colors focus:ring-2 focus:ring-primary focus:outline-offset-2"
                       role="button"
                       tabIndex={0}
                       onClick={() => navigate(`/tickets/${ticket.id}`)}

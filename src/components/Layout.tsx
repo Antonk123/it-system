@@ -299,7 +299,7 @@ export const Layout = ({
           >
             <Menu className="w-6 h-6" />
           </button>
-          <div className="flex-1 relative group" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
+          <div className="flex-1 relative group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
             {/* Glow layer */}
             <div className="absolute z-[-1] overflow-hidden h-full w-full rounded-xl blur-[2px] dark:opacity-50">
               <div className="absolute w-[999px] h-[999px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
@@ -322,7 +322,7 @@ export const Layout = ({
         <div data-print-hide className="hidden lg:block sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 flex-1">
-              <div className="relative group w-80 shrink-0 cursor-pointer" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
+              <div className="relative group w-80 shrink-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
                 {/* Glow layer 1: outer rotating gradient */}
                 <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[56px] rounded-xl blur-[3px] dark:opacity-50">
                   <div className="absolute w-[999px] h-[999px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
