@@ -11,7 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.104.2",
+    "@anthropic-ai/sdk": "^0.105.0",
     "@azure/msal-node": "^5.2.5",
     "archiver": "^7.0.1",
     "bcryptjs": "^3.0.3",
@@ -48,7 +48,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/mailparser": "^3.4.6",
     "@types/multer": "^2.1.0",
-    "@types/node": "^22.10.5",
+    "@types/node": "^22.20.0",
     "@types/node-cron": "^3.0.11",
     "@types/nodemailer": "^8.0.1",
     "@types/passport": "^1.0.17",
@@ -62,7 +62,7 @@
     "@vitest/coverage-v8": "^4.1.8",
     "supertest": "^7.2.2",
     "tsx": "^4.22.4",
-    "typescript": "^5.7.2",
+    "typescript": "^5.9.3",
     "vitest": "^4.1.8"
   },
   "overrides": {
