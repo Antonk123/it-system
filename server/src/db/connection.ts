@@ -19,6 +19,12 @@ db.pragma('foreign_keys = ON');
 // WAL mode allows concurrent readers and writers, improving performance
 db.pragma('journal_mode = WAL');
 
+// Wait up to 5s for a held write lock instead of failing immediately with
+// SQLITE_BUSY. With WAL + 6 background schedulers + the backup job all writing,
+// brief lock contention is expected; without this a busy moment throws
+// "database is locked" mid-request. 5000ms covers any realistic single write.
+db.pragma('busy_timeout = 5000');
+
 // Set synchronous mode to NORMAL for better write performance
 // NORMAL is safe for most applications and much faster than FULL
 db.pragma('synchronous = NORMAL');
