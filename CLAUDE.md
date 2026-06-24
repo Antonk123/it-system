@@ -18,6 +18,17 @@ Affärsmodell: open source + betald support/managed hosting. Ingen multi-tenancy
 | Auth | JWT access tokens (15 min) + rolling refresh tokens, API-nycklar (SHA-256), CSRF (csrf-csrf), webhooks HMAC-signerade |
 | PWA | vite-plugin-pwa med Workbox |
 
+## Kommandon (lokalt)
+
+Repo:t har **två** package.json — root (frontend) och `server/` (backend) — med separata vitest-sviter och beroenden. Node **22** (`.nvmrc`).
+
+| Var | Kommando | Syfte |
+|-----|----------|-------|
+| root | `npm run dev` / `npm test` / `npm run lint` / `npm run build` | Vite dev · frontend-tester · ESLint hela repo:t · prod-build |
+| `server/` | `npm run dev` / `npm test` / `npm run build` | tsx watch · backend-tester · `tsc` + kopiera `schema.sql` |
+
+Lokal helhet: `docker-compose.local.yml`.
+
 ## Infrastruktur & Hosting
 
 - **Host**: Proxmox-server med Docker via Portainer (stack `it-ticket-system`, id 39)
@@ -47,7 +58,7 @@ Affärsmodell: open source + betald support/managed hosting. Ingen multi-tenancy
 
 `JWT_SECRET`, `CSRF_SECRET`, `ADMIN_PASSWORD`, `ANTHROPIC_API_KEY`, `VAPID_*`, `SMTP_*`, `IMAP_*` (host/port/user/secure/poll, samt OAuth: `IMAP_TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`).
 
-Backend `process.exit(1)` om `CSRF_SECRET` saknas — **ovillkorligt, även i dev** (server/src/index.ts, ingen NODE_ENV-gate, ingen fallback). Gäller även `JWT_SECRET` i prod. Portainer-stack-filen är **separat** från repo-versionen — nya env-rader måste läggas till manuellt i Portainer GUI (se `Projekt/IT-System/lessons.md`).
+Backend `process.exit(1)` om `CSRF_SECRET` eller `JWT_SECRET` **saknas** — ovillkorligt i alla miljöer (CSRF: `server/src/app.ts`, JWT: `server/src/config/passport.ts`; **inte** `index.ts`). Är secret satt men **kortare än 32 tecken** failar den också closed (`process.exit(1)`) — utom när `ALLOW_WEAK_SECRETS=1` **och** `NODE_ENV` ∈ `development`/`test` (dubbel-gate), då bara en varning loggas. Portainer-stack-filen är **separat** från repo-versionen — nya env-rader måste läggas till manuellt i Portainer GUI (se `Projekt/IT-System/lessons.md`).
 
 ## Deployment
 
