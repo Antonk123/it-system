@@ -64,11 +64,25 @@ export const KanbanCard = memo(function KanbanCard({ ticket, onTicketClick }: Ka
         handlePointerDown(e);
         listeners?.onPointerDown?.(e as any);
       }}
+      onKeyDown={(e) => {
+        // Låt dnd-kit hantera Space (plocka upp/släpp), piltangenter och Esc.
+        listeners?.onKeyDown?.(e as any);
+        // Enter öppnar ärendet (Enter är borttaget ur KeyboardSensor:s koder).
+        if (e.key === 'Enter' && !isDragging) {
+          e.preventDefault();
+          if (onTicketClick) {
+            onTicketClick(ticket.id);
+          } else {
+            navigate(`/tickets/${ticket.id}`);
+          }
+        }
+      }}
       onClick={handleClick}
       className={cn(
         'p-3 rounded-lg cursor-pointer',
         'bg-card border border-border',
         'hover:border-primary/50 hover:bg-card/80',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         'transition-all duration-200',
         isDragging && 'opacity-50 scale-95 shadow-2xl z-50 ring-2 ring-primary cursor-grabbing'
       )}
