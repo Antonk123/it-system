@@ -84,6 +84,32 @@ Standardflöde: lokal utveckling → push → Anton bygger images via SSH → **
 - Obsidian-dokumentation i övrigt: se `Projekt/IT-System/` i vaultet
 - Generella arbetsregler (plan mode, verifiering, subagenter, kvalitet) ärvs från `~/.claude/CLAUDE.md`
 
+## Automatiseringar (projektets egna)
+
+Detta register laddas varje session så Claude vet vad som finns och *när* det ska användas — du ska aldrig behöva minnas att köra något manuellt. **Lägg till nya hooks/skills/agenter här när de skapas.**
+
+**Hur de fyrar:**
+- **Hooks** → körs av Claude Code automatiskt på tool-events (noll minnesbörda).
+- **Subagenter** → auto-fyrar *inte*; Claude anropar dem själv när tasken matchar tabellen nedan. Det här registret + agenternas description är det som gör att Claude vet att de finns.
+- **Skills** → model-invocable skills väljer Claude själv via sin description.
+
+### Subagenter (`.claude/agents/`)
+
+| Agent | Anropa när |
+|-------|-----------|
+| `security-reviewer` | Diff rör auth/secrets/CSRF/JWT/API-nycklar/webhooks/HMAC, ny Express-route, raw SQL med template-literals (`SET ${...}`), `dangerouslySetInnerHTML`, eller före merge av säkerhetskänsligt arbete. |
+| `a11y-ui-reviewer` | Frontend-ändring i `src/components/**` / `src/pages/**`, dialoger/forms/tabeller/Kanban (dnd-kit), nya interaktiva element, eller före merge av en frontend-feature. |
+| `bug-detective` | Buggrapport, oväntat beteende, UX-/prestanda-regression (befintlig). |
+| `code-reviewer` | Efter avslutat större steg, före merge mot main (befintlig). |
+
+### Hooks (`.claude/settings.json`)
+
+Inga projekt-egna hooks ännu. (Förslag ligger i en pausad `automation-recommender`-workflow — återuppta för auto-format/type-check + blockering av `.env`-edits.)
+
+### Skills (`.claude/skills/`)
+
+Inga projekt-egna skills ännu. (Samma pausade workflow har förslag, t.ex. en db-migration-skill som auto-påminner om `migrations.ts`-arrayen.)
+
 ## Frontend Aesthetics
 
 <frontend_aesthetics>
