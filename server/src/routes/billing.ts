@@ -7,6 +7,10 @@ import { logger } from '../lib/logger.js';
 
 const router = Router();
 
+// Standardmomssats (svensk normalmoms). Kan överstyras per faktura vid skapande.
+const DEFAULT_VAT_RATE = 0.25;
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
 interface TimeEntryPreview {
   time_entry_id: string;
   ticket_id: string;
@@ -72,14 +76,20 @@ interface InvoiceRow {
   period_start: string;
   period_end: string;
   status: string;
+  invoice_number: number | null;
   total_hours: number;
   total_amount: number;
+  vat_rate: number;
+  vat_amount: number;
   currency: string;
   pdf_path: string | null;
   created_at: string;
   sent_at: string | null;
   paid_at: string | null;
 }
+
+// Kolumnlista för fakturor (utan tabellprefix) — återanvänds i SELECT:ar.
+const INVOICE_COLS = 'id, company_id, period_start, period_end, status, invoice_number, total_hours, total_amount, vat_rate, vat_amount, currency, pdf_path, created_at, sent_at, paid_at';
 
 interface InvoiceLineRow {
   id: string;
@@ -98,7 +108,7 @@ router.get('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Resp
     const companyId = req.query.company_id as string | undefined;
     let invoices: (InvoiceRow & { company_name: string })[];
 
-    const invoiceCols = 'i.id, i.company_id, i.period_start, i.period_end, i.status, i.total_hours, i.total_amount, i.currency, i.pdf_path, i.created_at, i.sent_at, i.paid_at';
+    const invoiceCols = 'i.id, i.company_id, i.period_start, i.period_end, i.status, i.invoice_number, i.total_hours, i.total_amount, i.vat_rate, i.vat_amount, i.currency, i.pdf_path, i.created_at, i.sent_at, i.paid_at';
     if (companyId) {
       invoices = db.prepare(`
         SELECT ${invoiceCols}, co.name as company_name
@@ -127,7 +137,7 @@ router.get('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Resp
 router.get('/invoices/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const invoice = db.prepare(`
-      SELECT i.id, i.company_id, i.period_start, i.period_end, i.status, i.total_hours, i.total_amount, i.currency, i.pdf_path, i.created_at, i.sent_at, i.paid_at,
+      SELECT i.id, i.company_id, i.period_start, i.period_end, i.status, i.invoice_number, i.total_hours, i.total_amount, i.vat_rate, i.vat_amount, i.currency, i.pdf_path, i.created_at, i.sent_at, i.paid_at,
              co.name as company_name, co.org_number, co.email as company_email, co.address as company_address
       FROM invoices i
       JOIN companies co ON i.company_id = co.id
@@ -171,7 +181,7 @@ router.post('/invoices/preview', authenticate, requireAdmin, (req: AuthRequest, 
       return res.status(400).json({ error: 'No billing rate set for this company' });
     }
 
-    // Get time entries for this company in the period
+    // Get billable, not-yet-invoiced time entries for this company in the period.
     const entries = db.prepare(`
       SELECT te.id as time_entry_id, te.ticket_id, te.duration_minutes, te.note, te.created_at,
              t.title as ticket_title
@@ -180,6 +190,8 @@ router.post('/invoices/preview', authenticate, requireAdmin, (req: AuthRequest, 
       WHERE t.company_id = ?
         AND te.created_at >= ?
         AND te.created_at < ?
+        AND te.billable = 1
+        AND te.invoice_id IS NULL
       ORDER BY te.created_at ASC
     `).all(company_id, period_start, period_end) as TimeEntryPreview[];
 
@@ -214,7 +226,9 @@ router.post('/invoices/preview', authenticate, requireAdmin, (req: AuthRequest, 
     });
 
     const totalHours = lines.reduce((sum, l) => sum + l.hours, 0);
-    const totalAmount = lines.reduce((sum, l) => sum + l.amount, 0);
+    const totalAmount = round2(lines.reduce((sum, l) => sum + l.amount, 0));
+    const vatRate = DEFAULT_VAT_RATE;
+    const vatAmount = round2(totalAmount * vatRate);
 
     res.json({
       company_id,
@@ -224,7 +238,10 @@ router.post('/invoices/preview', authenticate, requireAdmin, (req: AuthRequest, 
       currency: rate.currency,
       lines,
       total_hours: Math.round(totalHours * 100) / 100,
-      total_amount: Math.round(totalAmount * 100) / 100,
+      total_amount: totalAmount,
+      vat_rate: vatRate,
+      vat_amount: vatAmount,
+      total_incl_vat: round2(totalAmount + vatAmount),
     });
   } catch (error) {
     logger.error('Error previewing invoice:', { error: String(error) });
@@ -235,7 +252,7 @@ router.post('/invoices/preview', authenticate, requireAdmin, (req: AuthRequest, 
 // POST /invoices — create invoice from preview
 router.post('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
-    const { company_id, period_start, period_end, lines, currency } = req.body;
+    const { company_id, period_start, period_end, lines, currency, vat_rate } = req.body;
 
     if (!company_id || !period_start || !period_end || !lines) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -243,6 +260,15 @@ router.post('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Res
 
     if (!Array.isArray(lines) || lines.length === 0) {
       return res.status(400).json({ error: 'At least one invoice line is required' });
+    }
+
+    // Momssats: överstyrbar per faktura, annars standard. Validera 0..1.
+    let vatRate = DEFAULT_VAT_RATE;
+    if (vat_rate !== undefined) {
+      if (typeof vat_rate !== 'number' || vat_rate < 0 || vat_rate > 1) {
+        return res.status(400).json({ error: 'vat_rate must be a number between 0 and 1' });
+      }
+      vatRate = vat_rate;
     }
 
     // L28: Check overlapping invoice periods for the same company
@@ -259,12 +285,18 @@ router.post('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Res
     const computedTotalAmount = Math.round(lines.reduce((sum: number, l: any) => sum + (Number(l.amount) || 0), 0) * 100) / 100;
 
     const invoiceId = uuidv4();
+    const vatAmount = round2(computedTotalAmount * vatRate);
 
     db.transaction(() => {
+      // Gapless löpnummer (global serie). MAX+1 inom transaktionen är säkert:
+      // better-sqlite3 är synkront och SQLite serialiserar skrivningar; det
+      // partiella unika indexet på invoice_number är dessutom en backstop.
+      const nextNumber = (db.prepare('SELECT COALESCE(MAX(invoice_number), 0) + 1 AS n FROM invoices').get() as { n: number }).n;
+
       db.prepare(`
-        INSERT INTO invoices (id, company_id, period_start, period_end, total_hours, total_amount, currency)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(invoiceId, company_id, period_start, period_end, computedTotalHours, computedTotalAmount, currency || 'SEK');
+        INSERT INTO invoices (id, company_id, period_start, period_end, invoice_number, total_hours, total_amount, vat_rate, vat_amount, currency)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(invoiceId, company_id, period_start, period_end, nextNumber, computedTotalHours, computedTotalAmount, vatRate, vatAmount, currency || 'SEK');
 
       const insertLine = db.prepare(`
         INSERT INTO invoice_lines (id, invoice_id, ticket_id, description, hours, rate, amount)
@@ -274,10 +306,23 @@ router.post('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Res
       for (const line of lines) {
         insertLine.run(uuidv4(), invoiceId, line.ticket_id || null, line.description, line.hours, line.rate, line.amount);
       }
+
+      // Stämpla de fakturerade tidsposterna (billbara, ej redan fakturerade i
+      // perioden) så de inte kan dubbel-faktureras. Server-auktoritativt urval
+      // som matchar preview-queryn.
+      db.prepare(`
+        UPDATE time_entries SET invoice_id = ?
+        WHERE id IN (
+          SELECT te.id FROM time_entries te
+          JOIN tickets t ON te.ticket_id = t.id
+          WHERE t.company_id = ? AND te.created_at >= ? AND te.created_at < ?
+            AND te.billable = 1 AND te.invoice_id IS NULL
+        )
+      `).run(invoiceId, company_id, period_start, period_end);
     })();
 
     const invoice = db.prepare(
-      'SELECT id, company_id, period_start, period_end, status, total_hours, total_amount, currency, pdf_path, created_at, sent_at, paid_at FROM invoices WHERE id = ?'
+      `SELECT ${INVOICE_COLS} FROM invoices WHERE id = ?`
     ).get(invoiceId);
 
     logAudit(req.user!.id, 'invoice_create', 'invoice', invoiceId, `company: ${company_id}, amount: ${computedTotalAmount}`, req.ip);
@@ -298,7 +343,7 @@ router.put('/invoices/:id/status', authenticate, requireAdmin, (req: AuthRequest
     }
 
     const existing = db.prepare(
-      'SELECT id, company_id, period_start, period_end, status, total_hours, total_amount, currency, pdf_path, created_at, sent_at, paid_at FROM invoices WHERE id = ?'
+      `SELECT ${INVOICE_COLS} FROM invoices WHERE id = ?`
     ).get(req.params.id) as InvoiceRow | undefined;
     if (!existing) {
       return res.status(404).json({ error: 'Invoice not found' });
@@ -322,7 +367,7 @@ router.put('/invoices/:id/status', authenticate, requireAdmin, (req: AuthRequest
     logAudit(req.user!.id, 'invoice_status_change', 'invoice', req.params.id, `${existing.status} -> ${status}`, req.ip);
 
     const invoice = db.prepare(
-      'SELECT id, company_id, period_start, period_end, status, total_hours, total_amount, currency, pdf_path, created_at, sent_at, paid_at FROM invoices WHERE id = ?'
+      `SELECT ${INVOICE_COLS} FROM invoices WHERE id = ?`
     ).get(req.params.id);
     res.json(invoice);
   } catch (error) {

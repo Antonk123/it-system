@@ -1148,9 +1148,23 @@ class ApiClient {
     );
   }
 
-  async createTimeEntry(ticketId: string, payload: { duration_minutes: number; note?: string }) {
+  async createTimeEntry(
+    ticketId: string,
+    payload: { duration_minutes: number; note?: string; billable?: boolean; work_date?: string | null }
+  ) {
     return this.request<TimeEntryRow>(`/time-entries/${ticketId}`, {
       method: 'POST',
+      body: payload,
+    });
+  }
+
+  async updateTimeEntry(
+    ticketId: string,
+    entryId: string,
+    payload: { duration_minutes?: number; note?: string | null; billable?: boolean; work_date?: string | null }
+  ) {
+    return this.request<TimeEntryRow>(`/time-entries/${ticketId}/${entryId}`, {
+      method: 'PUT',
       body: payload,
     });
   }
@@ -1237,7 +1251,7 @@ class ApiClient {
     });
   }
 
-  async createInvoice(data: { company_id: string; period_start: string; period_end: string; lines: any[]; total_hours: number; total_amount: number; currency: string }) {
+  async createInvoice(data: { company_id: string; period_start: string; period_end: string; lines: any[]; total_hours: number; total_amount: number; currency: string; vat_rate?: number }) {
     return this.request<InvoiceRow>('/billing/invoices', {
       method: 'POST',
       body: data,
@@ -1715,11 +1729,14 @@ export interface InvoiceRow {
   id: string;
   company_id: string;
   company_name?: string;
+  invoice_number: number | null;
   period_start: string;
   period_end: string;
   status: string;
   total_hours: number;
-  total_amount: number;
+  total_amount: number; // NETTO (exkl moms)
+  vat_rate: number;     // t.ex. 0.25
+  vat_amount: number;
   currency: string;
   created_at: string;
   sent_at: string | null;
@@ -1751,7 +1768,10 @@ export interface InvoicePreview {
   currency: string;
   lines: Array<InvoiceLineRow & { entry_count: number }>;
   total_hours: number;
-  total_amount: number;
+  total_amount: number;   // NETTO (exkl moms)
+  vat_rate: number;       // t.ex. 0.25
+  vat_amount: number;
+  total_incl_vat: number;
 }
 
 export interface RequesterAnalyticsRow {

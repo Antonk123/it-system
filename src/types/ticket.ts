@@ -242,4 +242,7 @@ export interface TimeEntryRow {
   duration_minutes: number;
   note: string | null;
   created_at: string;
+  billable: number;          // SQLite 0/1
+  work_date: string | null;  // 'YYYY-MM-DD'
+  invoice_id: string | null; // satt → redan fakturerad (kan ej redigeras)
 }

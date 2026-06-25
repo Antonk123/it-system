@@ -16,7 +16,7 @@ export function useTimeEntries(ticketId: string) {
   });
 
   const addEntry = useMutation({
-    mutationFn: (payload: { duration_minutes: number; note?: string }) =>
+    mutationFn: (payload: { duration_minutes: number; note?: string; billable?: boolean; work_date?: string | null }) =>
       api.createTimeEntry(ticketId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: timeEntryKeys.ticket(ticketId) });
@@ -24,6 +24,20 @@ export function useTimeEntries(ticketId: string) {
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Kunde inte logga tid');
+    },
+  });
+
+  const editEntry = useMutation({
+    mutationFn: ({ id, payload }: {
+      id: string;
+      payload: { duration_minutes?: number; note?: string | null; billable?: boolean; work_date?: string | null };
+    }) => api.updateTimeEntry(ticketId, id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: timeEntryKeys.ticket(ticketId) });
+      toast.success('Tidpost uppdaterad');
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Kunde inte uppdatera tidpost');
     },
   });
 
@@ -43,8 +57,10 @@ export function useTimeEntries(ticketId: string) {
     totalMinutes: data?.total_minutes ?? 0,
     isLoading,
     addEntry: addEntry.mutate,
+    editTimeEntry: editEntry.mutateAsync,
     deleteEntry: deleteEntry.mutate,
     isAdding: addEntry.isPending,
+    isEditing: editEntry.isPending,
     isDeleting: deleteEntry.isPending,
   };
 }

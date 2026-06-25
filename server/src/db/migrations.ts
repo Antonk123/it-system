@@ -1267,4 +1267,39 @@ export const migrations: Migration[] = [
         END`);
     },
   },
+  {
+    id: '063',
+    name: 'invoice_authenticity_and_time_fields',
+    up: (db, { columnExists }) => {
+      // Fakturor: löpnummer (gapless global serie) + moms. invoices skapas av
+      // migration 033, så kolumnerna finns när 063 körs (även fresh-install).
+      if (!columnExists('invoices', 'invoice_number')) {
+        db.prepare('ALTER TABLE invoices ADD COLUMN invoice_number INTEGER').run();
+      }
+      if (!columnExists('invoices', 'vat_rate')) {
+        db.prepare('ALTER TABLE invoices ADD COLUMN vat_rate REAL NOT NULL DEFAULT 0').run();
+      }
+      if (!columnExists('invoices', 'vat_amount')) {
+        db.prepare('ALTER TABLE invoices ADD COLUMN vat_amount REAL NOT NULL DEFAULT 0').run();
+      }
+      // Partiellt unikt index: tvingar unikhet på tilldelade löpnummer men
+      // tillåter flera ej-numrerade (NULL) rader. Skyddar seriens integritet.
+      db.prepare(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number) WHERE invoice_number IS NOT NULL'
+      ).run();
+
+      // Tidsposter: billbar-flagga (default 1) + arbetsdatum + invoice_id (stämpel
+      // som markerar att posten är fakturerad → förhindrar dubbel-fakturering).
+      // time_entries skapas av migration 021.
+      if (!columnExists('time_entries', 'billable')) {
+        db.prepare('ALTER TABLE time_entries ADD COLUMN billable INTEGER NOT NULL DEFAULT 1').run();
+      }
+      if (!columnExists('time_entries', 'work_date')) {
+        db.prepare('ALTER TABLE time_entries ADD COLUMN work_date TEXT').run();
+      }
+      if (!columnExists('time_entries', 'invoice_id')) {
+        db.prepare('ALTER TABLE time_entries ADD COLUMN invoice_id TEXT REFERENCES invoices(id) ON DELETE SET NULL').run();
+      }
+    },
+  },
 ];
