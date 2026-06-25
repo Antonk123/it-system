@@ -25,6 +25,7 @@ import { useInvoices, useInvoiceDetail } from '@/hooks/useBilling';
 import { api, InvoicePreview, InvoiceRow } from '@/lib/api';
 import { formatDate } from '@/lib/date';
 import { toast } from 'sonner';
+import { EmptyState } from '@/components/EmptyState';
 
 const STATUS_LABELS: Record<string, string> = {
   draft: 'Utkast',
@@ -107,6 +108,10 @@ function InvoiceDetailDialog({ invoiceId, open, onClose, onStatusChange, onDelet
                 <p className="text-muted-foreground">Skapad</p>
                 <p className="font-medium">{formatDate(invoice.created_at)}</p>
               </div>
+              <div>
+                <p className="text-muted-foreground">Fakturanr</p>
+                <p className="font-medium">{invoice.invoice_number != null ? `#${invoice.invoice_number}` : '—'}</p>
+              </div>
             </div>
 
             {/* Lines table */}
@@ -136,12 +141,26 @@ function InvoiceDetailDialog({ invoiceId, open, onClose, onStatusChange, onDelet
                     </tr>
                   ))}
                 </tbody>
-                <tfoot className="bg-muted/30 font-semibold">
-                  <tr>
-                    <td className="px-3 py-2">Totalt</td>
+                <tfoot className="bg-muted/30">
+                  <tr className="font-medium">
+                    <td className="px-3 py-2">Netto</td>
                     <td className="px-3 py-2 text-right tabular-nums">{invoice.total_hours.toFixed(2)}</td>
                     <td />
                     <td className="px-3 py-2 text-right tabular-nums">{formatAmount(invoice.total_amount, invoice.currency)}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-3 py-2 text-muted-foreground" colSpan={3}>
+                      Moms ({Math.round(invoice.vat_rate * 100)}%)
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                      {formatAmount(invoice.vat_amount, invoice.currency)}
+                    </td>
+                  </tr>
+                  <tr className="font-semibold border-t">
+                    <td className="px-3 py-2" colSpan={3}>Att betala</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {formatAmount(invoice.total_amount + invoice.vat_amount, invoice.currency)}
+                    </td>
                   </tr>
                 </tfoot>
               </table>
@@ -235,6 +254,7 @@ const Invoices = () => {
         total_hours: preview.total_hours,
         total_amount: preview.total_amount,
         currency: preview.currency,
+        vat_rate: preview.vat_rate,
       });
       setPreview(null);
     } finally {
@@ -322,12 +342,26 @@ const Invoices = () => {
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="bg-muted/30 font-semibold">
-                      <tr>
-                        <td className="px-3 py-2">Totalt</td>
+                    <tfoot className="bg-muted/30">
+                      <tr className="font-medium">
+                        <td className="px-3 py-2">Netto</td>
                         <td className="px-3 py-2 text-right tabular-nums">{preview.total_hours.toFixed(2)} h</td>
                         <td className="px-3 py-2 text-right tabular-nums">
                           {formatAmount(preview.total_amount, preview.currency)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td className="px-3 py-2 text-muted-foreground" colSpan={2}>
+                          Moms ({Math.round(preview.vat_rate * 100)}%)
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                          {formatAmount(preview.vat_amount, preview.currency)}
+                        </td>
+                      </tr>
+                      <tr className="font-semibold border-t">
+                        <td className="px-3 py-2" colSpan={2}>Att betala</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {formatAmount(preview.total_incl_vat, preview.currency)}
                         </td>
                       </tr>
                     </tfoot>
@@ -366,16 +400,21 @@ const Invoices = () => {
                 {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
               </div>
             ) : filteredInvoices.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Inga fakturor hittades.</p>
+              <EmptyState
+                icon={<Receipt />}
+                title="Inga fakturor hittades"
+                description="Fyll i formuläret ovan för att förhandsgranska och skapa din första faktura."
+              />
             ) : (
               <div className="border rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                   <thead className="bg-muted/50">
                     <tr>
+                      <th scope="col" className="text-left px-3 py-2 font-medium text-muted-foreground">Nr</th>
                       <th scope="col" className="text-left px-3 py-2 font-medium text-muted-foreground">Företag</th>
                       <th scope="col" className="text-left px-3 py-2 font-medium text-muted-foreground">Period</th>
                       <th scope="col" className="text-right px-3 py-2 font-medium text-muted-foreground">Timmar</th>
-                      <th scope="col" className="text-right px-3 py-2 font-medium text-muted-foreground">Belopp</th>
+                      <th scope="col" className="text-right px-3 py-2 font-medium text-muted-foreground">Netto</th>
                       <th scope="col" className="text-left px-3 py-2 font-medium text-muted-foreground">Status</th>
                     </tr>
                   </thead>
@@ -394,6 +433,9 @@ const Invoices = () => {
                           }
                         }}
                       >
+                        <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                          {inv.invoice_number != null ? `#${inv.invoice_number}` : '—'}
+                        </td>
                         <td className="px-3 py-2 font-medium">{inv.company_name ?? '—'}</td>
                         <td className="px-3 py-2 text-muted-foreground">
                           {formatDate(inv.period_start)} – {formatDate(inv.period_end)}

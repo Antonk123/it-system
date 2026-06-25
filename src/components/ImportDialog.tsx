@@ -222,24 +222,24 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
 
               <div className="border rounded-lg p-4 bg-card">
                 <div className="flex items-center gap-2 mb-1">
-                  <XCircle className="w-4 h-4 text-red-500" />
+                  <XCircle className="w-4 h-4 text-destructive" />
                   <span className="text-sm text-muted-foreground">Ogiltiga</span>
                 </div>
-                <p className="text-2xl font-bold text-red-600">{preview.invalid}</p>
+                <p className="text-2xl font-bold text-destructive">{preview.invalid}</p>
               </div>
 
               <div className="border rounded-lg p-4 bg-card">
                 <div className="flex items-center gap-2 mb-1">
-                  <AlertCircle className="w-4 h-4 text-yellow-500" />
+                  <AlertCircle className="w-4 h-4 text-warning" />
                   <span className="text-sm text-muted-foreground">Dubletter</span>
                 </div>
-                <p className="text-2xl font-bold text-yellow-600">{preview.duplicates}</p>
+                <p className="text-2xl font-bold text-warning">{preview.duplicates}</p>
               </div>
             </div>
 
             {preview.results.filter(r => !r.valid).length > 0 && (
-              <div className="border rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
-                <h4 className="font-semibold mb-2 text-red-900 dark:text-red-100">
+              <div className="border rounded-lg p-4 bg-destructive/10">
+                <h4 className="font-semibold mb-2 text-destructive">
                   Valideringsfel ({preview.results.filter(r => !r.valid).length} st)
                 </h4>
                 <div className="space-y-3 max-h-60 overflow-y-auto">
@@ -247,11 +247,11 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
                     .filter(r => !r.valid)
                     .slice(0, 10)
                     .map((result, idx) => (
-                      <div key={idx} className="text-sm border-b border-red-200 dark:border-red-800 pb-2 last:border-0">
-                        <p className="font-medium text-red-800 dark:text-red-200">
+                      <div key={idx} className="text-sm border-b border-destructive/20 pb-2 last:border-0">
+                        <p className="font-medium text-destructive">
                           {result.ticket.title || '(Ingen titel)'}
                         </p>
-                        <div className="text-xs text-red-600 dark:text-red-400 mt-1 space-y-1">
+                        <div className="text-xs text-destructive/80 mt-1 space-y-1">
                           {result.ticket.category && (
                             <p>Kategori: {result.ticket.category}</p>
                           )}
@@ -259,7 +259,7 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
                             <p>Beställare: {result.ticket.requester_name}</p>
                           )}
                         </div>
-                        <ul className="list-disc list-inside text-red-700 dark:text-red-300 mt-1">
+                        <ul className="list-disc list-inside text-destructive mt-1">
                           {result.errors.map((error, i) => (
                             <li key={i}>{error}</li>
                           ))}
@@ -268,7 +268,7 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
                     ))}
                 </div>
                 {preview.results.filter(r => !r.valid).length > 10 && (
-                  <p className="text-sm text-red-700 dark:text-red-300 mt-2">
+                  <p className="text-sm text-destructive mt-2">
                     ... och {preview.results.filter(r => !r.valid).length - 10} till
                   </p>
                 )}
@@ -277,8 +277,8 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
 
             {/* Debug info for valid tickets */}
             {preview.results.filter(r => r.valid).length > 0 && (
-              <div className="border rounded-lg p-4 bg-green-50 dark:bg-green-950/20">
-                <h4 className="font-semibold mb-2 text-green-900 dark:text-green-100">
+              <div className="border rounded-lg p-4 bg-success/10">
+                <h4 className="font-semibold mb-2 text-success">
                   Giltiga ärenden ({preview.results.filter(r => r.valid).length} st)
                 </h4>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -287,10 +287,10 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
                     .slice(0, 5)
                     .map((result, idx) => (
                       <div key={idx} className="text-sm">
-                        <p className="font-medium text-green-800 dark:text-green-200">
+                        <p className="font-medium text-success">
                           {result.ticket.title}
                         </p>
-                        <p className="text-xs text-green-600 dark:text-green-400">
+                        <p className="text-xs text-success/80">
                           Kategori: {result.ticket.category || '(ingen)'} |
                           Beställare: {result.ticket.requester_name || '(ingen)'}
                         </p>

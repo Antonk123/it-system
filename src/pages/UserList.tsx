@@ -1,8 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { format } from 'date-fns';
-import { sv } from 'date-fns/locale';
-import { Plus, Pencil, Trash2, Users as UsersIcon, Ticket, Download, Upload, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users as UsersIcon, Download, Upload, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useUsers } from '@/hooks/useUsers';
 import { useCompanies } from '@/hooks/useCompanies';
@@ -12,7 +10,6 @@ import { EmptyState } from '@/components/EmptyState';
 import { UserTicketHistory } from '@/components/UserTicketHistory';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -47,7 +44,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { User } from '@/types/ticket';
 
 const UserList = () => {
-  const { users, isLoading: usersLoading, addUser, updateUser, deleteUser, refetch } = useUsers();
+  const { users, isLoading: usersLoading, isError, addUser, updateUser, deleteUser, refetch } = useUsers();
   const { companies } = useCompanies();
   // Serverside-aggregat istället för att ladda hela ticket-listan client-side.
   const { data: openTicketsByUser = {} } = useQuery({
@@ -385,17 +382,36 @@ const UserList = () => {
         </div>
 
         {usersLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Card key={i}>
-                <CardContent className="p-4 space-y-3">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-40" />
-                  <Skeleton className="h-3 w-24" />
-                  <Skeleton className="h-9 w-full mt-2" />
-                </CardContent>
-              </Card>
-            ))}
+          <div className="border rounded-lg overflow-hidden bg-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">E-post</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Företag</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Avdelning</th>
+                  <th scope="col" className="text-right px-4 py-3 font-medium text-muted-foreground tabular-nums">Öppna ärenden</th>
+                  <th scope="col" className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i} className="border-b last:border-0">
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                    <td className="px-4 py-3 hidden sm:table-cell"><Skeleton className="h-4 w-40" /></td>
+                    <td className="px-4 py-3 hidden md:table-cell"><Skeleton className="h-4 w-28" /></td>
+                    <td className="px-4 py-3 hidden lg:table-cell"><Skeleton className="h-4 w-24" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-8 ml-auto" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-8 w-16 ml-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : isError ? (
+          <div className="text-center py-12 space-y-2">
+            <p className="text-destructive text-sm">Kunde inte hämta användare</p>
+            <Button variant="outline" size="sm" onClick={refetch}>Försök igen</Button>
           </div>
         ) : filteredUsers.length === 0 ? (
           search === '' && companyFilter === 'all' ? (
@@ -417,77 +433,91 @@ const UserList = () => {
           )
         ) : (
           <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {paginatedUsers.map(user => (
-              <Card key={user.id}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h2 className="font-medium text-foreground truncate">{user.name}</h2>
-                        {openTicketsByUser[user.id] > 0 && (
-                          <Badge variant="secondary" className="shrink-0">
-                            {openTicketsByUser[user.id]} öppna
-                          </Badge>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground truncate">{user.email}</p>
-                      {(user as any).company_name && (
-                        <p className="text-sm text-muted-foreground mt-1">{(user as any).company_name}</p>
-                      )}
-                      {user.department && (
-                        <p className="text-xs text-muted-foreground">{user.department}</p>
-                      )}
-                      <p className="text-xs text-muted-foreground mt-2">
-                        Tillagd {format(user.createdAt, 'd MMM yyyy', { locale: sv })}
-                      </p>
-                    </div>
-                    <div className="flex gap-1 ml-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => handleEdit(user)}
-                        aria-label="Redigera användare"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" aria-label="Ta bort användare">
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Ta bort användare</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Är du säker på att du vill ta bort {user.name}? Denna åtgärd kan inte ångras.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Avbryt</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => deleteUser(user.id)}>
-                              Ta bort
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full mt-3 gap-2"
+          <div className="border rounded-lg overflow-hidden bg-card">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">E-post</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Företag</th>
+                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Avdelning</th>
+                  <th scope="col" className="text-right px-4 py-3 font-medium text-muted-foreground tabular-nums">Öppna ärenden</th>
+                  <th scope="col" className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedUsers.map(user => (
+                  <tr
+                    key={user.id}
+                    className="border-b last:border-0 hover:bg-muted/40 cursor-pointer transition-colors"
                     onClick={() => setSelectedUser(user)}
                   >
-                    <Ticket className="w-4 h-4" />
-                    Visa ärenden
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                    <td className="px-4 py-3 font-medium text-foreground">
+                      <button
+                        type="button"
+                        className="text-left rounded-sm hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={(e) => { e.stopPropagation(); setSelectedUser(user); }}
+                      >
+                        {user.name}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">{user.email}</td>
+                    <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
+                      {(user as any).company_name || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground hidden lg:table-cell">
+                      {user.department || '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      <div className="flex justify-end">
+                        {openTicketsByUser[user.id] > 0 ? (
+                          <Badge variant="secondary">{openTicketsByUser[user.id]}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </div>
+                    </td>
+                    <td
+                      className="px-4 py-3"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleEdit(user)}
+                          aria-label="Redigera användare"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" aria-label="Ta bort användare">
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Ta bort användare</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Är du säker på att du vill ta bort {user.name}? Denna åtgärd kan inte ångras.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Avbryt</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deleteUser(user.id)}>
+                                Ta bort
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           {/* Pagination Controls */}
@@ -589,25 +619,25 @@ const UserList = () => {
                     </div>
                     <p className="text-2xl font-bold font-mono tabular-nums">{importPreview.total}</p>
                   </div>
-                  <div className="border rounded-lg p-3 bg-green-50 dark:bg-green-950/20">
-                    <div className="flex items-center gap-2 text-green-600 mb-1">
+                  <div className="border rounded-lg p-3 bg-success/10">
+                    <div className="flex items-center gap-2 text-success mb-1">
                       <Plus className="w-4 h-4" />
                       <span className="text-sm">Giltiga</span>
                     </div>
-                    <p className="text-2xl font-bold text-green-600 font-mono tabular-nums">{importPreview.valid}</p>
+                    <p className="text-2xl font-bold text-success font-mono tabular-nums">{importPreview.valid}</p>
                   </div>
-                  <div className="border rounded-lg p-3 bg-red-50 dark:bg-red-950/20">
-                    <div className="flex items-center gap-2 text-red-600 mb-1">
+                  <div className="border rounded-lg p-3 bg-destructive/10">
+                    <div className="flex items-center gap-2 text-destructive mb-1">
                       <Trash2 className="w-4 h-4" />
                       <span className="text-sm">Ogiltiga</span>
                     </div>
-                    <p className="text-2xl font-bold text-red-600 font-mono tabular-nums">{importPreview.invalid}</p>
+                    <p className="text-2xl font-bold text-destructive font-mono tabular-nums">{importPreview.invalid}</p>
                   </div>
                 </div>
 
                 {importPreview.results.filter((r: any) => !r.valid).length > 0 && (
-                  <div className="border rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
-                    <h4 className="font-semibold mb-2 text-red-900 dark:text-red-100">
+                  <div className="border rounded-lg p-4 bg-destructive/10">
+                    <h4 className="font-semibold mb-2 text-destructive">
                       Valideringsfel ({importPreview.results.filter((r: any) => !r.valid).length} st)
                     </h4>
                     <div className="space-y-3 max-h-60 overflow-y-auto">
@@ -615,16 +645,16 @@ const UserList = () => {
                         .filter((r: any) => !r.valid)
                         .slice(0, 10)
                         .map((result: any, idx: number) => (
-                          <div key={idx} className="text-sm border-b border-red-200 dark:border-red-800 pb-2 last:border-0">
-                            <p className="font-medium text-red-800 dark:text-red-200">
+                          <div key={idx} className="text-sm border-b border-destructive/20 pb-2 last:border-0">
+                            <p className="font-medium text-destructive">
                               {result.contact.name || result.contact.email || '(Tom rad)'}
                             </p>
                             {result.contact.email && (
-                              <p className="text-xs text-red-600 dark:text-red-400 mt-1">
+                              <p className="text-xs text-destructive mt-1">
                                 {result.contact.email}
                               </p>
                             )}
-                            <ul className="list-disc list-inside text-red-700 dark:text-red-300 mt-1">
+                            <ul className="list-disc list-inside text-destructive mt-1">
                               {result.errors.map((error: string, i: number) => (
                                 <li key={i}>{error}</li>
                               ))}
@@ -633,7 +663,7 @@ const UserList = () => {
                         ))}
                     </div>
                     {importPreview.results.filter((r: any) => !r.valid).length > 10 && (
-                      <p className="text-sm text-red-700 dark:text-red-300 mt-2">
+                      <p className="text-sm text-destructive mt-2">
                         ... och {importPreview.results.filter((r: any) => !r.valid).length - 10} till
                       </p>
                     )}
@@ -641,8 +671,8 @@ const UserList = () => {
                 )}
 
                 {importPreview.results.filter((r: any) => r.valid).length > 0 && (
-                  <div className="border rounded-lg p-4 bg-green-50 dark:bg-green-950/20">
-                    <h4 className="font-semibold mb-2 text-green-900 dark:text-green-100">
+                  <div className="border rounded-lg p-4 bg-success/10">
+                    <h4 className="font-semibold mb-2 text-success">
                       Giltiga användare ({importPreview.results.filter((r: any) => r.valid).length} st)
                     </h4>
                     <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -651,10 +681,10 @@ const UserList = () => {
                         .slice(0, 5)
                         .map((result: any, idx: number) => (
                           <div key={idx} className="text-sm">
-                            <p className="font-medium text-green-800 dark:text-green-200">
+                            <p className="font-medium text-success">
                               {result.contact.name}
                             </p>
-                            <p className="text-xs text-green-600 dark:text-green-400">
+                            <p className="text-xs text-success">
                               {result.contact.email}
                               {result.contact.company && ` | ${result.contact.company}`}
                             </p>

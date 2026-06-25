@@ -396,7 +396,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
             className={cn(
               'mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
               isActive
-                ? 'bg-emerald-500/15 text-emerald-500'
+                ? 'bg-success/15 text-success'
                 : 'bg-[hsl(var(--warning))]/15 text-[hsl(var(--warning))]'
             )}
           >
@@ -411,7 +411,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
                 className={cn(
                   'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
                   isActive
-                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                    ? 'bg-success/15 text-success'
                     : 'bg-[hsl(var(--warning))]/15 text-[hsl(var(--warning))]'
                 )}
               >
@@ -462,7 +462,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
               {isActive ? (
                 <Pause className="h-4 w-4 text-[hsl(var(--warning))]" />
               ) : (
-                <Play className="h-4 w-4 text-emerald-500" />
+                <Play className="h-4 w-4 text-success" />
               )}
             </Button>
 

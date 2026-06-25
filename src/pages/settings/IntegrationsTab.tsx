@@ -163,8 +163,8 @@ const IntegrationsTab = () => {
                 </div>
 
                 {createdApiKey && (
-                  <div className="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-3 space-y-2">
-                    <p className="text-sm font-medium text-yellow-400">Kopiera nyckeln nu — den visas bara en gång!</p>
+                  <div className="rounded-md border border-warning/30 bg-warning/10 p-3 space-y-2">
+                    <p className="text-sm font-medium text-warning">Kopiera nyckeln nu — den visas bara en gång!</p>
                     <div className="flex items-center gap-2">
                       <code className="flex-1 text-xs bg-background/50 p-2 rounded font-mono break-all">{createdApiKey}</code>
                       <Button
@@ -192,7 +192,7 @@ const IntegrationsTab = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-sm truncate">{key.name}</p>
-                          <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${keyCanWrite(key.permissions) ? 'bg-amber-500/15 text-amber-500' : 'bg-muted text-muted-foreground'}`}>
+                          <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${keyCanWrite(key.permissions) ? 'bg-warning/15 text-warning' : 'bg-muted text-muted-foreground'}`}>
                             {keyCanWrite(key.permissions) ? 'Läs + Skriv' : 'Läs'}
                           </span>
                         </div>

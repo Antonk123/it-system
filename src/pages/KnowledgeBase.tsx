@@ -30,6 +30,7 @@ import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { EmptyState } from '@/components/EmptyState';
 
 const listContainer: Variants = {
   hidden: {},
@@ -76,7 +77,7 @@ const KnowledgeBase = () => {
   // (the URL/input value updates immediately; only the fetch is delayed).
   const debouncedSearch = useDebounce(search, 200);
 
-  const { articles, isLoading, refetch: refetchArticles } = useKbArticles({
+  const { articles, isLoading, isError, refetch: refetchArticles } = useKbArticles({
     search: debouncedSearch || undefined,
     category_id: !debouncedSearch && selectedCategoryId ? selectedCategoryId : undefined,
     article_type: typeFilter !== 'all' ? typeFilter : undefined,
@@ -448,6 +449,18 @@ const KnowledgeBase = () => {
                     </div>
                   ))}
                 </motion.div>
+              ) : isError ? (
+                <motion.div
+                  key="error"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="text-center py-12 space-y-2"
+                >
+                  <p className="text-destructive text-sm">Kunde inte hämta artiklar</p>
+                  <Button variant="outline" size="sm" onClick={refetchArticles}>Försök igen</Button>
+                </motion.div>
               ) : articles.length === 0 ? (
                 <motion.div
                   key="empty"
@@ -455,16 +468,37 @@ const KnowledgeBase = () => {
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   transition={{ duration: 0.15 }}
-                  className="text-center py-16 text-muted-foreground"
                 >
-                  <BookOpen className="w-10 h-10 mx-auto mb-3 opacity-30" />
-                  <p className="text-sm">
-                    {isSearching
-                      ? `Inga artiklar hittades för "${search}"`
-                      : typeFilter !== 'all'
-                      ? 'Inga artiklar matchar filtret'
-                      : 'Inga artiklar ännu — skapa din första!'}
-                  </p>
+                  <EmptyState
+                    icon={<BookOpen />}
+                    title={
+                      isSearching
+                        ? `Inga artiklar hittades för "${search}"`
+                        : typeFilter !== 'all' || staleFilter
+                        ? 'Inga artiklar matchar filtret'
+                        : 'Inga artiklar ännu'
+                    }
+                    description={
+                      !isSearching && typeFilter === 'all' && !staleFilter
+                        ? 'Kom igång genom att skapa din första artikel.'
+                        : undefined
+                    }
+                    hasFilters={isSearching || typeFilter !== 'all' || staleFilter}
+                    onClearFilters={() => {
+                      updateParam('search', null);
+                      updateParam('type', null);
+                      setStaleFilter(false);
+                    }}
+                    action={
+                      <Button
+                        size="sm"
+                        onClick={() => navigate(`/kb/new${selectedCategoryId ? `?category=${selectedCategoryId}` : ''}`)}
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Skapa artikel
+                      </Button>
+                    }
+                  />
                 </motion.div>
               ) : (
                 <motion.div

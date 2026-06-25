@@ -168,8 +168,8 @@ const PublicTicketForm = () => {
         <div className="absolute top-1/4 -left-32 w-96 h-96 rounded-full bg-primary/8 blur-[100px] pointer-events-none" />
         <div className="absolute bottom-1/4 -right-32 w-80 h-80 rounded-full bg-accent/10 blur-[100px] pointer-events-none" />
         <div className="w-full max-w-md relative z-10 text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 mb-6">
-            <ThumbsUp className="w-10 h-10 text-emerald-500" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-success/10 border border-success/20 mb-6">
+            <ThumbsUp className="w-10 h-10 text-success" />
           </div>
           <h2 className="text-2xl font-semibold text-foreground mb-2">Glad att det löste sig!</h2>
           <p className="text-muted-foreground mb-8">Inget ärende behövde skapas. Kontakta oss gärna igen om du behöver mer hjälp.</p>
@@ -397,7 +397,7 @@ const PublicTicketForm = () => {
                       <Button
                         type="button"
                         onClick={handleAiSolved}
-                        className="flex-1 h-10 rounded-xl gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                        className="flex-1 h-10 rounded-xl gap-2 bg-success hover:bg-success/90 text-success-foreground"
                       >
                         <ThumbsUp className="h-4 w-4" />
                         Det löste problemet

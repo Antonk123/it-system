@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building2, Plus, Search, Trash2, Loader2, MoreHorizontal } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,14 +14,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Label } from '@/components/ui/label';
-import { useCompanies } from '@/hooks/useCompanies';
+import { useCompanies, companyKeys } from '@/hooks/useCompanies';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/EmptyState';
 
 const CompanyList = () => {
   const navigate = useNavigate();
-  const { companies, isLoading, createCompany, deleteCompany } = useCompanies();
+  const queryClient = useQueryClient();
+  const { companies, isLoading, isError, createCompany, deleteCompany } = useCompanies();
+  const refetch = () => queryClient.invalidateQueries({ queryKey: companyKeys.list() });
 
   const [search, setSearch] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -182,6 +185,11 @@ const CompanyList = () => {
               </tbody>
             </table>
           </div>
+        ) : isError ? (
+          <div className="text-center py-12 space-y-2">
+            <p className="text-destructive text-sm">Kunde inte hämta företag</p>
+            <Button variant="outline" size="sm" onClick={refetch}>Försök igen</Button>
+          </div>
         ) : filtered.length === 0 ? (
           hasFilters ? (
             <EmptyState
@@ -221,18 +229,17 @@ const CompanyList = () => {
                   <tr
                     key={company.id}
                     className="border-b last:border-0 hover:bg-muted/40 cursor-pointer transition-colors"
-                    role="button"
-                    tabIndex={0}
                     onClick={() => navigate(`/companies/${company.id}`)}
-                    onKeyDown={(e) => {
-                      // Tangentbordsnavigering: Enter/Space navigerar till företagssidan
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        navigate(`/companies/${company.id}`);
-                      }
-                    }}
                   >
-                    <td className="px-4 py-3 font-medium text-foreground">{company.name}</td>
+                    <td className="px-4 py-3 font-medium text-foreground">
+                      <button
+                        type="button"
+                        className="text-left rounded-sm hover:underline focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/companies/${company.id}`); }}
+                      >
+                        {company.name}
+                      </button>
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                       {company.org_number || '—'}
                     </td>

@@ -93,7 +93,7 @@ export const TicketChecklist = ({
       <span
         className={`inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded shrink-0 ${
           overdue
-            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+            ? 'bg-destructive/10 text-destructive'
             : 'bg-muted text-muted-foreground'
         }`}
       >

@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Search, Loader2 } from 'lucide-react';
+import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Search, Loader2, Inbox } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { STATUS_LABELS } from '@/lib/constants';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { EmptyState } from '@/components/EmptyState';
 
 // KanbanView laddas lazy — drar in dnd-vendor (~48 kB) som inte behövs i tabell-vy
 const KanbanView = lazy(() => import('@/components/KanbanView').then(m => ({ default: m.KanbanView })));
@@ -466,7 +467,11 @@ const TicketList = () => {
                     <Button variant="outline" size="sm" onClick={refetch}>Försök igen</Button>
                   </div>
                 ) : tickets.length === 0 ? (
-                  <p className="text-center text-muted-foreground py-12">Inga ärenden hittades</p>
+                  <EmptyState
+                    icon={<Inbox />}
+                    title="Inga ärenden hittades"
+                    description="Prova att justera dina filter eller skapa ett nytt ärende."
+                  />
                 ) : (
                   tickets.map(ticket => (
                     <button
