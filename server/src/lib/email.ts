@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { db } from '../db/connection.js';
 import { stripHtml } from './htmlUtils.js';
+import { buildReplyHeaders, generateMessageId } from './emailThreading.js';
 import { logger } from './logger.js';
 
 interface TicketEmailPayload {
@@ -485,6 +486,172 @@ export const sendTicketReceivedConfirmation = async (opts: {
     html,
   }).catch(error => {
     logger.error('[email-inbound] Failed to send confirmation', { error: String(error) });
+  });
+};
+
+// ── Agent → customer reply (closes the conversation loop) ───────────
+
+/**
+ * Sends a technician's public reply/comment to the ticket's requester, threaded
+ * so the customer's reply lands back on the same ticket (see emailThreading.ts).
+ * For a web-origin ticket (no stored Message-ID) the generated Message-ID is
+ * persisted as the thread anchor so the customer's reply re-matches. No-op when
+ * SMTP is not configured.
+ */
+export const sendTicketReplyEmail = async (opts: {
+  ticketId: string;
+  toEmail: string;
+  toName: string;
+  title: string;
+  body: string;
+}): Promise<void> => {
+  const transporter = createTransporter();
+  const from = process.env.EMAIL_FROM;
+  if (!transporter || !from) return;
+
+  const replyTo = process.env.IMAP_USER || from;
+  const shortId = opts.ticketId.slice(0, 8).toUpperCase();
+  const safeTitle = sanitizeSubject(opts.title);
+
+  // Thread anchor: reuse the ticket's existing Message-ID, or persist a new one
+  // (web-origin first reply) so the customer's reply re-matches the ticket.
+  const row = db.prepare('SELECT email_message_id FROM tickets WHERE id = ?').get(opts.ticketId) as
+    | { email_message_id: string | null }
+    | undefined;
+  const anchor = row?.email_message_id ?? null;
+  const domain = from.split('@')[1];
+  const generated = generateMessageId(domain);
+  if (!anchor) {
+    db.prepare('UPDATE tickets SET email_message_id = ? WHERE id = ? AND email_message_id IS NULL')
+      .run(generated, opts.ticketId);
+  }
+  const headers = buildReplyHeaders({ anchorMessageId: anchor, generatedMessageId: generated });
+
+  const bodyHtml = markdownToEmailHtml(opts.body);
+  const content = `
+  <tr>
+    <td style="padding: 32px 36px 0;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 6px;">
+        <tr>
+          <td style="font-family: ${F}; font-size: 11px; font-weight: 700; color: ${T.accent}; text-transform: uppercase; letter-spacing: 0.06em;">Svar fr&#229;n supporten</td>
+          <td align="right" style="font-family: ${FM}; font-size: 11px; color: ${T.textMut};">#${shortId}</td>
+        </tr>
+      </table>
+      <h1 style="margin: 0 0 16px 0; font-family: ${F}; color: ${T.text}; font-size: 21px; font-weight: 700; line-height: 1.3;">
+        ${escapeHtml(safeTitle)}
+      </h1>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding: 0 36px 32px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+        <tr>
+          <td bgcolor="${T.surface}" style="background-color: ${T.surface}; padding: 14px 16px; border-left: 3px solid ${T.accent};">
+            <p style="margin: 0 0 8px 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.65;">
+              Hej ${escapeHtml(opts.toName)},
+            </p>
+            <p style="margin: 0; font-family: ${F}; color: ${T.text}; font-size: 14px; line-height: 1.65;">
+              ${bodyHtml}
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>`;
+
+  const html = buildEmailShell(content, `Svara p&#229; detta mail f&#246;r att &#229;terkoppla &middot; ${getBrandName()}`);
+
+  const text = [
+    `Hej ${opts.toName},`,
+    '',
+    stripHtml(opts.body),
+    '',
+    `Svara på detta mail om du vill återkoppla. Referensnummer #${shortId}.`,
+  ].join('\n');
+
+  await transporter.sendMail({
+    from,
+    replyTo,
+    to: opts.toEmail,
+    subject: `[#${shortId}] ${safeTitle}`,
+    text,
+    html,
+    messageId: headers.messageId,
+    inReplyTo: headers.inReplyTo,
+    references: headers.references,
+  }).catch(error => {
+    logger.error('[reply-email] Failed to send reply', { error: String(error) });
+  });
+};
+
+/**
+ * Notifies the assigned technician that the customer has replied (inbound email
+ * became a public comment). No-op when SMTP is not configured.
+ */
+export const sendAgentReplyNotificationEmail = async (opts: {
+  toEmail: string;
+  toName: string;
+  ticketId: string;
+  title: string;
+  snippet: string;
+}): Promise<void> => {
+  const transporter = createTransporter();
+  const from = process.env.EMAIL_FROM;
+  if (!transporter || !from) return;
+
+  const config = getEmailConfig();
+  const shortId = opts.ticketId.slice(0, 8).toUpperCase();
+  const safeTitle = sanitizeSubject(opts.title);
+  const ticketUrl = config?.appBaseUrl
+    ? `${config.appBaseUrl.replace(/\/$/, '')}/tickets/${opts.ticketId}`
+    : null;
+
+  const content = `
+  <tr>
+    <td style="padding: 32px 36px 0;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 6px;">
+        <tr>
+          <td style="font-family: ${F}; font-size: 11px; font-weight: 700; color: ${T.accent}; text-transform: uppercase; letter-spacing: 0.06em;">Nytt kundsvar</td>
+          <td align="right" style="font-family: ${FM}; font-size: 11px; color: ${T.textMut};">#${shortId}</td>
+        </tr>
+      </table>
+      <h1 style="margin: 0 0 16px 0; font-family: ${F}; color: ${T.text}; font-size: 21px; font-weight: 700; line-height: 1.3;">
+        ${escapeHtml(safeTitle)}
+      </h1>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding: 0 36px 32px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 20px;">
+        <tr>
+          <td bgcolor="${T.surface}" style="background-color: ${T.surface}; padding: 14px 16px; border-left: 3px solid ${T.accent};">
+            <p style="margin: 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.65;">
+              ${markdownToEmailHtml(opts.snippet)}
+            </p>
+          </td>
+        </tr>
+      </table>
+      ${ticketUrl ? buildCta(ticketUrl, '&#214;ppna &#228;rendet') : ''}
+    </td>
+  </tr>`;
+
+  const html = buildEmailShell(content, `Avisering fr&#229;n ${getBrandName()}`);
+  const text = [
+    `Kunden har svarat på ärende #${shortId} (${opts.title}):`,
+    '',
+    stripHtml(opts.snippet),
+    '',
+    ticketUrl ? `Öppna ärendet: ${ticketUrl}` : null,
+  ].filter(Boolean).join('\n');
+
+  await transporter.sendMail({
+    from,
+    to: opts.toEmail,
+    subject: `[#${shortId}] Nytt kundsvar: ${safeTitle}`,
+    text,
+    html,
+  }).catch(error => {
+    logger.error('[agent-notify] Failed to send reply notification', { error: String(error) });
   });
 };
 

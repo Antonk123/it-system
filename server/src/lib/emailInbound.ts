@@ -6,6 +6,7 @@ import { db } from '../db/connection.js';
 import { randomUUID, randomBytes } from 'crypto';
 import { dispatchWebhook } from './webhookDispatcher.js';
 import { sendTicketReceivedConfirmation } from './email.js';
+import { notifyAgentOfCustomerReply } from './ticketNotifications.js';
 import { logger } from './logger.js';
 import { ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE, hasMagicByteMatch } from '../routes/attachments.js';
 
@@ -272,6 +273,11 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     if (parsed.attachments && parsed.attachments.length > 0) {
       await saveAttachments(parsed.attachments, existingTicket.id);
     }
+
+    // Close the loop the other way: surface the customer's reply to the assigned
+    // technician (webhook + push + email). Fire-and-forget.
+    notifyAgentOfCustomerReply(existingTicket.id, body)
+      .catch((err) => logger.error('notifyAgentOfCustomerReply failed', { error: String(err) }));
     return;
   }
 

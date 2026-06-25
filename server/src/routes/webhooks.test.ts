@@ -171,6 +171,17 @@ describe('Webhook CRUD authorization (admin-only)', () => {
     expect(res.body.error).toMatch(/invalid event type/i);
   });
 
+  // ticket.closed is dispatched by tickets.ts but was historically missing from
+  // VALID_EVENTS, so consumers could not subscribe to a real, fired event.
+  it('lets an admin subscribe to ticket.closed (201)', async () => {
+    const res = await admin.agent
+      .post('/api/webhooks')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ url: PUBLIC_URL, events: ['ticket.closed'] });
+    expect(res.status).toBe(201);
+  });
+
   it('blocks a non-admin from deleting a webhook (403)', async () => {
     const id = randomUUID();
     db.prepare('INSERT INTO webhooks (id, url, events, secret) VALUES (?, ?, ?, ?)')

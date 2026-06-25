@@ -2,9 +2,10 @@ import { memo, useState } from 'react';
 import { Comment } from '@/types/ticket';
 import { Button } from '@/components/ui/button';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import { MessageSquare, Loader2 } from 'lucide-react';
+import { MessageSquare, Loader2, Lock, Send } from 'lucide-react';
 import { CommentItem } from './CommentItem';
 import { hasVisibleText } from '@/lib/textValidation';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 interface TicketCommentsProps {
@@ -26,6 +27,8 @@ export const TicketComments = memo(function TicketComments({
 }: TicketCommentsProps) {
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Internal note (default, staff-only) vs public reply (emailed to the requester).
+  const [isInternal, setIsInternal] = useState(true);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,9 +36,9 @@ export const TicketComments = memo(function TicketComments({
 
     setIsSubmitting(true);
     try {
-      await onAddComment(newComment, true);  // Always internal by default
+      await onAddComment(newComment, isInternal);
       setNewComment('');
-      toast.success('Kommentar tillagd');
+      toast.success(isInternal ? 'Intern kommentar tillagd' : 'Svar skickat till kund');
     } catch (error) {
       toast.error('Kunde inte lägga till kommentar');
     } finally {
@@ -52,18 +55,53 @@ export const TicketComments = memo(function TicketComments({
 
       {/* Comment Form */}
       <form onSubmit={handleSubmit} className="space-y-2">
+        {/* Visibility mode: internal note vs public reply to the customer */}
+        <div role="group" aria-label="Synlighet" className="inline-flex rounded-md border border-border p-0.5 bg-muted/40">
+          <button
+            type="button"
+            aria-pressed={isInternal}
+            onClick={() => setIsInternal(true)}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+              isInternal ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Lock className="w-3 h-3" />
+            Internt
+          </button>
+          <button
+            type="button"
+            aria-pressed={!isInternal}
+            onClick={() => setIsInternal(false)}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+              !isInternal ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Send className="w-3 h-3" />
+            Publikt svar
+          </button>
+        </div>
+
         <RichTextEditor
           value={newComment}
           onChange={(html) => setNewComment(html)}
-          placeholder="Lägg till en intern kommentar..."
+          placeholder={isInternal ? 'Lägg till en intern kommentar...' : 'Skriv ett svar till kunden...'}
           minHeight="80px"
           disabled={isSubmitting}
           showToolbar={true}
         />
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            {isInternal
+              ? 'Syns bara internt — skickas inte till kunden.'
+              : 'Skickas som e-post till beställaren.'}
+          </p>
           <Button type="submit" size="sm" disabled={isSubmitting || !hasVisibleText(newComment)}>
             {isSubmitting && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
-            Lägg till kommentar
+            {isInternal ? 'Lägg till kommentar' : 'Skicka svar till kund'}
           </Button>
         </div>
       </form>

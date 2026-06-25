@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { sanitizeRichText } from '../lib/htmlSanitizer.js';
+import { notifyCustomerOfPublicReply } from '../lib/ticketNotifications.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
@@ -83,6 +84,13 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
       LEFT JOIN contacts contact ON contact.email = u.email
       WHERE c.id = ?
     `).get(id) as CommentRow;
+
+    // Close the conversation loop: a public comment is the agent's reply to the
+    // customer. Fire-and-forget so the HTTP response is not blocked on email.
+    if (!isInternal) {
+      notifyCustomerOfPublicReply(req.params.ticketId, safeContent)
+        .catch((err) => logger.error('notifyCustomerOfPublicReply failed', { error: String(err) }));
+    }
 
     res.status(201).json(comment);
   } catch (error) {
