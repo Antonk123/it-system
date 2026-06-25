@@ -62,7 +62,7 @@ Backend `process.exit(1)` om `CSRF_SECRET` eller `JWT_SECRET` **saknas** — ovi
 
 ## Deployment
 
-Standardflöde: lokal utveckling → push → Anton bygger images via SSH → **Anton redeployar i Portainer**. Claude kör aldrig `docker-compose up`, `docker run` eller container-livscykel-kommandon — det skapar separat stack som krockar med Portainer.
+Standardflöde: lokal utveckling → `git push` → SSH till servern, `git pull` + bygg nödvändiga images (**Claude får göra detta** — `docker build`) → **Anton redeployar i Portainer**. Claude kör aldrig `docker run`, `docker compose up/down` eller annan container-livscykel **från terminalen** — då skapas containrar utanför Portainers hantering så Portainer tappar kopplingen/översikten över dem. Att bygga images är OK.
 
 1. Gör ändringar lokalt (testa via `docker-compose.local.yml` vid behov)
 2. `git push` till GitHub
@@ -123,7 +123,7 @@ Körs automatiskt av Claude Code — du behöver inte göra något. Kräver `jq`
 |-------|---------|-------|
 | `db-migration` | DB/schema/migration-arbete — säkrar `migrations.ts`-arrayen + `schema.sql`-synk + FTS5. | ✅ Claude auto-väljer |
 | `express-api-route` | Ny/ändrad endpoint — auth/CSRF/parametriserad SQL/mount + `api.request`. | ✅ Claude auto-väljer |
-| `deploy-it-ticket` | Deploy-runbooket (push→SSH-bygg→Portainer). | ⚠️ user-only: kör `/deploy-it-ticket` |
+| `deploy-it-ticket` | Deploy-runbooket: gates → push → SSH `git pull` → `docker build` (Claude bygger image). **Anton** redeployar i Portainer; aldrig `docker run`/`compose up` från terminal. | ⚠️ user-only: kör `/deploy-it-ticket` |
 
 ### MCP-servrar
 
