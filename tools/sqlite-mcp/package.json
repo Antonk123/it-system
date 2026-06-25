@@ -1,0 +1,15 @@
+{
+  "name": "itticket-sqlite-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only MCP server for inspecting the IT-Ticket SQLite database (better-sqlite3 readonly).",
+  "bin": {
+    "itticket-sqlite-mcp": "server.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "better-sqlite3": "^12.11.1",
+    "zod": "^3.25.76"
+  }
+}

@@ -92,6 +92,7 @@ Detta register laddas varje session så Claude vet vad som finns och *när* det 
 - **Hooks** → körs av Claude Code automatiskt på tool-events (noll minnesbörda).
 - **Subagenter** → auto-fyrar *inte*; Claude anropar dem själv när tasken matchar tabellen nedan. Det här registret + agenternas description är det som gör att Claude vet att de finns.
 - **Skills** → model-invocable skills väljer Claude själv via sin description.
+- **MCP-servrar** → verktygen blir tillgängliga varje session; Claude väljer dem när uppgiften matchar.
 
 ### Subagenter (`.claude/agents/`)
 
@@ -99,16 +100,38 @@ Detta register laddas varje session så Claude vet vad som finns och *när* det 
 |-------|-----------|
 | `security-reviewer` | Diff rör auth/secrets/CSRF/JWT/API-nycklar/webhooks/HMAC, ny Express-route, raw SQL med template-literals (`SET ${...}`), `dangerouslySetInnerHTML`, eller före merge av säkerhetskänsligt arbete. |
 | `a11y-ui-reviewer` | Frontend-ändring i `src/components/**` / `src/pages/**`, dialoger/forms/tabeller/Kanban (dnd-kit), nya interaktiva element, eller före merge av en frontend-feature. |
+| `db-migration-reviewer` | Diff rör `server/src/db/migrations.ts` eller `schema.sql`, ny CREATE/ALTER/DROP-DDL, FTS5-ändring, eller "varför kördes inte min migrering". |
+| `ai-integration-reviewer` | Diff rör `server/src/lib/aiHelper.ts`, `/ai-suggest` eller andra AI-routes, `client.messages.create`, modell-fallback/`max_tokens`/prompt-bygge från ärende-/mejltext, eller AI-kostnad/modell-id. |
 | `bug-detective` | Buggrapport, oväntat beteende, UX-/prestanda-regression (befintlig). |
 | `code-reviewer` | Efter avslutat större steg, före merge mot main (befintlig). |
 
 ### Hooks (`.claude/settings.json`)
 
-Inga projekt-egna hooks ännu. (Förslag ligger i en pausad `automation-recommender`-workflow — återuppta för auto-format/type-check + blockering av `.env`-edits.)
+Körs automatiskt av Claude Code — du behöver inte göra något. Kräver `jq`.
+
+| Hook | Event | Vad |
+|------|-------|-----|
+| `.env`-skydd | PreToolUse `Write\|Edit` | Blockerar redigering av `.env*` (släpper `.env.example`) — skyddar secrets. |
+| Portainer-skydd | PreToolUse `Bash` | Blockerar `docker compose up/down/run` + container-livscykel (krockar med Portainer-stackarna). |
+| migrations-påminnelse | PostToolUse `Write\|Edit` | Påminner om `migrations.ts`-arrayen vid ändringar under `server/src/db/`. |
+
+(En 4:e föreslagen hook — `eslint --fix` per edit — valdes bort medvetet; eslint körs ändå i CI + via lint-staged.)
 
 ### Skills (`.claude/skills/`)
 
-Inga projekt-egna skills ännu. (Samma pausade workflow har förslag, t.ex. en db-migration-skill som auto-påminner om `migrations.ts`-arrayen.)
+| Skill | Triggar | Auto? |
+|-------|---------|-------|
+| `db-migration` | DB/schema/migration-arbete — säkrar `migrations.ts`-arrayen + `schema.sql`-synk + FTS5. | ✅ Claude auto-väljer |
+| `express-api-route` | Ny/ändrad endpoint — auth/CSRF/parametriserad SQL/mount + `api.request`. | ✅ Claude auto-väljer |
+| `deploy-it-ticket` | Deploy-runbooket (push→SSH-bygg→Portainer). | ⚠️ user-only: kör `/deploy-it-ticket` |
+
+### MCP-servrar
+
+| Server | Vad | Scope |
+|--------|-----|-------|
+| `sqlite-itticket-ro` | Read-only-frågor mot lokala dev-DB:n (`tools/sqlite-mcp/`, better-sqlite3 `readonly`) — använd istället för engångs-`tsx`-scripts för att inspektera schema/migrationer/FTS5. Verktyg: `list_tables`, `describe_table`, `read_query`. | lokal (per maskin; `.mcp.json` gitignorad). Registrera: se `tools/sqlite-mcp/README.md`. |
+
+Redan anslutna på harness-/plugin-nivå (dubblera inte): context7, playwright, supabase, magic, claude_ai (Gmail/Calendar/Drive/M365). GitHub nås via `gh` CLI — ingen MCP.
 
 ## Frontend Aesthetics
 

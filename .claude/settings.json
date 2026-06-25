@@ -45,5 +45,40 @@
     "Bash(docker inspect*)",
     "Bash(docker images*)"
   ],
-  "hooks": {}
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); b=$(basename \"$f\"); case \"$b\" in .env.example|.env.sample|.env.template) exit 0;; .env|.env.*) echo \"BLOCKERAT: $f är en secret-fil (gitignorad, innehåller JWT_SECRET/CSRF_SECRET/ANTHROPIC_API_KEY m.m.). Redigera den manuellt eller via Portainer GUI — Claude rör aldrig .env. Använd .env.example för dokumenterade nycklar.\" >&2; exit 2;; *) exit 0;; esac",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command // empty'); if echo \"$cmd\" | grep -Eq '(docker[ -]compose[[:space:]]+(up|down|restart|stop|start)|docker[[:space:]]+run|docker[[:space:]]+(stop|start|restart|rm|kill)[[:space:]])'; then echo \"BLOCKERAT: container-livscykel-kommando. CLAUDE.md förbjuder docker-compose up/down/run — det skapar en separat stack som krockar med Portainer (prod id 39, dev id 40). Deploy-flöde: git push → ssh root@10.38.195.180 → docker build -t ... → Anton redeployar i Portainer. docker build/ps/logs/exec/inspect/images är OK.\" >&2; exit 2; fi; exit 0",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=$(jq -r '.tool_input.file_path // empty'); case \"$f\" in */server/src/db/migrations.ts) echo 'PÅMINNELSE: Lade du till en ny Migration-post i migrations-arrayen (export const migrations: Migration[]) med korrekt löpande version? Den körs i array-ordning via runMigrations() i initializeDatabase().';; */server/src/db/*) echo 'PÅMINNELSE: Du ändrade en fil under server/src/db/. Om detta är en schemaändring MÅSTE den in som en ny Migration-post i arrayen i server/src/db/migrations.ts — fristående tsx-scripts och schema.sql-redigeringar körs INTE vid serverstart och slår aldrig igenom i prod.';; esac; exit 0",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
 }
