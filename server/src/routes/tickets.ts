@@ -1015,9 +1015,14 @@ router.get('/:id/ai-summary', aiRateLimiter, authenticate, async (req: AuthReque
     } | undefined;
     if (!ticket) return res.status(404).json({ error: 'Ärendet hittades inte' });
 
-    // Cache-check: max 1 timme gammal
+    // Cache-check: max 1 timme gammal.
+    // ai_summary_updated_at är SQLite CURRENT_TIMESTAMP = UTC "YYYY-MM-DD HH:MM:SS"
+    // (mellanslag, ingen Z). V8 tolkar det mellanslags-formatet som LOKAL tid, så i
+    // prod-TZ (Europe/Stockholm) blev en färsk cache direkt 1-2h "gammal" → cachen
+    // träffades aldrig och varje vy rebillade ett Claude-anrop. Tolka som UTC.
     if (!force && ticket.ai_summary_json && ticket.ai_summary_updated_at) {
-      const ageMs = Date.now() - new Date(ticket.ai_summary_updated_at).getTime();
+      const updatedAtMs = new Date(ticket.ai_summary_updated_at.replace(' ', 'T') + 'Z').getTime();
+      const ageMs = Date.now() - updatedAtMs;
       if (ageMs < 60 * 60 * 1000) {
         try {
           return res.json({ summary: JSON.parse(ticket.ai_summary_json), cached: true, ageMinutes: Math.round(ageMs / 60000) });
