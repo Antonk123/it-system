@@ -1063,10 +1063,10 @@ layer(base);
     --status-closed: 215 16% 47%;
 
     /* Priority colors */
-    --priority-low: 142 71% 45%;
-    --priority-medium: 38 95% 35%; /* WCAG AA: mörkare amber ≥ 4.5:1 mot vit (var 45 93% 47% = 2.2:1) */
-    --priority-high: 25 95% 53%;
-    --priority-critical: 0 84% 60%;
+    --priority-low: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 45% = 2.1:1) */
+    --priority-medium: 38 95% 25%; /* WCAG AA: djup amber ≥4.5:1 mot badge-tint (var 35% = 3.6:1 — tidigare "fix" felräknad mot vit) */
+    --priority-high: 25 95% 30%; /* WCAG AA: djup orange ≥4.5:1 mot badge-tint (var 53% = 2.5:1) */
+    --priority-critical: 0 84% 37%; /* WCAG AA: djup röd ≥4.5:1 mot badge-tint (var 60% = 3.3:1) */
 
     /* Sidebar */
     --sidebar-background: 220 20% 96%;
@@ -1153,10 +1153,10 @@ layer(base);
     --status-closed: 215 16% 47%;
 
     /* Priority colors */
-    --priority-low: 142 71% 45%;
-    --priority-medium: 38 95% 35%; /* WCAG AA: mörkare amber ≥ 4.5:1 mot vit */
-    --priority-high: 25 95% 53%;
-    --priority-critical: 0 84% 60%;
+    --priority-low: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 45% = 2.1:1) */
+    --priority-medium: 38 95% 25%; /* WCAG AA: djup amber ≥4.5:1 mot badge-tint (var 35% = 3.6:1 — tidigare "fix" felräknad mot vit) */
+    --priority-high: 25 95% 30%; /* WCAG AA: djup orange ≥4.5:1 mot badge-tint (var 53% = 2.5:1) */
+    --priority-critical: 0 84% 37%; /* WCAG AA: djup röd ≥4.5:1 mot badge-tint (var 60% = 3.3:1) */
 
     /* Sidebar */
     --sidebar-background: 232 22% 96%;
@@ -1243,10 +1243,10 @@ layer(base);
     --status-closed: 215 16% 47%;
 
     /* Priority colors */
-    --priority-low: 142 71% 45%;
-    --priority-medium: 38 95% 35%; /* WCAG AA: mörkare amber ≥ 4.5:1 mot vit */
-    --priority-high: 25 95% 53%;
-    --priority-critical: 0 84% 60%;
+    --priority-low: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 45% = 2.1:1) */
+    --priority-medium: 38 95% 25%; /* WCAG AA: djup amber ≥4.5:1 mot badge-tint (var 35% = 3.6:1 — tidigare "fix" felräknad mot vit) */
+    --priority-high: 25 95% 30%; /* WCAG AA: djup orange ≥4.5:1 mot badge-tint (var 53% = 2.5:1) */
+    --priority-critical: 0 84% 37%; /* WCAG AA: djup röd ≥4.5:1 mot badge-tint (var 60% = 3.3:1) */
 
     /* Sidebar */
     --sidebar-background: 218 12% 96%;
@@ -1333,10 +1333,10 @@ layer(base);
     --status-closed: 215 16% 47%;
 
     /* Priority colors */
-    --priority-low: 142 71% 45%;
-    --priority-medium: 38 95% 35%; /* WCAG AA: mörkare amber ≥ 4.5:1 mot vit */
-    --priority-high: 25 95% 53%;
-    --priority-critical: 0 84% 60%;
+    --priority-low: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 45% = 2.1:1) */
+    --priority-medium: 38 95% 25%; /* WCAG AA: djup amber ≥4.5:1 mot badge-tint (var 35% = 3.6:1 — tidigare "fix" felräknad mot vit) */
+    --priority-high: 25 95% 30%; /* WCAG AA: djup orange ≥4.5:1 mot badge-tint (var 53% = 2.5:1) */
+    --priority-critical: 0 84% 37%; /* WCAG AA: djup röd ≥4.5:1 mot badge-tint (var 60% = 3.3:1) */
 
     /* Sidebar */
     --sidebar-background: 198 8% 96%;
@@ -1423,10 +1423,10 @@ layer(base);
     --status-closed: 219 7% 50%;
 
     /* Priority colors */
-    --priority-low: 134 62% 40%;
-    --priority-medium: 38 95% 35%; /* WCAG AA: mörkare amber ≥ 4.5:1 mot vit */
-    --priority-high: 25 95% 53%;
-    --priority-critical: 0 84% 60%;
+    --priority-low: 134 62% 25%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 40% = 2.9:1) */
+    --priority-medium: 38 95% 25%; /* WCAG AA: djup amber ≥4.5:1 mot badge-tint (var 35% = 3.6:1 — tidigare "fix" felräknad mot vit) */
+    --priority-high: 25 95% 30%; /* WCAG AA: djup orange ≥4.5:1 mot badge-tint (var 53% = 2.5:1) */
+    --priority-critical: 0 84% 37%; /* WCAG AA: djup röd ≥4.5:1 mot badge-tint (var 60% = 3.3:1) */
 
     /* Sidebar */
     --sidebar-background: 210 7% 96%;
@@ -1513,10 +1513,10 @@ layer(base);
     --status-closed: 0 0% 45%;
 
     /* Priority colors */
-    --priority-low: 141 73% 40%;
-    --priority-medium: 38 95% 35%; /* WCAG AA: mörkare amber ≥ 4.5:1 mot vit (var 32 90% 48% = 2.7:1) */
-    --priority-high: 15 85% 50%;
-    --priority-critical: 354 75% 50%;
+    --priority-low: 141 73% 23%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 40% = 2.6:1) */
+    --priority-medium: 38 95% 25%; /* WCAG AA: djup amber ≥4.5:1 mot badge-tint (var 35% = 3.6:1 — tidigare "fix" felräknad mot vit) */
+    --priority-high: 15 85% 34%; /* WCAG AA: djup röd-orange ≥4.5:1 mot badge-tint (var 50% = 3.3:1) */
+    --priority-critical: 354 75% 39%; /* WCAG AA: djup röd ≥4.5:1 mot badge-tint (var 50% = 4.1:1) */
 
     /* Sidebar */
     --sidebar-background: 0 0% 96%;
