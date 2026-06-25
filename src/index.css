@@ -82,11 +82,6 @@ layer(base);
   --animate-slide-in-right: slide-in-right 0.4s ease-out;
   --animate-scale-in: scale-in 0.3s ease-out;
   --animate-spin-slow: spin 4s linear infinite;
-  --animate-search-glow-slow: search-glow-slow 2s ease-in-out infinite alternate;
-  --animate-search-glow-focus: search-glow-focus 4s ease-in-out infinite;
-  --animate-glow-rotate: glow-rotate 6s linear infinite;
-
-  --transition-duration-2000: 2000ms;
 
   --font-sans: Plus Jakarta Sans, ui-sans-serif, system-ui, sans-serif;
   --font-serif: Crimson Pro, Libre Caslon Text, ui-serif, Georgia, serif;
@@ -145,33 +140,6 @@ layer(base);
       opacity: 1;
       transform: scale(1);
     }
-  }
-  @keyframes search-glow-slow {
-    from {
-      transform: translate(-50%, -50%) rotate(60deg);
-    }
-    to {
-      transform: translate(-50%, -50%) rotate(-120deg);
-    }
-  }
-  @keyframes search-glow-focus {
-    from {
-      transform: translate(-50%, -50%) rotate(82deg);
-    }
-    to {
-      transform: translate(-50%, -50%) rotate(442deg);
-    }
-  }
-  /* Full continuous rotation — glow travels around the entire perimeter.
-     IMPORTANT: rotate ONLY, no translate. Centering is done by the element's
-     Tailwind `-translate-x-1/2 -translate-y-1/2` (which compiles to the standalone
-     `translate:` property in TW v4). Putting translate() here too would STACK on
-     top of that property → double-shift → gradient centre lands far up-left and the
-     glow appears stuck in the corner. transform-origin (centre) keeps rotation about
-     the card centre. */
-  @keyframes glow-rotate {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
   }
 }
 
@@ -550,13 +518,6 @@ layer(base);
     --spacing: 0.25rem;
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 214 100% 50%;
-    --search-glow-accent-vivid: 199 85% 58%;
-    --search-glow-primary-dark: 214 100% 25%;
-    --search-glow-accent-dark: 199 80% 30%;
-    --search-glow-primary-bright: 214 90% 75%;
-    --search-glow-accent-bright: 199 80% 75%;
-    --search-glow-base: 220 40% 7%;
     --search-input-bg: 218 38% 10%;
 
     /* Semantic accent — AI / branded actions (purple/violet family).
@@ -649,13 +610,6 @@ layer(base);
     --shadow-2xl: 0 30px 50px -10px hsl(0 0% 0% / 0.48), 0 12px 20px -5px hsl(0 0% 0% / 0.38);
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 243 75% 55%;
-    --search-glow-accent-vivid: 196 72% 58%;
-    --search-glow-primary-dark: 243 70% 28%;
-    --search-glow-accent-dark: 196 65% 32%;
-    --search-glow-primary-bright: 243 70% 80%;
-    --search-glow-accent-bright: 196 68% 75%;
-    --search-glow-base: 233 42% 7%;
     --search-input-bg: 233 40% 10%;
   }
 
@@ -734,13 +688,6 @@ layer(base);
     --shadow-2xl: 0 30px 50px -10px hsl(0 0% 0% / 0.5), 0 12px 20px -5px hsl(0 0% 0% / 0.4);
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 38 92% 45%;
-    --search-glow-accent-vivid: 32 85% 50%;
-    --search-glow-primary-dark: 38 85% 25%;
-    --search-glow-accent-dark: 32 75% 28%;
-    --search-glow-primary-bright: 38 88% 70%;
-    --search-glow-accent-bright: 32 80% 68%;
-    --search-glow-base: 218 12% 9%;
     --search-input-bg: 218 12% 11%;
   }
 
@@ -819,13 +766,6 @@ layer(base);
     --shadow-2xl: 0 30px 50px -10px hsl(0 0% 0% / 0.48), 0 12px 20px -5px hsl(0 0% 0% / 0.38);
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 160 55% 36%;
-    --search-glow-accent-vivid: 152 45% 40%;
-    --search-glow-primary-dark: 160 50% 20%;
-    --search-glow-accent-dark: 152 42% 22%;
-    --search-glow-primary-bright: 160 50% 62%;
-    --search-glow-accent-bright: 152 42% 58%;
-    --search-glow-base: 198 7% 9%;
     --search-input-bg: 198 7% 11%;
   }
 
@@ -904,13 +844,6 @@ layer(base);
     --shadow-2xl: 0 0 0 1px rgba(0,0,0,0.2), 0 24px 48px rgba(0,0,0,0.35);
 
     /* Search glow - indigo-violet */
-    --search-glow-primary-deep: 234 56% 50%;
-    --search-glow-accent-vivid: 240 100% 72%;
-    --search-glow-primary-dark: 234 50% 28%;
-    --search-glow-accent-dark: 240 80% 35%;
-    --search-glow-primary-bright: 234 56% 75%;
-    --search-glow-accent-bright: 240 90% 82%;
-    --search-glow-base: 210 4% 8%;
     --search-input-bg: 210 6% 6%;
   }
 
@@ -989,13 +922,6 @@ layer(base);
     --shadow-2xl: 0 24px 48px 0px rgba(0,0,0,0.6);
 
     /* Search glow - Spotify green */
-    --search-glow-primary-deep: 141 73% 40%;
-    --search-glow-accent-vivid: 141 76% 48%;
-    --search-glow-primary-dark: 141 65% 22%;
-    --search-glow-accent-dark: 141 60% 26%;
-    --search-glow-primary-bright: 141 73% 65%;
-    --search-glow-accent-bright: 141 76% 60%;
-    --search-glow-base: 0 0% 9%;
     --search-input-bg: 0 0% 12%;
   }
 
@@ -1098,13 +1024,6 @@ layer(base);
     --spacing: 0.25rem;
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 214 100% 45%;
-    --search-glow-accent-vivid: 199 85% 48%;
-    --search-glow-primary-dark: 214 90% 35%;
-    --search-glow-accent-dark: 199 75% 35%;
-    --search-glow-primary-bright: 214 85% 70%;
-    --search-glow-accent-bright: 199 75% 70%;
-    --search-glow-base: 220 15% 92%;
     --search-input-bg: 220 15% 90%;
   }
 
@@ -1188,13 +1107,6 @@ layer(base);
     --spacing: 0.25rem;
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 243 75% 48%;
-    --search-glow-accent-vivid: 196 72% 48%;
-    --search-glow-primary-dark: 243 68% 35%;
-    --search-glow-accent-dark: 196 65% 35%;
-    --search-glow-primary-bright: 243 68% 72%;
-    --search-glow-accent-bright: 196 65% 68%;
-    --search-glow-base: 232 18% 92%;
     --search-input-bg: 232 18% 90%;
   }
 
@@ -1278,13 +1190,6 @@ layer(base);
     --spacing: 0.25rem;
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 38 92% 38%;
-    --search-glow-accent-vivid: 32 85% 42%;
-    --search-glow-primary-dark: 38 85% 28%;
-    --search-glow-accent-dark: 32 78% 28%;
-    --search-glow-primary-bright: 38 88% 62%;
-    --search-glow-accent-bright: 32 80% 60%;
-    --search-glow-base: 218 10% 92%;
     --search-input-bg: 218 10% 90%;
   }
 
@@ -1368,13 +1273,6 @@ layer(base);
     --spacing: 0.25rem;
 
     /* Animated search glow colors */
-    --search-glow-primary-deep: 160 55% 30%;
-    --search-glow-accent-vivid: 152 45% 35%;
-    --search-glow-primary-dark: 160 50% 22%;
-    --search-glow-accent-dark: 152 42% 24%;
-    --search-glow-primary-bright: 160 50% 55%;
-    --search-glow-accent-bright: 152 42% 52%;
-    --search-glow-base: 196 6% 92%;
     --search-input-bg: 196 6% 90%;
   }
 
@@ -1458,13 +1356,6 @@ layer(base);
     --spacing: 0.25rem;
 
     /* Search glow - indigo */
-    --search-glow-primary-deep: 234 56% 45%;
-    --search-glow-accent-vivid: 240 100% 62%;
-    --search-glow-primary-dark: 234 50% 32%;
-    --search-glow-accent-dark: 240 80% 38%;
-    --search-glow-primary-bright: 234 56% 70%;
-    --search-glow-accent-bright: 240 90% 78%;
-    --search-glow-base: 210 7% 93%;
     --search-input-bg: 210 7% 91%;
   }
 
@@ -1548,13 +1439,6 @@ layer(base);
     --spacing: 0.25rem;
 
     /* Search glow - green */
-    --search-glow-primary-deep: 141 76% 30%;
-    --search-glow-accent-vivid: 141 73% 40%;
-    --search-glow-primary-dark: 141 65% 22%;
-    --search-glow-accent-dark: 141 60% 26%;
-    --search-glow-primary-bright: 141 73% 60%;
-    --search-glow-accent-bright: 141 76% 55%;
-    --search-glow-base: 0 0% 93%;
     --search-input-bg: 0 0% 91%;
   }
 

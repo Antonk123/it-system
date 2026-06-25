@@ -299,15 +299,7 @@ export const Layout = ({
           >
             <Menu className="w-6 h-6" />
           </button>
-          <div className="flex-1 relative group rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
-            {/* Glow layer */}
-            <div className="absolute z-[-1] overflow-hidden h-full w-full rounded-xl blur-[2px] dark:opacity-50">
-              <div className="absolute w-[999px] h-[999px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
-                              bg-[conic-gradient(hsl(var(--search-glow-base)),hsl(var(--search-glow-primary-deep))_5%,hsl(var(--search-glow-base))_38%,hsl(var(--search-glow-base))_50%,hsl(var(--search-glow-accent-vivid))_60%,hsl(var(--search-glow-base))_87%)]
-                              transition-all duration-2000
-                              animate-search-glow-slow
-                              group-hover:rotate-[-120deg] group-focus-within:animate-search-glow-focus" />
-            </div>
+          <div className="flex-1 relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
             <div className="relative flex w-full items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-primary/30 text-muted-foreground text-sm cursor-pointer transition-colors">
               <Search className="w-4 h-4" />
               <span>Sök överallt...</span>
@@ -322,29 +314,7 @@ export const Layout = ({
         <div data-print-hide className="hidden lg:block sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 flex-1">
-              <div className="relative group w-80 shrink-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
-                {/* Glow layer 1: outer rotating gradient */}
-                <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[56px] rounded-xl blur-[3px] dark:opacity-50">
-                  <div className="absolute w-[999px] h-[999px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2
-                                  bg-[conic-gradient(hsl(var(--search-glow-base)),hsl(var(--search-glow-primary-deep))_5%,hsl(var(--search-glow-base))_38%,hsl(var(--search-glow-base))_50%,hsl(var(--search-glow-accent-vivid))_60%,hsl(var(--search-glow-base))_87%)]
-                                  transition-all duration-2000
-                                  animate-search-glow-slow
-                                  group-hover:rotate-[-120deg] group-focus-within:animate-search-glow-focus" />
-                </div>
-                {/* Glow layer 2: inner gradient */}
-                <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[52px] rounded-xl blur-[3px] dark:opacity-50">
-                  <div className="absolute w-[600px] h-[600px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-82
-                                  bg-[conic-gradient(rgba(0,0,0,0),hsl(var(--search-glow-primary-dark)),rgba(0,0,0,0)_10%,rgba(0,0,0,0)_50%,hsl(var(--search-glow-accent-dark)),rgba(0,0,0,0)_60%)]
-                                  transition-all duration-2000
-                                  group-hover:rotate-[-98deg] group-focus-within:rotate-442" />
-                </div>
-                {/* Glow layer 3: highlight */}
-                <div className="absolute z-[-1] overflow-hidden h-full w-full max-h-[50px] rounded-lg blur-[2px] dark:opacity-50">
-                  <div className="absolute w-[600px] h-[600px] bg-no-repeat top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-70
-                                  bg-[conic-gradient(rgba(0,0,0,0)_0%,hsl(var(--search-glow-primary-bright)),rgba(0,0,0,0)_8%,rgba(0,0,0,0)_50%,hsl(var(--search-glow-accent-bright)),rgba(0,0,0,0)_58%)]
-                                  brightness-140 transition-all duration-2000
-                                  group-hover:rotate-[-97deg] group-focus-within:rotate-443" />
-                </div>
+              <div className="relative w-80 shrink-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
                 <div className="relative flex items-center gap-2 px-4 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-primary/30 text-muted-foreground text-sm transition-colors">
                   <Search className="w-4 h-4" />
                   <span>Sök överallt...</span>
