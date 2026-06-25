@@ -112,7 +112,7 @@ Körs automatiskt av Claude Code — du behöver inte göra något. Kräver `jq`
 | Hook | Event | Vad |
 |------|-------|-----|
 | `.env`-skydd | PreToolUse `Write\|Edit` | Blockerar redigering av `.env*` (släpper `.env.example`) — skyddar secrets. |
-| Portainer-skydd | PreToolUse `Bash` | Blockerar `docker compose up/down/run` + container-livscykel (krockar med Portainer-stackarna). |
+| Portainer-skydd | PreToolUse `Bash` | Blockerar container-livscykel från terminal — `compose up/down/...`, `run/create/start/stop/restart/rm/kill/pause`, samt `container`/`stack`/`service`/`prune`-subkommandon (krockar med Portainer-stackarna). Tål flaggor mellan `compose` och verbet (t.ex. `-f <fil>`) och **strippar citerade strängar** först → blockerar inte längre commit-/echo-text som bara *nämner* kommandona. Bygg/läs-kommandon (`build/ps/logs/exec/inspect/images/pull`) släpps. |
 | migrations-påminnelse | PostToolUse `Write\|Edit` | Påminner om `migrations.ts`-arrayen vid ändringar under `server/src/db/`. |
 
 (En 4:e föreslagen hook — `eslint --fix` per edit — valdes bort medvetet; eslint körs ändå i CI + via lint-staged.)
