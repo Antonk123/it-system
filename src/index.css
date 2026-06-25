@@ -1056,11 +1056,11 @@ layer(base);
     --radius: 0.625rem;
 
     /* Custom ticket status colors */
-    --status-open: 217 91% 50%;
-    --status-in-progress: 140 60% 30%; /* WCAG AA: mörkare grön ≥ 4.5:1 mot vit (var 45 93% 47% = amber, för låg kontrast) */
-    --status-waiting: 195 70% 45%;
-    --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 47%;
+    --status-open: 217 91% 42%; /* WCAG AA: djupare blå ≥4.5:1 mot status-badge-tint (var 50% = 3.6:1) */
+    --status-in-progress: 42 90% 25%; /* WCAG AA: djup amber ≥4.5:1 även mot 20%-tint (SLABadge). Amber (ej grön) särskiljer från resolved + speglar dark-temats in-progress (45°) */
+    --status-waiting: 195 70% 29%; /* WCAG AA: djup cyan ≥4.5:1 mot status-badge-tint (var 45% = 2.4:1) */
+    --status-resolved: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1. Särskiljs från in-progress via HUE (amber vs grön), inte lightness */
+    --status-closed: 215 16% 38%; /* WCAG AA: djupare grå ≥4.5:1 mot status-badge-tint (var 47% = 3.5:1) */
 
     /* Priority colors */
     --priority-low: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 45% = 2.1:1) */
@@ -1146,11 +1146,11 @@ layer(base);
     --radius: 0.5rem;
 
     /* Custom ticket status colors */
-    --status-open: 217 91% 50%;
-    --status-in-progress: 140 60% 30%; /* WCAG AA: mörkare grön ≥ 4.5:1 mot vit */
-    --status-waiting: 195 70% 45%;
-    --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 47%;
+    --status-open: 217 91% 42%; /* WCAG AA: djupare blå ≥4.5:1 mot status-badge-tint (var 50% = 3.6:1) */
+    --status-in-progress: 42 90% 25%; /* WCAG AA: djup amber ≥4.5:1 även mot 20%-tint (SLABadge). Amber (ej grön) särskiljer från resolved + speglar dark-temats in-progress (45°) */
+    --status-waiting: 195 70% 29%; /* WCAG AA: djup cyan ≥4.5:1 mot status-badge-tint (var 45% = 2.4:1) */
+    --status-resolved: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1. Särskiljs från in-progress via HUE (amber vs grön), inte lightness */
+    --status-closed: 215 16% 38%; /* WCAG AA: djupare grå ≥4.5:1 mot status-badge-tint (var 47% = 3.5:1) */
 
     /* Priority colors */
     --priority-low: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 45% = 2.1:1) */
@@ -1236,11 +1236,11 @@ layer(base);
     --radius: 0.5rem;
 
     /* Custom ticket status colors */
-    --status-open: 217 91% 50%;
-    --status-in-progress: 140 60% 30%; /* WCAG AA: mörkare grön ≥ 4.5:1 mot vit */
-    --status-waiting: 195 70% 45%;
-    --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 47%;
+    --status-open: 217 91% 42%; /* WCAG AA: djupare blå ≥4.5:1 mot status-badge-tint (var 50% = 3.6:1) */
+    --status-in-progress: 42 90% 25%; /* WCAG AA: djup amber ≥4.5:1 även mot 20%-tint (SLABadge). Amber (ej grön) särskiljer från resolved + speglar dark-temats in-progress (45°) */
+    --status-waiting: 195 70% 29%; /* WCAG AA: djup cyan ≥4.5:1 mot status-badge-tint (var 45% = 2.4:1) */
+    --status-resolved: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1. Särskiljs från in-progress via HUE (amber vs grön), inte lightness */
+    --status-closed: 215 16% 38%; /* WCAG AA: djupare grå ≥4.5:1 mot status-badge-tint (var 47% = 3.5:1) */
 
     /* Priority colors */
     --priority-low: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 45% = 2.1:1) */
@@ -1326,11 +1326,11 @@ layer(base);
     --radius: 0.75rem;
 
     /* Custom ticket status colors */
-    --status-open: 217 91% 50%;
-    --status-in-progress: 140 60% 30%; /* WCAG AA: mörkare grön ≥ 4.5:1 mot vit */
-    --status-waiting: 195 70% 45%;
-    --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 47%;
+    --status-open: 217 91% 42%; /* WCAG AA: djupare blå ≥4.5:1 mot status-badge-tint (var 50% = 3.6:1) */
+    --status-in-progress: 42 90% 25%; /* WCAG AA: djup amber ≥4.5:1 även mot 20%-tint (SLABadge). Amber (ej grön) särskiljer från resolved + speglar dark-temats in-progress (45°) */
+    --status-waiting: 195 70% 29%; /* WCAG AA: djup cyan ≥4.5:1 mot status-badge-tint (var 45% = 2.4:1) */
+    --status-resolved: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1. Särskiljs från in-progress via HUE (amber vs grön), inte lightness */
+    --status-closed: 215 16% 38%; /* WCAG AA: djupare grå ≥4.5:1 mot status-badge-tint (var 47% = 3.5:1) */
 
     /* Priority colors */
     --priority-low: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 45% = 2.1:1) */
@@ -1416,11 +1416,11 @@ layer(base);
     --radius: 0.375rem;
 
     /* Ticket status colors */
-    --status-open: 217 91% 50%;
-    --status-in-progress: 140 60% 30%; /* WCAG AA: mörkare grön ≥ 4.5:1 mot vit */
-    --status-waiting: 195 70% 45%;
-    --status-resolved: 134 62% 40%;
-    --status-closed: 219 7% 50%;
+    --status-open: 217 91% 42%; /* WCAG AA: djupare blå ≥4.5:1 mot status-badge-tint (var 50% = 3.6:1) */
+    --status-in-progress: 42 90% 25%; /* WCAG AA: djup amber ≥4.5:1 även mot 20%-tint (SLABadge). Amber (ej grön) särskiljer från resolved + speglar dark-temats in-progress (45°) */
+    --status-waiting: 195 70% 29%; /* WCAG AA: djup cyan ≥4.5:1 mot status-badge-tint (var 45% = 2.4:1) */
+    --status-resolved: 134 62% 26%; /* WCAG AA: djup grön ≥4.5:1. Särskiljs från in-progress via HUE (amber vs grön), inte lightness */
+    --status-closed: 219 7% 38%; /* WCAG AA: djupare grå ≥4.5:1 mot status-badge-tint (var 50% = 3.1:1) */
 
     /* Priority colors */
     --priority-low: 134 62% 25%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 40% = 2.9:1) */
@@ -1506,11 +1506,11 @@ layer(base);
     --radius: 0.5rem;
 
     /* Ticket status colors */
-    --status-open: 215 89% 50%;
-    --status-in-progress: 140 60% 30%; /* WCAG AA: mörkare grön ≥ 4.5:1 mot vit (var 32 90% 48% = 2.7:1) */
-    --status-waiting: 195 70% 45%;
-    --status-resolved: 141 73% 40%;
-    --status-closed: 0 0% 45%;
+    --status-open: 215 89% 40%; /* WCAG AA: djupare blå ≥4.5:1 mot status-badge-tint (var 50% = 3.4:1) */
+    --status-in-progress: 42 90% 25%; /* WCAG AA: djup amber ≥4.5:1 även mot 20%-tint (SLABadge). Amber (ej grön) särskiljer från resolved + speglar dark-temats in-progress (45°) */
+    --status-waiting: 195 70% 29%; /* WCAG AA: djup cyan ≥4.5:1 mot status-badge-tint (var 45% = 2.4:1) */
+    --status-resolved: 141 73% 24%; /* WCAG AA: djup grön ≥4.5:1. Särskiljs från in-progress via HUE (amber vs grön), inte lightness */
+    --status-closed: 0 0% 37%; /* WCAG AA: djupare grå ≥4.5:1 mot status-badge-tint (var 45% = 3.5:1) */
 
     /* Priority colors */
     --priority-low: 141 73% 23%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 40% = 2.6:1) */
