@@ -76,8 +76,10 @@ const NavOption = ({ item, isActive, open, onClick }: NavOptionProps) => {
     <Link
       to={item.path}
       onClick={onClick}
+      aria-current={isActive ? 'page' : undefined}
       className={cn(
         "relative flex h-11 w-full items-center rounded-md transition-all duration-200",
+        "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         isActive
           ? "bg-primary/10 text-primary shadow-sm border-l-2 border-primary"
           : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
@@ -223,13 +225,6 @@ export const Layout = ({
   return <><a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:bg-background focus:px-4 focus:py-2 focus:rounded-md focus:ring-2 focus:ring-ring">
       Hoppa till innehåll
     </a><div className="min-h-dvh flex bg-background relative overflow-hidden">
-      {/* Decorative floating shapes */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-20 right-1/4 w-96 h-96 bg-primary/5 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '8s' }}></div>
-        <div className="absolute bottom-1/4 left-1/3 w-72 h-72 bg-accent/5 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '10s', animationDelay: '2s' }}></div>
-        <div className="absolute top-1/3 left-1/4 w-64 h-64 bg-primary/3 rounded-full blur-3xl animate-pulse" style={{ animationDuration: '12s', animationDelay: '4s' }}></div>
-      </div>
-
       {/* Mobile overlay with backdrop blur */}
       {sidebarOpen && (
         <button

@@ -587,21 +587,21 @@ const UserList = () => {
                       <UsersIcon className="w-4 h-4" />
                       <span className="text-sm">Totalt</span>
                     </div>
-                    <p className="text-2xl font-bold">{importPreview.total}</p>
+                    <p className="text-2xl font-bold font-mono tabular-nums">{importPreview.total}</p>
                   </div>
                   <div className="border rounded-lg p-3 bg-green-50 dark:bg-green-950/20">
                     <div className="flex items-center gap-2 text-green-600 mb-1">
                       <Plus className="w-4 h-4" />
                       <span className="text-sm">Giltiga</span>
                     </div>
-                    <p className="text-2xl font-bold text-green-600">{importPreview.valid}</p>
+                    <p className="text-2xl font-bold text-green-600 font-mono tabular-nums">{importPreview.valid}</p>
                   </div>
                   <div className="border rounded-lg p-3 bg-red-50 dark:bg-red-950/20">
                     <div className="flex items-center gap-2 text-red-600 mb-1">
                       <Trash2 className="w-4 h-4" />
                       <span className="text-sm">Ogiltiga</span>
                     </div>
-                    <p className="text-2xl font-bold text-red-600">{importPreview.invalid}</p>
+                    <p className="text-2xl font-bold text-red-600 font-mono tabular-nums">{importPreview.invalid}</p>
                   </div>
                 </div>
 

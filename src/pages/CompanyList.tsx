@@ -162,9 +162,9 @@ const CompanyList = () => {
                 <tr className="border-b bg-muted/50">
                   <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
                   <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Org.nummer</th>
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">Öppna ärenden</th>
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Totalt</th>
+                  <th scope="col" className="text-right tabular-nums px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
+                  <th scope="col" className="text-right tabular-nums px-4 py-3 font-medium text-muted-foreground">Öppna ärenden</th>
+                  <th scope="col" className="text-right tabular-nums px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Totalt</th>
                   <th scope="col" className="px-4 py-3" />
                 </tr>
               </thead>
@@ -210,9 +210,9 @@ const CompanyList = () => {
                 <tr className="border-b bg-muted/50">
                   <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
                   <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Org.nummer</th>
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">Öppna ärenden</th>
-                  <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Totalt</th>
+                  <th scope="col" className="text-right tabular-nums px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
+                  <th scope="col" className="text-right tabular-nums px-4 py-3 font-medium text-muted-foreground">Öppna ärenden</th>
+                  <th scope="col" className="text-right tabular-nums px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Totalt</th>
                   <th scope="col" className="px-4 py-3" />
                 </tr>
               </thead>
@@ -236,17 +236,19 @@ const CompanyList = () => {
                     <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                       {company.org_number || '—'}
                     </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
+                    <td className="px-4 py-3 text-right tabular-nums hidden lg:table-cell">
                       {(company as any).contact_count ?? 0}
                     </td>
-                    <td className="px-4 py-3">
-                      {(company as any).open_ticket_count > 0 ? (
-                        <Badge variant="secondary">{(company as any).open_ticket_count}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground">0</span>
-                      )}
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      <div className="flex justify-end">
+                        {(company as any).open_ticket_count > 0 ? (
+                          <Badge variant="secondary">{(company as any).open_ticket_count}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell">
+                    <td className="px-4 py-3 text-right tabular-nums text-muted-foreground hidden sm:table-cell">
                       {(company as any).total_ticket_count ?? 0}
                     </td>
                     <td

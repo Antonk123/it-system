@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { TicketPriority } from '@/types/ticket';
 import { Button } from '@/components/ui/button';
 import {
@@ -131,7 +132,8 @@ export function BulkActionBar({
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-              ⚠️ Permanent radering — kan INTE ångras
+              <AlertTriangle className="w-4 h-4" aria-hidden="true" />
+              Permanent radering — kan INTE ångras
             </AlertDialogTitle>
             <AlertDialogDescription className="space-y-2">
               <span className="block">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 interface AnimatedNumberProps {
@@ -16,21 +16,26 @@ export const AnimatedNumber = ({
   suffix = '',
   prefix = '',
   className,
-  duration = 1500,
+  duration = 600,
 }: AnimatedNumberProps) => {
   const [displayValue, setDisplayValue] = useState(0);
+  // Tracks the last animation target so subsequent updates start from there
+  // rather than from 0 — prevents the "flicker to 0" on refetch.
+  const prevValueRef = useRef(0);
 
   useEffect(() => {
     // Check for reduced motion preference
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     if (prefersReducedMotion) {
+      prevValueRef.current = value;
       setDisplayValue(value);
       return;
     }
 
     let startTime: number | null = null;
-    const startValue = 0;
+    const startValue = prevValueRef.current;
+    let rafId: number;
 
     const animate = (timestamp: number) => {
       if (!startTime) startTime = timestamp;
@@ -43,11 +48,20 @@ export const AnimatedNumber = ({
       setDisplayValue(current);
 
       if (progress < 1) {
-        requestAnimationFrame(animate);
+        rafId = requestAnimationFrame(animate);
+      } else {
+        prevValueRef.current = value;
       }
     };
 
-    requestAnimationFrame(animate);
+    rafId = requestAnimationFrame(animate);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      // On cancellation (new value arrived mid-animation) store the old
+      // target as the next start point — avoids a jump back to 0.
+      prevValueRef.current = value;
+    };
   }, [value, duration]);
 
   const formattedValue = decimals > 0

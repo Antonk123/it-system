@@ -38,7 +38,11 @@ export const BottomTabBar = () => {
         if (item.path === '/tickets/new') {
           return (
             <div key={item.path} className="flex-1 flex items-center justify-center relative -mt-3 overflow-visible">
-              <Link to={item.path} className="flex flex-col items-center justify-center gap-0.5">
+              <Link
+                to={item.path}
+                aria-current={active ? 'page' : undefined}
+                className="flex flex-col items-center justify-center gap-0.5 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
                 <div className={cn(
                   'w-12 h-12 rounded-full flex items-center justify-center shadow-lg -mt-4',
                   active ? 'bg-primary/90' : 'bg-primary'
@@ -55,9 +59,11 @@ export const BottomTabBar = () => {
           <Link
             key={item.path}
             to={item.path}
+            aria-current={active ? 'page' : undefined}
             className={cn(
               'flex-1 min-h-[44px] flex flex-col items-center justify-center gap-0.5',
               'border-t-2 transition-colors',
+              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
               active
                 ? 'border-primary text-primary'
                 : 'border-transparent text-muted-foreground'

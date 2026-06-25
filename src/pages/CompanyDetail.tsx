@@ -169,7 +169,7 @@ const CompanyDetail = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{company.stats?.open_count ?? 0}</p>
+              <p className="text-2xl font-bold font-mono tabular-nums">{company.stats?.open_count ?? 0}</p>
             </CardContent>
           </Card>
 
@@ -181,7 +181,7 @@ const CompanyDetail = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{company.stats?.total ?? 0}</p>
+              <p className="text-2xl font-bold font-mono tabular-nums">{company.stats?.total ?? 0}</p>
             </CardContent>
           </Card>
 
@@ -193,7 +193,7 @@ const CompanyDetail = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{avgResolution}</p>
+              <p className="text-2xl font-bold font-mono tabular-nums">{avgResolution}</p>
             </CardContent>
           </Card>
 
@@ -205,7 +205,7 @@ const CompanyDetail = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{loggedHours}</p>
+              <p className="text-2xl font-bold font-mono tabular-nums">{loggedHours}</p>
             </CardContent>
           </Card>
         </div>

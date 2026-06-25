@@ -8,7 +8,7 @@
 
 import { useEffect, useState } from 'react';
 import { getAuthenticatedFileUrl, downloadAuthenticatedFile, revokeBlobUrl } from '@/lib/secureFileAccess';
-import { Loader2 } from 'lucide-react';
+import { Loader2, ImageOff } from 'lucide-react';
 
 interface SecureImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   fileId: string;
@@ -62,7 +62,7 @@ export const SecureImage = ({ fileId, alt, className, ...props }: SecureImagePro
   if (error || !blobUrl) {
     return (
       <div className={`${className ?? ''} bg-muted`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontSize: '10px' }}>❌</span>
+        <ImageOff className="w-4 h-4 text-muted-foreground" aria-hidden="true" />
       </div>
     );
   }

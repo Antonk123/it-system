@@ -382,7 +382,7 @@ export const TicketTable = memo(function TicketTable({
               }}
             >
               {onSelectionChange && selectionMode && (
-                <TableCell className="w-10 pl-4" onClick={(e) => e.stopPropagation()}>
+                <TableCell className="w-10 py-2.5 pl-4" onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={selectedIds.includes(ticket.id)}
                     onCheckedChange={() => toggleOne(ticket.id)}
@@ -391,7 +391,7 @@ export const TicketTable = memo(function TicketTable({
                 </TableCell>
               )}
               {/* Ärende: Title + Category/Tags/SLA row */}
-              <TableCell className={cn(compact && "py-3")}>
+              <TableCell className={cn("py-2.5 px-4", compact && "py-1.5")}>
                 <div className="flex flex-col gap-1">
                   <span className="font-semibold text-foreground group-hover:text-primary transition-colors duration-200">
                     {ticket.title}
@@ -411,15 +411,15 @@ export const TicketTable = memo(function TicketTable({
                 </div>
               </TableCell>
               {/* Status: Badge only */}
-              <TableCell className={cn(compact && "py-2")}>
+              <TableCell className={cn("py-2.5 px-4", compact && "py-1.5")}>
                 <StatusBadge status={ticket.status} />
               </TableCell>
               {/* Prioritet */}
-              <TableCell className={cn(compact && "py-2")}>
+              <TableCell className={cn("py-2.5 px-4", compact && "py-1.5")}>
                 <PriorityBadge priority={ticket.priority} />
               </TableCell>
               {/* Förlopp */}
-              <TableCell className={cn(compact && "py-3")}>
+              <TableCell className={cn("py-2.5 px-4", compact && "py-1.5")}>
                 {(() => {
                   const progress = getProgress(ticket.id);
                   if (!progress || progress.total === 0) {
@@ -438,7 +438,7 @@ export const TicketTable = memo(function TicketTable({
                         )}
                       </div>
                       <span className={cn(
-                        "text-xs font-medium whitespace-nowrap transition-colors",
+                        "text-xs font-medium whitespace-nowrap transition-colors tabular-nums",
                         isComplete ? "text-primary" : "text-muted-foreground",
                         compact && "text-[11px]"
                       )}>
@@ -449,7 +449,7 @@ export const TicketTable = memo(function TicketTable({
                 })()}
               </TableCell>
               {/* Tilldelad: Avatar + name */}
-              <TableCell className={cn(compact && "py-2", "hidden lg:table-cell")}>
+              <TableCell className={cn("py-2.5 px-4 hidden lg:table-cell", compact && "py-1.5")}>
                 {(() => {
                   const assigneeName = ticket.assignedToName || (ticket.assignedTo ? getUserName(ticket.assignedTo) : null);
                   if (!assigneeName) {
@@ -469,7 +469,7 @@ export const TicketTable = memo(function TicketTable({
                 })()}
               </TableCell>
               {/* Beställare: Avatar + name + date */}
-              <TableCell className={cn(compact && "py-2")}>
+              <TableCell className={cn("py-2.5 px-4", compact && "py-1.5")}>
                 <div className="flex items-center gap-2">
                   <div className="shrink-0 w-6 h-6 rounded-full bg-muted flex items-center justify-center">
                     <span className="text-xs font-bold text-muted-foreground">{initials}</span>

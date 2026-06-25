@@ -81,7 +81,7 @@ export function SLABadge({ deadline, met, pausedAt, label, className, ticketStat
       )}
     >
       <Clock className="h-3 w-3" />
-      {label} {timeText}
+      {label} <span className="tabular-nums">{timeText}</span>
     </Badge>
   );
 }

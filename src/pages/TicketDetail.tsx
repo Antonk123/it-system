@@ -906,8 +906,17 @@ const TicketDetail = () => {
                         className="w-full min-h-[120px] bg-background/50 border border-border rounded-md p-3 text-sm resize-y focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                       />
                       {(aiDraftKbTitles.length > 0 || aiDraftAttachments.length > 0) && (
-                        <p className="text-xs text-muted-foreground">
-                          Baserat på: {[...aiDraftKbTitles, ...aiDraftAttachments.map(a => `📎 ${a}`)].join(', ')}
+                        <p className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
+                          Baserat på:{' '}
+                          {aiDraftKbTitles.join(', ')}
+                          {aiDraftKbTitles.length > 0 && aiDraftAttachments.length > 0 && ', '}
+                          {aiDraftAttachments.map((a, i) => (
+                            <span key={a} className="inline-flex items-center gap-0.5">
+                              {i > 0 && ', '}
+                              <Paperclip className="w-3 h-3" aria-hidden="true" />
+                              {a}
+                            </span>
+                          ))}
                         </p>
                       )}
                       <div className="flex justify-end">

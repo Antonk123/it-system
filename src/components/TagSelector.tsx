@@ -83,8 +83,11 @@ export function TagSelector({ selectedTagIds = [], preloadedTags, onTagsChange, 
           {selectedTags.map((tag) => (
             <div
               key={tag.id}
-              style={{ backgroundColor: tag.color }}
-              className="px-3 py-1 rounded-full text-sm font-medium text-white flex items-center gap-2"
+              style={{
+                backgroundColor: `color-mix(in srgb, ${tag.color} 15%, transparent)`,
+                borderColor: tag.color,
+              }}
+              className="px-3 py-1 rounded-full text-sm font-medium text-foreground border flex items-center gap-2"
             >
               {tag.name}
               <button

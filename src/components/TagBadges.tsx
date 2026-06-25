@@ -46,13 +46,14 @@ export const TagBadges = memo(function TagBadges({
         <span
           key={tag.id}
           style={{
-            '--tag-color': tag.color
+            '--tag-color': tag.color,
+            '--tag-bg-hover': `color-mix(in srgb, ${tag.color} 15%, transparent)`,
           } as React.CSSProperties}
           className={`
             px-2 py-1 rounded text-xs font-medium whitespace-nowrap
             border border-border transition-all duration-200
-            text-foreground hover:text-white
-            hover:bg-(--tag-color) hover:border-(--tag-color)
+            text-foreground
+            hover:bg-[var(--tag-bg-hover)] hover:border-(--tag-color)
             ${clickable ? 'cursor-pointer' : ''}
           `}
           onClick={(e) => handleTagClick(e, tag.id)}

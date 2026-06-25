@@ -3,7 +3,7 @@ import { Switch } from '@/components/ui/switch';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Loader2, CalendarClock, Play } from 'lucide-react';
+import { Loader2, CalendarClock, Play, Check, X } from 'lucide-react';
 import { formatDate } from '@/lib/date';
 import { useBackupConfig, useRunBackupNow } from '@/hooks/useBackupConfig';
 
@@ -51,7 +51,11 @@ export const BackupScheduleSection = memo(function BackupScheduleSection() {
   };
 
   const lastRun = config?.lastRunAt;
-  const statusIcon = config?.lastStatus === 'success' ? '✓' : config?.lastStatus === 'failed' ? '✗' : '';
+  const statusIconEl = config?.lastStatus === 'success'
+    ? <Check className="w-4 h-4" aria-hidden="true" />
+    : config?.lastStatus === 'failed'
+    ? <X className="w-4 h-4" aria-hidden="true" />
+    : null;
   const sizeLabel = formatBytes(config?.lastSizeBytes ?? null);
 
   return (
@@ -97,10 +101,14 @@ export const BackupScheduleSection = memo(function BackupScheduleSection() {
         </div>
       )}
 
-      <p className="text-sm text-muted-foreground">
-        {lastRun
-          ? `Senaste: ${formatDate(lastRun, { year: 'numeric', month: 'short', day: 'numeric' })}${statusIcon ? ` ${statusIcon}` : ''}${sizeLabel ? ` (${sizeLabel})` : ''}`
-          : 'Ingen körning än'}
+      <p className="flex items-center gap-1 text-sm text-muted-foreground">
+        {lastRun ? (
+          <>
+            {`Senaste: ${formatDate(lastRun, { year: 'numeric', month: 'short', day: 'numeric' })}`}
+            {statusIconEl}
+            {sizeLabel ? ` (${sizeLabel})` : ''}
+          </>
+        ) : 'Ingen körning än'}
       </p>
 
       <div className="flex flex-wrap gap-2">
