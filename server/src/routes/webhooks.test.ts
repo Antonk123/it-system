@@ -182,6 +182,16 @@ describe('Webhook CRUD authorization (admin-only)', () => {
     expect(res.status).toBe(201);
   });
 
+  // SLA breach events fired by the SLA scheduler.
+  it('lets an admin subscribe to sla.response.breached and sla.resolution.breached (201)', async () => {
+    const res = await admin.agent
+      .post('/api/webhooks')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ url: PUBLIC_URL, events: ['sla.response.breached', 'sla.resolution.breached'] });
+    expect(res.status).toBe(201);
+  });
+
   it('blocks a non-admin from deleting a webhook (403)', async () => {
     const id = randomUUID();
     db.prepare('INSERT INTO webhooks (id, url, events, secret) VALUES (?, ?, ?, ?)')

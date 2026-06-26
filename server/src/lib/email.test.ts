@@ -31,7 +31,7 @@ vi.mock('nodemailer', () => ({
 }));
 
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
-import { sendTicketReplyEmail, sendAgentReplyNotificationEmail } from './email.js';
+import { sendTicketReplyEmail, sendAgentReplyNotificationEmail, sendSlaBreachEmail } from './email.js';
 
 function makeTicket(emailMessageId: string | null): string {
   const contactId = randomUUID();
@@ -123,5 +123,26 @@ describe('sendAgentReplyNotificationEmail', () => {
     expect(opts.to).toBe('agent@itticket.local');
     expect(String(opts.subject)).toContain('[#ABC12345]');
     expect(String(opts.text) + String(opts.html)).toContain('kunden svarade om felet');
+  });
+});
+
+describe('sendSlaBreachEmail', () => {
+  it('emails the recipient about a resolution SLA breach with the short id', async () => {
+    sendMailMock.mockClear();
+    await sendSlaBreachEmail({
+      toEmail: 'tech@itticket.local',
+      toName: 'Tech',
+      ticketId: 'def67890-0000-0000-0000-000000000000',
+      title: 'Servern nere',
+      breachType: 'resolution',
+      deadline: '2026-06-26T08:00:00.000Z',
+      priority: 'critical',
+    });
+
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    const opts = sendMailMock.mock.calls[0][0] as Record<string, unknown>;
+    expect(opts.to).toBe('tech@itticket.local');
+    expect(String(opts.subject)).toContain('[#DEF67890]');
+    expect(String(opts.subject).toLowerCase()).toContain('sla');
   });
 });

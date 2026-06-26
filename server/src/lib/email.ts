@@ -655,6 +655,84 @@ export const sendAgentReplyNotificationEmail = async (opts: {
   });
 };
 
+/**
+ * Notifies a recipient (assigned technician or admin) that a ticket has breached
+ * its response or resolution SLA. No-op when SMTP is not configured.
+ */
+export const sendSlaBreachEmail = async (opts: {
+  toEmail: string;
+  toName: string;
+  ticketId: string;
+  title: string;
+  breachType: 'response' | 'resolution';
+  deadline: string;
+  priority: string;
+}): Promise<void> => {
+  const transporter = createTransporter();
+  const from = process.env.EMAIL_FROM;
+  if (!transporter || !from) return;
+
+  const config = getEmailConfig();
+  const shortId = opts.ticketId.slice(0, 8).toUpperCase();
+  const safeTitle = sanitizeSubject(opts.title);
+  const typeLabel = opts.breachType === 'response' ? 'Första svar' : 'Lösning';
+  const ticketUrl = config?.appBaseUrl
+    ? `${config.appBaseUrl.replace(/\/$/, '')}/tickets/${opts.ticketId}`
+    : null;
+  const deadlineLabel = new Date(opts.deadline).toLocaleString('sv-SE', { timeZone: 'Europe/Stockholm' });
+
+  const content = `
+  <tr>
+    <td style="padding: 32px 36px 0;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 6px;">
+        <tr>
+          <td style="font-family: ${F}; font-size: 11px; font-weight: 700; color: #dc2626; text-transform: uppercase; letter-spacing: 0.06em;">SLA-brott &middot; ${typeLabel}</td>
+          <td align="right" style="font-family: ${FM}; font-size: 11px; color: ${T.textMut};">#${shortId}</td>
+        </tr>
+      </table>
+      <h1 style="margin: 0 0 16px 0; font-family: ${F}; color: ${T.text}; font-size: 21px; font-weight: 700; line-height: 1.3;">
+        ${escapeHtml(safeTitle)}
+      </h1>
+    </td>
+  </tr>
+  <tr>
+    <td style="padding: 0 36px 32px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 20px;">
+        <tr>
+          <td bgcolor="${T.surface}" style="background-color: ${T.surface}; padding: 14px 16px; border-left: 3px solid #dc2626;">
+            <p style="margin: 0 0 4px 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.65;">
+              SLA f&#246;r <strong>${typeLabel.toLowerCase()}</strong> har passerats (prioritet: ${escapeHtml(opts.priority)}).
+            </p>
+            <p style="margin: 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.65;">
+              Deadline: <strong>${escapeHtml(deadlineLabel)}</strong>
+            </p>
+          </td>
+        </tr>
+      </table>
+      ${ticketUrl ? buildCta(ticketUrl, '&#214;ppna &#228;rendet') : ''}
+    </td>
+  </tr>`;
+
+  const html = buildEmailShell(content, `Avisering fr&#229;n ${getBrandName()}`);
+  const text = [
+    `SLA-brott (${typeLabel.toLowerCase()}) på ärende #${shortId}: ${opts.title}`,
+    `Prioritet: ${opts.priority}`,
+    `Deadline passerad: ${deadlineLabel}`,
+    '',
+    ticketUrl ? `Öppna ärendet: ${ticketUrl}` : null,
+  ].filter(Boolean).join('\n');
+
+  await transporter.sendMail({
+    from,
+    to: opts.toEmail,
+    subject: `[#${shortId}] SLA-brott (${typeLabel}): ${safeTitle}`,
+    text,
+    html,
+  }).catch(error => {
+    logger.error('[sla-breach] Failed to send breach notification', { error: String(error) });
+  });
+};
+
 // ── Reminder email ──────────────────────────────────────────────────
 
 export const sendTicketReminderEmail = async (data: {

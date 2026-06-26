@@ -6,6 +6,7 @@ import { cleanupOldAiUsage } from './lib/aiHelper.js';
 import { startAutoCloseScheduler, stopAutoCloseScheduler } from './lib/autoCloseScheduler.js';
 import { startRecurringScheduler, stopRecurringScheduler } from './lib/recurringScheduler.js';
 import { startWebhookRetryScheduler, stopWebhookRetryScheduler } from './lib/webhookRetryScheduler.js';
+import { startSlaScheduler, stopSlaScheduler } from './lib/slaScheduler.js';
 import { initWebPush } from './lib/push.js';
 import { startPushScheduler, stopPushScheduler } from './lib/pushScheduler.js';
 import { startBackupScheduler, stopBackupScheduler } from './lib/backupScheduler.js';
@@ -127,6 +128,10 @@ startRecurringScheduler();
 // with exponential backoff up to 5 attempts.
 startWebhookRetryScheduler();
 
+// SLA breach scheduler (every 5 minutes) — proactively flags + notifies passed
+// SLA deadlines on open tickets so breaches don't pass silently.
+startSlaScheduler();
+
 // Bygg Express-appen (middleware + CSRF + routes + felhanterare) — definierad i
 // app.ts utan sidoeffekter så att den kan importeras av tester (supertest).
 // Anropas efter DB-init och schemaläggare, samma ordning som tidigare.
@@ -158,6 +163,7 @@ const gracefulShutdown = (signal: string) => {
   stopRecurringScheduler();
   stopAutoCloseScheduler();
   stopPushScheduler();
+  stopSlaScheduler();
 
   // Stoppa inline cron-jobb och timers definierade i denna fil
   refreshTokenCleanupTask.stop();

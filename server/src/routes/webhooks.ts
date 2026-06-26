@@ -59,7 +59,7 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
     return res.status(400).json({ error: 'At least one event is required' });
   }
 
-  const VALID_EVENTS = ['ticket.created', 'ticket.updated', 'ticket.closed', 'ticket.deleted', 'ticket.status_changed', 'comment.created', 'contact.created', 'contact.updated'];
+  const VALID_EVENTS = ['ticket.created', 'ticket.updated', 'ticket.closed', 'ticket.deleted', 'ticket.status_changed', 'comment.created', 'contact.created', 'contact.updated', 'sla.response.breached', 'sla.resolution.breached'];
   const invalidEvents = events.filter((e: string) => !VALID_EVENTS.includes(e));
   if (invalidEvents.length > 0) {
     return res.status(400).json({ error: `Invalid event type(s): ${invalidEvents.join(', ')}`, validEvents: VALID_EVENTS });
