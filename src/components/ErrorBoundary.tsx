@@ -53,7 +53,7 @@ class ErrorBoundary extends Component<Props, State> {
                 Ett oväntat fel uppstod. Försök ladda om sidan.
               </p>
             </div>
-            {this.state.error && (
+            {import.meta.env.DEV && this.state.error && (
               <pre className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3 overflow-auto max-h-32 text-left">
                 {this.state.error.message}
               </pre>

@@ -35,7 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { TicketPriority, TicketStatus, Template } from '@/types/ticket';
 import { toast } from 'sonner';
@@ -755,12 +755,12 @@ const TicketForm = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <h1 className="flex items-center gap-2 text-lg font-semibold leading-none tracking-tight">
               {isEditing
                 ? <><Pencil className="w-5 h-5 text-primary" />Redigera ärende</>
                 : <><PlusCircle className="w-5 h-5 text-primary" />Skapa nytt ärende</>
               }
-            </CardTitle>
+            </h1>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
