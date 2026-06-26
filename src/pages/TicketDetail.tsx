@@ -11,6 +11,7 @@ import { useTicketChecklists, ChecklistItem } from '@/hooks/useTicketChecklists'
 import { useChecklistTemplates } from '@/hooks/useChecklistTemplates';
 import { useTicketSharing } from '@/hooks/useTicketSharing';
 import { useTicketComments } from '@/hooks/useTicketComments';
+import { useSettings } from '@/hooks/useSettings';
 import { useTicketLinks } from '@/hooks/useTicketLinks';
 import { useTicketHistory } from '@/hooks/useTicketHistory';
 import { useTicketReminders } from '@/hooks/useTicketReminders';
@@ -111,6 +112,7 @@ const TicketDetail = () => {
   const { items: checklistItems, fetchChecklists, addChecklistItem, updateChecklistItem, deleteChecklistItem, setItems: setChecklistItems } = useTicketChecklists();
   const { templates: checklistTemplates, fetchTemplates: fetchChecklistTemplates, createTemplate: createChecklistTemplate, applyTemplate: applyChecklistTemplate } = useChecklistTemplates();
   const { comments, isLoading: commentsLoading, isError: commentsError, addComment, updateComment, deleteComment } = useTicketComments(id || '');
+  const { twoWayEmailEnabled } = useSettings();
   const { links, isLoading: linksLoading, isError: linksError, addLink, deleteLink } = useTicketLinks(id || '');
   // Defer non-critical, below-the-fold data until the browser is idle after the
   // first paint, so it doesn't compete with the ticket + comments fetch on a
@@ -955,6 +957,7 @@ const TicketDetail = () => {
                 comments={comments}
                 isLoading={commentsLoading}
                 isError={commentsError}
+                allowPublicReply={twoWayEmailEnabled}
                 onAddComment={(content, isInternal) => addComment(content, isInternal).then(() => {})}
                 onUpdateComment={updateComment}
                 onDeleteComment={deleteComment}
