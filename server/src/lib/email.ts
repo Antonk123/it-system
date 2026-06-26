@@ -50,6 +50,12 @@ const createTransporter = () => {
     requireTLS: port === 587,
     auth: user && pass ? { user, pass } : undefined,
     tls: { ciphers: 'TLSv1.2' },
+    // Defense in depth: cap a slow relay so a (now backgrounded) send fails
+    // fast instead of holding a connection for nodemailer's 30s/120s/600s
+    // greeting/connection/socket defaults.
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 20_000,
   });
 };
 

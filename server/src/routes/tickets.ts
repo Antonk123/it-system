@@ -872,21 +872,19 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
 
     const warnings: string[] = [];
 
-    try {
-      await sendTicketCreatedEmail({
-        id: ticket.id,
-        title: ticket.title,
-        description: ticket.description,
-        status: ticket.status,
-        priority: ticket.priority,
-        categoryId: ticket.category_id,
-        requesterName: requester?.name,
-        requesterEmail: requester?.email,
-      });
-    } catch (error) {
-      logger.error('Error sending ticket created email:', { error: String(error) });
-      warnings.push('E-postnotifiering kunde inte skickas');
-    }
+    // Fire-and-forget: a notification email must NOT block the save response.
+    // Inline-awaiting coupled the user's save latency to SMTP latency (up to
+    // ~30s stalls when the relay throttled). Mirror the webhook dispatch below.
+    sendTicketCreatedEmail({
+      id: ticket.id,
+      title: ticket.title,
+      description: ticket.description,
+      status: ticket.status,
+      priority: ticket.priority,
+      categoryId: ticket.category_id,
+      requesterName: requester?.name,
+      requesterEmail: requester?.email,
+    }).catch((error) => logger.error('Error sending ticket created email:', { error: String(error) }));
 
     dispatchWebhook('ticket.created', { id: ticket.id, title: ticket.title, status: ticket.status, priority: ticket.priority }).catch((e) => logger.error('Webhook dispatch error (ticket.created):', { error: String(e) }));
 
@@ -1523,14 +1521,15 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
           // Avoid spamming users who assign tickets to themselves.
           const isSelfAssign = safeUpdates.assigned_to === req.user!.id;
           if (!isSelfAssign) {
-            await sendTicketAssignedEmail({
+            // Fire-and-forget — notification must not block the update response.
+            sendTicketAssignedEmail({
               toEmail: assignee.email,
               toName: assignee.display_name || assignee.email.split('@')[0],
               ticketId: req.params.id as string,
               ticketTitle: existing.title,
               ticketPriority: (safeUpdates.priority as string) || existing.priority,
               assignerName: assigner?.display_name || assigner?.email?.split('@')[0] || 'System',
-            });
+            }).catch((error) => logger.error('Assignee notification error (non-fatal):', { error: String(error) }));
           }
         }
       } catch (error) {
@@ -1572,21 +1571,17 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
         ? (db.prepare('SELECT name, email FROM contacts WHERE id = ?').get(ticket.requester_id) as { name: string; email: string } | undefined)
         : undefined;
 
-      try {
-        await sendTicketClosedEmail({
-          id: ticket.id,
-          title: ticket.title,
-          description: ticket.description,
-          status: ticket.status,
-          priority: ticket.priority,
-          categoryId: ticket.category_id,
-          requesterName: requester?.name,
-          requesterEmail: requester?.email,
-        });
-      } catch (error) {
-        logger.error('Error sending ticket closed email:', { error: String(error) });
-        warnings.push('E-postnotifiering vid stängning kunde inte skickas');
-      }
+      // Fire-and-forget — notification must not block the update response.
+      sendTicketClosedEmail({
+        id: ticket.id,
+        title: ticket.title,
+        description: ticket.description,
+        status: ticket.status,
+        priority: ticket.priority,
+        categoryId: ticket.category_id,
+        requesterName: requester?.name,
+        requesterEmail: requester?.email,
+      }).catch((error) => logger.error('Error sending ticket closed email:', { error: String(error) }));
     }
 
     res.json({ ...ticket, tags: formattedTags, warnings: warnings.length > 0 ? warnings : undefined });
