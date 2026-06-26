@@ -37,6 +37,7 @@ import apiKeyRoutes from './routes/apiKeys.js';
 import webhookRoutes from './routes/webhooks.js';
 import emailInboundRoutes from './routes/emailInbound.js';
 import slaRoutes from './routes/sla.js';
+import settingsRoutes from './routes/settings.js';
 
 /**
  * Bygger Express-appen med all middleware och alla routes — men UTAN sidoeffekter
@@ -259,6 +260,7 @@ export function createApp() {
   app.use('/api/webhooks', webhookRoutes);
   app.use('/api/email-inbound', emailInboundRoutes);
   app.use('/api/sla', slaRoutes);
+  app.use('/api/settings', settingsRoutes);
 
   // Error handling
   // HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client
