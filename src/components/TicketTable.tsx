@@ -312,9 +312,9 @@ export const TicketTable = memo(function TicketTable({
       )}
 
     <div className="rounded-2xl overflow-hidden border border-border/50 backdrop-blur-xs bg-card/30">
-      <Table className={cn(compact && "text-xs")}>
-        <TableHeader>
-          <TableRow className="border-b border-border/50 bg-background/40 backdrop-blur-xs">
+      <Table className={cn(compact && "text-xs")} containerClassName="max-h-[calc(100dvh-16rem)] overflow-auto">
+        <TableHeader className="sticky top-0 z-10">
+          <TableRow className="border-b border-border/50 bg-card hover:bg-card">
             {onSelectionChange && selectionMode && (
               <TableHead className="w-10 pl-4">
                 <Checkbox
