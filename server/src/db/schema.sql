@@ -295,3 +295,9 @@ CREATE TABLE IF NOT EXISTS backup_config (
   last_size_bytes INTEGER,
   updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
+
+-- App settings (generic key-value runtime settings; first key: two_way_email_enabled)
+CREATE TABLE IF NOT EXISTS app_settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);

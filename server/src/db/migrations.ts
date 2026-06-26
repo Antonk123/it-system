@@ -1302,4 +1302,20 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    id: '064',
+    name: 'create_app_settings',
+    up: (db) => {
+      // Generisk key-value-tabell för runtime-systeminställningar (appens första).
+      // Första nyckeln: two_way_email_enabled — styr om utgående kund-mejl (publikt
+      // svar + mottagningsbekräftelse) skickas. Seedas '1' (på) → bakåtkompatibelt
+      // med dagens beteende. CREATE IF NOT EXISTS + INSERT OR IGNORE = idempotent.
+      db.exec(`CREATE TABLE IF NOT EXISTS app_settings (
+        key   TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )`);
+      db.prepare('INSERT OR IGNORE INTO app_settings (key, value) VALUES (?, ?)')
+        .run('two_way_email_enabled', '1');
+    },
+  },
 ];
