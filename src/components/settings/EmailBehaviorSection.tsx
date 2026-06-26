@@ -31,18 +31,21 @@ export function EmailBehaviorSection() {
       </CardHeader>
       <CardContent>
         <div className="flex items-center justify-between gap-4">
-          <Label htmlFor="two-way-email-switch" className="flex flex-col gap-1">
-            <span className="font-medium">Två-vägs e-postkommunikation med kunder</span>
-            <span className="text-sm text-muted-foreground font-normal">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="two-way-email-switch" className="font-medium">
+              Två-vägs e-postkommunikation med kunder
+            </Label>
+            <span id="two-way-email-desc" className="text-sm text-muted-foreground">
               När av: inga svar eller mottagningsbekräftelser mejlas till kunder.
               Interna notiser och inkommande mejl→ärende påverkas inte.
             </span>
-          </Label>
+          </div>
           <Switch
             id="two-way-email-switch"
             checked={twoWayEmailEnabled}
             disabled={isLoading || updateTwoWayEmail.isPending}
             onCheckedChange={(checked) => updateTwoWayEmail.mutate(checked)}
+            aria-describedby="two-way-email-desc"
           />
         </div>
       </CardContent>
