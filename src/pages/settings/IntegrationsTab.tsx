@@ -25,6 +25,7 @@ import { parseServerDate } from '@/lib/date';
 import { useApiKeys } from '@/hooks/useApiKeys';
 import { useWebhooks, useWebhookDeliveries } from '@/hooks/useWebhooks';
 import { Checkbox } from '@/components/ui/checkbox';
+import { EmailBehaviorSection } from '@/components/settings/EmailBehaviorSection';
 
 const WebhookDeliveriesPanel = memo(({ webhookId }: { webhookId: string }) => {
   const { deliveries, isLoading } = useWebhookDeliveries(webhookId);
@@ -99,6 +100,7 @@ const IntegrationsTab = () => {
 
   return (
     <>
+        <EmailBehaviorSection />
         <Collapsible open={sectionsOpen.apiKeys} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, apiKeys: open }))}>
           <Card>
             <CollapsibleTrigger className="w-full">
