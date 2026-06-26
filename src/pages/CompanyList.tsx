@@ -159,10 +159,10 @@ const CompanyList = () => {
 
         {/* Table */}
         {isLoading ? (
-          <div className="border rounded-lg overflow-hidden bg-card">
+          <div className="border rounded-lg bg-card max-h-[calc(100dvh-16rem)] overflow-auto">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b bg-muted">
                   <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
                   <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Org.nummer</th>
                   <th scope="col" className="text-right tabular-nums px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
@@ -212,10 +212,10 @@ const CompanyList = () => {
             />
           )
         ) : (
-          <div className="border rounded-lg overflow-hidden bg-card">
+          <div className="border rounded-lg bg-card max-h-[calc(100dvh-16rem)] overflow-auto">
             <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/50">
+              <thead className="sticky top-0 z-10">
+                <tr className="border-b bg-muted">
                   <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground">Namn</th>
                   <th scope="col" className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Org.nummer</th>
                   <th scope="col" className="text-right tabular-nums px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Kontakter</th>
