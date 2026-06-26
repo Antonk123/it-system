@@ -46,4 +46,17 @@ describe('TicketComments visibility mode', () => {
 
     await waitFor(() => expect(onAddComment).toHaveBeenCalledWith('Vi har löst det', false));
   });
+
+  it('hides the visibility toggle and posts internal when public replies are disabled', async () => {
+    const onAddComment = vi.fn().mockResolvedValue(undefined);
+    render(<TicketComments {...baseProps} onAddComment={onAddComment} allowPublicReply={false} />);
+
+    // The visibility group is gone...
+    expect(screen.queryByRole('group', { name: /synlighet/i })).toBeNull();
+
+    // ...and submitting posts an internal comment (isInternal=true).
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'notering' } });
+    fireEvent.click(screen.getByRole('button', { name: /lägg till kommentar/i }));
+    await waitFor(() => expect(onAddComment).toHaveBeenCalledWith('notering', true));
+  });
 });

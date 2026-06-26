@@ -12,6 +12,10 @@ interface TicketCommentsProps {
   comments: Comment[];
   isLoading: boolean;
   isError?: boolean;
+  // When false, two-way email is disabled system-wide → hide the public-reply
+  // toggle entirely (a "public" comment only triggers the customer email, which
+  // is now suppressed, so the choice would be meaningless/misleading).
+  allowPublicReply?: boolean;
   onAddComment: (content: string, isInternal: boolean) => Promise<void>;
   onUpdateComment: (commentId: string, content: string) => Promise<void>;
   onDeleteComment: (commentId: string) => Promise<void>;
@@ -21,6 +25,7 @@ export const TicketComments = memo(function TicketComments({
   comments,
   isLoading,
   isError,
+  allowPublicReply = true,
   onAddComment,
   onUpdateComment,
   onDeleteComment,
@@ -55,35 +60,39 @@ export const TicketComments = memo(function TicketComments({
 
       {/* Comment Form */}
       <form onSubmit={handleSubmit} className="space-y-2">
-        {/* Visibility mode: internal note vs public reply to the customer */}
-        <div role="group" aria-label="Synlighet" className="inline-flex rounded-md border border-border p-0.5 bg-muted/40">
-          <button
-            type="button"
-            aria-pressed={isInternal}
-            onClick={() => setIsInternal(true)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
-              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-              isInternal ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Lock className="w-3 h-3" />
-            Internt
-          </button>
-          <button
-            type="button"
-            aria-pressed={!isInternal}
-            onClick={() => setIsInternal(false)}
-            className={cn(
-              'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
-              'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-              !isInternal ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            <Send className="w-3 h-3" />
-            Publikt svar
-          </button>
-        </div>
+        {/* Visibility mode: internal note vs public reply to the customer.
+            Hidden when two-way email is off — isInternal then stays at its
+            default (true) since these buttons are the only way to flip it. */}
+        {allowPublicReply && (
+          <div role="group" aria-label="Synlighet" className="inline-flex rounded-md border border-border p-0.5 bg-muted/40">
+            <button
+              type="button"
+              aria-pressed={isInternal}
+              onClick={() => setIsInternal(true)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+                isInternal ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Lock className="w-3 h-3" />
+              Internt
+            </button>
+            <button
+              type="button"
+              aria-pressed={!isInternal}
+              onClick={() => setIsInternal(false)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-colors',
+                'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+                !isInternal ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Send className="w-3 h-3" />
+              Publikt svar
+            </button>
+          </div>
+        )}
 
         <RichTextEditor
           value={newComment}
