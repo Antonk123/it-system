@@ -9,9 +9,11 @@ import type { AgingTicket } from '@/hooks/useDashboardOverview';
 interface AgingTicketsPanelProps {
   tickets: AgingTicket[] | undefined;
   isLoading: boolean;
+  isError?: boolean;
+  onRetry?: () => void;
 }
 
-export const AgingTicketsPanel = ({ tickets, isLoading }: AgingTicketsPanelProps) => {
+export const AgingTicketsPanel = ({ tickets, isLoading, isError, onRetry }: AgingTicketsPanelProps) => {
   const navigate = useNavigate();
 
   return (
@@ -44,6 +46,17 @@ export const AgingTicketsPanel = ({ tickets, isLoading }: AgingTicketsPanelProps
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-10 w-full rounded-md" />
             ))}
+          </div>
+        ) : isError ? (
+          <div className="text-center py-6">
+            <p className="text-sm font-semibold text-destructive">Kunde inte hämta eftersläpning</p>
+            <button
+              onClick={() => onRetry?.()}
+              aria-label="Försök igen"
+              className="mt-2 text-xs font-medium text-destructive hover:opacity-75 transition-opacity underline-offset-2 hover:underline"
+            >
+              Försök igen
+            </button>
           </div>
         ) : !tickets || tickets.length === 0 ? (
           <div className="text-center py-6">

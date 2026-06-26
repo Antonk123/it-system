@@ -236,6 +236,8 @@ const Dashboard = () => {
               tickets={activeQueue ?? []}
               isLoading={isQueueLoading}
               getUserName={getUserName}
+              isError={isQueueError}
+              onRetry={refetchQueue}
             />
 
             {/* Aging + Reminders below the queue */}
@@ -243,6 +245,8 @@ const Dashboard = () => {
               <AgingTicketsPanel
                 tickets={dashboardOverview?.agingTickets}
                 isLoading={isOverviewLoading}
+                isError={isOverviewError}
+                onRetry={refetchOverview}
               />
               <RemindersPanel
                 reminders={upcomingReminders}

@@ -325,7 +325,7 @@ export const TicketTable = memo(function TicketTable({
                 />
               </TableHead>
             )}
-            <TableHead className="font-semibold text-foreground/90">
+            <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
               <div className="flex items-center gap-2">
                 {onSelectionChange && !selectionMode && (
                   <Checkbox
@@ -338,11 +338,11 @@ export const TicketTable = memo(function TicketTable({
                 Ärende
               </div>
             </TableHead>
-            <TableHead className="font-semibold text-foreground/90">{renderSortButton('Status', 'status', enableStatusSort)}</TableHead>
-            <TableHead className="font-semibold text-foreground/90">{renderSortButton('Prioritet', 'priority', enablePrioritySort)}</TableHead>
-            <TableHead className="font-semibold text-foreground/90">Förlopp</TableHead>
-            <TableHead className="font-semibold text-foreground/90 hidden lg:table-cell">Tilldelad</TableHead>
-            <TableHead className="font-semibold text-foreground/90">Beställare</TableHead>
+            <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{renderSortButton('Status', 'status', enableStatusSort)}</TableHead>
+            <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{renderSortButton('Prioritet', 'priority', enablePrioritySort)}</TableHead>
+            <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Förlopp</TableHead>
+            <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Tilldelad</TableHead>
+            <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Beställare</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

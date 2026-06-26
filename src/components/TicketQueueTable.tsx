@@ -9,6 +9,8 @@ interface TicketQueueTableProps {
   tickets: Ticket[];
   isLoading: boolean;
   getUserName?: (id: string) => string | undefined;
+  isError?: boolean;
+  onRetry?: () => void;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -50,7 +52,7 @@ const PRIORITY_LABELS: Record<string, string> = {
 };
 
 
-export const TicketQueueTable = ({ tickets, isLoading, getUserName }: TicketQueueTableProps) => {
+export const TicketQueueTable = ({ tickets, isLoading, getUserName, isError, onRetry }: TicketQueueTableProps) => {
   const navigate = useNavigate();
   const activeTickets = tickets
     .filter(t => t.status !== 'closed')
@@ -78,6 +80,17 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName }: TicketQueu
             {Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-12 w-full rounded-md" />
             ))}
+          </div>
+        ) : isError ? (
+          <div className="text-center py-8 px-5">
+            <p className="text-sm font-semibold text-destructive">Kunde inte hämta kön</p>
+            <button
+              onClick={() => onRetry?.()}
+              aria-label="Försök igen"
+              className="mt-2 text-xs font-medium text-destructive hover:opacity-75 transition-opacity underline-offset-2 hover:underline"
+            >
+              Försök igen
+            </button>
           </div>
         ) : activeTickets.length === 0 ? (
           <div className="text-center py-8 px-5">
