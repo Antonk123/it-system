@@ -3,6 +3,7 @@ import { db } from '../db/connection.js';
 import { stripHtml } from './htmlUtils.js';
 import { buildReplyHeaders, generateMessageId } from './emailThreading.js';
 import { logger } from './logger.js';
+import { shouldEmailCustomer } from './settings.js';
 
 interface TicketEmailPayload {
   id: string;
@@ -432,6 +433,11 @@ export const sendTicketReceivedConfirmation = async (opts: {
   const from = process.env.EMAIL_FROM;
   if (!transporter || !from) return;
 
+  if (!shouldEmailCustomer(opts.toEmail)) {
+    logger.info('[two-way-email] Disabled — skipping received-confirmation', { ticketId: opts.ticketId });
+    return;
+  }
+
   const replyTo = process.env.IMAP_USER || from;
   const shortId = opts.ticketId.slice(0, 8).toUpperCase();
   const safeTitle = sanitizeSubject(opts.title);
@@ -514,6 +520,11 @@ export const sendTicketReplyEmail = async (opts: {
   const transporter = createTransporter();
   const from = process.env.EMAIL_FROM;
   if (!transporter || !from) return;
+
+  if (!shouldEmailCustomer(opts.toEmail)) {
+    logger.info('[two-way-email] Disabled — skipping reply email', { ticketId: opts.ticketId });
+    return;
+  }
 
   const replyTo = process.env.IMAP_USER || from;
   const shortId = opts.ticketId.slice(0, 8).toUpperCase();

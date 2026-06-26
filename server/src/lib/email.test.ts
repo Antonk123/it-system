@@ -31,7 +31,8 @@ vi.mock('nodemailer', () => ({
 }));
 
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
-import { sendTicketReplyEmail, sendAgentReplyNotificationEmail, sendSlaBreachEmail } from './email.js';
+import { sendTicketReplyEmail, sendAgentReplyNotificationEmail, sendSlaBreachEmail, sendTicketReceivedConfirmation } from './email.js';
+import { setSetting } from './settings.js';
 
 function makeTicket(emailMessageId: string | null): string {
   const contactId = randomUUID();
@@ -144,5 +145,56 @@ describe('sendSlaBreachEmail', () => {
     expect(opts.to).toBe('tech@itticket.local');
     expect(String(opts.subject)).toContain('[#DEF67890]');
     expect(String(opts.subject).toLowerCase()).toContain('sla');
+  });
+});
+
+describe('two-way email gate (shouldEmailCustomer)', () => {
+  // Default seed is '1' (on). Restore it after each test so order is irrelevant
+  // and the existing threading tests (which run earlier) are unaffected.
+  afterEach(() => setSetting('two_way_email_enabled', '1'));
+
+  it('does NOT send the customer reply email when two-way is off', async () => {
+    sendMailMock.mockClear();
+    setSetting('two_way_email_enabled', '0');
+    const ticketId = makeTicket(null);
+
+    await sendTicketReplyEmail({
+      ticketId,
+      toEmail: 'kund@customer.example',
+      toName: 'Kund',
+      title: 'Skrivaren krånglar',
+      body: 'Detta ska inte mejlas.',
+    });
+
+    expect(sendMailMock).not.toHaveBeenCalled();
+  });
+
+  it('does NOT send the received-confirmation when two-way is off', async () => {
+    sendMailMock.mockClear();
+    setSetting('two_way_email_enabled', '0');
+
+    await sendTicketReceivedConfirmation({
+      toEmail: 'kund@customer.example',
+      toName: 'Kund',
+      ticketId: 'abc12345-0000-0000-0000-000000000000',
+      title: 'Nytt ärende',
+    });
+
+    expect(sendMailMock).not.toHaveBeenCalled();
+  });
+
+  it('sends the received-confirmation when two-way is on (control)', async () => {
+    sendMailMock.mockClear();
+    setSetting('two_way_email_enabled', '1');
+
+    await sendTicketReceivedConfirmation({
+      toEmail: 'kund@customer.example',
+      toName: 'Kund',
+      ticketId: 'abc12345-0000-0000-0000-000000000000',
+      title: 'Nytt ärende',
+    });
+
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    expect((sendMailMock.mock.calls[0][0] as Record<string, unknown>).to).toBe('kund@customer.example');
   });
 });
