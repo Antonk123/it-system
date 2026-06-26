@@ -1375,6 +1375,17 @@ class ApiClient {
     });
   }
 
+  async getSettings() {
+    return this.request<{ twoWayEmailEnabled: boolean }>('/settings');
+  }
+
+  async updateTwoWayEmail(enabled: boolean) {
+    return this.request<{ twoWayEmailEnabled: boolean }>('/settings/two-way-email', {
+      method: 'PUT',
+      body: { enabled },
+    });
+  }
+
   async runBackupNow() {
     return this.request<{ status: string; lastRunAt: string | null; lastSizeBytes: number | null }>('/backup/run-now', {
       method: 'POST',
