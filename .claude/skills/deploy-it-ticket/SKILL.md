@@ -5,7 +5,7 @@ description: >-
   Portainer). Use ONLY when the user explicitly asks to deploy/ship/release or
   build server images. Encodes the exact runbook and the hard rule that Claude
   never runs container lifecycle commands.
-disable-model-invocation: true
+disable-model-invocation: false
 ---
 
 # Deploy runbook (IT-Ticket)

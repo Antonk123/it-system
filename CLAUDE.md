@@ -123,7 +123,7 @@ Körs automatiskt av Claude Code — du behöver inte göra något. Kräver `jq`
 |-------|---------|-------|
 | `db-migration` | DB/schema/migration-arbete — säkrar `migrations.ts`-arrayen + `schema.sql`-synk + FTS5. | ✅ Claude auto-väljer |
 | `express-api-route` | Ny/ändrad endpoint — auth/CSRF/parametriserad SQL/mount + `api.request`. | ✅ Claude auto-väljer |
-| `deploy-it-ticket` | Deploy-runbooket: gates → push → SSH `git pull` → `docker build` (Claude bygger image). **Anton** redeployar i Portainer; aldrig `docker run`/`compose up` från terminal. | ⚠️ user-only: kör `/deploy-it-ticket` |
+| `deploy-it-ticket` | Deploy-runbooket: gates → push → SSH `git pull` → `docker build` (Claude bygger image). **Anton** redeployar i Portainer; aldrig `docker run`/`compose up` från terminal. | ✅ Claude auto-väljer — men ENDAST vid explicit deploy-/ship-begäran (gatas av skillens description + hard rules) |
 
 ### MCP-servrar
 
