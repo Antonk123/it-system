@@ -17,7 +17,11 @@ declare global {
   }
 }
 
-export type AuthRequest = Request;
+// Express 5 / @types/express 5 widened req.params values to `string | string[]`
+// (path-to-regexp 8 can repeat params). Denna kodbas använder inga repeterade
+// params (auditerat) → smalna params till Record<string, string> så `req.params.id`
+// förblir `string` och kan skickas till string-funktioner utan cast.
+export type AuthRequest = Request<Record<string, string>>;
 
 // Methods that mutate state. API keys without 'write' permission must not
 // authenticate for these — even if the underlying user has admin role, the
