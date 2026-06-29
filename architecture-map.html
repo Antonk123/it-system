@@ -102,9 +102,9 @@
   /* node + edge classes driven by JS via attributes */
   .node rect.box { transition: opacity .18s; }
   .node { cursor: pointer; }
-  .node .lbl { fill: var(--txt); font-size: 12px; font-weight: 650; letter-spacing: -0.1px; }
-  .node .loc { fill: var(--txt-3); font-size: 9px; font-family: var(--mono); }
-  .node .layb { font-size: 8.5px; font-family: var(--mono); fill: var(--txt-4); letter-spacing: .3px; }
+  .node .namn { fill: var(--txt); font-size: 12.5px; font-weight: 700; letter-spacing: -0.15px; }
+  .node .meta { fill: var(--txt-3); font-size: 8.5px; font-family: var(--mono); letter-spacing: .1px; }
+  .node .loc { fill: var(--txt-4); font-size: 8.5px; font-family: var(--mono); }
   .edge { fill: none; stroke-linecap: round; transition: opacity .18s, stroke-width .12s; }
   .bandrow rect { transition: opacity .18s; }
 
@@ -203,6 +203,60 @@
   .zoomctl button { width: 34px; height: 32px; background: none; border: none; color: var(--txt-2); cursor: pointer; font-size: 15px; }
   .zoomctl button + button { border-top: 1px solid var(--line); }
   .zoomctl button:hover { background: #20242a; color: var(--txt); }
+
+  /* ---------- Detalj: kodnamn + behörighet + rika endpoints ---------- */
+  .d-sub { font-family: var(--mono); font-size: 11px; color: var(--txt-3); margin-top: 4px; }
+  .auth { font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 1px 6px; border-radius: 4px; letter-spacing: .3px; white-space: nowrap; }
+  .auth.publik   { background: rgba(56,214,200,0.16); color: #5fe0d2; }
+  .auth.inloggad { background: rgba(255,180,84,0.16); color: var(--up); }
+  .auth.admin    { background: rgba(239,95,107,0.18); color: var(--dead); }
+  .epr { display:flex; flex-direction:column; gap:7px; max-height: 280px; overflow:auto; }
+  .epr .row { background: var(--bg); border:1px solid var(--line); border-radius:7px; padding:7px 9px; }
+  .epr .top { display:flex; align-items:center; gap:7px; font-family:var(--mono); font-size:10.5px; }
+  .epr .m { font-weight:700; flex:0 0 auto; }
+  .epr .m.GET{color:#46b3e6}.epr .m.POST{color:#3fbf8f}.epr .m.PUT,.epr .m.PATCH{color:var(--up)}.epr .m.DELETE{color:var(--dead)}
+  .epr .p { color: var(--txt); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .epr .sv { font-size:11.5px; color: var(--txt-2); margin-top:5px; line-height:1.45; }
+
+  /* ---------- Ändringar-panel ---------- */
+  #changes { position:absolute; top:14px; left:14px; width:330px; max-height:calc(100% - 28px);
+    background: linear-gradient(180deg,#15181c,#111316); border:1px solid var(--line-2); border-radius:14px;
+    box-shadow:0 24px 60px -20px rgba(0,0,0,.75); display:none; flex-direction:column; overflow:hidden; z-index:22; animation:pop .18s ease-out; }
+  #changes.show { display:flex; }
+  .cg-head { padding:13px 15px; border-bottom:1px solid var(--line); display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .cg-head h3 { margin:0; font-size:14px; font-weight:760; }
+  .cg-head .sub { font-size:11px; color:var(--txt-3); margin-top:3px; line-height:1.4; }
+  .cg-body { overflow-y:auto; padding:10px 12px; }
+  .chg { border:1px solid var(--line); border-radius:9px; padding:10px 11px; margin-bottom:9px; cursor:pointer; transition:border-color .12s, background .12s; }
+  .chg:hover { background: var(--panel-2); border-color: var(--line-2); }
+  .chg.active { border-color: var(--brand); background: rgba(255,158,77,0.07); }
+  .chg .ct { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+  .chg .tag { font-size:9px; font-weight:700; font-family:var(--mono); padding:1px 6px; border-radius:4px; letter-spacing:.2px; }
+  .chg .tag.bugg { background:rgba(239,95,107,0.18); color:var(--dead); }
+  .chg .tag.funktion { background:rgba(63,191,143,0.18); color:#54c79b; }
+  .chg .date { font-size:10px; color:var(--txt-4); font-family:var(--mono); margin-left:auto; }
+  .chg .title { font-size:13px; font-weight:680; line-height:1.3; }
+  .chg .det { margin-top:9px; font-size:12px; color:var(--txt-2); line-height:1.5; display:none; }
+  .chg.active .det { display:block; }
+  .chg .det b { color: var(--txt); font-weight:680; }
+  .chg .det .sol { margin-top:7px; padding-top:7px; border-top:1px solid var(--line); }
+  .chg .affn { margin-top:9px; display:flex; flex-wrap:wrap; gap:5px; }
+  .chg .affn .a { font-size:10px; background:var(--panel-2); border:1px solid var(--line); border-radius:5px; padding:2px 7px; cursor:pointer; transition:.12s; }
+  .chg .affn .a:hover { border-color:var(--brand); color:var(--brand); }
+
+  /* ---------- Intro-overlay ---------- */
+  #intro { position:absolute; inset:0; background:rgba(6,7,9,0.72); z-index:50; display:none; align-items:center; justify-content:center; padding:20px; }
+  #intro.show { display:flex; }
+  .intro-card { width:min(580px,94vw); background:linear-gradient(180deg,#16191e,#111317); border:1px solid var(--line-2); border-radius:16px;
+    box-shadow:0 40px 90px -30px rgba(0,0,0,.8); padding:26px 28px; animation:pop .2s ease-out; }
+  .intro-card h2 { margin:0 0 7px; font-size:21px; font-weight:800; letter-spacing:-0.5px; }
+  .intro-card .lead { color:var(--txt-2); font-size:13.5px; line-height:1.55; margin:0 0 18px; }
+  .intro-card ul { margin:0 0 20px; padding:0; list-style:none; display:flex; flex-direction:column; gap:11px; }
+  .intro-card li { display:flex; gap:11px; font-size:13px; color:var(--txt-2); line-height:1.45; align-items:flex-start; }
+  .intro-card li .ic { flex:0 0 24px; height:24px; border-radius:7px; display:grid; place-items:center; font-size:12px; font-weight:800; color:#0c0c0c; margin-top:1px; }
+  .intro-card li b { color:var(--txt); font-weight:700; }
+  .intro-card .go { appearance:none; border:none; background:var(--brand); color:#241200; font-weight:700; font-size:13px; padding:10px 18px; border-radius:9px; cursor:pointer; font-family:var(--sans); }
+  .intro-card .go:hover { background:#ffb04f; }
 </style>
 </head>
 <body>
@@ -227,12 +281,14 @@
     <button id="btn-dead" class="danger" title="Isolera nåbarhetsdöd kod">Dödkod</button>
   </div>
   <button class="btn" id="btn-collapse" title="Fäll ihop / expandera alla domäner">Fäll alla</button>
+  <button class="btn" id="btn-changes" title="Ändringar & vad de påverkade">Ändringar</button>
+  <button class="btn" id="btn-help" title="Vad är det här? — förklaring" style="padding:0 12px; font-weight:700">?</button>
 </header>
 
 <div class="stage" id="stage">
   <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
   <svg class="colhead" id="colhead" width="100%" height="34"></svg>
-  <div class="hint">Klicka en nod · <b>nedström</b>=beror på · <b>uppström</b>=påverkas vid ändring · dra för att panorera · scroll för zoom</div>
+  <div class="hint">Klicka en ruta för att se kopplingar · <b>scrolla</b> eller dra för att panorera · <b>⌘/Ctrl + scroll</b> (eller nyp) för att zooma</div>
 
   <aside id="detail">
     <div class="d-head">
@@ -240,13 +296,18 @@
       <button class="d-close" id="d-close">✕</button>
       <div class="d-kicker" id="d-kicker"></div>
       <div class="d-title" id="d-title"></div>
+      <div class="d-sub" id="d-sub"></div>
       <div class="d-loc" id="d-loc" title="Kopiera sökväg"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span id="d-loc-txt"></span></div>
     </div>
     <div class="d-body">
       <p class="d-desc" id="d-desc"></p>
       <div class="d-sec eps" id="d-eps-sec" style="display:none">
         <h4>Endpoints <span class="n" id="d-eps-n"></span></h4>
-        <div class="eplist" id="d-eps"></div>
+        <div id="d-eps"></div>
+      </div>
+      <div class="d-sec callers" id="d-callers-sec" style="display:none">
+        <h4 style="color:var(--txt-2)">Anropas av <span class="n" id="d-callers-n"></span></h4>
+        <div class="reflist" id="d-callers"></div>
       </div>
       <div class="d-sec down">
         <h4>Beror på · nedström <span class="n" id="d-down-n"></span></h4>
@@ -283,6 +344,31 @@
     <button id="z-in" title="Zooma in">+</button>
     <button id="z-out" title="Zooma ut">−</button>
     <button id="z-fit" title="Anpassa till skärm" style="font-size:11px">fit</button>
+  </div>
+
+  <aside id="changes">
+    <div class="cg-head">
+      <div>
+        <h3>Ändringar & påverkan</h3>
+        <div class="sub">Klicka en post → kartan visar exakt vad som påverkades, och lösningen.</div>
+      </div>
+      <button class="d-close" id="cg-close" style="position:static">✕</button>
+    </div>
+    <div class="cg-body" id="cg-body"></div>
+  </aside>
+
+  <div id="intro">
+    <div class="intro-card">
+      <h2>Vad är det här?</h2>
+      <p class="lead">En karta över hela IT-Ticket-systemet — hur delarna hänger ihop, från det användaren ser hela vägen till databasen. Du behöver inte vara tekniker för att läsa den.</p>
+      <ul>
+        <li><span class="ic" style="background:#ff9e4d">→</span><span><b>Läs vänster→höger.</b> Längst till vänster är det <b>användaren ser</b> (frontend); längst till höger ligger <b>servern och databasen</b> (backend).</span></li>
+        <li><span class="ic" style="background:#46b3e6">●</span><span><b>Färgen</b> visar vilket affärsområde en del hör till — Ärenden, Fakturering, Kunder, och så vidare (raderna).</span></li>
+        <li><span class="ic" style="background:#38d6c8">↳</span><span><b>Klicka på en ruta</b> så ser du vad den <b>använder</b> och vad som <b>påverkas om man ändrar den</b>.</span></li>
+        <li><span class="ic" style="background:#8a96a8">≡</span><span><b>"Ändringar"</b> uppe till höger visar riktiga buggar och funktioner — och exakt vilka delar de rörde.</span></li>
+      </ul>
+      <button class="go" id="intro-go">Visa kartan</button>
+    </div>
   </div>
 
   <div id="toast"></div>
@@ -939,6 +1025,40 @@ const GRAPH = {
 };
 /* __GRAPH_DATA_END__ */
 
+/* Klarspråksnamn + endpoint-info injiceras (svenska namn per nod, rika endpoints per route). */
+/* __NAMES_START__ */
+const NODE_NAMES = {"page:Index": {"namn": "Startsida", "kort": "Webbplatsens startadress som direkt visar översiktspanelen."}, "page:Dashboard": {"namn": "Översiktspanel", "kort": "Startvy med hälsning, nyckeltal, aktiva ärenden, åldrande ärenden och påminnelser."}, "page:Login": {"namn": "Inloggning", "kort": "Logga in med e-post och lösenord."}, "page:ForgotPassword": {"namn": "Glömt lösenord", "kort": "Begär ett återställningsmejl när man har glömt sitt lösenord."}, "page:ResetPassword": {"namn": "Återställ lösenord", "kort": "Sätt ett nytt lösenord via länken i återställningsmejlet."}, "page:NotFound": {"namn": "Sidan saknas", "kort": "Visas när en webbadress inte finns (felmeddelande 404)."}, "page:TicketList": {"namn": "Ärendelista", "kort": "Lista över ärenden som går att filtrera och visa som tabell eller tavla."}, "page:PublicTicketForm": {"namn": "Offentligt supportformulär", "kort": "Formulär där vem som helst kan skicka in en supportfråga, med AI-förslag som kan lösa den direkt."}, "page:SharedTicket": {"namn": "Delat ärende", "kort": "Skrivskyddad vy av ett ärende som delats via en länk."}, "page:SharedKBArticle": {"namn": "Delad hjälpartikel", "kort": "Skrivskyddad vy av en hjälpartikel som delats via en länk."}, "page:TicketForm": {"namn": "Skapa/redigera ärende", "kort": "Formulär för att skapa eller ändra ett ärende, med mallar, bilagor och checklista."}, "page:TicketDetail": {"namn": "Ärendevy", "kort": "Hela ärendet med kommentarer, tidsregistrering, påminnelser, delning och historik."}, "page:Recurring": {"namn": "Återkommande ärenden", "kort": "Hantera scheman som skapar ärenden automatiskt med jämna mellanrum."}, "page:CompanyList": {"namn": "Företag", "kort": "Lista och sök bland kundföretag, samt skapa och ta bort dem."}, "page:CompanyDetail": {"namn": "Företagsvy", "kort": "Ett företags profil med statistik, kontaktpersoner och timpris."}, "page:Invoices": {"namn": "Fakturor", "kort": "Skapa fakturor från registrerad tid och se eller ändra deras status."}, "page:Archive": {"namn": "Arkiv", "kort": "Arkiv över stängda ärenden med möjlighet att återöppna, exportera och importera."}, "page:UserList": {"namn": "Kontakter", "kort": "Hantera kontaktpersoner hos kunderna och se hur många öppna ärenden var och en har."}, "page:Reports": {"namn": "Rapporter", "kort": "Analysvy med nyckeltal och diagram över ärenden, samt export till Excel."}, "page:Settings": {"namn": "Inställningar", "kort": "Inställningssidan med flikar för allmänt, ärenden, integrationer och admin."}, "page:KnowledgeBase": {"namn": "Kunskapsbas", "kort": "Bläddra och sök bland hjälpartiklar sorterade i kategorier."}, "page:KBArticleDetail": {"namn": "Hjälpartikel", "kort": "Läs en hjälpartikel med innehållsförteckning och länkade ärenden."}, "page:KBArticleForm": {"namn": "Skapa/redigera hjälpartikel", "kort": "Formulär för att skriva eller ändra en artikel i kunskapsbasen."}, "page:GeneralTab": {"namn": "Inställningar: Allmänt", "kort": "Utseende som tema och teckensnitt, samt att slå på pushnotiser."}, "page:AdminTab": {"namn": "Inställningar: Admin", "kort": "Endast för administratörer: hantera användare och säkerhetskopior."}, "page:IntegrationsTab": {"namn": "Inställningar: Integrationer", "kort": "Kopplingar till andra system: API-nycklar, webhooks och e-postinkorg."}, "page:TicketsTab": {"namn": "Inställningar: Ärenden", "kort": "Ställ in kategorier, taggar, mallar, checklistor och svarstidsregler."}, "comp:Layout": {"namn": "App-skal", "kort": "Den gemensamma ramen med meny runt alla inloggade sidor."}, "comp:CommandPalette": {"namn": "Snabbsök (⌘K)", "kort": "Snabbsökruta som öppnas med tangentbordet för att hitta ärenden, artiklar och kontakter."}, "comp:QuickCaptureFAB": {"namn": "Snabbknapp: nytt ärende", "kort": "Flytande knapp som snabbt skapar ett nytt ärende."}, "ctx:Auth": {"namn": "Inloggningstillstånd", "kort": "Håller reda på vem som är inloggad och sköter in- och utloggning."}, "hook:useActiveQueue": {"namn": "Aktiva ärenden-data", "kort": "Hämtar en lista över de senaste öppna ärendena till startsidans kö."}, "hook:useActivityFeed": {"namn": "Aktivitetsflöde-data", "kort": "Hämtar det senaste som hänt med ärenden till startsidans aktivitetsflöde."}, "hook:useApiKeys": {"namn": "API-nycklar-data", "kort": "Hämtar och hanterar API-nycklar som låter andra system koppla in sig."}, "hook:useBackupConfig": {"namn": "Säkerhetskopiering-inställningar", "kort": "Hämtar och ändrar inställningar för säkerhetskopior och kan starta en kopiering direkt."}, "hook:useBilling": {"namn": "Faktura-data", "kort": "Hämtar och hanterar fakturor och timpriser."}, "hook:useCategories": {"namn": "Kategorier-data", "kort": "Hämtar och hanterar de kategorier som ärenden kan sorteras i."}, "hook:useChecklistTemplates": {"namn": "Checklistmallar-data", "kort": "Hämtar och hanterar färdiga checklistor som kan läggas på ett ärende."}, "hook:useCommandPaletteSearch": {"namn": "Snabbsök-data", "kort": "Söker samtidigt bland ärenden, kunskapsartiklar och kontakter i snabbsökrutan."}, "hook:useCompanies": {"namn": "Företag-data", "kort": "Hämtar och hanterar kundföretagen och deras uppgifter."}, "hook:useDashboardOverview": {"namn": "Nyckeltal-data", "kort": "Hämtar de viktigaste nyckeltalen som visas på startsidan."}, "hook:useDebounce": {"namn": "Skrivfördröjning", "kort": "Liten hjälpfunktion som väntar tills man slutat skriva innan något körs; hämtar ingen data."}, "hook:useDeflectionStats": {"namn": "AI-avlastning statistik", "kort": "Hämtar statistik över hur ofta AI:n löst kundens problem utan att personal behövts."}, "hook:useFilterViews": {"namn": "Sparade filter", "kort": "Sparar och hämtar egna filtervyer för ärendelistan, lagrat i webbläsaren."}, "hook:useKbArticle": {"namn": "Kunskapsartikel-data", "kort": "Hämtar en enskild artikel i kunskapsbasen med dess länkar och delning."}, "hook:useKbArticles": {"namn": "Kunskapsartiklar-data", "kort": "Hämtar listan med artiklar i kunskapsbasen med möjlighet att filtrera."}, "hook:useKbCategories": {"namn": "Kunskapskategorier-data", "kort": "Hämtar kategorierna som artiklarna i kunskapsbasen är indelade i."}, "hook:useMode": {"namn": "Tema-läge", "kort": "Håller koll på appens utseende-läge som ljust eller mörkt tema; hämtar ingen data."}, "hook:useRecurringTemplates": {"namn": "Återkommande mallar-data", "kort": "Hämtar och hanterar mallar för ärenden som skapas automatiskt med jämna mellanrum."}, "hook:useReportsSummary": {"namn": "Rapportsammanställning-data", "kort": "Hämtar sammanställd tid och statistik per år och månad till rapporterna."}, "hook:useSLAPolicies": {"namn": "Svarstidsregler-data", "kort": "Hämtar och sparar regler för hur snabbt ärenden ska besvaras per företag."}, "hook:useSettings": {"namn": "Inställningar-data", "kort": "Hämtar appens inställningar och styr om svar ska mejlas till kunden."}, "hook:useStatusCounts": {"namn": "Antal per status", "kort": "Hämtar hur många ärenden som finns i varje status."}, "hook:useStatusFlow": {"namn": "Statusflöde-data", "kort": "Hämtar hur ärenden rör sig mellan olika statusar till startsidan."}, "hook:useSystemUsers": {"namn": "Användare-data", "kort": "Hämtar och hanterar personalens inloggningskonton och deras roller."}, "hook:useTagAnalytics": {"namn": "Taggstatistik-data", "kort": "Hämtar statistik över hur ofta olika taggar används."}, "hook:useTags": {"namn": "Taggar-data", "kort": "Hämtar och hanterar de taggar (etiketter) som kan sättas på ärenden."}, "hook:useTemplates": {"namn": "Ärendemallar-data", "kort": "Hämtar och hanterar färdiga mallar för att skapa ärenden snabbare."}, "hook:useTicketAttachments": {"namn": "Bilagor-data", "kort": "Hämtar, laddar upp och tar bort filer som hängts på ett ärende."}, "hook:useTicketChecklists": {"namn": "Checklista-data", "kort": "Hämtar och hanterar checklistpunkterna på ett enskilt ärende."}, "hook:useTicketComments": {"namn": "Kommentarer-data", "kort": "Hämtar och hanterar kommentarerna på ett ärende."}, "hook:useTicketHistory": {"namn": "Ärendehistorik-data", "kort": "Hämtar historiken över vilka ändringar som gjorts på ett ärende."}, "hook:useTicketLinks": {"namn": "Ärendelänkar-data", "kort": "Hämtar och hanterar kopplingar mellan ärenden som hör ihop."}, "hook:useTicketReminders": {"namn": "Påminnelser-data", "kort": "Hämtar och hanterar påminnelser kopplade till ett enskilt ärende."}, "hook:useTicketSharing": {"namn": "Ärendedelning-data", "kort": "Skapar och hanterar en publik länk så ett ärende kan visas utan inloggning."}, "hook:useTickets": {"namn": "Ärenden-data", "kort": "Hämtar och hanterar ärendelistan med att skapa, ändra och ta bort ärenden."}, "hook:useTimeEntries": {"namn": "Tidsregistrering-data", "kort": "Hämtar och hanterar nedlagd tid som registrerats på ett ärende."}, "hook:useUpcomingReminders": {"namn": "Kommande påminnelser", "kort": "Hämtar alla påminnelser som snart förfaller till en samlad översikt."}, "hook:useUsers": {"namn": "Kontakter-data", "kort": "Hämtar och hanterar kundkontakterna som skickar in ärenden, inte personalens konton."}, "hook:useWebhooks": {"namn": "Webhookar-data", "kort": "Hämtar och hanterar webhookar som skickar händelser vidare till andra system."}, "hook:useIsMobile": {"namn": "Mobil-läge", "kort": "Känner av om skärmen är liten som på en mobil; hämtar ingen data."}, "api:client": {"namn": "API-anrop (inloggat)", "kort": "Den centrala funktionen som skickar alla anrop till servern med rätt inloggning och säkerhetskontroll."}, "api:csrf": {"namn": "Säkerhets-token (CSRF)", "kort": "Hämtar och sparar en säkerhetskod som bevisar att anropet kommer från den riktiga appen och inte en angripare."}, "route:auth": {"namn": "Inloggnings-API", "kort": "Serverns hantering av inloggning, utloggning och lösenordsåterställning."}, "route:tickets": {"namn": "Ärende-API", "kort": "Serverns hantering av ärenden: skapa, ändra, lista, importera och exportera."}, "route:categories": {"namn": "Kategori-API", "kort": "Serverns hantering av ärendekategorier och deras ordning."}, "route:contacts": {"namn": "Kontakt-API", "kort": "Serverns hantering av kontaktpersoner, inklusive import och export via Excel."}, "route:attachments": {"namn": "Bilage-API", "kort": "Serverns hantering av filer som bifogas ärenden: ladda upp, ladda ner och ta bort."}, "route:checklists": {"namn": "Checklist-API", "kort": "Serverns hantering av checklistepunkter på ett enskilt ärende."}, "route:checklist-templates": {"namn": "Checklistmall-API", "kort": "Serverns hantering av återanvändbara checklistmallar som kan läggas på ärenden."}, "route:comments": {"namn": "Kommentar-API", "kort": "Serverns hantering av kommentarer och interna anteckningar på ärenden."}, "route:links": {"namn": "Ärendelänk-API", "kort": "Serverns hantering av kopplingar mellan ärenden, som relaterade eller dubbletter."}, "route:shares": {"namn": "Delnings-API", "kort": "Serverns hantering av delningslänkar så utomstående kan läsa ett ärende utan inloggning."}, "route:users": {"namn": "Användar-API", "kort": "Serverns hantering av inloggningsanvändare: lista, skapa, ändra roll och ta bort (endast admin)."}, "route:public": {"namn": "Publikt formulär-API", "kort": "Serverns hantering av det öppna supportformuläret där vem som helst kan skicka in ett ärende."}, "route:templates": {"namn": "Ärendemall-API", "kort": "Serverns hantering av ärendemallar och deras dynamiska fält."}, "route:tags": {"namn": "Tagg-API", "kort": "Serverns hantering av taggar (namn och färg) för ärenden."}, "route:kb": {"namn": "Kunskaps-API", "kort": "Serverns hantering av kunskapsbasen: artiklar, kategorier, sökning och delningslänkar."}, "route:reports": {"namn": "Rapport-API", "kort": "Serverns leverans av statistik och analyser, som ärendesummeringar och tidsrapporter."}, "route:recurring": {"namn": "Återkommande-API", "kort": "Serverns hantering av mallar som automatiskt skapar återkommande ärenden."}, "route:time-entries": {"namn": "Tidrapport-API", "kort": "Serverns hantering av nedlagd tid som loggas på ärenden."}, "route:backup": {"namn": "Säkerhetskopia-API", "kort": "Serverns hantering av databasens säkerhetskopior: ladda ner, återställa och schemalägga (admin)."}, "route:push": {"namn": "Push-avi-API", "kort": "Serverns hantering av push-notiser till webbläsare och mobil."}, "route:companies": {"namn": "Företags-API", "kort": "Serverns hantering av kundföretag med statistik och avtalsinställningar."}, "route:billing": {"namn": "Fakturerings-API", "kort": "Serverns hantering av timpriser och fakturor baserat på loggad tid."}, "route:api-keys": {"namn": "API-nyckel-API", "kort": "Serverns hantering av API-nycklar som låter andra system koppla in sig."}, "route:webhooks": {"namn": "Webhook-API", "kort": "Serverns hantering av webhookar som automatiskt skickar händelser vidare till andra system."}, "route:email-inbound": {"namn": "Inkommande mejl-API", "kort": "Visar status för funktionen som gör inkommande mejl till ärenden."}, "route:sla": {"namn": "SLA-API", "kort": "Serverns hantering av svars- och lösningstider (servicenivåer) per kund och prioritet."}, "route:settings": {"namn": "Inställnings-API", "kort": "Serverns hantering av appens inställningar, som om kunder ska få mejlsvar."}, "route:template-fields": {"namn": "Mallfält-API", "kort": "Serverns hantering av de egna fält som kan definieras på en ärendemall."}, "svc:aiHelper": {"namn": "AI-hjälp", "kort": "AI-assistenten som föreslår svar, kategoriserar ärenden och sammanfattar text."}, "svc:auditLog": {"namn": "Säkerhetslogg", "kort": "Antecknar känsliga händelser i en säkerhetslogg utan att störa resten av systemet."}, "svc:automationHelper": {"namn": "Automatisk taggning", "kort": "Sätter automatiskt taggar och prioritet på ärenden utifrån vad rubriken innehåller."}, "svc:email": {"namn": "Mejlutskick", "kort": "Skickar mejl till kunder och medarbetare, som bekräftelser och påminnelser."}, "svc:emailInbound": {"namn": "Mejl till ärende", "kort": "Läser inkommande mejl och skapar automatiskt ärenden av dem."}, "svc:emailThreading": {"namn": "Mejltrådning", "kort": "Ser till att svar hamnar i rätt mejltråd hos mottagaren."}, "svc:htmlSanitizer": {"namn": "Textrensning (säkerhet)", "kort": "Rensar bort farlig kod ur formaterad text så inget skadligt kan visas."}, "svc:htmlUtils": {"namn": "Textförenkling", "kort": "Gör om formaterad text till vanlig, oformaterad text."}, "svc:logger": {"namn": "Loggning", "kort": "Skriver systemets händelser till en logg som utvecklare kan läsa."}, "svc:offsiteBackup": {"namn": "Extern säkerhetskopia", "kort": "Kopierar säkerhetskopian till en plats utanför servern."}, "svc:passwordPolicy": {"namn": "Lösenordskrav", "kort": "Kontrollerar att lösenord är tillräckligt starka i längd, bokstäver, siffror och tecken."}, "svc:push": {"namn": "Push-aviseringar", "kort": "Skickar push-notiser till alla som prenumererar på dem."}, "svc:settings": {"namn": "Inställningar-logik", "kort": "Läser och sparar appens inställningar och avgör om kunden ska få mejl."}, "svc:slaHelper": {"namn": "SLA-logik", "kort": "Räknar ut och bevakar svarsfrister enligt avtalade servicenivåer."}, "svc:ticketAccess": {"namn": "Behörighetskoll", "kort": "Avgör vem som får se eller ändra ett visst ärende."}, "svc:ticketImportExport": {"namn": "Import/export av ärenden", "kort": "Läser in och skriver ut ärenden som CSV- eller Excel-filer."}, "svc:ticketNotifications": {"namn": "Aviseringar för ärenden", "kort": "Skickar avisering via push, mejl och andra system när någon kommenterar ett ärende."}, "svc:ticketQuery": {"namn": "Ärendesökning-logik", "kort": "Bygger sökfrågorna som filtrerar och sorterar ärendelistan."}, "svc:webhookDispatcher": {"namn": "Webhook-leverans", "kort": "Skickar signerade webhook-anrop till andra system och försöker igen om det misslyckas."}, "svc:webhookValidator": {"namn": "Webhook-säkerhetskoll", "kort": "Kontrollerar att en webhook-adress är säker och inte pekar mot interna system."}, "svc:auth": {"namn": "Inloggningskontroll", "kort": "Kontrollerar att den som anropar systemet är inloggad och har rätt behörighet."}, "svc:rateLimit": {"namn": "Anropsbroms", "kort": "Begränsar hur många anrop samma användare får göra för att stoppa missbruk."}, "svc:automation": {"namn": "Automationsregler", "kort": "Fasta regler för automatisk stängning, taggning och prioritering av ärenden."}, "svc:cookies": {"namn": "Cookie-säkerhet", "kort": "Bestämmer hur säkert webbläsarens inloggnings-cookies hanteras."}, "svc:passport": {"namn": "Inloggningsmetoder", "kort": "Hanterar hur användare loggar in med lösenord eller token."}, "sched:reminderScheduler": {"namn": "Bakgrundsjobb: påminnelser", "kort": "Kör varje minut och skickar ut ärendepåminnelser via mejl och push när de är dags."}, "sched:autoCloseScheduler": {"namn": "Bakgrundsjobb: autostängning", "kort": "Stänger varje natt automatiskt ärenden som varit lösta i ett antal dagar."}, "sched:recurringScheduler": {"namn": "Bakgrundsjobb: återkommande ärenden", "kort": "Skapar varje minut nya ärenden från scheman för återkommande uppgifter."}, "sched:webhookRetryScheduler": {"namn": "Bakgrundsjobb: webhook-omförsök", "kort": "Försöker varje minut skicka om webhook-anrop som tidigare misslyckades."}, "sched:slaScheduler": {"namn": "Bakgrundsjobb: SLA-bevakning", "kort": "Kollar var femte minut om svarsfrister passerats och varnar via mejl och push."}, "sched:pushScheduler": {"namn": "Bakgrundsjobb: åldrande ärenden", "kort": "Skickar varje morgon push-notiser om ärenden som börjar bli gamla."}, "sched:backupScheduler": {"namn": "Bakgrundsjobb: säkerhetskopiering", "kort": "Tar varje dag en säkerhetskopia av databasen, kontrollerar den och packar ihop den."}, "sched:refreshTokenCleanup": {"namn": "Bakgrundsjobb: städa inloggningar", "kort": "Raderar varje natt utgångna inloggnings-tokens ur databasen."}, "sched:aiUsageCleanup": {"namn": "Bakgrundsjobb: städa AI-logg", "kort": "Raderar varje natt AI-användningsloggar som är äldre än 90 dagar."}, "table:users": {"namn": "Användare (databas)", "kort": "Personerna som kan logga in i systemet, med e-post, lösenord och behörighet (admin eller vanlig)."}, "table:companies": {"namn": "Företag (databas)", "kort": "Registret över kundföretag med namn, organisationsnummer och kontaktuppgifter."}, "table:contacts": {"namn": "Kontakter (databas)", "kort": "Personer som skickar in ärenden men saknar inloggning, kopplade till sitt företag."}, "table:categories": {"namn": "Ärendekategorier (databas)", "kort": "De kategorier man kan sortera ärenden i, med namn och sorteringsordning."}, "table:tickets": {"namn": "Ärenden (databas)", "kort": "Själva ärendena med status, prioritet, kategori, vem som frågar och vem som är ansvarig."}, "table:ticket_attachments": {"namn": "Ärendebilagor (databas)", "kort": "Filer som bifogats till ett ärende, med filnamn, storlek och typ."}, "table:ticket_checklists": {"namn": "Ärendechecklistor (databas)", "kort": "Att-göra-punkter kopplade till ett enskilt ärende."}, "table:ticket_comments": {"namn": "Ärendekommentarer (databas)", "kort": "Kommentarer och interna anteckningar som skrivs på ett ärende."}, "table:ticket_shares": {"namn": "Delade ärenden (databas)", "kort": "Delningslänkar som ger utomstående läsbehörighet till ett enskilt ärende."}, "table:ticket_links": {"namn": "Ärendekopplingar (databas)", "kort": "Kopplingar mellan ärenden som hör ihop, till exempel relaterade eller dubbletter."}, "table:tags": {"namn": "Taggar (databas)", "kort": "De gemensamma etiketterna (namn och färg) som kan sättas på ärenden och artiklar."}, "table:ticket_tags": {"namn": "Ärendetaggar (databas)", "kort": "Kopplingen mellan ärenden och de taggar de fått."}, "table:ticket_reminders": {"namn": "Ärendepåminnelser (databas)", "kort": "Inplanerade påminnelser om ett ärende som skickas till en användare."}, "table:kb_categories": {"namn": "Kunskapskategorier (databas)", "kort": "Kategorierna i kunskapsbasen, med namn, färg och ordning."}, "table:kb_articles": {"namn": "Kunskapsartiklar (databas)", "kort": "Hjälpartiklarna i kunskapsbasen med text, status och antal visningar."}, "table:kb_article_shares": {"namn": "Delade artiklar (databas)", "kort": "Delningslänkar som ger utomstående läsbehörighet till en enskild kunskapsartikel."}, "table:refresh_tokens": {"namn": "Inloggningsnycklar (databas)", "kort": "Sparade nycklar som håller en användare inloggad utan att lösenordet behöver fyllas i igen."}, "table:ticket_kb_links": {"namn": "Ärende-artikellänkar (databas)", "kort": "Kopplingen mellan ärenden och de kunskapsartiklar som hör till dem."}, "table:backup_config": {"namn": "Säkerhetskopieinställning (databas)", "kort": "Inställningen för när automatiska säkerhetskopior ska tas."}, "table:app_settings": {"namn": "Appinställningar (databas)", "kort": "Allmänna systeminställningar, till exempel om automatiska svarsmejl till kunder är påslagna."}, "table:ticket_templates": {"namn": "Ärendemallar (databas)", "kort": "Färdiga mallar för att snabbt skapa nya ärenden."}, "table:template_checklists": {"namn": "Mallchecklistor (databas)", "kort": "Standardpunkter på en att-göra-lista som följer med en ärendemall."}, "table:template_fields": {"namn": "Mallfält (databas)", "kort": "Extra anpassade fält som definieras på en ärendemall."}, "table:ticket_field_values": {"namn": "Ärendefältvärden (databas)", "kort": "De ifyllda värdena för ett ärendes anpassade mallfält."}, "table:ticket_history": {"namn": "Ärendehistorik (databas)", "kort": "Logg över alla ändringar på ett ärende: vad som ändrades, av vem och när."}, "table:checklist_templates": {"namn": "Checklistmallar (databas)", "kort": "Namngivna, återanvändbara att-göra-listor som kan läggas på ärenden."}, "table:checklist_template_items": {"namn": "Checklistmallpunkter (databas)", "kort": "De enskilda punkterna som ingår i en checklistmall."}, "table:kb_articles_fts": {"namn": "Kunskapsbas sökindex", "kort": "Sökregister som gör att man snabbt kan fritextsöka i kunskapsartiklarna."}, "table:kb_article_tags": {"namn": "Artikeltaggar (databas)", "kort": "Kopplingen mellan kunskapsartiklar och de taggar de fått."}, "table:recurring_templates": {"namn": "Återkommande mallar (databas)", "kort": "Mallar som automatiskt skapar nya ärenden med jämna mellanrum."}, "table:recurring_ticket_history": {"namn": "Återkommande-historik (databas)", "kort": "Logg över vilka ärenden som skapats automatiskt från en återkommande mall."}, "table:kb_article_links": {"namn": "Artikellänkar (databas)", "kort": "Länkar mellan kunskapsartiklar som hänvisar till varandra."}, "table:time_entries": {"namn": "Tidsregistreringar (databas)", "kort": "Registrerad arbetstid per ärende, inklusive om tiden är fakturerbar."}, "table:push_subscriptions": {"namn": "Push-prenumerationer (databas)", "kort": "Enheter som anmält sig för att ta emot push-notiser från appen."}, "table:tickets_fts": {"namn": "Ärenden sökindex", "kort": "Sökregister som gör att man snabbt kan fritextsöka bland ärenden."}, "table:sla_policies": {"namn": "SLA-regler (databas)", "kort": "Mål för hur snabbt ärenden ska besvaras och lösas, per företag och prioritet."}, "table:billing_rates": {"namn": "Timpriser (databas)", "kort": "Det timpris och den valuta som gäller för respektive företag."}, "table:invoices": {"namn": "Fakturor (databas)", "kort": "Fakturorna som skapas per företag."}, "table:invoice_lines": {"namn": "Fakturarader (databas)", "kort": "De enskilda raderna på en faktura, kopplade till ärende och nedlagd tid."}, "table:api_keys": {"namn": "API-nycklar (databas)", "kort": "Nycklar som låter andra system koppla upp sig mot systemets gränssnitt."}, "table:webhooks": {"namn": "Webhooks (databas)", "kort": "Adresser dit systemet automatiskt skickar avisering när något händer."}, "table:webhook_deliveries": {"namn": "Webhook-leveranser (databas)", "kort": "Logg över utskick till webhooks och om de lyckades eller behöver göras om."}, "table:ai_usage_log": {"namn": "AI-användning (databas)", "kort": "Logg över hur mycket AI-funktionerna använts och vad det kostat."}, "table:ai_deflections": {"namn": "AI-avlastningar (databas)", "kort": "Loggade fall där AI:n föreslog en lösning i kundportalen i stället för att ett ärende skapades."}, "table:password_reset_tokens": {"namn": "Lösenordsåterställning (databas)", "kort": "Engångskoder som används när någon återställer sitt lösenord."}, "table:audit_log": {"namn": "Säkerhetslogg (databas)", "kort": "Logg över känsliga åtgärder i systemet, med vem som gjorde vad och varifrån."}, "table:schema_migrations": {"namn": "Databasversioner (databas)", "kort": "Internt register som håller koll på vilka databasuppdateringar som redan körts."}};
+const ROUTE_EP = {"route:tickets": [{"method": "GET", "path": "/", "line": 111, "auth": "inloggad", "sv": "Hämtar en lista över alla ärenden, med möjlighet att filtrera, söka och dela upp i sidor."}, {"method": "POST", "path": "/import/preview", "line": 222, "auth": "admin", "sv": "Förhandsgranskar en uppladdad CSV-fil och visar hur många ärenden som är giltiga, ogiltiga eller dubbletter innan import."}, {"method": "POST", "path": "/import/confirm", "line": 263, "auth": "admin", "sv": "Genomför själva importen och skapar ärendena från CSV-filen i databasen."}, {"method": "GET", "path": "/export", "line": 369, "auth": "inloggad", "sv": "Exporterar ärenden till en Excel-fil enligt valda filter."}, {"method": "GET", "path": "/export-archive", "line": 432, "auth": "inloggad", "sv": "Exporterar arkiverade (stängda) ärenden till en förenklad Excel-fil med några få kolumner."}, {"method": "GET", "path": "/dashboard-overview", "line": 543, "auth": "inloggad", "sv": "Ger en översikt till instrumentpanelen: äldsta obesvarade ärenden, dagens siffror och antal kritiska ärenden."}, {"method": "GET", "path": "/activity-feed", "line": 590, "auth": "inloggad", "sv": "Visar ett flöde med de senaste händelserna och ändringarna på ärenden."}, {"method": "GET", "path": "/status-counts", "line": 618, "auth": "inloggad", "sv": "Räknar hur många ärenden som finns i varje status (öppna, pågående, väntande, lösta, stängda)."}, {"method": "GET", "path": "/requester-open-counts", "line": 646, "auth": "inloggad", "sv": "Räknar antalet ej stängda ärenden per beställare."}, {"method": "GET", "path": "/upcoming-reminders", "line": 665, "auth": "inloggad", "sv": "Listar kommande påminnelser som ännu inte skickats, sorterade efter hur snart de inträffar."}, {"method": "GET", "path": "/:id", "line": 692, "auth": "inloggad", "sv": "Hämtar ett enskilt ärende med dess fält och taggar."}, {"method": "POST", "path": "/", "line": 729, "auth": "inloggad", "sv": "Skapar ett nytt ärende, sätter automatiskt prioritet, taggar, SLA-frister och kan föreslå kategori med AI."}, {"method": "POST", "path": "/:id/ai-draft", "line": 906, "auth": "inloggad", "sv": "Låter AI:n skriva ett utkast till svar baserat på ärendets innehåll, relevanta hjälpartiklar och textbilagor."}, {"method": "GET", "path": "/:id/ai-summary", "line": 1001, "auth": "inloggad", "sv": "Ger en AI-skapad sammanfattning av ärendet, som sparas och återanvänds i upp till en timme."}, {"method": "GET", "path": "/:id/history", "line": 1070, "auth": "inloggad", "sv": "Visar ändringshistoriken för ett ärende, alltså vem som ändrade vad och när."}, {"method": "PUT", "path": "/bulk", "line": 1102, "auth": "inloggad", "sv": "Uppdaterar flera ärenden samtidigt, till exempel status, prioritet, kategori eller handläggare."}, {"method": "POST", "path": "/bulk-delete", "line": 1247, "auth": "admin", "sv": "Raderar flera ärenden permanent på en gång, inklusive deras bifogade filer."}, {"method": "PUT", "path": "/:id", "line": 1313, "auth": "inloggad", "sv": "Uppdaterar ett enskilt ärende och hanterar samtidigt SLA, notiser till handläggare och historik."}, {"method": "DELETE", "path": "/:id", "line": 1595, "auth": "admin", "sv": "Raderar ett enskilt ärende permanent och tar bort dess bifogade filer."}, {"method": "POST", "path": "/:id/reminders", "line": 1631, "auth": "inloggad", "sv": "Skapar en påminnelse för ett ärende vid en framtida tidpunkt."}, {"method": "GET", "path": "/:id/reminders", "line": 1669, "auth": "inloggad", "sv": "Listar alla påminnelser som är kopplade till ett ärende."}, {"method": "DELETE", "path": "/:id/reminders/sent", "line": 1689, "auth": "inloggad", "sv": "Tar bort alla redan skickade påminnelser för ett ärende."}, {"method": "DELETE", "path": "/:id/reminders/:reminderId", "line": 1707, "auth": "inloggad", "sv": "Avbryter och tar bort en specifik påminnelse (endast egna påminnelser, eller alla om man är admin)."}], "route:public": [{"method": "GET", "path": "/templates", "line": 49, "auth": "publik", "sv": "Hämtar de färdiga ärendemallarna med tillhörande formulärfält som visas i det publika anmälningsformuläret."}, {"method": "GET", "path": "/categories", "line": 79, "auth": "publik", "sv": "Hämtar listan över ärendekategorier som en besökare kan välja mellan i det publika formuläret."}, {"method": "POST", "path": "/tickets", "line": 90, "auth": "publik", "sv": "Tar emot ett nytt ärende från det publika formuläret, skapar kontakt vid behov och skickar bekräftelsemejl."}, {"method": "POST", "path": "/ai-suggest", "line": 251, "auth": "publik", "sv": "Låter en AI söka i kunskapsbasen och föreslå en lösning på problemet innan besökaren skapar ett ärende."}, {"method": "PATCH", "path": "/ai-suggest/:id", "line": 330, "auth": "publik", "sv": "Registrerar om AI-förslaget löste problemet eller om besökaren ändå skapade ett ärende."}, {"method": "GET", "path": "/ai-suggest/stats", "line": 359, "auth": "inloggad", "sv": "Visar statistik för hur ofta AI-förslagen löste problem de senaste 30 dagarna, för instrumentpanelen."}], "route:kb": [{"method": "GET", "path": "/categories", "line": 97, "auth": "inloggad", "sv": "Listar alla kategorier i kunskapsbasen med antal publicerade artiklar i varje."}, {"method": "POST", "path": "/categories", "line": 113, "auth": "admin", "sv": "Skapar en ny kategori i kunskapsbasen."}, {"method": "PUT", "path": "/categories/:id", "line": 135, "auth": "admin", "sv": "Ändrar namn och färg på en befintlig kategori i kunskapsbasen."}, {"method": "DELETE", "path": "/categories/:id", "line": 155, "auth": "admin", "sv": "Tar bort en kategori från kunskapsbasen."}, {"method": "GET", "path": "/articles", "line": 170, "auth": "inloggad", "sv": "Söker och listar artiklar i kunskapsbasen med filter på sökord, kategori, typ och tagg."}, {"method": "GET", "path": "/articles/:id", "line": 222, "auth": "inloggad", "sv": "Hämtar en enskild kunskapsbasartikel med dess innehåll och taggar."}, {"method": "GET", "path": "/articles/:id/tickets", "line": 255, "auth": "inloggad", "sv": "Listar de ärenden som har kopplats till en viss kunskapsbasartikel."}, {"method": "POST", "path": "/articles", "line": 272, "auth": "admin", "sv": "Skapar en ny artikel i kunskapsbasen."}, {"method": "PUT", "path": "/articles/:id", "line": 327, "auth": "admin", "sv": "Uppdaterar innehåll, kategori och taggar för en befintlig kunskapsbasartikel."}, {"method": "PATCH", "path": "/articles/:id/review", "line": 386, "auth": "admin", "sv": "Markerar en artikel som nyligen granskad genom att sätta dagens datum."}, {"method": "DELETE", "path": "/articles/:id", "line": 400, "auth": "admin", "sv": "Tar bort en kunskapsbasartikel och raderar dess inbäddade bilder från disken."}, {"method": "GET", "path": "/ticket/:ticketId", "line": 447, "auth": "inloggad", "sv": "Listar de kunskapsbasartiklar som är länkade till ett visst ärende."}, {"method": "POST", "path": "/ticket/:ticketId", "line": 468, "auth": "inloggad", "sv": "Kopplar en kunskapsbasartikel till ett ärende, om användaren har behörighet till ärendet."}, {"method": "DELETE", "path": "/ticket/:ticketId/:articleId", "line": 496, "auth": "inloggad", "sv": "Tar bort kopplingen mellan en kunskapsbasartikel och ett ärende."}, {"method": "GET", "path": "/articles/:id/links", "line": 518, "auth": "inloggad", "sv": "Listar andra kunskapsbasartiklar som är korslänkade till den angivna artikeln."}, {"method": "POST", "path": "/articles/:id/links", "line": 541, "auth": "admin", "sv": "Skapar en korslänk mellan två kunskapsbasartiklar."}, {"method": "DELETE", "path": "/articles/:id/links/:targetId", "line": 569, "auth": "admin", "sv": "Tar bort korslänken mellan två kunskapsbasartiklar."}, {"method": "GET", "path": "/articles/:id/share", "line": 588, "auth": "inloggad", "sv": "Hämtar den publika delningslänken för en artikel, om en sådan finns."}, {"method": "POST", "path": "/articles/:id/share", "line": 599, "auth": "admin", "sv": "Skapar en publik delningslänk så att en artikel kan läsas utan inloggning."}, {"method": "DELETE", "path": "/articles/:id/share", "line": 621, "auth": "admin", "sv": "Återkallar den publika delningslänken för en artikel."}, {"method": "GET", "path": "/public/:token", "line": 633, "auth": "publik", "sv": "Visar en delad kunskapsbasartikel skrivskyddat via en delningslänk, utan inloggning."}, {"method": "POST", "path": "/upload-image", "line": 660, "auth": "admin", "sv": "Laddar upp en bild som ska bäddas in i en kunskapsbasartikel."}, {"method": "GET", "path": "/images/:filename", "line": 682, "auth": "publik", "sv": "Serverar en uppladdad kunskapsbasbild, så att den kan visas även i publikt delade artiklar."}], "route:reports": [{"method": "GET", "path": "/summary", "line": 16, "auth": "inloggad", "sv": "Sammanställer ärendestatistik (antal per status, kategori, prioritet, trend och lösningstid) för vald period."}, {"method": "GET", "path": "/time-summary", "line": 197, "auth": "inloggad", "sv": "Summerar nedlagd tid på ärenden per kategori och visar de tio ärenden med mest registrerad tid."}, {"method": "GET", "path": "/requester-analytics", "line": 251, "auth": "inloggad", "sv": "Tar fram statistik per ärendeanmälare, som antal ärenden, status, prioriteter och vanligaste kategorier."}, {"method": "GET", "path": "/status-flow", "line": 523, "auth": "inloggad", "sv": "Ger en månadsvis fördelning av ärenden per status över de senaste tolv månaderna."}, {"method": "GET", "path": "/tag-analytics", "line": 560, "auth": "inloggad", "sv": "Räknar hur många ärenden varje tagg förekommer på, för taggmoln och taggdiagram."}, {"method": "GET", "path": "/kpi-tickets", "line": 660, "auth": "inloggad", "sv": "Hämtar detaljerade ärenderader bakom nyckeltalen på rapportsidan, antingen totalt eller åldrade ärenden."}], "route:auth": [{"method": "POST", "path": "/login", "line": 72, "auth": "publik", "sv": "Loggar in en användare med e-post och lösenord och ger tillbaka en inloggningsnyckel."}, {"method": "POST", "path": "/refresh", "line": 124, "auth": "publik", "sv": "Förnyar en utgången inloggning automatiskt så att användaren slipper logga in på nytt."}, {"method": "POST", "path": "/logout", "line": 213, "auth": "inloggad", "sv": "Loggar ut användaren och spärrar den sparade sessionen."}, {"method": "GET", "path": "/me", "line": 239, "auth": "inloggad", "sv": "Visar information om den användare som är inloggad just nu."}, {"method": "POST", "path": "/change-password", "line": 244, "auth": "inloggad", "sv": "Låter användaren byta sitt lösenord och loggar samtidigt ut alla andra enheter."}, {"method": "POST", "path": "/forgot-password", "line": 299, "auth": "publik", "sv": "Skickar ett mejl med en återställningslänk om e-postadressen finns i systemet."}, {"method": "POST", "path": "/reset-password", "line": 351, "auth": "publik", "sv": "Sätter ett nytt lösenord med hjälp av återställningslänken från mejlet."}, {"method": "GET", "path": "/audit-log", "line": 403, "auth": "admin", "sv": "Visar en logg över viktiga händelser i systemet, endast för administratörer."}], "route:users": [{"method": "GET", "path": "/", "line": 29, "auth": "inloggad", "sv": "Listar systemets användare; administratörer ser fler detaljer än vanliga användare."}, {"method": "POST", "path": "/", "line": 62, "auth": "admin", "sv": "Skapar en ny användare med roll och eventuellt ett genererat tillfälligt lösenord."}, {"method": "PATCH", "path": "/:id", "line": 143, "auth": "admin", "sv": "Ändrar en användares roll eller visningsnamn."}, {"method": "DELETE", "path": "/:id", "line": 203, "auth": "admin", "sv": "Tar bort en användare ur systemet."}], "route:api-keys": [{"method": "GET", "path": "/", "line": 23, "auth": "inloggad", "sv": "Listar de API-nycklar som tillhör den inloggade användaren."}, {"method": "POST", "path": "/", "line": 37, "auth": "inloggad", "sv": "Skapar en ny API-nyckel för att låta program ansluta till systemet."}, {"method": "DELETE", "path": "/:id", "line": 106, "auth": "inloggad", "sv": "Tar bort en av användarens API-nycklar."}], "route:webhooks": [{"method": "GET", "path": "/", "line": 32, "auth": "admin", "sv": "Listar alla webhooks som skickar automatiska aviseringar till andra system."}, {"method": "POST", "path": "/", "line": 46, "auth": "admin", "sv": "Skapar en ny webhook som meddelar ett externt system när vissa händelser inträffar."}, {"method": "PUT", "path": "/:id", "line": 98, "auth": "admin", "sv": "Ändrar en befintlig webhook, till exempel dess adress eller vilka händelser den lyssnar på."}, {"method": "DELETE", "path": "/:id", "line": 144, "auth": "admin", "sv": "Tar bort en webhook."}, {"method": "GET", "path": "/:id/deliveries", "line": 160, "auth": "admin", "sv": "Visar de senaste leveranserna för en webhook så man kan se om aviseringarna gått fram."}], "route:categories": [{"method": "GET", "path": "/", "line": 18, "auth": "inloggad", "sv": "Hämtar listan över alla ärendekategorier, sorterade i ordning."}, {"method": "POST", "path": "/", "line": 29, "auth": "admin", "sv": "Skapar en ny ärendekategori."}, {"method": "PUT", "path": "/reorder", "line": 54, "auth": "admin", "sv": "Ändrar i vilken ordning kategorierna visas."}, {"method": "PUT", "path": "/:id", "line": 80, "auth": "admin", "sv": "Byter namn på en kategori."}, {"method": "DELETE", "path": "/:id", "line": 104, "auth": "admin", "sv": "Tar bort en kategori."}], "route:contacts": [{"method": "GET", "path": "/", "line": 35, "auth": "inloggad", "sv": "Hämtar listan över kontaktpersoner (max 500 åt gången)."}, {"method": "GET", "path": "/export", "line": 102, "auth": "inloggad", "sv": "Laddar ner alla kontakter som en Excel-fil."}, {"method": "POST", "path": "/import/preview", "line": 160, "auth": "inloggad", "sv": "Förhandsgranskar en uppladdad CSV-fil med kontakter och visar vilka rader som är giltiga eller dubbletter innan import."}, {"method": "POST", "path": "/import/confirm", "line": 229, "auth": "inloggad", "sv": "Genomför importen av kontakter från CSV och sparar dem i systemet."}, {"method": "GET", "path": "/:id", "line": 346, "auth": "inloggad", "sv": "Hämtar uppgifter om en enskild kontaktperson."}, {"method": "POST", "path": "/", "line": 367, "auth": "admin", "sv": "Skapar en ny kontaktperson."}, {"method": "PUT", "path": "/:id", "line": 394, "auth": "admin", "sv": "Uppdaterar uppgifterna för en kontaktperson."}, {"method": "DELETE", "path": "/:id", "line": 455, "auth": "admin", "sv": "Tar bort en kontaktperson."}], "route:attachments": [{"method": "GET", "path": "/ticket/:ticketId", "line": 148, "auth": "inloggad", "sv": "Listar alla bifogade filer som hör till ett visst ärende."}, {"method": "POST", "path": "/ticket/:ticketId", "line": 173, "auth": "inloggad", "sv": "Laddar upp en bifogad fil till ett ärende."}, {"method": "GET", "path": "/file/:id", "line": 247, "auth": "inloggad", "sv": "Laddar ner en enskild bifogad fil."}, {"method": "DELETE", "path": "/:id", "line": 299, "auth": "inloggad", "sv": "Tar bort en bifogad fil från ett ärende."}], "route:checklists": [{"method": "POST", "path": "/progress", "line": 28, "auth": "inloggad", "sv": "Hämtar hur långt checklistorna har kommit för flera ärenden samtidigt (antal klara av totalt)."}, {"method": "GET", "path": "/ticket/:ticketId", "line": 71, "auth": "inloggad", "sv": "Hämtar checklistan som hör till ett visst ärende."}, {"method": "POST", "path": "/ticket/:ticketId", "line": 87, "auth": "inloggad", "sv": "Lägger till en ny punkt i ett ärendes checklista."}, {"method": "POST", "path": "/ticket/:ticketId/bulk", "line": 126, "auth": "inloggad", "sv": "Lägger till flera checklistepunkter på ett ärende på en gång."}, {"method": "PUT", "path": "/:id", "line": 195, "auth": "inloggad", "sv": "Uppdaterar en checklistepunkt, till exempel bockar av den som klar."}, {"method": "DELETE", "path": "/:id", "line": 243, "auth": "inloggad", "sv": "Tar bort en punkt från en checklista."}], "route:checklist-templates": [{"method": "GET", "path": "/", "line": 39, "auth": "inloggad", "sv": "Hämtar alla checklistmallar med deras punkter."}, {"method": "POST", "path": "/", "line": 55, "auth": "admin", "sv": "Skapar en ny checklistmall med tillhörande punkter."}, {"method": "PUT", "path": "/:id", "line": 97, "auth": "admin", "sv": "Uppdaterar en checklistmall och dess punkter."}, {"method": "DELETE", "path": "/:id", "line": 139, "auth": "admin", "sv": "Tar bort en checklistmall."}, {"method": "POST", "path": "/:id/apply", "line": 151, "auth": "inloggad", "sv": "Kopierar punkterna från en checklistmall till ett ärendes checklista."}], "route:comments": [{"method": "GET", "path": "/ticket/:ticketId", "line": 25, "auth": "inloggad", "sv": "Hämtar alla kommentarer som hör till ett ärende."}, {"method": "POST", "path": "/ticket/:ticketId", "line": 48, "auth": "inloggad", "sv": "Skriver en ny kommentar på ett ärende (intern anteckning eller publikt svar till kunden)."}, {"method": "PUT", "path": "/:id", "line": 103, "auth": "inloggad", "sv": "Ändrar texten i en befintlig kommentar (bara din egen, eller om du är administratör)."}, {"method": "DELETE", "path": "/:id", "line": 150, "auth": "inloggad", "sv": "Tar bort en kommentar (bara din egen, eller om du är administratör)."}], "route:links": [{"method": "GET", "path": "/ticket/:ticketId", "line": 42, "auth": "inloggad", "sv": "Visar alla ärenden som är kopplade till ett visst ärende."}, {"method": "POST", "path": "/ticket/:ticketId", "line": 116, "auth": "inloggad", "sv": "Kopplar ihop ett ärende med ett annat (t.ex. relaterat eller blockerar)."}, {"method": "DELETE", "path": "/:id", "line": 217, "auth": "inloggad", "sv": "Tar bort en koppling mellan två ärenden."}], "route:shares": [{"method": "GET", "path": "/ticket/:ticketId", "line": 78, "auth": "inloggad", "sv": "Hämtar en eventuell delningslänk för ett ärende."}, {"method": "POST", "path": "/ticket/:ticketId", "line": 92, "auth": "inloggad", "sv": "Skapar en delningslänk så ett ärende kan visas av utomstående utan inloggning."}, {"method": "DELETE", "path": "/ticket/:ticketId", "line": 128, "auth": "inloggad", "sv": "Tar bort delningslänken för ett ärende så den slutar fungera."}, {"method": "GET", "path": "/public/:token", "line": 147, "auth": "publik", "sv": "Visar ett delat ärende öppet via en delningslänk, utan inloggning (interna anteckningar döljs)."}, {"method": "GET", "path": "/public/file/:token/:attachmentId", "line": 215, "auth": "publik", "sv": "Laddar ner en bifogad fil från ett delat ärende via delningslänken, utan inloggning."}], "route:tags": [{"method": "GET", "path": "/", "line": 17, "auth": "inloggad", "sv": "Listar alla etiketter (taggar) som finns."}, {"method": "POST", "path": "/", "line": 28, "auth": "admin", "sv": "Skapar en ny etikett (tagg) med namn och färg."}, {"method": "PUT", "path": "/:id", "line": 57, "auth": "admin", "sv": "Ändrar namn eller färg på en etikett."}, {"method": "DELETE", "path": "/:id", "line": 87, "auth": "admin", "sv": "Tar bort en etikett."}], "route:templates": [{"method": "GET", "path": "/", "line": 28, "auth": "inloggad", "sv": "Listar alla ärendemallar tillsammans med deras fält."}, {"method": "GET", "path": "/:id", "line": 57, "auth": "inloggad", "sv": "Hämtar en enskild ärendemall med dess fält."}, {"method": "POST", "path": "/", "line": 74, "auth": "admin", "sv": "Skapar en ny ärendemall, eventuellt med egna inmatningsfält."}, {"method": "PUT", "path": "/reorder", "line": 145, "auth": "admin", "sv": "Ändrar ordningen som ärendemallarna visas i."}, {"method": "PUT", "path": "/:id", "line": 171, "auth": "admin", "sv": "Uppdaterar innehållet i en ärendemall."}, {"method": "DELETE", "path": "/:id", "line": 207, "auth": "admin", "sv": "Tar bort en ärendemall."}], "route:template-fields": [{"method": "GET", "path": "/", "line": 25, "auth": "inloggad", "sv": "Listar alla inmatningsfält som hör till en viss ärendemall."}, {"method": "POST", "path": "/", "line": 37, "auth": "admin", "sv": "Lägger till ett nytt inmatningsfält i en ärendemall."}, {"method": "PUT", "path": "/reorder", "line": 65, "auth": "admin", "sv": "Ändrar ordningen på fälten i en ärendemall."}, {"method": "PUT", "path": "/:fieldId", "line": 90, "auth": "admin", "sv": "Uppdaterar ett enskilt fält i en ärendemall."}, {"method": "DELETE", "path": "/:fieldId", "line": 124, "auth": "admin", "sv": "Tar bort ett fält från en ärendemall."}], "route:recurring": [{"method": "GET", "path": "/", "line": 35, "auth": "inloggad", "sv": "Listar alla mallar för återkommande ärenden, var och en med sina tio senaste skapade ärenden."}, {"method": "POST", "path": "/", "line": 79, "auth": "admin", "sv": "Skapar en ny mall som automatiskt genererar ärenden med valt intervall (dagligen, veckovis eller månadsvis)."}, {"method": "PUT", "path": "/:id", "line": 141, "auth": "admin", "sv": "Uppdaterar en mall för återkommande ärenden, till exempel namn, innehåll eller hur ofta den körs."}, {"method": "DELETE", "path": "/:id", "line": 226, "auth": "admin", "sv": "Tar bort en mall för återkommande ärenden och dess historik."}, {"method": "PATCH", "path": "/:id/toggle", "line": 245, "auth": "admin", "sv": "Pausar eller återstartar en återkommande mall med ett klick."}], "route:time-entries": [{"method": "GET", "path": "/:ticketId", "line": 26, "auth": "inloggad", "sv": "Visar alla tidsregistreringar för ett ärende samt den totala loggade tiden."}, {"method": "POST", "path": "/:ticketId", "line": 60, "auth": "inloggad", "sv": "Loggar nedlagd tid på ett ärende (antal minuter, anteckning och om tiden är fakturerbar)."}, {"method": "PUT", "path": "/:ticketId/:id", "line": 133, "auth": "inloggad", "sv": "Ändrar en befintlig tidsregistrering, så länge den inte redan har fakturerats."}, {"method": "DELETE", "path": "/:ticketId/:id", "line": 209, "auth": "inloggad", "sv": "Tar bort en tidsregistrering från ett ärende."}], "route:backup": [{"method": "GET", "path": "/", "line": 54, "auth": "admin", "sv": "Laddar ner en komplett säkerhetskopia av databasen och alla bifogade filer som en ZIP-fil."}, {"method": "POST", "path": "/restore", "line": 100, "auth": "admin", "sv": "Återställer systemet från en uppladdad säkerhetskopia och startar om servern automatiskt."}, {"method": "GET", "path": "/config", "line": 341, "auth": "admin", "sv": "Hämtar inställningarna för automatiska säkerhetskopior, inklusive när nästa körning sker."}, {"method": "PUT", "path": "/config", "line": 346, "auth": "admin", "sv": "Ändrar schemat för automatiska säkerhetskopior (på/av, tidpunkt och hur länge de sparas)."}, {"method": "POST", "path": "/run-now", "line": 369, "auth": "admin", "sv": "Startar en säkerhetskopiering direkt, utan att vänta på nästa schemalagda körning."}], "route:push": [{"method": "GET", "path": "/vapid-public-key", "line": 9, "auth": "inloggad", "sv": "Hämtar den publika nyckel som webbläsaren behöver för att ta emot push-notiser."}, {"method": "POST", "path": "/subscribe", "line": 15, "auth": "inloggad", "sv": "Registrerar användarens enhet för att kunna ta emot push-notiser."}, {"method": "DELETE", "path": "/unsubscribe", "line": 33, "auth": "inloggad", "sv": "Avregistrerar en enhet så att den slutar ta emot push-notiser."}], "route:companies": [{"method": "GET", "path": "/", "line": 29, "auth": "inloggad", "sv": "Listar alla företag med statistik om antal kontakter och öppna respektive totala ärenden."}, {"method": "GET", "path": "/:id", "line": 48, "auth": "inloggad", "sv": "Visar ett enskilt företag med dess kontakter och utförlig ärende- och tidsstatistik."}, {"method": "POST", "path": "/", "line": 94, "auth": "admin", "sv": "Lägger till ett nytt företag (kund) i systemet."}, {"method": "PUT", "path": "/:id", "line": 115, "auth": "admin", "sv": "Uppdaterar ett företags uppgifter och kan slå av eller på SLA-bevakning för dess ärenden."}, {"method": "DELETE", "path": "/:id", "line": 185, "auth": "admin", "sv": "Tar bort ett företag; dess kontakter behålls men kopplas loss från företaget."}], "route:billing": [{"method": "GET", "path": "/rates/:companyId", "line": 35, "auth": "admin", "sv": "Hämtar det avtalade timpriset för ett företag."}, {"method": "PUT", "path": "/rates/:companyId", "line": 46, "auth": "admin", "sv": "Sätter eller uppdaterar timpriset och valutan för ett företag."}, {"method": "GET", "path": "/invoices", "line": 106, "auth": "admin", "sv": "Listar fakturor, valfritt filtrerade på ett visst företag."}, {"method": "GET", "path": "/invoices/:id", "line": 137, "auth": "admin", "sv": "Visar en enskild faktura med alla dess fakturarader."}, {"method": "POST", "path": "/invoices/preview", "line": 169, "auth": "admin", "sv": "Räknar fram ett fakturaförslag för en period utan att spara det, baserat på ej fakturerad tid."}, {"method": "POST", "path": "/invoices", "line": 253, "auth": "admin", "sv": "Skapar en faktura och markerar den fakturerade tiden så att den inte kan faktureras igen."}, {"method": "PUT", "path": "/invoices/:id/status", "line": 338, "auth": "admin", "sv": "Flyttar en faktura framåt i statuskedjan utkast → skickad → betald."}, {"method": "DELETE", "path": "/invoices/:id", "line": 380, "auth": "admin", "sv": "Tar bort en faktura, men endast om den fortfarande är ett utkast."}], "route:email-inbound": [{"method": "GET", "path": "/status", "line": 9, "auth": "inloggad", "sv": "Visar om inkommande e-post (mejl-till-ärende) är korrekt konfigurerad och igång."}], "route:sla": [{"method": "GET", "path": "/", "line": 20, "auth": "inloggad", "sv": "Listar SLA-regler för svars- och lösningstider, valfritt filtrerade per företag eller standard."}, {"method": "PUT", "path": "/", "line": 43, "auth": "admin", "sv": "Sparar SLA-reglerna (svars- och lösningstider per prioritet) för ett företag eller som standard."}, {"method": "DELETE", "path": "/:id", "line": 86, "auth": "admin", "sv": "Tar bort en enskild SLA-regel."}], "route:settings": [{"method": "GET", "path": "/", "line": 11, "auth": "inloggad", "sv": "Talar om ifall tvåvägs-e-post (svara på ärenden via mejl) är aktiverat."}, {"method": "PUT", "path": "/two-way-email", "line": 16, "auth": "admin", "sv": "Slår av eller på systemets tvåvägs-e-postfunktion."}]};
+/* __NAMES_END__ */
+
+/* ============================================================
+   ÄNDRINGAR & IMPACT — handredigerbar lista.
+   Lägg till egna poster här. typ: "bugg" | "funktion".
+   påverkade = nod-id (klicka en ruta för att se id, eller sök).
+   ============================================================ */
+const CHANGES = [
+  { id:"c-save30s", typ:"bugg", titel:"Spara ärende tog ~30 sekunder", datum:"2026-06-26",
+    vad:"Att spara ett ärende tog ~30 s innan sidan svarade (ärendet skapades ändå).",
+    lösning:"Notismejlen skickades inline och blockerade svaret tills SMTP svarade (timeout 30 s). Fix: bakgrunda alla notismejl (fire-and-forget) + explicita SMTP-timeouts.",
+    påverkade:["route:tickets","svc:email","svc:ticketNotifications"] },
+  { id:"c-apikey-csrf", typ:"bugg", titel:"API-nyckel kunde inte skriva (CSRF)", datum:"2026-06-22",
+    vad:"En API-nyckel med skrivrättighet kunde aldrig skriva — POST gav 403 (CSRF blockerade före behörighetskollen).",
+    lösning:"CSRF skyddar bara cookie-inloggning, inte API-nycklar. Fix: undanta Bearer-nyckel-anrop (itk_live_) från CSRF via en delad isApiKeyRequest().",
+    påverkade:["route:api-keys","svc:auth"] },
+  { id:"c-idor", typ:"bugg", titel:"IDOR: andras ärenderelationer åtkomliga", datum:"2026-06-23",
+    vad:"Inloggade icke-admins kunde läsa/ändra andras ärenderelationer via fyra rutter som saknade per-ärende-koll.",
+    lösning:"Lägg åtkomstkollen canAccessTicket (403) på GET-handlers i länkar/delning/checklistor samt på bilageuppladdning; länkning kräver åtkomst till båda ärendena.",
+    påverkade:["route:links","route:shares","route:checklists","route:attachments","svc:ticketAccess"] },
+  { id:"c-fts", typ:"bugg", titel:"Korrupt ärendesökning (FTS5 dubbel-write)", datum:"2026-06-04",
+    vad:"Sökindexet för ärenden blev korrupt av dubbla skrivningar i FTS5-triggrarna.",
+    lösning:"Bygg om sökindexet contentless med contentless_delete=1 och skriv om synk-triggrarna (migration 052/057, idempotent säkrad i 062).",
+    påverkade:["table:tickets_fts","route:tickets"] },
+  { id:"c-twoway-mail", typ:"funktion", titel:"Två-vägs e-post: på/av-reglage", datum:"2026-06-26",
+    vad:"Admin kan slå av/på om kundsvar ska mejlas ut (två-vägs e-postkommunikation).",
+    lösning:"Ny inställning i app_settings (migration 064) som en settings-tjänst läser; mejlutskicket gatas på den; admin-switch i Integrationer; publika svar styrs i ärendevyn.",
+    påverkade:["route:settings","svc:settings","svc:email","table:app_settings","hook:useSettings","page:IntegrationsTab","page:TicketDetail"] },
+];
+
 /* ============================================================
    CONFIG
    ============================================================ */
@@ -962,14 +1082,20 @@ const GROUP_BY_KEY = Object.fromEntries(GROUPS.map(g => [g.key, g]));
 function groupOf(domain){ return RAW2GROUP[domain] || "platform"; }
 function groupColor(domain){ return (GROUP_BY_KEY[groupOf(domain)]||GROUP_BY_KEY.platform).color; }
 
-// Lager → kolumn (vänster→höger: användare → data)
+// Lager → kolumn (vänster→höger: användare → data). zone: fe = frontend, be = backend.
 const COLUMNS = [
-  { key:"entry",   name:"Entré",       layers:["frontend-page","frontend-shell","scheduler"] },
-  { key:"state",   name:"State",       layers:["frontend-hook","context"] },
-  { key:"client",  name:"API-klient",  layers:["api-client"] },
-  { key:"route",   name:"Routes",      layers:["api-route"] },
-  { key:"service", name:"Tjänster",    layers:["service"] },
-  { key:"data",    name:"Data",        layers:["db-table"] },
+  { key:"entry",   name:"Entré",         zone:"fe", layers:["frontend-page","frontend-shell","scheduler"],
+    explain:"Där allt börjar: sidorna användaren öppnar och schemalagda bakgrundsjobb." },
+  { key:"state",   name:"Datahämtning",  zone:"fe", layers:["frontend-hook","context"],
+    explain:"Hämtar och mellanlagrar data från servern åt sidorna." },
+  { key:"client",  name:"API-klient",    zone:"fe", layers:["api-client"],
+    explain:"Bryggan som skickar anropen till servern, med inloggning och säkerhetstoken." },
+  { key:"route",   name:"API-endpoints", zone:"be", layers:["api-route"],
+    explain:"Serverns ingångar som tar emot anropen från frontend." },
+  { key:"service", name:"Logik",         zone:"be", layers:["service"],
+    explain:"Affärslogik och hjälpfunktioner på servern (mejl, SLA, AI, behörighet …)." },
+  { key:"data",    name:"Databas",       zone:"be", layers:["db-table"],
+    explain:"Tabellerna där all information lagras." },
 ];
 const LAYER2COL = {};
 COLUMNS.forEach((c,i) => c.layers.forEach(l => LAYER2COL[l] = i));
@@ -979,6 +1105,13 @@ const LAYER_LABEL = {
   "frontend-page":"page","frontend-shell":"shell","scheduler":"cron","frontend-hook":"hook","context":"context",
   "api-client":"client","api-route":"route","service":"service","db-table":"table",
 };
+// Klarspråk per lager (visas på noder + i detaljpanel)
+const LAYER_SV = {
+  "frontend-page":"Sida", "frontend-shell":"Skal/Kommando", "scheduler":"Bakgrundsjobb",
+  "frontend-hook":"Datahämtning", "context":"Tillstånd", "api-client":"API-klient",
+  "api-route":"API-endpoint", "service":"Logik", "db-table":"Databas",
+};
+function layerSv(l){ return LAYER_SV[l] || l; }
 
 // Edge-typ → färg + streckmönster (vid impact-highlight) + legend-text
 const KINDS = {
@@ -993,7 +1126,7 @@ const KINDS = {
 function kindStyle(k){ return KINDS[k] || { color:"#7d8a9e", dash:"", label:k }; }
 
 // Layout-mått
-const NW = 178, NH = 46, COL_GAP = 86, V_GAP = 13, BAND_PAD = 26, GUTTER = 168, TOP = 30;
+const NW = 184, NH = 56, COL_GAP = 86, V_GAP = 12, BAND_PAD = 26, GUTTER = 168, TOP = 30;
 const COL_W = NW + COL_GAP;
 
 /* ============================================================
@@ -1001,7 +1134,14 @@ const COL_W = NW + COL_GAP;
    ============================================================ */
 const SVG_NS = "http://www.w3.org/2000/svg";
 const nodeById = new Map();
-GRAPH.nodes.forEach(n => { n.group = groupOf(n.domain); n.col = colOf(n.layer); nodeById.set(n.id, n); });
+GRAPH.nodes.forEach(n => {
+  n.group = groupOf(n.domain); n.col = colOf(n.layer);
+  const nm = NODE_NAMES[n.id];
+  n.namn = (nm && nm.namn) || n.label;          // klarspråksnamn (faller tillbaka på kodnamn)
+  n.kort = (nm && nm.kort) || n.desc || "";      // jargongfri beskrivning
+  n.epRich = ROUTE_EP[n.id] || null;             // berikade endpoints (routes)
+  nodeById.set(n.id, n);
+});
 
 // adjacency
 const outAdj = new Map(), inAdj = new Map();
@@ -1078,7 +1218,7 @@ function computeLayout(){
    ============================================================ */
 const svg = document.getElementById("svg");
 const colheadSvg = document.getElementById("colhead");
-let root, edgeLayer, bandLayer, nodeLayer;
+let root, edgeLayer, bandLayer, nodeLayer, zoneLayer;
 
 function el(tag, attrs, parent){
   const e = document.createElementNS(SVG_NS, tag);
@@ -1117,9 +1257,18 @@ function render(){
   svg.innerHTML = "";
   buildDefs();
   root = el("g", { id:"root" }, svg);
+  zoneLayer = el("g", null, root);
   bandLayer = el("g", { class:"bandrow" }, root);
   edgeLayer = el("g", null, root);
   nodeLayer = el("g", null, root);
+
+  // FE/BE-zoner (bakom banden): frontend = svagt blå, backend = svagt mörkare, brygglinje vid API:t
+  const _colX = i => GUTTER + 24 + i*COL_W;
+  const divX = _colX(2) + NW + COL_GAP/2;
+  const zh = Math.max(0, layout.height - TOP);
+  el("rect", { x:GUTTER, y:TOP, width:Math.max(0,divX-GUTTER), height:zh, fill:"rgba(120,170,255,0.020)" }, zoneLayer);
+  el("rect", { x:divX, y:TOP, width:Math.max(0,layout.width-divX), height:zh, fill:"rgba(0,0,0,0.16)" }, zoneLayer);
+  el("line", { x1:divX, y1:TOP, x2:divX, y2:layout.height, stroke:hexA('#ff9e4d',0.28), "stroke-width":1.5, "stroke-dasharray":"3 6" }, zoneLayer);
 
   // bands
   for (const b of layout.bands){
@@ -1164,23 +1313,23 @@ function render(){
       "stroke-dasharray": n._dead ? "4 3" : "" }, g);
     // left accent bar
     el("rect", { x:0, y:0, width:3.5, height:n._h, rx:0, fill: n._dead ? "var(--dead)" : c, opacity: n._dead?0.9:0.9 }, g);
-    // layer tag
-    const lay = el("text", { class:"layb", x:n._w-9, y:15, "text-anchor":"end" }, g);
-    lay.textContent = LAYER_LABEL[n.layer] || n.layer;
-    // label
-    const lbl = el("text", { class:"lbl", x:11, y:20 }, g);
-    lbl.textContent = trunc(n.label, 20);
-    if (n._dead) lbl.setAttribute("fill", "#e8b6ba");
-    // loc
-    const loc = el("text", { class:"loc", x:11, y:36 }, g);
-    loc.textContent = trunc(n.loc.split("/").slice(-1)[0], 26);
-    // dead marker
+    // klarspråksnamn (rad 1)
+    const namn = el("text", { class:"namn", x:12, y:21 }, g);
+    namn.textContent = trunc(n.namn || n.label, 23);
+    if (n._dead) namn.setAttribute("fill", "#e8b6ba");
+    // lager · kodnamn (rad 2)
+    const meta = el("text", { class:"meta", x:12, y:35 }, g);
+    meta.textContent = trunc(layerSv(n.layer) + " · " + n.label, 31);
+    // fil:rad (rad 3)
+    const loc = el("text", { class:"loc", x:12, y:48 }, g);
+    loc.textContent = trunc(n.loc.split("/").slice(-1)[0], 30);
+    // död-markör
     if (n._dead){
-      const dm = el("text", { x:n._w-9, y:35, "text-anchor":"end", "font-size":8, "font-family":"var(--mono)", fill:"var(--dead)", "font-weight":700 }, g);
+      const dm = el("text", { x:n._w-9, y:18, "text-anchor":"end", "font-size":8, "font-family":"var(--mono)", fill:"var(--dead)", "font-weight":700 }, g);
       dm.textContent = "DÖD";
     }
     const title = el("title", null, g);
-    title.textContent = `${n.label}\n${n.loc}` + (n.desc?`\n${n.desc}`:"");
+    title.textContent = `${n.namn||n.label}  (${layerSv(n.layer)})\n${n.label} — ${n.loc}` + (n.kort?`\n${n.kort}`:"");
   }
 
   applyTransform();
@@ -1188,21 +1337,37 @@ function render(){
 }
 
 function renderColHeads(){
+  colheadSvg.setAttribute("height", 52);
   colheadSvg.innerHTML = "";
-  el("rect", { x:0, y:0, width:"100%", height:34, fill:"#0d0f11" }, colheadSvg);
-  el("line", { x1:0, y1:33.5, x2:"100%", y2:33.5, stroke:"var(--line)" }, colheadSvg);
-  const showLabels = COL_W * view.k >= 76; // dölj kolumnetiketter när de skulle krocka (låg zoom)
+  el("rect", { x:0, y:0, width:"100%", height:52, fill:"#0d0f11" }, colheadSvg);
+  el("line", { x1:0, y1:51.5, x2:"100%", y2:51.5, stroke:"var(--line)" }, colheadSvg);
+  const W = colheadSvg.clientWidth || 1200;
+  const sx = wx => wx * view.k + view.x;
+  // FRONTEND/BACKEND-banner (rad 1) + brygglinje
+  const divWorld = (GUTTER+24+2*COL_W+NW) + COL_GAP/2;
+  const dsx = sx(divWorld);
+  if (dsx > GUTTER && dsx < W) el("line", { x1:dsx, y1:6, x2:dsx, y2:49, stroke:hexA('#ff9e4d',0.45), "stroke-width":1.5, "stroke-dasharray":"3 5" }, colheadSvg);
+  function banner(cx, label, sub, color){
+    if (cx < GUTTER-30 || cx > W+30) return;
+    const t = el("text", { x:cx, y:18, "text-anchor":"middle", fill:color, "font-size":11, "font-weight":800, "letter-spacing":"1.3px" }, colheadSvg);
+    t.textContent = label;
+    const s = el("text", { x:cx, y:31, "text-anchor":"middle", fill:"var(--txt-4)", "font-size":9, "font-weight":600 }, colheadSvg);
+    s.textContent = sub;
+  }
+  banner(sx((GUTTER+24 + (GUTTER+24+2*COL_W+NW))/2), "FRONTEND", "det användaren ser", "#9cc3ff");
+  banner(sx(((GUTTER+24+3*COL_W) + (GUTTER+24+5*COL_W+NW))/2), "BACKEND", "servern", "#c9a06a");
+  // kolumnnamn (rad 2)
+  const showLabels = COL_W * view.k >= 78;
   COLUMNS.forEach((c, i) => {
-    const cx = (GUTTER + 24 + i*COL_W + NW/2) * view.k + view.x;
-    if (cx < -60 || cx > colheadSvg.clientWidth + 60) return;
-    if (!showLabels) return;
-    const t = el("text", { x:cx, y:21, "text-anchor":"middle", fill:"var(--txt-3)",
-      "font-size":11, "font-weight":700, "letter-spacing":"0.6px", "font-family":"var(--mono)" }, colheadSvg);
+    const cx = sx(GUTTER + 24 + i*COL_W + NW/2);
+    if (cx < -60 || cx > W + 60 || !showLabels) return;
+    const t = el("text", { x:cx, y:46, "text-anchor":"middle", fill:"var(--txt-3)",
+      "font-size":10.5, "font-weight":700, "letter-spacing":"0.5px", "font-family":"var(--mono)" }, colheadSvg);
     t.textContent = c.name.toUpperCase();
+    const tt = el("title", null, t); tt.textContent = c.explain;
   });
-  // gutter header
-  const g = el("text", { x:16, y:21, fill:"var(--txt-4)", "font-size":10, "font-weight":700, "letter-spacing":"0.6px", "font-family":"var(--mono)" }, colheadSvg);
-  g.textContent = "DOMÄN";
+  const g = el("text", { x:16, y:46, fill:"var(--txt-4)", "font-size":10, "font-weight":700, "letter-spacing":"0.5px", "font-family":"var(--mono)" }, colheadSvg);
+  g.textContent = "OMRÅDE";
 }
 
 /* ============================================================
@@ -1245,7 +1410,13 @@ function zoomAt(cx, cy, factor){
 stage.addEventListener("wheel", (e) => {
   e.preventDefault();
   const r = stage.getBoundingClientRect();
-  zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY < 0 ? 1.12 : 1/1.12);
+  if (e.ctrlKey || e.metaKey){
+    // zoom — pinch på styrplatta skickar ctrlKey; mjukt, deltabaserat steg
+    zoomAt(e.clientX-r.left, e.clientY-r.top, Math.exp(-e.deltaY * 0.0022));
+  } else {
+    // vanlig scroll = panorera (det folk förväntar sig i en stor karta)
+    view.x -= e.deltaX; view.y -= e.deltaY; applyTransform();
+  }
 }, { passive:false });
 let drag = null;
 stage.addEventListener("pointerdown", (e) => {
@@ -1330,24 +1501,47 @@ function openDetail(n, downOrder, upOrder){
   d.classList.add("show");
   const c = groupColor(n.domain);
   document.getElementById("d-accent").style.background = c;
-  document.getElementById("d-title").textContent = n.label;
+  document.getElementById("d-title").textContent = n.namn || n.label;
+  document.getElementById("d-sub").textContent = n.label;   // kodnamn
   const kick = document.getElementById("d-kicker"); kick.innerHTML = "";
-  const lc = document.createElement("span"); lc.className="chip layer"; lc.textContent = (LAYER_LABEL[n.layer]||n.layer); kick.appendChild(lc);
+  const lc = document.createElement("span"); lc.className="chip layer"; lc.textContent = layerSv(n.layer); kick.appendChild(lc);
   const dc = document.createElement("span"); dc.className="chip dom"; dc.style.background=c; dc.textContent=(GROUP_BY_KEY[groupOf(n.domain)]||{}).name||n.domain; kick.appendChild(dc);
   if (n._dead){ const x=document.createElement("span"); x.className="chip dead"; x.textContent="DÖD KOD"; kick.appendChild(x); }
   document.getElementById("d-loc-txt").textContent = n.loc;
-  document.getElementById("d-desc").textContent = n.desc || "—";
+  document.getElementById("d-desc").textContent = n.kort || n.desc || "—";
 
-  // endpoints
+  // endpoints — rika (metod + sökväg + svensk text + behörighet) om de finns, annars enkel lista
   const epSec = document.getElementById("d-eps-sec");
-  if (n.endpoints && n.endpoints.length){
+  const epWrap = document.getElementById("d-eps");
+  if (n.epRich && n.epRich.length){
+    epSec.style.display="block";
+    document.getElementById("d-eps-n").textContent = n.epRich.length;
+    epWrap.className = "epr";
+    epWrap.innerHTML = n.epRich.map(ep => {
+      const a = (ep.auth||"inloggad").toLowerCase();
+      const al = a==="admin"?"Admin":a==="publik"?"Publik":"Inloggad";
+      return `<div class="row"><div class="top"><span class="m ${escapeHtml(ep.method)}">${escapeHtml(ep.method)}</span>`
+        + `<span class="p">${escapeHtml(ep.path)}</span><span class="auth ${a}">${al}</span></div>`
+        + (ep.sv?`<div class="sv">${escapeHtml(ep.sv)}</div>`:"") + `</div>`;
+    }).join("");
+  } else if (n.endpoints && n.endpoints.length){
     epSec.style.display="block";
     document.getElementById("d-eps-n").textContent = n.endpoints.length;
-    document.getElementById("d-eps").innerHTML = n.endpoints.map(ep => {
+    epWrap.className = "eplist";
+    epWrap.innerHTML = n.endpoints.map(ep => {
       const m = ep.match(/^([A-Z]+)\s+(.*)$/);
       return m ? `<div><span class="ep-m">${m[1]}</span> ${escapeHtml(m[2])}</div>` : `<div>${escapeHtml(ep)}</div>`;
     }).join("");
   } else epSec.style.display="none";
+
+  // Anropas av — frontend som träffar denna API-endpoint (ur grafens uppströmsnoder)
+  const calSec = document.getElementById("d-callers-sec");
+  if (n.layer === "api-route"){
+    const fe = new Set(["frontend-hook","frontend-page","frontend-shell","context"]);
+    const callers = upOrder.filter(o => { const m=nodeById.get(o.id); return m && fe.has(m.layer); });
+    calSec.style.display = "block";
+    fillRefs("d-callers","d-callers-n", callers, "var(--up)");
+  } else calSec.style.display = "none";
 
   fillRefs("d-down","d-down-n", downOrder, "var(--down)");
   fillRefs("d-up","d-up-n", upOrder, "var(--up)");
@@ -1364,7 +1558,7 @@ function fillRefs(listId, nId, order, dotColor){
     const m = nodeById.get(o.id); if(!m) return;
     const row = document.createElement("div"); row.className="ref";
     row.innerHTML = `<span class="rdot" style="background:${groupColor(m.domain)}"></span>`
-      + `<span class="rlbl">${escapeHtml(m.label)}</span>`
+      + `<span class="rlbl">${escapeHtml(m.namn||m.label)}</span>`
       + `<span class="rkind">${o.kind}</span>`;
     row.onclick = (ev) => { ev.stopPropagation(); centerOn(m.id); selectNode(m.id); };
     list.appendChild(row);
@@ -1378,8 +1572,10 @@ function centerOn(id){
   applyTransform();
 }
 function deselect(){
-  selected = null; clearViz();
+  selected = null;
   document.getElementById("detail").classList.remove("show");
+  if (activeChange && document.getElementById("changes").classList.contains("show")){ selectChange(activeChange); return; }
+  clearViz();
   if (deadMode) applyDeadMode();
 }
 
@@ -1444,10 +1640,15 @@ document.getElementById("d-loc").onclick = () => {
   navigator.clipboard?.writeText(txt).then(()=>toast("Kopierat: "+txt), ()=>toast(txt));
 };
 document.addEventListener("keydown", (e) => {
-  if (e.key==="Escape"){ if(document.activeElement===q){ q.value=""; q.dispatchEvent(new Event("input")); q.blur(); } else deselect(); }
+  if (e.key==="Escape"){
+    if(document.getElementById("intro").classList.contains("show")){ hideIntro(); return; }
+    if(document.activeElement===q){ q.value=""; q.dispatchEvent(new Event("input")); q.blur(); return; }
+    if(document.getElementById("changes").classList.contains("show")){ closeChanges(); return; }
+    deselect();
+  }
   if (e.key==="/" && document.activeElement!==q){ e.preventDefault(); q.focus(); }
 });
-document.getElementById("btn-reset").onclick = () => { q.value=""; q.dispatchEvent(new Event("input")); exitDeadMode(); deselect(); fit(); };
+document.getElementById("btn-reset").onclick = () => { q.value=""; q.dispatchEvent(new Event("input")); exitDeadMode(); closeChanges(); deselect(); fit(); };
 
 function toggleBand(key){
   if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
@@ -1529,15 +1730,90 @@ function toast(msg){
 }
 
 /* ============================================================
+   ÄNDRINGAR & IMPACT (verkliga buggar/funktioner → vad påverkades)
+   ============================================================ */
+let activeChange = null;
+function buildChanges(){
+  const body = document.getElementById("cg-body"); body.innerHTML="";
+  CHANGES.forEach(ch => {
+    const valid = ch.påverkade.filter(id => nodeById.has(id));
+    const div = document.createElement("div"); div.className="chg"; div.dataset.id=ch.id;
+    div.innerHTML =
+      `<div class="ct"><span class="tag ${ch.typ}">${ch.typ==="bugg"?"BUGG":"FUNKTION"}</span><span class="date">${escapeHtml(ch.datum)}</span></div>`
+      + `<div class="title">${escapeHtml(ch.titel)}</div>`
+      + `<div class="det"><b>Vad:</b> ${escapeHtml(ch.vad)}`
+      + `<div class="sol"><b>Lösning:</b> ${escapeHtml(ch.lösning)}</div>`
+      + `<div class="affn">${valid.map(id=>`<span class="a" data-node="${escapeHtml(id)}">${escapeHtml(nodeById.get(id).namn||nodeById.get(id).label)}</span>`).join("")}</div></div>`;
+    div.addEventListener("click", () => selectChange(ch.id));
+    div.querySelectorAll(".affn .a").forEach(a => a.addEventListener("click",(e)=>{ e.stopPropagation(); centerOn(a.dataset.node); selectNode(a.dataset.node); }));
+    body.appendChild(div);
+  });
+}
+function highlightSet(ids, color){
+  clearViz();
+  const set = new Set(ids.filter(id=>nodeById.has(id)));
+  GRAPH.nodes.forEach(m => { if(!m._g) return;
+    if(!set.has(m.id)) m._g.classList.add("dimmed");
+    else { const b=m._g.querySelector(".box"); b.setAttribute("stroke",color); b.setAttribute("stroke-width",2.8); b.setAttribute("fill", hexA(color,0.15)); }
+  });
+  edges.forEach(e => { if(!e._el) return;
+    if (set.has(e.source) && set.has(e.target)){ const st=kindStyle(e.kind); e._el.setAttribute("stroke",st.color); e._el.setAttribute("stroke-width",2); e._el.setAttribute("opacity",0.9); e._el.setAttribute("stroke-dasharray",st.dash); e._el.setAttribute("marker-end","url(#ar-"+e.kind+")"); }
+    else e._el.setAttribute("opacity",0.04);
+  });
+}
+function fitNodes(ids){
+  const ns = ids.map(id=>nodeById.get(id)).filter(n=>n && n._x!=null);
+  if(!ns.length) return;
+  const minX=Math.min(...ns.map(n=>n._x)), maxX=Math.max(...ns.map(n=>n._x+n._w));
+  const minY=Math.min(...ns.map(n=>n._y)), maxY=Math.max(...ns.map(n=>n._y+n._h));
+  const vw=stage.clientWidth, vh=stage.clientHeight, pad=130;
+  const k=Math.min((vw-pad*2)/Math.max(1,maxX-minX),(vh-pad*2)/Math.max(1,maxY-minY),1.0);
+  view.k=Math.max(0.22,k);
+  view.x=vw/2-((minX+maxX)/2)*view.k;
+  view.y=vh/2-((minY+maxY)/2)*view.k;
+  applyTransform();
+}
+function selectChange(id){
+  const ch = CHANGES.find(c=>c.id===id); if(!ch) return;
+  activeChange = id;
+  selected = null; if (deadMode) exitDeadMode(true);
+  document.getElementById("detail").classList.remove("show");
+  document.querySelectorAll(".chg").forEach(dn=>dn.classList.toggle("active", dn.dataset.id===id));
+  const ids = ch.påverkade.filter(x=>nodeById.has(x));
+  let needRebuild=false;
+  ids.forEach(x=>{ const g=nodeById.get(x).group; if(collapsed.has(g)){ collapsed.delete(g); needRebuild=true; } });
+  if (needRebuild) rebuild();
+  highlightSet(ids, "#ff9e4d");
+  fitNodes(ids);
+}
+function openChanges(){ document.getElementById("changes").classList.add("show"); document.getElementById("detail").classList.remove("show"); document.getElementById("btn-changes").classList.add("on"); }
+function closeChanges(){
+  document.getElementById("changes").classList.remove("show");
+  document.getElementById("btn-changes").classList.remove("on");
+  if(activeChange){ activeChange=null; document.querySelectorAll(".chg").forEach(d=>d.classList.remove("active")); clearViz(); if(deadMode) applyDeadMode(); }
+}
+document.getElementById("btn-changes").onclick = () => { const c=document.getElementById("changes"); if(c.classList.contains("show")) closeChanges(); else openChanges(); };
+document.getElementById("cg-close").onclick = closeChanges;
+
+/* ---------- Intro / hjälp ---------- */
+function showIntro(){ document.getElementById("intro").classList.add("show"); }
+function hideIntro(){ document.getElementById("intro").classList.remove("show"); try{ localStorage.setItem("archmap-intro-seen","1"); }catch(e){} }
+document.getElementById("intro-go").onclick = hideIntro;
+document.getElementById("intro").addEventListener("click",(e)=>{ if(e.target.id==="intro") hideIntro(); });
+document.getElementById("btn-help").onclick = showIntro;
+
+/* ============================================================
    BOOT
    ============================================================ */
 computeLayout();
 render();
 buildLegend();
+buildChanges();
 updateHeaderStats();
 fit();
-setTimeout(() => document.querySelector(".hint")?.classList.add("gone"), 8000);
+setTimeout(() => document.querySelector(".hint")?.classList.add("gone"), 9000);
 window.addEventListener("resize", () => { applyTransform(); });
+(function maybeIntro(){ let seen=false; try{ seen = localStorage.getItem("archmap-intro-seen")==="1"; }catch(e){} if(!seen) showIntro(); })();
 
 // Djuplänk: ?n=<nod-id> markerar en nod (delbar impact-vy), ?dead öppnar dödkodsläge,
 // ?q=<term> förfyller sökningen. Gör vyer delbara (t.ex. ?n=svc:auth = auth-blast-radius).
