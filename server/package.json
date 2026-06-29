@@ -22,7 +22,7 @@
     "exceljs": "^4.4.0",
     "express": "^5.2.1",
     "helmet": "^8.2.0",
-    "html-to-text": "^9.0.5",
+    "html-to-text": "^10.0.0",
     "imapflow": "^1.4.3",
     "jsonwebtoken": "^9.0.2",
     "mailparser": "^3.9.10",
