@@ -1,0 +1,1571 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IT-Ticket · Arkitekturkarta</title>
+<style>
+  /* ============================================================
+     IT-Ticket · Interaktiv arkitekturkarta
+     Helt självständig — inga CDN, inga externa beroenden.
+     Estetik: Linear-mörkt grafverktyg, varm bärnstensaccent (#ff9e4d),
+     per-domän accentfärg, JetBrains Mono för fil:rad.
+     ============================================================ */
+  :root {
+    --bg:           #0b0c0e;
+    --bg-grid:      rgba(255,255,255,0.018);
+    --panel:        #111316;
+    --panel-2:      #16181c;
+    --elev:         #1b1e23;
+    --line:         rgba(255,255,255,0.07);
+    --line-2:       rgba(255,255,255,0.11);
+    --txt:          #f2f4f7;
+    --txt-2:        #aab2bd;
+    --txt-3:        #6b7480;
+    --txt-4:        #4a525c;
+    --brand:        #ff9e4d;
+    --brand-dim:    #c87a38;
+    --down:         #38d6c8;  /* nedström — beror på */
+    --up:           #ffb454;  /* uppström — påverkas vid ändring */
+    --dead:         #ef5f6b;
+    --radius:       9px;
+    --mono:         "JetBrains Mono", ui-monospace, "SF Mono", "Menlo", monospace;
+    --sans:         "Plus Jakarta Sans", -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: var(--txt);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "cv01","ss03";
+  }
+  body { display: flex; flex-direction: column; }
+
+  /* ---------- Topbar ---------- */
+  header {
+    display: flex; align-items: center; gap: 18px;
+    padding: 0 18px; height: 56px; flex: 0 0 auto;
+    background: linear-gradient(180deg, #121418 0%, #0e1012 100%);
+    border-bottom: 1px solid var(--line);
+    z-index: 30; position: relative;
+  }
+  .brandmark { display: flex; align-items: center; gap: 11px; user-select: none; }
+  .brandmark .glyph {
+    width: 26px; height: 26px; border-radius: 7px;
+    background: radial-gradient(120% 120% at 30% 20%, #ffb978, var(--brand) 55%, var(--brand-dim));
+    box-shadow: 0 0 0 1px rgba(255,158,77,0.35), 0 6px 18px -6px rgba(255,158,77,0.5);
+    display: grid; place-items: center; color: #2a1604; font-weight: 800; font-size: 14px;
+  }
+  .brandmark h1 { font-size: 14px; font-weight: 700; margin: 0; letter-spacing: -0.2px; }
+  .brandmark .sub { font-size: 11px; color: var(--txt-3); font-family: var(--mono); margin-top: 1px; }
+
+  .topspacer { flex: 1; }
+
+  .search {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 7px; padding: 0 10px; height: 32px; min-width: 230px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .search:focus-within { border-color: rgba(255,158,77,0.5); box-shadow: 0 0 0 3px rgba(255,158,77,0.10); }
+  .search svg { flex: 0 0 auto; opacity: .55; }
+  .search input {
+    background: none; border: none; outline: none; color: var(--txt);
+    font-family: var(--sans); font-size: 13px; width: 100%;
+  }
+  .search input::placeholder { color: var(--txt-4); }
+  .search .count { font-family: var(--mono); font-size: 10px; color: var(--txt-3); white-space: nowrap; }
+
+  .seg { display: flex; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .btn, .seg button {
+    appearance: none; background: none; border: none; color: var(--txt-2);
+    font-family: var(--sans); font-size: 12px; font-weight: 600;
+    padding: 0 11px; height: 32px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+    transition: background .12s, color .12s;
+  }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; }
+  .btn:hover, .seg button:hover { background: #20242a; color: var(--txt); }
+  .seg button.on { background: rgba(255,158,77,0.16); color: var(--brand); }
+  .btn.danger.on { background: rgba(239,95,107,0.16); color: var(--dead); border-color: rgba(239,95,107,0.4); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; }
+
+  /* ---------- Stage ---------- */
+  .stage { position: relative; flex: 1; overflow: hidden; cursor: grab; }
+  .stage.panning { cursor: grabbing; }
+  #svg { display: block; width: 100%; height: 100%; touch-action: none; }
+  #svg text { user-select: none; pointer-events: none; }
+
+  .colhead { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 5; }
+
+  /* node + edge classes driven by JS via attributes */
+  .node rect.box { transition: opacity .18s; }
+  .node { cursor: pointer; }
+  .node .lbl { fill: var(--txt); font-size: 12px; font-weight: 650; letter-spacing: -0.1px; }
+  .node .loc { fill: var(--txt-3); font-size: 9px; font-family: var(--mono); }
+  .node .layb { font-size: 8.5px; font-family: var(--mono); fill: var(--txt-4); letter-spacing: .3px; }
+  .edge { fill: none; stroke-linecap: round; transition: opacity .18s, stroke-width .12s; }
+  .bandrow rect { transition: opacity .18s; }
+
+  .dimmed { opacity: 0.10 !important; }
+  .softdim { opacity: 0.34 !important; }
+
+  /* ---------- Detail panel ---------- */
+  #detail {
+    position: absolute; top: 14px; right: 14px; width: 322px; max-height: calc(100% - 28px);
+    background: linear-gradient(180deg, #15181c, #111316);
+    border: 1px solid var(--line-2); border-radius: 14px;
+    box-shadow: 0 24px 60px -20px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.02);
+    display: none; flex-direction: column; overflow: hidden; z-index: 20;
+    animation: pop .18s ease-out;
+  }
+  #detail.show { display: flex; }
+  @keyframes pop { from { opacity: 0; transform: translateY(-6px) scale(.985);} to {opacity:1; transform:none;} }
+  .d-head { padding: 14px 15px 12px; border-bottom: 1px solid var(--line); position: relative; }
+  .d-accent { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
+  .d-kicker { display: flex; align-items: center; gap: 8px; margin-bottom: 7px; flex-wrap: wrap; }
+  .chip { font-family: var(--mono); font-size: 9.5px; padding: 2px 7px; border-radius: 5px; font-weight: 600; letter-spacing: .2px; }
+  .chip.layer { background: rgba(255,255,255,0.06); color: var(--txt-2); }
+  .chip.dom { color: #0c0c0c; font-weight: 700; }
+  .chip.dead { background: rgba(239,95,107,0.18); color: var(--dead); }
+  .d-title { font-size: 17px; font-weight: 750; letter-spacing: -0.3px; line-height: 1.2; word-break: break-word; }
+  .d-loc { margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--brand);
+           background: rgba(255,158,77,0.07); border: 1px solid rgba(255,158,77,0.16);
+           padding: 5px 8px; border-radius: 6px; cursor: copy; display: inline-flex; align-items: center; gap: 7px;
+           max-width: 100%; }
+  .d-loc:hover { background: rgba(255,158,77,0.13); }
+  .d-loc span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .d-body { padding: 12px 15px; overflow-y: auto; }
+  .d-desc { font-size: 13px; color: var(--txt-2); line-height: 1.5; margin: 0 0 14px; }
+  .d-sec { margin-bottom: 14px; }
+  .d-sec > h4 {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .8px; margin: 0 0 7px;
+    display: flex; align-items: center; gap: 7px; font-weight: 700;
+  }
+  .d-sec > h4 .n { font-family: var(--mono); font-weight: 600; opacity: .7; }
+  .d-sec.down h4 { color: var(--down); }
+  .d-sec.up h4 { color: var(--up); }
+  .d-sec.eps h4 { color: var(--txt-2); }
+  .reflist { display: flex; flex-direction: column; gap: 4px; }
+  .ref {
+    display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 6px;
+    background: var(--panel-2); border: 1px solid var(--line); cursor: pointer;
+    font-size: 12px; transition: background .1s, border-color .1s;
+  }
+  .ref:hover { background: #20242a; border-color: var(--line-2); }
+  .ref .rdot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+  .ref .rlbl { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ref .rkind { margin-left: auto; font-family: var(--mono); font-size: 9px; color: var(--txt-3); flex: 0 0 auto; }
+  .eplist { font-family: var(--mono); font-size: 10.5px; color: var(--txt-2); line-height: 1.7;
+            background: var(--bg); border: 1px solid var(--line); border-radius: 7px; padding: 8px 10px; max-height: 190px; overflow:auto; }
+  .ep-m { color: var(--brand); font-weight: 600; }
+  .d-empty { font-size: 12px; color: var(--txt-4); font-style: italic; }
+  .d-close { position: absolute; top: 11px; right: 11px; width: 24px; height: 24px; border-radius: 6px;
+             background: rgba(255,255,255,0.04); border: 1px solid var(--line); color: var(--txt-2);
+             cursor: pointer; display: grid; place-items: center; font-size: 14px; }
+  .d-close:hover { background: rgba(255,255,255,0.09); color: var(--txt); }
+
+  /* ---------- Legend ---------- */
+  #legend {
+    position: absolute; left: 14px; bottom: 14px; z-index: 15;
+    background: #14171b;
+    border: 1px solid var(--line-2); border-radius: 12px;
+    width: 246px; overflow: hidden; box-shadow: 0 16px 40px -18px rgba(0,0,0,.7);
+  }
+  #legend .lg-head { display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 12px; cursor: pointer; font-size: 11px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--txt-2); }
+  #legend .lg-body { padding: 4px 12px 12px; display: block; }
+  #legend.collapsed .lg-body { display: none; }
+  .lg-grp { margin-top: 10px; }
+  .lg-grp:first-child { margin-top: 2px; }
+  .lg-grp .t { font-size: 9px; text-transform: uppercase; letter-spacing: .7px; color: var(--txt-4); margin-bottom: 6px; }
+  .lg-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--txt-2); padding: 2.5px 0; }
+  .lg-row svg { flex: 0 0 auto; }
+  .lg-swatch { width: 14px; height: 14px; border-radius: 4px; flex: 0 0 auto; }
+  .lg-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; }
+
+  /* ---------- Toasts / hint ---------- */
+  #toast { position: absolute; left: 50%; bottom: 22px; transform: translateX(-50%);
+    background: var(--elev); border: 1px solid var(--line-2); color: var(--txt);
+    font-size: 12px; padding: 8px 14px; border-radius: 8px; z-index: 40; opacity: 0; pointer-events: none;
+    transition: opacity .2s, transform .2s; box-shadow: 0 10px 30px -10px rgba(0,0,0,.7); }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(-4px); }
+  .hint { position: absolute; left: 50%; transform: translateX(-50%); bottom: 16px; font-size: 11px; color: var(--txt-3);
+    font-family: var(--mono); z-index: 6; pointer-events: none; line-height: 1.6; text-align: center;
+    background: #0e1013; border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px;
+    transition: opacity .5s; }
+  .hint.gone { opacity: 0; }
+  .hint b { color: var(--brand); font-weight: 600; }
+
+  .zoomctl { position: absolute; right: 14px; bottom: 14px; z-index: 15; display: flex; flex-direction: column;
+    background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 9px; overflow: hidden; }
+  .zoomctl button { width: 34px; height: 32px; background: none; border: none; color: var(--txt-2); cursor: pointer; font-size: 15px; }
+  .zoomctl button + button { border-top: 1px solid var(--line); }
+  .zoomctl button:hover { background: #20242a; color: var(--txt); }
+</style>
+</head>
+<body>
+<header>
+  <div class="brandmark">
+    <div class="glyph">IT</div>
+    <div>
+      <h1>Arkitekturkarta</h1>
+      <div class="sub" id="hdr-stats">laddar…</div>
+    </div>
+  </div>
+  <div class="topspacer"></div>
+
+  <div class="search">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+    <input id="q" type="text" placeholder="Sök noder, fil, domän…" spellcheck="false" autocomplete="off" />
+    <span class="count" id="qcount"></span>
+  </div>
+
+  <div class="seg" id="modeseg">
+    <button id="btn-reset" title="Återställ markering (Esc)">Översikt</button>
+    <button id="btn-dead" class="danger" title="Isolera nåbarhetsdöd kod">Dödkod</button>
+  </div>
+  <button class="btn" id="btn-collapse" title="Fäll ihop / expandera alla domäner">Fäll alla</button>
+</header>
+
+<div class="stage" id="stage">
+  <svg id="svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  <svg class="colhead" id="colhead" width="100%" height="34"></svg>
+  <div class="hint">Klicka en nod · <b>nedström</b>=beror på · <b>uppström</b>=påverkas vid ändring · dra för att panorera · scroll för zoom</div>
+
+  <aside id="detail">
+    <div class="d-head">
+      <div class="d-accent" id="d-accent"></div>
+      <button class="d-close" id="d-close">✕</button>
+      <div class="d-kicker" id="d-kicker"></div>
+      <div class="d-title" id="d-title"></div>
+      <div class="d-loc" id="d-loc" title="Kopiera sökväg"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg><span id="d-loc-txt"></span></div>
+    </div>
+    <div class="d-body">
+      <p class="d-desc" id="d-desc"></p>
+      <div class="d-sec eps" id="d-eps-sec" style="display:none">
+        <h4>Endpoints <span class="n" id="d-eps-n"></span></h4>
+        <div class="eplist" id="d-eps"></div>
+      </div>
+      <div class="d-sec down">
+        <h4>Beror på · nedström <span class="n" id="d-down-n"></span></h4>
+        <div class="reflist" id="d-down"></div>
+      </div>
+      <div class="d-sec up">
+        <h4>Påverkas vid ändring · uppström <span class="n" id="d-up-n"></span></h4>
+        <div class="reflist" id="d-up"></div>
+      </div>
+    </div>
+  </aside>
+
+  <div id="legend">
+    <div class="lg-head" id="lg-head">Teckenförklaring <span style="font-family:var(--mono);font-size:10px;opacity:.6" id="lg-toggle">▾</span></div>
+    <div class="lg-body" id="lg-body">
+      <div class="lg-grp">
+        <div class="t">Kopplingar (edge-typ)</div>
+        <div id="lg-edges"></div>
+      </div>
+      <div class="lg-grp">
+        <div class="t">Impact-markering</div>
+        <div class="lg-row"><span class="lg-swatch" style="background:var(--down)"></span> Nedström — beror på</div>
+        <div class="lg-row"><span class="lg-swatch" style="background:var(--up)"></span> Uppström — påverkas</div>
+        <div class="lg-row"><span class="lg-swatch" style="background:repeating-linear-gradient(45deg,var(--dead),var(--dead) 3px,transparent 3px,transparent 6px);border:1px solid var(--dead)"></span> Död / onåbar kod</div>
+      </div>
+      <div class="lg-grp">
+        <div class="t">Domäner (rader)</div>
+        <div class="lg-cols" id="lg-domains"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="zoomctl">
+    <button id="z-in" title="Zooma in">+</button>
+    <button id="z-out" title="Zooma ut">−</button>
+    <button id="z-fit" title="Anpassa till skärm" style="font-size:11px">fit</button>
+  </div>
+
+  <div id="toast"></div>
+</div>
+
+<script>
+/* ============================================================
+   GRAPH — injiceras från upptäcktsfasen. (Platshållare nedan
+   ersätts med den verkliga grafen.)
+   Node:  { id, label, layer, domain, loc, desc?, endpoints?[], dead? }
+   Edge:  { source, target, kind }
+   ============================================================ */
+/* __GRAPH_DATA_START__ */
+const GRAPH = {
+  nodes: [
+    {"id":"page:Index","label":"Index","layer":"frontend-page","domain":"reports","loc":"src/pages/Index.tsx:3","dead":false,"desc":"\"/\" route wrapper that renders the Dashboard component."},
+    {"id":"page:Dashboard","label":"Dashboard","layer":"frontend-page","domain":"reports","loc":"src/pages/Dashboard.tsx:65","dead":false,"desc":"Home dashboard: greeting, KPI cards, active ticket queue, aging tickets, reminders, status flow and activity feed."},
+    {"id":"page:Login","label":"Login","layer":"frontend-page","domain":"auth","loc":"src/pages/Login.tsx:10","dead":false,"desc":"Email/password sign-in; links to forgot-password and public form. Uses AuthContext.signIn."},
+    {"id":"page:ForgotPassword","label":"Forgot Password","layer":"frontend-page","domain":"auth","loc":"src/pages/ForgotPassword.tsx:10","dead":false,"desc":"Request password-reset email; posts to auth route."},
+    {"id":"page:ResetPassword","label":"Reset Password","layer":"frontend-page","domain":"auth","loc":"src/pages/ResetPassword.tsx:13","dead":false,"desc":"Set new password from reset token via auth route."},
+    {"id":"page:NotFound","label":"Not Found","layer":"frontend-page","domain":"platform","loc":"src/pages/NotFound.tsx:4","dead":false,"desc":"404 fallback for catch-all route; logs bad path."},
+    {"id":"page:TicketList","label":"Ticket List","layer":"frontend-page","domain":"tickets","loc":"src/pages/TicketList.tsx:50","dead":false,"desc":"Paginated/filterable ticket list (table + lazy Kanban); serves /tickets and /my-tickets."},
+    {"id":"page:PublicTicketForm","label":"Public Ticket Form","layer":"frontend-page","domain":"tickets","loc":"src/pages/PublicTicketForm.tsx:25","dead":false,"desc":"Unauthenticated support-request form with AI deflection; redirects logged-in users to /tickets/new."},
+    {"id":"page:SharedTicket","label":"Shared Ticket","layer":"frontend-page","domain":"tickets","loc":"src/pages/SharedTicket.tsx:23","dead":false,"desc":"Public read-only ticket view via share token."},
+    {"id":"page:SharedKBArticle","label":"Shared KB Article","layer":"frontend-page","domain":"kb","loc":"src/pages/SharedKBArticle.tsx:9","dead":false,"desc":"Public read-only KB article view via share token."},
+    {"id":"page:TicketForm","label":"Ticket Form","layer":"frontend-page","domain":"tickets","loc":"src/pages/TicketForm.tsx:49","dead":false,"desc":"Create/edit ticket: templates+dynamic fields, attachments, checklist, draft autosave, clone."},
+    {"id":"page:TicketDetail","label":"Ticket Detail","layer":"frontend-page","domain":"tickets","loc":"src/pages/TicketDetail.tsx:94","dead":false,"desc":"Full ticket view: comments, links, KB links, time tracking, reminders, sharing, history, AI summary/draft."},
+    {"id":"page:Recurring","label":"Recurring Templates","layer":"frontend-page","domain":"automation","loc":"src/pages/Recurring.tsx:574","dead":false,"desc":"Manage recurring ticket schedules with interval config, tags and run history."},
+    {"id":"page:CompanyList","label":"Company List","layer":"frontend-page","domain":"customers","loc":"src/pages/CompanyList.tsx:22","dead":false,"desc":"List/search companies; create and delete."},
+    {"id":"page:CompanyDetail","label":"Company Detail","layer":"frontend-page","domain":"customers","loc":"src/pages/CompanyDetail.tsx:16","dead":false,"desc":"Company profile: stats, contacts, editable per-hour billing rate."},
+    {"id":"page:Invoices","label":"Invoices","layer":"frontend-page","domain":"billing","loc":"src/pages/Invoices.tsx:211","dead":false,"desc":"Generate invoices from logged time; list/filter, view detail, change status."},
+    {"id":"page:Archive","label":"Archive","layer":"frontend-page","domain":"tickets","loc":"src/pages/Archive.tsx:39","dead":false,"desc":"Closed-ticket archive; bulk reopen/priority/assign/export/delete, CSV import."},
+    {"id":"page:UserList","label":"User/Contact List","layer":"frontend-page","domain":"customers","loc":"src/pages/UserList.tsx:46","dead":false,"desc":"Contacts management: CRUD, per-requester open counts, Excel export and CSV import."},
+    {"id":"page:Reports","label":"Reports","layer":"frontend-page","domain":"reports","loc":"src/pages/Reports.tsx:157","dead":false,"desc":"Analytics dashboard: KPIs, status/priority/category charts, requester analytics, drill-downs, Excel export."},
+    {"id":"page:Settings","label":"Settings","layer":"frontend-page","domain":"settings","loc":"src/pages/Settings.tsx:9","dead":false,"desc":"Settings shell; renders GeneralTab/TicketsTab/IntegrationsTab always and AdminTab only for admins."},
+    {"id":"page:KnowledgeBase","label":"Knowledge Base","layer":"frontend-page","domain":"kb","loc":"src/pages/KnowledgeBase.tsx:60","dead":false,"desc":"KB browser: category sidebar, debounced search, filters, article cards, import dialog."},
+    {"id":"page:KBArticleDetail","label":"KB Article Detail","layer":"frontend-page","domain":"kb","loc":"src/pages/KBArticleDetail.tsx:39","dead":false,"desc":"Read article with ToC; share toggle, mark-reviewed, delete, cross-refs and linked tickets."},
+    {"id":"page:KBArticleForm","label":"KB Article Form","layer":"frontend-page","domain":"kb","loc":"src/pages/KBArticleForm.tsx:52","dead":false,"desc":"Create/edit KB article; manage see-also links and auto-link to source ticket."},
+    {"id":"page:GeneralTab","label":"Settings · General","layer":"frontend-page","domain":"settings","loc":"src/pages/settings/GeneralTab.tsx:28","dead":false,"desc":"Appearance (theme/mode/font) and web push subscribe/unsubscribe."},
+    {"id":"page:AdminTab","label":"Settings · Admin","layer":"frontend-page","domain":"auth","loc":"src/pages/settings/AdminTab.tsx:34","dead":false,"desc":"Admin-only: manage system users and download/restore DB backups."},
+    {"id":"page:IntegrationsTab","label":"Settings · Integrations","layer":"frontend-page","domain":"integrations","loc":"src/pages/settings/IntegrationsTab.tsx:53","dead":false,"desc":"API keys, webhooks (+delivery history), IMAP email-inbound status; embeds EmailBehaviorSection."},
+    {"id":"page:TicketsTab","label":"Settings · Tickets","layer":"frontend-page","domain":"settings","loc":"src/pages/settings/TicketsTab.tsx:207","dead":false,"desc":"Ticket config: categories, tags, templates, checklist templates and SLA policies."},
+    {"id":"api:client","label":"api.request()","layer":"api-client","domain":"platform","loc":"src/lib/api.ts:92","dead":false,"desc":"Central fetch wrapper: Bearer + X-CSRF-Token, proactive + 401 silent refresh, retries once on EBADCSRFTOKEN."},
+    {"id":"api:csrf","label":"getCsrfToken()","layer":"api-client","domain":"platform","loc":"src/lib/api.ts:52","dead":false,"desc":"Fetches+caches CSRF token from GET /csrf-token (route not modeled); used by request() for state-changing methods."},
+    {"id":"ctx:Auth","label":"AuthProvider / useAuth","layer":"context","domain":"auth","loc":"src/contexts/AuthContext.tsx:16","dead":false,"desc":"Holds user/isLoading/isAuthenticated; signIn/signOut, validates token via api.getMe on mount."},
+    {"id":"hook:useActiveQueue","label":"useActiveQueue","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useActiveQueue.ts:14","dead":false,"desc":"Recent open-ticket queue widget; GET /tickets."},
+    {"id":"hook:useActivityFeed","label":"useActivityFeed","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useActivityFeed.ts:19","dead":false,"desc":"Dashboard activity feed; GET /tickets/activity-feed."},
+    {"id":"hook:useApiKeys","label":"useApiKeys","layer":"frontend-hook","domain":"integrations","loc":"src/hooks/useApiKeys.ts:9","dead":false,"desc":"List/create/delete API keys (/api-keys)."},
+    {"id":"hook:useBackupConfig","label":"useBackupConfig (+useRunBackupNow)","layer":"frontend-hook","domain":"backup","loc":"src/hooks/useBackupConfig.ts:10","dead":false,"desc":"Backup config get/update + run-now (/backup)."},
+    {"id":"hook:useBilling","label":"useBilling (useBillingRate/useInvoices/useInvoiceDetail)","layer":"frontend-hook","domain":"billing","loc":"src/hooks/useBilling.ts:15","dead":false,"desc":"Billing rates + invoices CRUD (/billing)."},
+    {"id":"hook:useCategories","label":"useCategories","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useCategories.ts:15","dead":false,"desc":"Ticket category CRUD + reorder (/categories)."},
+    {"id":"hook:useChecklistTemplates","label":"useChecklistTemplates","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useChecklistTemplates.ts:8","dead":false,"desc":"Reusable checklist templates CRUD + apply-to-ticket (/checklist-templates)."},
+    {"id":"hook:useCommandPaletteSearch","label":"useCommandPaletteSearch","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useCommandPaletteSearch.ts:27","dead":false,"desc":"Cmd-palette cross search: /tickets, /kb, /contacts. Consumed by CommandPalette component (not a page)."},
+    {"id":"hook:useCompanies","label":"useCompanies (+useCompanyDetail)","layer":"frontend-hook","domain":"customers","loc":"src/hooks/useCompanies.ts:15","dead":false,"desc":"Company CRUD + detail (/companies)."},
+    {"id":"hook:useDashboardOverview","label":"useDashboardOverview","layer":"frontend-hook","domain":"reports","loc":"src/hooks/useDashboardOverview.ts:29","dead":false,"desc":"Dashboard KPI overview; GET /tickets/dashboard-overview (tickets router, not /reports)."},
+    {"id":"hook:useDebounce","label":"useDebounce","layer":"frontend-hook","domain":"platform","loc":"src/hooks/useDebounce.ts:3","dead":false,"desc":"Generic debounce utility hook; no API."},
+    {"id":"hook:useDeflectionStats","label":"useDeflectionStats","layer":"frontend-hook","domain":"ai","loc":"src/hooks/useDeflectionStats.ts:17","dead":false,"desc":"AI deflection stats; GET /public/ai-suggest/stats."},
+    {"id":"hook:useFilterViews","label":"useFilterViews","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useFilterViews.ts:56","dead":false,"desc":"Saved ticket filter views in localStorage; no API."},
+    {"id":"hook:useKbArticle","label":"useKbArticle","layer":"frontend-hook","domain":"kb","loc":"src/hooks/useKbArticle.ts:23","dead":false,"desc":"Single KB article + share + linked tickets + cross-links (/kb)."},
+    {"id":"hook:useKbArticles","label":"useKbArticles","layer":"frontend-hook","domain":"kb","loc":"src/hooks/useKbArticles.ts:24","dead":false,"desc":"KB article list with filters (/kb/articles)."},
+    {"id":"hook:useKbCategories","label":"useKbCategories","layer":"frontend-hook","domain":"kb","loc":"src/hooks/useKbCategories.ts:16","dead":false,"desc":"KB category list (/kb/categories)."},
+    {"id":"hook:useMode","label":"useMode","layer":"frontend-hook","domain":"platform","loc":"src/hooks/useMode.ts:16","dead":false,"desc":"App UI mode/theme via window event; no API."},
+    {"id":"hook:useRecurringTemplates","label":"useRecurringTemplates","layer":"frontend-hook","domain":"automation","loc":"src/hooks/useRecurringTemplates.ts:44","dead":false,"desc":"Recurring ticket templates CRUD + toggle (/recurring)."},
+    {"id":"hook:useReportsSummary","label":"useReportsSummary","layer":"frontend-hook","domain":"reports","loc":"src/hooks/useReportsSummary.ts:26","dead":false,"desc":"Time/reports summary by year/month; GET /reports/summary."},
+    {"id":"hook:useSLAPolicies","label":"useSLAPolicies","layer":"frontend-hook","domain":"sla","loc":"src/hooks/useSLAPolicies.ts:12","dead":false,"desc":"SLA policies get/upsert per company (/sla)."},
+    {"id":"hook:useSettings","label":"useSettings","layer":"frontend-hook","domain":"settings","loc":"src/hooks/useSettings.ts:9","dead":false,"desc":"App settings get + two-way-email toggle (/settings)."},
+    {"id":"hook:useStatusCounts","label":"useStatusCounts","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useStatusCounts.ts:10","dead":false,"desc":"Ticket count per status; GET /tickets/status-counts."},
+    {"id":"hook:useStatusFlow","label":"useStatusFlow","layer":"frontend-hook","domain":"reports","loc":"src/hooks/useStatusFlow.ts:10","dead":false,"desc":"Status transition flow report; GET /reports/status-flow. Consumed by Dashboard."},
+    {"id":"hook:useSystemUsers","label":"useSystemUsers","layer":"frontend-hook","domain":"auth","loc":"src/hooks/useSystemUsers.ts:25","dead":false,"desc":"System (login) user invite/role/delete (/users)."},
+    {"id":"hook:useTagAnalytics","label":"useTagAnalytics","layer":"frontend-hook","domain":"reports","loc":"src/hooks/useTagAnalytics.ts:10","dead":false,"desc":"Tag usage analytics; GET /reports/tag-analytics. Consumed by Reports (Taggar tab)."},
+    {"id":"hook:useTags","label":"useTags","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useTags.ts:12","dead":false,"desc":"Tag CRUD (/tags)."},
+    {"id":"hook:useTemplates","label":"useTemplates","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useTemplates.ts:16","dead":false,"desc":"Ticket templates CRUD + reorder (/templates)."},
+    {"id":"hook:useTicketAttachments","label":"useTicketAttachments","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useTicketAttachments.ts:28","dead":false,"desc":"Ticket attachments list/upload/delete (/attachments)."},
+    {"id":"hook:useTicketChecklists","label":"useTicketChecklists","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useTicketChecklists.ts:26","dead":false,"desc":"Per-ticket checklist items CRUD + bulk (/checklists)."},
+    {"id":"hook:useTicketComments","label":"useTicketComments","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useTicketComments.ts:27","dead":false,"desc":"Ticket comments CRUD (/comments)."},
+    {"id":"hook:useTicketHistory","label":"useTicketHistory","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useTicketHistory.ts:4","dead":false,"desc":"Ticket audit history; GET /tickets/:id/history."},
+    {"id":"hook:useTicketLinks","label":"useTicketLinks","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useTicketLinks.ts:30","dead":false,"desc":"Ticket-to-ticket links CRUD (/links)."},
+    {"id":"hook:useTicketReminders","label":"useTicketReminders","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useTicketReminders.ts:18","dead":false,"desc":"Per-ticket reminders CRUD + clear-sent (/tickets/:id/reminders)."},
+    {"id":"hook:useTicketSharing","label":"useTicketSharing","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useTicketSharing.ts:5","dead":false,"desc":"Public ticket share token get/create/delete (/shares)."},
+    {"id":"hook:useTickets","label":"useTickets","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useTickets.ts:69","dead":false,"desc":"Core ticket list + create/update(optimistic)/bulk/delete (/tickets)."},
+    {"id":"hook:useTimeEntries","label":"useTimeEntries","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useTimeEntries.ts:10","dead":false,"desc":"Per-ticket time entries CRUD (/time-entries). Consumed by TicketDetail time tracking."},
+    {"id":"hook:useUpcomingReminders","label":"useUpcomingReminders","layer":"frontend-hook","domain":"tickets","loc":"src/hooks/useUpcomingReminders.ts:18","dead":false,"desc":"Global upcoming reminders widget; GET /tickets/upcoming-reminders."},
+    {"id":"hook:useUsers","label":"useUsers","layer":"frontend-hook","domain":"customers","loc":"src/hooks/useUsers.ts:16","dead":false,"desc":"NAME GOTCHA: manages CONTACTS (customers), not system users (/contacts)."},
+    {"id":"hook:useWebhooks","label":"useWebhooks (+useWebhookDeliveries)","layer":"frontend-hook","domain":"integrations","loc":"src/hooks/useWebhooks.ts:11","dead":false,"desc":"Webhook CRUD + deliveries list (/webhooks)."},
+    {"id":"hook:useIsMobile","label":"useIsMobile","layer":"frontend-hook","domain":"platform","loc":"src/hooks/use-mobile.tsx:5","dead":false,"desc":"Viewport breakpoint hook (matchMedia); no API. May appear as hook:useMobile in another slice (file basename)."},
+    {"id":"route:auth","label":"/api/auth","layer":"api-route","domain":"auth","loc":"server/src/routes/auth.ts:24","dead":false,"desc":"Login/refresh/logout, JWT + rolling refresh tokens, change/forgot/reset password, audit-log view.","endpoints":["POST /login","POST /refresh","POST /logout","GET /me","POST /change-password","POST /forgot-password","POST /reset-password","GET /audit-log"]},
+    {"id":"route:tickets","label":"/api/tickets","layer":"api-route","domain":"tickets","loc":"server/src/routes/tickets.ts:82","dead":false,"desc":"Core ticket CRUD, list/filter, import/export, dashboard/activity/status feeds, bulk ops, reminders, AI draft/summary.","endpoints":["GET /","POST /import/preview","POST /import/confirm","GET /export","GET /export-archive","GET /dashboard-overview","GET /activity-feed","GET /status-counts","GET /requester-open-counts","GET /upcoming-reminders","GET /:id","POST /","POST /:id/ai-draft","GET /:id/ai-summary","GET /:id/history","PUT /bulk","POST /bulk-delete","PUT /:id","DELETE /:id","POST /:id/reminders","GET /:id/reminders","DELETE /:id/reminders/sent"]},
+    {"id":"route:categories","label":"/api/categories","layer":"api-route","domain":"tickets","loc":"server/src/routes/categories.ts:7","dead":false,"desc":"Ticket category CRUD + reordering.","endpoints":["GET /","POST /","PUT /reorder","PUT /:id","DELETE /:id"]},
+    {"id":"route:contacts","label":"/api/contacts","layer":"api-route","domain":"customers","loc":"server/src/routes/contacts.ts:9","dead":false,"desc":"Contact CRUD, Excel import/export, contact->company linking.","endpoints":["GET /","GET /export","POST /import/preview","POST /import/confirm","GET /:id","POST /","PUT /:id","DELETE /:id"]},
+    {"id":"route:attachments","label":"/api/attachments","layer":"api-route","domain":"tickets","loc":"server/src/routes/attachments.ts:85","dead":false,"desc":"Ticket file attachments: list, upload (magic-byte validated), download, delete.","endpoints":["GET /ticket/:ticketId","POST /ticket/:ticketId","GET /file/:id","DELETE /:id"]},
+    {"id":"route:checklists","label":"/api/checklists","layer":"api-route","domain":"tickets","loc":"server/src/routes/checklists.ts:8","dead":false,"desc":"Per-ticket checklist items: progress, list, create, bulk-create, update, delete.","endpoints":["POST /progress","GET /ticket/:ticketId","POST /ticket/:ticketId","POST /ticket/:ticketId/bulk","PUT /:id","DELETE /:id"]},
+    {"id":"route:checklist-templates","label":"/api/checklist-templates","layer":"api-route","domain":"tickets","loc":"server/src/routes/checklistTemplates.ts:8","dead":false,"desc":"Reusable checklist templates + items; apply template to a ticket.","endpoints":["GET /","POST /","PUT /:id","DELETE /:id","POST /:id/apply"]},
+    {"id":"route:comments","label":"/api/comments","layer":"api-route","domain":"tickets","loc":"server/src/routes/comments.ts:9","dead":false,"desc":"Ticket comments (internal/public), sanitized rich text, soft-delete, notify customer on public reply.","endpoints":["GET /ticket/:ticketId","POST /ticket/:ticketId","PUT /:id","DELETE /:id"]},
+    {"id":"route:links","label":"/api/links","layer":"api-route","domain":"tickets","loc":"server/src/routes/links.ts:8","dead":false,"desc":"Ticket-to-ticket relationship links (related/duplicate/blocks).","endpoints":["GET /ticket/:ticketId","POST /ticket/:ticketId","DELETE /:id"]},
+    {"id":"route:shares","label":"/api/shares","layer":"api-route","domain":"tickets","loc":"server/src/routes/shares.ts:17","dead":false,"desc":"Public ticket share tokens; unauthenticated public read of shared ticket + attachments.","endpoints":["GET /ticket/:ticketId","POST /ticket/:ticketId","DELETE /ticket/:ticketId","GET /public/:token","GET /public/file/:token/:attachmentId"]},
+    {"id":"route:users","label":"/api/users","layer":"api-route","domain":"auth","loc":"server/src/routes/users.ts:14","dead":false,"desc":"User management (admin): list, create, patch role/status, delete.","endpoints":["GET /","POST /","PATCH /:id","DELETE /:id"]},
+    {"id":"route:public","label":"/api/public","layer":"api-route","domain":"tickets","loc":"server/src/routes/public.ts:12","dead":false,"desc":"Unauthenticated public ticket form: templates/categories, submit ticket, AI deflection suggest + outcome.","endpoints":["GET /templates","GET /categories","POST /tickets","POST /ai-suggest","PATCH /ai-suggest/:id","GET /ai-suggest/stats"]},
+    {"id":"route:templates","label":"/api/templates","layer":"api-route","domain":"tickets","loc":"server/src/routes/templates.ts:8","dead":false,"desc":"Ticket templates CRUD + reorder; mounts template-fields sub-router at /:templateId/fields.","endpoints":["GET /","GET /:id","POST /","PUT /reorder","PUT /:id","DELETE /:id","USE /:templateId/fields -> template-fields"]},
+    {"id":"route:tags","label":"/api/tags","layer":"api-route","domain":"tickets","loc":"server/src/routes/tags.ts:7","dead":false,"desc":"Ticket tag CRUD (name + color).","endpoints":["GET /","POST /","PUT /:id","DELETE /:id"]},
+    {"id":"route:kb","label":"/api/kb","layer":"api-route","domain":"kb","loc":"server/src/routes/kb.ts:53","dead":false,"desc":"Knowledge base: categories, articles (FTS5 indexed), tags/links, ticket<->article links, share tokens, image upload, public read.","endpoints":["GET /categories","POST /categories","PUT /categories/:id","DELETE /categories/:id","GET /articles","GET /articles/:id","GET /articles/:id/tickets","POST /articles","PUT /articles/:id","PATCH /articles/:id/review","DELETE /articles/:id","GET /ticket/:ticketId","POST /ticket/:ticketId","DELETE /ticket/:ticketId/:articleId","GET /articles/:id/links","POST /articles/:id/links","DELETE /articles/:id/links/:targetId","GET /articles/:id/share","POST /articles/:id/share","DELETE /articles/:id/share","GET /public/:token","POST /upload-image","GET /images/:filename"]},
+    {"id":"route:reports","label":"/api/reports","layer":"api-route","domain":"reports","loc":"server/src/routes/reports.ts:6","dead":false,"desc":"Read-only analytics: ticket summary, time summary, requester analytics, status-flow, tag analytics, KPI tickets.","endpoints":["GET /summary","GET /time-summary","GET /requester-analytics","GET /status-flow","GET /tag-analytics","GET /kpi-tickets"]},
+    {"id":"route:recurring","label":"/api/recurring","layer":"api-route","domain":"automation","loc":"server/src/routes/recurring.ts:8","dead":false,"desc":"Recurring ticket templates: list with run history, create, update, delete, toggle active (computes next_run).","endpoints":["GET /","POST /","PUT /:id","DELETE /:id","PATCH /:id/toggle"]},
+    {"id":"route:time-entries","label":"/api/time-entries","layer":"api-route","domain":"tickets","loc":"server/src/routes/time-entries.ts:8","dead":false,"desc":"Per-ticket time tracking entries: list+total, create, update (guards invoiced), delete.","endpoints":["GET /:ticketId","POST /:ticketId","PUT /:ticketId/:id","DELETE /:ticketId/:id"]},
+    {"id":"route:backup","label":"/api/backup","layer":"api-route","domain":"backup","loc":"server/src/routes/backup.ts:52","dead":false,"desc":"Admin DB backup download / restore (zip), backup config get/update, run-now (delegates to backupScheduler).","endpoints":["GET /","POST /restore","GET /config","PUT /config","POST /run-now"]},
+    {"id":"route:push","label":"/api/push","layer":"api-route","domain":"integrations","loc":"server/src/routes/push.ts:7","dead":false,"desc":"Web-push: VAPID public key, subscribe, unsubscribe.","endpoints":["GET /vapid-public-key","POST /subscribe","DELETE /unsubscribe"]},
+    {"id":"route:companies","label":"/api/companies","layer":"api-route","domain":"customers","loc":"server/src/routes/companies.ts:8","dead":false,"desc":"Company CRUD with contact/ticket/time stats; updating SLA on company applies SLA to its tickets.","endpoints":["GET /","GET /:id","POST /","PUT /:id","DELETE /:id"]},
+    {"id":"route:billing","label":"/api/billing","layer":"api-route","domain":"billing","loc":"server/src/routes/billing.ts:8","dead":false,"desc":"Billing rates per company; invoices CRUD, preview from time entries, status changes, time-entry->invoice linking.","endpoints":["GET /rates/:companyId","PUT /rates/:companyId","GET /invoices","GET /invoices/:id","POST /invoices/preview","POST /invoices","PUT /invoices/:id/status","DELETE /invoices/:id"]},
+    {"id":"route:api-keys","label":"/api/api-keys","layer":"api-route","domain":"integrations","loc":"server/src/routes/apiKeys.ts:8","dead":false,"desc":"API key management: list, create (SHA-256 hashed, returns plaintext once), revoke; audit-logged.","endpoints":["GET /","POST /","DELETE /:id"]},
+    {"id":"route:webhooks","label":"/api/webhooks","layer":"api-route","domain":"integrations","loc":"server/src/routes/webhooks.ts:8","dead":false,"desc":"Webhook subscription CRUD (SSRF-validated URLs, HMAC secret) + delivery log view.","endpoints":["GET /","POST /","PUT /:id","DELETE /:id","GET /:id/deliveries"]},
+    {"id":"route:email-inbound","label":"/api/email-inbound","layer":"api-route","domain":"email","loc":"server/src/routes/emailInbound.ts:6","dead":false,"desc":"Read-only status of the IMAP mail-to-ticket poller (delegates to emailInbound service).","endpoints":["GET /status"]},
+    {"id":"route:sla","label":"/api/sla","layer":"api-route","domain":"sla","loc":"server/src/routes/sla.ts:7","dead":false,"desc":"SLA policy CRUD per priority, global (company_id IS NULL) or per-company.","endpoints":["GET /","PUT /","DELETE /:id"]},
+    {"id":"route:settings","label":"/api/settings","layer":"api-route","domain":"settings","loc":"server/src/routes/settings.ts:5","dead":false,"desc":"App settings: read two-way-email flag (any user), set it (admin). Delegates to settings service.","endpoints":["GET /","PUT /two-way-email"]},
+    {"id":"route:template-fields","label":"/api/templates/:templateId/fields","layer":"api-route","domain":"tickets","loc":"server/src/routes/template-fields.ts:7","dead":false,"desc":"Dynamic custom fields for a ticket template — mergeParams sub-router mounted by templates.ts, NOT in app.ts.","endpoints":["GET /","POST /","PUT /reorder","PUT /:fieldId","DELETE /:fieldId"]},
+    {"id":"svc:aiHelper","label":"aiHelper","layer":"service","domain":"ai","loc":"server/src/lib/aiHelper.ts:344","dead":false,"desc":"Claude SDK helper: KB deflection, categorize, draft reply, summarize; budget + circuit-breaker + usage logging."},
+    {"id":"svc:auditLog","label":"auditLog","layer":"service","domain":"platform","loc":"server/src/lib/auditLog.ts:12","dead":false,"desc":"Fire-and-forget insert of sensitive operations into audit_log; never throws."},
+    {"id":"svc:automationHelper","label":"automationHelper","layer":"service","domain":"automation","loc":"server/src/lib/automationHelper.ts:29","dead":false,"desc":"Auto-tag (title keyword) and auto-priority detection from TAG_RULES/PRIORITY_RULES."},
+    {"id":"svc:email","label":"email","layer":"service","domain":"email","loc":"server/src/lib/email.ts:415","dead":false,"desc":"Nodemailer SMTP sender: created/closed/reminder/assignment/reset/reply/SLA-breach/agent-notify emails."},
+    {"id":"svc:emailInbound","label":"emailInbound","layer":"service","domain":"email","loc":"server/src/lib/emailInbound.ts:468","dead":false,"desc":"IMAP polling (OAuth2/Basic) mail-to-ticket: thread/dedup matching, ticket+comment+attachment creation."},
+    {"id":"svc:emailThreading","label":"emailThreading","layer":"service","domain":"email","loc":"server/src/lib/emailThreading.ts:17","dead":false,"desc":"Pure RFC5322 reply-header + Message-ID generation for outbound email threading."},
+    {"id":"svc:htmlSanitizer","label":"htmlSanitizer","layer":"service","domain":"platform","loc":"server/src/lib/htmlSanitizer.ts:42","dead":false,"desc":"sanitize-html allowlist for rich text + plain text (matches TipTap editor)."},
+    {"id":"svc:htmlUtils","label":"htmlUtils","layer":"service","domain":"platform","loc":"server/src/lib/htmlUtils.ts:1","dead":false,"desc":"Pure stripHtml helper (tags/entities to plain text)."},
+    {"id":"svc:logger","label":"logger","layer":"service","domain":"platform","loc":"server/src/lib/logger.ts:19","dead":false,"desc":"JSON-line console logger; ubiquitous platform sink (~18 nodes call it)."},
+    {"id":"svc:offsiteBackup","label":"offsiteBackup","layer":"service","domain":"backup","loc":"server/src/lib/offsiteBackup.ts:36","dead":false,"desc":"Runs OFFSITE_BACKUP_CMD via sh -c with path passed safely through env var; optional/REQUIRED modes."},
+    {"id":"svc:passwordPolicy","label":"passwordPolicy","layer":"service","domain":"auth","loc":"server/src/lib/passwordPolicy.ts:27","dead":false,"desc":"Pure password validator (>=12 chars, upper/lower/digit/special)."},
+    {"id":"svc:push","label":"push","layer":"service","domain":"integrations","loc":"server/src/lib/push.ts:7","dead":false,"desc":"web-push VAPID init + sendPushToAllSubscriptions; prunes expired (410/404) subscriptions."},
+    {"id":"svc:settings","label":"settings","layer":"service","domain":"settings","loc":"server/src/lib/settings.ts:8","dead":false,"desc":"app_settings get/set + shouldEmailCustomer gate (two_way_email_enabled)."},
+    {"id":"svc:slaHelper","label":"slaHelper","layer":"service","domain":"sla","loc":"server/src/lib/slaHelper.ts:12","dead":false,"desc":"SLA policy lookup, deadline application, pause/resume on status change, recalc on priority change."},
+    {"id":"svc:ticketAccess","label":"ticketAccess","layer":"service","domain":"tickets","loc":"server/src/lib/ticketAccess.ts:21","dead":false,"desc":"canAccessTicket: admin OR requester/assignee/creator — single source of truth for ticket sub-resource access."},
+    {"id":"svc:ticketImportExport","label":"ticketImportExport","layer":"service","domain":"tickets","loc":"server/src/lib/ticketImportExport.ts:46","dead":false,"desc":"Pure CSV/XLSX import & export helpers; no DB handle."},
+    {"id":"svc:ticketNotifications","label":"ticketNotifications","layer":"service","domain":"tickets","loc":"server/src/lib/ticketNotifications.ts:19","dead":false,"desc":"Bridges public-comment/customer-reply events to webhook + push + email notifications."},
+    {"id":"svc:ticketQuery","label":"ticketQuery","layer":"service","domain":"tickets","loc":"server/src/lib/ticketQuery.ts:48","dead":false,"desc":"Pure SQL fragment builders (WHERE/ORDER BY/pagination, FTS5+LIKE) for tickets list; no DB handle."},
+    {"id":"svc:webhookDispatcher","label":"webhookDispatcher","layer":"service","domain":"integrations","loc":"server/src/lib/webhookDispatcher.ts:138","dead":false,"desc":"HMAC-signed webhook delivery + persisted retry rows with backoff; SSRF re-validation at send."},
+    {"id":"svc:webhookValidator","label":"webhookValidator","layer":"service","domain":"integrations","loc":"server/src/lib/webhookValidator.ts:53","dead":false,"desc":"isSafeWebhookUrl SSRF guard: https-only, blocks private/loopback/link-local IPs incl. DNS-resolved."},
+    {"id":"svc:auth","label":"auth (middleware)","layer":"service","domain":"auth","loc":"server/src/middleware/auth.ts:110","dead":false,"desc":"authenticate (API-key bearer then JWT), requireAdmin, scope enforcement. Ubiquitous gate — edges omitted by slices."},
+    {"id":"svc:rateLimit","label":"rateLimit (middleware)","layer":"service","domain":"platform","loc":"server/src/middleware/rateLimit.ts:25","dead":false,"desc":"In-memory per-IP rate limiter factory + login/write/public/AI limiters."},
+    {"id":"svc:automation","label":"automation (config)","layer":"service","domain":"automation","loc":"server/src/config/automation.ts:7","dead":false,"desc":"Static config: AUTO_CLOSE_DAYS, TAG_RULES, PRIORITY_RULES."},
+    {"id":"svc:cookies","label":"cookies (config)","layer":"service","domain":"auth","loc":"server/src/config/cookies.ts:21","dead":false,"desc":"cookieSecure() policy: COOKIE_SECURE override else NODE_ENV=production."},
+    {"id":"svc:passport","label":"passport (config)","layer":"service","domain":"auth","loc":"server/src/config/passport.ts:11","dead":false,"desc":"Passport Local + JWT strategies; JWT_SECRET validation with process.exit(1) on missing/short."},
+    {"id":"sched:reminderScheduler","label":"reminderScheduler","layer":"scheduler","domain":"automation","loc":"server/src/lib/reminderScheduler.ts:24","dead":false,"desc":"Every minute: send due ticket reminders via email + push, mark sent."},
+    {"id":"sched:autoCloseScheduler","label":"autoCloseScheduler","layer":"scheduler","domain":"automation","loc":"server/src/lib/autoCloseScheduler.ts:63","dead":false,"desc":"Daily 02:30: close tickets resolved > AUTO_CLOSE_DAYS, record history."},
+    {"id":"sched:recurringScheduler","label":"recurringScheduler","layer":"scheduler","domain":"automation","loc":"server/src/lib/recurringScheduler.ts:193","dead":false,"desc":"Every minute: create tickets from due recurring templates, advance next_run."},
+    {"id":"sched:webhookRetryScheduler","label":"webhookRetryScheduler","layer":"scheduler","domain":"integrations","loc":"server/src/lib/webhookRetryScheduler.ts:8","dead":false,"desc":"Every minute (reentrancy-guarded): re-attempt due webhook deliveries via webhookDispatcher."},
+    {"id":"sched:slaScheduler","label":"slaScheduler","layer":"scheduler","domain":"sla","loc":"server/src/lib/slaScheduler.ts:98","dead":false,"desc":"Every 5 min: flag passed SLA deadlines and notify via webhook/email/push."},
+    {"id":"sched:pushScheduler","label":"pushScheduler","layer":"scheduler","domain":"automation","loc":"server/src/lib/pushScheduler.ts:54","dead":false,"desc":"Daily 09:00: push aging-ticket notifications, 24h dedup. Started only if VAPID set."},
+    {"id":"sched:backupScheduler","label":"backupScheduler","layer":"scheduler","domain":"backup","loc":"server/src/lib/backupScheduler.ts:218","dead":false,"desc":"Daily at configured time: WAL-safe snapshot + integrity check + zip + retention; off-site upload."},
+    {"id":"sched:refreshTokenCleanup","label":"refreshTokenCleanup (inline cron)","layer":"scheduler","domain":"auth","loc":"server/src/db/cleanup-refresh-tokens.ts:11","dead":false,"desc":"Inline cron (index.ts:98, daily 03:00): delete expired/old-revoked refresh tokens."},
+    {"id":"sched:aiUsageCleanup","label":"aiUsageCleanup (inline cron)","layer":"scheduler","domain":"ai","loc":"server/src/lib/aiHelper.ts:694","dead":false,"desc":"Inline cron (index.ts:108, daily 03:15): delete ai_usage_log rows older than 90 days."},
+    {"id":"table:users","label":"users","layer":"db-table","domain":"auth","loc":"server/src/db/schema.sql:2","dead":false,"desc":"Login users: email, password_hash, role (admin/user), last_login."},
+    {"id":"table:companies","label":"companies","layer":"db-table","domain":"customers","loc":"server/src/db/schema.sql:13","dead":false,"desc":"Customer companies: name, org_number, contact info, sla_disabled flag (mig 045)."},
+    {"id":"table:contacts","label":"contacts","layer":"db-table","domain":"customers","loc":"server/src/db/schema.sql:27","dead":false,"desc":"Ticket requesters without login; company_id (mig 028) + department (mig 036)."},
+    {"id":"table:categories","label":"categories","layer":"db-table","domain":"tickets","loc":"server/src/db/schema.sql:40","dead":false,"desc":"Ticket categories with name/label and sort position."},
+    {"id":"table:tickets","label":"tickets","layer":"db-table","domain":"tickets","loc":"server/src/db/schema.sql:49","dead":false,"desc":"Core ticket record: status/priority, category/requester/company/assignee, SLA + AI columns, email_message_id, created_by."},
+    {"id":"table:ticket_attachments","label":"ticket_attachments","layer":"db-table","domain":"tickets","loc":"server/src/db/schema.sql:85","dead":false,"desc":"Files attached to a ticket (name, path, size, type)."},
+    {"id":"table:ticket_checklists","label":"ticket_checklists","layer":"db-table","domain":"tickets","loc":"server/src/db/schema.sql:96","dead":false,"desc":"Per-ticket checklist items; nested via parent_id + due_date (mig 012)."},
+    {"id":"table:ticket_comments","label":"ticket_comments","layer":"db-table","domain":"tickets","loc":"server/src/db/schema.sql:107","dead":false,"desc":"Comments/internal notes on a ticket; soft-deleted via deleted_at."},
+    {"id":"table:ticket_shares","label":"ticket_shares","layer":"db-table","domain":"tickets","loc":"server/src/db/schema.sql:119","dead":false,"desc":"Public share tokens granting read access to a single ticket."},
+    {"id":"table:ticket_links","label":"ticket_links","layer":"db-table","domain":"tickets","loc":"server/src/db/schema.sql:128","dead":false,"desc":"Bidirectional related-ticket relationships (source/target ticket id)."},
+    {"id":"table:tags","label":"tags","layer":"db-table","domain":"tickets","loc":"server/src/db/schema.sql:138","dead":false,"desc":"Shared label vocabulary (name + color) used by tickets and KB articles."},
+    {"id":"table:ticket_tags","label":"ticket_tags","layer":"db-table","domain":"tickets","loc":"server/src/db/schema.sql:146","dead":false,"desc":"Many-to-many join between tickets and tags."},
+    {"id":"table:ticket_reminders","label":"ticket_reminders","layer":"db-table","domain":"tickets","loc":"server/src/db/schema.sql:155","dead":false,"desc":"Scheduled per-user reminder notifications for a ticket; sent flag + sent_at."},
+    {"id":"table:kb_categories","label":"kb_categories","layer":"db-table","domain":"kb","loc":"server/src/db/schema.sql:167","dead":false,"desc":"Knowledge-base categories (name, color, position)."},
+    {"id":"table:kb_articles","label":"kb_articles","layer":"db-table","domain":"kb","loc":"server/src/db/schema.sql:176","dead":false,"desc":"KB articles; article_type (mig 014), status/view_count (mig 015), last_reviewed_at (mig 018)."},
+    {"id":"table:kb_article_shares","label":"kb_article_shares","layer":"db-table","domain":"kb","loc":"server/src/db/schema.sql:186","dead":false,"desc":"Public share tokens for individual KB articles."},
+    {"id":"table:refresh_tokens","label":"refresh_tokens","layer":"db-table","domain":"auth","loc":"server/src/db/schema.sql:197","dead":false,"desc":"Rolling JWT refresh tokens: hash, expiry, revoked, last_used_at. Mirrored by mig 026/059."},
+    {"id":"table:ticket_kb_links","label":"ticket_kb_links","layer":"db-table","domain":"kb","loc":"server/src/db/schema.sql:211","dead":false,"desc":"Many-to-many link between tickets and KB articles."},
+    {"id":"table:backup_config","label":"backup_config","layer":"db-table","domain":"backup","loc":"server/src/db/schema.sql:288","dead":false,"desc":"Single-row (id=1) auto-backup schedule config. Seeded by mig 061."},
+    {"id":"table:app_settings","label":"app_settings","layer":"db-table","domain":"settings","loc":"server/src/db/schema.sql:300","dead":false,"desc":"Generic key-value runtime settings; first key two_way_email_enabled. Seeded by mig 064."},
+    {"id":"table:ticket_templates","label":"ticket_templates","layer":"db-table","domain":"tickets","loc":"server/src/db/migrations.ts:102","dead":false,"desc":"Reusable ticket templates; template_type standard/dynamic (mig 046)."},
+    {"id":"table:template_checklists","label":"template_checklists","layer":"db-table","domain":"tickets","loc":"server/src/db/migrations.ts:129","dead":false,"desc":"Default checklist items attached to a ticket template. NO writer/reader modeled in any slice — verify template-create seeds it."},
+    {"id":"table:template_fields","label":"template_fields","layer":"db-table","domain":"tickets","loc":"server/src/db/migrations.ts:143","dead":false,"desc":"Dynamic custom fields defined on a ticket template (type, options, required)."},
+    {"id":"table:ticket_field_values","label":"ticket_field_values","layer":"db-table","domain":"tickets","loc":"server/src/db/migrations.ts:183","dead":false,"desc":"Per-ticket values for dynamic template fields (unique per ticket+field_name)."},
+    {"id":"table:ticket_history","label":"ticket_history","layer":"db-table","domain":"tickets","loc":"server/src/db/migrations.ts:199","dead":false,"desc":"Field-level audit trail of ticket changes (old/new value, user, changed_at)."},
+    {"id":"table:checklist_templates","label":"checklist_templates","layer":"db-table","domain":"tickets","loc":"server/src/db/migrations.ts:243","dead":false,"desc":"Named reusable checklist templates (standalone from ticket templates)."},
+    {"id":"table:checklist_template_items","label":"checklist_template_items","layer":"db-table","domain":"tickets","loc":"server/src/db/migrations.ts:247","dead":false,"desc":"Items belonging to a checklist_template (label, parent_label, position)."},
+    {"id":"table:kb_articles_fts","label":"kb_articles_fts","layer":"db-table","domain":"kb","loc":"server/src/db/migrations.ts:263","dead":false,"desc":"FTS5 contentless index over KB title/content_plain; synced MANUALLY in routes/kb.ts (no triggers)."},
+    {"id":"table:kb_article_tags","label":"kb_article_tags","layer":"db-table","domain":"kb","loc":"server/src/db/migrations.ts:293","dead":false,"desc":"Many-to-many join between KB articles and shared tags; tag_id added/migrated in mig 017."},
+    {"id":"table:recurring_templates","label":"recurring_templates","layer":"db-table","domain":"automation","loc":"server/src/db/migrations.ts:347","dead":false,"desc":"Recurring-ticket templates with interval, next_run, is_active."},
+    {"id":"table:recurring_ticket_history","label":"recurring_ticket_history","layer":"db-table","domain":"automation","loc":"server/src/db/migrations.ts:359","dead":false,"desc":"Log of tickets generated from a recurring_template. (route:recurring's read edge mis-targeted 'recurring_history'.)"},
+    {"id":"table:kb_article_links","label":"kb_article_links","layer":"db-table","domain":"kb","loc":"server/src/db/migrations.ts:373","dead":false,"desc":"Directed links between KB articles (source/target, unique pair)."},
+    {"id":"table:time_entries","label":"time_entries","layer":"db-table","domain":"tickets","loc":"server/src/db/migrations.ts:389","dead":false,"desc":"Logged work time per ticket; user_id (mig 049), billable/work_date/invoice_id (mig 063)."},
+    {"id":"table:push_subscriptions","label":"push_subscriptions","layer":"db-table","domain":"integrations","loc":"server/src/db/migrations.ts:405","dead":false,"desc":"Web-push (PWA) subscription endpoints + keys; user_id added in mig 055."},
+    {"id":"table:tickets_fts","label":"tickets_fts","layer":"db-table","domain":"tickets","loc":"server/src/db/migrations.ts:426","dead":false,"desc":"FTS5 contentless index over ticket text; auto-synced via AFTER INSERT/UPDATE/DELETE triggers on tickets."},
+    {"id":"table:sla_policies","label":"sla_policies","layer":"db-table","domain":"sla","loc":"server/src/db/migrations.ts:575","dead":false,"desc":"SLA response/resolution targets per company+priority (NULL company = global). Defaults seeded mig 042."},
+    {"id":"table:billing_rates","label":"billing_rates","layer":"db-table","domain":"billing","loc":"server/src/db/migrations.ts:609","dead":false,"desc":"Hourly billing rate + currency per company (unique per company)."},
+    {"id":"table:invoices","label":"invoices","layer":"db-table","domain":"billing","loc":"server/src/db/migrations.ts:626","dead":false,"desc":"Per-company invoices; invoice_number + VAT cols added mig 063."},
+    {"id":"table:invoice_lines","label":"invoice_lines","layer":"db-table","domain":"billing","loc":"server/src/db/migrations.ts:643","dead":false,"desc":"Invoice line items linked to ticket/time_entry (hours, rate, amount)."},
+    {"id":"table:api_keys","label":"api_keys","layer":"db-table","domain":"integrations","loc":"server/src/db/migrations.ts:664","dead":false,"desc":"API keys: prefix + SHA-256 hash, owning user, permissions JSON, expiry."},
+    {"id":"table:webhooks","label":"webhooks","layer":"db-table","domain":"integrations","loc":"server/src/db/migrations.ts:684","dead":false,"desc":"Outbound webhook endpoints: url, subscribed events JSON, HMAC secret, active flag."},
+    {"id":"table:webhook_deliveries","label":"webhook_deliveries","layer":"db-table","domain":"integrations","loc":"server/src/db/migrations.ts:694","dead":false,"desc":"Webhook delivery attempts log; retry fields next_retry_at/last_error added mig 043."},
+    {"id":"table:ai_usage_log","label":"ai_usage_log","layer":"db-table","domain":"ai","loc":"server/src/db/migrations.ts:742","dead":false,"desc":"AI token/cost usage per feature; CHECK constraint dropped via table rebuild in mig 039."},
+    {"id":"table:ai_deflections","label":"ai_deflections","layer":"db-table","domain":"ai","loc":"server/src/db/migrations.ts:767","dead":false,"desc":"Public-portal AI deflection events: problem text, suggestion, outcome. Written only by route:public."},
+    {"id":"table:password_reset_tokens","label":"password_reset_tokens","layer":"db-table","domain":"auth","loc":"server/src/db/migrations.ts:822","dead":false,"desc":"One-time password-reset tokens (hash, expiry, used_at) per user."},
+    {"id":"table:audit_log","label":"audit_log","layer":"db-table","domain":"platform","loc":"server/src/db/migrations.ts:1031","dead":false,"desc":"Generic security/audit log: action, entity_type/id, details, ip_address, user."},
+    {"id":"table:schema_migrations","label":"schema_migrations","layer":"db-table","domain":"platform","loc":"server/src/db/connection.ts:56","dead":false,"desc":"Migration bookkeeping; created+written by the migration runner in connection.ts (infra, not modeled as an edge). Skrivs av migration-runnern vid uppstart (omodellerad).","keepAlive":true},
+    {"id":"comp:Layout","label":"Layout · app-skal","layer":"frontend-shell","domain":"platform","loc":"src/components/Layout.tsx:1","dead":false,"desc":"Globalt skal runt alla skyddade sidor: sidomeny, header-sök, brödsmulor, ⌘K-palett, snabb-FAB, onboarding."},
+    {"id":"comp:CommandPalette","label":"CommandPalette · ⌘K","layer":"frontend-shell","domain":"platform","loc":"src/components/CommandPalette.tsx:1","dead":false,"desc":"Global ⌘K/Ctrl-K-sökning över ärenden, KB och kontakter + temaväxling."},
+    {"id":"comp:QuickCaptureFAB","label":"QuickCaptureFAB","layer":"frontend-shell","domain":"tickets","loc":"src/components/QuickCaptureFAB.tsx:1","dead":false,"desc":"Flytande snabbknapp som skapar ett ärende direkt via api.createTicket()."}
+  ],
+  edges: [
+    {"source":"page:Index","target":"page:Dashboard","kind":"calls"},
+    {"source":"page:Dashboard","target":"hook:useActiveQueue","kind":"uses"},
+    {"source":"page:Dashboard","target":"hook:useUsers","kind":"uses"},
+    {"source":"page:Dashboard","target":"hook:useDashboardOverview","kind":"uses"},
+    {"source":"page:Dashboard","target":"hook:useUpcomingReminders","kind":"uses"},
+    {"source":"page:Dashboard","target":"hook:useActivityFeed","kind":"uses"},
+    {"source":"page:Dashboard","target":"hook:useStatusCounts","kind":"uses"},
+    {"source":"page:Dashboard","target":"hook:useDeflectionStats","kind":"uses"},
+    {"source":"page:Dashboard","target":"page:TicketList","kind":"calls"},
+    {"source":"page:Dashboard","target":"page:Reports","kind":"calls"},
+    {"source":"page:Login","target":"page:ForgotPassword","kind":"calls"},
+    {"source":"page:Login","target":"page:PublicTicketForm","kind":"calls"},
+    {"source":"page:ForgotPassword","target":"route:auth","kind":"calls"},
+    {"source":"page:ResetPassword","target":"route:auth","kind":"calls"},
+    {"source":"page:TicketList","target":"hook:useIsMobile","kind":"uses"},
+    {"source":"page:TicketList","target":"hook:useTickets","kind":"uses"},
+    {"source":"page:TicketList","target":"hook:useUsers","kind":"uses"},
+    {"source":"page:TicketList","target":"hook:useCompanies","kind":"uses"},
+    {"source":"page:TicketList","target":"hook:useFilterViews","kind":"uses"},
+    {"source":"page:TicketList","target":"route:tickets","kind":"calls"},
+    {"source":"page:TicketList","target":"page:TicketForm","kind":"calls"},
+    {"source":"page:TicketList","target":"page:TicketDetail","kind":"calls"},
+    {"source":"page:PublicTicketForm","target":"route:public","kind":"calls"},
+    {"source":"page:PublicTicketForm","target":"page:TicketForm","kind":"calls"},
+    {"source":"page:PublicTicketForm","target":"page:Login","kind":"calls"},
+    {"source":"page:SharedTicket","target":"route:shares","kind":"calls"},
+    {"source":"page:SharedKBArticle","target":"route:kb","kind":"calls"},
+    {"source":"page:TicketForm","target":"hook:useTickets","kind":"uses"},
+    {"source":"page:TicketForm","target":"hook:useUsers","kind":"uses"},
+    {"source":"page:TicketForm","target":"hook:useSystemUsers","kind":"uses"},
+    {"source":"page:TicketForm","target":"hook:useCompanies","kind":"uses"},
+    {"source":"page:TicketForm","target":"hook:useCategories","kind":"uses"},
+    {"source":"page:TicketForm","target":"hook:useTemplates","kind":"uses"},
+    {"source":"page:TicketForm","target":"hook:useTicketAttachments","kind":"uses"},
+    {"source":"page:TicketForm","target":"hook:useTicketChecklists","kind":"uses"},
+    {"source":"page:TicketForm","target":"hook:useChecklistTemplates","kind":"uses"},
+    {"source":"page:TicketForm","target":"route:tickets","kind":"calls"},
+    {"source":"page:TicketForm","target":"route:templates","kind":"calls"},
+    {"source":"page:TicketForm","target":"page:TicketDetail","kind":"calls"},
+    {"source":"page:TicketDetail","target":"hook:useTickets","kind":"uses"},
+    {"source":"page:TicketDetail","target":"hook:useCategories","kind":"uses"},
+    {"source":"page:TicketDetail","target":"hook:useUsers","kind":"uses"},
+    {"source":"page:TicketDetail","target":"hook:useTicketAttachments","kind":"uses"},
+    {"source":"page:TicketDetail","target":"hook:useTicketChecklists","kind":"uses"},
+    {"source":"page:TicketDetail","target":"hook:useChecklistTemplates","kind":"uses"},
+    {"source":"page:TicketDetail","target":"hook:useTicketSharing","kind":"uses"},
+    {"source":"page:TicketDetail","target":"hook:useTicketComments","kind":"uses"},
+    {"source":"page:TicketDetail","target":"hook:useSettings","kind":"uses"},
+    {"source":"page:TicketDetail","target":"hook:useTicketLinks","kind":"uses"},
+    {"source":"page:TicketDetail","target":"hook:useTicketHistory","kind":"uses"},
+    {"source":"page:TicketDetail","target":"hook:useTicketReminders","kind":"uses"},
+    {"source":"page:TicketDetail","target":"hook:useTimeEntries","kind":"uses"},
+    {"source":"page:TicketDetail","target":"route:tickets","kind":"calls"},
+    {"source":"page:TicketDetail","target":"route:attachments","kind":"calls"},
+    {"source":"page:TicketDetail","target":"page:TicketForm","kind":"calls"},
+    {"source":"page:Recurring","target":"hook:useRecurringTemplates","kind":"uses"},
+    {"source":"page:Recurring","target":"hook:useCategories","kind":"uses"},
+    {"source":"page:Recurring","target":"hook:useTags","kind":"uses"},
+    {"source":"page:Recurring","target":"page:TicketDetail","kind":"calls"},
+    {"source":"page:CompanyList","target":"hook:useCompanies","kind":"uses"},
+    {"source":"page:CompanyList","target":"page:CompanyDetail","kind":"calls"},
+    {"source":"page:CompanyDetail","target":"hook:useCompanies","kind":"uses"},
+    {"source":"page:CompanyDetail","target":"hook:useBilling","kind":"uses"},
+    {"source":"page:Invoices","target":"hook:useCompanies","kind":"uses"},
+    {"source":"page:Invoices","target":"hook:useBilling","kind":"uses"},
+    {"source":"page:Invoices","target":"route:billing","kind":"calls"},
+    {"source":"page:Archive","target":"hook:useTickets","kind":"uses"},
+    {"source":"page:Archive","target":"hook:useUsers","kind":"uses"},
+    {"source":"page:Archive","target":"hook:useFilterViews","kind":"uses"},
+    {"source":"page:Archive","target":"route:tickets","kind":"calls"},
+    {"source":"page:Archive","target":"page:TicketDetail","kind":"calls"},
+    {"source":"page:UserList","target":"hook:useUsers","kind":"uses"},
+    {"source":"page:UserList","target":"hook:useCompanies","kind":"uses"},
+    {"source":"page:UserList","target":"route:tickets","kind":"calls"},
+    {"source":"page:UserList","target":"route:contacts","kind":"calls"},
+    {"source":"page:Reports","target":"hook:useMode","kind":"uses"},
+    {"source":"page:Reports","target":"hook:useReportsSummary","kind":"uses"},
+    {"source":"page:Reports","target":"hook:useUsers","kind":"uses"},
+    {"source":"page:Reports","target":"hook:useIsMobile","kind":"uses"},
+    {"source":"page:Reports","target":"hook:useTagAnalytics","kind":"uses"},
+    {"source":"page:Reports","target":"route:reports","kind":"calls"},
+    {"source":"page:Reports","target":"route:tickets","kind":"calls"},
+    {"source":"page:Settings","target":"page:GeneralTab","kind":"calls"},
+    {"source":"page:Settings","target":"page:TicketsTab","kind":"calls"},
+    {"source":"page:Settings","target":"page:IntegrationsTab","kind":"calls"},
+    {"source":"page:Settings","target":"page:AdminTab","kind":"calls"},
+    {"source":"page:KnowledgeBase","target":"hook:useKbCategories","kind":"uses"},
+    {"source":"page:KnowledgeBase","target":"hook:useKbArticles","kind":"uses"},
+    {"source":"page:KnowledgeBase","target":"hook:useDebounce","kind":"uses"},
+    {"source":"page:KnowledgeBase","target":"route:kb","kind":"calls"},
+    {"source":"page:KnowledgeBase","target":"page:KBArticleForm","kind":"calls"},
+    {"source":"page:KnowledgeBase","target":"page:KBArticleDetail","kind":"calls"},
+    {"source":"page:KBArticleDetail","target":"hook:useKbArticle","kind":"uses"},
+    {"source":"page:KBArticleDetail","target":"route:kb","kind":"calls"},
+    {"source":"page:KBArticleDetail","target":"page:KBArticleForm","kind":"calls"},
+    {"source":"page:KBArticleDetail","target":"page:TicketDetail","kind":"calls"},
+    {"source":"page:KBArticleForm","target":"hook:useKbCategories","kind":"uses"},
+    {"source":"page:KBArticleForm","target":"hook:useKbArticles","kind":"uses"},
+    {"source":"page:KBArticleForm","target":"hook:useTags","kind":"uses"},
+    {"source":"page:KBArticleForm","target":"route:kb","kind":"calls"},
+    {"source":"page:KBArticleForm","target":"page:KBArticleDetail","kind":"calls"},
+    {"source":"page:GeneralTab","target":"route:push","kind":"calls"},
+    {"source":"page:AdminTab","target":"hook:useSystemUsers","kind":"uses"},
+    {"source":"page:AdminTab","target":"hook:useBackupConfig","kind":"uses"},
+    {"source":"page:AdminTab","target":"route:backup","kind":"calls"},
+    {"source":"page:IntegrationsTab","target":"hook:useApiKeys","kind":"uses"},
+    {"source":"page:IntegrationsTab","target":"hook:useWebhooks","kind":"uses"},
+    {"source":"page:IntegrationsTab","target":"route:email-inbound","kind":"calls"},
+    {"source":"page:TicketsTab","target":"hook:useCategories","kind":"uses"},
+    {"source":"page:TicketsTab","target":"hook:useTags","kind":"uses"},
+    {"source":"page:TicketsTab","target":"hook:useTemplates","kind":"uses"},
+    {"source":"page:TicketsTab","target":"hook:useChecklistTemplates","kind":"uses"},
+    {"source":"page:TicketsTab","target":"hook:useSLAPolicies","kind":"uses"},
+    {"source":"page:TicketsTab","target":"hook:useCompanies","kind":"uses"},
+    {"source":"api:client","target":"api:csrf","kind":"uses"},
+    {"source":"api:csrf","target":"api:client","kind":"uses"},
+    {"source":"ctx:Auth","target":"route:auth","kind":"calls"},
+    {"source":"ctx:Auth","target":"api:client","kind":"uses"},
+    {"source":"page:Dashboard","target":"ctx:Auth","kind":"uses"},
+    {"source":"page:Login","target":"ctx:Auth","kind":"uses"},
+    {"source":"page:TicketList","target":"ctx:Auth","kind":"uses"},
+    {"source":"page:PublicTicketForm","target":"ctx:Auth","kind":"uses"},
+    {"source":"page:Settings","target":"ctx:Auth","kind":"uses"},
+    {"source":"page:AdminTab","target":"ctx:Auth","kind":"uses"},
+    {"source":"page:Reports","target":"ctx:Auth","kind":"uses"},
+    {"source":"page:Dashboard","target":"hook:useStatusFlow","kind":"uses"},
+    {"source":"hook:useActiveQueue","target":"api:client","kind":"uses"},
+    {"source":"hook:useActiveQueue","target":"route:tickets","kind":"calls"},
+    {"source":"hook:useActivityFeed","target":"api:client","kind":"uses"},
+    {"source":"hook:useActivityFeed","target":"route:tickets","kind":"calls"},
+    {"source":"hook:useApiKeys","target":"api:client","kind":"uses"},
+    {"source":"hook:useApiKeys","target":"route:api-keys","kind":"calls"},
+    {"source":"hook:useBackupConfig","target":"api:client","kind":"uses"},
+    {"source":"hook:useBackupConfig","target":"route:backup","kind":"calls"},
+    {"source":"hook:useBilling","target":"api:client","kind":"uses"},
+    {"source":"hook:useBilling","target":"route:billing","kind":"calls"},
+    {"source":"hook:useCategories","target":"api:client","kind":"uses"},
+    {"source":"hook:useCategories","target":"route:categories","kind":"calls"},
+    {"source":"hook:useChecklistTemplates","target":"api:client","kind":"uses"},
+    {"source":"hook:useChecklistTemplates","target":"route:checklist-templates","kind":"calls"},
+    {"source":"hook:useCommandPaletteSearch","target":"api:client","kind":"uses"},
+    {"source":"hook:useCommandPaletteSearch","target":"route:tickets","kind":"calls"},
+    {"source":"hook:useCommandPaletteSearch","target":"route:kb","kind":"calls"},
+    {"source":"hook:useCommandPaletteSearch","target":"route:contacts","kind":"calls"},
+    {"source":"hook:useCompanies","target":"api:client","kind":"uses"},
+    {"source":"hook:useCompanies","target":"route:companies","kind":"calls"},
+    {"source":"hook:useDashboardOverview","target":"api:client","kind":"uses"},
+    {"source":"hook:useDashboardOverview","target":"route:tickets","kind":"calls"},
+    {"source":"hook:useDeflectionStats","target":"api:client","kind":"uses"},
+    {"source":"hook:useDeflectionStats","target":"route:public","kind":"calls"},
+    {"source":"hook:useKbArticle","target":"api:client","kind":"uses"},
+    {"source":"hook:useKbArticle","target":"route:kb","kind":"calls"},
+    {"source":"hook:useKbArticles","target":"api:client","kind":"uses"},
+    {"source":"hook:useKbArticles","target":"route:kb","kind":"calls"},
+    {"source":"hook:useKbCategories","target":"api:client","kind":"uses"},
+    {"source":"hook:useKbCategories","target":"route:kb","kind":"calls"},
+    {"source":"hook:useRecurringTemplates","target":"api:client","kind":"uses"},
+    {"source":"hook:useRecurringTemplates","target":"route:recurring","kind":"calls"},
+    {"source":"hook:useReportsSummary","target":"api:client","kind":"uses"},
+    {"source":"hook:useReportsSummary","target":"route:reports","kind":"calls"},
+    {"source":"hook:useSLAPolicies","target":"api:client","kind":"uses"},
+    {"source":"hook:useSLAPolicies","target":"route:sla","kind":"calls"},
+    {"source":"hook:useSettings","target":"api:client","kind":"uses"},
+    {"source":"hook:useSettings","target":"route:settings","kind":"calls"},
+    {"source":"hook:useStatusCounts","target":"api:client","kind":"uses"},
+    {"source":"hook:useStatusCounts","target":"route:tickets","kind":"calls"},
+    {"source":"hook:useStatusFlow","target":"api:client","kind":"uses"},
+    {"source":"hook:useStatusFlow","target":"route:reports","kind":"calls"},
+    {"source":"hook:useSystemUsers","target":"api:client","kind":"uses"},
+    {"source":"hook:useSystemUsers","target":"route:users","kind":"calls"},
+    {"source":"hook:useTagAnalytics","target":"api:client","kind":"uses"},
+    {"source":"hook:useTagAnalytics","target":"route:reports","kind":"calls"},
+    {"source":"hook:useTags","target":"api:client","kind":"uses"},
+    {"source":"hook:useTags","target":"route:tags","kind":"calls"},
+    {"source":"hook:useTemplates","target":"api:client","kind":"uses"},
+    {"source":"hook:useTemplates","target":"route:templates","kind":"calls"},
+    {"source":"hook:useTicketAttachments","target":"api:client","kind":"uses"},
+    {"source":"hook:useTicketAttachments","target":"route:attachments","kind":"calls"},
+    {"source":"hook:useTicketChecklists","target":"api:client","kind":"uses"},
+    {"source":"hook:useTicketChecklists","target":"route:checklists","kind":"calls"},
+    {"source":"hook:useTicketComments","target":"api:client","kind":"uses"},
+    {"source":"hook:useTicketComments","target":"route:comments","kind":"calls"},
+    {"source":"hook:useTicketHistory","target":"api:client","kind":"uses"},
+    {"source":"hook:useTicketHistory","target":"route:tickets","kind":"calls"},
+    {"source":"hook:useTicketLinks","target":"api:client","kind":"uses"},
+    {"source":"hook:useTicketLinks","target":"route:links","kind":"calls"},
+    {"source":"hook:useTicketReminders","target":"api:client","kind":"uses"},
+    {"source":"hook:useTicketReminders","target":"route:tickets","kind":"calls"},
+    {"source":"hook:useTicketSharing","target":"api:client","kind":"uses"},
+    {"source":"hook:useTicketSharing","target":"route:shares","kind":"calls"},
+    {"source":"hook:useTickets","target":"api:client","kind":"uses"},
+    {"source":"hook:useTickets","target":"route:tickets","kind":"calls"},
+    {"source":"hook:useTimeEntries","target":"api:client","kind":"uses"},
+    {"source":"hook:useTimeEntries","target":"route:time-entries","kind":"calls"},
+    {"source":"hook:useUpcomingReminders","target":"api:client","kind":"uses"},
+    {"source":"hook:useUpcomingReminders","target":"route:tickets","kind":"calls"},
+    {"source":"hook:useUsers","target":"api:client","kind":"uses"},
+    {"source":"hook:useUsers","target":"route:contacts","kind":"calls"},
+    {"source":"hook:useWebhooks","target":"api:client","kind":"uses"},
+    {"source":"hook:useWebhooks","target":"route:webhooks","kind":"calls"},
+    {"source":"route:auth","target":"svc:passport","kind":"calls"},
+    {"source":"route:auth","target":"svc:email","kind":"calls"},
+    {"source":"route:auth","target":"svc:passwordPolicy","kind":"calls"},
+    {"source":"route:auth","target":"svc:auditLog","kind":"calls"},
+    {"source":"route:auth","target":"svc:cookies","kind":"calls"},
+    {"source":"route:auth","target":"svc:rateLimit","kind":"calls"},
+    {"source":"route:auth","target":"table:refresh_tokens","kind":"writes"},
+    {"source":"route:auth","target":"table:users","kind":"writes"},
+    {"source":"route:auth","target":"table:password_reset_tokens","kind":"writes"},
+    {"source":"route:auth","target":"table:audit_log","kind":"reads"},
+    {"source":"route:tickets","target":"svc:email","kind":"calls"},
+    {"source":"route:tickets","target":"svc:ticketAccess","kind":"calls"},
+    {"source":"route:tickets","target":"svc:automationHelper","kind":"calls"},
+    {"source":"route:tickets","target":"svc:slaHelper","kind":"calls"},
+    {"source":"route:tickets","target":"svc:webhookDispatcher","kind":"calls"},
+    {"source":"route:tickets","target":"svc:aiHelper","kind":"calls"},
+    {"source":"route:tickets","target":"svc:htmlUtils","kind":"calls"},
+    {"source":"route:tickets","target":"svc:htmlSanitizer","kind":"calls"},
+    {"source":"route:tickets","target":"svc:ticketQuery","kind":"calls"},
+    {"source":"route:tickets","target":"svc:ticketImportExport","kind":"calls"},
+    {"source":"route:tickets","target":"svc:rateLimit","kind":"calls"},
+    {"source":"route:tickets","target":"table:tickets","kind":"writes"},
+    {"source":"route:tickets","target":"table:tickets_fts","kind":"writes"},
+    {"source":"route:tickets","target":"table:ticket_history","kind":"writes"},
+    {"source":"route:tickets","target":"table:ticket_field_values","kind":"writes"},
+    {"source":"route:tickets","target":"table:ticket_tags","kind":"writes"},
+    {"source":"route:tickets","target":"table:ticket_reminders","kind":"writes"},
+    {"source":"route:tickets","target":"table:ticket_attachments","kind":"reads"},
+    {"source":"route:tickets","target":"table:ticket_comments","kind":"reads"},
+    {"source":"route:tickets","target":"table:contacts","kind":"reads"},
+    {"source":"route:tickets","target":"table:categories","kind":"reads"},
+    {"source":"route:tickets","target":"table:users","kind":"reads"},
+    {"source":"route:categories","target":"table:categories","kind":"writes"},
+    {"source":"route:contacts","target":"table:contacts","kind":"writes"},
+    {"source":"route:contacts","target":"table:companies","kind":"writes"},
+    {"source":"route:attachments","target":"svc:ticketAccess","kind":"calls"},
+    {"source":"route:attachments","target":"table:ticket_attachments","kind":"writes"},
+    {"source":"route:attachments","target":"table:tickets","kind":"reads"},
+    {"source":"route:checklists","target":"svc:ticketAccess","kind":"calls"},
+    {"source":"route:checklists","target":"table:ticket_checklists","kind":"writes"},
+    {"source":"route:checklists","target":"table:tickets","kind":"reads"},
+    {"source":"route:checklist-templates","target":"svc:ticketAccess","kind":"calls"},
+    {"source":"route:checklist-templates","target":"table:checklist_templates","kind":"writes"},
+    {"source":"route:checklist-templates","target":"table:checklist_template_items","kind":"writes"},
+    {"source":"route:checklist-templates","target":"table:ticket_checklists","kind":"writes"},
+    {"source":"route:checklist-templates","target":"table:tickets","kind":"reads"},
+    {"source":"route:comments","target":"svc:htmlSanitizer","kind":"calls"},
+    {"source":"route:comments","target":"svc:ticketNotifications","kind":"calls"},
+    {"source":"route:comments","target":"table:ticket_comments","kind":"writes"},
+    {"source":"route:comments","target":"table:tickets","kind":"writes"},
+    {"source":"route:links","target":"svc:ticketAccess","kind":"calls"},
+    {"source":"route:links","target":"table:ticket_links","kind":"writes"},
+    {"source":"route:links","target":"table:tickets","kind":"reads"},
+    {"source":"route:shares","target":"svc:ticketAccess","kind":"calls"},
+    {"source":"route:shares","target":"svc:rateLimit","kind":"calls"},
+    {"source":"route:shares","target":"table:ticket_shares","kind":"writes"},
+    {"source":"route:shares","target":"table:tickets","kind":"reads"},
+    {"source":"route:shares","target":"table:ticket_attachments","kind":"reads"},
+    {"source":"route:shares","target":"table:ticket_checklists","kind":"reads"},
+    {"source":"route:users","target":"svc:passwordPolicy","kind":"calls"},
+    {"source":"route:users","target":"svc:auditLog","kind":"calls"},
+    {"source":"route:users","target":"table:users","kind":"writes"},
+    {"source":"route:users","target":"table:contacts","kind":"reads"},
+    {"source":"route:public","target":"svc:email","kind":"calls"},
+    {"source":"route:public","target":"svc:aiHelper","kind":"calls"},
+    {"source":"route:public","target":"svc:htmlUtils","kind":"calls"},
+    {"source":"route:public","target":"svc:htmlSanitizer","kind":"calls"},
+    {"source":"route:public","target":"svc:rateLimit","kind":"calls"},
+    {"source":"route:public","target":"table:tickets","kind":"writes"},
+    {"source":"route:public","target":"table:contacts","kind":"writes"},
+    {"source":"route:public","target":"table:ticket_field_values","kind":"writes"},
+    {"source":"route:public","target":"table:ai_deflections","kind":"writes"},
+    {"source":"route:public","target":"table:ticket_templates","kind":"reads"},
+    {"source":"route:public","target":"table:template_fields","kind":"reads"},
+    {"source":"route:public","target":"table:categories","kind":"reads"},
+    {"source":"route:templates","target":"route:template-fields","kind":"imports"},
+    {"source":"route:templates","target":"table:ticket_templates","kind":"writes"},
+    {"source":"route:templates","target":"table:template_fields","kind":"reads"},
+    {"source":"route:tags","target":"table:tags","kind":"writes"},
+    {"source":"route:kb","target":"svc:htmlUtils","kind":"calls"},
+    {"source":"route:kb","target":"svc:htmlSanitizer","kind":"calls"},
+    {"source":"route:kb","target":"svc:ticketAccess","kind":"calls"},
+    {"source":"route:kb","target":"svc:rateLimit","kind":"calls"},
+    {"source":"route:kb","target":"route:attachments","kind":"imports"},
+    {"source":"route:kb","target":"table:kb_articles","kind":"writes"},
+    {"source":"route:kb","target":"table:kb_articles_fts","kind":"writes"},
+    {"source":"route:kb","target":"table:kb_categories","kind":"writes"},
+    {"source":"route:kb","target":"table:kb_article_tags","kind":"writes"},
+    {"source":"route:kb","target":"table:kb_article_links","kind":"writes"},
+    {"source":"route:kb","target":"table:kb_article_shares","kind":"writes"},
+    {"source":"route:kb","target":"table:ticket_kb_links","kind":"writes"},
+    {"source":"route:reports","target":"table:tickets","kind":"reads"},
+    {"source":"route:reports","target":"table:time_entries","kind":"reads"},
+    {"source":"route:reports","target":"table:ticket_tags","kind":"reads"},
+    {"source":"route:reports","target":"table:tags","kind":"reads"},
+    {"source":"route:reports","target":"table:categories","kind":"reads"},
+    {"source":"route:reports","target":"table:contacts","kind":"reads"},
+    {"source":"route:reports","target":"table:users","kind":"reads"},
+    {"source":"route:recurring","target":"sched:recurringScheduler","kind":"calls"},
+    {"source":"route:recurring","target":"table:recurring_templates","kind":"writes"},
+    {"source":"route:time-entries","target":"svc:ticketAccess","kind":"calls"},
+    {"source":"route:time-entries","target":"table:time_entries","kind":"writes"},
+    {"source":"route:time-entries","target":"table:tickets","kind":"reads"},
+    {"source":"route:backup","target":"sched:backupScheduler","kind":"calls"},
+    {"source":"route:backup","target":"svc:rateLimit","kind":"calls"},
+    {"source":"route:backup","target":"table:backup_config","kind":"writes"},
+    {"source":"route:push","target":"table:push_subscriptions","kind":"writes"},
+    {"source":"route:companies","target":"svc:slaHelper","kind":"calls"},
+    {"source":"route:companies","target":"table:companies","kind":"writes"},
+    {"source":"route:companies","target":"table:contacts","kind":"reads"},
+    {"source":"route:companies","target":"table:tickets","kind":"reads"},
+    {"source":"route:companies","target":"table:time_entries","kind":"reads"},
+    {"source":"route:billing","target":"svc:auditLog","kind":"calls"},
+    {"source":"route:billing","target":"table:invoices","kind":"writes"},
+    {"source":"route:billing","target":"table:invoice_lines","kind":"writes"},
+    {"source":"route:billing","target":"table:billing_rates","kind":"writes"},
+    {"source":"route:billing","target":"table:time_entries","kind":"writes"},
+    {"source":"route:api-keys","target":"svc:auditLog","kind":"calls"},
+    {"source":"route:api-keys","target":"table:api_keys","kind":"writes"},
+    {"source":"route:webhooks","target":"svc:webhookValidator","kind":"calls"},
+    {"source":"route:webhooks","target":"table:webhooks","kind":"writes"},
+    {"source":"route:webhooks","target":"table:webhook_deliveries","kind":"reads"},
+    {"source":"route:email-inbound","target":"svc:emailInbound","kind":"calls"},
+    {"source":"route:sla","target":"table:sla_policies","kind":"writes"},
+    {"source":"route:settings","target":"svc:settings","kind":"calls"},
+    {"source":"route:template-fields","target":"table:template_fields","kind":"writes"},
+    {"source":"svc:aiHelper","target":"table:ai_usage_log","kind":"writes"},
+    {"source":"svc:aiHelper","target":"table:categories","kind":"reads"},
+    {"source":"svc:aiHelper","target":"svc:logger","kind":"calls"},
+    {"source":"svc:auditLog","target":"table:audit_log","kind":"writes"},
+    {"source":"svc:auditLog","target":"svc:logger","kind":"calls"},
+    {"source":"svc:automationHelper","target":"table:tags","kind":"reads"},
+    {"source":"svc:automationHelper","target":"table:ticket_tags","kind":"writes"},
+    {"source":"svc:automationHelper","target":"svc:automation","kind":"imports"},
+    {"source":"svc:automationHelper","target":"svc:logger","kind":"calls"},
+    {"source":"svc:email","target":"table:categories","kind":"reads"},
+    {"source":"svc:email","target":"table:tickets","kind":"writes"},
+    {"source":"svc:email","target":"svc:emailThreading","kind":"calls"},
+    {"source":"svc:email","target":"svc:htmlUtils","kind":"calls"},
+    {"source":"svc:email","target":"svc:settings","kind":"calls"},
+    {"source":"svc:email","target":"svc:logger","kind":"calls"},
+    {"source":"svc:emailInbound","target":"table:tickets","kind":"writes"},
+    {"source":"svc:emailInbound","target":"table:contacts","kind":"writes"},
+    {"source":"svc:emailInbound","target":"table:ticket_comments","kind":"writes"},
+    {"source":"svc:emailInbound","target":"table:ticket_history","kind":"writes"},
+    {"source":"svc:emailInbound","target":"table:ticket_attachments","kind":"writes"},
+    {"source":"svc:emailInbound","target":"table:ticket_shares","kind":"writes"},
+    {"source":"svc:emailInbound","target":"table:users","kind":"reads"},
+    {"source":"svc:emailInbound","target":"svc:webhookDispatcher","kind":"calls"},
+    {"source":"svc:emailInbound","target":"svc:email","kind":"calls"},
+    {"source":"svc:emailInbound","target":"svc:ticketNotifications","kind":"calls"},
+    {"source":"svc:emailInbound","target":"svc:logger","kind":"calls"},
+    {"source":"svc:offsiteBackup","target":"svc:logger","kind":"calls"},
+    {"source":"svc:push","target":"table:push_subscriptions","kind":"reads"},
+    {"source":"svc:push","target":"table:push_subscriptions","kind":"writes"},
+    {"source":"svc:push","target":"svc:logger","kind":"calls"},
+    {"source":"svc:settings","target":"table:app_settings","kind":"reads"},
+    {"source":"svc:settings","target":"table:app_settings","kind":"writes"},
+    {"source":"svc:slaHelper","target":"table:sla_policies","kind":"reads"},
+    {"source":"svc:slaHelper","target":"table:companies","kind":"reads"},
+    {"source":"svc:slaHelper","target":"table:tickets","kind":"writes"},
+    {"source":"svc:ticketAccess","target":"table:tickets","kind":"reads"},
+    {"source":"svc:ticketImportExport","target":"svc:ticketQuery","kind":"imports"},
+    {"source":"svc:ticketNotifications","target":"table:tickets","kind":"reads"},
+    {"source":"svc:ticketNotifications","target":"table:users","kind":"reads"},
+    {"source":"svc:ticketNotifications","target":"svc:webhookDispatcher","kind":"calls"},
+    {"source":"svc:ticketNotifications","target":"svc:push","kind":"calls"},
+    {"source":"svc:ticketNotifications","target":"svc:email","kind":"calls"},
+    {"source":"svc:ticketNotifications","target":"svc:htmlUtils","kind":"calls"},
+    {"source":"svc:ticketNotifications","target":"svc:logger","kind":"calls"},
+    {"source":"svc:webhookDispatcher","target":"table:webhooks","kind":"reads"},
+    {"source":"svc:webhookDispatcher","target":"table:webhooks","kind":"writes"},
+    {"source":"svc:webhookDispatcher","target":"table:webhook_deliveries","kind":"writes"},
+    {"source":"svc:webhookDispatcher","target":"svc:webhookValidator","kind":"calls"},
+    {"source":"svc:webhookDispatcher","target":"svc:logger","kind":"calls"},
+    {"source":"svc:auth","target":"table:api_keys","kind":"reads"},
+    {"source":"svc:auth","target":"table:api_keys","kind":"writes"},
+    {"source":"svc:auth","target":"table:users","kind":"reads"},
+    {"source":"svc:auth","target":"svc:logger","kind":"calls"},
+    {"source":"svc:passport","target":"table:users","kind":"reads"},
+    {"source":"svc:passport","target":"table:users","kind":"writes"},
+    {"source":"svc:passport","target":"svc:logger","kind":"calls"},
+    {"source":"sched:reminderScheduler","target":"table:ticket_reminders","kind":"writes"},
+    {"source":"sched:reminderScheduler","target":"table:tickets","kind":"reads"},
+    {"source":"sched:reminderScheduler","target":"table:users","kind":"reads"},
+    {"source":"sched:reminderScheduler","target":"svc:email","kind":"triggers"},
+    {"source":"sched:reminderScheduler","target":"svc:push","kind":"triggers"},
+    {"source":"sched:reminderScheduler","target":"svc:logger","kind":"calls"},
+    {"source":"sched:autoCloseScheduler","target":"table:tickets","kind":"writes"},
+    {"source":"sched:autoCloseScheduler","target":"table:ticket_history","kind":"writes"},
+    {"source":"sched:autoCloseScheduler","target":"svc:automation","kind":"imports"},
+    {"source":"sched:autoCloseScheduler","target":"svc:logger","kind":"calls"},
+    {"source":"sched:recurringScheduler","target":"table:recurring_templates","kind":"writes"},
+    {"source":"sched:recurringScheduler","target":"table:tickets","kind":"writes"},
+    {"source":"sched:recurringScheduler","target":"table:ticket_tags","kind":"writes"},
+    {"source":"sched:recurringScheduler","target":"table:ticket_history","kind":"writes"},
+    {"source":"sched:recurringScheduler","target":"table:recurring_ticket_history","kind":"writes"},
+    {"source":"sched:recurringScheduler","target":"table:tags","kind":"reads"},
+    {"source":"sched:recurringScheduler","target":"svc:logger","kind":"calls"},
+    {"source":"sched:webhookRetryScheduler","target":"svc:webhookDispatcher","kind":"triggers"},
+    {"source":"sched:webhookRetryScheduler","target":"svc:logger","kind":"calls"},
+    {"source":"sched:slaScheduler","target":"table:tickets","kind":"writes"},
+    {"source":"sched:slaScheduler","target":"table:users","kind":"reads"},
+    {"source":"sched:slaScheduler","target":"svc:webhookDispatcher","kind":"triggers"},
+    {"source":"sched:slaScheduler","target":"svc:push","kind":"triggers"},
+    {"source":"sched:slaScheduler","target":"svc:email","kind":"triggers"},
+    {"source":"sched:slaScheduler","target":"svc:logger","kind":"calls"},
+    {"source":"sched:pushScheduler","target":"table:tickets","kind":"writes"},
+    {"source":"sched:pushScheduler","target":"svc:push","kind":"triggers"},
+    {"source":"sched:pushScheduler","target":"svc:logger","kind":"calls"},
+    {"source":"sched:backupScheduler","target":"table:backup_config","kind":"writes"},
+    {"source":"sched:backupScheduler","target":"svc:offsiteBackup","kind":"triggers"},
+    {"source":"sched:backupScheduler","target":"svc:logger","kind":"calls"},
+    {"source":"sched:refreshTokenCleanup","target":"table:refresh_tokens","kind":"writes"},
+    {"source":"sched:aiUsageCleanup","target":"svc:aiHelper","kind":"triggers"},
+    {"source":"sched:aiUsageCleanup","target":"table:ai_usage_log","kind":"writes"},
+    {"source":"comp:Layout","target":"comp:CommandPalette","kind":"uses"},
+    {"source":"comp:Layout","target":"comp:QuickCaptureFAB","kind":"uses"},
+    {"source":"comp:Layout","target":"ctx:Auth","kind":"uses"},
+    {"source":"comp:CommandPalette","target":"hook:useCommandPaletteSearch","kind":"uses"},
+    {"source":"comp:CommandPalette","target":"hook:useMode","kind":"uses"},
+    {"source":"comp:QuickCaptureFAB","target":"api:client","kind":"uses"},
+    {"source":"comp:QuickCaptureFAB","target":"route:tickets","kind":"calls"},
+    {"source":"comp:QuickCaptureFAB","target":"ctx:Auth","kind":"uses"},
+    {"source":"route:auth","target":"svc:auth","kind":"uses"},
+    {"source":"route:tickets","target":"svc:auth","kind":"uses"},
+    {"source":"route:categories","target":"svc:auth","kind":"uses"},
+    {"source":"route:contacts","target":"svc:auth","kind":"uses"},
+    {"source":"route:attachments","target":"svc:auth","kind":"uses"},
+    {"source":"route:checklists","target":"svc:auth","kind":"uses"},
+    {"source":"route:checklist-templates","target":"svc:auth","kind":"uses"},
+    {"source":"route:comments","target":"svc:auth","kind":"uses"},
+    {"source":"route:links","target":"svc:auth","kind":"uses"},
+    {"source":"route:shares","target":"svc:auth","kind":"uses"},
+    {"source":"route:users","target":"svc:auth","kind":"uses"},
+    {"source":"route:public","target":"svc:auth","kind":"uses"},
+    {"source":"route:templates","target":"svc:auth","kind":"uses"},
+    {"source":"route:tags","target":"svc:auth","kind":"uses"},
+    {"source":"route:kb","target":"svc:auth","kind":"uses"},
+    {"source":"route:reports","target":"svc:auth","kind":"uses"},
+    {"source":"route:recurring","target":"svc:auth","kind":"uses"},
+    {"source":"route:time-entries","target":"svc:auth","kind":"uses"},
+    {"source":"route:backup","target":"svc:auth","kind":"uses"},
+    {"source":"route:push","target":"svc:auth","kind":"uses"},
+    {"source":"route:companies","target":"svc:auth","kind":"uses"},
+    {"source":"route:billing","target":"svc:auth","kind":"uses"},
+    {"source":"route:api-keys","target":"svc:auth","kind":"uses"},
+    {"source":"route:webhooks","target":"svc:auth","kind":"uses"},
+    {"source":"route:email-inbound","target":"svc:auth","kind":"uses"},
+    {"source":"route:sla","target":"svc:auth","kind":"uses"},
+    {"source":"route:settings","target":"svc:auth","kind":"uses"},
+    {"source":"route:template-fields","target":"svc:auth","kind":"uses"}
+  ],
+  domains: ["tickets", "platform", "auth", "kb", "integrations", "customers", "automation", "reports", "email", "settings", "sla", "billing", "backup", "ai"],
+};
+/* __GRAPH_DATA_END__ */
+
+/* ============================================================
+   CONFIG
+   ============================================================ */
+
+// Raw-domän → display-domän (de 10 valda raderna). Ordning = prioritet.
+const GROUPS = [
+  { key:"tickets",      name:"Ärenden",          color:"#ff9e4d", raw:["tickets"] },
+  { key:"customers",    name:"Kunder",           color:"#46b3e6", raw:["customers"] },
+  { key:"kb",           name:"Kunskapsbas",      color:"#8b7bf0", raw:["kb"] },
+  { key:"billing",      name:"Fakturering",      color:"#3fbf8f", raw:["billing"] },
+  { key:"emailai",      name:"E-post & AI",      color:"#e070b0", raw:["email","ai"] },
+  { key:"slaauto",      name:"SLA & Automation", color:"#d9a93f", raw:["sla","automation"] },
+  { key:"integrations", name:"Integrationer",    color:"#6d7bdb", raw:["integrations"] },
+  { key:"auth",         name:"Konto",            color:"#e0635f", raw:["auth"] },
+  { key:"reports",      name:"Rapporter",        color:"#86c14a", raw:["reports"] },
+  { key:"platform",     name:"Drift / Plattform",color:"#8a96a8", raw:["settings","backup","platform"] },
+];
+const RAW2GROUP = {};
+GROUPS.forEach(g => g.raw.forEach(r => RAW2GROUP[r] = g.key));
+const GROUP_BY_KEY = Object.fromEntries(GROUPS.map(g => [g.key, g]));
+function groupOf(domain){ return RAW2GROUP[domain] || "platform"; }
+function groupColor(domain){ return (GROUP_BY_KEY[groupOf(domain)]||GROUP_BY_KEY.platform).color; }
+
+// Lager → kolumn (vänster→höger: användare → data)
+const COLUMNS = [
+  { key:"entry",   name:"Entré",       layers:["frontend-page","frontend-shell","scheduler"] },
+  { key:"state",   name:"State",       layers:["frontend-hook","context"] },
+  { key:"client",  name:"API-klient",  layers:["api-client"] },
+  { key:"route",   name:"Routes",      layers:["api-route"] },
+  { key:"service", name:"Tjänster",    layers:["service"] },
+  { key:"data",    name:"Data",        layers:["db-table"] },
+];
+const LAYER2COL = {};
+COLUMNS.forEach((c,i) => c.layers.forEach(l => LAYER2COL[l] = i));
+function colOf(layer){ return LAYER2COL[layer] ?? 1; }
+
+const LAYER_LABEL = {
+  "frontend-page":"page","frontend-shell":"shell","scheduler":"cron","frontend-hook":"hook","context":"context",
+  "api-client":"client","api-route":"route","service":"service","db-table":"table",
+};
+
+// Edge-typ → färg + streckmönster (vid impact-highlight) + legend-text
+const KINDS = {
+  calls:    { color:"#ff9e4d", dash:"",        label:"anropar" },
+  uses:     { color:"#8a96a8", dash:"",        label:"använder" },
+  reads:    { color:"#46b3e6", dash:"6 4",     label:"läser" },
+  writes:   { color:"#3fbf8f", dash:"",        label:"skriver" },
+  triggers: { color:"#d9a93f", dash:"2 4",     label:"triggar" },
+  imports:  { color:"#6d7bdb", dash:"1 4",     label:"importerar" },
+  creates:  { color:"#e070b0", dash:"8 3 2 3", label:"skapar" },
+};
+function kindStyle(k){ return KINDS[k] || { color:"#7d8a9e", dash:"", label:k }; }
+
+// Layout-mått
+const NW = 178, NH = 46, COL_GAP = 86, V_GAP = 13, BAND_PAD = 26, GUTTER = 168, TOP = 30;
+const COL_W = NW + COL_GAP;
+
+/* ============================================================
+   BYGG INDEX + LAYOUT
+   ============================================================ */
+const SVG_NS = "http://www.w3.org/2000/svg";
+const nodeById = new Map();
+GRAPH.nodes.forEach(n => { n.group = groupOf(n.domain); n.col = colOf(n.layer); nodeById.set(n.id, n); });
+
+// adjacency
+const outAdj = new Map(), inAdj = new Map();
+GRAPH.nodes.forEach(n => { outAdj.set(n.id, []); inAdj.set(n.id, []); });
+const edges = GRAPH.edges.filter(e => nodeById.has(e.source) && nodeById.has(e.target));
+edges.forEach(e => { outAdj.get(e.source).push(e); inAdj.get(e.target).push(e); });
+
+// reachability / dead-code: BFS framåt från entrypoints (pages + schedulers, ej redan döda)
+function computeDead(){
+  const reach = new Set();
+  const q = [];
+  GRAPH.nodes.forEach(n => {
+    const isEntry = (n.layer === "frontend-page" || n.layer === "frontend-shell" || n.layer === "scheduler");
+    if (isEntry && !n.dead) { reach.add(n.id); q.push(n.id); }
+  });
+  while (q.length){
+    const id = q.shift();
+    for (const e of outAdj.get(id)){
+      if (!reach.has(e.target)) { reach.add(e.target); q.push(e.target); }
+    }
+  }
+  GRAPH.nodes.forEach(n => {
+    // Död om: explicit flaggad ELLER ej nåbar från någon aktiv entrypoint.
+    // keepAlive = nåbar via avsiktligt omodellerad infra (t.ex. migration-runnern).
+    if (n.dead === true) { n._dead = true; return; }
+    if (n.keepAlive === true) { n._dead = false; return; }
+    n._dead = !reach.has(n.id);
+  });
+}
+computeDead();
+
+// order groups present, keep priority order
+const presentGroups = GROUPS.filter(g => GRAPH.nodes.some(n => n.group === g.key));
+const collapsed = new Set();
+
+// layout state
+let layout = { width: 0, height: 0, bands: [] };
+function computeLayout(){
+  const colX = i => GUTTER + 24 + i * COL_W;
+  let y = TOP + 12;
+  const bands = [];
+  for (const g of presentGroups){
+    const nodes = GRAPH.nodes.filter(n => n.group === g.key);
+    const isColl = collapsed.has(g.key);
+    const band = { key:g.key, name:g.name, color:g.color, top:y, nodes, collapsed:isColl, count:nodes.length };
+    if (isColl){
+      band.height = 38;
+      nodes.forEach(n => { n._x = null; n._y = null; }); // dölj noder i ihopfälld domän
+    } else {
+      // per-column stacks
+      const cols = COLUMNS.map(()=>[]);
+      nodes.forEach(n => cols[n.col].push(n));
+      cols.forEach(arr => arr.sort((a,b)=> (a._dead?1:0)-(b._dead?1:0) || a.label.localeCompare(b.label)));
+      const maxCount = Math.max(1, ...cols.map(c=>c.length));
+      band.height = BAND_PAD*2 + maxCount*NH + (maxCount-1)*V_GAP;
+      cols.forEach((arr, ci) => {
+        arr.forEach((n, idx) => {
+          n._x = colX(ci);
+          n._y = y + BAND_PAD + idx*(NH+V_GAP);
+          n._w = NW; n._h = NH;
+        });
+      });
+    }
+    bands.push(band);
+    y += band.height + 10;
+  }
+  layout.bands = bands;
+  layout.height = y + 30;
+  layout.width = colX(COLUMNS.length-1) + NW + 60;
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const svg = document.getElementById("svg");
+const colheadSvg = document.getElementById("colhead");
+let root, edgeLayer, bandLayer, nodeLayer;
+
+function el(tag, attrs, parent){
+  const e = document.createElementNS(SVG_NS, tag);
+  if (attrs) for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function buildDefs(){
+  const defs = el("defs", null, svg);
+  // arrow markers per kind (+ default + highlight variants)
+  Object.entries(KINDS).forEach(([k, st]) => {
+    const m = el("marker", { id:"ar-"+k, viewBox:"0 0 10 10", refX:"8.5", refY:"5",
+      markerWidth:"6.5", markerHeight:"6.5", orient:"auto-start-reverse" }, defs);
+    el("path", { d:"M0,1 L9,5 L0,9 z", fill: st.color }, m);
+  });
+  const md = el("marker", { id:"ar-base", viewBox:"0 0 10 10", refX:"8.5", refY:"5",
+    markerWidth:"6", markerHeight:"6", orient:"auto-start-reverse" }, defs);
+  el("path", { d:"M0,1 L9,5 L0,9 z", fill:"#3a4049" }, md);
+}
+
+function edgePath(s, t){
+  const sx = s._x + s._w, sy = s._y + s._h/2;
+  const tx = t._x, ty = t._y + t._h/2;
+  const dx = tx - sx;
+  if (dx > 12){
+    const c = Math.max(40, dx*0.5);
+    return `M${sx},${sy} C${sx+c},${sy} ${tx-c},${ty} ${tx},${ty}`;
+  }
+  // bakåt/sidled — bukta ut åt höger så den inte korsar rakt igenom noder
+  const bow = 60 + Math.abs(ty-sy)*0.15;
+  return `M${sx},${sy} C${sx+bow},${sy} ${tx-bow},${ty} ${tx},${ty}`;
+}
+
+function render(){
+  svg.innerHTML = "";
+  buildDefs();
+  root = el("g", { id:"root" }, svg);
+  bandLayer = el("g", { class:"bandrow" }, root);
+  edgeLayer = el("g", null, root);
+  nodeLayer = el("g", null, root);
+
+  // bands
+  for (const b of layout.bands){
+    const g = el("g", { "data-band": b.key }, bandLayer);
+    el("rect", { x:0, y:b.top, width:layout.width, height:b.height,
+      fill: hexA(b.color, b.collapsed?0.05:0.035), stroke:"none" }, g);
+    el("rect", { x:0, y:b.top, width:4, height:b.height, fill:b.color, opacity:0.85 }, g);
+    el("line", { x1:0, y1:b.top+b.height, x2:layout.width, y2:b.top+b.height, stroke:"var(--line)", "stroke-width":1 }, g);
+    // gutter label (clickable -> collapse)
+    const lg = el("g", { class:"gutter", "data-band": b.key, style:"cursor:pointer" }, g);
+    el("rect", { x:0, y:b.top, width:GUTTER, height:b.height, fill:"transparent" }, lg);
+    const ty = b.collapsed ? b.top+24 : b.top+26;
+    el("circle", { cx:18, cy:ty-4, r:5, fill:b.color }, lg);
+    const tl = el("text", { x:32, y:ty, fill:"var(--txt)", "font-size":13, "font-weight":750, "letter-spacing":"-0.2px" }, lg);
+    tl.textContent = b.name;
+    const cnt = el("text", { x:32, y:ty+15, fill:"var(--txt-3)", "font-size":10, "font-family":"var(--mono)" }, lg);
+    cnt.textContent = (b.collapsed ? "▸ " : "▾ ") + b.count + " noder";
+  }
+
+  // edges
+  for (const e of edges){
+    const s = nodeById.get(e.source), t = nodeById.get(e.target);
+    if (s._x == null || t._x == null) continue; // collapsed
+    const st = kindStyle(e.kind);
+    const p = el("path", { class:"edge", d:edgePath(s,t),
+      stroke:"#2b3038", "stroke-width":1.2,
+      "stroke-dasharray": "", opacity: 0.42 }, edgeLayer);
+    p._edge = e; p._kind = st;
+    e._el = p;
+  }
+
+  // nodes
+  for (const n of GRAPH.nodes){
+    if (n._x == null) continue; // collapsed band
+    const c = groupColor(n.domain);
+    const g = el("g", { class:"node", "data-id":n.id, transform:`translate(${n._x},${n._y})` }, nodeLayer);
+    n._g = g;
+    const r = el("rect", { class:"box", x:0, y:0, width:n._w, height:n._h, rx:8,
+      fill: n._dead ? "#191213" : "#15181d",
+      stroke: n._dead ? "var(--dead)" : hexA(c,0.55),
+      "stroke-width": n._dead ? 1.3 : 1.2,
+      "stroke-dasharray": n._dead ? "4 3" : "" }, g);
+    // left accent bar
+    el("rect", { x:0, y:0, width:3.5, height:n._h, rx:0, fill: n._dead ? "var(--dead)" : c, opacity: n._dead?0.9:0.9 }, g);
+    // layer tag
+    const lay = el("text", { class:"layb", x:n._w-9, y:15, "text-anchor":"end" }, g);
+    lay.textContent = LAYER_LABEL[n.layer] || n.layer;
+    // label
+    const lbl = el("text", { class:"lbl", x:11, y:20 }, g);
+    lbl.textContent = trunc(n.label, 20);
+    if (n._dead) lbl.setAttribute("fill", "#e8b6ba");
+    // loc
+    const loc = el("text", { class:"loc", x:11, y:36 }, g);
+    loc.textContent = trunc(n.loc.split("/").slice(-1)[0], 26);
+    // dead marker
+    if (n._dead){
+      const dm = el("text", { x:n._w-9, y:35, "text-anchor":"end", "font-size":8, "font-family":"var(--mono)", fill:"var(--dead)", "font-weight":700 }, g);
+      dm.textContent = "DÖD";
+    }
+    const title = el("title", null, g);
+    title.textContent = `${n.label}\n${n.loc}` + (n.desc?`\n${n.desc}`:"");
+  }
+
+  applyTransform();
+  renderColHeads();
+}
+
+function renderColHeads(){
+  colheadSvg.innerHTML = "";
+  el("rect", { x:0, y:0, width:"100%", height:34, fill:"#0d0f11" }, colheadSvg);
+  el("line", { x1:0, y1:33.5, x2:"100%", y2:33.5, stroke:"var(--line)" }, colheadSvg);
+  const showLabels = COL_W * view.k >= 76; // dölj kolumnetiketter när de skulle krocka (låg zoom)
+  COLUMNS.forEach((c, i) => {
+    const cx = (GUTTER + 24 + i*COL_W + NW/2) * view.k + view.x;
+    if (cx < -60 || cx > colheadSvg.clientWidth + 60) return;
+    if (!showLabels) return;
+    const t = el("text", { x:cx, y:21, "text-anchor":"middle", fill:"var(--txt-3)",
+      "font-size":11, "font-weight":700, "letter-spacing":"0.6px", "font-family":"var(--mono)" }, colheadSvg);
+    t.textContent = c.name.toUpperCase();
+  });
+  // gutter header
+  const g = el("text", { x:16, y:21, fill:"var(--txt-4)", "font-size":10, "font-weight":700, "letter-spacing":"0.6px", "font-family":"var(--mono)" }, colheadSvg);
+  g.textContent = "DOMÄN";
+}
+
+/* ============================================================
+   PAN / ZOOM
+   ============================================================ */
+const stage = document.getElementById("stage");
+let view = { x: 0, y: 0, k: 1 };
+function applyTransform(){
+  if (root) root.setAttribute("transform", `translate(${view.x},${view.y}) scale(${view.k})`);
+  renderColHeads();
+}
+// Standardvy: passa BREDDEN (läsbara noder), toppankrad → scrolla vertikalt genom domänerna.
+function fit(){
+  const pad = 48;
+  const vw = stage.clientWidth, vh = stage.clientHeight;
+  const k = Math.min((vw - pad*2)/layout.width, 1.05);
+  view.k = Math.max(0.3, k);
+  view.x = (vw - layout.width*view.k)/2;
+  // om hela kartan ändå får plats på höjden, centrera; annars toppankra
+  const fitsH = layout.height*view.k <= vh - TOP - 16;
+  view.y = fitsH ? TOP + 8 + (vh - TOP - layout.height*view.k)/2 : TOP + 8;
+  applyTransform();
+}
+// Översiktsvy ("fit"-knappen): hela kartan i fågelperspektiv.
+function fitAll(){
+  const pad = 56;
+  const vw = stage.clientWidth, vh = stage.clientHeight - TOP;
+  const k = Math.min((vw - pad*2)/layout.width, (vh - pad)/layout.height, 1.05);
+  view.k = Math.max(0.12, k);
+  view.x = (vw - layout.width*view.k)/2;
+  view.y = TOP + 8 + Math.max(0, (vh - layout.height*view.k)/2);
+  applyTransform();
+}
+function zoomAt(cx, cy, factor){
+  const k2 = Math.min(2.4, Math.max(0.1, view.k*factor));
+  view.x = cx - (cx - view.x) * (k2/view.k);
+  view.y = cy - (cy - view.y) * (k2/view.k);
+  view.k = k2; applyTransform();
+}
+stage.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  const r = stage.getBoundingClientRect();
+  zoomAt(e.clientX-r.left, e.clientY-r.top, e.deltaY < 0 ? 1.12 : 1/1.12);
+}, { passive:false });
+let drag = null;
+stage.addEventListener("pointerdown", (e) => {
+  if (e.target.closest(".node") || e.target.closest("#detail") || e.target.closest(".gutter")) return;
+  drag = { x:e.clientX, y:e.clientY, vx:view.x, vy:view.y };
+  stage.classList.add("panning"); stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener("pointermove", (e) => {
+  if (!drag) return;
+  view.x = drag.vx + (e.clientX-drag.x);
+  view.y = drag.vy + (e.clientY-drag.y);
+  applyTransform();
+});
+stage.addEventListener("pointerup", (e) => { drag=null; stage.classList.remove("panning"); });
+document.getElementById("z-in").onclick  = () => zoomAt(stage.clientWidth/2, stage.clientHeight/2, 1.2);
+document.getElementById("z-out").onclick = () => zoomAt(stage.clientWidth/2, stage.clientHeight/2, 1/1.2);
+document.getElementById("z-fit").onclick = fitAll;
+
+/* ============================================================
+   SELECTION / IMPACT HIGHLIGHT
+   ============================================================ */
+let selected = null;
+function bfs(startId, adj){
+  const seen = new Set(); const q=[startId]; const order=[];
+  while(q.length){
+    const id=q.shift();
+    for(const e of adj.get(id)){
+      const nxt = adj===outAdj ? e.target : e.source;
+      if(!seen.has(nxt)){ seen.add(nxt); order.push({id:nxt, kind:e.kind, via:id}); q.push(nxt); }
+    }
+  }
+  return { set:seen, order };
+}
+function clearViz(){
+  GRAPH.nodes.forEach(n => { if(n._g){ const b=n._g.querySelector(".box"); n._g.classList.remove("dimmed","softdim"); b.setAttribute("stroke-width", n._dead?1.3:1.2); b.setAttribute("fill", n._dead?"#191213":"#15181d");} });
+  edges.forEach(e => { if(e._el){ e._el.setAttribute("stroke","#2b3038"); e._el.setAttribute("stroke-width",1.2); e._el.setAttribute("opacity",0.42); e._el.removeAttribute("marker-end"); e._el.setAttribute("stroke-dasharray",""); } });
+  layout.bands.forEach(b=>{});
+}
+function selectNode(id){
+  selected = id;
+  document.querySelector(".hint")?.classList.add("gone");
+  const n = nodeById.get(id);
+  const down = bfs(id, outAdj);   // beror på
+  const up   = bfs(id, inAdj);    // påverkas
+  clearViz();
+  if (deadMode) exitDeadMode(true);
+
+  const keep = new Set([id, ...down.set, ...up.set]);
+  GRAPH.nodes.forEach(m => { if(!m._g) return; if(!keep.has(m.id)) m._g.classList.add("dimmed"); });
+
+  // node accents
+  const self = n._g.querySelector(".box");
+  self.setAttribute("stroke", groupColor(n.domain));
+  self.setAttribute("stroke-width", 3);
+  self.setAttribute("fill", hexA(groupColor(n.domain), 0.16));
+  down.set.forEach(d => { const b=nodeById.get(d)._g?.querySelector(".box"); if(b){ b.setAttribute("stroke","var(--down)"); b.setAttribute("stroke-width",2); } });
+  up.set.forEach(u => { const b=nodeById.get(u)._g?.querySelector(".box"); if(b){ b.setAttribute("stroke","var(--up)"); b.setAttribute("stroke-width",2); } });
+
+  // edges on the impact paths
+  edges.forEach(e => {
+    if(!e._el) return;
+    const onDown = (keep.has(e.source) && down.set.has(e.target) && reachableForward(id, e.source)) ;
+    const inDownChain = down.set.has(e.target) && (e.source===id || down.set.has(e.source));
+    const inUpChain   = up.set.has(e.source) && (e.target===id || up.set.has(e.target));
+    if (inDownChain || inUpChain){
+      const st = kindStyle(e.kind);
+      e._el.setAttribute("stroke", st.color);
+      e._el.setAttribute("stroke-width", 2);
+      e._el.setAttribute("opacity", 0.95);
+      e._el.setAttribute("stroke-dasharray", st.dash);
+      e._el.setAttribute("marker-end", "url(#ar-"+e.kind+")");
+    } else {
+      e._el.setAttribute("opacity", 0.04);
+    }
+  });
+  openDetail(n, down.order, up.order);
+}
+function reachableForward(){ return true; }
+
+function openDetail(n, downOrder, upOrder){
+  const d = document.getElementById("detail");
+  d.classList.add("show");
+  const c = groupColor(n.domain);
+  document.getElementById("d-accent").style.background = c;
+  document.getElementById("d-title").textContent = n.label;
+  const kick = document.getElementById("d-kicker"); kick.innerHTML = "";
+  const lc = document.createElement("span"); lc.className="chip layer"; lc.textContent = (LAYER_LABEL[n.layer]||n.layer); kick.appendChild(lc);
+  const dc = document.createElement("span"); dc.className="chip dom"; dc.style.background=c; dc.textContent=(GROUP_BY_KEY[groupOf(n.domain)]||{}).name||n.domain; kick.appendChild(dc);
+  if (n._dead){ const x=document.createElement("span"); x.className="chip dead"; x.textContent="DÖD KOD"; kick.appendChild(x); }
+  document.getElementById("d-loc-txt").textContent = n.loc;
+  document.getElementById("d-desc").textContent = n.desc || "—";
+
+  // endpoints
+  const epSec = document.getElementById("d-eps-sec");
+  if (n.endpoints && n.endpoints.length){
+    epSec.style.display="block";
+    document.getElementById("d-eps-n").textContent = n.endpoints.length;
+    document.getElementById("d-eps").innerHTML = n.endpoints.map(ep => {
+      const m = ep.match(/^([A-Z]+)\s+(.*)$/);
+      return m ? `<div><span class="ep-m">${m[1]}</span> ${escapeHtml(m[2])}</div>` : `<div>${escapeHtml(ep)}</div>`;
+    }).join("");
+  } else epSec.style.display="none";
+
+  fillRefs("d-down","d-down-n", downOrder, "var(--down)");
+  fillRefs("d-up","d-up-n", upOrder, "var(--up)");
+}
+function fillRefs(listId, nId, order, dotColor){
+  const list = document.getElementById(listId);
+  document.getElementById(nId).textContent = order.length;
+  if (!order.length){ list.innerHTML = `<div class="d-empty">Inga.</div>`; return; }
+  list.innerHTML = "";
+  // unique by id, keep first kind
+  const seen=new Set();
+  order.forEach(o => {
+    if(seen.has(o.id)) return; seen.add(o.id);
+    const m = nodeById.get(o.id); if(!m) return;
+    const row = document.createElement("div"); row.className="ref";
+    row.innerHTML = `<span class="rdot" style="background:${groupColor(m.domain)}"></span>`
+      + `<span class="rlbl">${escapeHtml(m.label)}</span>`
+      + `<span class="rkind">${o.kind}</span>`;
+    row.onclick = (ev) => { ev.stopPropagation(); centerOn(m.id); selectNode(m.id); };
+    list.appendChild(row);
+  });
+}
+function centerOn(id){
+  const n = nodeById.get(id); if(!n || n._x==null) return;
+  const vw = stage.clientWidth, vh = stage.clientHeight;
+  view.x = vw/2 - (n._x + n._w/2)*view.k;
+  view.y = vh/2 - (n._y + n._h/2)*view.k;
+  applyTransform();
+}
+function deselect(){
+  selected = null; clearViz();
+  document.getElementById("detail").classList.remove("show");
+  if (deadMode) applyDeadMode();
+}
+
+/* ============================================================
+   DEAD MODE
+   ============================================================ */
+let deadMode = false;
+function applyDeadMode(){
+  clearViz();
+  GRAPH.nodes.forEach(n => { if(!n._g) return; if(!n._dead) n._g.classList.add("softdim"); else { const b=n._g.querySelector(".box"); b.setAttribute("stroke-width",2.4); b.setAttribute("fill","#2a1518"); } });
+  edges.forEach(e => { if(!e._el) return;
+    const dead = nodeById.get(e.source)._dead && nodeById.get(e.target)._dead;
+    if (dead){ e._el.setAttribute("stroke","var(--dead)"); e._el.setAttribute("opacity",0.85); e._el.setAttribute("stroke-width",1.6); }
+    else e._el.setAttribute("opacity",0.05);
+  });
+}
+function exitDeadMode(silent){
+  deadMode=false; document.getElementById("btn-dead").classList.remove("on");
+  if(!silent) clearViz();
+}
+document.getElementById("btn-dead").onclick = () => {
+  deadMode = !deadMode;
+  document.getElementById("btn-dead").classList.toggle("on", deadMode);
+  document.getElementById("detail").classList.remove("show"); selected=null;
+  if (deadMode){ applyDeadMode(); toast(`${GRAPH.nodes.filter(n=>n._dead).length} döda noder isolerade`); }
+  else clearViz();
+};
+
+/* ============================================================
+   SEARCH
+   ============================================================ */
+const q = document.getElementById("q");
+q.addEventListener("input", () => {
+  const term = q.value.trim().toLowerCase();
+  const cnt = document.getElementById("qcount");
+  if (!term){ cnt.textContent=""; clearViz(); if(selected) selectNode(selected); else if(deadMode) applyDeadMode(); return; }
+  clearViz(); selected=null; document.getElementById("detail").classList.remove("show");
+  let hits=0;
+  GRAPH.nodes.forEach(n => {
+    if(!n._g) return;
+    const hay = (n.label+" "+n.id+" "+n.loc+" "+(n.desc||"")+" "+n.domain).toLowerCase();
+    if (hay.includes(term)){ hits++; const b=n._g.querySelector(".box"); b.setAttribute("stroke","var(--brand)"); b.setAttribute("stroke-width",2.6); b.setAttribute("fill","#241a10"); }
+    else n._g.classList.add("dimmed");
+  });
+  edges.forEach(e => { if(e._el) e._el.setAttribute("opacity",0.04); });
+  cnt.textContent = hits + " träff" + (hits===1?"":"ar");
+});
+
+/* ============================================================
+   EVENTS
+   ============================================================ */
+svg.addEventListener("click", (e) => {
+  const g = e.target.closest(".node");
+  const gut = e.target.closest(".gutter");
+  if (gut){ toggleBand(gut.getAttribute("data-band")); return; }
+  if (g){ const id=g.getAttribute("data-id"); if(id===selected) deselect(); else selectNode(id); return; }
+  if (!e.target.closest("#detail")) deselect();
+});
+document.getElementById("d-close").onclick = deselect;
+document.getElementById("d-loc").onclick = () => {
+  const txt = document.getElementById("d-loc-txt").textContent;
+  navigator.clipboard?.writeText(txt).then(()=>toast("Kopierat: "+txt), ()=>toast(txt));
+};
+document.addEventListener("keydown", (e) => {
+  if (e.key==="Escape"){ if(document.activeElement===q){ q.value=""; q.dispatchEvent(new Event("input")); q.blur(); } else deselect(); }
+  if (e.key==="/" && document.activeElement!==q){ e.preventDefault(); q.focus(); }
+});
+document.getElementById("btn-reset").onclick = () => { q.value=""; q.dispatchEvent(new Event("input")); exitDeadMode(); deselect(); fit(); };
+
+function toggleBand(key){
+  if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
+  rebuild();
+}
+let allCollapsed=false;
+document.getElementById("btn-collapse").onclick = () => {
+  allCollapsed = !allCollapsed;
+  collapsed.clear();
+  if (allCollapsed) presentGroups.forEach(g=>collapsed.add(g.key));
+  document.getElementById("btn-collapse").textContent = allCollapsed ? "Expandera alla" : "Fäll alla";
+  rebuild();
+};
+function rebuild(){
+  computeLayout(); render();
+  if (selected && nodeById.get(selected)?._x!=null) selectNode(selected);
+  else if (deadMode) applyDeadMode();
+}
+
+/* ============================================================
+   LEGEND + HEADER
+   ============================================================ */
+function buildLegend(){
+  const le = document.getElementById("lg-edges");
+  // only kinds that occur
+  const used = new Set(edges.map(e=>e.kind));
+  le.innerHTML = "";
+  Object.entries(KINDS).forEach(([k,st]) => {
+    if (!used.has(k)) return;
+    const row = document.createElement("div"); row.className="lg-row";
+    row.innerHTML = `<svg width="26" height="10"><line x1="1" y1="5" x2="25" y2="5" stroke="${st.color}" stroke-width="2" ${st.dash?`stroke-dasharray="${st.dash}"`:""} marker-end="url(#lgar-${k})"/></svg> ${st.label}`;
+    le.appendChild(row);
+  });
+  // markers for legend (separate inline svg defs)
+  const defsSvg = document.createElementNS(SVG_NS,"svg");
+  defsSvg.setAttribute("width","0"); defsSvg.setAttribute("height","0"); defsSvg.style.position="absolute";
+  const defs = el("defs", null, defsSvg);
+  Object.entries(KINDS).forEach(([k,st])=>{
+    const m = el("marker",{id:"lgar-"+k,viewBox:"0 0 10 10",refX:"8",refY:"5",markerWidth:"5",markerHeight:"5",orient:"auto-start-reverse"},defs);
+    el("path",{d:"M0,1 L9,5 L0,9 z",fill:st.color},m);
+  });
+  document.body.appendChild(defsSvg);
+
+  const dl = document.getElementById("lg-domains"); dl.innerHTML="";
+  presentGroups.forEach(g => {
+    const row = document.createElement("div"); row.className="lg-row";
+    row.style.cursor="pointer";
+    row.innerHTML = `<span class="lg-swatch" style="background:${g.color}"></span> ${g.name}`;
+    row.onclick = () => { const n = GRAPH.nodes.find(x=>x.group===g.key && x._x!=null); if(n){ centerOn(n.id);} };
+    dl.appendChild(row);
+  });
+}
+document.getElementById("lg-head").onclick = () => {
+  const lg = document.getElementById("legend"); lg.classList.toggle("collapsed");
+  document.getElementById("lg-toggle").textContent = lg.classList.contains("collapsed") ? "▸" : "▾";
+};
+
+function updateHeaderStats(){
+  const byLayer = {};
+  GRAPH.nodes.forEach(n => byLayer[n.layer]=(byLayer[n.layer]||0)+1);
+  const dead = GRAPH.nodes.filter(n=>n._dead).length;
+  document.getElementById("hdr-stats").textContent =
+    `${GRAPH.nodes.length} noder · ${edges.length} kopplingar · ${presentGroups.length} domäner · ${dead} döda`;
+}
+
+/* ============================================================
+   UTILS
+   ============================================================ */
+function trunc(s, n){ return s.length>n ? s.slice(0,n-1)+"…" : s; }
+function escapeHtml(s){ return s.replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function hexA(hex, a){
+  const m = hex.replace("#",""); const r=parseInt(m.slice(0,2),16),g=parseInt(m.slice(2,4),16),b=parseInt(m.slice(4,6),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+let toastT;
+function toast(msg){
+  const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove("show"),1600);
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+computeLayout();
+render();
+buildLegend();
+updateHeaderStats();
+fit();
+setTimeout(() => document.querySelector(".hint")?.classList.add("gone"), 8000);
+window.addEventListener("resize", () => { applyTransform(); });
+
+// Djuplänk: ?n=<nod-id> markerar en nod (delbar impact-vy), ?dead öppnar dödkodsläge,
+// ?q=<term> förfyller sökningen. Gör vyer delbara (t.ex. ?n=svc:auth = auth-blast-radius).
+(function deepLink(){
+  const p = new URLSearchParams(location.search);
+  if (p.has("dead")) document.getElementById("btn-dead").click();
+  const term = p.get("q");
+  if (term){ q.value = term; q.dispatchEvent(new Event("input")); }
+  const nid = p.get("n");
+  if (nid && nodeById.has(nid)){
+    const n = nodeById.get(nid);
+    if (n.group && collapsed.has(n.group)) { collapsed.delete(n.group); rebuild(); }
+    view.k = 0.62; applyTransform();
+    selectNode(nid);
+    view.x = stage.clientWidth*0.32 - (n._x + n._w/2)*view.k;
+    view.y = stage.clientHeight*0.46 - (n._y + n._h/2)*view.k;
+    applyTransform();
+  }
+  const fid = p.get("focus"); // panorera till en nod utan att markera (komponerar med ?dead)
+  if (fid && nodeById.has(fid)){
+    const n = nodeById.get(fid);
+    if (n.group && collapsed.has(n.group)) { collapsed.delete(n.group); rebuild(); if (deadMode) applyDeadMode(); }
+    view.k = 0.66;
+    view.x = stage.clientWidth*0.5 - (n._x + n._w/2)*view.k;
+    view.y = stage.clientHeight*0.5 - (n._y + n._h/2)*view.k;
+    applyTransform();
+  }
+})();
+</script>
+</body>
+</html>
