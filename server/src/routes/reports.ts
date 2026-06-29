@@ -603,7 +603,7 @@ export function computeKpiTickets(
   scope: 'total' | 'aging',
   filters: { year?: string; month?: string } = {},
 ): Record<string, unknown>[] {
-  let where = '';
+  let where: string;
   const params: string[] = [];
 
   if (scope === 'aging') {

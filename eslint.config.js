@@ -28,7 +28,14 @@ export default tseslint.config(
       "react-refresh": reactRefresh,
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
+      // react-hooks 7:s `recommended` drar numera in React Compiler-reglerna
+      // (set-state-in-effect, refs, purity, immutability, preserve-manual-
+      // memoization). Denna kodbas kör INTE React Compiler, och de reglerna ger
+      // ~40 beteendekänsliga träffar över 20+ filer — adopteras som egen,
+      // testad insats, inte via en dep-bump. Därför sätts de KLASSISKA reglerna
+      // explicit (= tidigare beteende), versionsoberoende:
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-explicit-any": "off",

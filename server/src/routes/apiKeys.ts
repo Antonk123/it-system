@@ -44,7 +44,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
   // Validera expires_at: om satt måste det vara ett giltigt framtida datum.
   // Utan denna check accepterar `new Date('garbage') < new Date()` (= false)
   // tyst och nyckeln går aldrig ut.
-  let normalizedExpiresAt: string | null = null;
+  let normalizedExpiresAt: string | null;
   if (expires_at !== undefined && expires_at !== null && expires_at !== '') {
     if (typeof expires_at !== 'string') {
       return res.status(400).json({ error: 'expires_at måste vara ett ISO-datum (sträng)' });

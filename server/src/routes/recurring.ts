@@ -58,7 +58,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
     }
 
     const result = templates.map(t => {
-      let parsedTags: string[] = [];
+      let parsedTags: string[];
       try {
         parsedTags = JSON.parse(t.tags || '[]');
       } catch {

@@ -22,15 +22,6 @@ updates:
       # som inte finns i drift.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
-      # eslint-ekosystemet uppgraderas KOORDINERAT som en egen insats: @eslint/js 10
-      # kräver eslint 10, och eslint-plugin-react-hooks 7 aktiverar ~39 nya
-      # beteendekänsliga regler som måste triageas. Inte styckvis i ett dep-svep.
-      - dependency-name: "eslint"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "@eslint/js"
-        update-types: ["version-update:semver-major"]
-      - dependency-name: "eslint-plugin-react-hooks"
-        update-types: ["version-update:semver-major"]
 
   # Backend (server/package.json)
   - package-ecosystem: "npm"
