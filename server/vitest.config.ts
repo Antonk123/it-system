@@ -16,14 +16,16 @@ export default defineConfig({
       exclude: ['src/**/*.test.ts', 'src/db/migrations.ts'],
       // Regressionsspärr (ratchet): satta strax UNDER nuvarande täckning så de
       // fångar tapp utan att fälla bygget idag. Höj i takt med fler tester.
-      // Kör med `npm test -- --coverage`.
-      // audit-v3: täckning höjd ~33 %→~42 % (auth/tickets/apiKeys/webhooks/users/
-      // recurring/attachments route-tester) → ratchet höjd från 27/18/28/27.
+      // VERKSTÄLLS I CI: lint-server-jobbet kör `npm test -- --coverage`, så ett
+      // tapp under trösklarna fäller bygget (inte bara lokalt).
+      // audit-v3: täckning höjd ~33 %→~42 % → ratchet 27/18/28/27 → 38/33/38/38.
+      // 2026-06-29: faktisk nivå 44.0/40.5/45.0/44.6 → ratchet höjd till
+      // 42/38/42/42 (~2 p marginal) för att låsa vinsterna.
       thresholds: {
-        statements: 38,
-        branches: 33,
-        functions: 38,
-        lines: 38,
+        statements: 42,
+        branches: 38,
+        functions: 42,
+        lines: 42,
       },
     },
   },

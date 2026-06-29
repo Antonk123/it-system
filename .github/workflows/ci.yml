@@ -33,7 +33,9 @@ jobs:
           cache-dependency-path: server/package-lock.json
       - run: cd server && npm ci
       - run: cd server && npx tsc --noEmit
-      - run: cd server && npm test
+      # --coverage verkställer ratchet-trösklarna i vitest.config.ts (fäller
+      # bygget om täckningen tappar under dem).
+      - run: cd server && npm test -- --coverage
 
   docker-build:
     runs-on: ubuntu-latest
