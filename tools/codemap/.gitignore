@@ -1,0 +1,6 @@
+node_modules/
+graph.auto.json
+graph.json
+verify.ts
+*.DS_Store
+# dist/codemap.html checkas in (genererad men användbar utan bygge)

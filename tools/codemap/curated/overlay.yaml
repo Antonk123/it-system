@@ -1,0 +1,30 @@
+# Kurerat lager: lägg till affärslogik och beskrivningar som inte syns i koden.
+# Noder här slås ihop med auto-noder via id (kör `npm run extract` och titta i
+# graph.auto.json för giltiga id:n). Edges med kind: business läggs till.
+# Refererar du en nod som inte finns kastar merge ett fel — det är meningen.
+# Exempel — fyll på fritt. Id:n verifierade mot graph.auto.json 2026-06-29.
+nodes:
+  - id: page:CompanyList
+    feature: Företag
+    description: Listar företag med statistik (öppna ärenden, kontakter).
+  - id: page:TicketDetail
+    feature: Ärenden
+    description: Ärendevy med AI-draftsvar, sammanfattning, checklistor och tidrapportering.
+  - id: route:/api/billing
+    feature: Fakturering
+    description: Gapless löpnummer + moms, billbar tid och dubbel-fakturerings-skydd.
+  - id: route:/api/email-inbound
+    feature: E-post → ärende
+    description: IMAP-pollad inkommande mejl skapar/uppdaterar ärenden och notifierar tekniker.
+  - id: service:aiHelper
+    feature: AI
+    description: Anthropic Claude SDK — deflection, draftsvar, sammanfattning, kategorisering.
+  - id: service:slaScheduler
+    feature: SLA
+    description: Kör var 5:e min, flaggar passerade deadlines och eskalerar via webhook/mejl/push.
+edges: []
+features:
+  Fakturering: { color: "#e8a838" }
+  SLA: { color: "#d1495b" }
+  "E-post → ärende": { color: "#30638e" }
+  AI: { color: "#f0a35e" }
