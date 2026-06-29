@@ -16,6 +16,21 @@ updates:
       frontend-minor-patch:
         applies-to: version-updates
         update-types: ["minor", "patch"]
+    ignore:
+      # @types/node hålls i linje med Node-runtime (22). Bumpa major först när
+      # .nvmrc/Docker/CI går till en nyare Node-major — annars typar vi mot API:er
+      # som inte finns i drift.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # eslint-ekosystemet uppgraderas KOORDINERAT som en egen insats: @eslint/js 10
+      # kräver eslint 10, och eslint-plugin-react-hooks 7 aktiverar ~39 nya
+      # beteendekänsliga regler som måste triageas. Inte styckvis i ett dep-svep.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "eslint-plugin-react-hooks"
+        update-types: ["version-update:semver-major"]
 
   # Backend (server/package.json)
   - package-ecosystem: "npm"
@@ -31,6 +46,10 @@ updates:
       backend-minor-patch:
         applies-to: version-updates
         update-types: ["minor", "patch"]
+    ignore:
+      # Samma som frontend: håll @types/node i linje med Node-runtime (22).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions i workflowsen (pinnade actions hålls aktuella)
   - package-ecosystem: "github-actions"
