@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>IT-Ticket · API-referens</title>
+    <!--
+      Statisk API-referens som renderar openapi.yaml med Redoc.
+      Öppna filen direkt i en webbläsare (eller servera docs/) — ingen backend krävs.
+      Specen är sanningskällan; den här filen är bara visaren.
+    -->
+    <style>
+      body { margin: 0; padding: 0; }
+    </style>
+  </head>
+  <body>
+    <redoc spec-url="./openapi.yaml"></redoc>
+    <!-- Pinnad version + Subresource Integrity (sha384) → skyddar mot CDN-kompromiss.
+         Vid uppgradering: byt version i URL:en OCH räkna om integrity-hashen. -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/redoc@2.5.0/bundles/redoc.standalone.js"
+      integrity="sha384-4vOjrBu7SuDWXcAw1qFznVLA/sKL+0l4nn+J1HY8w7cpa6twQEYuh4b0Cwuo7CyX"
+      crossorigin="anonymous"
+    ></script>
+  </body>
+</html>

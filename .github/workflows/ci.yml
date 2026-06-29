@@ -21,6 +21,8 @@ jobs:
       - run: npx tsc --noEmit -p tsconfig.app.json
       - run: npx tsc --noEmit -p tsconfig.node.json
       - run: npm test
+      # OpenAPI-specen måste vara strukturellt giltig (docs/openapi.yaml).
+      - run: npm run openapi:lint
 
   lint-server:
     runs-on: ubuntu-latest

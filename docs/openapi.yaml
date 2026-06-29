@@ -1,0 +1,1283 @@
+openapi: 3.0.3
+info:
+  title: IT-Ticket API
+  version: 1.0.0
+  description: >
+    REST-API för IT-Ticket — ett ärendehanteringssystem för IT-konsulter.
+
+
+    **Leverans:** rullande från `main` (en instans per deployment).
+    Versionen ovan spårar API-kontraktet, inte appens git-tagg.
+
+
+    ## Autentisering
+
+    Två sätt att autentisera, båda via `Authorization`-headern:
+
+    - **Session (JWT):** `Authorization: Bearer <jwt>`. Access-token gäller 15 min;
+      en HttpOnly refresh-cookie (path `/api/auth`) förnyar den via
+      `POST /api/auth/refresh`. **Muterande anrop (POST/PUT/PATCH/DELETE) kräver
+      även CSRF-token** i `x-csrf-token` (hämtas från `GET /api/csrf-token`).
+    - **API-nyckel:** `Authorization: Bearer itk_live_...`. Nycklar har scope
+      `read` eller `read,write`. API-nyckel-anrop är **undantagna från CSRF**.
+
+
+    ## Fel
+
+    Fel returneras som `{ "error": "..." }` med relevant HTTP-status.
+  license:
+    name: Se LICENSE i repot
+    url: https://github.com/Antonk123/it-system
+  contact:
+    name: IT-Ticket
+    url: https://github.com/Antonk123/it-system
+
+servers:
+  - url: https://ticket.prefabmastarna.se/api
+    description: Produktion
+  - url: http://localhost:3002/api
+    description: Lokal (docker-compose.local)
+
+tags:
+  - name: Auth
+    description: Inloggning, tokens, lösenord
+  - name: System
+    description: Hälsa och CSRF
+  - name: Tickets
+    description: Ärenden
+  - name: Categories
+    description: Ärendekategorier
+  - name: Contacts
+    description: Kontakter/beställare
+  - name: Companies
+    description: Företag/kunder
+  - name: Billing
+    description: Timpriser och fakturor (admin)
+  - name: Time entries
+    description: Tidsrapportering per ärende
+  - name: Knowledge base
+    description: Kunskapsbas-artiklar
+  - name: Public
+    description: Oautentiserad portal (deflection, publika ärenden)
+
+# Default: de flesta endpoints accepterar antingen session-JWT eller API-nyckel.
+# Publika endpoints sätter `security: []`, muterande lägger till csrfToken för
+# sessionsgrenen (se beforehand: (bearerAuth AND csrfToken) OR apiKeyAuth).
+security:
+  - bearerAuth: []
+  - apiKeyAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Hälsokontroll
+      security: []
+      responses:
+        "200":
+          description: Tjänsten är uppe
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  timestamp: { type: string, format: date-time }
+        "503":
+          description: Databasfel
+          $ref: "#/components/responses/Error"
+
+  /csrf-token:
+    get:
+      tags: [System]
+      summary: Hämta CSRF-token
+      description: Returnerar token som ska skickas i `x-csrf-token` på muterande sessions-anrop.
+      security: []
+      responses:
+        "200":
+          description: Token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  csrfToken: { type: string }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Logga in
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        "200":
+          description: Inloggad — access-token + refresh-cookie sätts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+                  accessToken: { type: string }
+                  token: { type: string, description: Alias för accessToken (bakåtkompat) }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Förnya access-token
+      description: Använder refresh-cookien (eller `refreshToken` i body).
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken: { type: string }
+      responses:
+        "200":
+          description: Ny access-token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  accessToken: { type: string }
+                  token: { type: string }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logga ut
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      responses:
+        "200":
+          $ref: "#/components/responses/Message"
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Aktuell användare
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Användaren
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Byt lösenord
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [currentPassword, newPassword]
+              properties:
+                currentPassword: { type: string, format: password }
+                newPassword: { type: string, format: password }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Begär lösenordsåterställning
+      description: Svarar alltid generiskt (anti-enumeration), oavsett om e-posten finns.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      summary: Återställ lösenord med token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, newPassword]
+              properties:
+                token: { type: string }
+                newPassword: { type: string, format: password }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /tickets:
+    get:
+      tags: [Tickets]
+      summary: Lista ärenden
+      parameters:
+        - { name: status, in: query, schema: { type: string, enum: [open, in-progress, waiting, resolved, closed] } }
+        - { name: priority, in: query, schema: { type: string, enum: [low, medium, high, critical] } }
+        - { name: search, in: query, schema: { type: string }, description: Fulltextsökning (FTS5) }
+        - { name: company_id, in: query, schema: { type: string } }
+        - { name: assigned_to, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        "200":
+          description: Lista med ärenden
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Ticket" }
+    post:
+      tags: [Tickets]
+      summary: Skapa ärende
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketInput" }
+      responses:
+        "201":
+          description: Skapat ärende
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /tickets/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Tickets]
+      summary: Hämta ärende
+      responses:
+        "200":
+          description: Ärendet (med kommentarer)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Tickets]
+      summary: Uppdatera ärende
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TicketInput" }
+      responses:
+        "200":
+          description: Uppdaterat ärende
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ticket" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Tickets]
+      summary: Radera ärende
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /categories:
+    get:
+      tags: [Categories]
+      summary: Lista kategorier
+      responses:
+        "200":
+          description: Kategorier
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Category" }
+    post:
+      tags: [Categories]
+      summary: Skapa kategori (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label: { type: string }
+      responses:
+        "201":
+          description: Skapad kategori
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /categories/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [Categories]
+      summary: Uppdatera kategori (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label]
+              properties:
+                label: { type: string }
+      responses:
+        "200":
+          description: Uppdaterad kategori
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Category" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Categories]
+      summary: Radera kategori (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /contacts:
+    get:
+      tags: [Contacts]
+      summary: Lista kontakter
+      responses:
+        "200":
+          description: Kontakter (max 500)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Contact" }
+    post:
+      tags: [Contacts]
+      summary: Skapa kontakt (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactInput" }
+      responses:
+        "201":
+          description: Skapad kontakt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Contact" }
+
+  /contacts/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Contacts]
+      summary: Hämta kontakt
+      responses:
+        "200":
+          description: Kontakten
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Contact" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Contacts]
+      summary: Uppdatera kontakt (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ContactInput" }
+      responses:
+        "200":
+          description: Uppdaterad kontakt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Contact" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Contacts]
+      summary: Radera kontakt (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /companies:
+    get:
+      tags: [Companies]
+      summary: Lista företag
+      responses:
+        "200":
+          description: Företag med statistik
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Company" }
+    post:
+      tags: [Companies]
+      summary: Skapa företag (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompanyInput" }
+      responses:
+        "201":
+          description: Skapat företag
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Company" }
+
+  /companies/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Companies]
+      summary: Hämta företag (med kontakter + stats)
+      responses:
+        "200":
+          description: Företaget
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Company" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Companies]
+      summary: Uppdatera företag (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CompanyInput" }
+      responses:
+        "200":
+          description: Uppdaterat företag
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Company" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Companies]
+      summary: Radera företag (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /billing/rates/{companyId}:
+    parameters:
+      - { name: companyId, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Billing]
+      summary: Hämta timpris (admin)
+      responses:
+        "200":
+          description: Timpris för företaget (kroppen är `null` om inget timpris är satt)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingRate" }
+    put:
+      tags: [Billing]
+      summary: Sätt timpris (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rate_per_hour]
+              properties:
+                rate_per_hour: { type: number, minimum: 0, exclusiveMinimum: true }
+                currency: { type: string, default: SEK }
+      responses:
+        "200":
+          description: Uppdaterat timpris
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BillingRate" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /billing/invoices:
+    get:
+      tags: [Billing]
+      summary: Lista fakturor (admin)
+      parameters:
+        - { name: company_id, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Fakturor
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Invoice" }
+    post:
+      tags: [Billing]
+      summary: Skapa faktura (admin)
+      description: Serverberäknar totaler, tilldelar gapless löpnummer och stämplar fakturerade tidsposter.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [company_id, period_start, period_end, lines]
+              properties:
+                company_id: { type: string }
+                period_start: { type: string, format: date-time }
+                period_end: { type: string, format: date-time }
+                currency: { type: string, default: SEK }
+                vat_rate: { type: number, minimum: 0, maximum: 1, description: "Momssats 0–1 (default 0.25)" }
+                lines:
+                  type: array
+                  items: { $ref: "#/components/schemas/InvoiceLineInput" }
+      responses:
+        "201":
+          description: Skapad faktura
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Invoice" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409":
+          description: Överlappande fakturaperiod för företaget
+          $ref: "#/components/responses/Error"
+
+  /billing/invoices/preview:
+    post:
+      tags: [Billing]
+      summary: Förhandsgranska faktura (admin)
+      description: Aggregerar billbar, ej fakturerad tid i perioden → rader + totaler + moms.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [company_id, period_start, period_end]
+              properties:
+                company_id: { type: string }
+                period_start: { type: string, format: date-time }
+                period_end: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Förhandsgranskning
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lines:
+                    type: array
+                    items: { $ref: "#/components/schemas/InvoiceLine" }
+                  total_hours: { type: number }
+                  total_amount: { type: number }
+                  vat_rate: { type: number }
+                  vat_amount: { type: number }
+                  total_incl_vat: { type: number }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /billing/invoices/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Billing]
+      summary: Hämta faktura med rader (admin)
+      responses:
+        "200":
+          description: Fakturan
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - { $ref: "#/components/schemas/Invoice" }
+                  - type: object
+                    properties:
+                      lines:
+                        type: array
+                        items: { $ref: "#/components/schemas/InvoiceLine" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Billing]
+      summary: Radera fakturautkast (admin)
+      description: Endast utkast (draft) kan raderas.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "400":
+          description: Icke-utkast kan inte raderas
+          $ref: "#/components/responses/Error"
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /billing/invoices/{id}/status:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [Billing]
+      summary: Ändra fakturastatus (admin)
+      description: "Endast framåt: draft → sent → paid."
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [draft, sent, paid] }
+      responses:
+        "200":
+          description: Uppdaterad faktura
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Invoice" }
+        "400":
+          description: Ogiltig bakåt-övergång eller ogiltigt värde
+          $ref: "#/components/responses/Error"
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /time-entries/{ticketId}:
+    parameters:
+      - { name: ticketId, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Time entries]
+      summary: Lista tid på ärende
+      responses:
+        "200":
+          description: Tidsposter + summa
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items: { $ref: "#/components/schemas/TimeEntry" }
+                  total_minutes: { type: integer }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Time entries]
+      summary: Logga tid
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [duration_minutes]
+              properties:
+                duration_minutes: { type: integer, minimum: 1, maximum: 1440 }
+                note: { type: string, nullable: true }
+                billable: { type: boolean, default: true }
+                work_date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$', nullable: true }
+      responses:
+        "201":
+          description: Skapad tidspost
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TimeEntry" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /time-entries/{ticketId}/{id}:
+    parameters:
+      - { name: ticketId, in: path, required: true, schema: { type: string } }
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      tags: [Time entries]
+      summary: Redigera tidspost
+      description: Låst (409) om posten redan fakturerats.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                duration_minutes: { type: integer, minimum: 1, maximum: 1440 }
+                note: { type: string, nullable: true }
+                billable: { type: boolean }
+                work_date: { type: string, pattern: '^\d{4}-\d{2}-\d{2}$', nullable: true }
+      responses:
+        "200":
+          description: Uppdaterad tidspost
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TimeEntry" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Posten är redan fakturerad
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [Time entries]
+      summary: Radera tidspost
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /kb/articles:
+    get:
+      tags: [Knowledge base]
+      summary: Lista/sök artiklar
+      parameters:
+        - { name: search, in: query, schema: { type: string }, description: Fulltextsökning (FTS5) }
+        - { name: category_id, in: query, schema: { type: string } }
+        - { name: article_type, in: query, schema: { type: string, enum: [how-to, solution] } }
+        - { name: tag, in: query, schema: { type: string } }
+        - { name: stale, in: query, schema: { type: boolean } }
+      responses:
+        "200":
+          description: Artiklar (icke-admin ser bara publicerade)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/KbArticle" }
+    post:
+      tags: [Knowledge base]
+      summary: Skapa artikel (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KbArticleInput" }
+      responses:
+        "201":
+          description: Skapad artikel
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KbArticle" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /kb/articles/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Knowledge base]
+      summary: Hämta artikel
+      responses:
+        "200":
+          description: Artikeln
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KbArticle" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [Knowledge base]
+      summary: Uppdatera artikel (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KbArticleInput" }
+      responses:
+        "200":
+          description: Uppdaterad artikel
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KbArticle" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Knowledge base]
+      summary: Radera artikel (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /kb/public/{token}:
+    parameters:
+      - { name: token, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Knowledge base]
+      summary: Hämta publik artikel via delningstoken
+      security: []
+      responses:
+        "200":
+          description: Publik artikel
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KbArticle" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /public/tickets:
+    post:
+      tags: [Public]
+      summary: Skapa ärende från portalen
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, title]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                title: { type: string }
+                description: { type: string }
+                category: { type: string }
+                priority: { type: string, enum: [low, medium, high, critical] }
+                template_id: { type: string }
+                customFields:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      fieldName: { type: string }
+                      fieldLabel: { type: string }
+                      fieldValue: { type: string }
+      responses:
+        "201":
+          description: Skapat ärende
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  ticketId: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /public/ai-suggest:
+    post:
+      tags: [Public]
+      summary: Deflection — AI-svar från kunskapsbasen
+      description: Söker KB via FTS och genererar ett AI-svar. Oautentiserad.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [problemText]
+              properties:
+                problemText: { type: string }
+                userEmail: { type: string, format: email }
+      responses:
+        "200":
+          description: AI-förslag
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deflectionId: { type: string }
+                  hasSolution: { type: boolean }
+                  solution: { type: string }
+                  confidence: { type: number }
+                  kbReferences:
+                    type: array
+                    items: { type: object }
+        "400": { $ref: "#/components/responses/Error" }
+        "503":
+          description: AI ej konfigurerad/otillgänglig
+          $ref: "#/components/responses/Error"
+
+  /public/ai-suggest/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    patch:
+      tags: [Public]
+      summary: Rapportera utfall av AI-förslag
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [outcome]
+              properties:
+                outcome: { type: string, enum: [solved, rejected] }
+                ticketId: { type: string }
+      responses:
+        "200":
+          description: Registrerat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Session-JWT: `Authorization: Bearer <jwt>`."
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: "API-nyckel: `Authorization: Bearer itk_live_...` (scope read/write). Undantagen från CSRF."
+    csrfToken:
+      type: apiKey
+      in: header
+      name: x-csrf-token
+      description: Krävs på muterande sessions-anrop. Hämtas från `GET /api/csrf-token`.
+
+  responses:
+    Error:
+      description: Fel
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Message:
+      description: OK med meddelande
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+    Unauthorized:
+      description: Ej autentiserad
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Saknar behörighet (t.ex. admin krävs eller fel scope)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Hittades inte
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+      required: [error]
+
+    User:
+      type: object
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        role: { type: string, enum: [admin, user] }
+
+    Ticket:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [open, in-progress, waiting, resolved, closed] }
+        priority: { type: string, enum: [low, medium, high, critical] }
+        category_id: { type: string, nullable: true }
+        requester_id: { type: string, nullable: true }
+        company_id: { type: string, nullable: true }
+        assigned_to: { type: string, nullable: true }
+        assigned_to_name: { type: string, nullable: true }
+        notes: { type: string, nullable: true }
+        solution: { type: string, nullable: true }
+        created_by: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time, nullable: true }
+        closed_at: { type: string, format: date-time, nullable: true }
+        sla_response_deadline: { type: string, format: date-time, nullable: true }
+        sla_resolution_deadline: { type: string, format: date-time, nullable: true }
+
+    TicketInput:
+      type: object
+      required: [title]
+      description: Antingen `description` eller `customFields` krävs.
+      properties:
+        title: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [open, in-progress, waiting, resolved, closed] }
+        priority: { type: string, enum: [low, medium, high, critical] }
+        category_id: { type: string }
+        requester_id: { type: string }
+        company_id: { type: string }
+        assigned_to: { type: string }
+        notes: { type: string }
+        solution: { type: string }
+        template_id: { type: string }
+        customFields:
+          type: array
+          items:
+            type: object
+            properties:
+              fieldName: { type: string }
+              fieldLabel: { type: string }
+              fieldValue: { type: string }
+
+    Category:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        label: { type: string }
+        position: { type: integer }
+        created_at: { type: string, format: date-time }
+
+    Contact:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string, nullable: true }
+        company_id: { type: string, nullable: true }
+        company_name: { type: string, nullable: true }
+        department: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    ContactInput:
+      type: object
+      required: [name, email]
+      properties:
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: string }
+        company_id: { type: string }
+        department: { type: string }
+
+    Company:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        org_number: { type: string, nullable: true }
+        email: { type: string, nullable: true }
+        phone: { type: string, nullable: true }
+        address: { type: string, nullable: true }
+        sla_disabled: { type: integer, enum: [0, 1] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        contact_count: { type: integer }
+        open_ticket_count: { type: integer }
+        total_ticket_count: { type: integer }
+
+    CompanyInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        org_number: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        sla_disabled: { type: boolean }
+
+    BillingRate:
+      type: object
+      properties:
+        id: { type: string }
+        company_id: { type: string }
+        rate_per_hour: { type: number }
+        currency: { type: string }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    Invoice:
+      type: object
+      properties:
+        id: { type: string }
+        company_id: { type: string }
+        company_name: { type: string, nullable: true }
+        period_start: { type: string, format: date-time }
+        period_end: { type: string, format: date-time }
+        status: { type: string, enum: [draft, sent, paid] }
+        invoice_number: { type: integer, nullable: true }
+        total_hours: { type: number }
+        total_amount: { type: number }
+        vat_rate: { type: number }
+        vat_amount: { type: number }
+        currency: { type: string }
+        pdf_path: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        sent_at: { type: string, format: date-time, nullable: true }
+        paid_at: { type: string, format: date-time, nullable: true }
+
+    InvoiceLine:
+      type: object
+      properties:
+        id: { type: string }
+        invoice_id: { type: string }
+        ticket_id: { type: string, nullable: true }
+        description: { type: string }
+        hours: { type: number }
+        rate: { type: number }
+        amount: { type: number }
+
+    InvoiceLineInput:
+      type: object
+      required: [description, hours, rate, amount]
+      properties:
+        ticket_id: { type: string }
+        description: { type: string }
+        hours: { type: number }
+        rate: { type: number }
+        amount: { type: number }
+
+    TimeEntry:
+      type: object
+      properties:
+        id: { type: string }
+        ticket_id: { type: string }
+        user_id: { type: string, nullable: true }
+        duration_minutes: { type: integer }
+        note: { type: string, nullable: true }
+        billable: { type: integer, enum: [0, 1] }
+        work_date: { type: string, nullable: true }
+        invoice_id: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    KbArticle:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        content: { type: string }
+        category_id: { type: string, nullable: true }
+        category_name: { type: string, nullable: true }
+        article_type: { type: string, enum: [how-to, solution] }
+        status: { type: string, enum: [draft, published] }
+        tags:
+          type: array
+          items: { type: string }
+        view_count: { type: integer }
+        last_reviewed_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    KbArticleInput:
+      type: object
+      required: [title, category_id]
+      properties:
+        title: { type: string }
+        content: { type: string }
+        category_id: { type: string }
+        article_type: { type: string, enum: [how-to, solution] }
+        status: { type: string, enum: [draft, published] }
+        tag_ids:
+          type: array
+          items: { type: string }

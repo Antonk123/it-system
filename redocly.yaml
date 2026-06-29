@@ -1,0 +1,10 @@
+# Redocly-config för OpenAPI-validering (CI: `npm run openapi:lint`).
+# `minimal` kör de strukturella/korrekthetsreglerna (ogiltig OpenAPI fäller bygget)
+# utan `recommended`-rulesetets stil-nag (operationId på varje operation, 4xx på
+# varje svar). Höj till `recommended` om/när vi vill täcka de sakerna också.
+extends:
+  - minimal
+
+apis:
+  itticket:
+    root: docs/openapi.yaml

@@ -60,9 +60,14 @@ All konfiguration sker via `.env`. Se [`.env.example`](.env.example) för dokume
 
 ## API-översikt
 
-Fullständig endpoint-referens finns i [`docs/API.md`](docs/API.md).
+**Maskinläsbart kontrakt:** [`docs/openapi.yaml`](docs/openapi.yaml) (OpenAPI 3.0).
+Öppna [`docs/api.html`](docs/api.html) i en webbläsare för en renderad, klickbar
+referens (Redoc) — eller generera en klient-SDK från specen. Validera med
+`npm run openapi:lint` (körs även i CI). Snabböversikt nedan; `docs/API.md` har prosan.
 
-Alla endpoints ligger under `/api`. Autentisering via JWT Bearer-token. CSRF-skydd via `X-CSRF-Token`-header.
+Alla endpoints ligger under `/api`. Autentisering via JWT Bearer-token **eller**
+API-nyckel (`Authorization: Bearer itk_live_...`). CSRF-skydd via `x-csrf-token`-header
+på muterande sessions-anrop (API-nyckel-anrop är undantagna).
 
 | Endpoint | Beskrivning |
 |----------|-------------|
