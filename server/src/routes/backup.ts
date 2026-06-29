@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { db, closeDatabase } from '../db/connection.js';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, unlinkSync, mkdirSync, createReadStream, createWriteStream, copyFileSync, rmSync, openSync, readSync, closeSync } from 'fs';
@@ -63,7 +63,7 @@ router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (req: A
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    const archive = archiver('zip', { zlib: { level: 6 } });
+    const archive = new ZipArchive({ zlib: { level: 6 } });
 
     archive.pipe(res);
 

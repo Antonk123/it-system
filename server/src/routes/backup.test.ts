@@ -40,7 +40,7 @@ const { DB_PATH } = vi.hoisted(() => {
 
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import { PassThrough } from 'node:stream';
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
 import { createApp } from '../app.js';
@@ -68,7 +68,7 @@ let userToken: string;
  */
 function buildZipBuffer(entries: { name: string; content: Buffer | string }[]): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const archive = archiver('zip', { zlib: { level: 1 } });
+    const archive = new ZipArchive({ zlib: { level: 1 } });
     const chunks: Buffer[] = [];
     const passThrough = new PassThrough();
     passThrough.on('data', (chunk: Buffer) => chunks.push(chunk));

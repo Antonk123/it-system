@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import Database from 'better-sqlite3';
 import type { Database as DatabaseType } from 'better-sqlite3';
 import { existsSync, mkdirSync, unlinkSync, createWriteStream, statSync, readdirSync, chmodSync } from 'fs';
@@ -141,7 +141,7 @@ export async function runBackup(
     // 3. Bunta DB + uploads till ZIP (samma struktur som manuell download → direkt restorebar)
     await new Promise<void>((resolve, reject) => {
       const output = createWriteStream(backupPath);
-      const archive = archiver('zip', { zlib: { level: 6 } });
+      const archive = new ZipArchive({ zlib: { level: 6 } });
       output.on('close', () => resolve());
       output.on('error', reject);
       archive.on('error', reject);
