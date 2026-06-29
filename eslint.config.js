@@ -14,7 +14,6 @@ export default tseslint.config(
       ".planning/**",
       ".superpowers/**",
       "node_modules/**",
-      "tools/codemap/**",
     ],
   },
   {
