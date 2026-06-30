@@ -112,7 +112,7 @@
   .softdim { opacity: 0.34 !important; }
 
   /* ---------- Detail panel ---------- */
-  #detail {
+  #detail, #dompanel {
     position: absolute; top: 14px; right: 14px; width: 322px; max-height: calc(100% - 28px);
     background: linear-gradient(180deg, #15181c, #111316);
     border: 1px solid var(--line-2); border-radius: 14px;
@@ -120,7 +120,16 @@
     display: none; flex-direction: column; overflow: hidden; z-index: 20;
     animation: pop .18s ease-out;
   }
-  #detail.show { display: flex; }
+  #detail.show, #dompanel.show { display: flex; }
+  .dp-actions { display:flex; gap:8px; margin:2px 0 16px; }
+  .dp-actions .btn { flex:1; justify-content:center; height:34px; }
+  .dp-break { display:flex; flex-direction:column; gap:9px; margin:2px 0 16px; }
+  .dp-zone { background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:9px 11px; }
+  .dp-zone .zt { font-size:10px; text-transform:uppercase; letter-spacing:.7px; font-weight:700; margin-bottom:7px; }
+  .dp-zone.fe .zt { color:#9cc3ff; } .dp-zone.be .zt { color:#c9a06a; }
+  .dp-zone .rows { display:flex; flex-wrap:wrap; gap:5px; }
+  .dp-zone .lc { font-size:11px; background:var(--panel-2); border:1px solid var(--line); border-radius:5px; padding:2px 7px; color:var(--txt-2); }
+  .dp-zone .lc b { color:var(--txt); font-weight:700; }
   @keyframes pop { from { opacity: 0; transform: translateY(-6px) scale(.985);} to {opacity:1; transform:none;} }
   .d-head { padding: 14px 15px 12px; border-bottom: 1px solid var(--line); position: relative; }
   .d-accent { position: absolute; left: 0; top: 0; bottom: 0; width: 3px; }
@@ -317,6 +326,25 @@
         <h4>Påverkas vid ändring · uppström <span class="n" id="d-up-n"></span></h4>
         <div class="reflist" id="d-up"></div>
       </div>
+    </div>
+  </aside>
+
+  <aside id="dompanel">
+    <div class="d-head">
+      <div class="d-accent" id="dp-accent"></div>
+      <button class="d-close" id="dp-close">✕</button>
+      <div class="d-kicker"><span class="chip layer">Affärsområde</span></div>
+      <div class="d-title" id="dp-title"></div>
+      <div class="d-sub" id="dp-sub"></div>
+    </div>
+    <div class="d-body">
+      <p class="d-desc" id="dp-desc"></p>
+      <div class="dp-break" id="dp-break"></div>
+      <div class="dp-actions">
+        <button class="btn" id="dp-focus">Fokusera området</button>
+        <button class="btn" id="dp-collapse">Fäll ihop</button>
+      </div>
+      <div class="d-sec"><h4 style="color:var(--txt-2)">Mest centrala delar</h4><div class="reflist" id="dp-hubs"></div></div>
     </div>
   </aside>
 
@@ -1057,6 +1085,38 @@ const CHANGES = [
     vad:"Admin kan slå av/på om kundsvar ska mejlas ut (två-vägs e-postkommunikation).",
     lösning:"Ny inställning i app_settings (migration 064) som en settings-tjänst läser; mejlutskicket gatas på den; admin-switch i Integrationer; publika svar styrs i ärendevyn.",
     påverkade:["route:settings","svc:settings","svc:email","table:app_settings","hook:useSettings","page:IntegrationsTab","page:TicketDetail"] },
+  { id:"c-ticketform-loop", typ:"bugg", titel:"Beställaren gick inte att ändra (render-loop)", datum:"2026-06-22",
+    vad:"I redigeringsformuläret snäppte beställarvalet och alla fält tillbaka till serverns värde — formuläret gick inte att redigera.",
+    lösning:"Ärende-objektet beräknades inline (ny referens varje render) → populeringen loopade oändligt. Fix: useMemo för stabil referens + populera-en-gång-per-id-spärr.",
+    påverkade:["page:TicketForm"] },
+  { id:"c-contacts-500", typ:"bugg", titel:"Kontaktredigering gav fel (500)", datum:"2026-06-22",
+    vad:"Varje gång en admin ändrade en kontakt misslyckades sparandet med ett serverfel.",
+    lösning:"Koden satte ett 'updated_at'-fält som kontakttabellen saknar → SQL-fel. Fix: ta bort fältet (det läses ingenstans) + regressionstest.",
+    påverkade:["route:contacts","table:contacts"] },
+  { id:"c-ticketdetail-404", typ:"bugg", titel:"Ärende gav '404' utanför listans sida", datum:"2026-06-17",
+    vad:"Att öppna ett ärende som inte låg på den just laddade list-sidan gav 'Ärendet hittades inte'.",
+    lösning:"Ärendet byggdes bara ur den paginerade list-cachen. Fix: använd detalj-anropet som primärkälla med list-cachen som omedelbar reserv.",
+    påverkade:["page:TicketDetail","route:tickets"] },
+  { id:"c-reports-1000", typ:"bugg", titel:"Rapporter räknade fel över 1000 ärenden", datum:"2026-06-18",
+    vad:"Status- och taggdiagrammen i Rapporter visade för låga tal när antalet ärenden passerade 1000.",
+    lösning:"Aggregeringen skedde i webbläsaren från max 1000 rader. Fix: räkna i databasen (server-side SQL) över hela datasetet via nya endpoints.",
+    påverkade:["page:Reports","route:reports"] },
+  { id:"c-kb-xss", typ:"bugg", titel:"DOM-XSS i kunskapsbasens preview", datum:"2026-06-18",
+    vad:"Artikel-previewen i kunskapsbasen kunde tolka rå <, >, & som kod istället för text.",
+    lösning:"Söktermsmarkeringen escapar nu alltid texten innan <mark> läggs på; escapeHtml flyttad till en delad hjälpfunktion. +4 tester.",
+    påverkade:["page:KnowledgeBase"] },
+  { id:"c-prompt-injection", typ:"bugg", titel:"Prompt injection i AI-funktionerna", datum:"2026-06-04",
+    vad:"Användartext (ärendetitel/beskrivning, kommentarer, bilagor) skickades osanerad in i AI-prompterna.",
+    lösning:"sanitizeForPrompt() tillämpas nu på all användartext i alla fyra AI-funktioner (KB-förslag, kategorisering, svarsutkast, sammanfattning).",
+    påverkade:["svc:aiHelper","route:public","route:tickets"] },
+  { id:"c-iso-trigger", typ:"bugg", titel:"Datumfilter missade kommentarer/checklistor", datum:"2026-06-20",
+    vad:"Datumfilter på 'uppdaterad' missade exakta gränser för kommentarer och checklistor.",
+    lösning:"DB-triggrarna skrev ett annat tidsformat och åsidosatte app-kodens ISO-tid. Fix: migration 060 skriver om triggrarna till ISO-format (speglar tickets-fixen i 059).",
+    påverkade:["table:ticket_comments","table:ticket_checklists"] },
+  { id:"c-assigned-col", typ:"funktion", titel:"'Tilldelad'-kolumn i ärendelistan", datum:"2026-06-17",
+    vad:"Ärendelistan visade bara beställare, inte vem ärendet var tilldelat (syntes bara på översikten).",
+    lösning:"Ny 'Tilldelad'-kolumn (avatar + namn) i listan; delad avatar-hjälpare återanvänd från översiktspanelen.",
+    påverkade:["page:TicketList"] },
 ];
 
 /* ============================================================
@@ -1285,7 +1345,7 @@ function render(){
     const tl = el("text", { x:32, y:ty, fill:"var(--txt)", "font-size":13, "font-weight":750, "letter-spacing":"-0.2px" }, lg);
     tl.textContent = b.name;
     const cnt = el("text", { x:32, y:ty+15, fill:"var(--txt-3)", "font-size":10, "font-family":"var(--mono)" }, lg);
-    cnt.textContent = (b.collapsed ? "▸ " : "▾ ") + b.count + " noder";
+    cnt.textContent = b.collapsed ? ("▸ " + b.count + " delar") : (b.count + " delar · översikt ›");
   }
 
   // edges
@@ -1459,6 +1519,7 @@ function clearViz(){
 }
 function selectNode(id){
   selected = id;
+  document.getElementById("dompanel").classList.remove("show"); activeDomain = null;
   document.querySelector(".hint")?.classList.add("gone");
   const n = nodeById.get(id);
   const down = bfs(id, outAdj);   // beror på
@@ -1550,7 +1611,7 @@ function openDetail(n, downOrder, upOrder){
 }
 function fillRefs(listId, nId, order, dotColor){
   const list = document.getElementById(listId);
-  document.getElementById(nId).textContent = order.length;
+  const _nEl = document.getElementById(nId); if(_nEl) _nEl.textContent = order.length;
   if (!order.length){ list.innerHTML = `<div class="d-empty">Inga.</div>`; return; }
   list.innerHTML = "";
   // unique by id, keep first kind
@@ -1618,7 +1679,8 @@ q.addEventListener("input", () => {
   let hits=0;
   GRAPH.nodes.forEach(n => {
     if(!n._g) return;
-    const hay = (n.label+" "+n.id+" "+n.loc+" "+(n.desc||"")+" "+n.domain).toLowerCase();
+    const epText = n.epRich ? n.epRich.map(e=>e.path+" "+(e.sv||"")).join(" ") : (n.endpoints||[]).join(" ");
+    const hay = (n.namn+" "+n.kort+" "+n.label+" "+n.id+" "+n.loc+" "+(n.desc||"")+" "+n.domain+" "+layerSv(n.layer)+" "+epText).toLowerCase();
     if (hay.includes(term)){ hits++; const b=n._g.querySelector(".box"); b.setAttribute("stroke","var(--brand)"); b.setAttribute("stroke-width",2.6); b.setAttribute("fill","#241a10"); }
     else n._g.classList.add("dimmed");
   });
@@ -1632,7 +1694,7 @@ q.addEventListener("input", () => {
 svg.addEventListener("click", (e) => {
   const g = e.target.closest(".node");
   const gut = e.target.closest(".gutter");
-  if (gut){ toggleBand(gut.getAttribute("data-band")); return; }
+  if (gut){ openDomain(gut.getAttribute("data-band")); return; }
   if (g){ const id=g.getAttribute("data-id"); if(id===selected) deselect(); else selectNode(id); return; }
   if (!e.target.closest("#detail")) deselect();
 });
@@ -1646,11 +1708,12 @@ document.addEventListener("keydown", (e) => {
     if(document.getElementById("intro").classList.contains("show")){ hideIntro(); return; }
     if(document.activeElement===q){ q.value=""; q.dispatchEvent(new Event("input")); q.blur(); return; }
     if(document.getElementById("changes").classList.contains("show")){ closeChanges(); return; }
+    if(document.getElementById("dompanel").classList.contains("show")){ closeDomain(); return; }
     deselect();
   }
   if (e.key==="/" && document.activeElement!==q){ e.preventDefault(); q.focus(); }
 });
-document.getElementById("btn-reset").onclick = () => { q.value=""; q.dispatchEvent(new Event("input")); exitDeadMode(); closeChanges(); deselect(); fit(); };
+document.getElementById("btn-reset").onclick = () => { q.value=""; q.dispatchEvent(new Event("input")); exitDeadMode(); closeChanges(); closeDomain(); deselect(); fit(); };
 
 function toggleBand(key){
   if (collapsed.has(key)) collapsed.delete(key); else collapsed.add(key);
@@ -1804,6 +1867,41 @@ document.getElementById("intro-go").onclick = hideIntro;
 document.getElementById("intro").addEventListener("click",(e)=>{ if(e.target.id==="intro") hideIntro(); });
 document.getElementById("btn-help").onclick = showIntro;
 
+/* ---------- Domän-översikt (klick på domänrubrik) ---------- */
+let activeDomain = null;
+function openDomain(key){
+  const g = GROUP_BY_KEY[key]; if(!g) return;
+  activeDomain = key;
+  selected = null; document.getElementById("detail").classList.remove("show");
+  if (activeChange){ activeChange=null; document.querySelectorAll(".chg").forEach(d=>d.classList.remove("active")); }
+  document.getElementById("changes").classList.remove("show"); document.getElementById("btn-changes").classList.remove("on");
+  if (deadMode) exitDeadMode(true);
+  const nodes = GRAPH.nodes.filter(n=>n.group===key);
+  document.getElementById("dp-accent").style.background = g.color;
+  document.getElementById("dp-title").textContent = g.name;
+  document.getElementById("dp-sub").textContent = nodes.length + " delar i området";
+  document.getElementById("dp-desc").textContent = "Allt som rör " + g.name.toLowerCase() + " — från det användaren ser hela vägen till databasen.";
+  const byLayer = {}; nodes.forEach(n=>byLayer[n.layer]=(byLayer[n.layer]||0)+1);
+  const feLayers=["frontend-page","frontend-shell","frontend-hook","context","api-client"].filter(l=>byLayer[l]);
+  const beLayers=["api-route","service","scheduler","db-table"].filter(l=>byLayer[l]);
+  const chips = ls => ls.map(l=>`<span class="lc"><b>${byLayer[l]}</b> ${escapeHtml(layerSv(l).toLowerCase())}</span>`).join("");
+  const brk = document.getElementById("dp-break"); brk.innerHTML="";
+  if(feLayers.length) brk.innerHTML += `<div class="dp-zone fe"><div class="zt">Frontend · det användaren ser</div><div class="rows">${chips(feLayers)}</div></div>`;
+  if(beLayers.length) brk.innerHTML += `<div class="dp-zone be"><div class="zt">Backend · servern</div><div class="rows">${chips(beLayers)}</div></div>`;
+  const deg = id => outAdj.get(id).length + inAdj.get(id).length;
+  const hubs = nodes.slice().sort((a,b)=>deg(b.id)-deg(a.id)).slice(0,5).map(h=>({id:h.id, kind:layerSv(h.layer)}));
+  fillRefs("dp-hubs","__dp_noop", hubs, g.color);
+  document.getElementById("dp-collapse").textContent = collapsed.has(key) ? "Expandera" : "Fäll ihop";
+  document.getElementById("dp-collapse").onclick = () => { toggleBand(key); document.getElementById("dp-collapse").textContent = collapsed.has(key)?"Expandera":"Fäll ihop"; };
+  document.getElementById("dp-focus").onclick = () => { const ids=GRAPH.nodes.filter(n=>n.group===key && n._x!=null).map(n=>n.id); if(ids.length){ highlightSet(ids, g.color); fitNodes(ids); } };
+  document.getElementById("dompanel").classList.add("show");
+}
+function closeDomain(){
+  document.getElementById("dompanel").classList.remove("show");
+  if(activeDomain){ activeDomain=null; clearViz(); if(deadMode) applyDeadMode(); }
+}
+document.getElementById("dp-close").onclick = closeDomain;
+
 /* ============================================================
    BOOT
    ============================================================ */
@@ -1849,6 +1947,8 @@ window.addEventListener("resize", () => { applyTransform(); });
   }
   const cid = p.get("change"); // ?change=<id> öppnar ändringar och markerar en post (delbar)
   if (cid && CHANGES.some(c=>c.id===cid)){ openChanges(); selectChange(cid); }
+  const dk = p.get("domain"); // ?domain=<key> öppnar en domänöversikt (delbar)
+  if (dk && GROUP_BY_KEY[dk]) openDomain(dk);
 })();
 </script>
 </body>
