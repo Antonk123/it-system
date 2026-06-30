@@ -1262,19 +1262,19 @@ function render(){
   edgeLayer = el("g", null, root);
   nodeLayer = el("g", null, root);
 
-  // FE/BE-zoner (bakom banden): frontend = svagt blå, backend = svagt mörkare, brygglinje vid API:t
+  // FE/BE: brygglinje vid API-klienten. Zon-tinten ritas per band nedan (billig
+  // rastrering — en jättestor halvtransparent rekt är dyr att komposita).
   const _colX = i => GUTTER + 24 + i*COL_W;
   const divX = _colX(2) + NW + COL_GAP/2;
-  const zh = Math.max(0, layout.height - TOP);
-  el("rect", { x:GUTTER, y:TOP, width:Math.max(0,divX-GUTTER), height:zh, fill:"rgba(120,170,255,0.020)" }, zoneLayer);
-  el("rect", { x:divX, y:TOP, width:Math.max(0,layout.width-divX), height:zh, fill:"rgba(0,0,0,0.16)" }, zoneLayer);
-  el("line", { x1:divX, y1:TOP, x2:divX, y2:layout.height, stroke:hexA('#ff9e4d',0.28), "stroke-width":1.5, "stroke-dasharray":"3 6" }, zoneLayer);
+  el("line", { x1:divX, y1:TOP, x2:divX, y2:layout.height, stroke:hexA('#ff9e4d',0.30), "stroke-width":1.5, "stroke-dasharray":"3 6" }, zoneLayer);
 
   // bands
   for (const b of layout.bands){
     const g = el("g", { "data-band": b.key }, bandLayer);
     el("rect", { x:0, y:b.top, width:layout.width, height:b.height,
       fill: hexA(b.color, b.collapsed?0.05:0.035), stroke:"none" }, g);
+    // backend-zonen aningen mörkare (per band = billig rastrering)
+    if (!b.collapsed) el("rect", { x:divX, y:b.top, width:Math.max(0,layout.width-divX), height:b.height, fill:"rgba(0,0,0,0.14)" }, g);
     el("rect", { x:0, y:b.top, width:4, height:b.height, fill:b.color, opacity:0.85 }, g);
     el("line", { x1:0, y1:b.top+b.height, x2:layout.width, y2:b.top+b.height, stroke:"var(--line)", "stroke-width":1 }, g);
     // gutter label (clickable -> collapse)
@@ -1314,8 +1314,10 @@ function render(){
     // left accent bar
     el("rect", { x:0, y:0, width:3.5, height:n._h, rx:0, fill: n._dead ? "var(--dead)" : c, opacity: n._dead?0.9:0.9 }, g);
     // klarspråksnamn (rad 1)
+    // tile-namn: släpp redundant "(databas)" på tabeller (kolumnen + metaraden säger redan Databas)
+    const dispNamn = n.layer==="db-table" ? (n.namn||n.label).replace(/\s*\(databas\)\s*$/i,"") : (n.namn||n.label);
     const namn = el("text", { class:"namn", x:12, y:21 }, g);
-    namn.textContent = trunc(n.namn || n.label, 23);
+    namn.textContent = trunc(dispNamn, 25);
     if (n._dead) namn.setAttribute("fill", "#e8b6ba");
     // lager · kodnamn (rad 2)
     const meta = el("text", { class:"meta", x:12, y:35 }, g);
@@ -1813,7 +1815,11 @@ updateHeaderStats();
 fit();
 setTimeout(() => document.querySelector(".hint")?.classList.add("gone"), 9000);
 window.addEventListener("resize", () => { applyTransform(); });
-(function maybeIntro(){ let seen=false; try{ seen = localStorage.getItem("archmap-intro-seen")==="1"; }catch(e){} if(!seen) showIntro(); })();
+(function maybeIntro(){
+  if (new URLSearchParams(location.search).has("nointro")) return; // hoppa över intron (delning/inbäddning/screenshot)
+  let seen=false; try{ seen = localStorage.getItem("archmap-intro-seen")==="1"; }catch(e){}
+  if(!seen) showIntro();
+})();
 
 // Djuplänk: ?n=<nod-id> markerar en nod (delbar impact-vy), ?dead öppnar dödkodsläge,
 // ?q=<term> förfyller sökningen. Gör vyer delbara (t.ex. ?n=svc:auth = auth-blast-radius).
@@ -1841,6 +1847,8 @@ window.addEventListener("resize", () => { applyTransform(); });
     view.y = stage.clientHeight*0.5 - (n._y + n._h/2)*view.k;
     applyTransform();
   }
+  const cid = p.get("change"); // ?change=<id> öppnar ändringar och markerar en post (delbar)
+  if (cid && CHANGES.some(c=>c.id===cid)){ openChanges(); selectChange(cid); }
 })();
 </script>
 </body>
