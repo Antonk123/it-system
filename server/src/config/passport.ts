@@ -4,39 +4,24 @@ import { Strategy as JwtStrategy, ExtractJwt } from 'passport-jwt';
 import bcrypt from 'bcryptjs';
 import { db } from '../db/connection.js';
 import { logger } from '../lib/logger.js';
+import { validateSecret } from './secretValidation.js';
 
 // CRITICAL: JWT_SECRET must be set in environment variables
-// Never use a hardcoded fallback in production
-const MIN_SECRET_LENGTH = 32;
+// Never use a hardcoded fallback in production.
+// Validation logic lives in secretValidation.ts (pure, unit-tested) — this IIFE
+// just wires the result to logging + process.exit for this specific secret.
 const JWT_SECRET: string = (() => {
   const secret = process.env.JWT_SECRET;
-  if (!secret) {
-    logger.error('FATAL: JWT_SECRET environment variable is not set!');
-    logger.error('Please set JWT_SECRET to a strong random value.');
+  const result = validateSecret('JWT_SECRET', secret, process.env);
+  if (!result.ok) {
+    logger.error(`FATAL: ${result.reason}`);
     logger.error('Generate one with: openssl rand -base64 32');
     process.exit(1);
   }
-  // A short secret is brute-forceable (HS256 token forging). Fail CLOSED by
-  // default. The relaxation requires TWO explicit conditions — opt-in flag AND a
-  // whitelisted non-prod NODE_ENV ('development'|'test', never "!= production") —
-  // so neither a misconfigured prod with NODE_ENV unset, nor ALLOW_WEAK_SECRETS=1
-  // leaking into prod, can fail open. (Missing secret above always exits too.)
-  if (secret.length < MIN_SECRET_LENGTH) {
-    const allowWeak =
-      process.env.ALLOW_WEAK_SECRETS === '1' &&
-      (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test');
-    if (allowWeak) {
-      logger.warn(
-        `JWT_SECRET is short (${secret.length} chars) — allowed only because ALLOW_WEAK_SECRETS=1 in NODE_ENV=${process.env.NODE_ENV}. Recommend at least ${MIN_SECRET_LENGTH}.`
-      );
-    } else {
-      logger.error(
-        `FATAL: JWT_SECRET is too short (${secret.length} chars) — must be at least ${MIN_SECRET_LENGTH}. (Overridable only with NODE_ENV=development|test + ALLOW_WEAK_SECRETS=1.) Generate with: openssl rand -base64 32`
-      );
-      process.exit(1);
-    }
+  if (result.warning) {
+    logger.warn(result.warning);
   }
-  return secret;
+  return secret as string;
 })();
 
 interface UserRow {

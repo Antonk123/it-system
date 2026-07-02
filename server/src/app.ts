@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import passport from './config/passport.js';
 import { logger } from './lib/logger.js';
 import { cookieSecure } from './config/cookies.js';
+import { validateSecret } from './config/secretValidation.js';
 import { isApiKeyRequest } from './middleware/auth.js';
 import { db } from './db/connection.js';
 
@@ -138,29 +139,15 @@ export function createApp() {
   // CSRF protection (Double Submit Cookie Pattern via csrf-csrf)
   // Protects all state-changing endpoints (POST, PUT, PATCH, DELETE) under /api
   // Exempt: /api/auth/login and /api/auth/refresh (authenticate with credentials, not cookies)
-  if (!process.env.CSRF_SECRET) {
-    logger.error('FATAL: CSRF_SECRET must be set (no dev fallback — generate with `openssl rand -hex 64`)');
+  // Validation logic lives in secretValidation.ts (pure, unit-tested) — this
+  // block just wires the result to logging + process.exit for CSRF_SECRET.
+  const csrfSecretResult = validateSecret('CSRF_SECRET', process.env.CSRF_SECRET, process.env);
+  if (!csrfSecretResult.ok) {
+    logger.error(`FATAL: ${csrfSecretResult.reason} Generate with \`openssl rand -hex 64\`.`);
     process.exit(1);
   }
-  // A short CSRF secret weakens the double-submit signing. Fail CLOSED by
-  // default. The relaxation requires TWO explicit conditions — opt-in flag AND a
-  // whitelisted non-prod NODE_ENV — so neither a misconfigured prod (NODE_ENV
-  // unset) nor ALLOW_WEAK_SECRETS=1 leaking into prod can fail open. (Missing
-  // secret above always exits too.)
-  if (process.env.CSRF_SECRET.length < 32) {
-    const allowWeak =
-      process.env.ALLOW_WEAK_SECRETS === '1' &&
-      (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test');
-    if (allowWeak) {
-      logger.warn(
-        `CSRF_SECRET is short (${process.env.CSRF_SECRET.length} chars) — allowed only because ALLOW_WEAK_SECRETS=1 in NODE_ENV=${process.env.NODE_ENV}. Recommend at least 32.`
-      );
-    } else {
-      logger.error(
-        `FATAL: CSRF_SECRET is too short (${process.env.CSRF_SECRET.length} chars) — must be at least 32. (Overridable only with NODE_ENV=development|test + ALLOW_WEAK_SECRETS=1.) Generate with \`openssl rand -hex 64\`.`
-      );
-      process.exit(1);
-    }
+  if (csrfSecretResult.warning) {
+    logger.warn(csrfSecretResult.warning);
   }
 
   const { generateCsrfToken, doubleCsrfProtection } = doubleCsrf({
