@@ -6,7 +6,8 @@ shutdown och en kort incident-checklista.
 
 > Närliggande dokument:
 > - `docs/RUNBOOK.md` — drifthandbok för per-kund-installationer via `setup.sh`
->   (manuell volym-backup, uppgradering). Den här filen täcker de
+>   (uppgradering; backup/restore utgår från det inbyggda systemet med manuell
+>   volym-kopiering som reserv). Den här filen täcker de
 >   **applikationsinterna** rutinerna (inbyggd scheduler, endpoints, env-styrning).
 > - `docs/AI_FEATURES.md` — AI-funktioner, modellval, token-budget och
 >   circuit breaker (refereras från avsnittet om AI-tokenövervakning nedan).
