@@ -100,7 +100,8 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
       description || null,
       templateType,
       title_template,
-      description_template || null,
+      // Kolumnen är NOT NULL; dynamiska mallar komponerar beskrivningen från fält → tom sträng
+      description_template || '',
       priority || 'medium',
       category_id || null,
       notes_template || null,
