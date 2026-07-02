@@ -4,7 +4,7 @@ import { db, closeDatabase } from '../db/connection.js';
 import { ZipArchive } from 'archiver';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync, unlinkSync, mkdirSync, createReadStream, createWriteStream, copyFileSync, rmSync, openSync, readSync, closeSync } from 'fs';
+import { existsSync, unlinkSync, mkdirSync, createReadStream, createWriteStream, copyFileSync, cpSync, rmSync, openSync, readSync, closeSync } from 'fs';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import multer from 'multer';
@@ -16,8 +16,10 @@ import {
   runBackup,
   isBackupRunning,
   reconfigureBackupScheduler,
+  getConsecutiveBackupFailures,
   type BackupConfig,
 } from '../lib/backupScheduler.js';
+import { getOffsiteFailureCount } from '../lib/offsiteBackup.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -48,6 +50,49 @@ const backupDownloadLimiter = createRateLimiter(15 * 60 * 1000, 10);
 
 // Fynd restore-missing-rate-limit: Rate limit för restore (max 5 försök per 15 min per IP).
 const restoreLimiter = createRateLimiter(15 * 60 * 1000, 5);
+
+// Fynd M14: swap-logiken för restore utbruten ur route-handlern så att den lyckade
+// vägen kan testas direkt (process.exit(0) stannar kvar i handlern). Invariant:
+// pre-restore-kopian tas FÖRE closeDb (checkpoint + closeDatabase i prod) och
+// rollback sker vid varje fel efter den punkten — DB-filen lämnas aldrig halvbytt.
+export function performRestoreSwap(opts: {
+  restoredDbPath: string;
+  dbPath: string;
+  uploadsSrc: string;
+  uploadsDest: string;
+  // Körs efter pre-restore-kopian men före filbytet. Route-handlern skickar
+  // WAL-checkpoint + closeDatabase här; testerna kan utelämna eller kasta.
+  closeDb?: () => void;
+}): void {
+  const { restoredDbPath, dbPath, uploadsSrc, uploadsDest, closeDb } = opts;
+
+  const dbBackup = `${dbPath}.pre-restore`;
+  copyFileSync(dbPath, dbBackup);
+
+  try {
+    closeDb?.();
+
+    copyFileSync(restoredDbPath, dbPath);
+    const walFile = `${dbPath}-wal`;
+    const shmFile = `${dbPath}-shm`;
+    if (existsSync(walFile)) unlinkSync(walFile);
+    if (existsSync(shmFile)) unlinkSync(shmFile);
+
+    if (existsSync(uploadsSrc)) {
+      // Fynd 4: Rensa uploads-katalogen innan återställning så att den exakt speglar backupen.
+      rmSync(uploadsDest, { recursive: true, force: true });
+      mkdirSync(uploadsDest, { recursive: true });
+      cpSync(uploadsSrc, uploadsDest, { recursive: true });
+    }
+  } catch (restoreError) {
+    copyFileSync(dbBackup, dbPath);
+    throw restoreError;
+  }
+
+  // Fynd pre-restore-backup-not-cleaned-up: Ta bort rollback-filen efter lyckad
+  // återställning så att den inte ligger kvar och tar diskutrymme i onödan.
+  try { unlinkSync(dbBackup); } catch { /* ignore — filen kanske redan är borta */ }
+}
 
 const router = Router();
 
@@ -235,46 +280,28 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
       testDb.close();
     }
 
-    const dbBackup = `${DB_PATH}.pre-restore`;
-    copyFileSync(DB_PATH, dbBackup);
+    // Fynd M14: hela swap-sekvensen (pre-restore-kopia → checkpoint/close → filbyte →
+    // sidofiler → uploads, med rollback) ligger i performRestoreSwap så den är testbar.
+    performRestoreSwap({
+      restoredDbPath: restoredDb,
+      dbPath: DB_PATH,
+      uploadsSrc: join(extractDir, 'data', 'uploads'),
+      uploadsDest: UPLOAD_DIR,
+      closeDb: () => {
+        // Fynd backup-audit-1: RESTART (inte TRUNCATE) väntar in pågående läsare/skrivare
+        // innan checkpointen slutförs. Det undviker att vi skriver över DB-filen mitt i en
+        // annan transaktions partiella skrivning → korruption under restore.
+        db.pragma('wal_checkpoint(RESTART)');
 
-    try {
-      const walFile = `${DB_PATH}-wal`;
-      const shmFile = `${DB_PATH}-shm`;
-
-      // Fynd backup-audit-1: RESTART (inte TRUNCATE) väntar in pågående läsare/skrivare
-      // innan checkpointen slutförs. Det undviker att vi skriver över DB-filen mitt i en
-      // annan transaktions partiella skrivning → korruption under restore.
-      db.pragma('wal_checkpoint(RESTART)');
-
-      // Stäng databashandtaget innan vi skriver över filen — process.exit(0)
-      // nedan startar om processen med ett nytt handtag mot den återställda DB:n.
-      closeDatabase();
-      dbClosed = true;
-
-      copyFileSync(restoredDb, DB_PATH);
-      if (existsSync(walFile)) unlinkSync(walFile);
-      if (existsSync(shmFile)) unlinkSync(shmFile);
-
-      const restoredUploads = join(extractDir, 'data', 'uploads');
-      if (existsSync(restoredUploads)) {
-        // Fynd 4: Rensa UPLOAD_DIR innan återställning så att det exakt speglar backupen.
-        rmSync(UPLOAD_DIR, { recursive: true, force: true });
-        mkdirSync(UPLOAD_DIR, { recursive: true });
-        const { cpSync } = await import('fs');
-        cpSync(restoredUploads, UPLOAD_DIR, { recursive: true });
-      }
-    } catch (restoreError) {
-      copyFileSync(dbBackup, DB_PATH);
-      throw restoreError;
-    }
+        // Stäng databashandtaget innan vi skriver över filen — process.exit(0)
+        // nedan startar om processen med ett nytt handtag mot den återställda DB:n.
+        closeDatabase();
+        dbClosed = true;
+      },
+    });
 
     rmSync(tmpDir, { recursive: true, force: true });
     try { unlinkSync(uploadedZip); } catch { /* ignore */ }
-
-    // Fynd pre-restore-backup-not-cleaned-up: Ta bort rollback-filen efter lyckad
-    // återställning så att den inte ligger kvar och tar diskutrymme i onödan.
-    try { unlinkSync(dbBackup); } catch { /* ignore — filen kanske redan är borta */ }
 
     // Fynd 1: Skicka svar och schemalägg process.exit(0) så Docker (restart: unless-stopped)
     // startar om containern med den nya DB:n i ett rent tillstånd.
@@ -338,9 +365,19 @@ function computeNextRunAt(cfg: BackupConfig): string | null {
   return next.toISOString();
 }
 
+// Fynd M13: räknarna exponeras så admin-UI:t kan varna vid upprepade fel —
+// tidigare syntes fel bara som en passiv ikon.
+function configResponse(cfg: BackupConfig) {
+  return {
+    ...cfg,
+    nextRunAt: computeNextRunAt(cfg),
+    consecutiveFailures: getConsecutiveBackupFailures(),
+    offsiteFailureCount: getOffsiteFailureCount(),
+  };
+}
+
 router.get('/config', authenticate, requireAdmin, (_req: AuthRequest, res: Response) => {
-  const cfg = getBackupConfig();
-  res.json({ ...cfg, nextRunAt: computeNextRunAt(cfg) });
+  res.json(configResponse(getBackupConfig()));
 });
 
 router.put('/config', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
@@ -362,8 +399,9 @@ router.put('/config', authenticate, requireAdmin, (req: AuthRequest, res: Respon
   // Slå igenom utan omstart: stoppa gammal task, schemalägg ny (eller ingen om pausad).
   reconfigureBackupScheduler();
 
-  const cfg = getBackupConfig();
-  return res.json({ ...cfg, nextRunAt: computeNextRunAt(cfg) });
+  // Samma svar som GET — hooken ersätter cachen med PUT-svaret (setQueryData),
+  // så räknarna måste med här också för att inte försvinna efter "Spara".
+  return res.json(configResponse(getBackupConfig()));
 });
 
 router.post('/run-now', authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {

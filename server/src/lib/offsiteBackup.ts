@@ -21,14 +21,15 @@ import { logger } from './logger.js';
  * NOTE for ops: add the following line to your .env (see .env.example):
  *   # OFFSITE_BACKUP_CMD=rclone copy {file} remote:itticket/
  *
- * Fynd backup-audit-7: håll en in-memory-räknare över misslyckade offsite-uppladdningar
- * (kan exporteras/visas senare). Om OFFSITE_BACKUP_REQUIRED === 'true' är en misslyckad
- * uppladdning fatal — vi kastar så att anroparen kan markera hela backupen som failed.
- * Annars är beteendet oförändrat (icke-fatalt: logga och fortsätt).
+ * Fynd backup-audit-7 + M13: håll en in-memory-räknare över KONSEKUTIVA misslyckade
+ * offsite-uppladdningar — ökar vid fel, nollställs vid lyckad uppladdning (annars
+ * skulle en enstaka historisk miss varna för evigt i admin-UI:t). Om
+ * OFFSITE_BACKUP_REQUIRED === 'true' är en misslyckad uppladdning fatal — vi kastar
+ * så att anroparen kan markera körningen. Annars icke-fatalt: logga och fortsätt.
  */
 let offsiteFailureCount = 0;
 
-/** Antal misslyckade offsite-uppladdningar sedan processtart (in-memory, ingen DB). */
+/** Antal konsekutiva misslyckade offsite-uppladdningar (in-memory, ingen DB). */
 export function getOffsiteFailureCount(): number {
   return offsiteFailureCount;
 }
@@ -61,6 +62,10 @@ export async function uploadBackupOffsite(filePath: string): Promise<void> {
         resolve();
       });
     });
+    if (offsiteFailureCount > 0) {
+      logger.info('Off-site backup recovered after consecutive failures', { previousFailures: offsiteFailureCount });
+    }
+    offsiteFailureCount = 0;
     logger.info('Off-site backup completed', { file: filePath });
   } catch (err) {
     offsiteFailureCount += 1;

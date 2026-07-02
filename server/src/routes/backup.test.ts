@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { existsSync, rmSync } from 'fs';
+import { existsSync, rmSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { join, dirname } from 'node:path';
+import { tmpdir as osTmpdir } from 'node:os';
 import { randomUUID } from 'crypto';
 
 /**
@@ -45,6 +47,7 @@ import { PassThrough } from 'node:stream';
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
 import { createApp } from '../app.js';
 import { stopBackupScheduler } from '../lib/backupScheduler.js';
+import { performRestoreSwap } from './backup.js';
 
 let app: ReturnType<typeof createApp>;
 
@@ -423,6 +426,15 @@ describe('GET /api/backup/config', () => {
     expect(res.body).toHaveProperty('lastStatus');
     expect(res.body).toHaveProperty('nextRunAt');
   });
+
+  it('exposes failure counters for the admin UI (M13)', async () => {
+    const res = await adminAgent
+      .get('/api/backup/config')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    expect(typeof res.body.consecutiveFailures).toBe('number');
+    expect(typeof res.body.offsiteFailureCount).toBe('number');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -513,5 +525,91 @@ describe('POST /api/backup/run-now', () => {
         .set('x-csrf-token', adminCsrfToken);
     const [a, b] = await Promise.all([fire(), fire()]);
     expect([a.status, b.status].sort()).toEqual([200, 409]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// performRestoreSwap — fynd M14: den lyckade restore-vägen kunde aldrig testas
+// via routen (process.exit(0)); swap-logiken testas därför direkt här.
+// ---------------------------------------------------------------------------
+
+describe('performRestoreSwap (M14)', () => {
+  // Temp-miljö som speglar restore-läget: live-DB med -wal/-shm-sidofiler,
+  // extraherad backup-DB + uploads, och en dest-uploads med gammalt innehåll.
+  const setup = () => {
+    const dir = mkdtempSync(join(osTmpdir(), 'restore-swap-'));
+
+    const dbPath = join(dir, 'live', 'database.sqlite');
+    mkdirSync(dirname(dbPath), { recursive: true });
+    writeFileSync(dbPath, 'OLD DB CONTENT');
+    writeFileSync(`${dbPath}-wal`, 'wal');
+    writeFileSync(`${dbPath}-shm`, 'shm');
+
+    const restoredDbPath = join(dir, 'extracted', 'data', 'database.sqlite');
+    mkdirSync(dirname(restoredDbPath), { recursive: true });
+    writeFileSync(restoredDbPath, 'NEW DB CONTENT');
+
+    const uploadsSrc = join(dir, 'extracted', 'data', 'uploads');
+    mkdirSync(uploadsSrc, { recursive: true });
+    writeFileSync(join(uploadsSrc, 'restored.txt'), 'from backup');
+
+    const uploadsDest = join(dir, 'live', 'uploads');
+    mkdirSync(uploadsDest, { recursive: true });
+    writeFileSync(join(uploadsDest, 'stale.txt'), 'should be removed');
+
+    return { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest };
+  };
+
+  it('swaps the DB file, deletes sidecars, mirrors uploads and removes the rollback copy', () => {
+    const { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest } = setup();
+    const closeDb = vi.fn();
+
+    performRestoreSwap({ restoredDbPath, dbPath, uploadsSrc, uploadsDest, closeDb });
+
+    expect(closeDb).toHaveBeenCalledTimes(1);
+    expect(readFileSync(dbPath, 'utf8')).toBe('NEW DB CONTENT');
+    expect(existsSync(`${dbPath}-wal`)).toBe(false);
+    expect(existsSync(`${dbPath}-shm`)).toBe(false);
+    // uploads speglar backupen exakt: nytt innehåll in, gammalt bort.
+    expect(readFileSync(join(uploadsDest, 'restored.txt'), 'utf8')).toBe('from backup');
+    expect(existsSync(join(uploadsDest, 'stale.txt'))).toBe(false);
+    // rollback-kopian städad efter lyckad swap.
+    expect(existsSync(`${dbPath}.pre-restore`)).toBe(false);
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('leaves uploadsDest untouched when the backup contains no uploads directory', () => {
+    const { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest } = setup();
+    rmSync(uploadsSrc, { recursive: true, force: true });
+
+    performRestoreSwap({ restoredDbPath, dbPath, uploadsSrc, uploadsDest });
+
+    expect(readFileSync(dbPath, 'utf8')).toBe('NEW DB CONTENT');
+    expect(readFileSync(join(uploadsDest, 'stale.txt'), 'utf8')).toBe('should be removed');
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('rolls back the DB file and rethrows when closeDb throws', () => {
+    const { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest } = setup();
+
+    expect(() =>
+      performRestoreSwap({
+        restoredDbPath,
+        dbPath,
+        uploadsSrc,
+        uploadsDest,
+        closeDb: () => {
+          throw new Error('checkpoint failed');
+        },
+      }),
+    ).toThrow('checkpoint failed');
+
+    // Pre-restore-kopian har rullat tillbaka DB-filen; uploads orörda.
+    expect(readFileSync(dbPath, 'utf8')).toBe('OLD DB CONTENT');
+    expect(readFileSync(join(uploadsDest, 'stale.txt'), 'utf8')).toBe('should be removed');
+
+    rmSync(dir, { recursive: true, force: true });
   });
 });

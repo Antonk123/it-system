@@ -12,17 +12,21 @@ import { logger } from './logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Fynd L14: 'offsite_failed' = lokal backup OK men offsite-uppladdningen misslyckades
+// (bara möjligt när OFFSITE_BACKUP_REQUIRED=true). Ingen schemaändring — last_status är TEXT.
+export type BackupRunStatus = 'success' | 'failed' | 'offsite_failed';
+
 export interface BackupConfig {
   enabled: boolean;
   time: string; // 'HH:MM' 24h i containerns lokaltid (styrs av TZ-env; prod = Europe/Stockholm, kräver tzdata i imagen — annars UTC)
   retentionDays: number;
   lastRunAt: string | null;
-  lastStatus: 'success' | 'failed' | null;
+  lastStatus: BackupRunStatus | null;
   lastSizeBytes: number | null;
 }
 
 export interface RunResult {
-  status: 'success' | 'failed' | 'skipped';
+  status: BackupRunStatus | 'skipped';
   path?: string;
   sizeBytes?: number;
   error?: string;
@@ -69,7 +73,7 @@ export function getBackupConfig(database: DatabaseType = defaultDb): BackupConfi
     time: row.time,
     retentionDays: row.retention_days,
     lastRunAt: row.last_run_at,
-    lastStatus: row.last_status as 'success' | 'failed' | null,
+    lastStatus: row.last_status as BackupRunStatus | null,
     lastSizeBytes: row.last_size_bytes,
   };
 }
@@ -80,7 +84,35 @@ export function isBackupRunning(): boolean {
   return running;
 }
 
-function recordRun(database: DatabaseType, status: 'success' | 'failed', sizeBytes: number | null): void {
+// Fynd M13: konsekutiva HELT misslyckade körningar (lokalt backup-fel). Speglar
+// consecutiveFailures-mönstret i aiHelper.ts. 'offsite_failed' nollställer — den
+// lokala pipelinen är då frisk och offsite har egen räknare (offsiteBackup.ts).
+// Ingen generell mail-hjälpare finns i server/src/lib (email.ts är ticketmall-
+// specifik), så larmet går via logg + exponeras i GET /api/backup/config.
+let consecutiveBackupFailures = 0;
+const BACKUP_FAILURE_ALERT_THRESHOLD = 3;
+
+/** Antal konsekutiva misslyckade backup-körningar (in-memory, ingen DB). */
+export function getConsecutiveBackupFailures(): number {
+  return consecutiveBackupFailures;
+}
+
+function recordRun(database: DatabaseType, status: BackupRunStatus, sizeBytes: number | null): void {
+  if (status === 'failed') {
+    consecutiveBackupFailures++;
+    if (consecutiveBackupFailures >= BACKUP_FAILURE_ALERT_THRESHOLD) {
+      logger.error('BACKUP ALERT: consecutive backup failures — investigate immediately', {
+        consecutiveFailures: consecutiveBackupFailures,
+        threshold: BACKUP_FAILURE_ALERT_THRESHOLD,
+      });
+    }
+  } else {
+    if (consecutiveBackupFailures >= BACKUP_FAILURE_ALERT_THRESHOLD) {
+      logger.info('Backup recovered after consecutive failures', { count: consecutiveBackupFailures });
+    }
+    consecutiveBackupFailures = 0;
+  }
+
   try {
     const now = new Date().toISOString();
     database
@@ -169,18 +201,18 @@ export async function runBackup(
     logger.info('Automatic backup completed', { path: backupPath, sizeBytes });
 
     // 3b. Off-site-upload (konfigureras via OFFSITE_BACKUP_CMD).
-    // Fynd backup-audit-7: uploadBackupOffsite kastar bara när OFFSITE_BACKUP_REQUIRED === 'true'
-    // (då behandlas en misslyckad uppladdning som fatal). I så fall låter vi felet propagera
-    // till den yttre catchen så att hela backupen markeras som 'failed'. Annars (icke-required)
-    // har funktionen redan loggat felet och returnerat normalt — backupen förblir lyckad.
-    if (process.env.OFFSITE_BACKUP_REQUIRED === 'true') {
+    // Fynd backup-audit-7 + L14: uploadBackupOffsite kastar bara när
+    // OFFSITE_BACKUP_REQUIRED === 'true'. Den lokala backupen är då redan skriven och
+    // verifierad, så körningen ska INTE markeras som helt 'failed' (det dolde att en
+    // giltig lokal backup fanns och hoppade över retention för dagen). Vi fångar felet,
+    // markerar 'offsite_failed' och låter retention köras ändå. Icke-required-fel har
+    // funktionen själv redan loggat och returnerat normalt.
+    let offsiteFailed = false;
+    try {
       await uploadBackupOffsite(backupPath);
-    } else {
-      try {
-        await uploadBackupOffsite(backupPath);
-      } catch (offSiteErr) {
-        logger.error('Off-site backup threw unexpectedly', { error: String(offSiteErr) });
-      }
+    } catch (offSiteErr) {
+      offsiteFailed = true;
+      logger.error('Off-site backup failed — local backup kept, run marked offsite_failed', { error: String(offSiteErr) });
     }
 
     // 4. Retention — behåll nyaste N, radera äldre .zip/.sqlite-snapshots.
@@ -200,8 +232,9 @@ export async function runBackup(
       } catch { /* ignore */ }
     }
 
-    recordRun(database, 'success', sizeBytes);
-    return { status: 'success', path: backupPath, sizeBytes };
+    const status: BackupRunStatus = offsiteFailed ? 'offsite_failed' : 'success';
+    recordRun(database, status, sizeBytes);
+    return { status, path: backupPath, sizeBytes };
   } catch (error) {
     cleanupTmp();
     logger.error('Automatic backup failed', { error: String(error) });
@@ -215,10 +248,25 @@ export async function runBackup(
 // ── Schemaläggning ──────────────────────────────────────────────────────────
 let task: ReturnType<typeof cron.schedule> | null = null;
 
-export function startBackupScheduler(database: DatabaseType = defaultDb): void {
+// Fynd M12: node-cron registrerar bara framåt — var servern nere vid klockslaget
+// hoppades dagens backup över tyst. Catch-up behövs när senaste körningen saknas,
+// har ett oparsebart timestamp eller är äldre än ~24h.
+const CATCH_UP_THRESHOLD_MS = 24 * 60 * 60 * 1000;
+
+/** Exporterad för testbarhet — ren beslutsfunktion för M12-catch-up. */
+export function isCatchUpNeeded(lastRunAt: string | null, nowMs: number = Date.now()): boolean {
+  if (!lastRunAt) return true;
+  const lastRunMs = Date.parse(lastRunAt);
+  return !Number.isFinite(lastRunMs) || nowMs - lastRunMs > CATCH_UP_THRESHOLD_MS;
+}
+
+export function startBackupScheduler(
+  database: DatabaseType = defaultDb,
+  opts: { catchUp?: boolean; backupDir?: string; uploadDir?: string } = {},
+): void {
   // Fynd backup-audit-6: säkerställ + logga backup-katalogen redan vid schedulerstart,
   // inte först vid första körningen.
-  const backupDir = defaultBackupDir();
+  const backupDir = opts.backupDir ?? defaultBackupDir();
   try {
     mkdirSync(backupDir, { recursive: true, mode: 0o700 });
     logger.info('Backup directory ready', { path: backupDir });
@@ -231,6 +279,16 @@ export function startBackupScheduler(database: DatabaseType = defaultDb): void {
     logger.info('Automatic backup disabled (paused via UI)');
     return;
   }
+
+  // Fynd M12: kör ikapp en missad backup direkt vid start (asynkront, icke-fatalt —
+  // runBackup fångar egna fel; .catch är hängslen så schemaläggningen aldrig stoppas).
+  if ((opts.catchUp ?? true) && isCatchUpNeeded(cfg.lastRunAt)) {
+    logger.info('Backup catch-up: last run missing or older than 24h — running backup now', { lastRunAt: cfg.lastRunAt });
+    void runBackup(database, { backupDir: opts.backupDir, uploadDir: opts.uploadDir }).catch((e) => {
+      logger.error('Backup catch-up run failed unexpectedly', { error: String(e) });
+    });
+  }
+
   task = cron.schedule(timeToCron(cfg.time), () => {
     void runBackup(database);
   });
@@ -238,12 +296,14 @@ export function startBackupScheduler(database: DatabaseType = defaultDb): void {
 }
 
 // Anropas efter config-PUT så tid/paus slår igenom utan omstart.
+// catchUp: false — en config-ändring är ingen serverstart; utan gaten skulle varje
+// PUT med gammal last_run_at trigga en omedelbar (oväntad) backup-körning.
 export function reconfigureBackupScheduler(database: DatabaseType = defaultDb): void {
   if (task) {
     task.stop();
     task = null;
   }
-  startBackupScheduler(database);
+  startBackupScheduler(database, { catchUp: false });
 }
 
 export function stopBackupScheduler(): void {
