@@ -9,9 +9,13 @@ backup/
 # Server runtime data (databas, uploads, backups)
 server/data/
 
-# Känsliga dokument (interna anteckningar, projektinstruktioner)
+# Känsliga dokument (interna anteckningar)
+# OBS: CLAUDE.md är medvetet spårad (utvecklarguide för repot); lokala tillägg → CLAUDE.local.md
 TODO.md
-CLAUDE.md
+CLAUDE.local.md
+
+# Täckningsrapporter (genereras av vitest --coverage, även i CI)
+coverage/
 
 # Claude Code-konfiguration (lokala/personliga inställningar ignoreras)
 .claude/settings.local.json

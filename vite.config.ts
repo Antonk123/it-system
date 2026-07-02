@@ -5,9 +5,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
-  // tools/codemap är ett fristående verktyg med egna beroenden (ts-morph) och
-  // egen testkörning — appens svit ska inte plocka upp dess tester. Speglar att
-  // mappen redan är exkluderad från eslint (eslint.config.js).
+  // tools/sqlite-mcp är ett fristående verktyg med egna beroenden — appens
+  // svit ska inte plocka upp ev. tester därifrån. Speglar att mappen redan är
+  // exkluderad från eslint (eslint.config.js).
   test: {
     exclude: [...configDefaults.exclude, "tools/**"],
   },
