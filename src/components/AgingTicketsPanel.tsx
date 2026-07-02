@@ -69,9 +69,18 @@ export const AgingTicketsPanel = ({ tickets, isLoading, isError, onRetry }: Agin
               <div
                 key={ticket.id}
                 onClick={() => navigate(`/tickets/${ticket.id}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(`/tickets/${ticket.id}`);
+                  }
+                }}
                 className={cn(
                   'flex items-center gap-3 px-1 py-2 rounded-md cursor-pointer',
                   'hover:bg-muted/40 transition-colors duration-150',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background',
                   ticket.age_days >= 14 && 'border-l-2 border-l-destructive/60',
                   ticket.age_days >= 7 && ticket.age_days < 14 && 'border-l-2 border-l-[hsl(var(--priority-high))]/50'
                 )}

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Check, ChevronsUpDown, Search } from 'lucide-react';
+import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
@@ -7,7 +7,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Input } from '@/components/ui/input';
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from '@/components/ui/command';
 import { Template } from '@/types/ticket';
 
 interface TemplateComboboxProps {
@@ -51,56 +58,54 @@ export const TemplateCombobox = ({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[280px] p-0 bg-popover border border-border z-50" align="start">
-          <div className="flex items-center border-b px-3 py-2">
-            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-            <Input
+          <Command shouldFilter={false}>
+            <CommandInput
               placeholder="Sök mall..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="h-8 border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+              onValueChange={setSearch}
             />
-          </div>
-          <div className="max-h-60 overflow-y-auto">
-            {filteredTemplates.length === 0 ? (
-              <div className="py-6 text-center text-sm text-muted-foreground">
+            <CommandList className="max-h-60">
+              <CommandEmpty>
                 {templates.length === 0
                   ? 'Inga mallar tillgängliga'
                   : 'Inga resultat'}
-              </div>
-            ) : (
-              filteredTemplates.map((template) => (
-                <div
-                  key={template.id}
-                  className={cn(
-                    'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/60',
-                    selectedTemplate?.id === template.id && 'bg-muted/60'
-                  )}
-                  onClick={() => {
-                    onSelect(template);
-                    setOpen(false);
-                    setSearch('');
-                  }}
-                >
-                  <Check
+              </CommandEmpty>
+              <CommandGroup>
+                {filteredTemplates.map((template) => (
+                  <CommandItem
+                    key={template.id}
+                    value={template.id}
+                    onSelect={() => {
+                      onSelect(template);
+                      setOpen(false);
+                      setSearch('');
+                    }}
                     className={cn(
-                      'h-4 w-4 shrink-0',
-                      selectedTemplate?.id === template.id
-                        ? 'opacity-100'
-                        : 'opacity-0'
+                      'gap-2',
+                      selectedTemplate?.id === template.id && 'bg-muted/60'
                     )}
-                  />
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-medium truncate">{template.name}</span>
-                    {template.description && (
-                      <span className="text-xs text-muted-foreground truncate">
-                        {template.description}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                  >
+                    <Check
+                      className={cn(
+                        'h-4 w-4 shrink-0',
+                        selectedTemplate?.id === template.id
+                          ? 'opacity-100'
+                          : 'opacity-0'
+                      )}
+                    />
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-medium truncate">{template.name}</span>
+                      {template.description && (
+                        <span className="text-xs text-muted-foreground truncate">
+                          {template.description}
+                        </span>
+                      )}
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
         </PopoverContent>
       </Popover>
 

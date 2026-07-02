@@ -63,7 +63,15 @@ export const RemindersPanel = ({ reminders, isLoading }: RemindersPanelProps) =>
               <div
                 key={reminder.id}
                 onClick={() => navigate(`/tickets/${reminder.ticket_id}`)}
-                className="flex items-center gap-3 px-1 py-2 rounded-md cursor-pointer hover:bg-muted/40 transition-colors duration-150"
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(`/tickets/${reminder.ticket_id}`);
+                  }
+                }}
+                className="flex items-center gap-3 px-1 py-2 rounded-md cursor-pointer hover:bg-muted/40 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
               >
                 <Bell className="w-3.5 h-3.5 text-primary shrink-0" />
                 <p

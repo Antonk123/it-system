@@ -3,6 +3,7 @@ import { Plus, AlertTriangle, CheckCircle, MessageSquare, ArrowRightLeft, UserPl
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { STATUS_LABELS } from '@/lib/constants';
 import { formatDistanceToNow } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import type { ActivityEvent } from '@/hooks/useActivityFeed';
@@ -41,13 +42,7 @@ function getEventDescription(event: ActivityEvent): string {
     return `${user} skapade ärende${via}`;
   }
 
-  const statusLabels: Record<string, string> = {
-    'open': 'Öppen',
-    'in-progress': 'Pågående',
-    'waiting': 'Väntar',
-    'resolved': 'Löst',
-    'closed': 'Stängt',
-  };
+  const statusLabels: Record<string, string> = STATUS_LABELS;
 
   if (event.field_name === 'status') {
     const from = statusLabels[event.old_value ?? ''] || event.old_value;
@@ -105,8 +100,16 @@ export const ActivityFeedPanel = ({ events, isLoading }: ActivityFeedPanelProps)
               return (
                 <div
                   key={event.id}
-                  className="group grid grid-cols-[28px_1fr] gap-3 px-5 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors relative"
+                  className="group grid grid-cols-[28px_1fr] gap-3 px-5 py-2.5 cursor-pointer hover:bg-muted/30 transition-colors relative focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                  role="button"
+                  tabIndex={0}
                   onClick={() => event.ticket_id && navigate(`/tickets/${event.ticket_id}`)}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && event.ticket_id) {
+                      e.preventDefault();
+                      navigate(`/tickets/${event.ticket_id}`);
+                    }
+                  }}
                 >
                   {/* Timeline connector */}
                   {!isLast && (

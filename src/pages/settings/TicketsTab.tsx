@@ -90,6 +90,7 @@ const CategoryItem = memo(({
           }}
           className="flex-1"
           autoFocus
+          aria-label="Redigera kategorinamn"
         />
         <Button size="icon" variant="ghost" onClick={onSaveEdit} aria-label="Spara kategorinamn">
           <Check className="w-4 h-4 text-[hsl(var(--success))]" />
@@ -794,6 +795,7 @@ const TicketsTab = () => {
                         }}
                         className="flex-1"
                         autoFocus
+                        aria-label="Redigera taggnamn"
                       />
                       <Button size="icon" variant="ghost" onClick={handleSaveTagEdit} aria-label="Spara tagg">
                         <Check className="w-4 h-4 text-[hsl(var(--success))]" />
@@ -923,11 +925,13 @@ const TicketsTab = () => {
                       placeholder="Mallnamn (t.ex. Ny dator-setup)..."
                       value={clTemplateName}
                       onChange={(e) => setClTemplateName(e.target.value)}
+                      aria-label="Mallnamn"
                     />
                     <Input
                       placeholder="Beskrivning (valfri)..."
                       value={clTemplateDesc}
                       onChange={(e) => setClTemplateDesc(e.target.value)}
+                      aria-label="Mallbeskrivning"
                     />
                     <div className="space-y-1">
                       {clTemplateItems.map((item, idx) => (
@@ -962,6 +966,7 @@ const TicketsTab = () => {
                                 placeholder="Deluppgiftens text..."
                                 value={clNewSubItemLabel}
                                 onChange={(e) => setClNewSubItemLabel(e.target.value)}
+                                aria-label="Deluppgiftens text"
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' && clNewSubItemLabel.trim()) {
                                     setClTemplateItems(prev => {

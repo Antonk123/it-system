@@ -93,8 +93,16 @@ export function TimeSummaryTab({ year, month }: { year: string; month: string })
             {data.topTickets.map((ticket, i) => (
               <div
                 key={ticket.id}
-                className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
+                className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-muted/50 cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                 onClick={() => navigate(`/tickets/${ticket.id}`)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    navigate(`/tickets/${ticket.id}`);
+                  }
+                }}
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <span className="text-sm font-medium text-muted-foreground w-5">
