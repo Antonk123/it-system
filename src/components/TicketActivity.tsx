@@ -3,21 +3,7 @@ import { sv } from 'date-fns/locale';
 import { History, RefreshCcw, AlertTriangle, Edit2, StickyNote, Lightbulb, Tag, Plus } from 'lucide-react';
 import { TicketHistoryItem } from '@/lib/api';
 import { parseServerDate } from '@/lib/date';
-
-const STATUS_LABELS: Record<string, string> = {
-  'open': 'Öppen',
-  'in-progress': 'Pågående',
-  'waiting': 'Väntar',
-  'resolved': 'Löst',
-  'closed': 'Stängd',
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  'low': 'Låg',
-  'medium': 'Medium',
-  'high': 'Hög',
-  'critical': 'Kritisk',
-};
+import { PRIORITY_LABELS, STATUS_LABELS } from '@/lib/constants';
 
 function getActivityInfo(item: TicketHistoryItem): { icon: React.ReactNode; text: string } {
   switch (item.field_name) {

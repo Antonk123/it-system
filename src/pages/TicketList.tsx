@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
-import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Search, Loader2, Inbox } from 'lucide-react';
+import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Loader2, Inbox } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
@@ -14,11 +14,11 @@ import { PaginationControls } from '@/components/PaginationControls';
 import { ImportDialog } from '@/components/ImportDialog';
 import { FilterViewManager } from '@/components/FilterViewManager';
 import { UnifiedFilterBar } from '@/components/UnifiedFilterBar';
+import { SearchBar } from '@/components/SearchBar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useFilterViews } from '@/hooks/useFilterViews';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { TicketStatus, TicketPriority } from '@/types/ticket';
 import { cn } from '@/lib/utils';
 import { STATUS_LABELS } from '@/lib/constants';
@@ -318,16 +318,12 @@ const TicketList = () => {
 
         {/* Mobile simplified filters */}
         <div className="md:hidden space-y-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Sök ärenden..."
-              value={search}
-              onChange={e => updateFilters({ search: e.target.value })}
-              className="pl-9 w-full"
-              aria-label="Sök ärenden"
-            />
-          </div>
+          <SearchBar
+            value={search}
+            onChange={(value) => updateFilters({ search: value })}
+            placeholder="Sök ärenden..."
+            ariaLabel="Sök ärenden"
+          />
           <div className="flex gap-2 overflow-x-auto pb-1">
             {(['open', 'in-progress', 'waiting'] as TicketStatus[]).map(s => (
               <Badge
@@ -520,7 +516,6 @@ const TicketList = () => {
                     <TicketTable
                       tickets={tickets}
                       users={users}
-                      onStatusChange={handleStatusChange}
                       onTicketClick={handleTicketClick}
                       sortKey={sortKey}
                       sortDirection={sortDirection}

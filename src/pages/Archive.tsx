@@ -8,18 +8,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { PaginationControls } from '@/components/PaginationControls';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Archive as ArchiveIcon, Upload } from 'lucide-react';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { TicketStatus, TicketPriority } from '@/types/ticket';
+import { TicketPriority } from '@/types/ticket';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { ImportDialog } from '@/components/ImportDialog';
@@ -27,14 +17,6 @@ import { UnifiedFilterBar } from '@/components/UnifiedFilterBar';
 import { BulkActionBar } from '@/components/BulkActionBar';
 import { FilterViewManager } from '@/components/FilterViewManager';
 import { useFilterViews } from '@/hooks/useFilterViews';
-
-const statusLabels: Record<TicketStatus, string> = {
-  'open': 'Öppen',
-  'in-progress': 'Pågående',
-  'waiting': 'Väntar',
-  'resolved': 'Löst',
-  'closed': 'Stängd',
-};
 
 const Archive = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -59,7 +41,6 @@ const Archive = () => {
 
   const [compactView, setCompactView] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [pendingStatusChange, setPendingStatusChange] = useState<{ ticketId: string; status: TicketStatus } | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [manageViewsOpen, setManageViewsOpen] = useState(false);
 
@@ -77,7 +58,7 @@ const Archive = () => {
   } = useFilterViews();
 
   // Fetch with pagination - filter for closed tickets
-  const { tickets, pagination, isLoading, updateTicket, refetch } = useTickets({
+  const { tickets, pagination, isLoading, refetch } = useTickets({
     page,
     limit: pageSize,
     status: 'closed',
@@ -166,22 +147,6 @@ const Archive = () => {
       updateFilters({ sortDir: newDir });
     } else {
       updateFilters({ sortBy: key, sortDir: 'asc' });
-    }
-  };
-
-  const handleStatusChange = (ticketId: string, status: TicketStatus) => {
-    setPendingStatusChange({ ticketId, status });
-  };
-
-  const confirmStatusChange = async () => {
-    if (!pendingStatusChange) return;
-    try {
-      await updateTicket(pendingStatusChange.ticketId, { status: pendingStatusChange.status });
-      toast.success(`Status uppdaterad till ${statusLabels[pendingStatusChange.status]}`);
-    } catch {
-      toast.error('Kunde inte uppdatera status');
-    } finally {
-      setPendingStatusChange(null);
     }
   };
 
@@ -344,7 +309,6 @@ const Archive = () => {
               <TicketTable
                 tickets={tickets}
                 users={users}
-                onStatusChange={handleStatusChange}
                 onTicketClick={handleTicketClick}
                 sortKey={sortKey === 'priority' || sortKey === 'category' ? sortKey : undefined}
                 sortDirection={sortDirection}
@@ -402,22 +366,6 @@ const Archive = () => {
           refetch();
         }}
       />
-      <AlertDialog open={!!pendingStatusChange} onOpenChange={(open) => { if (!open) setPendingStatusChange(null); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Ändra status</AlertDialogTitle>
-            <AlertDialogDescription>
-              {pendingStatusChange && (
-                <>Vill du ändra status till <strong>{statusLabels[pendingStatusChange.status]}</strong>?</>
-              )}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmStatusChange}>Ändra</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </Layout>
   );
 };

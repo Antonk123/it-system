@@ -4,6 +4,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { Ticket } from '@/types/ticket';
 import { getInitials, hashColor } from '@/lib/avatar';
+import { PRIORITY_LABELS, STATUS_LABELS } from '@/lib/constants';
 
 interface TicketQueueTableProps {
   tickets: Ticket[];
@@ -35,22 +36,6 @@ const PRIORITY_STYLES: Record<string, string> = {
   medium: 'bg-[hsl(var(--priority-medium))]/14 text-[hsl(var(--priority-medium))] border-[hsl(var(--priority-medium))]/35',
   low: 'bg-[hsl(var(--priority-low))]/14 text-[hsl(var(--priority-low))] border-[hsl(var(--priority-low))]/35',
 };
-
-const STATUS_LABELS: Record<string, string> = {
-  open: 'Öppen',
-  'in-progress': 'Pågående',
-  waiting: 'Väntar',
-  resolved: 'Löst',
-  closed: 'Stängt',
-};
-
-const PRIORITY_LABELS: Record<string, string> = {
-  critical: 'Kritisk',
-  high: 'Hög',
-  medium: 'Medium',
-  low: 'Låg',
-};
-
 
 export const TicketQueueTable = ({ tickets, isLoading, getUserName, isError, onRetry }: TicketQueueTableProps) => {
   const navigate = useNavigate();

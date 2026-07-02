@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCategories } from '@/hooks/useCategories';
 import { useTags } from '@/hooks/useTags';
+import { PRIORITY_LABELS, STATUS_LABELS } from '@/lib/constants';
 
 interface ActiveFilterChipsProps {
   selectedStatuses: string[];
@@ -19,21 +20,6 @@ interface ActiveFilterChipsProps {
   onRemove: (updates: Record<string, any>) => void;
   onClearAll: () => void;
 }
-
-const PRIORITY_LABELS: Record<string, string> = {
-  low: 'Låg',
-  medium: 'Medium',
-  high: 'Hög',
-  critical: 'Kritisk',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  open: 'Öppen',
-  'in-progress': 'Pågående',
-  waiting: 'Väntar',
-  resolved: 'Löst',
-  closed: 'Stängd',
-};
 
 const CHECKLIST_LABELS: Record<string, string> = {
   has_checklist: 'Med checklista',

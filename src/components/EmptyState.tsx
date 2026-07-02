@@ -67,5 +67,3 @@ export const EmptyState = ({
     </div>
   );
 };
-
-export default EmptyState;

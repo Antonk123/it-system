@@ -49,15 +49,12 @@ interface BulkUpdates {
 interface TicketTableProps {
   tickets: Ticket[];
   users: User[];
-  onStatusChange?: (ticketId: string, status: TicketStatus) => void;
-  onCategoryChange?: (ticketId: string, categoryId: string) => void;
   onTicketClick?: (ticketId: string) => void;
   sortKey?: 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
   sortDirection?: 'asc' | 'desc';
   onSortChange?: (key: 'status' | 'priority' | 'category') => void;
   enableStatusSort?: boolean;
   enablePrioritySort?: boolean;
-  enableCategorySort?: boolean;
   compact?: boolean;
   selectedIds?: string[];
   onSelectionChange?: (ids: string[]) => void;
@@ -73,15 +70,12 @@ interface TicketTableProps {
 export const TicketTable = memo(function TicketTable({
   tickets,
   users,
-  onStatusChange,
-  onCategoryChange,
   onTicketClick,
   sortKey = 'createdAt',
   sortDirection = 'desc',
   onSortChange,
   enableStatusSort = true,
   enablePrioritySort = true,
-  enableCategorySort = true,
   compact = false,
   selectedIds = [],
   onSelectionChange,
