@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
-import { canAccessTicket } from '../lib/ticketAccess.js';
+import { canAccessTicket, filterAccessibleTicketIds } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
@@ -34,14 +34,15 @@ router.post('/progress', authenticate, (req: AuthRequest, res: Response) => {
 
   try {
     // Authz: only expose progress for tickets the caller may access. Reusing the
-    // shared canAccessTicket (admin short-circuits without a DB hit) closes the
-    // batch-IDOR where any logged-in user could probe checklist counts of any
-    // ticket. Inaccessible ids are silently dropped — batch semantics, and the
-    // client only ever sends ids from an already access-scoped ticket list.
-    // The typeof guard also hardens against non-string ids reaching the query.
-    const accessibleIds = (ticketIds as unknown[]).filter(
-      (id): id is string => typeof id === 'string' && canAccessTicket(req.user!, id)
-    );
+    // shared filterAccessibleTicketIds (admin short-circuits without a DB hit,
+    // otherwise a single batched IN(...) query instead of one SELECT per id)
+    // closes the batch-IDOR where any logged-in user could probe checklist
+    // counts of any ticket. Inaccessible ids are silently dropped — batch
+    // semantics, and the client only ever sends ids from an already
+    // access-scoped ticket list. The typeof guard also hardens against
+    // non-string ids reaching the query.
+    const candidateIds = (ticketIds as unknown[]).filter((id): id is string => typeof id === 'string');
+    const accessibleIds = filterAccessibleTicketIds(req.user!, candidateIds);
 
     if (accessibleIds.length === 0) {
       return res.json({});

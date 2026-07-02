@@ -10,7 +10,7 @@ import { sendTicketClosedEmail, sendTicketCreatedEmail, sendTicketAssignedEmail 
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
-import { applySLAToTicket, handleSLAStatusChange } from '../lib/slaHelper.js';
+import { applySLAToTicket, handleSLAStatusChange, recalculateSLAOnPriorityChange } from '../lib/slaHelper.js';
 import { writeRateLimiter, createRateLimiter } from '../middleware/rateLimit.js';
 
 const aiRateLimiter = createRateLimiter(60 * 1000, 5);
@@ -219,44 +219,54 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Import tickets - Preview
-router.post('/import/preview', authenticate, requireAdmin, upload.single('file'), (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+router.post('/import/preview', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
+  // Wrap upload.single to catch multer errors (e.g. wrong file type/oversize)
+  // as 400 instead of letting them propagate to Express's default error
+  // handler (500). Mirrors attachments.ts's upload-error wrapping.
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      logger.error('CSV upload validation error:', { error: err.message });
+      return res.status(400).json({ error: err.message });
     }
 
-    const csvContent = req.file.buffer.toString('utf-8');
-    const rows = parseCSV(csvContent);
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
 
-    if (rows.length === 0) {
-      return res.status(400).json({ error: 'CSV file is empty or invalid' });
+      const csvContent = req.file.buffer.toString('utf-8');
+      const rows = parseCSV(csvContent);
+
+      if (rows.length === 0) {
+        return res.status(400).json({ error: 'CSV file is empty or invalid' });
+      }
+
+      // Get categories and existing ticket IDs
+      const categories = db.prepare('SELECT id, label FROM categories').all();
+      const existingTickets = db.prepare('SELECT id FROM tickets').all() as { id: string }[];
+      const existingTicketIds = new Set(existingTickets.map(t => t.id));
+
+      // Validate each row
+      const results = rows.map((row, index) => {
+        return validateTicketRow(row, index, categories, existingTicketIds);
+      });
+
+      const valid = results.filter(r => r.valid);
+      const invalid = results.filter(r => !r.valid);
+      const duplicates = results.filter(r => r.isDuplicate);
+
+      res.json({
+        total: rows.length,
+        valid: valid.length,
+        invalid: invalid.length,
+        duplicates: duplicates.length,
+        results,
+      });
+    } catch (error) {
+      logger.error('Error previewing import:', { error: String(error) });
+      res.status(500).json({ error: 'Failed to preview import' });
     }
-
-    // Get categories and existing ticket IDs
-    const categories = db.prepare('SELECT id, label FROM categories').all();
-    const existingTickets = db.prepare('SELECT id FROM tickets').all() as { id: string }[];
-    const existingTicketIds = new Set(existingTickets.map(t => t.id));
-
-    // Validate each row
-    const results = rows.map((row, index) => {
-      return validateTicketRow(row, index, categories, existingTicketIds);
-    });
-
-    const valid = results.filter(r => r.valid);
-    const invalid = results.filter(r => !r.valid);
-    const duplicates = results.filter(r => r.isDuplicate);
-
-    res.json({
-      total: rows.length,
-      valid: valid.length,
-      invalid: invalid.length,
-      duplicates: duplicates.length,
-      results,
-    });
-  } catch (error) {
-    logger.error('Error previewing import:', { error: String(error) });
-    res.status(500).json({ error: 'Failed to preview import' });
-  }
+  });
 });
 
 // Import tickets - Confirm
@@ -1162,25 +1172,41 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
     const bulkUpdate = db.transaction(() => {
       let updatedCount = 0;
       const skipped: string[] = [];
+      const priorityChangedIds: string[] = [];
 
-      // Pre-fetch alla berörda ärenden i en enda query för att undvika N+1
+      // Pre-fetch alla berörda ärenden i en enda query för att undvika N+1.
+      // created_by ingår (utöver TICKET_COLUMNS) så att behörighetskontrollen
+      // nedan kan avgöras helt från denna batch — annars hade canAccessTicket
+      // (lib/ticketAccess.ts) behövt köra en egen query per rad enbart för
+      // created_by, vilket återinför N+1.
       const placeholders = ids.map(() => '?').join(',');
       const existingRows = db.prepare(
-        `SELECT ${TICKET_COLUMNS} FROM tickets WHERE id IN (${placeholders})`
-      ).all(...ids) as TicketRow[];
-      const existingMap = new Map<string, TicketRow>(existingRows.map(row => [row.id, row]));
+        `SELECT ${TICKET_COLUMNS}, tickets.created_by FROM tickets WHERE id IN (${placeholders})`
+      ).all(...ids) as (TicketRow & { created_by: string | null })[];
+      const existingMap = new Map<string, TicketRow & { created_by: string | null }>(
+        existingRows.map(row => [row.id, row])
+      );
 
       for (const ticketId of ids) {
         const existing = existingMap.get(ticketId);
         if (!existing) continue;
 
         // Behörighetsfilter (matchar PUT /:id): otilldelade ärenden står öppna
-        // för self-service pickup; i övrigt krävs access via canAccessTicket
-        // (admin / requester / assignee / creator). Otillgängliga ärenden tas
-        // inte tyst med — de rapporteras i `skipped`.
-        if (existing.assigned_to !== null && !canAccessTicket(req.user!, ticketId)) {
-          skipped.push(ticketId);
-          continue;
+        // för self-service pickup; i övrigt krävs access — admin, requester,
+        // assignee eller creator. Semantiken speglar canAccessTicket exakt
+        // (lib/ticketAccess.ts, som vi inte äger i detta scope) men avgörs
+        // lokalt från den redan batchade `existing`-raden för att undvika en
+        // extra query per ärende. Otillgängliga ärenden tas inte tyst med —
+        // de rapporteras i `skipped`.
+        if (existing.assigned_to !== null) {
+          const hasAccess = req.user!.role === 'admin'
+            || existing.requester_id === req.user!.id
+            || existing.assigned_to === req.user!.id
+            || existing.created_by === req.user!.id;
+          if (!hasAccess) {
+            skipped.push(ticketId);
+            continue;
+          }
         }
 
         const safeUpdates: Record<string, unknown> = {};
@@ -1197,6 +1223,7 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
           safeUpdates.priority = priority;
           if (priority !== existing.priority) {
             historyInsert.run(uuidv4(), ticketId, userId, 'priority', existing.priority as string, priority);
+            priorityChangedIds.push(ticketId);
           }
         }
         if (category_id !== undefined) {
@@ -1230,10 +1257,23 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
         updatedCount++;
       }
 
-      return { updatedCount, skipped };
+      return { updatedCount, skipped, priorityChangedIds };
     });
 
-    const { updatedCount, skipped } = bulkUpdate();
+    const { updatedCount, skipped, priorityChangedIds } = bulkUpdate();
+
+    // SLA deadline recalculation for tickets whose priority changed — mirrors
+    // the PUT /:id hook; runs after the transaction commits, per-ticket
+    // non-fatal (a recalculation failure for one ticket must not block the
+    // response or affect the others).
+    for (const ticketId of priorityChangedIds) {
+      try {
+        recalculateSLAOnPriorityChange(ticketId, priority);
+      } catch (error) {
+        logger.error('SLA priority-change error (non-fatal):', { error: String(error), ticketId });
+      }
+    }
+
     // Bakåtkompatibelt: `updated` (antal) behålls oförändrat. `skipped` läggs
     // till med ID:n för ärenden anroparen saknar behörighet till.
     return res.json({ updated: updatedCount, skipped });
@@ -1502,6 +1542,17 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
         handleSLAStatusChange(req.params.id as string, existing.status as string, safeUpdates.status as string);
       } catch (error) {
         logger.error('SLA status-change error (non-fatal):', { error: String(error) });
+      }
+    }
+
+    // SLA deadline recalculation on priority change — mirrors the status hook
+    // above; runs after the main update, non-fatal (a recalculation failure
+    // must not block the ticket update response).
+    if ('priority' in safeUpdates && safeUpdates.priority !== existing.priority) {
+      try {
+        recalculateSLAOnPriorityChange(req.params.id as string, safeUpdates.priority as string);
+      } catch (error) {
+        logger.error('SLA priority-change error (non-fatal):', { error: String(error) });
       }
     }
 

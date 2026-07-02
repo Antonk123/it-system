@@ -494,3 +494,116 @@ describe('Custom fields round-trip + SLA deadline on create', () => {
       .toBeGreaterThan(new Date(row.sla_response_deadline!).getTime());
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H4 regression: recalculateSLAOnPriorityChange (lib/slaHelper.ts) exists but
+// was never wired up — priority changes left stale SLA deadlines from the
+// original priority. Covers both PUT /:id and PUT /bulk.
+describe('SLA recalculation on priority change (H4 regression)', () => {
+  it('recalculates SLA deadlines when priority changes via PUT /:id', async () => {
+    const create = await admin.agent
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ title: 'Priority SLA ticket', description: 'starts medium', priority: 'medium' });
+    expect(create.status).toBe(201);
+    const id = create.body.id as string;
+
+    const before = db.prepare(
+      'SELECT sla_response_deadline, sla_resolution_deadline FROM tickets WHERE id = ?'
+    ).get(id) as { sla_response_deadline: string; sla_resolution_deadline: string };
+    expect(before.sla_response_deadline).toBeTruthy();
+
+    const put = await admin.agent
+      .put(`/api/tickets/${id}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ priority: 'critical' });
+    expect(put.status).toBe(200);
+    expect(put.body.priority).toBe('critical');
+
+    const after = db.prepare(
+      'SELECT sla_response_deadline, sla_resolution_deadline FROM tickets WHERE id = ?'
+    ).get(id) as { sla_response_deadline: string; sla_resolution_deadline: string };
+
+    // Default 'critical' policy (30m/240m) is tighter than 'medium' (240m/1440m)
+    // → deadlines must move earlier once recalculateSLAOnPriorityChange fires.
+    expect(new Date(after.sla_response_deadline).getTime())
+      .toBeLessThan(new Date(before.sla_response_deadline).getTime());
+    expect(new Date(after.sla_resolution_deadline).getTime())
+      .toBeLessThan(new Date(before.sla_resolution_deadline).getTime());
+  });
+
+  it('leaves SLA deadlines untouched when priority is unchanged via PUT /:id', async () => {
+    const create = await admin.agent
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ title: 'Priority unchanged ticket', description: 'stays medium', priority: 'medium' });
+    expect(create.status).toBe(201);
+    const id = create.body.id as string;
+
+    const before = db.prepare(
+      'SELECT sla_response_deadline FROM tickets WHERE id = ?'
+    ).get(id) as { sla_response_deadline: string };
+
+    const put = await admin.agent
+      .put(`/api/tickets/${id}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ priority: 'medium', notes: 'just a note update' });
+    expect(put.status).toBe(200);
+
+    const after = db.prepare(
+      'SELECT sla_response_deadline FROM tickets WHERE id = ?'
+    ).get(id) as { sla_response_deadline: string };
+    expect(after.sla_response_deadline).toBe(before.sla_response_deadline);
+  });
+
+  it('recalculates SLA deadlines when priority changes via PUT /bulk', async () => {
+    const create = await admin.agent
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ title: 'Bulk priority SLA ticket', description: 'starts low', priority: 'low' });
+    expect(create.status).toBe(201);
+    const id = create.body.id as string;
+
+    const before = db.prepare(
+      'SELECT sla_response_deadline FROM tickets WHERE id = ?'
+    ).get(id) as { sla_response_deadline: string };
+    expect(before.sla_response_deadline).toBeTruthy();
+
+    const bulk = await admin.agent
+      .put('/api/tickets/bulk')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ ids: [id], updates: { priority: 'critical' } });
+    expect(bulk.status).toBe(200);
+    expect(bulk.body.updated).toBe(1);
+
+    const after = db.prepare(
+      'SELECT sla_response_deadline FROM tickets WHERE id = ?'
+    ).get(id) as { sla_response_deadline: string };
+    expect(new Date(after.sla_response_deadline).getTime())
+      .toBeLessThan(new Date(before.sla_response_deadline).getTime());
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// M10-tickets regression: upload.single('file') was mounted directly as route
+// middleware, so a multer fileFilter rejection (wrong file type) threw past the
+// route handler's try/catch and fell through to Express's default error
+// handler → 500. Now wrapped manually (mirrors attachments.ts) → 400.
+describe('POST /api/tickets/import/preview — multer error handling (M10-tickets)', () => {
+  it('rejects a non-CSV file → 400, not 500 (multer fileFilter error)', async () => {
+    const res = await admin.agent
+      .post('/api/tickets/import/preview')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .attach('file', Buffer.from('not a csv, just plain text'), { filename: 'notes.txt', contentType: 'text/plain' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeDefined();
+  });
+});
