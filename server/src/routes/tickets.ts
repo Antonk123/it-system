@@ -914,19 +914,22 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
  * Sparar utkastet i ai_draft_response så det kan visas i UI:t.
  */
 router.post('/:id/ai-draft', aiRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
-  if (!aiEnabled()) {
-    return res.status(503).json({ error: 'AI är inte konfigurerat på denna installation (ANTHROPIC_API_KEY saknas)' });
-  }
   try {
-    // Behörighetskontroll: bara ägare/admin/tilldeln får generera utkast
-    if (!canAccessTicket(req.user!, req.params.id)) {
-      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
-    }
-
     const ticket = db.prepare(`
       SELECT id, title, description FROM tickets WHERE id = ?
     `).get(req.params.id) as { id: string; title: string; description: string } | undefined;
     if (!ticket) return res.status(404).json({ error: 'Ärendet hittades inte' });
+
+    // Behörighetskontroll: bara ägare/admin/tilldeln får generera utkast. Måste
+    // köras FÖRE aiEnabled() — annars får en obehörig användare 503 istället
+    // för 403, och 403-grenen blir otestbar utan en riktig API-nyckel.
+    if (!canAccessTicket(req.user!, req.params.id)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
+
+    if (!aiEnabled()) {
+      return res.status(503).json({ error: 'AI är inte konfigurerat på denna installation (ANTHROPIC_API_KEY saknas)' });
+    }
 
     const queryText = buildKbSearchQuery(`${ticket.title} ${ticket.description.slice(0, 200)}`);
 
@@ -1009,9 +1012,6 @@ router.post('/:id/ai-draft', aiRateLimiter, authenticate, async (req: AuthReques
  * Använd query-param ?force=1 för att tvinga ny sammanfattning.
  */
 router.get('/:id/ai-summary', aiRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
-  if (!aiEnabled()) {
-    return res.status(503).json({ error: 'AI är inte konfigurerat på denna installation' });
-  }
   try {
     const force = req.query.force === '1';
     const ticket = db.prepare(`
@@ -1022,6 +1022,17 @@ router.get('/:id/ai-summary', aiRateLimiter, authenticate, async (req: AuthReque
       ai_summary_json: string | null; ai_summary_updated_at: string | null;
     } | undefined;
     if (!ticket) return res.status(404).json({ error: 'Ärendet hittades inte' });
+
+    // Behörighetskontroll: bara ägare/admin/tilldeln får se AI-sammanfattningen.
+    // Måste köras FÖRE aiEnabled() — annars får en obehörig användare 503
+    // istället för 403, och 403-grenen blir otestbar utan en riktig API-nyckel.
+    if (!canAccessTicket(req.user!, req.params.id)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
+
+    if (!aiEnabled()) {
+      return res.status(503).json({ error: 'AI är inte konfigurerat på denna installation' });
+    }
 
     // Cache-check: max 1 timme gammal.
     // ai_summary_updated_at är SQLite CURRENT_TIMESTAMP = UTC "YYYY-MM-DD HH:MM:SS"
@@ -1694,10 +1705,16 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
       return res.status(400).json({ error: 'Reminder must be in the future' });
     }
 
-    // Check ticket exists
-    const ticket = db.prepare('SELECT id FROM tickets WHERE id = ?').get(ticketId);
-    if (!ticket) {
+    // Behörighetskontroll: spegla PUT /:id EXAKT (se ovan i denna fil samt
+    // comments.ts). Otilldelade ärenden är öppna för self-service-pickup —
+    // vilken agent som helst kan sätta en påminnelse på ett köärende.
+    // Tilldelade ärenden kräver admin/requester/assignee/creator.
+    const t = db.prepare('SELECT assigned_to FROM tickets WHERE id = ?').get(ticketId) as { assigned_to: string | null } | undefined;
+    if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
+    }
+    if (t.assigned_to !== null && !canAccessTicket(req.user!, ticketId)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
     const id = uuidv4();
@@ -1719,6 +1736,20 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
 // GET /api/tickets/:id/reminders - List reminders for ticket
 router.get('/:id/reminders', authenticate, (req: AuthRequest, res: Response) => {
   try {
+    const ticketId = req.params.id;
+
+    // Behörighetskontroll: spegla PUT /:id EXAKT (se ovan i denna fil samt
+    // comments.ts). Otilldelade ärenden är öppna för self-service-pickup —
+    // vilken agent som helst kan lista påminnelser på ett köärende.
+    // Tilldelade ärenden kräver admin/requester/assignee/creator.
+    const t = db.prepare('SELECT assigned_to FROM tickets WHERE id = ?').get(ticketId) as { assigned_to: string | null } | undefined;
+    if (!t) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    if (t.assigned_to !== null && !canAccessTicket(req.user!, ticketId)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
+
     const reminders = db.prepare(`
       SELECT tr.id, tr.ticket_id, tr.user_id, tr.reminder_time, tr.message, tr.sent, tr.created_at, tr.sent_at,
              u.display_name as user_name, u.email as user_email
@@ -1726,7 +1757,7 @@ router.get('/:id/reminders', authenticate, (req: AuthRequest, res: Response) => 
       JOIN users u ON tr.user_id = u.id
       WHERE tr.ticket_id = ?
       ORDER BY tr.reminder_time ASC
-    `).all(req.params.id);
+    `).all(ticketId);
 
     res.json(reminders);
   } catch (error) {
@@ -1741,6 +1772,18 @@ router.delete('/:id/reminders/sent', authenticate, (req: AuthRequest, res: Respo
   try {
     const ticketId = req.params.id as string;
     const userId = req.user!.id;
+
+    // Behörighetskontroll: spegla PUT /:id EXAKT (se ovan i denna fil samt
+    // comments.ts). Otilldelade ärenden är öppna för self-service-pickup —
+    // vilken agent som helst kan rensa sina egna skickade påminnelser på ett
+    // köärende. Tilldelade ärenden kräver admin/requester/assignee/creator.
+    const t = db.prepare('SELECT assigned_to FROM tickets WHERE id = ?').get(ticketId) as { assigned_to: string | null } | undefined;
+    if (!t) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    if (t.assigned_to !== null && !canAccessTicket(req.user!, ticketId)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
 
     const result = db.prepare(`
       DELETE FROM ticket_reminders

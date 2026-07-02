@@ -45,6 +45,19 @@ interface TemplateRow {
   category_id: string | null;
 }
 
+interface CustomFieldInput {
+  fieldName: string;
+  fieldLabel: string;
+  fieldValue?: string;
+}
+
+// Caps for the public customFields path (mirrors tickets.ts PUT: title 200 /
+// description 5000). No auth on this endpoint, so bound both the number of
+// fields and their lengths in addition to the composed description below.
+const MAX_CUSTOM_FIELDS = 30;
+const MAX_FIELD_LABEL_LENGTH = 200;
+const MAX_FIELD_VALUE_LENGTH = 2000;
+
 // Get public templates (for public ticket form)
 router.get('/templates', (_req: Request, res: Response) => {
   try {
@@ -129,6 +142,39 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
     return res.status(400).json({ error: 'Description must be 5000 characters or less' });
   }
 
+  // Validate customFields shape and caps BEFORE any DB work, so a rejected
+  // submission never creates a contact/ticket row as a side effect.
+  if (customFields !== undefined) {
+    if (!Array.isArray(customFields)) {
+      return res.status(400).json({ error: 'customFields must be an array' });
+    }
+    if (customFields.length > MAX_CUSTOM_FIELDS) {
+      return res.status(400).json({ error: `A maximum of ${MAX_CUSTOM_FIELDS} custom fields is allowed` });
+    }
+    for (const field of customFields as CustomFieldInput[]) {
+      // Icke-strängar (objekt/array/boolean) skulle annars kringgå caps och
+      // krascha sanitize-html till en 500 — avvisa allt utom string/undefined.
+      if (field?.fieldName !== undefined && typeof field.fieldName !== 'string') {
+        return res.status(400).json({ error: 'Field name must be a string' });
+      }
+      if (field?.fieldLabel !== undefined && typeof field.fieldLabel !== 'string') {
+        return res.status(400).json({ error: 'Field label must be a string' });
+      }
+      if (field?.fieldValue !== undefined && typeof field.fieldValue !== 'string') {
+        return res.status(400).json({ error: 'Field value must be a string' });
+      }
+      if (typeof field?.fieldName === 'string' && field.fieldName.length > MAX_FIELD_LABEL_LENGTH) {
+        return res.status(400).json({ error: `Field name must be ${MAX_FIELD_LABEL_LENGTH} characters or less` });
+      }
+      if (typeof field?.fieldLabel === 'string' && field.fieldLabel.length > MAX_FIELD_LABEL_LENGTH) {
+        return res.status(400).json({ error: `Field label must be ${MAX_FIELD_LABEL_LENGTH} characters or less` });
+      }
+      if (typeof field?.fieldValue === 'string' && field.fieldValue.length > MAX_FIELD_VALUE_LENGTH) {
+        return res.status(400).json({ error: `Field value must be ${MAX_FIELD_VALUE_LENGTH} characters or less` });
+      }
+    }
+  }
+
   // Validate priority
   const validPriorities = ['low', 'medium', 'high', 'critical'];
   const ticketPriority = validPriorities.includes(priority) ? priority : 'medium';
@@ -138,6 +184,34 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
   name = sanitizePlainText(name);
   title = sanitizePlainText(title);
   if (description !== undefined) description = sanitizeRichText(description);
+
+  // customFields are plain-text label/value pairs (not rich text — same
+  // treatment as name/title above), and were previously stored raw. Sanitize
+  // once here and reuse the same sanitized list both for composing
+  // finalDescription and for the ticket_field_values rows below.
+  const sanitizedCustomFields: CustomFieldInput[] = Array.isArray(customFields)
+    ? (customFields as CustomFieldInput[]).map((field) => ({
+        fieldName: field?.fieldName,
+        fieldLabel: sanitizePlainText(field?.fieldLabel),
+        fieldValue: sanitizePlainText(field?.fieldValue),
+      }))
+    : [];
+
+  // Prepare description: when customFields provided, compose ONLY from them (prevents duplicates)
+  let finalDescription: string;
+  if (sanitizedCustomFields.length > 0) {
+    finalDescription = sanitizedCustomFields
+      .filter((field) => field.fieldLabel)
+      .map((field) => `**${field.fieldLabel}**: ${field.fieldValue || '(ej angivet)'}`)
+      .join('  \n');
+  } else {
+    finalDescription = description || '';
+  }
+
+  // The composed description shares the same cap as a free-text description.
+  if (finalDescription.length > 5000) {
+    return res.status(400).json({ error: 'Description must be 5000 characters or less' });
+  }
 
   try {
     // Find or create contact
@@ -173,16 +247,8 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
     // Create ticket
     const ticketId = uuidv4();
 
-    // Prepare description: when customFields provided, compose ONLY from them (prevents duplicates)
-    let finalDescription: string;
-    if (customFields && Array.isArray(customFields) && customFields.length > 0) {
-      finalDescription = customFields
-        .filter((field: any) => field.fieldLabel)
-        .map((field: any) => `**${field.fieldLabel}**: ${field.fieldValue || '(ej angivet)'}`)
-        .join('  \n');
-    } else {
-      finalDescription = description || '';
-    }
+    // finalDescription was already composed (from sanitizedCustomFields or
+    // description) and length-validated above, before any DB writes.
 
     db.prepare(`
       INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, template_id)
@@ -191,14 +257,14 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
 
     // FTS5 synkas automatiskt via triggers (migration 050)
 
-    // Store custom field values if provided
-    if (customFields && Array.isArray(customFields) && customFields.length > 0) {
+    // Store custom field values if provided (already sanitized above)
+    if (sanitizedCustomFields.length > 0) {
       const insertFieldStmt = db.prepare(`
         INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
         VALUES (?, ?, ?, ?, ?)
       `);
 
-      customFields.forEach((field: any) => {
+      sanitizedCustomFields.forEach((field) => {
         if (field.fieldName && field.fieldLabel) {
           insertFieldStmt.run(uuidv4(), ticketId, field.fieldName, field.fieldLabel, field.fieldValue || '');
         }
