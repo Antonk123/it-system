@@ -4,6 +4,7 @@ import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { sanitizeRichText } from '../lib/htmlSanitizer.js';
 import { notifyCustomerOfPublicReply } from '../lib/ticketNotifications.js';
+import { canAccessTicket } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
@@ -24,6 +25,18 @@ interface CommentRow {
 // GET /api/comments/ticket/:ticketId - Fetch all comments for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
+    // Behörighetskontroll: spegla PUT /:id EXAKT (se tickets.ts). Otilldelade
+    // ärenden är öppna för self-service-pickup — vilken agent som helst kan
+    // läsa kommentarerna på ett köärende. Tilldelade ärenden kräver
+    // admin/requester/assignee/creator.
+    const t = db.prepare('SELECT assigned_to FROM tickets WHERE id = ?').get(req.params.ticketId) as { assigned_to: string | null } | undefined;
+    if (!t) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    if (t.assigned_to !== null && !canAccessTicket(req.user!, req.params.ticketId)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
+
     const comments = db.prepare(`
       SELECT
         c.id, c.ticket_id, c.user_id, c.content, c.is_internal, c.created_at, c.updated_at, c.deleted_at,
@@ -57,6 +70,18 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
   }
 
   try {
+    // Behörighetskontroll: spegla PUT /:id EXAKT (se tickets.ts). Otilldelade
+    // ärenden är öppna för self-service-pickup — vilken agent som helst kan
+    // kommentera på ett köärende. Tilldelade ärenden kräver
+    // admin/requester/assignee/creator.
+    const t = db.prepare('SELECT assigned_to FROM tickets WHERE id = ?').get(req.params.ticketId) as { assigned_to: string | null } | undefined;
+    if (!t) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    if (t.assigned_to !== null && !canAccessTicket(req.user!, req.params.ticketId)) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
+
     const id = uuidv4();
     const now = new Date().toISOString();
 

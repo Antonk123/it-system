@@ -145,8 +145,3 @@ export const requireAdmin: RequestHandler = (req: Request, res: Response, next: 
   }
   next();
 };
-
-/** Helper to get typed user from request (use after authenticate middleware) */
-export function getUser(req: Request): AuthUser {
-  return req.user as AuthUser;
-}

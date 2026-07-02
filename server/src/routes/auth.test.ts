@@ -386,6 +386,33 @@ describe('POST /api/auth/change-password', () => {
       .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
     expect([401, 403]).toContain(res.status);
   });
+
+  // Dedicated rate limiter (5/15min per IP) — without it, a caller holding a
+  // valid JWT could brute-force the current password unboundedly. Uses its own
+  // fixed source IP (not used elsewhere) so it doesn't share a bucket with the
+  // default-IP calls above, and its own changePasswordRateLimiter instance so it
+  // can't be tripped by / interfere with the login rate-limit suite.
+  it('rate limits repeated attempts: first 5 pass the limiter, 6th → 429', async () => {
+    const RATELIMIT_IP = '192.0.2.77'; // TEST-NET-1, dedicated to this test only
+    const email = 'changepw-ratelimit@authtest.local';
+    await createUser(email, PASSWORD);
+    const { agent, token, csrf } = await loginAgent(email, PASSWORD);
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      const res = await agent
+        .post('/api/auth/change-password')
+        .set('X-Forwarded-For', RATELIMIT_IP)
+        .set('Authorization', `Bearer ${token}`)
+        .set('x-csrf-token', csrf)
+        .send({ currentPassword: 'wrong-on-purpose', newPassword: NEW_PASSWORD });
+      statuses.push(res.status);
+    }
+
+    // First 5 reach the handler (400 for wrong current password), the 6th is 429.
+    expect(statuses.slice(0, 5)).toEqual([400, 400, 400, 400, 400]);
+    expect(statuses[5]).toBe(429);
+  });
 });
 
 // ───────────────────────────────────────────────────────────────────────────

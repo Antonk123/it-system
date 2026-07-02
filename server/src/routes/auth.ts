@@ -21,6 +21,15 @@ import { cookieSecure } from '../config/cookies.js';
  */
 const refreshRateLimiter = createRateLimiter(15 * 60 * 1000, 10);
 
+/**
+ * Rate limiter for change-password endpoint.
+ * 5 attempts per 15 minutes per IP — same budget as login. Without this, an
+ * attacker holding a stolen/valid JWT could brute-force the user's current
+ * password unbounded (change-password gates the new password behind knowing
+ * the current one, but nothing previously limited how many guesses it accepted).
+ */
+const changePasswordRateLimiter = createRateLimiter(15 * 60 * 1000, 5);
+
 const router = Router();
 
 // Token expiration times
@@ -241,7 +250,7 @@ router.get('/me', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Change password
-router.post('/change-password', authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/change-password', authenticate, changePasswordRateLimiter, async (req: AuthRequest, res: Response) => {
   const { currentPassword, newPassword } = req.body;
 
   if (!currentPassword || !newPassword) {

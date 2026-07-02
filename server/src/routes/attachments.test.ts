@@ -737,3 +737,21 @@ describe('POST /api/attachments — per-ticket count limit (MAX_ATTACHMENTS_PER_
     expect(res.status).toBe(201);
   });
 });
+
+// ─── L13-attachments (LOW): writeRateLimiter on the upload endpoint ───────────
+//
+// POST /api/attachments/ticket/:ticketId is now mounted behind `writeRateLimiter`
+// (same 60 req/min/IP limiter tickets.ts applies to its mutating routes), so a
+// single stranger/bot can no longer flood the upload endpoint unbounded.
+//
+// No dedicated "trip the limiter and assert 429" test here: `writeRateLimiter`
+// is a module-level singleton (one shared in-memory bucket keyed by IP), and
+// this file alone already issues ~35 authenticated POSTs to this route across
+// the suites above — all against the same bucket. Deliberately tripping it
+// would require padding in dozens more requests solely to cross the 60-count
+// threshold, with the exact number silently depending on how many uploads the
+// rest of this file happens to make (a maintenance trap: unrelated test
+// additions/removals elsewhere in the file would shift when/if 429 fires).
+// That coupling makes a reliable, isolated unit test impractical without
+// touching rateLimit.ts (out of scope here) to inject a lower limit for tests.
+// The wiring itself is verified by reading the route registration above.

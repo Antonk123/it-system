@@ -6,6 +6,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { writeRateLimiter } from '../middleware/rateLimit.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
 
@@ -170,7 +171,7 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
 });
 
 // Upload attachment with error handling
-router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/ticket/:ticketId', writeRateLimiter, authenticate, (req: AuthRequest, res: Response) => {
   // Wrap upload.single to catch multer errors
   upload.single('file')(req, res, (err) => {
     if (err) {

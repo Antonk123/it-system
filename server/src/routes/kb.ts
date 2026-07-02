@@ -11,7 +11,7 @@ import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { hasMagicByteMatch } from './attachments.js';
-import { createRateLimiter } from '../middleware/rateLimit.js';
+import { createRateLimiter, writeRateLimiter } from '../middleware/rateLimit.js';
 import { logger } from '../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -51,6 +51,38 @@ const uploadImage = multer({
 const kbShareRateLimiter = createRateLimiter(60 * 1000, 30);
 
 const router = Router();
+
+// Extraherar kb-* bildfilnamn refererade via <img src="/api/kb/images/kb-…"> i
+// artikelinnehåll. Delas mellan PUT (diff mot gammalt innehåll) och DELETE
+// (radera alla) för att undvika duplicerad parsing-/path-traversal-logik.
+function extractKbImageFilenames(content: string): Set<string> {
+  const filenames = new Set<string>();
+  const imgSrcPattern = /<img[^>]+src="([^"]+)"/gi;
+  let match: RegExpExecArray | null;
+  while ((match = imgSrcPattern.exec(content)) !== null) {
+    const src = match[1];
+    // Matcha bara lokalt uppladdade KB-bilder: /api/kb/images/<filename>
+    const localMatch = src.match(/\/api\/kb\/images\/(kb-[^/?#"]+)$/);
+    if (!localMatch) continue;
+    const filename = localMatch[1];
+    // Förhindra path-traversal: filnamnet får inte innehålla sökvägskomponenter.
+    if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) continue;
+    filenames.add(filename);
+  }
+  return filenames;
+}
+
+// Raderar en enskild lokalt uppladdad KB-bildfil (best-effort, icke-fatalt).
+function deleteKbImageFile(filename: string): void {
+  const filePath = join(UPLOAD_DIR, filename);
+  // Radera bara filer som faktiskt ligger i UPLOAD_DIR.
+  if (!filePath.startsWith(UPLOAD_DIR + '/') && filePath !== UPLOAD_DIR) return;
+  try {
+    if (existsSync(filePath)) unlinkSync(filePath);
+  } catch (unlinkErr) {
+    logger.warn('KB: kunde inte radera inbäddad bild', { filePath, error: String(unlinkErr) });
+  }
+}
 
 interface KbCategoryRow {
   id: string;
@@ -366,6 +398,21 @@ router.put('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, res: 
 
     updateArticleAndFts(articleId, safeTitle, articleContent, category_id || null, article_type || null, articleStatus, now);
 
+    // Rensa inbäddade KB-bilder som fanns i det gamla innehållet men saknas i det
+    // nya (best-effort, blockerar ej uppdateringen). Måste köras efter UPDATE:
+    // vi diffar mot articleContent (det faktiskt sparade, sanerade innehållet)
+    // — inte request-bodyns råa content — så saneringen inte felaktigt tolkas
+    // som att en bild togs bort.
+    try {
+      const oldImages = extractKbImageFilenames(existing.content);
+      const newImages = extractKbImageFilenames(articleContent);
+      for (const filename of oldImages) {
+        if (!newImages.has(filename)) deleteKbImageFile(filename);
+      }
+    } catch (parseErr) {
+      logger.warn('KB article update: fel vid parsning av inbäddade bilder', { error: String(parseErr) });
+    }
+
     const article = db.prepare(`
       SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.created_at, a.updated_at,
         c.name as category_name, c.color as category_color
@@ -411,24 +458,8 @@ router.delete('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, re
     // Parsa alla <img src="..."> i artikelns HTML och ta bort filer som pekar på
     // lokalt uppladdade KB-bilder (/api/kb/images/<kb-…>-filnamn).
     try {
-      const imgSrcPattern = /<img[^>]+src="([^"]+)"/gi;
-      let match: RegExpExecArray | null;
-      while ((match = imgSrcPattern.exec(existing.content)) !== null) {
-        const src = match[1];
-        // Matcha bara lokalt uppladdade KB-bilder: /api/kb/images/<filename>
-        const localMatch = src.match(/\/api\/kb\/images\/(kb-[^/?#"]+)$/);
-        if (!localMatch) continue;
-        const filename = localMatch[1];
-        // Förhindra path-traversal: filnamnet får inte innehålla sökvägskomponenter.
-        if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) continue;
-        const filePath = join(UPLOAD_DIR, filename);
-        // Radera bara filer som faktiskt ligger i UPLOAD_DIR.
-        if (!filePath.startsWith(UPLOAD_DIR + '/') && filePath !== UPLOAD_DIR) continue;
-        try {
-          if (existsSync(filePath)) unlinkSync(filePath);
-        } catch (unlinkErr) {
-          logger.warn('KB article delete: kunde inte radera inbäddad bild', { filePath, error: String(unlinkErr) });
-        }
+      for (const filename of extractKbImageFilenames(existing.content)) {
+        deleteKbImageFile(filename);
       }
     } catch (parseErr) {
       logger.warn('KB article delete: fel vid parsning av inbäddade bilder', { error: String(parseErr) });
@@ -630,7 +661,7 @@ router.delete('/articles/:id/share', authenticate, requireAdmin, (req: AuthReque
 });
 
 // GET /api/kb/public/:token — public read-only article (no auth)
-router.get('/public/:token', (_req: Request, res: Response) => {
+router.get('/public/:token', kbShareRateLimiter, (_req: Request, res: Response) => {
   const { token } = _req.params;
   try {
     const share = db.prepare('SELECT article_id FROM kb_article_shares WHERE share_token = ?').get(token) as { article_id: string } | undefined;
@@ -657,7 +688,7 @@ router.get('/public/:token', (_req: Request, res: Response) => {
 // ─── KB Image Upload ──────────────────────────────────────────────────────────
 
 // POST /api/kb/upload-image — upload image för KB-artikel (endast admin)
-router.post('/upload-image', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
+router.post('/upload-image', writeRateLimiter, authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   uploadImage.single('image')(req, res, (err) => {
     if (err) {
       logger.error('KB image upload error:', err.message);

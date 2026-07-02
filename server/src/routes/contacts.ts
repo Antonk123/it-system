@@ -157,76 +157,85 @@ function normalizeContactFieldNames(row: Record<string, string>): Record<string,
 }
 
 // Import contacts - Preview (must come before /:id route)
-router.post('/import/preview', authenticate, upload.single('file'), (req: AuthRequest, res: Response) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+router.post('/import/preview', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
+  // Wrap upload.single manually to catch multer errors (fileFilter/MulterError
+  // lack a .status and would otherwise fall through to the central 500 handler).
+  upload.single('file')(req, res, (err) => {
+    if (err) {
+      logger.error('Contact import file upload validation error:', { error: err instanceof Error ? err.message : String(err) });
+      return res.status(400).json({ error: err instanceof Error ? err.message : 'Invalid file upload' });
     }
 
-    const rows = parseCSV(req.file.buffer);
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
 
-    if (rows.length === 0) {
-      return res.status(400).json({ error: 'CSV file is empty' });
+      const rows = parseCSV(req.file.buffer);
+
+      if (rows.length === 0) {
+        return res.status(400).json({ error: 'CSV file is empty' });
+      }
+
+      // Get existing emails for duplicate detection
+      const existingEmails = new Set(
+        (db.prepare('SELECT email FROM contacts').all() as { email: string }[]).map((c) => c.email.toLowerCase())
+      );
+
+      const results = rows.map((row) => {
+        const normalized = normalizeContactFieldNames(row);
+        const errors: string[] = [];
+
+        // Required fields validation
+        if (!normalized.name || !normalized.name.trim()) {
+          errors.push('Namn saknas');
+        }
+        if (!normalized.email || !normalized.email.trim()) {
+          errors.push('Email saknas');
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized.email.trim())) {
+          errors.push('Ogiltig e-postadress');
+        }
+
+        // Check for duplicates
+        const isDuplicate = normalized.email && existingEmails.has(normalized.email.trim().toLowerCase());
+        if (isDuplicate) {
+          errors.push('E-post finns redan i systemet');
+        }
+
+        return {
+          contact: {
+            name: normalized.name?.trim() || '',
+            email: normalized.email?.trim() || '',
+            phone: normalized.phone?.trim() || null,
+            company: normalized.company?.trim() || null,
+          },
+          valid: errors.length === 0 && !isDuplicate,
+          errors,
+        };
+      });
+
+      const valid = results.filter((r) => r.valid).length;
+      const invalid = results.filter((r) => !r.valid).length;
+      const duplicates = results.filter((r) => r.errors.includes('E-post finns redan i systemet')).length;
+
+      res.json({
+        total: rows.length,
+        valid,
+        invalid,
+        duplicates,
+        results,
+      });
+    } catch (error) {
+      logger.error('Error previewing contact import:', { error: String(error) });
+      res.status(500).json({ error: 'Failed to preview import' });
     }
-
-    // Get existing emails for duplicate detection
-    const existingEmails = new Set(
-      (db.prepare('SELECT email FROM contacts').all() as { email: string }[]).map((c) => c.email.toLowerCase())
-    );
-
-    const results = rows.map((row) => {
-      const normalized = normalizeContactFieldNames(row);
-      const errors: string[] = [];
-
-      // Required fields validation
-      if (!normalized.name || !normalized.name.trim()) {
-        errors.push('Namn saknas');
-      }
-      if (!normalized.email || !normalized.email.trim()) {
-        errors.push('Email saknas');
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized.email.trim())) {
-        errors.push('Ogiltig e-postadress');
-      }
-
-      // Check for duplicates
-      const isDuplicate = normalized.email && existingEmails.has(normalized.email.trim().toLowerCase());
-      if (isDuplicate) {
-        errors.push('E-post finns redan i systemet');
-      }
-
-      return {
-        contact: {
-          name: normalized.name?.trim() || '',
-          email: normalized.email?.trim() || '',
-          phone: normalized.phone?.trim() || null,
-          company: normalized.company?.trim() || null,
-        },
-        valid: errors.length === 0 && !isDuplicate,
-        errors,
-      };
-    });
-
-    const valid = results.filter((r) => r.valid).length;
-    const invalid = results.filter((r) => !r.valid).length;
-    const duplicates = results.filter((r) => r.errors.includes('E-post finns redan i systemet')).length;
-
-    res.json({
-      total: rows.length,
-      valid,
-      invalid,
-      duplicates,
-      results,
-    });
-  } catch (error) {
-    logger.error('Error previewing contact import:', { error: String(error) });
-    res.status(500).json({ error: 'Failed to preview import' });
-  }
+  });
 });
 
 // Import contacts - Confirm (must come before /:id route)
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-router.post('/import/confirm', authenticate, (req: AuthRequest, res: Response) => {
+router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { contacts } = req.body;
 
   if (!Array.isArray(contacts)) {
