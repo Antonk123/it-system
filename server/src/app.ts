@@ -262,6 +262,15 @@ export function createApp() {
   app.use('/api/sla', slaRoutes);
   app.use('/api/settings', settingsRoutes);
 
+  // Catch-all for unknown /api/* routes — without this, Express falls back to
+  // its built-in HTML 404 page ("Cannot GET /api/xyz") instead of the API's
+  // JSON error shape. Bad for external API-key integrations that expect JSON.
+  // Must sit AFTER all /api/... mounts above (so real routes still match) and
+  // BEFORE the error middleware below (so it never reaches there).
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'Not found' });
+  });
+
   // Error handling
   // HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client
   app.use((err: Error & { status?: number; code?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {

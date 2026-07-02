@@ -92,6 +92,15 @@ describe('GET /api/health', () => {
   });
 });
 
+describe('GET /api/<unknown> (404 catch-all)', () => {
+  it('returns JSON 404 instead of Express\'s built-in HTML 404 page', async () => {
+    const res = await request(app).get('/api/finns-inte');
+    expect(res.status).toBe(404);
+    expect(res.headers['content-type']).toMatch(/application\/json/);
+    expect(res.body.error).toBeTruthy();
+  });
+});
+
 describe('Auth — login', () => {
   it('logs in with correct admin credentials and returns an access token', async () => {
     const res = await request(app)
