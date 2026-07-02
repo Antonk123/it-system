@@ -403,8 +403,8 @@ All routes require `authenticate` → `requireAdmin`.
 |--------|------|------|---------|--------|----------|
 | GET | `/api/backup` | admin + `backupDownloadLimiter` | Stream a ZIP backup (DB + uploads) | — | ZIP stream |
 | POST | `/api/backup/restore` | admin + `restoreLimiter` + multer `upload.single('file')` (ZIP, 500 MB) | Restore from uploaded ZIP (zip-slip/magic/table validation, then `process.exit`) | multipart `file` | `{ success, message, restartRequired }`; 400 |
-| GET | `/api/backup/config` | admin | Get backup schedule config + nextRunAt | — | `{ …cfg, nextRunAt }` |
-| PUT | `/api/backup/config` | admin | Update schedule (enabled/time/retentionDays) | body: `enabled`, `time`(HH:MM), `retentionDays`(1–3650) | `{ …cfg, nextRunAt }`; 400 |
+| GET | `/api/backup/config` | admin | Get backup schedule config + nextRunAt | — | `{ …cfg, nextRunAt, consecutiveFailures, offsiteFailureCount }` |
+| PUT | `/api/backup/config` | admin | Update schedule (enabled/time/retentionDays) | body: `enabled`, `time`(HH:MM), `retentionDays`(1–3650) | `{ …cfg, nextRunAt, consecutiveFailures, offsiteFailureCount }`; 400 |
 | POST | `/api/backup/run-now` | admin | Trigger backup immediately | — | `{ status, lastRunAt, lastSizeBytes }`; 409 if running |
 
 ---
@@ -427,6 +427,19 @@ All routes require `authenticate` → `requireAdmin`.
 
 ---
 
+## Settings — `/api/settings`
+
+System-wide runtime settings (key-value store, `app_settings` table). Read is
+open to any authenticated user (frontend uses it to decide whether to show the
+public-reply toggle); write is admin-only.
+
+| Method | Path | Auth | Purpose | Inputs | Response |
+|--------|------|------|---------|--------|----------|
+| GET | `/api/settings` | `authenticate` | Current two-way-email policy | — | `{ twoWayEmailEnabled }` |
+| PUT | `/api/settings/two-way-email` | `authenticate` → `requireAdmin` | Toggle whether outbound mail goes to customers | body: `enabled`(boolean, req) | `{ twoWayEmailEnabled }`; 400 |
+
+---
+
 ## Public (unauthenticated) — `/api/public`
 
 | Method | Path | Auth | Purpose | Inputs | Response |
@@ -442,6 +455,8 @@ All routes require `authenticate` → `requireAdmin`.
 
 ## Endpoint count
 
-Roughly **130** endpoints across 25 routers (plus 2 app-level routes and the
-template-fields sub-router). Counts are approximate — confirm against source when
-the figure matters.
+**170** documented endpoint rows across 27 routers (plus 2 app-level routes; the
+template-fields sub-router is mounted under `/api/templates/:templateId/fields`
+and counted within the Templates section, not separately). Recount with:
+`grep -cE '^\| (GET|POST|PUT|PATCH|DELETE) \|' docs/API.md`. Counts are
+approximate — confirm against source when the figure matters.

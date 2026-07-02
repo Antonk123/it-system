@@ -10,6 +10,24 @@ info:
     Versionen ovan spårar API-kontraktet, inte appens git-tagg.
 
 
+    ## ⚠ PARTIELL SPEC — inte det fullständiga API-kontraktet
+
+    Den här filen dokumenterar bara kärnflödena (30 av ~170 endpoints, se
+    `docs/API.md`): hälsa/CSRF, auth, tickets, categories, contacts, companies,
+    billing, time-entries, kb och public. Den är INTE en fullständig referens.
+
+
+    **Fullständig endpoint-referens:** `docs/API.md` — genererad från de
+    faktiska Express-routrarna i `server/src/routes/` och hålls uppdaterad
+    vid route-ändringar. Använd den filen som facit.
+
+
+    Routrar som saknas helt i denna OpenAPI-spec (se `docs/API.md` för dem):
+    attachments, checklists, checklist-templates, comments, links, shares,
+    users, templates, template-fields, tags, reports, recurring, backup,
+    push, api-keys, webhooks, email-inbound, sla, settings.
+
+
     ## Autentisering
 
     Två sätt att autentisera, båda via `Authorization`-headern:

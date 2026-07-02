@@ -17,17 +17,96 @@
 
 ---
 
-## Daglig backup
+## Backup & Restore
 
-### Manuell backup
+> Fullständig teknisk genomgång (validering, filstruktur, felkoder) finns i
+> [`docs/OPERATIONS.md`, avsnitt 4](./OPERATIONS.md#4-backup--restore). Det här
+> avsnittet är den korta drift-versionen.
+
+IT-Ticket har ett **inbyggt backup-system** — inget cron-script eller manuellt
+`docker run` krävs i normalfallet.
+
+### Schemalagd backup (rekommenderad väg)
+
+Styrs av raden `backup_config` i databasen (migration 061), default: **04:00
+lokal tid, 7 dagars retention**. Vid varje körning:
+
+1. WAL-säker online-snapshot av SQLite-databasen.
+2. `PRAGMA integrity_check` — en korrupt snapshot rullar aldrig in i retention.
+3. Buntar `data/database.sqlite` + `data/uploads/` till en `backup-<YYYY-MM-DD>.zip`
+   i `<DB_PATH-katalog>/backups` (`chmod 0o600`).
+4. Valfri off-site-uppladdning (`OFFSITE_BACKUP_CMD` i `.env` — se `.env.example`).
+5. Rensar äldre backupar enligt retention.
+6. Skriver status (`last_run_at`, `last_status`, `last_size_bytes`) till `backup_config`.
+
+Missar servern schemalagt klockslag (t.ex. nere vid 04:00) körs en catch-up-backup
+direkt vid nästa serverstart om senaste körningen saknas eller är äldre än ~24h.
+
+**Admin-UI:t** (Inställningar → Backup) visar och styr allt detta:
+- **"Kör backup nu"** — kör en backup direkt (409 om en redan pågår).
+- Schema: aktiverad/pausad, klockslag, retention-dagar.
+- Status för senaste körningen, inkl. `offsite_failed` om lokal backup lyckades
+  men off-site-uppladdningen inte gjorde det (se `OFFSITE_BACKUP_REQUIRED` i
+  `.env.example`), samt en räknare för konsekutiva misslyckanden.
+
+Motsvarande API: `GET/PUT /api/backup/config`, `POST /api/backup/run-now`
+(admin-only).
+
+### Manuell nedladdning
+
+`GET /api/backup` (admin-only, rate limit 10/15 min/IP) — laddar ner en färsk
+ZIP med samma struktur som den schemalagda backupen (`data/database.sqlite` +
+`data/uploads/`). Praktiskt för att ta en engångskopia innan en riskabel ändring,
+eller för att arkivera en backup utanför servern manuellt.
+
+### Restore
+
+`POST /api/backup/restore` (admin-only, rate limit 5/15 min/IP, max 500 MB ZIP)
+— ladda upp en ZIP från admin-UI:t (Inställningar → Backup → Återställ).
+
+Innan live-databasen rörs valideras uppladdningen i ordning:
+1. **Zip-slip-skydd** — varje post i ZIP:en måste ligga under extraktionskatalogen
+   (ingen absolut väg, inga `..`-segment).
+2. **Allowlist** — endast `data/database.sqlite` och `data/uploads/*` accepteras.
+3. `data/database.sqlite` måste finnas i ZIP:en.
+4. **SQLite-magic-header** verifieras (`SQLite format 3\0`) innan filen öppnas.
+5. Öppnas read-only och måste innehålla tabellerna `tickets` och `users`.
+
+Vid godkänd validering tas en `<DB_PATH>.pre-restore`-kopia (rollback om något
+går fel), WAL checkpointas, DB-filen och uploads ersätts, och servern svarar
+med `restartRequired: true` och kör därefter `process.exit(0)` — Docker
+(`restart: unless-stopped`) startar om containern automatiskt med den nya
+databasen. Verifiera `GET /api/health` = 200 efteråt.
+
+### Off-site backup (rekommenderas)
+
+Konfigureras via `.env` — inget separat script:
 
 ```bash
-# Stoppa skrivningar tillfälligt (valfritt, SQLite hanterar concurrent reads)
-BACKUP_DIR="/opt/it-ticketing/backups"
+# .env
+OFFSITE_BACKUP_CMD=rclone copy {file} remote:itticket/backups/
+OFFSITE_BACKUP_REQUIRED=false
+```
+
+`{file}` ersätts av filsökvägen via en env-var (aldrig interpolerad i shell-
+strängen → ingen shell-injection). Se `.env.example` för fler exempel-providers
+via [rclone](https://rclone.org/). `OFFSITE_BACKUP_REQUIRED=true` gör en
+misslyckad off-site-uppladdning fatal för körningen (markeras `offsite_failed`,
+lokal backup + retention körs ändå) — default `false` loggar bara felet.
+
+### Reservprocedur (manuell)
+
+> Använd bara om det inbyggda systemet ovan inte är tillgängligt (t.ex. servern
+> startar inte, eller du behöver en kopia från utsidan utan att gå via API:et).
+> Den rekommenderade vägen är alltid den inbyggda schemalagda backupen +
+> admin-UI:t.
+
+```bash
+# Kopiera databas och uppladdningar direkt från Docker-volymen
+BACKUP_DIR="/opt/it-ticketing/backups-manual"
 mkdir -p "$BACKUP_DIR"
 TIMESTAMP=$(date +%Y%m%d-%H%M)
 
-# Kopiera databas och uppladdningar från Docker-volymen
 docker run --rm \
   -v it-ticketing-data:/data:ro \
   -v "$BACKUP_DIR":/backup \
@@ -39,80 +118,7 @@ docker run --rm \
 echo "Backup klar: $BACKUP_DIR/database-${TIMESTAMP}.sqlite"
 ```
 
-### Automatisk backup (cron)
-
-```bash
-# Lägg till i root-crontab: crontab -e
-0 3 * * * /opt/it-ticketing/backup.sh >> /var/log/it-ticketing-backup.log 2>&1
-```
-
-Skapa `/opt/it-ticketing/backup.sh`:
-
-```bash
-#!/bin/bash
-set -e
-
-# Läs .env om den finns (gör BACKUP_RETENTION_DAYS tillgänglig)
-ENV_FILE="/opt/it-ticketing/.env"
-[ -f "$ENV_FILE" ] && set -a && . "$ENV_FILE" && set +a
-
-BACKUP_DIR="/opt/it-ticketing/backups"
-mkdir -p "$BACKUP_DIR"
-TIMESTAMP=$(date +%Y%m%d-%H%M)
-RETENTION="${BACKUP_RETENTION_DAYS:-7}"
-
-docker run --rm \
-  -v it-ticketing-data:/data:ro \
-  -v "$BACKUP_DIR":/backup \
-  alpine sh -c "
-    cp /data/database.sqlite /backup/database-${TIMESTAMP}.sqlite
-    tar czf /backup/uploads-${TIMESTAMP}.tar.gz -C /data uploads/
-  "
-
-# Behåll $RETENTION dagars backups (styrs av BACKUP_RETENTION_DAYS i .env, default 7)
-find "$BACKUP_DIR" -name "database-*.sqlite" -mtime +"${RETENTION}" -delete
-find "$BACKUP_DIR" -name "uploads-*.tar.gz" -mtime +"${RETENTION}" -delete
-
-echo "$(date): Backup klar — database-${TIMESTAMP}.sqlite (retention: ${RETENTION}d)"
-```
-
-```bash
-chmod +x /opt/it-ticketing/backup.sh
-```
-
-### Off-site backup (rekommenderas)
-
-Automatiska backupar sparas i samma Docker-volym som databasen. Vid disk-haveri på hosten försvinner både databas och backupfiler. Kopiera därför backuparna till ett externt mål med [rclone](https://rclone.org/).
-
-**Konfigurera rclone** (kör en gång):
-
-```bash
-# Installera
-curl https://rclone.org/install.sh | sudo bash
-
-# Konfigurera ett mål — välj provider (S3, B2, Azure, SFTP, …)
-rclone config
-# Följ guiden, ge destinationen ett namn, t.ex. "backup-s3"
-```
-
-**Cron — kopiera backupar nattligen** (lägg till med `crontab -e`):
-
-```bash
-# Kör varje natt kl 04:30 (30 min efter automatisk backup)
-30 4 * * * rclone copy /opt/it-ticketing/backups backup-s3:it-ticketing-backups/ \
-  --log-file /var/log/it-ticketing-rclone.log \
-  --log-level INFO
-```
-
-Byt `backup-s3:it-ticketing-backups/` mot ditt rclone-mål och bucket-/container-namn. Använd `rclone ls backup-s3:it-ticketing-backups/` för att verifiera att filer laddas upp.
-
-**Retention off-site** — rclone kopierar bara nya filer. Sätt bucket lifecycle rules (S3/B2) eller lägg till `--min-age`/`--max-age` för att styra hur länge filer bevaras off-site oberoende av lokal retention.
-
----
-
-## Restore
-
-### Restore databas
+Manuell restore från en sådan kopia (systemet måste vara nere):
 
 ```bash
 cd /opt/it-ticketing
@@ -123,7 +129,7 @@ docker compose -f docker-compose.local.yml --env-file .env down
 # 2. Kopiera backup till volymen
 docker run --rm \
   -v it-ticketing-data:/data \
-  -v /opt/it-ticketing/backups:/backup:ro \
+  -v /opt/it-ticketing/backups-manual:/backup:ro \
   alpine sh -c "
     cp /backup/database-YYYYMMDD-HHMM.sqlite /data/database.sqlite
     tar xzf /backup/uploads-YYYYMMDD-HHMM.tar.gz -C /data
