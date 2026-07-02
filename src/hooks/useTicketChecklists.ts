@@ -63,6 +63,9 @@ export const useTicketChecklists = (initialTicketId?: string) => {
     },
     onSuccess: (_data, { targetTicketId }) => {
       queryClient.invalidateQueries({ queryKey: checklistKeys.ticket(targetTicketId) });
+      // L23: keep the ticket list's checklist filter (?checklist=none/complete/…)
+      // correct — same invalidation update/delete already do below.
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
     },
     onError: () => {
       toast.error('Failed to add checklist item');
@@ -80,8 +83,10 @@ export const useTicketChecklists = (initialTicketId?: string) => {
       // Scope invalidation to the active ticket's checklist (avoids matching
       // unrelated checklist queries / stale closure keys).
       queryClient.invalidateQueries({ queryKey: queryKey });
-      // Refresh ticket list so checklist progress column stays in sync —
-      // run on every update for consistent behaviour (not only on completed-toggle).
+      // Refresh ticket list so the checklist filter (?checklist=none/complete/…)
+      // stays correct — run on every update for consistent behaviour (not only
+      // on completed-toggle). Note: the Förlopp/progress column in TicketTable
+      // reads its own separate state, not this query.
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
     },
     onError: (error) => {
@@ -97,7 +102,7 @@ export const useTicketChecklists = (initialTicketId?: string) => {
     },
     onSuccess: () => {
       // Scope to the active ticket's checklist; also refresh ticket list so the
-      // progress column reflects the removed item.
+      // checklist filter (?checklist=none/complete/…) reflects the removed item.
       queryClient.invalidateQueries({ queryKey: queryKey });
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
     },
@@ -113,6 +118,9 @@ export const useTicketChecklists = (initialTicketId?: string) => {
     },
     onSuccess: (_data, { targetTicketId }) => {
       queryClient.invalidateQueries({ queryKey: checklistKeys.ticket(targetTicketId) });
+      // L23: keep the ticket list's checklist filter (?checklist=none/complete/…)
+      // correct — same invalidation update/delete already do above.
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
     },
     onError: () => {
       toast.error('Failed to add checklist items');

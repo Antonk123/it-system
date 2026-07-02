@@ -3,7 +3,8 @@ import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Link as LinkIcon, Loader2, ListChecks, Plus, Camera, Sparkles, RefreshCw, Check, X, MoreVertical, Bell } from 'lucide-react';
-import { useTickets, ticketKeys } from '@/hooks/useTickets';
+import { ticketKeys } from '@/hooks/useTickets';
+import { useTicketMutations } from '@/hooks/useTicketMutations';
 import { useCategories } from '@/hooks/useCategories';
 import { useUsers } from '@/hooks/useUsers';
 import { useTicketAttachments } from '@/hooks/useTicketAttachments';
@@ -96,10 +97,12 @@ const TicketDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const { getTicketById, updateTicket, deleteTicket, isLoading: ticketsLoading } = useTickets();
+  // M9: detail-only mutations — does NOT mount useTickets()'s unfiltered list
+  // query (which previously hit the backend's legacy LIMIT-1000 branch on
+  // every ticket open just to reach update/delete).
+  const { updateTicket, deleteTicket } = useTicketMutations();
 
-  // Authoritative single-ticket query — preferred over paginated list cache
-  // which may be stale or filtered out.
+  // Authoritative single-ticket query — the sole data source for this page.
   const { data: ticketDetail, isLoading: ticketDetailLoading, isError: ticketDetailError } = useQuery({
     queryKey: ticketKeys.detail(id || ''),
     queryFn: () => api.getTicket(id!),
@@ -152,10 +155,11 @@ const TicketDetail = () => {
   >([]);
   const [tagsFromAPI, setTagsFromAPI] = useState<{ id: string; name: string; color: string }[]>([]);
 
-  // Prefer authoritative single-ticket data; fall back to list cache for instant display.
-  // ticketDetail is the primary source so ärenden outside the paginated page are found.
-  const listTicket = id ? getTicketById(id) : null;
-  const ticket = (ticketDetail ? mapTicketRow(ticketDetail) : null) ?? listTicket ?? null;
+  // Single-ticket detail query is the sole source now (M9): the old list-cache
+  // fallback came from useTickets()'s own unfiltered fetch (a distinct cache
+  // key from any filtered TicketTable/Kanban view), so it was never actually
+  // an "instant" hit off an existing cache — just a second full fetch.
+  const ticket = ticketDetail ? mapTicketRow(ticketDetail) : null;
   const user = ticket ? getUserById(ticket.requesterId) : null;
 
   // Sync field_values and tags from the authoritative single-ticket query
@@ -278,9 +282,8 @@ const TicketDetail = () => {
     addRecentlyViewedTicket(ticket.id, ticket.title);
   }, [ticket?.id, ticket?.title]);
 
-  // Show skeleton while loading: either list cache is loading, or
-  // detail query is in-flight and there's no list-cache fallback yet.
-  if (ticketsLoading || (ticketDetailLoading && !listTicket)) {
+  // Show skeleton while the single-ticket detail query is in-flight.
+  if (ticketDetailLoading) {
     return (
       <Layout>
         <div className="max-w-3xl mx-auto space-y-6">

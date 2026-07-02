@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Tag } from '@/types/ticket';
+import { ticketKeys } from '@/hooks/useTickets';
 import { toast } from 'sonner';
 
 export const tagKeys = {
@@ -33,6 +34,9 @@ export function useTags() {
       api.updateTag(id, { name, color }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: tagKeys.list() });
+      // M7: ticket rows embed the tag name/color — without this, ticket lists
+      // keep showing the old name/color for up to staleTime (2 min).
+      queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
     },
     onError: () => toast.error('Kunde inte uppdatera tagg'),
   });
@@ -42,6 +46,9 @@ export function useTags() {
     mutationFn: (id: string) => api.deleteTag(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: tagKeys.list() });
+      // M7: ticket rows still reference the deleted tag's name/color until the
+      // list queries are invalidated too.
+      queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
     },
     onError: () => toast.error('Kunde inte ta bort tagg'),
   });

@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, PlusCircle, Pencil, ChevronDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { useTickets, ticketKeys } from '@/hooks/useTickets';
+import { ticketKeys } from '@/hooks/useTickets';
+import { useTicketMutations } from '@/hooks/useTicketMutations';
 import { mapTicketRow } from '@/lib/mapTicket';
 import { useUsers } from '@/hooks/useUsers';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
@@ -50,7 +51,10 @@ const TicketForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { addTicket, updateTicket, getTicketById } = useTickets();
+  // M9: mutations only — does NOT mount useTickets()'s unfiltered list query
+  // (which previously hit the backend's legacy LIMIT-1000 branch on every
+  // form open just to reach addTicket/updateTicket).
+  const { addTicket, updateTicket } = useTicketMutations();
   const { users } = useUsers();
   const { users: systemUsers } = useSystemUsers();
   const { companies } = useCompanies();
@@ -80,11 +84,11 @@ const TicketForm = () => {
   useEffect(() => { fetchChecklistTemplates(); }, [fetchChecklistTemplates]);
 
   const isEditing = !!id;
-  // Authoritative single-ticket fetch: getTicketById only sees the (max-1000)
-  // list cache, so on direct-URL edit navigation it returns undefined and the
-  // form renders blank. A dedicated detail query (same pattern as TicketDetail)
-  // guarantees the ticket loads regardless of list-cache warmth; the list cache
-  // is a synchronous fallback while the query is in flight.
+  // Authoritative single-ticket fetch (same pattern as TicketDetail): the
+  // detail query is the sole source in edit mode. The old getTicketById
+  // fallback read useTickets()'s own unfiltered list cache — a distinct cache
+  // key from any filtered list view, so it was never warm once that list query
+  // was removed (M9); it only ever existed as a side effect of the extra fetch.
   const { data: ticketDetailRow } = useQuery({
     queryKey: ticketKeys.detail(id || ''),
     queryFn: () => api.getTicket(id!),
@@ -96,11 +100,8 @@ const TicketForm = () => {
   // en oändlig loop → React kapade den och formuläret frös på serverns värden
   // (man kunde inte ändra beställare m.m. — valet "snäppte tillbaka").
   const existingTicket = useMemo(
-    () =>
-      isEditing
-        ? ((ticketDetailRow ? mapTicketRow(ticketDetailRow) : null) ?? getTicketById(id))
-        : null,
-    [isEditing, ticketDetailRow, getTicketById, id]
+    () => (isEditing && ticketDetailRow ? mapTicketRow(ticketDetailRow) : null),
+    [isEditing, ticketDetailRow]
   );
 
   const [formData, setFormData] = useState({
@@ -148,8 +149,8 @@ const TicketForm = () => {
   }, []);
 
   // Populera formuläret EN gång per laddat ärende-id. Utan denna guard skulle en
-  // bakgrunds-refetch (eller detalj-queryns upplösning efter list-cache-fallbacken)
-  // köra setFormData igen och skriva över användarens osparade ändringar.
+  // bakgrunds-refetch av detalj-queryn köra setFormData igen och skriva över
+  // användarens osparade ändringar.
   const populatedTicketIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (existingTicket && populatedTicketIdRef.current !== (id ?? null)) {

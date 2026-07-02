@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { api, CustomFieldInput, TicketRow } from '@/lib/api';
 import { Ticket, TicketStatus, TicketPriority } from '@/types/ticket';
 import { ticketInsertSchema, ticketUpdateSchema, getValidationError } from '@/lib/validations';
@@ -66,6 +66,222 @@ export const ticketKeys = {
   detail: (id: string) => [...ticketKeys.details(), id] as const,
 };
 
+// M9: shared add/update/delete mutation builders — extracted so
+// useTicketMutations() (detail/form-only consumers like TicketDetail and
+// TicketForm) can reuse the exact same mutation logic (optimistic updates,
+// cache reconciliation, invalidation) WITHOUT also mounting the list useQuery
+// below. Behaviour for useTickets() itself is unchanged: it just calls these
+// builders instead of inlining the options.
+export function buildAddTicketMutationOptions(queryClient: QueryClient) {
+  return {
+    mutationFn: async (ticket: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { customFields?: CustomFieldInput[]; assigned_to?: string; company_id?: string }) => {
+      const { customFields, templateId, assigned_to, company_id, ...ticketData } = ticket;
+      const validation = ticketInsertSchema.safeParse(ticketData);
+      if (!validation.success) {
+        const errorMsg = getValidationError(validation.error);
+        throw new Error(errorMsg || 'Invalid ticket data');
+      }
+
+      const data = await api.createTicket({
+        title: validation.data.title,
+        description: validation.data.description,
+        status: validation.data.status,
+        priority: validation.data.priority,
+        // "none" means no category
+        category_id: validation.data.category === 'none' ? null : (validation.data.category || null),
+        requester_id: validation.data.requesterId || null,
+        notes: validation.data.notes || null,
+        solution: validation.data.solution || null,
+        customFields: customFields,
+        template_id: templateId || null,
+        assigned_to: assigned_to || null,
+        company_id: company_id || null,
+      });
+
+      if (data.warnings) {
+        data.warnings.forEach((w: string) => toast.warning(w));
+      }
+
+      return {
+        id: data.id,
+        title: data.title,
+        description: data.description,
+        status: data.status as TicketStatus,
+        priority: data.priority as TicketPriority,
+        category: data.category_id || undefined,
+        requesterId: data.requester_id || '',
+        createdAt: parseServerDate(data.created_at),
+        updatedAt: parseServerDate(data.updated_at),
+        notes: data.notes || undefined,
+        solution: data.solution || undefined,
+      };
+    },
+    onSuccess: () => {
+      // Invalidate all ticket queries to refetch
+      queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || 'Failed to create ticket');
+    },
+  };
+}
+
+export function buildUpdateTicketMutationOptions(queryClient: QueryClient) {
+  return {
+    mutationFn: async ({ id, updates, customFields, tagIds }: { id: string; updates: Partial<Ticket> & { tag_ids?: string[] }; customFields?: CustomFieldInput[]; tagIds?: string[] }) => {
+      const validation = ticketUpdateSchema.safeParse(updates);
+      if (!validation.success) {
+        const errorMsg = getValidationError(validation.error);
+        throw new Error(errorMsg || 'Invalid ticket data');
+      }
+
+      const validated = validation.data;
+      const updateData: Record<string, unknown> = {};
+
+      if (validated.title !== undefined) updateData.title = validated.title;
+      if (validated.description !== undefined) updateData.description = validated.description;
+      if (validated.status !== undefined) updateData.status = validated.status;
+      if (validated.priority !== undefined) updateData.priority = validated.priority;
+      // Handle "none" as "no category"
+      if (validated.category !== undefined) updateData.category_id = validated.category === 'none' ? null : validated.category;
+      if (validated.requesterId !== undefined) updateData.requester_id = validated.requesterId || null;
+      if (validated.notes !== undefined) updateData.notes = validated.notes || null;
+      if (validated.solution !== undefined) updateData.solution = validated.solution || null;
+      if ((updates as any).assigned_to !== undefined) updateData.assigned_to = (updates as any).assigned_to || null;
+      if ((updates as any).company_id !== undefined) updateData.company_id = (updates as any).company_id || null;
+
+      // Handle tags
+      if (tagIds !== undefined || updates.tag_ids !== undefined) {
+        updateData.tag_ids = tagIds || updates.tag_ids || [];
+      }
+
+      // Single round-trip: the PUT response IS the fresh ticket row (+ tags).
+      // We deliberately no longer follow with a second GET /tickets/:id — that
+      // doubled latency on slow links (VPN/5G) for every status/category/solution
+      // change, since the detail page then also had to wait for a third refetch.
+      const updated = await api.updateTicket(id, { ...(updateData as any), customFields: customFields || undefined }) as TicketRow & { warnings?: string[] };
+
+      if (updated?.warnings) {
+        updated.warnings.forEach((w: string) => toast.warning(w));
+      }
+
+      return { id, updated, hadCustomFields: !!(customFields && customFields.length > 0) };
+    },
+    onMutate: async ({ id, updates }: { id: string; updates: Partial<Ticket> & { tag_ids?: string[] } }) => {
+      // Cancel outgoing refetches för alla list-instanser och denna tickets detail.
+      await queryClient.cancelQueries({ queryKey: ticketKeys.lists() });
+      await queryClient.cancelQueries({ queryKey: ticketKeys.detail(id) });
+
+      // Snapshot ALLA monterade list-cacher för rollback (inte bara den stängda nyckeln)
+      const previousLists = queryClient.getQueriesData<unknown>({ queryKey: ticketKeys.lists() });
+      const previousDetail = queryClient.getQueryData<TicketRow>(ticketKeys.detail(id));
+
+      // Optimistisk list-uppdatering på ALLA monterade list-instanser (alla filtersvyer)
+      queryClient.setQueriesData<unknown>(
+        {
+          predicate: (query) => {
+            const key = query.queryKey;
+            // Matcha alla nycklar med formen ['tickets', 'list', ...filters]
+            return (
+              Array.isArray(key) &&
+              key[0] === 'tickets' &&
+              key[1] === 'list'
+            );
+          },
+        },
+        (old: any) => {
+          if (!old) return old;
+          return {
+            ...old,
+            tickets: old.tickets.map((t: Ticket) => {
+              if (t.id === id) {
+                return {
+                  ...t,
+                  ...updates,
+                  // Hantera category "none" → ingen kategori
+                  category: updates.category === 'none' ? undefined : (updates.category !== undefined ? updates.category : t.category),
+                };
+              }
+              return t;
+            }),
+          };
+        }
+      );
+
+      // Optimistisk detail-uppdatering — TicketDetail läser från denna query,
+      // utan detta såg användaren INGEN förändring förrän hela nätverksanropet var klart.
+      queryClient.setQueryData<TicketRow | undefined>(ticketKeys.detail(id), (old) =>
+        old ? applyOptimisticRow(old, updates) : old
+      );
+
+      return { previousLists, previousDetail, id };
+    },
+    onError: (error: Error, _variables: unknown, context: { previousLists?: [readonly unknown[], unknown][]; previousDetail?: TicketRow; id?: string } | undefined) => {
+      // Återställ ALLA list-cacher och detail-cachen vid fel
+      if (context?.previousLists) {
+        for (const [queryKey, data] of context.previousLists) {
+          queryClient.setQueryData(queryKey, data);
+        }
+      }
+      if (context?.id && context?.previousDetail !== undefined) {
+        queryClient.setQueryData(ticketKeys.detail(context.id), context.previousDetail);
+      }
+      toast.error(error.message || 'Failed to update ticket');
+    },
+    onSuccess: ({ id, updated, hadCustomFields }: { id: string; updated: TicketRow & { warnings?: string[] }; hadCustomFields: boolean }) => {
+      // Seed the detail cache with the authoritative row from the PUT response,
+      // preserving field_values (the PUT response omits them). This reconciles
+      // the optimistic state WITHOUT another network round-trip.
+      //
+      // OBS: seeda BARA om detail-cachen redan finns (`old`). Annars (t.ex. en
+      // status-ändring gjord från listan på ett ärende vars detaljvy aldrig
+      // öppnats) skulle vi skapa en post utan field_values och markera den färsk
+      // → templated ärende visar rå markdown i stället för fältblocket tills
+      // staleTime går ut. Saknas cachen: rör den inte — detaljmonteringen gör en
+      // färsk GET (som inkluderar field_values).
+      queryClient.setQueryData<TicketRow>(ticketKeys.detail(id), (old) =>
+        old
+          ? {
+              ...old,
+              ...updated,
+              field_values: (old as any).field_values ?? (updated as any).field_values ?? [],
+            }
+          : old,
+      );
+      // Custom fields changed → field_values are stale; refetch the detail once.
+      if (hadCustomFields) {
+        queryClient.invalidateQueries({ queryKey: ticketKeys.detail(id) });
+      }
+    },
+    onSettled: () => {
+      // Mark all list views stale so every filter-view converges. Default
+      // refetchType only refetches *active* (mounted) lists immediately —
+      // inactive ones refetch lazily on next mount, so this doesn't spam the
+      // network on a slow link. The optimistic update already gave instant UX.
+      queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
+    },
+  };
+}
+
+export function buildDeleteTicketMutationOptions(queryClient: QueryClient) {
+  return {
+    mutationFn: async (id: string) => {
+      await api.deleteTicket(id);
+      return id;
+    },
+    onSuccess: (id: string) => {
+      queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
+      // L10: drop the now-stale detail cache too — otherwise navigating back
+      // (e.g. browser back button) to a deleted ticket's URL still renders it
+      // from cache until gcTime expires instead of showing "not found".
+      queryClient.removeQueries({ queryKey: ticketKeys.detail(id) });
+    },
+    onError: (error: Error) => {
+      if (import.meta.env.DEV) console.error('Error deleting ticket:', error);
+    },
+  };
+}
+
 export const useTickets = (options?: UseTicketsOptions) => {
   const queryClient = useQueryClient();
 
@@ -118,221 +334,37 @@ export const useTickets = (options?: UseTicketsOptions) => {
   const tickets = useMemo(() => queryData?.tickets ?? [], [queryData?.tickets]);
   const pagination = queryData?.pagination || null;
 
-  // Add ticket mutation
-  const addTicketMutation = useMutation({
-    mutationFn: async (ticket: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { customFields?: CustomFieldInput[]; assigned_to?: string; company_id?: string }) => {
-      const { customFields, templateId, assigned_to, company_id, ...ticketData } = ticket;
-      const validation = ticketInsertSchema.safeParse(ticketData);
-      if (!validation.success) {
-        const errorMsg = getValidationError(validation.error);
-        throw new Error(errorMsg || 'Invalid ticket data');
-      }
+  // Add ticket mutation — logic lives in buildAddTicketMutationOptions()
+  // above (shared with useTicketMutations()).
+  const addTicketMutation = useMutation(buildAddTicketMutationOptions(queryClient));
 
-      const data = await api.createTicket({
-        title: validation.data.title,
-        description: validation.data.description,
-        status: validation.data.status,
-        priority: validation.data.priority,
-        // "none" means no category
-        category_id: validation.data.category === 'none' ? null : (validation.data.category || null),
-        requester_id: validation.data.requesterId || null,
-        notes: validation.data.notes || null,
-        solution: validation.data.solution || null,
-        customFields: customFields,
-        template_id: templateId || null,
-        assigned_to: assigned_to || null,
-        company_id: company_id || null,
-      });
-
-      if (data.warnings) {
-        data.warnings.forEach((w: string) => toast.warning(w));
-      }
-
-      return {
-        id: data.id,
-        title: data.title,
-        description: data.description,
-        status: data.status as TicketStatus,
-        priority: data.priority as TicketPriority,
-        category: data.category_id || undefined,
-        requesterId: data.requester_id || '',
-        createdAt: parseServerDate(data.created_at),
-        updatedAt: parseServerDate(data.updated_at),
-        notes: data.notes || undefined,
-        solution: data.solution || undefined,
-      };
-    },
-    onSuccess: () => {
-      // Invalidate all ticket queries to refetch
-      queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
-    },
-    onError: (error: Error) => {
-      toast.error(error.message || 'Failed to create ticket');
-    },
-  });
-
-  // Update ticket mutation
-  const updateTicketMutation = useMutation({
-    mutationFn: async ({ id, updates, customFields, tagIds }: { id: string; updates: Partial<Ticket> & { tag_ids?: string[] }; customFields?: CustomFieldInput[]; tagIds?: string[] }) => {
-      const validation = ticketUpdateSchema.safeParse(updates);
-      if (!validation.success) {
-        const errorMsg = getValidationError(validation.error);
-        throw new Error(errorMsg || 'Invalid ticket data');
-      }
-
-      const validated = validation.data;
-      const updateData: Record<string, unknown> = {};
-
-      if (validated.title !== undefined) updateData.title = validated.title;
-      if (validated.description !== undefined) updateData.description = validated.description;
-      if (validated.status !== undefined) updateData.status = validated.status;
-      if (validated.priority !== undefined) updateData.priority = validated.priority;
-      // Handle "none" as "no category"
-      if (validated.category !== undefined) updateData.category_id = validated.category === 'none' ? null : validated.category;
-      if (validated.requesterId !== undefined) updateData.requester_id = validated.requesterId || null;
-      if (validated.notes !== undefined) updateData.notes = validated.notes || null;
-      if (validated.solution !== undefined) updateData.solution = validated.solution || null;
-      if ((updates as any).assigned_to !== undefined) updateData.assigned_to = (updates as any).assigned_to || null;
-      if ((updates as any).company_id !== undefined) updateData.company_id = (updates as any).company_id || null;
-
-      // Handle tags
-      if (tagIds !== undefined || updates.tag_ids !== undefined) {
-        updateData.tag_ids = tagIds || updates.tag_ids || [];
-      }
-
-      // Single round-trip: the PUT response IS the fresh ticket row (+ tags).
-      // We deliberately no longer follow with a second GET /tickets/:id — that
-      // doubled latency on slow links (VPN/5G) for every status/category/solution
-      // change, since the detail page then also had to wait for a third refetch.
-      const updated = await api.updateTicket(id, { ...(updateData as any), customFields: customFields || undefined }) as TicketRow & { warnings?: string[] };
-
-      if (updated?.warnings) {
-        updated.warnings.forEach((w: string) => toast.warning(w));
-      }
-
-      return { id, updated, hadCustomFields: !!(customFields && customFields.length > 0) };
-    },
-    onMutate: async ({ id, updates }) => {
-      // Cancel outgoing refetches för alla list-instanser och denna tickets detail.
-      await queryClient.cancelQueries({ queryKey: ticketKeys.lists() });
-      await queryClient.cancelQueries({ queryKey: ticketKeys.detail(id) });
-
-      // Snapshot ALLA monterade list-cacher för rollback (inte bara den stängda nyckeln)
-      const previousLists = queryClient.getQueriesData<unknown>({ queryKey: ticketKeys.lists() });
-      const previousDetail = queryClient.getQueryData<TicketRow>(ticketKeys.detail(id));
-
-      // Optimistisk list-uppdatering på ALLA monterade list-instanser (alla filtersvyer)
-      queryClient.setQueriesData<unknown>(
-        {
-          predicate: (query) => {
-            const key = query.queryKey;
-            // Matcha alla nycklar med formen ['tickets', 'list', ...filters]
-            return (
-              Array.isArray(key) &&
-              key[0] === 'tickets' &&
-              key[1] === 'list'
-            );
-          },
-        },
-        (old: any) => {
-          if (!old) return old;
-          return {
-            ...old,
-            tickets: old.tickets.map((t: Ticket) => {
-              if (t.id === id) {
-                return {
-                  ...t,
-                  ...updates,
-                  // Hantera category "none" → ingen kategori
-                  category: updates.category === 'none' ? undefined : (updates.category !== undefined ? updates.category : t.category),
-                };
-              }
-              return t;
-            }),
-          };
-        }
-      );
-
-      // Optimistisk detail-uppdatering — TicketDetail läser från denna query,
-      // utan detta såg användaren INGEN förändring förrän hela nätverksanropet var klart.
-      queryClient.setQueryData<TicketRow | undefined>(ticketKeys.detail(id), (old) =>
-        old ? applyOptimisticRow(old, updates) : old
-      );
-
-      return { previousLists, previousDetail, id };
-    },
-    onError: (error: Error, _variables, context) => {
-      // Återställ ALLA list-cacher och detail-cachen vid fel
-      if (context?.previousLists) {
-        for (const [queryKey, data] of context.previousLists) {
-          queryClient.setQueryData(queryKey, data);
-        }
-      }
-      if (context?.id && context?.previousDetail !== undefined) {
-        queryClient.setQueryData(ticketKeys.detail(context.id), context.previousDetail);
-      }
-      toast.error(error.message || 'Failed to update ticket');
-    },
-    onSuccess: ({ id, updated, hadCustomFields }) => {
-      // Seed the detail cache with the authoritative row from the PUT response,
-      // preserving field_values (the PUT response omits them). This reconciles
-      // the optimistic state WITHOUT another network round-trip.
-      //
-      // OBS: seeda BARA om detail-cachen redan finns (`old`). Annars (t.ex. en
-      // status-ändring gjord från listan på ett ärende vars detaljvy aldrig
-      // öppnats) skulle vi skapa en post utan field_values och markera den färsk
-      // → templated ärende visar rå markdown i stället för fältblocket tills
-      // staleTime går ut. Saknas cachen: rör den inte — detaljmonteringen gör en
-      // färsk GET (som inkluderar field_values).
-      queryClient.setQueryData<TicketRow>(ticketKeys.detail(id), (old) =>
-        old
-          ? {
-              ...old,
-              ...updated,
-              field_values: (old as any).field_values ?? (updated as any).field_values ?? [],
-            }
-          : old,
-      );
-      // Custom fields changed → field_values are stale; refetch the detail once.
-      if (hadCustomFields) {
-        queryClient.invalidateQueries({ queryKey: ticketKeys.detail(id) });
-      }
-    },
-    onSettled: () => {
-      // Mark all list views stale so every filter-view converges. Default
-      // refetchType only refetches *active* (mounted) lists immediately —
-      // inactive ones refetch lazily on next mount, so this doesn't spam the
-      // network on a slow link. The optimistic update already gave instant UX.
-      queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
-    },
-  });
+  // Update ticket mutation — logic lives in buildUpdateTicketMutationOptions()
+  // above so useTicketMutations() (TicketDetail) can share it without the list
+  // useQuery this hook also mounts.
+  const updateTicketMutation = useMutation(buildUpdateTicketMutationOptions(queryClient));
 
   // Bulk update tickets mutation
   const bulkUpdateMutation = useMutation({
     mutationFn: async ({ ids, updates }: { ids: string[]; updates: { status?: string; priority?: string; category_id?: string | null } }) => {
       return await api.bulkUpdateTickets(ids, updates);
     },
-    onSuccess: () => {
+    onSuccess: (_data, { ids }) => {
       queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
+      // M8: bulk actions previously only invalidated the list views — any
+      // already-open detail page for one of the bulk-updated tickets kept
+      // showing stale status/priority/category until staleTime (2 min) expired.
+      ids.forEach((id) => {
+        queryClient.invalidateQueries({ queryKey: ticketKeys.detail(id) });
+      });
     },
     onError: (error: Error) => {
       toast.error(error.message || 'Failed to bulk update tickets');
     },
   });
 
-  // Delete ticket mutation
-  const deleteTicketMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await api.deleteTicket(id);
-      return id;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
-    },
-    onError: (error: Error) => {
-      if (import.meta.env.DEV) console.error('Error deleting ticket:', error);
-    },
-  });
+  // Delete ticket mutation — logic lives in buildDeleteTicketMutationOptions()
+  // above (shared with useTicketMutations()).
+  const deleteTicketMutation = useMutation(buildDeleteTicketMutationOptions(queryClient));
 
   const addTicket = useCallback(
     async (ticket: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { assigned_to?: string; company_id?: string }, customFields?: CustomFieldInput[]) => {
@@ -364,11 +396,6 @@ export const useTickets = (options?: UseTicketsOptions) => {
     [bulkUpdateMutation]
   );
 
-  const getTicketById = useCallback(
-    (id: string) => tickets.find((t) => t.id === id),
-    [tickets]
-  );
-
   const refetch = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ticketKeys.lists() });
   }, [queryClient]);
@@ -382,7 +409,6 @@ export const useTickets = (options?: UseTicketsOptions) => {
     updateTicket,
     deleteTicket,
     bulkUpdateTickets,
-    getTicketById,
     refetch,
   };
 };

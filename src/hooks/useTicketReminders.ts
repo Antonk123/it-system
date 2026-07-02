@@ -1,5 +1,6 @@
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { upcomingRemindersKeys } from '@/hooks/useUpcomingReminders';
 import { toast } from 'sonner';
 
 export interface TicketReminder {
@@ -37,6 +38,9 @@ export function useTicketReminders(ticketId: string) {
     onSuccess: () => {
       toast.success('Påminnelse skapad');
       queryClient.invalidateQueries({ queryKey: remindersKey });
+      // M6: keep the Dashboard "upcoming reminders" widget in sync — it reads
+      // a separate query key that this mutation never touched before.
+      queryClient.invalidateQueries({ queryKey: upcomingRemindersKeys.all });
     },
     onError: (error: unknown) => {
       if (import.meta.env.DEV) console.error('Error creating reminder:', error);
@@ -49,6 +53,7 @@ export function useTicketReminders(ticketId: string) {
     onSuccess: () => {
       toast.success('Påminnelse raderad');
       queryClient.invalidateQueries({ queryKey: remindersKey });
+      queryClient.invalidateQueries({ queryKey: upcomingRemindersKeys.all });
     },
     onError: (error: unknown) => {
       if (import.meta.env.DEV) console.error('Error deleting reminder:', error);
@@ -61,6 +66,7 @@ export function useTicketReminders(ticketId: string) {
     onSuccess: (result: { deleted: number }) => {
       toast.success(`${result.deleted} skickade påminnelser rensade`);
       queryClient.invalidateQueries({ queryKey: remindersKey });
+      queryClient.invalidateQueries({ queryKey: upcomingRemindersKeys.all });
     },
     onError: (error: unknown) => {
       if (import.meta.env.DEV) console.error('Error clearing sent reminders:', error);
