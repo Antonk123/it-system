@@ -52,6 +52,15 @@ services:
       # Sätt AI_MONTHLY_TOKEN_LIMIT (eller lämna ANTHROPIC_API_KEY tom för att stänga av AI i dev).
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - AI_MONTHLY_TOKEN_LIMIT=${AI_MONTHLY_TOKEN_LIMIT:-}
+    # Healthcheck: tsx watch kan stå "Up" fast servern inuti är död (process.exit
+    # sväljs av watchern — dev var nere 3 dagar utan att synas, se lessons.md).
+    # wget = busybox-varianten i node:22-alpine (curl finns inte i imagen).
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3001/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 300s   # apk add + npm ci vid containerboot kan ta flera minuter
     networks:
       - ticketing
     restart: unless-stopped
