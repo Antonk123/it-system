@@ -5,7 +5,7 @@ import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { logger } from '../lib/logger.js';

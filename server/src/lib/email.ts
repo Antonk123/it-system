@@ -771,7 +771,7 @@ export const sendTicketReminderEmail = async (data: {
     return;
   }
 
-  const { ticket, reminderMessage, userEmail, userName } = data;
+  const { ticket, reminderMessage, userEmail } = data;
   const categoryLabel = getCategoryLabel(ticket.categoryId);
   const ticketUrl = appBaseUrl ? `${appBaseUrl.replace(/\/$/, '')}/tickets/${ticket.id}` : null;
   const shortId = ticket.id.slice(0, 8).toUpperCase();

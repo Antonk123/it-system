@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, CompanyRow, CompanyDetail } from '@/lib/api';
+import { api, CompanyRow } from '@/lib/api';
 import { companySchema, getValidationError } from '@/lib/validations';
 import { toast } from 'sonner';
 

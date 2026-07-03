@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Trash2, Save, Pencil, Check, X, Star, ChevronDown, ChevronUp } from 'lucide-react';
+import { Trash2, Save, Pencil, Check, Star, ChevronUp } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog,

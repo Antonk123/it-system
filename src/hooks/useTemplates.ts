@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { Template, TemplateRow, TemplateFieldRow } from '@/types/ticket';
+import { Template, TemplateFieldRow } from '@/types/ticket';
 import { templateSchema, templateUpdateSchema, getValidationError } from '@/lib/validations';
 import { parseServerDate } from '@/lib/date';
 import { toast } from 'sonner';

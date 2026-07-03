@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, WebhookRow, WebhookDeliveryRow } from '@/lib/api';
+import { api } from '@/lib/api';
 
 export const webhookKeys = {
   all: ['webhooks'] as const,

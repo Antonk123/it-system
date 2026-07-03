@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Receipt, FileText, Send, CheckCircle, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Receipt, FileText, Send, CheckCircle, Trash2 } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

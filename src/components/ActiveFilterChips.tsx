@@ -26,6 +26,12 @@ const CHECKLIST_LABELS: Record<string, string> = {
   no_checklist: 'Utan checklista',
 };
 
+const DATE_FIELD_LABELS: Record<string, string> = {
+  created_at: 'Skapad',
+  updated_at: 'Uppdaterad',
+  closed_at: 'Stängd',
+};
+
 export function ActiveFilterChips({
   selectedStatuses,
   priorityFilter,
@@ -186,7 +192,7 @@ export function ActiveFilterChips({
           variant="secondary"
           className="flex items-center gap-1 pr-1 border border-primary text-xs font-semibold"
         >
-          <span className="text-muted-foreground">Datum:</span>
+          <span className="text-muted-foreground">{DATE_FIELD_LABELS[dateField] ?? 'Datum'}:</span>
           {dateFrom && dateTo
             ? `${dateFrom} till ${dateTo}`
             : dateFrom

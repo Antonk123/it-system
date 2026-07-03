@@ -11,22 +11,21 @@ import {
   useSensors,
   type Announcements,
 } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Ticket as TicketType, User, TicketStatus } from '@/types/ticket';
+import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
+import { Ticket as TicketType, TicketStatus } from '@/types/ticket';
 import { STATUS_LABELS } from '@/lib/constants';
 import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
 
 interface KanbanViewProps {
   tickets: TicketType[];
-  users: User[];
   onStatusChange: (ticketId: string, status: TicketStatus) => void;
   onTicketClick?: (ticketId: string) => void;
 }
 
 const STATUSES: TicketStatus[] = ['open', 'in-progress', 'waiting', 'resolved', 'closed'];
 
-export const KanbanView = memo(function KanbanView({ tickets, users, onStatusChange, onTicketClick }: KanbanViewProps) {
+export const KanbanView = memo(function KanbanView({ tickets, onStatusChange, onTicketClick }: KanbanViewProps) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, {

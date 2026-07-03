@@ -202,7 +202,7 @@ export function parseCSV(csvContent: string): any[] {
   return rows;
 }
 
-export function validateTicketRow(row: any, rowIndex: number, categories: any[], existingTicketIds: Set<string>): ValidationResult {
+export function validateTicketRow(row: any, _rowIndex: number, categories: any[], existingTicketIds: Set<string>): ValidationResult {
   const errors: string[] = [];
 
   // Required fields

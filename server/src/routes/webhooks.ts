@@ -29,7 +29,7 @@ interface WebhookDeliveryRow {
 }
 
 // GET / — list all webhooks
-router.get('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
+router.get('/', authenticate, requireAdmin, (_req: AuthRequest, res: Response) => {
   try {
     const webhooks = db.prepare(
       'SELECT id, url, events, active, created_at, last_triggered_at FROM webhooks ORDER BY created_at DESC'

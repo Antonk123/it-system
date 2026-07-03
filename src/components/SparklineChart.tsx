@@ -1,4 +1,4 @@
-import { LineChart, Line, ResponsiveContainer, Area, AreaChart } from 'recharts';
+import { ResponsiveContainer, Area, AreaChart } from 'recharts';
 import { cn } from '@/lib/utils';
 
 interface SparklineChartProps {

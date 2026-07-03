@@ -66,7 +66,6 @@ const UserList = () => {
 
   // Import state
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
-  const [importFile, setImportFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] = useState<any>(null);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -178,7 +177,6 @@ const UserList = () => {
       return;
     }
 
-    setImportFile(file);
     setIsImporting(true);
 
     try {
@@ -217,7 +215,6 @@ const UserList = () => {
         toast.warning(`${result.failed} användare misslyckades`);
       }
       setIsImportDialogOpen(false);
-      setImportFile(null);
       setImportPreview(null);
       refetch();
     } catch (error: any) {
@@ -230,7 +227,6 @@ const UserList = () => {
 
   const handleCloseImportDialog = () => {
     setIsImportDialogOpen(false);
-    setImportFile(null);
     setImportPreview(null);
   };
 

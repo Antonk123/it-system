@@ -70,7 +70,7 @@ const TICKET_COLUMNS = [
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
-  fileFilter: (req, file, cb) => {
+  fileFilter: (_req, file, cb) => {
     if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
       cb(null, true);
     } else {
@@ -550,7 +550,7 @@ interface UpcomingReminderRow {
 }
 
 // GET /dashboard-overview — aging tickets + today counts + critical count
-router.get('/dashboard-overview', authenticate, (req: AuthRequest, res: Response) => {
+router.get('/dashboard-overview', authenticate, (_req: AuthRequest, res: Response) => {
   try {
     const agingTickets = db.prepare(`
       SELECT
@@ -625,7 +625,7 @@ router.get('/activity-feed', authenticate, (req: AuthRequest, res: Response) => 
 });
 
 // GET /status-counts — count per status for flow visualization
-router.get('/status-counts', authenticate, (req: AuthRequest, res: Response) => {
+router.get('/status-counts', authenticate, (_req: AuthRequest, res: Response) => {
   try {
     const counts = db.prepare(`
       SELECT status, COUNT(*) as count
@@ -653,7 +653,7 @@ router.get('/status-counts', authenticate, (req: AuthRequest, res: Response) => 
 
 // GET /requester-open-counts — antal ej-stängda ärenden per requester (aggregat).
 // UserList använder detta istället för att ladda hela ticket-listan client-side.
-router.get('/requester-open-counts', authenticate, (req: AuthRequest, res: Response) => {
+router.get('/requester-open-counts', authenticate, (_req: AuthRequest, res: Response) => {
   try {
     const rows = db.prepare(`
       SELECT requester_id, COUNT(*) as count
@@ -672,7 +672,7 @@ router.get('/requester-open-counts', authenticate, (req: AuthRequest, res: Respo
 });
 
 // GET /upcoming-reminders — unsent reminders ordered by proximity
-router.get('/upcoming-reminders', authenticate, (req: AuthRequest, res: Response) => {
+router.get('/upcoming-reminders', authenticate, (_req: AuthRequest, res: Response) => {
   try {
     const reminders = db.prepare(`
       SELECT
@@ -1718,7 +1718,7 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
     }
 
     const id = uuidv4();
-    const insertResult = db.prepare(`
+    db.prepare(`
       INSERT INTO ticket_reminders (id, ticket_id, user_id, reminder_time, message)
       VALUES (?, ?, ?, ?, ?)
     `).run(id, ticketId, userId, reminder_time, message || null);

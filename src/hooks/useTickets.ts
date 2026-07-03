@@ -27,15 +27,6 @@ interface UseTicketsOptions {
   requester_id?: string;
 }
 
-interface PaginationInfo {
-  page: number;
-  limit: number;
-  total: number;
-  totalPages: number;
-  hasNext: boolean;
-  hasPrev: boolean;
-}
-
 // Apply a camelCase Partial<Ticket> patch onto a raw snake_case TicketRow.
 // Lets the single-ticket detail cache be patched optimistically so the UI
 // reflects a status/category/solution change instantly, instead of waiting for

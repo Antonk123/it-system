@@ -112,7 +112,7 @@ export const TagDistributionChart = ({
           margin={{ top: 10, right: 40, left: 10, bottom: 10 }}
         >
           <defs>
-            {gradients.map((gradient, index) => (
+            {gradients.map((gradient) => (
               <linearGradient key={gradient.id} id={gradient.id} x1="0" y1="0" x2="1" y2="0">
                 <stop offset="5%" stopColor={gradient.color} stopOpacity={0.8} />
                 <stop offset="95%" stopColor={gradient.color} stopOpacity={0.4} />
@@ -149,7 +149,7 @@ export const TagDistributionChart = ({
             cursor="pointer"
             label={renderBarLabel}
           >
-            {tagDistData.map((entry, index) => (
+            {tagDistData.map((_entry, index) => (
               <Cell
                 key={`cell-${index}`}
                 fill={`url(#${gradients[index].id})`}

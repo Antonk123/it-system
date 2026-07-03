@@ -67,7 +67,7 @@ function TypeBadge({ type }: { type: 'ticket' | 'kb' | 'contact' }) {
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const navigate = useNavigate();
   const searchHook = useCommandPaletteSearch();
-  const { results, isSearching, search: hookSearch, setSearch: setHookSearch } = searchHook;
+  const { results, isSearching, setSearch: setHookSearch } = searchHook;
 
   // Local input state for instant display; debounced value feeds the search hook
   const [inputValue, setInputValue] = useState('');

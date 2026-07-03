@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Loader2, Inbox } from 'lucide-react';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { useCompanies } from '@/hooks/useCompanies';
@@ -32,10 +31,6 @@ const KanbanView = lazy(() => import('@/components/KanbanView').then(m => ({ def
 const listContainer = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.05 } },
-};
-const listItem = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: 'easeOut' } },
 };
 
 const priorityVariant = (priority: string): 'default' | 'destructive' | 'secondary' | 'outline' => {
@@ -87,7 +82,6 @@ const TicketList = () => {
     return (saved as 'table' | 'kanban') || 'table';
   });
 
-  const isMobile = useIsMobile();
 
   // Filter views
   const {
@@ -547,7 +541,6 @@ const TicketList = () => {
                   }>
                     <KanbanView
                       tickets={tickets}
-                      users={users}
                       onStatusChange={handleStatusChange}
                       onTicketClick={handleTicketClick}
                     />

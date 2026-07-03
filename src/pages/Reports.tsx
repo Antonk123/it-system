@@ -38,15 +38,6 @@ const COLORS = [
   'hsl(var(--chart-5))',
 ];
 
-// Cohesive theme-based color scheme for Status pie chart
-const STATUS_COLORS: Record<string, string> = {
-  open: 'hsl(var(--chart-1))',      // Blue
-  'in-progress': 'hsl(var(--chart-2))',   // Teal/Green
-  waiting: 'hsl(var(--chart-3))',         // Purple
-  resolved: 'hsl(var(--chart-4))',        // Orange
-  closed: 'hsl(var(--muted-foreground))', // Gray for closed
-};
-
 // Same colors but different order for visual distinction in Requester Analytics
 const REQUESTER_STATUS_COLORS: Record<string, string> = {
   open: 'hsl(var(--chart-2))',            // Different from pie chart
@@ -158,7 +149,6 @@ const Reports = () => {
   const { users } = useUsers();
   const isMobile = useIsMobile();
   const mode = useMode();
-  const [selectedUserId, setSelectedUserId] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<string>('all');
   const [selectedMonth, setSelectedMonth] = useState<string>('all');
   const [kpiModalOpen, setKpiModalOpen] = useState<string | null>(null);
@@ -348,12 +338,6 @@ const Reports = () => {
       value: count,
     }));
   }, [summary?.byPriority]);
-
-  const selectedUserName = useMemo(() => {
-    if (selectedUserId === 'all') return 'Alla användare';
-    if (selectedUserId === 'unassigned') return 'Ej tilldelad';
-    return users.find(u => u.id === selectedUserId)?.name || 'Okänd';
-  }, [selectedUserId, users]);
 
   // KPI values from summary
   const totalTickets = summary?.totals.total ?? 0;
@@ -970,8 +954,7 @@ const Reports = () => {
                             stackId="status"
                             fill={`url(#requester-${status})`}
                             radius={status === 'open' ? [0, 4, 4, 0] : 0}
-                            onClick={(bar) => setSelectedUserId(bar.payload.userId)}
-                            className="cursor-pointer requester-bar"
+                            className="requester-bar"
                             animationDuration={800}
                             animationEasing="ease-out"
                           />

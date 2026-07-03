@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, ApiKeyRow } from '@/lib/api';
+import { api } from '@/lib/api';
 
 export const apiKeyKeys = {
   all: ['api-keys'] as const,

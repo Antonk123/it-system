@@ -96,7 +96,7 @@ export function performRestoreSwap(opts: {
 
 const router = Router();
 
-router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (req: AuthRequest, res: Response) => {
+router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (_req: AuthRequest, res: Response) => {
   const tmpFile = join(tmpdir(), `backup-${randomUUID()}.sqlite`);
 
   try {
@@ -126,7 +126,7 @@ router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (req: A
     res.on('close', cleanupTmpFile);
     res.on('error', cleanupTmpFile);
 
-    archive.on('error', (err) => {
+    archive.on('error', () => {
       try { unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
       if (!res.headersSent) {
         res.status(500).json({ error: 'Backup failed' });
