@@ -200,7 +200,7 @@ I `TicketDetail.tsx` (eller motsvarande):
 - Om `ai_suggested_category_id` finns och kategori är tom: visa **"AI föreslår: [kategori] · Acceptera · Ignorera"**.
 
 **5. Test i dev-miljö** (1 tim)
-Pusha till dev-server (10.38.195.180:5174). Skapa 5 ärenden, ett långt med 10 kommentarer, ett där KB har relevant artikel. Verifiera alla tre features.
+Pusha till dev-server (<server-ip>:5174). Skapa 5 ärenden, ett långt med 10 kommentarer, ett där KB har relevant artikel. Verifiera alla tre features.
 
 ---
 

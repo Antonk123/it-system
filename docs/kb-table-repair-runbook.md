@@ -63,7 +63,7 @@ If the count is 0, there is nothing to repair — stop here.
 ## Step 1 — Test in dev first
 
 This is a destructive write to article content. **Run it in dev before prod.** Dev has
-its own DB volume and checkout (see `docs/dev-db-isolation-runbook.md`), so it is the
+its own DB volume and checkout (see the dev-db isolation runbook in the ops vault), so it is the
 correct test surface. Run the dry run and then `--apply` against the dev DB and verify
 a repaired article renders correctly in the KB UI.
 

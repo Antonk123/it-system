@@ -24,9 +24,9 @@ disable-model-invocation: false
 2. `git push` to GitHub (Antonk123/it-system).
 3. Decide scope: did the change touch backend (server/**), frontend (src/**), or
    both? Build ONLY what changed.
-4. SSH and pull:
+4. SSH and pull (real host value lives in the gitignored `CLAUDE.local.md`):
    ```
-   ssh root@10.38.195.180
+   ssh <server>
    cd /opt/it-system/itticket-main && git pull
    ```
 5. Build only needed images:

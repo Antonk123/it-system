@@ -35,7 +35,7 @@ docs/superpowers/
 # Dev-miljö specifika filer (hot-reload, dev-setup)
 # OBS: docker-compose.dev.portainer.yml spåras numera medvetet som den
 # versionsspårade källan för dev-Portainer-stacken (it-system-dev / id 40).
-# Portainer-GUI:t måste spegla den filen — se docs/dev-db-isolation-runbook.md.
+# Portainer-GUI:t måste spegla den filen — se dev-db-isolation-runbooken i Obsidian (Projekt/IT-System).
 docker-compose.dev.yml
 
 # Logs

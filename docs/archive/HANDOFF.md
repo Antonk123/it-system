@@ -98,7 +98,7 @@ Med $10 i kredit täcker vi grovt:
 Om Claude CLI redan har committat allt är detta klart — verifiera via `git log`. Annars:
 
 ```bash
-cd /Users/anton/Downloads/Github/it-system
+cd <repo>
 git add server/src/lib/aiHelper.ts \
         server/src/db/migrations.ts \
         server/src/routes/tickets.ts \

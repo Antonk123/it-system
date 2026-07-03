@@ -11,7 +11,7 @@ shutdown och en kort incident-checklista.
 >   **applikationsinterna** rutinerna (inbyggd scheduler, endpoints, env-styrning).
 > - `docs/AI_FEATURES.md` — AI-funktioner, modellval, token-budget och
 >   circuit breaker (refereras från avsnittet om AI-tokenövervakning nedan).
-> - `docs/dev-db-isolation-runbook.md` — dev/prod-DB-isolation.
+> - dev-db-isolation-runbooken (Obsidian `Projekt/IT-System/`) — dev/prod-DB-isolation.
 
 Alla env-varianter nedan är verifierade mot källkoden. Se `.env.example` för
 fullständig lista och defaultvärden.
@@ -38,7 +38,7 @@ dirigera trafik till instansen vid 503.
 # Snabbkoll mot prod
 curl -s https://ticket.prefabmastarna.se/api/health
 # Mot dev
-curl -s http://10.38.195.180:5174/api/health
+curl -s http://<server-ip>:5174/api/health
 ```
 
 CORS tillåter requests utan `Origin`-header (curl, container-healthchecks) —
@@ -67,10 +67,10 @@ en request genom loggarna.
 
 ```bash
 # Följ backend-loggar (prod-container) live
-ssh root@10.38.195.180 'docker logs -f --tail 200 <backend-container>'
+ssh <server> 'docker logs -f --tail 200 <backend-container>'
 
 # Filtrera bara fel
-ssh root@10.38.195.180 'docker logs <backend-container> 2>&1 | grep "\"level\":\"error\""'
+ssh <server> 'docker logs <backend-container> 2>&1 | grep "\"level\":\"error\""'
 ```
 
 Notabla larm-loggrader att vakta på:

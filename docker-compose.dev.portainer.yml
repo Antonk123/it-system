@@ -1,9 +1,9 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# DEV-stacken — Portainer-stack "it-system-dev" (id 40) på 10.38.195.180.
+# DEV-stacken — Portainer-stack "it-system-dev" (id 40) på interna dev-servern.
 #
 # Detta är den VERSIONSSPÅRADE KÄLLAN. Portainer redigeras manuellt i GUI:t och
 # MÅSTE spegla denna fil (samma drift-regel som prod-stacken, se lessons.md /
-# docs/dev-db-isolation-runbook.md). Driv aldrig isär dem.
+# dev-db-isolation-runbooken i Obsidian, Projekt/IT-System). Driv aldrig isär dem.
 #
 # Skillnad mot prod (docker-compose.yml):
 #   • EGEN DB-volym  (it-ticketing-dev-data)        → delar INTE prod-DB:n. Detta är
@@ -67,10 +67,10 @@ services:
       - /opt/it-system/itticket-main:/app
       - /app/node_modules
     environment:
-      # OBS: IP-adressen nedan är ett fallback — i Portainer sätts VITE_API_URL som
-      # en Portainer-hanterad env-variabel (Environment variables i stack-GUI:t) och
-      # skriver över detta default. Ändra aldrig IP:n här utan i Portainer-stacken.
-      - VITE_API_URL=${VITE_API_URL:-http://10.38.195.180:3003/api}
+      # VITE_API_URL sätts i Portainer-stackens "Environment variables"
+      # (http://<server-ip>:3003/api). Ingen fallback här — :? failar deployen
+      # högljutt om variabeln saknas, hellre det än en tyst fel-URL.
+      - VITE_API_URL=${VITE_API_URL:?sätts i Portainer-stackens Environment variables}
     depends_on:
       - backend
     networks:

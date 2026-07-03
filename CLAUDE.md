@@ -33,14 +33,14 @@ Lokal helhet: `docker-compose.local.yml`.
 
 - **Host**: Proxmox-server med Docker via Portainer (stack `it-ticket-system`, id 39)
 - **Git**: [GitHub — Antonk123/it-system](https://github.com/Antonk123/it-system)
-- **Server-SSH**: `ssh root@10.38.195.180`, repo på `/opt/it-system/itticket-main`
+- **Server-SSH**: `ssh <server>` — riktigt host-värde i `CLAUDE.local.md` (gitignorad); repo på `/opt/it-system/itticket-main`
 
 ### Miljöer
 
 | Miljö | URL | Syfte |
 |-------|-----|-------|
 | **Prod** | `https://ticket.prefabmastarna.se` | Live-system |
-| **Dev** | `http://10.38.195.180:5174/` | Hot-reload-miljö på servern (bara `git pull` behövs) |
+| **Dev** | `http://<SERVER_IP>:5174/` (se `CLAUDE.local.md`) | Hot-reload-miljö på servern (bara `git pull` behövs) |
 | **Lokal** | `localhost` via `docker-compose.local.yml` | Lokal dev för att testa innan push |
 
 ### Portar
@@ -66,14 +66,14 @@ Standardflöde: lokal utveckling → `git push` → SSH till servern, `git pull`
 
 1. Gör ändringar lokalt (testa via `docker-compose.local.yml` vid behov)
 2. `git push` till GitHub
-3. SSH till servern: `ssh root@10.38.195.180`
+3. SSH till servern: `ssh <server>` (se `CLAUDE.local.md`)
 4. `cd /opt/it-system/itticket-main && git pull`
 5. Bygg bara nödvändiga images (identifiera om ändring är frontend/backend/båda):
    - Backend: `docker build -t it-ticketing-backend:latest -f Dockerfile.server .`
    - Frontend: `docker build -t it-ticketing-frontend:latest -f Dockerfile.client .`
 6. Anton redeployar via Portainer
 
-**Dev-miljön** är Portainer-stack `it-system-dev` (id 40), definierad i `docker-compose.dev.portainer.yml` (versionsspårad källa — Portainer-GUI:t måste spegla den). Den har **egen DB-volym** (`it-ticketing-dev-data`) → delar INTE prod-DB:n, men **delar prod-byggets checkout** `/opt/it-system/itticket-main` (på `main`; worktreet `itticket-dev` togs bort 2026-06-17 när vi gick över till merga-rakt-till-main). Synka dev till senaste main: `git -C /opt/it-system/itticket-main pull --ff-only` (eller `reset --hard origin/main`); tsx watch + Vite hot-reloadar, ingen rebuild. **UNDANTAG: om package.json/lock ändrats räcker inte pull** — containrarnas node_modules ligger i anon-volymer och `npm ci` körs bara vid containerstart → Anton måste starta om dev-stacken i Portainer, annars kraschar tsx på saknade/fel paketversioner (hände 2026-06-29→07-02: archiver 7 kvar i volymen efter v8-bump, dev nere i 3 dagar obemärkt). Prod ser inget förrän ny image byggs + deployas. Se `docs/dev-db-isolation-runbook.md`.
+**Dev-miljön** är Portainer-stack `it-system-dev` (id 40), definierad i `docker-compose.dev.portainer.yml` (versionsspårad källa — Portainer-GUI:t måste spegla den). Den har **egen DB-volym** (`it-ticketing-dev-data`) → delar INTE prod-DB:n, men **delar prod-byggets checkout** `/opt/it-system/itticket-main` (på `main`; worktreet `itticket-dev` togs bort 2026-06-17 när vi gick över till merga-rakt-till-main). Synka dev till senaste main: `git -C /opt/it-system/itticket-main pull --ff-only` (eller `reset --hard origin/main`); tsx watch + Vite hot-reloadar, ingen rebuild. **UNDANTAG: om package.json/lock ändrats räcker inte pull** — containrarnas node_modules ligger i anon-volymer och `npm ci` körs bara vid containerstart → Anton måste starta om dev-stacken i Portainer, annars kraschar tsx på saknade/fel paketversioner (hände 2026-06-29→07-02: archiver 7 kvar i volymen efter v8-bump, dev nere i 3 dagar obemärkt). Prod ser inget förrän ny image byggs + deployas. Se dev-DB-isolerings-runbooken i Obsidian (`Projekt/IT-System/dev-db-isolation-runbook.md`).
 
 ## Projektspecifika regler
 

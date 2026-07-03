@@ -33,8 +33,8 @@ Point it at the **local** dev DB file (safe — writes are impossible):
 
 ```bash
 claude mcp add sqlite-itticket-ro -- \
-  node /Users/anton/Downloads/Projekt/Github/it-system/tools/sqlite-mcp/server.mjs \
-       /Users/anton/Downloads/Projekt/Github/it-system/server/data/database.sqlite
+  node <repo>/tools/sqlite-mcp/server.mjs \
+       <repo>/server/data/database.sqlite
 ```
 
 Verify: `claude mcp list`. Never point it at a prod/dev volume on the server.

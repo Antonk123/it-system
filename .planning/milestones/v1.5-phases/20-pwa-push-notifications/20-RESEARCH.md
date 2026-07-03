@@ -218,7 +218,7 @@ Run once on any machine with node, save output to `.env`:
 ```
 VAPID_PUBLIC_KEY=BExxxxxxxx...
 VAPID_PRIVATE_KEY=xxxxx...
-VAPID_SUBJECT=mailto:anton@prefabmastarna.se
+VAPID_SUBJECT=mailto:admin@example.com
 ```
 
 The command is: `npx web-push generate-vapid-keys --json`
@@ -237,7 +237,7 @@ import { db } from '../db/connection.js';
 export function initWebPush(): boolean {
   const publicKey = process.env.VAPID_PUBLIC_KEY;
   const privateKey = process.env.VAPID_PRIVATE_KEY;
-  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@prefabmastarna.se';
+  const subject = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
   if (!publicKey || !privateKey) {
     console.warn('Push notifications disabled (VAPID keys not configured)');
     return false;

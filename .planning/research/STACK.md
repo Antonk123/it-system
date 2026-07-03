@@ -38,7 +38,7 @@ All new libraries must slot into this stack without replacing anything already i
 
 **Integration points:**
 - Call `webpush.generateVAPIDKeys()` once to generate key pair; store in `.env` as `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`
-- Call `webpush.setVapidDetails('mailto:admin@prefabmastarna.se', publicKey, privateKey)` at server startup
+- Call `webpush.setVapidDetails('mailto:admin@example.com', publicKey, privateKey)` at server startup
 - Store push subscriptions (endpoint + keys) in a new `push_subscriptions` SQLite table
 - Trigger `webpush.sendNotification(subscription, JSON.stringify(payload))` from the existing node-cron scheduler (reminders, aging tickets)
 - Expose `GET /api/push/vapid-public-key` (returns public key for client subscription) and `POST /api/push/subscribe` (saves subscription)
@@ -204,7 +204,7 @@ Add to `server/.env`:
 ```
 VAPID_PUBLIC_KEY=<generated>
 VAPID_PRIVATE_KEY=<generated>
-VAPID_SUBJECT=mailto:admin@prefabmastarna.se
+VAPID_SUBJECT=mailto:admin@example.com
 ```
 
 ---
