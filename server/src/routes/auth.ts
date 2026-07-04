@@ -13,6 +13,8 @@ import { validatePassword } from '../lib/passwordPolicy.js';
 import { logAudit } from '../lib/auditLog.js';
 import { logger } from '../lib/logger.js';
 import { cookieSecure } from '../config/cookies.js';
+import * as oidcClient from 'openid-client';
+import { getOidcSettings, getOidcConfig, findOrLinkOidcUser } from '../lib/oidc.js';
 
 /**
  * Rate limiter for token refresh endpoint.
@@ -433,6 +435,51 @@ router.get('/audit-log', authenticate, requireAdmin, (req: AuthRequest, res: Res
   } catch (error) {
     logger.error('Error fetching audit log', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch audit log' });
+  }
+});
+
+// ── SSO / OIDC (generisk; Entra ID första provider). Opt-in via env. ─────────
+const oidcRateLimiter = createRateLimiter(15 * 60 * 1000, 20);
+const OIDC_TX_COOKIE = 'oidcTx';
+const OIDC_COOKIE_PATH = '/api/auth/oidc';
+function oidcTxCookieOptions() {
+  return { httpOnly: true, secure: cookieSecure(), sameSite: 'lax' as const, path: OIDC_COOKIE_PATH };
+}
+
+router.get('/oidc/enabled', (_req: Request, res: Response) => {
+  const settings = getOidcSettings();
+  res.json({ enabled: settings !== null, label: settings?.buttonLabel ?? null });
+});
+
+router.get('/oidc/login', oidcRateLimiter, async (_req: Request, res: Response) => {
+  const settings = getOidcSettings();
+  if (!settings) {
+    return res.status(503).json({ error: 'SSO är inte konfigurerat' });
+  }
+  try {
+    const config = await getOidcConfig();
+    const codeVerifier = oidcClient.randomPKCECodeVerifier();
+    const codeChallenge = await oidcClient.calculatePKCECodeChallenge(codeVerifier);
+    const state = oidcClient.randomState();
+    const nonce = oidcClient.randomNonce();
+    // Transaktions-state i kortlivad HttpOnly-cookie. SameSite=Lax krävs för
+    // att cookien ska följa med på top-level-returen från IdP:n.
+    res.cookie(OIDC_TX_COOKIE, JSON.stringify({ state, nonce, codeVerifier }), {
+      ...oidcTxCookieOptions(),
+      maxAge: 10 * 60 * 1000,
+    });
+    const authUrl = oidcClient.buildAuthorizationUrl(config, {
+      redirect_uri: settings.redirectUri,
+      scope: 'openid profile email',
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+      state,
+      nonce,
+    });
+    res.redirect(authUrl.href);
+  } catch (error) {
+    logger.error('OIDC login init failed', { error: String(error) });
+    res.status(503).json({ error: 'SSO-tjänsten kunde inte nås' });
   }
 });
 
