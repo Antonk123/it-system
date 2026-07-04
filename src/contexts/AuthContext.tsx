@@ -9,6 +9,7 @@ interface AuthContextType {
   user: AuthUser | null;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  completeSsoLogin: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -62,13 +63,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
   }, [queryClient]);
 
+  // Efter OIDC-callbacken finns refresh-cookien men ingen access-token —
+  // hämta token + user utan full sidomladdning.
+  const completeSsoLogin = useCallback(async (): Promise<boolean> => {
+    const refreshed = await api.refreshSession();
+    if (!refreshed) return false;
+    try {
+      const { user } = await api.getMe();
+      setUser(user);
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
   const value = useMemo(() => ({
     isAuthenticated: !!user,
     isLoading,
     user,
     signIn,
     signOut,
-  }), [user, isLoading, signIn, signOut]);
+    completeSsoLogin,
+  }), [user, isLoading, signIn, signOut, completeSsoLogin]);
 
   return (
     <AuthContext.Provider value={value}>

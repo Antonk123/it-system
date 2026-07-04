@@ -10,6 +10,8 @@ export default defineConfig(() => ({
   // exkluderad från eslint (eslint.config.js).
   test: {
     exclude: [...configDefaults.exclude, "tools/**"],
+    environment: "jsdom",
+    globals: true,
   },
   server: {
     host: "::",

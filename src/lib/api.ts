@@ -206,6 +206,21 @@ class ApiClient {
     return data;
   }
 
+  /** Publik status för SSO-knappen på login-sidan. */
+  async getOidcStatus(): Promise<{ enabled: boolean; label: string | null }> {
+    return this.request('/auth/oidc/enabled');
+  }
+
+  /** Absolut URL till SSO-inloggningen (vanlig länk-navigation, ingen fetch). */
+  oidcLoginUrl(): string {
+    return `${this.baseUrl}/auth/oidc/login`;
+  }
+
+  /** Hämta ny access-token från refresh-cookien (används efter SSO-callback). */
+  async refreshSession(): Promise<boolean> {
+    return this.tryRefresh();
+  }
+
   async getMe() {
     return this.request<{ user: AuthUser }>('/auth/me');
   }
