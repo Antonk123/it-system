@@ -30,7 +30,7 @@ const MAX_ATTACHMENTS_PER_TICKET = 50;
 export const ALLOWED_MIME_TYPES = [
   'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
   'application/pdf',
-  'text/plain', 'text/csv',
+  'text/plain', 'text/csv', 'text/markdown',
   'message/rfc822', // .eml
   'application/msword', // .doc
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
@@ -46,10 +46,16 @@ export const ALLOWED_MIME_TYPES = [
 export const ALLOWED_EXTENSIONS = [
   'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
   'pdf',
-  'txt', 'csv', 'eml',
+  'txt', 'csv', 'md', 'markdown', 'eml',
   'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
   'zip', 'rar', '7z',
 ];
+
+// Markdown-ändelser vars MIME-typ webbläsare rapporterar inkonsekvent:
+// text/markdown på macOS men ofta application/octet-stream (eller tom sträng)
+// på Windows/Linux. För dessa normaliserar vi till text/markdown utifrån den
+// betrodda ändelsen (se fileFilter nedan).
+const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown']);
 
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
@@ -70,9 +76,24 @@ const upload = multer({
   fileFilter: (_req, file, cb) => {
     const ext = file.originalname.split('.').pop()?.toLowerCase() || '';
 
+    // Normalisera flakiga Markdown-MIME-typer till text/markdown så att
+    // allowlist-kontrollen nyckas på den betrodda ändelsen i stället för
+    // webbläsarens gissning. Säkert: bilagor serveras alltid som
+    // Content-Disposition: attachment (aldrig inline) och text saknar
+    // magic-byte-signatur (hasMagicByteMatch släpper igenom). Mutationen på
+    // file.mimetype persisteras till req.file → korrekt lagrad/serverad typ.
+    if (
+      MARKDOWN_EXTENSIONS.has(ext) &&
+      (file.mimetype === '' ||
+        file.mimetype === 'application/octet-stream' ||
+        file.mimetype === 'text/x-markdown')
+    ) {
+      file.mimetype = 'text/markdown';
+    }
+
     // Check both MIME type and extension
     if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-      return cb(new Error(`File type ${file.mimetype} is not allowed. Allowed types: images, PDFs, Office documents, archives.`));
+      return cb(new Error(`File type ${file.mimetype} is not allowed. Allowed types: images, PDFs, Office documents, Markdown, archives.`));
     }
 
     if (!ALLOWED_EXTENSIONS.includes(ext)) {

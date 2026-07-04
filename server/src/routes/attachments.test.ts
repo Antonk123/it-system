@@ -598,6 +598,7 @@ const MIME_FIXTURES: Fixture[] = [
   { mime: 'application/pdf', ext: 'pdf', magic: PDF_SIG },
   { mime: 'text/plain', ext: 'txt', magic: Buffer.from('hello world') }, // pass-through
   { mime: 'text/csv', ext: 'csv', magic: Buffer.from('a,b,c\n1,2,3') }, // pass-through
+  { mime: 'text/markdown', ext: 'md', magic: Buffer.from('# Heading\n\nbody') }, // pass-through
   { mime: 'message/rfc822', ext: 'eml', magic: Buffer.from('From: a@b\r\nSubject: x\r\n\r\nhi') }, // pass-through
   { mime: 'application/msword', ext: 'doc', magic: Buffer.from([0xd0, 0xcf, 0x11, 0xe0]) }, // pass-through
   { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: 'docx', magic: PK_ZIP },
@@ -666,6 +667,61 @@ describe('POST /api/attachments — full ALLOWED_MIME_TYPES / ALLOWED_EXTENSIONS
       .set('Authorization', `Bearer ${adminToken}`)
       .set('x-csrf-token', adminCsrfToken)
       .attach('file', buf, { filename: 'image.bin', contentType: 'image/png' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not allowed/i);
+  });
+});
+
+describe('POST /api/attachments — Markdown upload (browser-unreliable MIME)', () => {
+  // Browsers report .md inconsistently: text/markdown on macOS but often
+  // application/octet-stream (or empty) elsewhere. Every variant must be
+  // accepted and normalized to text/markdown so the stored/served type is
+  // consistent. Regression guard for "can't upload .md attachments".
+  let mdTicketId: string;
+
+  beforeAll(() => {
+    mdTicketId = randomUUID();
+    db.prepare(
+      `INSERT INTO tickets (id, title, description, status, assigned_to) VALUES (?, ?, ?, ?, ?)`
+    ).run(mdTicketId, 'Markdown Ticket', 'md upload', 'open', assignedUserId);
+  });
+
+  it.each(['text/markdown', 'application/octet-stream', 'text/x-markdown'])(
+    'accepts a .md upload declared as "%s" and stores it as text/markdown',
+    async (contentType) => {
+      const res = await adminAgent
+        .post(`/api/attachments/ticket/${mdTicketId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('x-csrf-token', adminCsrfToken)
+        .attach('file', Buffer.from('# Notes\n\nhello world'), { filename: 'notes.md', contentType });
+
+      expect(res.status).toBe(201);
+      expect(res.body.file_type).toBe('text/markdown');
+      expect(res.body.file_name).toBe('notes.md');
+    }
+  );
+
+  it('accepts a .markdown extension declared as application/octet-stream', async () => {
+    const res = await adminAgent
+      .post(`/api/attachments/ticket/${mdTicketId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .attach('file', Buffer.from('# Notes'), { filename: 'notes.markdown', contentType: 'application/octet-stream' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.file_type).toBe('text/markdown');
+    expect(res.body.file_name).toBe('notes.markdown');
+  });
+
+  it('still rejects application/octet-stream for a NON-markdown extension (.bin → 400)', async () => {
+    // The MIME-normalization is scoped to markdown extensions only; it must not
+    // become a general bypass of the octet-stream rejection.
+    const res = await adminAgent
+      .post(`/api/attachments/ticket/${mdTicketId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .attach('file', Buffer.from('binary'), { filename: 'payload.bin', contentType: 'application/octet-stream' });
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/not allowed/i);
