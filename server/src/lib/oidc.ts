@@ -59,12 +59,23 @@ export interface OidcMatchedUser {
 // fallback preferred_username) → länka sub vid första träffen. Okänd → null
 // (ingen JIT-provisionering). Konto redan länkat till annan sub → null.
 export function findOrLinkOidcUser(
-  claims: { sub: string; email?: unknown; preferred_username?: unknown }
+  claims: {
+    sub: string;
+    email?: unknown;
+    email_verified?: unknown;
+    preferred_username?: unknown;
+  }
 ): OidcMatchedUser | null {
   const bySub = db
     .prepare('SELECT id, email, role FROM users WHERE oidc_sub = ?')
     .get(claims.sub) as OidcMatchedUser | undefined;
   if (bySub) return bySub;
+
+  // Härdning mot kontoövertagning via overifierad e-post: om IdP:n uttryckligen
+  // säger email_verified=false vägrar vi e-postlänkning (sub-match ovan gäller
+  // fortfarande). Frånvarande claim accepteras — Entra v2.0 skickar ofta inte
+  // email_verified alls, och instansen har EN betrodd IdP (issuer i env).
+  if (claims.email_verified === false) return null;
 
   const rawEmail =
     typeof claims.email === 'string' && claims.email

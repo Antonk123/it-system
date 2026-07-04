@@ -89,4 +89,32 @@ describe('findOrLinkOidcUser', () => {
     expect(findOrLinkOidcUser({ sub: 's', email: { evil: true } })).toBeNull();
     expect(findOrLinkOidcUser({ sub: 's', email: 'inte-en-adress' })).toBeNull();
   });
+  it('email_verified: false + matchande e-post → null, ingen sub länkas', () => {
+    const id = seedUser('eva@x.se');
+    expect(
+      findOrLinkOidcUser({ sub: 'sub-eva', email: 'eva@x.se', email_verified: false })
+    ).toBeNull();
+    const row = db.prepare('SELECT oidc_sub FROM users WHERE id = ?').get(id) as { oidc_sub: string | null };
+    expect(row.oidc_sub).toBeNull();
+  });
+  it('email_verified: false men användaren redan länkad via sub → sub-matchen vinner', () => {
+    const id = seedUser('finn@x.se', 'sub-finn');
+    expect(
+      findOrLinkOidcUser({ sub: 'sub-finn', email: 'finn@x.se', email_verified: false })!.id
+    ).toBe(id);
+  });
+  it('email_verified: true + matchande e-post → länkar som vanligt', () => {
+    const id = seedUser('greta@x.se');
+    const user = findOrLinkOidcUser({ sub: 'sub-greta', email: 'greta@x.se', email_verified: true });
+    expect(user!.id).toBe(id);
+    const row = db.prepare('SELECT oidc_sub FROM users WHERE id = ?').get(id) as { oidc_sub: string };
+    expect(row.oidc_sub).toBe('sub-greta');
+  });
+  it('email_verified-claim saknas (som idag) → länkar som vanligt (regressionsskydd Entra)', () => {
+    const id = seedUser('helge@x.se');
+    const user = findOrLinkOidcUser({ sub: 'sub-helge', email: 'helge@x.se' });
+    expect(user!.id).toBe(id);
+    const row = db.prepare('SELECT oidc_sub FROM users WHERE id = ?').get(id) as { oidc_sub: string };
+    expect(row.oidc_sub).toBe('sub-helge');
+  });
 });
