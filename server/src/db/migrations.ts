@@ -1318,4 +1318,17 @@ export const migrations: Migration[] = [
         .run('two_way_email_enabled', '1');
     },
   },
+  {
+    id: '065',
+    name: 'add_users_oidc_sub',
+    up: (db, { columnExists }) => {
+      // SSO (generisk OIDC): koppling user ↔ extern identitet. Länkas vid
+      // första lyckade OIDC-inloggning (matchning på e-post). Partiellt unikt
+      // index — NULL för användare som aldrig loggat in via SSO.
+      if (!columnExists('users', 'oidc_sub')) {
+        db.prepare('ALTER TABLE users ADD COLUMN oidc_sub TEXT').run();
+      }
+      db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub) WHERE oidc_sub IS NOT NULL').run();
+    },
+  },
 ];

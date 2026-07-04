@@ -6,8 +6,10 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user')),
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  last_login TEXT
+  last_login TEXT,
+  oidc_sub TEXT
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub) WHERE oidc_sub IS NOT NULL;
 
 -- Companies (kopplas till contacts och tickets via company_id; skapas i migration 028)
 CREATE TABLE IF NOT EXISTS companies (
