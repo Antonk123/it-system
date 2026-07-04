@@ -483,4 +483,59 @@ router.get('/oidc/login', oidcRateLimiter, async (_req: Request, res: Response) 
   }
 });
 
+router.get('/oidc/callback', oidcRateLimiter, async (req: Request, res: Response) => {
+  const settings = getOidcSettings();
+  if (!settings) {
+    return res.status(503).json({ error: 'SSO är inte konfigurerat' });
+  }
+  const clearTxCookie = () => res.clearCookie(OIDC_TX_COOKIE, oidcTxCookieOptions());
+  try {
+    const rawTx = req.cookies?.[OIDC_TX_COOKIE] as string | undefined;
+    if (!rawTx) {
+      // Ingen pågående SSO-transaktion (cookie utgången/saknas) — starta om flödet.
+      return res.redirect('/login?sso_error=failed');
+    }
+    const tx = JSON.parse(rawTx) as { state: string; nonce: string; codeVerifier: string };
+    const config = await getOidcConfig();
+
+    // authorizationCodeGrant läser code/state ur URL:en och verifierar
+    // state/nonce/PKCE + id_token-signatur (JWKS) åt oss.
+    const currentUrl = new URL(settings.redirectUri);
+    currentUrl.search = new URL(req.originalUrl, 'http://internal').search;
+    const tokens = await oidcClient.authorizationCodeGrant(config, currentUrl, {
+      pkceCodeVerifier: tx.codeVerifier,
+      expectedState: tx.state,
+      expectedNonce: tx.nonce,
+    });
+    clearTxCookie();
+
+    const claims = tokens.claims();
+    if (!claims?.sub) {
+      return res.redirect('/login?sso_error=failed');
+    }
+    const user = findOrLinkOidcUser(claims as { sub: string; email?: unknown; preferred_username?: unknown });
+    if (!user) {
+      // Ingen JIT: okända identiteter nekas. IdP:ns tokens kastas (inget persisteras).
+      logAudit(null, 'login_failure', 'session', null, `oidc: okänd användare (sub ${claims.sub})`, req.ip);
+      return res.redirect('/login?sso_error=unknown_user');
+    }
+
+    db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
+    const refreshToken = generateRefreshToken();
+    db.prepare(`
+      INSERT INTO refresh_tokens (id, user_id, token, expires_at)
+      VALUES (?, ?, ?, ?)
+    `).run(uuidv4(), user.id, refreshToken, getRefreshTokenExpiry());
+    setRefreshCookie(res, refreshToken);
+    logAudit(user.id, 'login_success', 'session', user.id, 'oidc', req.ip);
+    // Access-token hämtas av SPA:n via befintliga POST /refresh (cookien ovan).
+    // Fast intern path — aldrig redirect till något från requesten (open redirect).
+    res.redirect('/login?sso=1');
+  } catch (error) {
+    clearTxCookie();
+    logger.error('OIDC callback failed', { error: String(error) });
+    res.redirect('/login?sso_error=failed');
+  }
+});
+
 export default router;
