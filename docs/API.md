@@ -80,6 +80,9 @@ These are the only endpoints reachable without credentials:
 | POST | `/api/auth/change-password` | `authenticate` | Change own password; revokes all refresh tokens | body: `currentPassword`, `newPassword` | `{ message }`; 400/404 |
 | POST | `/api/auth/forgot-password` | `loginRateLimiter` | Issue reset token + email link (enumeration-safe) | body: `email` | generic `{ message }` (always 200) |
 | POST | `/api/auth/reset-password` | `loginRateLimiter` | Reset password via token; revokes all refresh tokens | body: `token`, `newPassword` | `{ message }`; 400 invalid/expired |
+| GET | `/api/auth/oidc/enabled` | public/none | Check if OIDC SSO is configured and get button label | — | `{ enabled, label }` |
+| GET | `/api/auth/oidc/login` | public/none | Initiate OIDC login flow; redirect to IdP | — | 302 redirect to IdP; 503 if unconfigured or IdP unreachable |
+| GET | `/api/auth/oidc/callback` | public/none | OIDC callback receiver (internal; IdP redirects here) | query: `code`, `state` | 302 redirect to `/login?sso=1` or `/login?sso_error=unknown_user\|failed` |
 | GET | `/api/auth/audit-log` | `authenticate` → `requireAdmin` | Paginated audit-log viewer | query: `limit`(≤200), `offset`, `entity_type`, `action` | `{ entries, total, limit, offset }` |
 
 ---
