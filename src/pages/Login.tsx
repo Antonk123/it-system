@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
@@ -22,13 +22,17 @@ const Login = () => {
   const [searchParams] = useSearchParams();
   const [sso, setSso] = useState<{ enabled: boolean; label: string | null }>({ enabled: false, label: null });
   const ssoError = searchParams.get("sso_error");
+  // Dedup-guard: StrictMode (dev) dubbel-invokerar effekter — utan guard skulle
+  // två nära-samtidiga POST /auth/refresh race:a mot den roterande refresh-tokenen.
+  const ssoHandled = useRef(false);
 
   useEffect(() => {
     api.getOidcStatus().then(setSso).catch(() => setSso({ enabled: false, label: null }));
   }, []);
 
   useEffect(() => {
-    if (searchParams.get("sso") !== "1") return;
+    if (searchParams.get("sso") !== "1" || ssoHandled.current) return;
+    ssoHandled.current = true;
     completeSsoLogin().then((ok) => {
       if (ok) {
         toast.success("Inloggad");

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { StrictMode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -64,5 +65,18 @@ describe('callback-hantering', () => {
   it('?sso_error=failed → generiskt felmeddelande', async () => {
     renderLogin('?sso_error=failed');
     expect(await screen.findByText(/SSO-inloggningen misslyckades/i)).toBeInTheDocument();
+  });
+  it('?sso=1 → completeSsoLogin anropas bara EN gång trots StrictMode-dubbelkörning av effekten', async () => {
+    completeSsoLogin.mockResolvedValue(true);
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={['/login?sso=1']}>
+          <Login />
+        </MemoryRouter>
+      </StrictMode>
+    );
+    await waitFor(() => expect(completeSsoLogin).toHaveBeenCalled());
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/'));
+    expect(completeSsoLogin).toHaveBeenCalledTimes(1);
   });
 });
