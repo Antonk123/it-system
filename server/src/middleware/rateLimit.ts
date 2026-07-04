@@ -21,8 +21,16 @@ interface RateLimitStore {
  *
  * @param windowMs - Time window in milliseconds
  * @param max - Maximum number of requests per window
+ * @param onLimitExceeded - Optional custom 429 handler (req, res, retryAfterSeconds).
+ *   Defaults to a JSON 429 body. Use this for routes where a raw JSON response is
+ *   wrong for the context — e.g. a top-level browser navigation that should redirect
+ *   instead of rendering JSON.
  */
-export function createRateLimiter(windowMs: number, max: number) {
+export function createRateLimiter(
+  windowMs: number,
+  max: number,
+  onLimitExceeded?: (req: Request, res: Response, retryAfter: number) => void
+) {
   const store: RateLimitStore = {};
 
   // Cleanup old entries every minute — store ref to allow cleanup on shutdown
@@ -55,6 +63,9 @@ export function createRateLimiter(windowMs: number, max: number) {
     if (store[key].count > max) {
       const retryAfter = Math.ceil((store[key].resetTime - now) / 1000);
       res.set('Retry-After', String(retryAfter));
+      if (onLimitExceeded) {
+        return onLimitExceeded(req, res, retryAfter);
+      }
       return res.status(429).json({
         error: 'Too many requests, please try again later.',
         retryAfter

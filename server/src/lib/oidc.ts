@@ -58,6 +58,9 @@ export interface OidcMatchedUser {
 // Matchning i två steg: (1) oidc_sub, (2) e-post (lowercase; email-claim med
 // fallback preferred_username) → länka sub vid första träffen. Okänd → null
 // (ingen JIT-provisionering). Konto redan länkat till annan sub → null.
+// E-poststeget vägras om IdP:n uttryckligen sätter email_verified=false
+// (härdning mot kontoövertagning via overifierad e-post) — se kommentaren vid
+// email_verified-kontrollen nedan för detaljer.
 export function findOrLinkOidcUser(
   claims: {
     sub: string;

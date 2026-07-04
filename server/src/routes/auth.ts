@@ -439,7 +439,16 @@ router.get('/audit-log', authenticate, requireAdmin, (req: AuthRequest, res: Res
 });
 
 // ── SSO / OIDC (generisk; Entra ID första provider). Opt-in via env. ─────────
-const oidcRateLimiter = createRateLimiter(15 * 60 * 1000, 20);
+// Separata instanser för login/callback — annars delar de en gemensam räknare
+// (nycklad per IP) och en hel SSO-cykel (login + callback) förbrukar 2 av
+// budgeten, vilket halverar den effektiva gränsen till ~10 cykler/IP/kvart.
+const oidcLoginRateLimiter = createRateLimiter(15 * 60 * 1000, 20);
+// Callbacken är en top-level-navigation från IdP:n (browser-redirect), inte ett
+// fetch/XHR-anrop — ett rått JSON-429-svar skulle renderas som text i webbläsaren
+// istället för att ta användaren tillbaka till inloggningen. Redirecta istället.
+const oidcCallbackRateLimiter = createRateLimiter(15 * 60 * 1000, 20, (_req, res) => {
+  res.redirect('/login?sso_error=failed');
+});
 const OIDC_TX_COOKIE = 'oidcTx';
 const OIDC_COOKIE_PATH = '/api/auth/oidc';
 function oidcTxCookieOptions() {
@@ -451,7 +460,7 @@ router.get('/oidc/enabled', (_req: Request, res: Response) => {
   res.json({ enabled: settings !== null, label: settings?.buttonLabel ?? null });
 });
 
-router.get('/oidc/login', oidcRateLimiter, async (_req: Request, res: Response) => {
+router.get('/oidc/login', oidcLoginRateLimiter, async (_req: Request, res: Response) => {
   const settings = getOidcSettings();
   if (!settings) {
     return res.status(503).json({ error: 'SSO är inte konfigurerat' });
@@ -483,7 +492,7 @@ router.get('/oidc/login', oidcRateLimiter, async (_req: Request, res: Response) 
   }
 });
 
-router.get('/oidc/callback', oidcRateLimiter, async (req: Request, res: Response) => {
+router.get('/oidc/callback', oidcCallbackRateLimiter, async (req: Request, res: Response) => {
   const settings = getOidcSettings();
   if (!settings) {
     return res.status(503).json({ error: 'SSO är inte konfigurerat' });
@@ -513,7 +522,7 @@ router.get('/oidc/callback', oidcRateLimiter, async (req: Request, res: Response
     if (!claims?.sub) {
       return res.redirect('/login?sso_error=failed');
     }
-    const user = findOrLinkOidcUser(claims as { sub: string; email?: unknown; preferred_username?: unknown });
+    const user = findOrLinkOidcUser(claims as { sub: string; email?: unknown; email_verified?: unknown; preferred_username?: unknown });
     if (!user) {
       // Ingen JIT: okända identiteter nekas. IdP:ns tokens kastas (inget persisteras).
       logAudit(null, 'login_failure', 'session', null, `oidc: okänd användare (sub ${claims.sub})`, req.ip);
