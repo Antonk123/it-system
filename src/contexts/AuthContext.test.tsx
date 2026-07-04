@@ -1,31 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
-
-// Ensure localStorage is available
-if (typeof localStorage === 'undefined') {
-  const localStorageMock = (() => {
-    let store: Record<string, string> = {};
-    return {
-      getItem: (key: string) => store[key] || null,
-      setItem: (key: string, value: string) => {
-        store[key] = value.toString();
-      },
-      removeItem: (key: string) => {
-        delete store[key];
-      },
-      clear: () => {
-        store = {};
-      },
-    };
-  })();
-
-  Object.defineProperty(globalThis, 'localStorage', {
-    value: localStorageMock,
-    writable: true,
-  });
-}
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -39,6 +16,18 @@ vi.mock('@/lib/api', () => ({
 import { api } from '@/lib/api';
 import { AuthProvider, useAuth } from './AuthContext';
 
+// jsdom 25 levererar inte alltid localStorage utan storage-konfig → stubba en enkel
+// in-memory-variant (samma mönster som api.test.ts / secureFileAccess.test.ts).
+function stubLocalStorage() {
+  const store: Record<string, string> = {};
+  vi.stubGlobal('localStorage', {
+    getItem: (k: string) => store[k] ?? null,
+    setItem: (k: string, v: string) => { store[k] = v; },
+    removeItem: (k: string) => { delete store[k]; },
+    clear: () => { Object.keys(store).forEach((k) => delete store[k]); },
+  });
+}
+
 const wrapper = ({ children }: { children: ReactNode }) => (
   <QueryClientProvider client={new QueryClient()}>
     <AuthProvider>{children}</AuthProvider>
@@ -47,9 +36,11 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 
 beforeEach(() => {
   vi.clearAllMocks();
-  if (typeof localStorage !== 'undefined') {
-    localStorage.clear();
-  }
+  stubLocalStorage();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('completeSsoLogin', () => {
