@@ -1,18 +1,43 @@
-import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Lock, Mail, LogIn, Ticket } from "lucide-react";
 import { toast } from "sonner";
 
+const SSO_ERROR_MESSAGES: Record<string, string> = {
+  unknown_user: "Ditt konto finns inte i IT-Ticket — kontakta administratören.",
+  failed: "SSO-inloggningen misslyckades. Försök igen eller logga in med lösenord.",
+};
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const { signIn } = useAuth();
+  const { signIn, completeSsoLogin } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [sso, setSso] = useState<{ enabled: boolean; label: string | null }>({ enabled: false, label: null });
+  const ssoError = searchParams.get("sso_error");
+
+  useEffect(() => {
+    api.getOidcStatus().then(setSso).catch(() => setSso({ enabled: false, label: null }));
+  }, []);
+
+  useEffect(() => {
+    if (searchParams.get("sso") !== "1") return;
+    completeSsoLogin().then((ok) => {
+      if (ok) {
+        toast.success("Inloggad");
+        navigate("/");
+      } else {
+        toast.error(SSO_ERROR_MESSAGES.failed);
+      }
+    });
+  }, [searchParams, completeSsoLogin, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,6 +121,27 @@ const Login = () => {
               </Link>
             </div>
           </form>
+
+          {sso.enabled && (
+            <>
+              <div className="relative my-6">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">eller</span>
+                </div>
+              </div>
+              <Button asChild variant="outline" className="w-full">
+                <a href={api.oidcLoginUrl()}>{sso.label ?? "Logga in med SSO"}</a>
+              </Button>
+            </>
+          )}
+          {ssoError && (
+            <p role="alert" className="mt-4 text-sm text-destructive text-center">
+              {SSO_ERROR_MESSAGES[ssoError] ?? SSO_ERROR_MESSAGES.failed}
+            </p>
+          )}
 
           <div className="mt-6 pt-5 border-t border-border/50 text-center">
             <p className="text-xs text-muted-foreground mb-2">Behöver du hjälp?</p>
