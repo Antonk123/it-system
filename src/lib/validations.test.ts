@@ -379,6 +379,21 @@ describe('fileUploadSchema', () => {
     expect(() => fileUploadSchema.parse({ file: makeFile('data.csv', '') })).not.toThrow();
   });
 
+  it('godkänner .md med MIME text/markdown', () => {
+    expect(() => fileUploadSchema.parse({ file: makeFile('notes.md', 'text/markdown') })).not.toThrow();
+  });
+
+  it('godkänner .md via filändelse när browsern inte sätter MIME', () => {
+    // Edge/Chrome på macOS rapporterar .md inkonsekvent (tom sträng eller
+    // application/octet-stream) — extension-fallbacken måste släppa igenom.
+    expect(() => fileUploadSchema.parse({ file: makeFile('notes.md', '') })).not.toThrow();
+    expect(() => fileUploadSchema.parse({ file: makeFile('notes.md', 'application/octet-stream') })).not.toThrow();
+  });
+
+  it('godkänner .markdown via filändelse', () => {
+    expect(() => fileUploadSchema.parse({ file: makeFile('rapport.markdown', '') })).not.toThrow();
+  });
+
   it('avvisar otillåten filtyp utan känd extension', () => {
     expect(() =>
       fileUploadSchema.parse({ file: makeFile('skript.sh', 'application/x-sh') })

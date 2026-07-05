@@ -548,11 +548,17 @@ const TicketForm = () => {
       if (isEditing && id) {
         await updateTicket(id, { ...submitFormData, assigned_to: formData.assigned_to || undefined, company_id: formData.company_id || undefined } as any, customFieldValues.length > 0 ? customFieldValues : undefined);
 
-        // Upload pending files
+        // Upload pending files. uploadAttachment() returns null on failure
+        // (client-side validation OR backend rejection) — collect those so we
+        // surface them via the retry banner instead of silently reporting
+        // success and navigating away, which would drop the file. (The create
+        // branch below already does this; the edit branch used to swallow it.)
+        const failedFiles: File[] = [];
         if (pendingFiles.length > 0) {
           for (let i = 0; i < pendingFiles.length; i++) {
             setUploadProgress(`Laddar upp fil ${i + 1} av ${pendingFiles.length}...`);
-            await uploadAttachment(id, pendingFiles[i]);
+            const uploaded = await uploadAttachment(id, pendingFiles[i]);
+            if (!uploaded) failedFiles.push(pendingFiles[i]);
           }
           setUploadProgress(null);
         }
@@ -563,6 +569,15 @@ const TicketForm = () => {
         }
 
         setHasUnsavedChanges(false);
+
+        if (failedFiles.length > 0) {
+          // Ticket itself saved; some attachments didn't. Show the retry banner
+          // (same UX as create mode) rather than navigating away and losing them.
+          setFailedUploads({ files: failedFiles, ticketId: id });
+          toast.warning(`Ärendet uppdaterades, men ${failedFiles.length} fil(er) kunde inte laddas upp`);
+          return;
+        }
+
         toast.success('Ärendet uppdaterades');
         // Navigate back to source instead of detail page
         if (location.state?.from) {
@@ -716,7 +731,7 @@ const TicketForm = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-foreground">
-                    Ärendet skapades, men {failedUploads.files.length} fil(er) kunde inte laddas upp
+                    Ärendet sparades, men {failedUploads.files.length} fil(er) kunde inte laddas upp
                   </p>
                   <ul className="mt-1 space-y-0.5">
                     {failedUploads.files.map((file, i) => (

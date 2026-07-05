@@ -84,6 +84,7 @@ export const fileUploadSchema = z.object({
           'application/pdf',
           'text/plain',
           'text/csv',
+          'text/markdown',
           'application/msword',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
           'application/vnd.ms-excel',
@@ -93,11 +94,11 @@ export const fileUploadSchema = z.object({
         ];
         // Some browsers don't set MIME type for certain files, check extension as fallback
         const fileName = f.name.toLowerCase();
-        const allowedExtensions = ['.eml', '.msg', '.csv', '.xls', '.xlsx'];
+        const allowedExtensions = ['.eml', '.msg', '.csv', '.xls', '.xlsx', '.md', '.markdown'];
         const hasAllowedExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
         return allowedTypes.includes(f.type) || hasAllowedExtension;
       },
-      'Invalid file type. Allowed: images, PDF, text, Word, Excel/CSV, email files (.eml, .msg)'
+      'Invalid file type. Allowed: images, PDF, text, Markdown, Word, Excel/CSV, email files (.eml, .msg)'
     ),
 });
 
