@@ -9,7 +9,12 @@ CREATE TABLE IF NOT EXISTS users (
   last_login TEXT,
   oidc_sub TEXT
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub) WHERE oidc_sub IS NOT NULL;
+-- OBS: idx_users_oidc_sub skapas ENDAST i migration 065 (add_users_oidc_sub),
+-- INTE här. schema.sql exec:as före migrationerna vid varje start; på en äldre
+-- prod-DB är `CREATE TABLE IF NOT EXISTS users` en no-op så oidc_sub-kolumnen
+-- finns inte ännu → ett index på den här skulle krascha starten med
+-- "no such column: oidc_sub" (prod-incident 2026-07-05). Index på
+-- migrations-tillagda kolumner måste ligga i migrationen, aldrig i bas-schemat.
 
 -- Companies (kopplas till contacts och tickets via company_id; skapas i migration 028)
 CREATE TABLE IF NOT EXISTS companies (
