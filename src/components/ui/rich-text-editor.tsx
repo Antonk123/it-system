@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useEffect, useState, useMemo, useRef } from 'react';
+import { shouldApplyExternalValue } from './rich-text-sync';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
@@ -272,7 +273,9 @@ export const RichTextEditor = ({
   const [linkUrl, setLinkUrl] = useState('');
   const [linkText, setLinkText] = useState('');
   const [isInserting, setIsInserting] = useState(false);
-  const isLocalChange = useRef(false);
+  // Tracks the last HTML the editor emitted, so the value-sync effect can tell
+  // an echo of our own onChange apart from a genuinely external value change.
+  const lastEmittedHtml = useRef(value);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -381,24 +384,24 @@ export const RichTextEditor = ({
       },
     },
     onUpdate: ({ editor }) => {
-      isLocalChange.current = true;
-      onChangeRef.current(editor.getHTML());
+      const html = editor.getHTML();
+      lastEmittedHtml.current = html;
+      onChangeRef.current(html);
     },
   }, []);
 
   useEffect(() => {
-    // Stale-closure guard: only sync prop -> editor when we are NOT in the middle
-    // of a local edit. The previous version reset isLocalChange unconditionally
-    // at the end of the effect, which let a follow-up render arriving with a
-    // stale `value` overwrite the user's most recent keystroke (cursor jumped
-    // to end, last character vanished).
+    // Sync an EXTERNAL value change (clear-after-submit, loading a ticket's
+    // description, a programmatic reset) into the editor — but ignore echoes of
+    // what the editor itself just emitted, which would clobber the caret while
+    // typing. See rich-text-sync.ts for why the old isLocalChange ref was
+    // replaced (it got stuck and swallowed the post-submit clear).
     if (!editor) return;
-    if (isLocalChange.current) {
-      isLocalChange.current = false;
-      return;
-    }
-    if (!isInserting && value !== editor.getHTML()) {
-      editor.commands.setContent(value || '');
+    if (shouldApplyExternalValue(value, editor.getHTML(), lastEmittedHtml.current, isInserting)) {
+      lastEmittedHtml.current = value;
+      // emitUpdate:false — this is not a user edit, so it must not feed back
+      // through onUpdate/onChange (in TipTap v3 setContent emits by default).
+      editor.commands.setContent(value || '', { emitUpdate: false });
     }
   }, [value, editor, isInserting]);
 

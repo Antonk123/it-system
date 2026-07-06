@@ -65,3 +65,6 @@ dist-ssr
 *.sln
 *.sw?
 .mcp.json
+
+# Playwright MCP artifacts
+.playwright-mcp/
