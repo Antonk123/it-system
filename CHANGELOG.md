@@ -14,6 +14,12 @@ Omfattande vidareutveckling sedan v1.5 (april 2026). Sammanfattat per tema —
 för commit-nivå, se git-historiken.
 
 ### Tillagt
+- **SSO-inloggning (OIDC):** Authorization Code + PKCE mot valfri IdP (t.ex.
+  Microsoft Entra ID). Aktiveras med `OIDC_*`-env-vars — SSO-knappen visas bara
+  när allt är konfigurerat. Kräver befintligt konto (ingen auto-provisionering)
+  och verifierad e-post från IdP:n; egna rate-limiters för login/callback.
+- **Markdown-bilagor:** `.md`/`.markdown` tillåtna som ticket-bilagor (validering
+  i alla tre lager: filväljare, klient-schema, backend-allowlist).
 - **Tvåvägs-e-post / kundloop:** teknikerns publika svar mejlas trådat till
   beställaren; inkommande kundsvar blir kommentar och notifierar tilldelad
   tekniker (push/mejl/webhook). Admin-styrd på/av i Integrationer.
@@ -37,9 +43,10 @@ för commit-nivå, se git-historiken.
 - Node 20 → 22; vendor-bundle code-split.
 
 ### Fixat
-- Hundratals buggfixar över flera kodaudits (v1–v3), bl.a. IDOR-härdning,
+- Hundratals buggfixar över flera kodaudits (v1–v4), bl.a. IDOR-härdning,
   en render-loop i ärendeformuläret, FTS5-triggers, e-post-deduplicering och
-  diverse export-/UX-buggar.
+  diverse export-/UX-buggar. Senast: kommentar-editorn tömdes inte efter spar,
+  och `schema.sql` kraschade startup på äldre databaser.
 
 ### Säkerhet
 - Återkommande säkerhetsaudits; fail-closed-validering av `JWT_SECRET`/

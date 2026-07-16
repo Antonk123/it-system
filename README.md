@@ -9,6 +9,7 @@
 - E-post → ärende (IMAP-polling med OAuth2)
 - Web push-notiser och e-postnotifieringar
 - Multi-user med roller och API-nycklar
+- SSO-inloggning via OIDC (t.ex. Microsoft Entra ID) — valfritt tillägg till lösenordsinloggning
 - 6 teman, PWA, responsiv design
 
 ## Snabbstart
@@ -21,7 +22,7 @@ Kräver Docker och Docker Compose.
 bash <(curl -fsSL https://raw.githubusercontent.com/Antonk123/it-system/main/setup.sh)
 ```
 
-Scriptet guidar dig genom konfigurationen och startar systemet. När det är klart visas URL och inloggningsuppgifter.
+Scriptet guidar dig genom konfigurationen och startar systemet. När det är klart visas URL och inloggningsuppgifter. Avinstallera med [`uninstall.sh`](uninstall.sh).
 
 ### Lokal utveckling
 
@@ -57,6 +58,7 @@ All konfiguration sker via `.env`. Se [`.env.example`](.env.example) för dokume
 | `SMTP_HOST/PORT/USER/PASS` | Nej | Utgående e-post |
 | `IMAP_HOST/PORT/USER` | Nej | E-post → ärende |
 | `VAPID_PUBLIC_KEY/PRIVATE_KEY` | Nej | Push-notiser |
+| `OIDC_ISSUER_URL/CLIENT_ID/CLIENT_SECRET/REDIRECT_URI` | Nej | SSO-inloggning via OIDC — knappen visas när alla fyra är satta |
 
 ## API-översikt
 
@@ -72,6 +74,7 @@ på muterande sessions-anrop (API-nyckel-anrop är undantagna).
 | Endpoint | Beskrivning |
 |----------|-------------|
 | `POST /api/auth/login` | Logga in, få JWT + refresh token |
+| `GET /api/auth/oidc/*` | SSO-inloggning via OIDC (enabled/login/callback) |
 | `GET /api/tickets` | Lista ärenden (filter, sökning, paginering) |
 | `POST /api/tickets` | Skapa ärende |
 | `GET /api/tickets/:id` | Hämta ärende med kommentarer |
@@ -114,6 +117,9 @@ Se respektive routfil i `server/src/routes/` för fullständig dokumentation.
 | Databas | SQLite via better-sqlite3, FTS5 |
 | AI | Claude API (Anthropic) |
 | Deploy | Docker (nginx + Node), Docker Compose |
+
+En interaktiv arkitekturkarta (moduler, flöden och samtliga endpoints) finns i
+[`docs/architecture-map.html`](docs/architecture-map.html) — öppna den i en webbläsare.
 
 ## Portainer
 

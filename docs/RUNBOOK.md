@@ -148,8 +148,10 @@ Byt `YYYYMMDD-HHMM` mot tidsstämpeln på backupen du vill återställa.
 ```bash
 cd /opt/it-ticketing
 
-# 1. Ta backup först!
-./backup.sh
+# 1. Ta backup först! (inbyggda backup-systemet — se "Backup & Restore" ovan)
+#    Admin-UI: Inställningar → Backup → "Kör backup nu", eller ladda ner en ZIP:
+curl -sf -H "Authorization: Bearer itk_live_<admin-användares API-nyckel>" \
+  -o backup-pre-upgrade.zip http://localhost:3002/api/backup
 
 # 2. Hämta ny kod
 git pull

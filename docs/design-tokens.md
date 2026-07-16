@@ -5,14 +5,15 @@
 
 ## Overview
 
-Detta projekt använder ett **5-tema system** med komplett support för theme-switching. Alla komponenter ska använda semantiska design tokens istället för hårdkodade färger.
+Detta projekt använder ett **6-tema system** (varje tema i mörk + ljus variant, 12 kombinationer) med komplett support för theme-switching. Alla komponenter ska använda semantiska design tokens istället för hårdkodade färger.
 
-### Tillgängliga teman
-1. **Ocean Deep** (default) - Djupblå, professionell
-2. **Cyberpunk** - Neon, futuristisk
-3. **Arctic** - Ljusblå, ren
-4. **Terminal** - Grön monokrom, tech
-5. **Sunset** - Varm orange/röd
+### Tillgängliga teman (CSS-klasser i `src/index.css`, väljs i Inställningar → Allmänt)
+1. **Slate** (`theme-default`) - Neutral standard
+2. **Midnight** (`theme-midnight`) - Djup mörkblå
+3. **Graphite** (`theme-graphite`) - Grå monokrom
+4. **Stone** (`theme-stone`) - Varm beige/sten
+5. **Linear** (`theme-linear`) - Stram, Linear-inspirerad
+6. **Spotify** (`theme-spotify`) - Grön accent, Spotify-inspirerad
 
 ---
 
@@ -223,11 +224,12 @@ hover:shadow-xl hover:shadow-primary/30   // Hover state
 
 ### Per Theme
 Border radius anpassar sig automatiskt per tema via `--radius`:
-- **Ocean Deep**: `1rem` (generous)
-- **Cyberpunk**: `0.5rem` (medium)
-- **Terminal**: `0.375rem` (sharp)
-- **Arctic**: `1rem` (generous)
-- **Sunset**: `0.75rem` (balanced)
+- **Slate**: `0.625rem`
+- **Midnight**: `0.5rem`
+- **Graphite**: `0.5rem`
+- **Stone**: `0.75rem` (generous)
+- **Linear**: `0.375rem` (sharp)
+- **Spotify**: `0.5rem`
 
 ### Usage
 ```tsx
@@ -340,7 +342,7 @@ text-base md:text-sm   // Larger text mobile
 
 ### Per Change
 - [ ] **Visual test**: Ser komponenten korrekt ut?
-- [ ] **Theme test**: Testa ALLA 5 teman (Ocean, Cyberpunk, Arctic, Terminal, Sunset)
+- [ ] **Theme test**: Testa ALLA 6 teman (Slate, Midnight, Graphite, Stone, Linear, Spotify) i mörkt + ljust läge
 - [ ] **Interaction test**: Hover, focus, active states fungerar?
 - [ ] **Responsive test**: Mobile (375px) och Desktop (1440px)
 
@@ -366,17 +368,10 @@ text-base md:text-sm   // Larger text mobile
 
 ### 2. Testa Theme-Switching
 ```bash
-# Efter varje ändring:
-1. Öppna Settings → Välj tema
-2. Växla mellan alla 5 teman
+# Efter varje ändring (npm run dev — Vite hot-reloadar):
+1. Öppna Inställningar → Allmänt → Välj tema
+2. Växla mellan alla 6 teman, i både mörkt och ljust läge
 3. Verifiera att komponenten ser bra ut i alla
-```
-
-### 3. Docker Rebuild
-```bash
-# Efter frontend-ändringar:
-docker-compose build frontend
-docker-compose up -d
 ```
 
 ---
@@ -392,8 +387,7 @@ docker-compose up -d
 - **StatusBadge.tsx** - Semantic color system
 
 ### Config-filer (Ändra EJ)
-- **tailwind.config.ts** - Tema-definitioner
-- **index.css** - CSS-variabler och tema-switcher
+- **src/index.css** - CSS-variabler, tema-definitioner och tema-switcher (Tailwind v4 konfigureras här — det finns ingen tailwind.config)
 - **shadcn components** - UI-komponentbibliotek
 
 ---
@@ -462,7 +456,7 @@ docker-compose up -d
 
 ### Frågor?
 - Kolla referens-komponenter (Login.tsx, Button.tsx, Card.tsx)
-- Testa i alla 5 teman
+- Testa i alla 6 teman
 - Följ design tokens-guiden
 
 ### Bidra
@@ -472,6 +466,6 @@ docker-compose up -d
 
 ---
 
-**Senast uppdaterad**: 2026-03-17
-**Version**: 1.0
+**Senast uppdaterad**: 2026-07-16
+**Version**: 1.1
 **Maintainer**: IT Support Team
