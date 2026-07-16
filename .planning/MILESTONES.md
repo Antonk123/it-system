@@ -31,6 +31,21 @@
 
 ---
 
+## v1.3 Streamline & Declutter (Shipped: 2026-03-30)
+
+> Posten tillagd retroaktivt 2026-07-16 — milstolpen gick aldrig genom complete-milestone.
+
+**Phases completed:** 3 phases, 6 plans
+
+**Key accomplishments:**
+
+- KB stripped of unused features (less code and UI noise), plus silent 401-refresh + retry in ApiClient.request() so users aren't logged out unnecessarily
+- Ticket create/edit forms reworked with progressive disclosure: create form shows only Titel, Mall, Beskrivning, Kategori, Beställare by default
+- Searchable CategoryCombobox/TemplateCombobox with inline creation ("Ny kategori") and clear-template action
+- Quick capture: floating action button for title-only ticket creation, auth detection on the public form, and a ticket clone button
+
+---
+
 ## v1.2 Knowledge Base Expansion (Shipped: 2026-03-29)
 
 **Phases completed:** 3 phases, 6 plans, 7 tasks
