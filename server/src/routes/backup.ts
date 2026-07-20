@@ -4,7 +4,7 @@ import { db, closeDatabase } from '../db/connection.js';
 import { ZipArchive } from 'archiver';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync, unlinkSync, mkdirSync, createReadStream, createWriteStream, copyFileSync, cpSync, rmSync, openSync, readSync, closeSync } from 'fs';
+import { existsSync, unlinkSync, mkdirSync, createReadStream, createWriteStream, copyFileSync, cpSync, rmSync, openSync, readSync, closeSync, chmodSync } from 'fs';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import multer from 'multer';
@@ -102,6 +102,13 @@ router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (_req: 
   try {
     await db.backup(tmpFile);
 
+    // Backup-dumpen innehåller hela databasen (inkl. hemligheter) → minsta-rättighet 0o600.
+    try {
+      chmodSync(tmpFile, 0o600);
+    } catch (chmodErr) {
+      logger.warn('Kunde inte sätta läsrättigheter (0o600) på temporär backup-fil', { path: tmpFile, error: String(chmodErr) });
+    }
+
     const dateStr = new Date().toISOString().slice(0, 10);
     const filename = `it-ticket-backup-${dateStr}.zip`;
 
@@ -149,6 +156,14 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
 
   // Fynd 3: req.file.path används (diskStorage) — ingen buffer i minnet.
   const uploadedZip = req.file.path;
+
+  // Uppladdad backup-ZIP innehåller hela databasen (inkl. hemligheter) → minsta-rättighet 0o600.
+  try {
+    chmodSync(uploadedZip, 0o600);
+  } catch (chmodErr) {
+    logger.warn('Kunde inte sätta läsrättigheter (0o600) på uppladdad backup-fil', { path: uploadedZip, error: String(chmodErr) });
+  }
+
   const tmpDir = join(tmpdir(), `restore-${randomUUID()}`);
   const extractDir = join(tmpDir, 'extracted');
 
@@ -172,6 +187,13 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
 
   try {
     mkdirSync(extractDir, { recursive: true });
+
+    // Extraherad backup innehåller hela databasen (inkl. hemligheter) → minsta-rättighet 0o700 på katalogen.
+    try {
+      chmodSync(tmpDir, 0o700);
+    } catch (chmodErr) {
+      logger.warn('Kunde inte sätta läsrättigheter (0o700) på temporär restore-katalog', { path: tmpDir, error: String(chmodErr) });
+    }
 
     // Fynd 2: Zip-slip-skydd — validera varje entry innan extraktion.
     // Fynd unzipper-pipe-close-race: Samla finish-löften per entry och awaita
