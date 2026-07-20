@@ -24,10 +24,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Trash2, Users, Mail, Shield, Loader2, HardDriveDownload, Upload } from 'lucide-react';
+import { Trash2, Users, Mail, Shield, Loader2, HardDriveDownload, Upload, ScrollText } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { BackupScheduleSection } from '@/components/settings/BackupScheduleSection';
+import { AuditLogSection } from '@/components/settings/AuditLogSection';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 
@@ -49,6 +50,7 @@ const AdminTab = () => {
   const [sectionsOpen, setSectionsOpen] = useState({
     users: false,
     backup: false,
+    auditLog: false,
   });
 
   const handleBackup = useCallback(async () => {
@@ -303,6 +305,28 @@ const AdminTab = () => {
                     {restoreLoading ? 'Återställer...' : 'Återställ backup'}
                   </Button>
                 </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        <Collapsible open={sectionsOpen.auditLog} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, auditLog: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <ScrollText className="w-5 h-5" />
+                  Granskningslogg
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.auditLog ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Historik över känsliga åtgärder i systemet — inloggningar, användarändringar, fakturor med mera.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+                <AuditLogSection />
               </CardContent>
             </CollapsibleContent>
           </Card>
