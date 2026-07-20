@@ -42,17 +42,6 @@ export interface ValidationResult {
   isDuplicate: boolean;
 }
 
-// CSV helper functions
-export function escapeCSVField(field: any): string {
-  if (field === null || field === undefined) return '';
-  const str = String(field);
-  // Escape double quotes by doubling them, and wrap in quotes if contains comma, quote, or newline
-  if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
-    return `"${str.replace(/"/g, '""')}"`;
-  }
-  return str;
-}
-
 export async function generateXLSX(tickets: TicketRow[], categories: CategoryLookup[], contacts: ContactLookup[]): Promise<Buffer> {
   const categoryMap = new Map(categories.map((c) => [c.id, c.label]));
   const contactMap = new Map(contacts.map((c) => [c.id, { name: c.name, email: c.email }]));

@@ -13,7 +13,7 @@ export const useSLAPolicies = (companyId?: string) => {
   const queryClient = useQueryClient();
 
   const { data: policies = [], isLoading, isError } = useQuery({
-    queryKey: slaKeys.list(companyId),
+    queryKey: slaKeys.list(companyId ?? 'default'),
     queryFn: () => api.getSLAPolicies(companyId),
     staleTime: 1000 * 60 * 5,
   });
@@ -23,7 +23,7 @@ export const useSLAPolicies = (companyId?: string) => {
       return api.upsertSLAPolicies(companyId, policies);
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(slaKeys.list(variables.companyId || 'default'), data);
+      queryClient.setQueryData(slaKeys.list(variables.companyId ?? 'default'), data);
       queryClient.invalidateQueries({ queryKey: slaKeys.all });
       toast.success('SLA-policy sparad');
     },

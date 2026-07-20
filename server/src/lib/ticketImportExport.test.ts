@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import {
-  escapeCSVField,
   parseCSVLine,
   parseCSV,
   normalizeFieldNames,
@@ -9,44 +8,6 @@ import {
 
 // Pure import/export helpers extracted from routes/tickets.ts (M-cq3).
 // No DB or request/response access — straightforward unit tests.
-
-describe('escapeCSVField', () => {
-  it('returns empty string for null', () => {
-    expect(escapeCSVField(null)).toBe('');
-  });
-
-  it('returns empty string for undefined', () => {
-    expect(escapeCSVField(undefined)).toBe('');
-  });
-
-  it('passes through a plain string unchanged', () => {
-    expect(escapeCSVField('hello')).toBe('hello');
-  });
-
-  it('stringifies numbers', () => {
-    expect(escapeCSVField(42)).toBe('42');
-  });
-
-  it('wraps fields containing a comma in quotes', () => {
-    expect(escapeCSVField('a,b')).toBe('"a,b"');
-  });
-
-  it('doubles embedded double-quotes and wraps', () => {
-    expect(escapeCSVField('say "hi"')).toBe('"say ""hi"""');
-  });
-
-  it('wraps fields containing a newline', () => {
-    expect(escapeCSVField('line1\nline2')).toBe('"line1\nline2"');
-  });
-
-  it('wraps fields containing a carriage return', () => {
-    expect(escapeCSVField('line1\rline2')).toBe('"line1\rline2"');
-  });
-
-  it('does not wrap a field with no special characters', () => {
-    expect(escapeCSVField('plain text 123')).toBe('plain text 123');
-  });
-});
 
 describe('parseCSVLine', () => {
   it('splits a simple comma-separated line and trims', () => {

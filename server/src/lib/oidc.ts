@@ -25,10 +25,6 @@ export function getOidcSettings(): OidcSettings | null {
   };
 }
 
-export function isOidcEnabled(): boolean {
-  return getOidcSettings() !== null;
-}
-
 // Discovery cachas efter första LYCKADE anropet (lazy). Fel cachas inte —
 // nästa request gör om discovery, så en IdP-hicka självläker utan omstart.
 let cachedConfig: client.Configuration | null = null;

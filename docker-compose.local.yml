@@ -52,7 +52,9 @@ services:
       - IMAP_CLIENT_ID=${IMAP_CLIENT_ID:-}
       - IMAP_CLIENT_SECRET=${IMAP_CLIENT_SECRET:-}
       - OFFSITE_BACKUP_CMD=${OFFSITE_BACKUP_CMD:-}
+      - OFFSITE_BACKUP_REQUIRED=${OFFSITE_BACKUP_REQUIRED:-false}
       - PUSH_AGING_DAYS=${PUSH_AGING_DAYS:-7}
+      - SHUTDOWN_TIMEOUT_MS=${SHUTDOWN_TIMEOUT_MS:-10000}
     logging:
       driver: "json-file"
       options:

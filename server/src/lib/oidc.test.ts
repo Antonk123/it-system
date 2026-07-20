@@ -14,7 +14,7 @@ const { DB_PATH } = vi.hoisted(() => {
 });
 
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
-import { getOidcSettings, isOidcEnabled, findOrLinkOidcUser } from './oidc.js';
+import { getOidcSettings, findOrLinkOidcUser } from './oidc.js';
 
 const OIDC_ENV = ['OIDC_ISSUER_URL', 'OIDC_CLIENT_ID', 'OIDC_CLIENT_SECRET', 'OIDC_REDIRECT_URI', 'OIDC_BUTTON_LABEL'];
 
@@ -39,10 +39,9 @@ beforeEach(() => {
   db.prepare('DELETE FROM users').run();
 });
 
-describe('getOidcSettings / isOidcEnabled', () => {
-  it('null/false när config saknas helt', () => {
+describe('getOidcSettings', () => {
+  it('null när config saknas helt', () => {
     expect(getOidcSettings()).toBeNull();
-    expect(isOidcEnabled()).toBe(false);
   });
   it('null när en av de fyra obligatoriska saknas', () => {
     setFullOidcEnv();
