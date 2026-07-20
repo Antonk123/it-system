@@ -371,8 +371,26 @@ describe('fileUploadSchema', () => {
     expect(() => fileUploadSchema.parse({ file: makeFile('mail.eml', '') })).not.toThrow();
   });
 
-  it('godkänner .msg via filändelse', () => {
-    expect(() => fileUploadSchema.parse({ file: makeFile('outlook.msg', '') })).not.toThrow();
+  it('avvisar .msg — backend-allowlisten (attachments.ts) tar aldrig emot den', () => {
+    expect(() => fileUploadSchema.parse({ file: makeFile('outlook.msg', '') })).toThrow();
+    expect(() =>
+      fileUploadSchema.parse({ file: makeFile('outlook.msg', 'application/vnd.ms-outlook') })
+    ).toThrow();
+  });
+
+  it('godkänner Office-format som backend tillåter (ppt/pptx)', () => {
+    expect(() => fileUploadSchema.parse({ file: makeFile('deck.ppt', 'application/vnd.ms-powerpoint') })).not.toThrow();
+    expect(() => fileUploadSchema.parse({ file: makeFile('deck.pptx', '') })).not.toThrow();
+  });
+
+  it('godkänner arkiv som backend tillåter (zip/rar/7z)', () => {
+    expect(() => fileUploadSchema.parse({ file: makeFile('loggar.zip', 'application/zip') })).not.toThrow();
+    expect(() => fileUploadSchema.parse({ file: makeFile('loggar.rar', '') })).not.toThrow();
+    expect(() => fileUploadSchema.parse({ file: makeFile('loggar.7z', '') })).not.toThrow();
+  });
+
+  it('godkänner SVG som backend tillåter', () => {
+    expect(() => fileUploadSchema.parse({ file: makeFile('ikon.svg', 'image/svg+xml') })).not.toThrow();
   });
 
   it('godkänner .csv via filändelse', () => {

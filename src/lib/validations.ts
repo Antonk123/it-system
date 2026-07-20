@@ -71,34 +71,51 @@ export const templateSchema = templateBaseSchema.superRefine((data, ctx) => {
 export const templateUpdateSchema = templateBaseSchema.partial();
 
 // File upload validation
+// Kept in sync with the backend whitelist (server/src/routes/attachments.ts
+// ALLOWED_MIME_TYPES / ALLOWED_EXTENSIONS) — a mismatch here lets a file pass
+// client-side validation only to be rejected by the server, or vice versa.
+export const ALLOWED_ATTACHMENT_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/svg+xml',
+  'application/pdf',
+  'text/plain',
+  'text/csv',
+  'text/markdown',
+  'message/rfc822', // .eml files
+  'application/msword', // .doc
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
+  'application/vnd.ms-excel', // .xls
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+  'application/vnd.ms-powerpoint', // .ppt
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation', // .pptx
+  'application/zip',
+  'application/x-zip-compressed',
+  'application/x-rar-compressed',
+  'application/x-7z-compressed',
+];
+
+// Some browsers don't set MIME type for certain files, so this is checked as a fallback.
+export const ALLOWED_ATTACHMENT_EXTENSIONS = [
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg',
+  '.pdf',
+  '.txt', '.csv', '.md', '.markdown', '.eml',
+  '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.zip', '.rar', '.7z',
+];
+
 export const fileUploadSchema = z.object({
   file: z.instanceof(File)
     .refine(f => f.size <= 10 * 1024 * 1024, 'File must be 10MB or less')
     .refine(
       f => {
-        const allowedTypes = [
-          'image/jpeg',
-          'image/png',
-          'image/gif',
-          'image/webp',
-          'application/pdf',
-          'text/plain',
-          'text/csv',
-          'text/markdown',
-          'application/msword',
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          'application/vnd.ms-excel',
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'message/rfc822', // .eml files
-          'application/vnd.ms-outlook', // .msg files
-        ];
-        // Some browsers don't set MIME type for certain files, check extension as fallback
         const fileName = f.name.toLowerCase();
-        const allowedExtensions = ['.eml', '.msg', '.csv', '.xls', '.xlsx', '.md', '.markdown'];
-        const hasAllowedExtension = allowedExtensions.some(ext => fileName.endsWith(ext));
-        return allowedTypes.includes(f.type) || hasAllowedExtension;
+        const hasAllowedExtension = ALLOWED_ATTACHMENT_EXTENSIONS.some(ext => fileName.endsWith(ext));
+        return ALLOWED_ATTACHMENT_MIME_TYPES.includes(f.type) || hasAllowedExtension;
       },
-      'Invalid file type. Allowed: images, PDF, text, Markdown, Word, Excel/CSV, email files (.eml, .msg)'
+      'Invalid file type. Allowed: images (incl. SVG), PDF, text, Markdown, Word, Excel, PowerPoint, archives (.zip, .rar, .7z), email files (.eml)'
     ),
 });
 
