@@ -76,6 +76,7 @@ const NavOption = ({ item, isActive, open, onClick }: NavOptionProps) => {
     <Link
       to={item.path}
       onClick={onClick}
+      aria-label={item.label}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
         "relative flex h-11 w-full items-center rounded-md transition-all duration-200",
@@ -137,12 +138,14 @@ const BottomSection = ({ open, user, onLogout, onToggle }: BottomSectionProps) =
     <div className="border-t border-sidebar-border p-2 space-y-2">
       {/* "Nytt ärende" button */}
       <Link to="/tickets/new">
-        <button className={cn(
-          "w-full flex items-center gap-2 rounded-md transition-all duration-200",
-          "bg-linear-to-r from-primary to-accent text-white",
-          "hover:from-primary/90 hover:to-accent/90",
-          open ? "h-11 px-4" : "h-11 justify-center"
-        )}>
+        <button
+          aria-label="Nytt ärende"
+          className={cn(
+            "w-full flex items-center gap-2 rounded-md transition-all duration-200",
+            "bg-linear-to-r from-primary to-accent text-white",
+            "hover:from-primary/90 hover:to-accent/90",
+            open ? "h-11 px-4" : "h-11 justify-center"
+          )}>
           <Plus className="w-5 h-5" />
           {open && <span className="text-sm font-medium">Nytt ärende</span>}
         </button>
