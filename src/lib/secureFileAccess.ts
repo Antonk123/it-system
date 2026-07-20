@@ -1,42 +1,13 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+import { api } from './api';
 
 const blobUrlCache = new Map<string, string>();
-
-async function fetchWithRefresh(url: string, isRetry = false): Promise<Response> {
-  const token = localStorage.getItem('auth_token');
-  const response = await fetch(url, {
-    headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-    credentials: 'include',
-  });
-
-  if (response.status === 401 && !isRetry) {
-    // Refresh-token ligger i HttpOnly-cookie — skickas via credentials:'include'.
-    const refreshRes = await fetch(`${API_BASE_URL}/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-    });
-    if (refreshRes.ok) {
-      const data = await refreshRes.json();
-      localStorage.setItem('auth_token', data.accessToken);
-      return fetchWithRefresh(url, true);
-    }
-  }
-
-  return response;
-}
 
 export async function getAuthenticatedFileUrl(fileId: string): Promise<string> {
   if (blobUrlCache.has(fileId)) {
     return blobUrlCache.get(fileId)!;
   }
 
-  const response = await fetchWithRefresh(`${API_BASE_URL}/attachments/file/${fileId}`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch file: ${response.statusText}`);
-  }
-
-  const blob = await response.blob();
+  const blob = await api.requestBlob(`/attachments/file/${fileId}`);
   const blobUrl = URL.createObjectURL(blob);
   blobUrlCache.set(fileId, blobUrl);
   return blobUrl;
@@ -44,11 +15,7 @@ export async function getAuthenticatedFileUrl(fileId: string): Promise<string> {
 
 export async function downloadAuthenticatedFile(fileId: string, filename: string): Promise<void> {
   // Always do a fresh fetch for downloads to avoid stale/empty blob cache issues
-  const response = await fetchWithRefresh(`${API_BASE_URL}/attachments/file/${fileId}`);
-  if (!response.ok) {
-    throw new Error(`Failed to download file: ${response.statusText}`);
-  }
-  const blob = await response.blob();
+  const blob = await api.requestBlob(`/attachments/file/${fileId}`);
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

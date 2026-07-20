@@ -65,9 +65,8 @@ export default tseslint.config(
     },
   },
   {
-    // api.ts implementerar request()-wrappern och behöver raw fetch internt.
-    // secureFileAccess.ts anropar /auth/refresh som är CSRF-exempt.
-    files: ["src/lib/api.ts", "src/lib/secureFileAccess.ts"],
+    // api.ts implementerar request()/requestBlob()-wrapprarna och behöver raw fetch internt.
+    files: ["src/lib/api.ts"],
     rules: {
       "no-restricted-syntax": "off",
     },

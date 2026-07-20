@@ -89,19 +89,31 @@ class ApiClient {
     }
   }
 
-  async request<T>(endpoint: string, options: ApiOptions = {}, isRetry = false): Promise<T> {
-    const { method = 'GET', body, headers = {}, signal } = options;
-
+  // Proaktiv refresh: om access-token är utgången, uppdatera innan requesten
+  // för att undvika en onödig 401 som browsern loggar till konsolen.
+  private async getFreshToken(isRetry: boolean): Promise<string | null> {
     let token = this.getToken();
-
-    // Proactive refresh: if access token is expired, refresh before the request
-    // to avoid an unnecessary 401 that the browser logs to console.
     if (token && !isRetry && this.isTokenExpired(token)) {
       const refreshed = await this.tryRefresh();
       if (refreshed) {
         token = this.getToken();
       }
     }
+    return token;
+  }
+
+  // Refresh-token saknas eller är utgången — tyst redirect, ingen toast.
+  private sessionExpired(): never {
+    this.clearToken();
+    localStorage.removeItem('user');
+    window.location.href = '/login';
+    throw new Error('Session expired');
+  }
+
+  async request<T>(endpoint: string, options: ApiOptions = {}, isRetry = false): Promise<T> {
+    const { method = 'GET', body, headers = {}, signal } = options;
+
+    const token = await this.getFreshToken(isRetry);
 
     const requestHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -131,11 +143,7 @@ class ApiClient {
         if (await this.tryRefresh()) {
           return this.request<T>(endpoint, options, true);
         }
-        // Refresh token absent or expired — silent redirect, no toast
-        this.clearToken();
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-        throw new Error('Session expired');
+        this.sessionExpired();
       }
 
       const error = await response.json().catch(() => ({ error: `Request failed (${response.status})` }));
@@ -169,11 +177,46 @@ class ApiClient {
     }
   }
 
-  async uploadFile<T>(endpoint: string, file: File): Promise<T> {
-    const token = this.getToken();
+  // Hämtar en binär resurs (t.ex. bilagor) med samma refresh-retry och
+  // session-expiry-hantering som request() — men utan JSON-parsning/Content-Type.
+  async requestBlob(endpoint: string, options: { signal?: AbortSignal } = {}, isRetry = false): Promise<Blob> {
+    const { signal } = options;
+
+    const token = await this.getFreshToken(isRetry);
+
+    const requestHeaders: Record<string, string> = {};
+    if (token) {
+      requestHeaders['Authorization'] = `Bearer ${token}`;
+    }
+
+    const response = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'GET',
+      headers: requestHeaders,
+      credentials: 'include',
+      signal,
+    });
+
+    if (!response.ok) {
+      if (response.status === 401 && !isRetry) {
+        if (await this.tryRefresh()) {
+          return this.requestBlob(endpoint, options, true);
+        }
+        this.sessionExpired();
+      }
+
+      const error = await response.json().catch(() => ({ error: `Request failed (${response.status})` }));
+      throw new Error(error.error || error.message || 'Request failed');
+    }
+
+    return response.blob();
+  }
+
+  async uploadFile<T>(endpoint: string, file: File, isRetry = false): Promise<T> {
+    const token = await this.getFreshToken(isRetry);
     const formData = new FormData();
     formData.append('file', file);
 
+    // Ingen Content-Type — browsern måste sätta multipart-boundary själv.
     const headers: Record<string, string> = {};
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
@@ -188,7 +231,20 @@ class ApiClient {
     });
 
     if (!response.ok) {
+      if (response.status === 401 && !isRetry) {
+        if (await this.tryRefresh()) {
+          return this.uploadFile<T>(endpoint, file, true);
+        }
+        this.sessionExpired();
+      }
+
       const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+
+      if (response.status === 403 && !isRetry && this.isCsrfError(error)) {
+        this.csrfToken = null;
+        return this.uploadFile<T>(endpoint, file, true);
+      }
+
       throw new Error(error.error || error.message || 'Upload failed');
     }
 

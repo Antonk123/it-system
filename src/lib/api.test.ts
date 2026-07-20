@@ -197,6 +197,36 @@ describe('401 → silent refresh → retry', () => {
     // Nya access-token sparades i localStorage av setToken()
     expect(localStorage.getItem('auth_token')).toBe('fräscht-token');
   });
+
+  it('uploadFile() refreshar och retrar också — utan att sätta Content-Type på FormData', async () => {
+    let uploadCalls = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${BASE}/csrf-token`) {
+        return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ csrfToken: 'csrf-abc' }) }));
+      }
+      if (url === `${BASE}/auth/refresh`) {
+        return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ accessToken: 'fräscht-token' }) }));
+      }
+      uploadCalls++;
+      if (uploadCalls === 1) {
+        return Promise.resolve(fakeResponse({ ok: false, status: 401, json: () => Promise.resolve({}) }));
+      }
+      return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ id: 'bilaga-1' }) }));
+    });
+
+    const api = await freshApi();
+    const file = new File(['innehåll'], 'rapport.pdf', { type: 'application/pdf' });
+
+    const result = await api.uploadFile('/tickets/t1/attachments', file);
+
+    expect(result).toEqual({ id: 'bilaga-1' });
+    expect(uploadCalls).toBe(2);
+    expect(fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`)).toHaveLength(1);
+
+    const uploadCall = fetchMock.mock.calls.find((c) => urlOfCall(c).endsWith('/attachments'));
+    expect(headersOfCall(uploadCall)['Content-Type']).toBeUndefined();
+    expect(headersOfCall(uploadCall)['X-CSRF-Token']).toBe('csrf-abc');
+  });
 });
 
 // ---------------------------------------------------------------------------

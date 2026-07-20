@@ -6,6 +6,9 @@
  *
  * OBS: URL-konstruktorn lämnas orörd (vi stub:ar bara createObjectURL/revokeObjectURL
  * som statiska metoder). document-anrop (createElement, body) stub:as där de behövs.
+ *
+ * Hämtningen går via api.requestBlob() — fetch-mocken träffar alltså api.ts:s
+ * anrop, och auth-header, refresh-retry och session-expiry ägs numera där.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,7 +23,9 @@ function makeFetchMock(options: { ok: boolean; status?: number; blob?: Blob }) {
     status: options.status ?? (options.ok ? 200 : 403),
     statusText: options.ok ? 'OK' : 'Forbidden',
     blob: () => Promise.resolve(blob),
-    json: () => Promise.resolve({ accessToken: 'nytt-token' }),
+    json: () => Promise.resolve(
+      options.ok ? { accessToken: 'nytt-token' } : { error: 'Filen kunde inte hämtas' }
+    ),
   });
 }
 
@@ -129,11 +134,11 @@ describe('getAuthenticatedFileUrl', () => {
     expect(anrop[1]?.headers?.['Authorization']).toBe('Bearer mitt-jwt-token');
   });
 
-  it('kastar Error när servern svarar med icke-ok status', async () => {
+  it('propagerar serverns felmeddelande när svaret är icke-ok', async () => {
     vi.stubGlobal('fetch', makeFetchMock({ ok: false, status: 404 }));
     const { getAuthenticatedFileUrl } = await import('./secureFileAccess');
 
-    await expect(getAuthenticatedFileUrl('fil-404')).rejects.toThrow('Failed to fetch file');
+    await expect(getAuthenticatedFileUrl('fil-404')).rejects.toThrow('Filen kunde inte hämtas');
   });
 
   it('försöker refresh-token vid 401 och lyckas sedan', async () => {
@@ -174,29 +179,27 @@ describe('getAuthenticatedFileUrl', () => {
     expect(localStorage.getItem('auth_token')).toBe('nytt-token');
   });
 
-  it('kastar Error när refresh-token misslyckas och original är 401', async () => {
-    let anropNummer = 0;
-    const fetchMock = vi.fn().mockImplementation(() => {
-      anropNummer++;
-      if (anropNummer === 1) {
-        return Promise.resolve({
-          ok: false, status: 401, statusText: 'Unauthorized',
-          blob: () => Promise.resolve(new Blob()),
-          json: () => Promise.resolve({}),
-        });
-      }
-      // Refresh misslyckas också
-      return Promise.resolve({
-        ok: false, status: 401, statusText: 'Unauthorized',
-        blob: () => Promise.resolve(new Blob()),
-        json: () => Promise.resolve({}),
-      });
+  it('loggar ut och redirectar till /login när refresh misslyckas efter 401', async () => {
+    localStorage.setItem('auth_token', 'gammalt-token');
+    localStorage.setItem('user', '{"id":"1"}');
+
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false, status: 401, statusText: 'Unauthorized',
+      blob: () => Promise.resolve(new Blob()),
+      json: () => Promise.resolve({}),
     });
+    const location = { href: '' };
 
     vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('window', { location });
     const { getAuthenticatedFileUrl } = await import('./secureFileAccess');
 
-    await expect(getAuthenticatedFileUrl('fil-refresh-fail')).rejects.toThrow('Failed to fetch file');
+    // Samma session-expiry-hantering som api.request() ger överallt annars —
+    // inte det tysta 401-svar den gamla lokala fetchWithRefresh() returnerade.
+    await expect(getAuthenticatedFileUrl('fil-refresh-fail')).rejects.toThrow('Session expired');
+    expect(location.href).toBe('/login');
+    expect(localStorage.getItem('auth_token')).toBeNull();
+    expect(localStorage.getItem('user')).toBeNull();
   });
 });
 
@@ -236,7 +239,7 @@ describe('downloadAuthenticatedFile', () => {
     });
 
     const { downloadAuthenticatedFile } = await import('./secureFileAccess');
-    await expect(downloadAuthenticatedFile('fil-err', 'fil.pdf')).rejects.toThrow('Failed to download file');
+    await expect(downloadAuthenticatedFile('fil-err', 'fil.pdf')).rejects.toThrow('Filen kunde inte hämtas');
   });
 
   it('hämtar alltid filen från servern — ignorerar blob-cachen', async () => {
