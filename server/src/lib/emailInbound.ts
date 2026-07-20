@@ -443,6 +443,12 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
 
 let pollingTimer: ReturnType<typeof setTimeout> | null = null;
 
+// UID-nycklad felräknare för dead-lettering av giftiga meddelanden. Avsiktligt
+// i minnet — en omstart av processen ger ett giftigt meddelande nya försök
+// från noll, vilket är acceptabelt.
+const emailFailureCounts = new Map<number, number>();
+const EMAIL_DEAD_LETTER_THRESHOLD = 3;
+
 /** Returnerar aktuell konfigurationsstatus för inkommande e-post (IMAP). */
 export function getEmailInboundStatus() {
   const configured = !!(
@@ -510,11 +516,19 @@ export async function startEmailPolling(): Promise<void> {
         // already exists
       }
 
+      // Ensure "Errors" mailbox exists (dead-letter for repeatedly failing messages)
+      try {
+        await client.mailboxCreate('Errors');
+      } catch {
+        // already exists
+      }
+
       const lock = await client.getMailboxLock('INBOX');
 
       try {
         const uids = await client.search({ all: true }, { uid: true });
         const processedMsgUids: number[] = [];
+        const deadLetterMsgUids: number[] = [];
 
         if (uids && uids.length > 0) {
           const messages = client.fetch(
@@ -529,8 +543,20 @@ export async function startEmailPolling(): Promise<void> {
               if (!message.source) continue;
               await processEmail(message.source, currentConfig);
               processedMsgUids.push(message.uid);
+              emailFailureCounts.delete(message.uid);
             } catch (error) {
               logger.error('Error processing email', { error: String(error) });
+              const failureCount = (emailFailureCounts.get(message.uid) ?? 0) + 1;
+              if (failureCount >= EMAIL_DEAD_LETTER_THRESHOLD) {
+                deadLetterMsgUids.push(message.uid);
+                emailFailureCounts.delete(message.uid);
+                logger.error('Dead-lettering email after repeated failures, will not be retried', {
+                  uid: message.uid,
+                  failureCount,
+                });
+              } else {
+                emailFailureCounts.set(message.uid, failureCount);
+              }
             }
           }
         }
@@ -548,6 +574,23 @@ export async function startEmailPolling(): Promise<void> {
               logger.info('COPY+DELETE fallback succeeded', { count: processedMsgUids.length });
             } catch (fallbackErr: any) {
               logger.error('COPY+DELETE fallback also failed', { error: fallbackErr.message });
+            }
+          }
+        }
+
+        // Move dead-lettered messages to "Errors" folder
+        if (deadLetterMsgUids.length > 0 && !connectionDead) {
+          try {
+            await client.messageMove(deadLetterMsgUids, 'Errors', { uid: true });
+            logger.info('Moved emails to Errors folder', { count: deadLetterMsgUids.length });
+          } catch (moveErr: any) {
+            logger.warn('MOVE to Errors failed, trying COPY+DELETE fallback', { error: moveErr.message });
+            try {
+              await client.messageCopy(deadLetterMsgUids, 'Errors', { uid: true });
+              await client.messageFlagsAdd(deadLetterMsgUids, ['\\Deleted'], { uid: true });
+              logger.info('COPY+DELETE fallback to Errors succeeded', { count: deadLetterMsgUids.length });
+            } catch (fallbackErr: any) {
+              logger.error('COPY+DELETE fallback to Errors also failed', { error: fallbackErr.message });
             }
           }
         }
