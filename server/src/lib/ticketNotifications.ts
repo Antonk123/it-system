@@ -46,6 +46,31 @@ export async function notifyCustomerOfPublicReply(ticketId: string, content: str
 }
 
 /**
+ * A new ticket was created (web/API form or inbound email) → alert all staff by
+ * broadcasting a web-push to every registered device. Called fire-and-forget
+ * from both creation paths; no-ops when push is disabled and never rejects.
+ *
+ * Recipient/privacy decision (2026-07-22): broadcast to ALL subscriptions with
+ * the ticket title in the headline. This deliberately differs from
+ * notifyAgentOfCustomerReply (assignee-only) — a brand-new ticket is typically
+ * unassigned, and the install owner wants every incoming ticket surfaced.
+ * Only authenticated staff devices can hold a subscription (POST
+ * /api/push/subscribe requires auth), so the title is not exposed beyond staff.
+ */
+export async function notifyStaffOfNewTicket(
+  ticketId: string,
+  title: string,
+  description: string,
+): Promise<void> {
+  await sendPushToAllSubscriptions({
+    type: 'ticket.created',
+    ticketId,
+    title: `Nytt ärende: ${title}`,
+    body: snippet(description) || 'Nytt ärende har skapats',
+  }).catch((err) => logger.error('new-ticket push failed', { error: String(err) }));
+}
+
+/**
  * A customer replied (inbound email became a public comment) → notify the
  * assigned technician: fire the comment.created webhook and push + email the
  * assignee. Called fire-and-forget from the inbound-email path.

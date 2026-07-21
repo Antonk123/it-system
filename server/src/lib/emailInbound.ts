@@ -6,7 +6,7 @@ import { db } from '../db/connection.js';
 import { randomUUID, randomBytes } from 'crypto';
 import { dispatchWebhook } from './webhookDispatcher.js';
 import { sendTicketReceivedConfirmation } from './email.js';
-import { notifyAgentOfCustomerReply } from './ticketNotifications.js';
+import { notifyAgentOfCustomerReply, notifyStaffOfNewTicket } from './ticketNotifications.js';
 import { logger } from './logger.js';
 import { ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE, hasMagicByteMatch } from '../routes/attachments.js';
 
@@ -351,6 +351,11 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     priority: 'medium',
     source: 'email',
   }).catch((err: unknown) => logger.error('dispatchWebhook failed', { error: String(err) }));
+
+  // Fire-and-forget web-push so staff get an instant notification on their
+  // installed PWA (incl. iOS) for every incoming email ticket.
+  notifyStaffOfNewTicket(ticketId, subject, body)
+    .catch((err) => logger.error('notifyStaffOfNewTicket failed', { error: String(err) }));
 
   sendTicketReceivedConfirmation({
     toEmail: fromAddress,

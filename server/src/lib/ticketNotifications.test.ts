@@ -24,7 +24,7 @@ vi.mock('./push.js', () => ({ sendPushToAllSubscriptions: vi.fn(async () => unde
 
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
 import { sendPushToAllSubscriptions } from './push.js';
-import { notifyCustomerOfPublicReply, notifyAgentOfCustomerReply } from './ticketNotifications.js';
+import { notifyCustomerOfPublicReply, notifyAgentOfCustomerReply, notifyStaffOfNewTicket } from './ticketNotifications.js';
 
 const pushMock = vi.mocked(sendPushToAllSubscriptions);
 
@@ -126,5 +126,37 @@ describe('notifyAgentOfCustomerReply', () => {
     expect(captured.some((c) => c.event === 'comment.created')).toBe(true);
     // ...but we do not push the ticket title to every staff device.
     expect(pushMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('notifyStaffOfNewTicket', () => {
+  it('broadcasts a ticket.created push (no user filter) with title in the headline', async () => {
+    await notifyStaffOfNewTicket('ticket-123', 'Skrivaren funkar inte', 'Den skriver bara ut blanka sidor.');
+
+    expect(pushMock).toHaveBeenCalledTimes(1);
+    const [payload, userId] = pushMock.mock.calls[0];
+    expect(payload).toMatchObject({
+      type: 'ticket.created',
+      ticketId: 'ticket-123',
+      title: 'Nytt ärende: Skrivaren funkar inte',
+      body: 'Den skriver bara ut blanka sidor.',
+    });
+    // Broadcast to ALL subscriptions — no per-user targeting for a new ticket.
+    expect(userId).toBeUndefined();
+  });
+
+  it('falls back to a generic body when the description is empty', async () => {
+    await notifyStaffOfNewTicket('ticket-456', 'Tomt ärende', '');
+
+    expect(pushMock).toHaveBeenCalledTimes(1);
+    expect(pushMock.mock.calls[0][0].body).toBe('Nytt ärende har skapats');
+  });
+
+  it('never rejects when the push send fails (fire-and-forget safe)', async () => {
+    pushMock.mockRejectedValueOnce(new Error('VAPID exploded'));
+
+    await expect(
+      notifyStaffOfNewTicket('ticket-789', 'Trasig grej', 'beskrivning'),
+    ).resolves.toBeUndefined();
   });
 });

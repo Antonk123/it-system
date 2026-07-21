@@ -15,6 +15,7 @@ import { writeRateLimiter, createRateLimiter } from '../middleware/rateLimit.js'
 
 const aiRateLimiter = createRateLimiter(60 * 1000, 5);
 import { dispatchWebhook } from '../lib/webhookDispatcher.js';
+import { notifyStaffOfNewTicket } from '../lib/ticketNotifications.js';
 import { aiEnabled, suggestCategory, draftReply, summarizeTicket, buildKbSearchQuery } from '../lib/aiHelper.js';
 import { stripHtml } from '../lib/htmlUtils.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
@@ -897,6 +898,11 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
     }).catch((error) => logger.error('Error sending ticket created email:', { error: String(error) }));
 
     dispatchWebhook('ticket.created', { id: ticket.id, title: ticket.title, status: ticket.status, priority: ticket.priority }).catch((e) => logger.error('Webhook dispatch error (ticket.created):', { error: String(e) }));
+
+    // Fire-and-forget web-push so staff get an instant notification on their
+    // installed PWA (incl. iOS). Broadcast to all subscriptions — see
+    // notifyStaffOfNewTicket for the recipient/privacy rationale.
+    notifyStaffOfNewTicket(ticket.id, ticket.title, ticket.description || '').catch((e) => logger.error('new-ticket push error (ticket.created):', { error: String(e) }));
 
     res.status(201).json({ ...ticket, warnings: warnings.length > 0 ? warnings : undefined });
   } catch (error) {
