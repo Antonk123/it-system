@@ -1,4 +1,5 @@
 import { precacheAndRoute, matchPrecache } from 'workbox-precaching';
+import { resolveNotificationUrl, focusOrOpen } from './lib/swNavigation';
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -52,18 +53,10 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const rawUrl: string = event.notification.data?.url ?? '/';
-  // Validate URL to prevent javascript: or other dangerous schemes
-  const isSafe = rawUrl.startsWith('/') || rawUrl.startsWith('https://') || rawUrl.startsWith('http://');
-  const url = isSafe ? rawUrl : '/';
+  const url = resolveNotificationUrl(event.notification.data?.url);
   event.waitUntil(
     self.clients
       .matchAll({ type: 'window', includeUncontrolled: true })
-      .then((windowClients) => {
-        for (const client of windowClients) {
-          if (client.url.includes(url) && 'focus' in client) return client.focus();
-        }
-        return self.clients.openWindow(url);
-      })
+      .then((windowClients) => focusOrOpen(windowClients, (u) => self.clients.openWindow(u), url))
   );
 });
