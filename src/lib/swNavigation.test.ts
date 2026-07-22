@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest';
-import { resolveNotificationUrl, focusOrOpen, type NavigableClient } from './swNavigation';
+import {
+  resolveNotificationUrl,
+  parseSwNavigateMessage,
+  focusOrOpen,
+  SW_NAVIGATE_MESSAGE,
+  type NavigableClient,
+} from './swNavigation';
 
 describe('resolveNotificationUrl', () => {
   it('keeps a same-origin ticket path', () => {
@@ -23,48 +29,44 @@ describe('resolveNotificationUrl', () => {
   });
 });
 
+describe('parseSwNavigateMessage', () => {
+  it('extracts a same-origin path from a valid message', () => {
+    expect(parseSwNavigateMessage({ type: SW_NAVIGATE_MESSAGE, url: '/tickets/1' })).toBe(
+      '/tickets/1',
+    );
+  });
+
+  it('ignores messages of the wrong type', () => {
+    expect(parseSwNavigateMessage({ type: 'other', url: '/tickets/1' })).toBeNull();
+  });
+
+  it('rejects non-path urls (no in-app navigation to absolute/dangerous targets)', () => {
+    expect(parseSwNavigateMessage({ type: SW_NAVIGATE_MESSAGE, url: 'https://evil.example' })).toBeNull();
+    expect(parseSwNavigateMessage({ type: SW_NAVIGATE_MESSAGE, url: 'javascript:x' })).toBeNull();
+  });
+
+  it('handles junk input safely', () => {
+    expect(parseSwNavigateMessage(undefined)).toBeNull();
+    expect(parseSwNavigateMessage('string')).toBeNull();
+    expect(parseSwNavigateMessage({ type: SW_NAVIGATE_MESSAGE })).toBeNull();
+  });
+});
+
 describe('focusOrOpen', () => {
-  it('navigates the existing window to the ticket, then focuses it (iOS single-window fix)', async () => {
+  it('focuses the existing window and posts an sw-navigate message (iOS-safe deep link)', async () => {
     const focus = vi.fn();
-    const focused: NavigableClient = { url: '/tickets/xyz', focus };
-    const navigate = vi.fn(async () => focused);
-    const client: NavigableClient = { url: '/', focus: vi.fn(), navigate };
+    const postMessage = vi.fn();
+    const client: NavigableClient = { url: '/tickets', focus, postMessage };
     const openWindow = vi.fn(async () => null);
 
     await focusOrOpen([client], openWindow, '/tickets/xyz');
 
-    expect(navigate).toHaveBeenCalledWith('/tickets/xyz');
-    expect(focus).toHaveBeenCalledTimes(1); // focuses the client returned by navigate()
-    expect(openWindow).not.toHaveBeenCalled();
-  });
-
-  it('focuses the original client when navigate() resolves null', async () => {
-    const focus = vi.fn();
-    const client: NavigableClient = { url: '/', focus, navigate: vi.fn(async () => null) };
-    const openWindow = vi.fn(async () => null);
-
-    await focusOrOpen([client], openWindow, '/tickets/1');
-
     expect(focus).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledWith({ type: SW_NAVIGATE_MESSAGE, url: '/tickets/xyz' });
     expect(openWindow).not.toHaveBeenCalled();
   });
 
-  it('falls back to focus when navigate() rejects', async () => {
-    const focus = vi.fn();
-    const client: NavigableClient = {
-      url: '/',
-      focus,
-      navigate: vi.fn(async () => { throw new Error('uncontrolled'); }),
-    };
-    const openWindow = vi.fn(async () => null);
-
-    await focusOrOpen([client], openWindow, '/tickets/1');
-
-    expect(focus).toHaveBeenCalledTimes(1);
-    expect(openWindow).not.toHaveBeenCalled();
-  });
-
-  it('focuses when the client has no navigate() (older engine)', async () => {
+  it('focuses the window even when it cannot postMessage (older client)', async () => {
     const focus = vi.fn();
     const client: NavigableClient = { url: '/', focus };
     const openWindow = vi.fn(async () => null);
@@ -75,7 +77,7 @@ describe('focusOrOpen', () => {
     expect(openWindow).not.toHaveBeenCalled();
   });
 
-  it('opens a new window when no client exists', async () => {
+  it('opens a new window at the target url when no client exists', async () => {
     const openWindow = vi.fn(async () => null);
 
     await focusOrOpen([], openWindow, '/tickets/1');

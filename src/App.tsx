@@ -2,9 +2,10 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigationType } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useNavigationType } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
+import { parseSwNavigateMessage } from "@/lib/swNavigation";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
 
@@ -122,12 +123,34 @@ const ScrollToTopOnNavigate = () => {
   return null;
 };
 
+/**
+ * Bridges service-worker notification clicks to in-app routing. The SW focuses
+ * the existing window and posts an `sw-navigate` message (see swNavigation.ts);
+ * here we route via React Router. This replaces WindowClient.navigate(), which
+ * is unreliable in iOS standalone PWAs and caused clicks to land on the last
+ * route (the ticket list) instead of the specific ticket.
+ */
+const SwNavigationBridge = () => {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const handler = (event: MessageEvent) => {
+      const url = parseSwNavigateMessage(event.data);
+      if (url) navigate(url);
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
+  }, [navigate]);
+  return null;
+};
+
 const AppRoutes = () => {
   const location = useLocation();
   return (
     <ErrorBoundary>
     <Suspense fallback={<RouteFallback />}>
       <ScrollToTopOnNavigate />
+      <SwNavigationBridge />
       {/* Ingen route-nivå AnimatePresence: route-elementen definierar inga exit-
           varianter, så den animerade inget. Sidornas egna enter-animationer
           (motion.div initial/animate) fungerar via key={pathname}-remount, och
