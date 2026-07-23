@@ -32,9 +32,16 @@ vi.mock('imapflow', () => ({ ImapFlow: class {} }));
 vi.mock('@azure/msal-node', () => ({ ConfidentialClientApplication: class {} }));
 
 // simpleParser is driven per-test via the controllable `nextParsed` variable.
+// `parseError`, when set, makes simpleParser reject — used to simulate a
+// message that fails processing (for the poll()/dead-letter tests below)
+// without needing per-message mailparser fixtures.
 let nextParsed: any = {};
+let parseError: Error | null = null;
 vi.mock('mailparser', () => ({
-  simpleParser: vi.fn(async () => nextParsed),
+  simpleParser: vi.fn(async () => {
+    if (parseError) throw parseError;
+    return nextParsed;
+  }),
 }));
 
 vi.mock('html-to-text', () => ({
@@ -66,6 +73,9 @@ const {
   addCommentToTicket,
   stripReplyPrefix,
   processEmail,
+  poll,
+  emailFailureCounts,
+  EMAIL_DEAD_LETTER_THRESHOLD,
 } = __test__;
 
 // EmailConfig only `autoCreateContact` is read by processEmail.
@@ -211,6 +221,8 @@ beforeEach(() => {
   memDb = new Database(':memory:');
   createSchema(memDb);
   nextParsed = {};
+  parseError = null;
+  emailFailureCounts.clear();
 });
 
 afterEach(() => {
@@ -528,5 +540,193 @@ describe('processEmail — threading attaches reply to existing ticket', () => {
       .all() as { ticket_id: string }[];
     expect(comments).toHaveLength(1);
     expect(comments[0].ticket_id).toBe('t-thread');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// poll() — IMAP poll loop: dead-letter threshold, MOVE→COPY+DELETE fallback,
+// and the successful-processing path.
+//
+// A scripted fake ImapFlow stands in for the real client via poll()'s
+// injectable `createClient` factory (see emailInbound.ts). The fake tracks
+// its own in-memory "mailbox" (a uid -> source Buffer map) and removes uids
+// on messageMove/messageFlagsAdd(\Deleted), mirroring how a real IMAP server
+// would no longer return a moved/expunged message on a subsequent search —
+// this is what lets the tests prove a dead-lettered message is never
+// reprocessed by a later poll() call.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface FakeImapCall {
+  uids: number[];
+  mailbox: string;
+}
+
+class FakeImapClient {
+  connectCalls = 0;
+  logoutCalls = 0;
+  moveCalls: FakeImapCall[] = [];
+  copyCalls: FakeImapCall[] = [];
+  flagsAddCalls: { uids: number[]; flags: string[] }[] = [];
+  private readonly moveShouldThrow: boolean;
+  private readonly messages: Map<number, Buffer>;
+
+  constructor(initialMessages: Record<number, Buffer>, opts: { moveShouldThrow?: boolean } = {}) {
+    this.messages = new Map(Object.entries(initialMessages).map(([uid, source]) => [Number(uid), source]));
+    this.moveShouldThrow = !!opts.moveShouldThrow;
+  }
+
+  get inboxUids(): number[] {
+    return Array.from(this.messages.keys());
+  }
+
+  on(): void {
+    // No test here simulates a mid-poll connection-level 'error' event.
+  }
+
+  async connect(): Promise<void> {
+    this.connectCalls++;
+  }
+
+  async mailboxCreate(): Promise<void> {
+    // Pretend "Processed"/"Errors" already exist, like the real ImapFlow catch-and-ignore path.
+  }
+
+  async getMailboxLock(): Promise<{ release: () => void }> {
+    return { release: () => {} };
+  }
+
+  async search(): Promise<number[]> {
+    return this.inboxUids;
+  }
+
+  async *fetch(uids: number[]): AsyncGenerator<{ uid: number; source: Buffer }> {
+    for (const uid of uids) {
+      const source = this.messages.get(uid);
+      if (source) yield { uid, source };
+    }
+  }
+
+  async messageMove(uids: number[], mailbox: string): Promise<void> {
+    if (this.moveShouldThrow) throw new Error('MOVE not supported by server');
+    this.moveCalls.push({ uids, mailbox });
+    for (const uid of uids) this.messages.delete(uid);
+  }
+
+  async messageCopy(uids: number[], mailbox: string): Promise<void> {
+    this.copyCalls.push({ uids, mailbox });
+  }
+
+  async messageFlagsAdd(uids: number[], flags: string[]): Promise<void> {
+    this.flagsAddCalls.push({ uids, flags });
+    // Real servers expunge \Deleted-flagged messages; approximate that here
+    // so a subsequent poll() no longer sees them (same effect as a MOVE).
+    for (const uid of uids) this.messages.delete(uid);
+  }
+
+  async logout(): Promise<void> {
+    this.logoutCalls++;
+  }
+}
+
+// EmailConfig fields poll() actually reads: host/port/secure/auth (forwarded
+// to createClient) and autoCreateContact (forwarded into processEmail).
+const pollConfig: any = {
+  host: 'imap.example.com',
+  port: 993,
+  secure: true,
+  user: 'inbox@example.com',
+  pollingInterval: 60,
+  autoCreateContact: true,
+  auth: { user: 'inbox@example.com', pass: 'secret' },
+};
+
+describe('poll — dead-letter threshold', () => {
+  it('dead-letters a message to Errors after EMAIL_DEAD_LETTER_THRESHOLD consecutive failures, then never reprocesses it', async () => {
+    const uid = 101;
+    const fakeClient = new FakeImapClient({ [uid]: Buffer.from('raw-email') });
+    parseError = new Error('simulated processing failure');
+
+    // Fails below the threshold: message stays in the inbox, counter increments, no move yet.
+    for (let i = 1; i < EMAIL_DEAD_LETTER_THRESHOLD; i++) {
+      await poll(pollConfig, () => fakeClient as any);
+      expect(emailFailureCounts.get(uid)).toBe(i);
+      expect(fakeClient.moveCalls).toHaveLength(0);
+      expect(fakeClient.inboxUids).toEqual([uid]);
+    }
+
+    // The Nth failure crosses the threshold: dead-lettered to "Errors", counter cleared.
+    await poll(pollConfig, () => fakeClient as any);
+    expect(emailFailureCounts.has(uid)).toBe(false);
+    expect(fakeClient.moveCalls).toEqual([{ uids: [uid], mailbox: 'Errors' }]);
+    expect(fakeClient.inboxUids).toEqual([]);
+
+    // A further poll cannot see the message any more (it's gone from the
+    // mailbox, like a real IMAP server after the move) — proves it is not
+    // reprocessed and no second "Errors" move happens.
+    await poll(pollConfig, () => fakeClient as any);
+    expect(fakeClient.moveCalls).toHaveLength(1);
+  });
+});
+
+describe('poll — MOVE→COPY+DELETE fallback', () => {
+  it('falls back to COPY+DELETE for the Errors move when messageMove throws', async () => {
+    const uid = 202;
+    const fakeClient = new FakeImapClient({ [uid]: Buffer.from('raw-email') }, { moveShouldThrow: true });
+    parseError = new Error('simulated processing failure');
+
+    for (let i = 0; i < EMAIL_DEAD_LETTER_THRESHOLD; i++) {
+      await poll(pollConfig, () => fakeClient as any);
+    }
+
+    expect(fakeClient.moveCalls).toHaveLength(0); // MOVE always throws
+    expect(fakeClient.copyCalls).toEqual([{ uids: [uid], mailbox: 'Errors' }]);
+    expect(fakeClient.flagsAddCalls).toEqual([{ uids: [uid], flags: ['\\Deleted'] }]);
+    expect(emailFailureCounts.has(uid)).toBe(false);
+    expect(fakeClient.inboxUids).toEqual([]);
+  });
+
+  it('falls back to COPY+DELETE for the Processed move when messageMove throws', async () => {
+    const uid = 303;
+    const fakeClient = new FakeImapClient({ [uid]: Buffer.from('raw-email') }, { moveShouldThrow: true });
+    nextParsed = makeEmail({ subject: 'Fallback success', messageId: '<fallback-1@x>' });
+
+    await poll(pollConfig, () => fakeClient as any);
+
+    expect(fakeClient.moveCalls).toHaveLength(0);
+    expect(fakeClient.copyCalls).toEqual([{ uids: [uid], mailbox: 'Processed' }]);
+    expect(fakeClient.flagsAddCalls).toEqual([{ uids: [uid], flags: ['\\Deleted'] }]);
+    expect(countTickets()).toBe(1);
+  });
+});
+
+describe('poll — successful processing', () => {
+  it('moves a successfully processed message to Processed and never dead-letters it', async () => {
+    const uid = 404;
+    const fakeClient = new FakeImapClient({ [uid]: Buffer.from('raw-email') });
+    nextParsed = makeEmail({ subject: 'All good', messageId: '<ok-1@x>' });
+
+    await poll(pollConfig, () => fakeClient as any);
+
+    expect(fakeClient.moveCalls).toEqual([{ uids: [uid], mailbox: 'Processed' }]);
+    expect(emailFailureCounts.has(uid)).toBe(false);
+    expect(countTickets()).toBe(1);
+  });
+
+  it('clears the failure counter for a message that fails once then succeeds on retry (does not accumulate toward dead-letter)', async () => {
+    const uid = 505;
+    const fakeClient = new FakeImapClient({ [uid]: Buffer.from('raw-email') });
+
+    parseError = new Error('transient failure');
+    await poll(pollConfig, () => fakeClient as any);
+    expect(emailFailureCounts.get(uid)).toBe(1);
+    expect(fakeClient.moveCalls).toHaveLength(0); // still under threshold, stays in inbox
+
+    parseError = null;
+    nextParsed = makeEmail({ subject: 'Recovered', messageId: '<recovered-1@x>' });
+    await poll(pollConfig, () => fakeClient as any);
+
+    expect(emailFailureCounts.has(uid)).toBe(false);
+    expect(fakeClient.moveCalls).toEqual([{ uids: [uid], mailbox: 'Processed' }]);
+    expect(countTickets()).toBe(1);
   });
 });

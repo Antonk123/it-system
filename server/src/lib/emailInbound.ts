@@ -454,6 +454,25 @@ let pollingTimer: ReturnType<typeof setTimeout> | null = null;
 const emailFailureCounts = new Map<number, number>();
 const EMAIL_DEAD_LETTER_THRESHOLD = 3;
 
+// Minimal yta av ImapFlow som poll() faktiskt använder. Låter tester injicera
+// en fake-klient utan att röra prod-vägen (default = riktig ImapFlow nedan).
+type ImapClientLike = Pick<
+  ImapFlow,
+  | 'on'
+  | 'connect'
+  | 'mailboxCreate'
+  | 'getMailboxLock'
+  | 'search'
+  | 'fetch'
+  | 'messageMove'
+  | 'messageCopy'
+  | 'messageFlagsAdd'
+  | 'logout'
+>;
+type ImapClientFactory = (options: ConstructorParameters<typeof ImapFlow>[0]) => ImapClientLike;
+
+const defaultImapClientFactory: ImapClientFactory = (options) => new ImapFlow(options);
+
 /** Returnerar aktuell konfigurationsstatus för inkommande e-post (IMAP). */
 export function getEmailInboundStatus() {
   const configured = !!(
@@ -469,6 +488,139 @@ export function getEmailInboundStatus() {
     polling_interval: parseInt(process.env.IMAP_POLL_INTERVAL || '60'),
     auto_create_contact: envBool(process.env.IMAP_AUTO_CREATE_CONTACT, true),
   };
+}
+
+/**
+ * Kör ett enskilt IMAP-pollningsvarv: ansluter, hämtar olästa meddelanden,
+ * processar dem, och flyttar processade/dead-lettrade meddelanden till
+ * "Processed"/"Errors". Utbruten till modulnivå (från en tidigare nested
+ * funktion i startEmailPolling) enbart för att göra `createClient`
+ * injicerbar i tester — logik och kontrollflöde är oförändrade.
+ */
+async function poll(config: EmailConfig, createClient: ImapClientFactory = defaultImapClientFactory) {
+  let client: ImapClientLike | null = null;
+  try {
+    // Refresh token each poll for OAuth2
+    const currentConfig = useOAuth2() ? await getEmailConfig() : config;
+    if (!currentConfig) return;
+
+    client = createClient({
+      host: currentConfig.host,
+      port: currentConfig.port,
+      secure: currentConfig.secure,
+      auth: currentConfig.auth,
+      logger: false as any,
+      socketTimeout: 90000,
+    });
+
+    let connectionDead = false;
+    client.on('error', (err: Error) => {
+      connectionDead = true;
+      logger.error('IMAP connection error', { error: err.message });
+    });
+
+    await client.connect();
+
+    // Ensure "Processed" mailbox exists
+    try {
+      await client.mailboxCreate('Processed');
+    } catch {
+      // already exists
+    }
+
+    // Ensure "Errors" mailbox exists (dead-letter for repeatedly failing messages)
+    try {
+      await client.mailboxCreate('Errors');
+    } catch {
+      // already exists
+    }
+
+    const lock = await client.getMailboxLock('INBOX');
+
+    try {
+      const uids = await client.search({ all: true }, { uid: true });
+      const processedMsgUids: number[] = [];
+      const deadLetterMsgUids: number[] = [];
+
+      if (uids && uids.length > 0) {
+        const messages = client.fetch(
+          uids,
+          { source: true, envelope: true, uid: true },
+          { uid: true }
+        );
+
+        for await (const message of messages) {
+          if (connectionDead) break;
+          try {
+            if (!message.source) continue;
+            await processEmail(message.source, currentConfig);
+            processedMsgUids.push(message.uid);
+            emailFailureCounts.delete(message.uid);
+          } catch (error) {
+            logger.error('Error processing email', { error: String(error) });
+            const failureCount = (emailFailureCounts.get(message.uid) ?? 0) + 1;
+            if (failureCount >= EMAIL_DEAD_LETTER_THRESHOLD) {
+              deadLetterMsgUids.push(message.uid);
+              emailFailureCounts.delete(message.uid);
+              logger.error('Dead-lettering email after repeated failures, will not be retried', {
+                uid: message.uid,
+                failureCount,
+              });
+            } else {
+              emailFailureCounts.set(message.uid, failureCount);
+            }
+          }
+        }
+      }
+
+      // Move all processed messages to "Processed" folder
+      if (processedMsgUids.length > 0 && !connectionDead) {
+        try {
+          await client.messageMove(processedMsgUids, 'Processed', { uid: true });
+          logger.info('Moved emails to Processed folder', { count: processedMsgUids.length });
+        } catch (moveErr: any) {
+          logger.warn('MOVE failed, trying COPY+DELETE fallback', { error: moveErr.message });
+          try {
+            await client.messageCopy(processedMsgUids, 'Processed', { uid: true });
+            await client.messageFlagsAdd(processedMsgUids, ['\\Deleted'], { uid: true });
+            logger.info('COPY+DELETE fallback succeeded', { count: processedMsgUids.length });
+          } catch (fallbackErr: any) {
+            logger.error('COPY+DELETE fallback also failed', { error: fallbackErr.message });
+          }
+        }
+      }
+
+      // Move dead-lettered messages to "Errors" folder
+      if (deadLetterMsgUids.length > 0 && !connectionDead) {
+        try {
+          await client.messageMove(deadLetterMsgUids, 'Errors', { uid: true });
+          logger.info('Moved emails to Errors folder', { count: deadLetterMsgUids.length });
+        } catch (moveErr: any) {
+          logger.warn('MOVE to Errors failed, trying COPY+DELETE fallback', { error: moveErr.message });
+          try {
+            await client.messageCopy(deadLetterMsgUids, 'Errors', { uid: true });
+            await client.messageFlagsAdd(deadLetterMsgUids, ['\\Deleted'], { uid: true });
+            logger.info('COPY+DELETE fallback to Errors succeeded', { count: deadLetterMsgUids.length });
+          } catch (fallbackErr: any) {
+            logger.error('COPY+DELETE fallback to Errors also failed', { error: fallbackErr.message });
+          }
+        }
+      }
+    } finally {
+      lock.release();
+    }
+
+    await client.logout();
+  } catch (error: any) {
+    if (error?.code !== 'ETIMEOUT') {
+      logger.error('IMAP polling error', { error: String(error) });
+    }
+    try {
+      if (client) await client.logout();
+    } catch {
+      // ignore logout errors
+    }
+  }
 }
 
 /**
@@ -490,132 +642,6 @@ export async function startEmailPolling(): Promise<void> {
     authMethod,
   });
 
-  async function poll() {
-    let client: ImapFlow | null = null;
-    try {
-      // Refresh token each poll for OAuth2
-      const currentConfig = useOAuth2() ? await getEmailConfig() : config;
-      if (!currentConfig) return;
-
-      client = new ImapFlow({
-        host: currentConfig.host,
-        port: currentConfig.port,
-        secure: currentConfig.secure,
-        auth: currentConfig.auth,
-        logger: false as any,
-        socketTimeout: 90000,
-      });
-
-      let connectionDead = false;
-      client.on('error', (err: Error) => {
-        connectionDead = true;
-        logger.error('IMAP connection error', { error: err.message });
-      });
-
-      await client.connect();
-
-      // Ensure "Processed" mailbox exists
-      try {
-        await client.mailboxCreate('Processed');
-      } catch {
-        // already exists
-      }
-
-      // Ensure "Errors" mailbox exists (dead-letter for repeatedly failing messages)
-      try {
-        await client.mailboxCreate('Errors');
-      } catch {
-        // already exists
-      }
-
-      const lock = await client.getMailboxLock('INBOX');
-
-      try {
-        const uids = await client.search({ all: true }, { uid: true });
-        const processedMsgUids: number[] = [];
-        const deadLetterMsgUids: number[] = [];
-
-        if (uids && uids.length > 0) {
-          const messages = client.fetch(
-            uids,
-            { source: true, envelope: true, uid: true },
-            { uid: true }
-          );
-
-          for await (const message of messages) {
-            if (connectionDead) break;
-            try {
-              if (!message.source) continue;
-              await processEmail(message.source, currentConfig);
-              processedMsgUids.push(message.uid);
-              emailFailureCounts.delete(message.uid);
-            } catch (error) {
-              logger.error('Error processing email', { error: String(error) });
-              const failureCount = (emailFailureCounts.get(message.uid) ?? 0) + 1;
-              if (failureCount >= EMAIL_DEAD_LETTER_THRESHOLD) {
-                deadLetterMsgUids.push(message.uid);
-                emailFailureCounts.delete(message.uid);
-                logger.error('Dead-lettering email after repeated failures, will not be retried', {
-                  uid: message.uid,
-                  failureCount,
-                });
-              } else {
-                emailFailureCounts.set(message.uid, failureCount);
-              }
-            }
-          }
-        }
-
-        // Move all processed messages to "Processed" folder
-        if (processedMsgUids.length > 0 && !connectionDead) {
-          try {
-            await client.messageMove(processedMsgUids, 'Processed', { uid: true });
-            logger.info('Moved emails to Processed folder', { count: processedMsgUids.length });
-          } catch (moveErr: any) {
-            logger.warn('MOVE failed, trying COPY+DELETE fallback', { error: moveErr.message });
-            try {
-              await client.messageCopy(processedMsgUids, 'Processed', { uid: true });
-              await client.messageFlagsAdd(processedMsgUids, ['\\Deleted'], { uid: true });
-              logger.info('COPY+DELETE fallback succeeded', { count: processedMsgUids.length });
-            } catch (fallbackErr: any) {
-              logger.error('COPY+DELETE fallback also failed', { error: fallbackErr.message });
-            }
-          }
-        }
-
-        // Move dead-lettered messages to "Errors" folder
-        if (deadLetterMsgUids.length > 0 && !connectionDead) {
-          try {
-            await client.messageMove(deadLetterMsgUids, 'Errors', { uid: true });
-            logger.info('Moved emails to Errors folder', { count: deadLetterMsgUids.length });
-          } catch (moveErr: any) {
-            logger.warn('MOVE to Errors failed, trying COPY+DELETE fallback', { error: moveErr.message });
-            try {
-              await client.messageCopy(deadLetterMsgUids, 'Errors', { uid: true });
-              await client.messageFlagsAdd(deadLetterMsgUids, ['\\Deleted'], { uid: true });
-              logger.info('COPY+DELETE fallback to Errors succeeded', { count: deadLetterMsgUids.length });
-            } catch (fallbackErr: any) {
-              logger.error('COPY+DELETE fallback to Errors also failed', { error: fallbackErr.message });
-            }
-          }
-        }
-      } finally {
-        lock.release();
-      }
-
-      await client.logout();
-    } catch (error: any) {
-      if (error?.code !== 'ETIMEOUT') {
-        logger.error('IMAP polling error', { error: String(error) });
-      }
-      try {
-        if (client) await client.logout();
-      } catch {
-        // ignore logout errors
-      }
-    }
-  }
-
   // Recursive setTimeout instead of setInterval prevents overlapping polls when
   // an IMAP fetch takes longer than the configured interval (mailbox lock, slow
   // network). Each new poll starts only after the previous one resolves.
@@ -629,14 +655,14 @@ export async function startEmailPolling(): Promise<void> {
       // förmodan) kastar utanför sitt egna try/catch. Utan finally:n kunde
       // ett oväntat fel döda hela poll-loopen tyst tills processen startas om.
       try {
-        await poll();
+        await poll(config);
       } finally {
         scheduleNext();
       }
     }, intervalMs);
   };
 
-  await poll();
+  await poll(config);
   scheduleNext();
 
   stopPolling = () => {
@@ -667,4 +693,7 @@ export const __test__ = {
   addCommentToTicket,
   stripReplyPrefix,
   processEmail,
+  poll,
+  emailFailureCounts,
+  EMAIL_DEAD_LETTER_THRESHOLD,
 };
