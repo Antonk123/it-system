@@ -43,7 +43,7 @@ export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) =
 
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Debounce search input — 300ms, same pattern as useCommandPaletteSearch
   useEffect(() => {

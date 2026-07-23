@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface KBImageLightboxProps {
-  containerRef: RefObject<HTMLElement>;
+  containerRef: RefObject<HTMLElement | null>;
   /** Re-attach handlers when this changes (e.g. when article content is replaced) */
   contentKey?: string | number | null;
 }

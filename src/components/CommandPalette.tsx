@@ -71,7 +71,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   // Local input state for instant display; debounced value feeds the search hook
   const [inputValue, setInputValue] = useState('');
-  const debounceTimer = React.useRef<ReturnType<typeof setTimeout>>();
+  const debounceTimer = React.useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const handleInputChange = (value: string) => {
     setInputValue(value);
