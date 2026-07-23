@@ -122,7 +122,7 @@ export const fileUploadSchema = z.object({
 // Helper to get validation error message
 export const getValidationError = (error: unknown): string | null => {
   if (error instanceof z.ZodError) {
-    return error.errors.map(e => e.message).join(', ');
+    return error.issues.map(e => e.message).join(', ');
   }
   return null;
 };

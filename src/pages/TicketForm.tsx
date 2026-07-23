@@ -512,7 +512,7 @@ const TicketForm = () => {
     const validation = schema.safeParse(submitFormData as any);
     if (!validation.success) {
       const fieldErrors: Record<string, string> = {};
-      validation.error.errors.forEach((err) => {
+      validation.error.issues.forEach((err) => {
         const key = err.path[0] ? String(err.path[0]) : '_form';
         fieldErrors[key] = err.message;
       });

@@ -68,3 +68,4 @@ dist-ssr
 
 # Playwright MCP artifacts
 .playwright-mcp/
+.foreman/
