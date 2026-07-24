@@ -136,19 +136,19 @@ interface BottomSectionProps {
 const BottomSection = ({ open, user, onLogout, onToggle }: BottomSectionProps) => {
   return (
     <div className="border-t border-sidebar-border p-2 space-y-2">
-      {/* "Nytt ärende" button */}
-      <Link to="/tickets/new">
-        <button
-          aria-label="Nytt ärende"
-          className={cn(
-            "w-full flex items-center gap-2 rounded-md transition-all duration-200",
-            "bg-linear-to-r from-primary to-accent text-white",
-            "hover:from-primary/90 hover:to-accent/90",
-            open ? "h-11 px-4" : "h-11 justify-center"
-          )}>
-          <Plus className="w-5 h-5" />
-          {open && <span className="text-sm font-medium">Nytt ärende</span>}
-        </button>
+      {/* "Nytt ärende" link */}
+      <Link
+        to="/tickets/new"
+        aria-label="Nytt ärende"
+        className={cn(
+          "w-full flex items-center gap-2 rounded-md transition-all duration-200",
+          "bg-linear-to-r from-primary to-accent text-white",
+          "hover:from-primary/90 hover:to-accent/90",
+          "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+          open ? "h-11 px-4" : "h-11 justify-center"
+        )}>
+        <Plus className="w-5 h-5" />
+        {open && <span className="text-sm font-medium">Nytt ärende</span>}
       </Link>
 
       {/* User email display (only when open) */}
