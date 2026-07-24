@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -74,5 +74,23 @@ describe('"Nytt ärende" — a11y-struktur (audit v5 MEDIUM-4/5)', () => {
     renderLayout();
     const link = screen.getByRole('link', { name: 'Nytt ärende' });
     expect(link).toHaveAttribute('href', '/tickets/new');
+  });
+
+  it('behåller accessible name i kollapsat läge, där aria-label är enda namnet', () => {
+    renderLayout();
+    fireEvent.click(screen.getByRole('button', { name: 'Dölj sidofält' }));
+    const link = screen.getByRole('link', { name: 'Nytt ärende' });
+    // Texten är unmountad i kollapsat läge — namnet måste komma från aria-label
+    expect(link.querySelector('span')).toBeNull();
+  });
+
+  it('stänger mobil-drawern när "Nytt ärende" klickas', () => {
+    renderLayout();
+    // X-knappen i drawern är alltid i DOM (döljs med CSS); overlayn är villkorad
+    // på sidebarOpen — så öppen drawer = 2 "Stäng meny", stängd = 1.
+    fireEvent.click(screen.getByRole('button', { name: 'Öppna meny' }));
+    expect(screen.getAllByRole('button', { name: 'Stäng meny' })).toHaveLength(2);
+    fireEvent.click(screen.getByRole('link', { name: 'Nytt ärende' }));
+    expect(screen.getAllByRole('button', { name: 'Stäng meny' })).toHaveLength(1);
   });
 });

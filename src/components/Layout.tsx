@@ -131,15 +131,17 @@ interface BottomSectionProps {
   user: any;
   onLogout: () => void;
   onToggle: () => void;
+  onNavigate: () => void;
 }
 
-const BottomSection = ({ open, user, onLogout, onToggle }: BottomSectionProps) => {
+const BottomSection = ({ open, user, onLogout, onToggle, onNavigate }: BottomSectionProps) => {
   return (
     <div className="border-t border-sidebar-border p-2 space-y-2">
       {/* "Nytt ärende" link */}
       <Link
         to="/tickets/new"
         aria-label="Nytt ärende"
+        onClick={onNavigate}
         className={cn(
           "w-full flex items-center gap-2 rounded-md transition-all duration-200",
           "bg-linear-to-r from-primary to-accent text-white",
@@ -283,6 +285,7 @@ export const Layout = ({
           user={user}
           onLogout={handleLogout}
           onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onNavigate={() => setSidebarOpen(false)}
         />
       </aside>
 
