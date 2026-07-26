@@ -7,13 +7,13 @@ import { randomUUID } from 'crypto';
 /**
  * Integration tests for the backup/restore endpoints.
  *
- * ⚠️  process.exit constraint: A successful restore calls process.exit(0) after
- *     ~1500 ms. We NEVER test a successful restore path here — it would kill the
- *     vitest runner. All tests target early-return paths:
- *       - Auth failures (401 / 403)
- *       - Missing/invalid upload body (400)
- *       - Zip-slip rejection (500 from the caught error)
- *       - Missing database.sqlite inside ZIP (400)
+ * ⚠️  process.exit constraint: A successful restore sends its HTTP response
+ *     (res.json) BEFORE scheduling `setTimeout(() => process.exit(0), 1500)`
+ *     (backup.ts ~line 330-339). Supertest resolves on the response, so we can
+ *     assert the happy path as long as `process.exit` is mocked first — see the
+ *     'successful restore path (M14 happy path)' describe block at the bottom
+ *     of this file. It runs LAST and closes the shared `db` handle + rewrites
+ *     DB_PATH/UPLOAD_DIR, so nothing may run after it in this file.
  *
  * Bootstrap mirrors app.test.ts exactly: vi.hoisted() sets env vars first,
  * then we import createApp + DB helpers and seed a temp SQLite file.
@@ -21,6 +21,10 @@ import { randomUUID } from 'crypto';
  * Rate-limit note: the login route is rate-limited to 5 attempts / 15 min per
  * IP. To stay safely below that cap we share a single login session per role
  * across all tests in this file (2 logins total: one admin, one regular user).
+ * The restore route itself is separately rate-limited to 5 requests / 15 min
+ * per IP (only counted for requests that pass admin auth) — this file makes
+ * exactly 5 such requests total (4 pre-existing 400-path tests + the 1 new
+ * happy-path test), staying at the cap rather than over it.
  */
 
 const USER_EMAIL = 'user@backuptest.local';
@@ -29,15 +33,20 @@ const ADMIN_EMAIL = 'admin@backuptest.local';
 const ADMIN_PASSWORD = 'Adm1n-S3cure-Pw!';
 
 // Set process.env BEFORE any import that transitively pulls in db/connection.ts.
-const { DB_PATH } = vi.hoisted(() => {
+// UPLOAD_DIR is read at backup.ts module-load time (same as kb.ts/attachments.ts),
+// so it must be set here too — otherwise the M14 happy-path restore below would
+// mirror uploads into the real server/data/uploads directory on disk.
+const { DB_PATH, UPLOAD_DIR } = vi.hoisted(() => {
   const { tmpdir } = require('node:os') as typeof import('node:os');
   const { join } = require('node:path') as typeof import('node:path');
   const dbPath = join(tmpdir(), `itticket-backup-test-${process.pid}-${Date.now()}.sqlite`);
+  const uploadDir = join(tmpdir(), `itticket-backup-uploads-${process.pid}-${Date.now()}`);
   process.env.DB_PATH = dbPath;
   process.env.NODE_ENV = 'test';
   process.env.CSRF_SECRET = 'test-csrf-secret-backup-0123456789abcdef0123456789abcdef';
   process.env.JWT_SECRET = 'test-jwt-secret-backup-0123456789abcdef0123456789abcdef';
-  return { DB_PATH: dbPath };
+  process.env.UPLOAD_DIR = uploadDir;
+  return { DB_PATH: dbPath, UPLOAD_DIR: uploadDir };
 });
 
 import request from 'supertest';
@@ -166,6 +175,41 @@ function buildRawZipSlip(filename: string, content: Buffer): Buffer {
   return Buffer.concat([lfh, content, cdh, eocd]);
 }
 
+/**
+ * Build a real, valid backup ZIP for the M14 happy-path restore test: a genuine
+ * SQLite file (correct magic header, opens with better-sqlite3, contains both
+ * `tickets` and `users` so it passes the restore route's table check) plus a
+ * throwaway `__restore_marker` row so the test can prove the file on DB_PATH
+ * was actually replaced (not just that *a* valid db exists there), and one
+ * uploads file to verify uploads mirroring.
+ */
+async function buildValidBackupZip(
+  markerValue: string,
+  uploadFileName: string,
+  uploadContent: string,
+): Promise<Buffer> {
+  const Database = (await import('better-sqlite3')).default;
+  const srcDir = mkdtempSync(join(osTmpdir(), 'backup-happy-src-'));
+  const srcDbPath = join(srcDir, 'database.sqlite');
+
+  const srcDb = new Database(srcDbPath);
+  srcDb.exec(`
+    CREATE TABLE tickets (id INTEGER PRIMARY KEY);
+    CREATE TABLE users (id INTEGER PRIMARY KEY);
+    CREATE TABLE __restore_marker (id INTEGER PRIMARY KEY, marker TEXT NOT NULL);
+  `);
+  srcDb.prepare('INSERT INTO __restore_marker (marker) VALUES (?)').run(markerValue);
+  srcDb.close();
+
+  const dbBytes = readFileSync(srcDbPath);
+  rmSync(srcDir, { recursive: true, force: true });
+
+  return buildZipBuffer([
+    { name: 'data/database.sqlite', content: dbBytes },
+    { name: `data/uploads/${uploadFileName}`, content: uploadContent },
+  ]);
+}
+
 // ---------------------------------------------------------------------------
 // Setup / Teardown
 // ---------------------------------------------------------------------------
@@ -238,6 +282,18 @@ afterAll(() => {
   try {
     const { dirname, join } = require('node:path') as typeof import('node:path');
     rmSync(join(dirname(DB_PATH), 'backups'), { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+  // Städa UPLOAD_DIR (mkdirSync'ad av attachments.ts/kb.ts vid modul-load, och
+  // skriven till av M14-happy-path-testet nedan).
+  try {
+    rmSync(UPLOAD_DIR, { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+  try {
+    rmSync(`${DB_PATH}.pre-restore`, { force: true });
   } catch {
     /* ignore */
   }
@@ -612,4 +668,85 @@ describe('performRestoreSwap (M14)', () => {
 
     rmSync(dir, { recursive: true, force: true });
   });
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/backup/restore — successful restore path (M14 happy path)
+//
+// MUST run last: a successful restore closes the shared `db` handle (via the
+// route's closeDb callback → wal_checkpoint + closeDatabase) and overwrites
+// DB_PATH + UPLOAD_DIR with the uploaded backup's content. Any test after this
+// one that touches `db` or the app's DB-backed routes would fail with
+// "database connection is not open". Vitest runs tests within a file
+// sequentially in declaration order (no `sequence.shuffle` / `.concurrent` is
+// configured here or in vitest.config.ts), so appending this block at the very
+// end of the file is sufficient to guarantee it runs after every other test in
+// this file. Other test files are unaffected: each file sets its own
+// per-process DB_PATH/UPLOAD_DIR via vi.hoisted() and vitest isolates module
+// state per test file, so there is no cross-file `db` singleton to corrupt.
+// ---------------------------------------------------------------------------
+
+describe('POST /api/backup/restore — successful restore path (M14 happy path)', () => {
+  it('extracts the ZIP, validates the DB, swaps DB_PATH + UPLOAD_DIR, cleans up the rollback file, returns 200, and schedules process.exit(0)', async () => {
+    const processExitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+
+    try {
+      // Prove uploads are truly *mirrored* (old content removed), not just
+      // appended to — same invariant the performRestoreSwap unit tests assert.
+      const staleUploadPath = join(UPLOAD_DIR, 'stale-before-restore.txt');
+      mkdirSync(UPLOAD_DIR, { recursive: true });
+      writeFileSync(staleUploadPath, 'this must vanish after restore');
+
+      const marker = `RESTORE-MARKER-${randomUUID()}`;
+      const uploadFileName = 'marker.txt';
+      const uploadContent = `restored-upload-${randomUUID()}`;
+      const zipBuffer = await buildValidBackupZip(marker, uploadFileName, uploadContent);
+
+      const res = await adminAgent
+        .post('/api/backup/restore')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('x-csrf-token', adminCsrfToken)
+        .attach('file', zipBuffer, { filename: 'backup.zip', contentType: 'application/zip' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ success: true, restartRequired: true });
+
+      // Rollback-kopian (${DB_PATH}.pre-restore) är borttagen efter lyckad restore.
+      expect(existsSync(`${DB_PATH}.pre-restore`)).toBe(false);
+
+      // DB_PATH har faktiskt bytts ut mot backupens innehåll — inte bara "en
+      // giltig databas", utan just VÅR databas (unik markörrad). Öppnar en
+      // FRISK anslutning eftersom routen redan stängt det delade `db`-handtaget.
+      const Database = (await import('better-sqlite3')).default;
+      const restoredDb = new Database(DB_PATH, { readonly: true });
+      try {
+        const tables = restoredDb
+          .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+          .all() as { name: string }[];
+        const tableNames = new Set(tables.map((t) => t.name));
+        expect(tableNames.has('tickets')).toBe(true);
+        expect(tableNames.has('users')).toBe(true);
+
+        const row = restoredDb
+          .prepare('SELECT marker FROM __restore_marker LIMIT 1')
+          .get() as { marker: string } | undefined;
+        expect(row?.marker).toBe(marker);
+      } finally {
+        restoredDb.close();
+      }
+
+      // UPLOAD_DIR speglar backupen: nytt innehåll finns, gammalt är borta.
+      expect(readFileSync(join(UPLOAD_DIR, uploadFileName), 'utf8')).toBe(uploadContent);
+      expect(existsSync(staleUploadPath)).toBe(false);
+
+      // process.exit(0) är schemalagt via setTimeout(…, 1500) EFTER res.json() —
+      // supertest har redan fått sitt svar (ovan), så vi väntar bara in den
+      // riktiga timern (mockad process.exit förhindrar att vitest-processen dör).
+      await new Promise((resolve) => setTimeout(resolve, 1700));
+      expect(processExitSpy).toHaveBeenCalledTimes(1);
+      expect(processExitSpy).toHaveBeenCalledWith(0);
+    } finally {
+      processExitSpy.mockRestore();
+    }
+  }, 10_000);
 });
