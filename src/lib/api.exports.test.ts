@@ -1,17 +1,19 @@
 // @vitest-environment jsdom
 /**
  * Tester för api.ts:s RÅA fetch()-metoder — de som ligger utanför kärn-pipen
- * request()/requestBlob()/uploadFile() och därför dupplicerar delar av dess
- * logik (auth-header, CSRF, 401-hantering) på egen hand:
+ * request()/requestBlob() och därför dupplicerar delar av dess logik
+ * (auth-header, CSRF, 401-hantering) på egen hand:
  *
  *  1. exportTickets/exportArchive/exportContacts — nedladdning via rå fetch:
  *     Content-Disposition-filnamnsparsning + DOM-städning (createObjectURL/
  *     revokeObjectURL, createElement/appendChild/removeChild).
  *  2. importTicketsPreview/importContactsPreview/uploadKbImage — FormData +
- *     CSRF via rå fetch. OBS (känd, rapporterad bugg): dessa tre saknar helt
- *     401-hantering (till skillnad från uploadFile() i kärn-pipen) — vi
- *     testar INTE att avsaknaden är korrekt, bara det som faktiskt ska stämma
- *     (URL, FormData-innehåll, CSRF-header, felpropagering).
+ *     CSRF, delad implementation via den privata `postFile()`-hjälparen
+ *     (samma hjälpare som uploadFile() använder). Tidigare (fixad bugg)
+ *     saknade dessa tre helt 401-hantering — de förnyade aldrig access-token
+ *     och kraschade hårt efter ~15 min inaktivitet. Nu delar alla fyra
+ *     FormData-metoder samma 401-refresh-retry + 403-CSRF-retry + proaktiv
+ *     refresh som uploadFile(); testas explicit nedan per metod.
  *  3. downloadBackup — egen duplicerad proaktiv-refresh + 401-retry, skild
  *     från request()/requestBlob().
  *
@@ -288,8 +290,9 @@ describe('exportContacts', () => {
 
 // ---------------------------------------------------------------------------
 // 2. importTicketsPreview / importContactsPreview / uploadKbImage
-//    — FormData + CSRF via rå fetch. Ingen 401-hantering (känd bugg, ej testad
-//    som "korrekt"; se filkommentaren överst).
+//    — FormData + CSRF via den delade postFile()-hjälparen (samma pipe som
+//    uploadFile()). 401-refresh-retry, misslyckad-refresh-session-expired och
+//    proaktiv refresh testas explicit per metod nedan (se targetDispatch).
 // ---------------------------------------------------------------------------
 
 function csrfDispatch(csrfToken: string, otherHandler: (url: string, opts: RequestInit) => unknown) {
@@ -298,6 +301,31 @@ function csrfDispatch(csrfToken: string, otherHandler: (url: string, opts: Reque
       return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ csrfToken }) }));
     }
     return otherHandler(url, opts);
+  };
+}
+
+// Dispatcher för 401-refresh-retry/session-expired/proaktiv-refresh-tester:
+// svarar på /csrf-token och /auth/refresh, och räknar anrop mot målendpointen
+// så vi kan verifiera "exakt en omkörning" (ingen loop, ingen dubbel-refresh).
+function targetDispatch(
+  targetUrl: string,
+  csrfToken: string,
+  onTarget: (call: number, opts: RequestInit) => ReturnType<typeof fakeResponse>,
+  onRefresh?: () => ReturnType<typeof fakeResponse>,
+) {
+  let calls = 0;
+  return (url: string, opts: RequestInit) => {
+    if (url === `${BASE}/csrf-token`) {
+      return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ csrfToken }) }));
+    }
+    if (url === `${BASE}/auth/refresh`) {
+      return Promise.resolve(onRefresh ? onRefresh() : fakeResponse({ ok: false, status: 401 }));
+    }
+    if (url === targetUrl) {
+      calls++;
+      return Promise.resolve(onTarget(calls, opts));
+    }
+    return Promise.resolve(fakeResponse({}));
   };
 }
 
@@ -352,6 +380,140 @@ describe('importTicketsPreview', () => {
     const api = await freshApi();
     await expect(api.importTicketsPreview(new File(['x'], 'bad.csv'))).rejects.toThrow('Preview failed');
   });
+
+  it('401 → EN /auth/refresh → EN omkörning som lyckas, med nya token i Authorization', async () => {
+    localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 3600)); // giltig, ingen proaktiv refresh
+    let retryHeaders: Record<string, string> | undefined;
+    fetchMock.mockImplementation(
+      targetDispatch(
+        `${BASE}/tickets/import/preview`,
+        'csrf-1',
+        (call, opts) => {
+          if (call === 1) return fakeResponse({ ok: false, status: 401 });
+          retryHeaders = (opts.headers ?? {}) as Record<string, string>;
+          return fakeResponse({ json: () => Promise.resolve({ preview: ['ok'] }) });
+        },
+        () => fakeResponse({ json: () => Promise.resolve({ accessToken: 'nytt-token' }) }),
+      ),
+    );
+
+    const api = await freshApi();
+    const result = await api.importTicketsPreview(new File(['a'], 'x.csv'));
+
+    expect(result).toEqual({ preview: ['ok'] });
+    expect(retryHeaders?.['Authorization']).toBe('Bearer nytt-token');
+    const targetCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/tickets/import/preview`);
+    expect(targetCalls).toHaveLength(2); // original + exakt en omkörning
+    const refreshCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`);
+    expect(refreshCalls).toHaveLength(1);
+  });
+
+  it('401, refresh misslyckas → session expired: token rensad, redirect till /login, kastar', async () => {
+    const loc = stubLocation();
+    localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 3600));
+    localStorage.setItem('user', JSON.stringify({ id: 'u1' }));
+    fetchMock.mockImplementation(
+      targetDispatch(
+        `${BASE}/tickets/import/preview`,
+        'csrf-1',
+        () => fakeResponse({ ok: false, status: 401 }),
+        () => fakeResponse({ ok: false, status: 401 }),
+      ),
+    );
+
+    const api = await freshApi();
+    await expect(api.importTicketsPreview(new File(['a'], 'x.csv'))).rejects.toThrow('Session expired');
+
+    const targetCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/tickets/import/preview`);
+    expect(targetCalls).toHaveLength(1); // ingen omkörning när refresh misslyckas
+    const refreshCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`);
+    expect(refreshCalls).toHaveLength(1);
+    expect(localStorage.getItem('auth_token')).toBeNull();
+    expect(localStorage.getItem('user')).toBeNull();
+    expect(loc.href).toBe('/login');
+  });
+
+  it('proaktiv refresh: nära-utgången token förnyas INNAN anropet', async () => {
+    localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 10)); // inom 30s-marginalen
+    let firstCallHeaders: Record<string, string> | undefined;
+    fetchMock.mockImplementation(
+      targetDispatch(
+        `${BASE}/tickets/import/preview`,
+        'csrf-1',
+        (call, opts) => {
+          firstCallHeaders = (opts.headers ?? {}) as Record<string, string>;
+          return fakeResponse({ json: () => Promise.resolve({ preview: [] }) });
+        },
+        () => fakeResponse({ json: () => Promise.resolve({ accessToken: 'proaktivt-token' }) }),
+      ),
+    );
+
+    const api = await freshApi();
+    await api.importTicketsPreview(new File(['a'], 'x.csv'));
+
+    // Endast ETT anrop mot målendpointen — token förnyades före, ingen 401-retry
+    const targetCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/tickets/import/preview`);
+    expect(targetCalls).toHaveLength(1);
+    expect(firstCallHeaders?.['Authorization']).toBe('Bearer proaktivt-token');
+    const refreshCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`);
+    expect(refreshCalls).toHaveLength(1);
+  });
+
+  it('401 på BÅDE originalanropet och den omkörda requesten → EXAKT en refresh, EXAKT två anrop mot endpointen, ingen oändlig loop — och en FÄRSK FormData-instans per försök', async () => {
+    // Regressionslås för !isRetry-spärren i postFile(): utan den skulle den
+    // omkörda requestens 401 trigga ÄNNU en refresh, och lyckas den (till
+    // skillnad från vår andra refresh nedan) rekurserar postFile i all
+    // evighet. Genom att låta den ANDRA refreshen misslyckas kan vi bevisa
+    // spärren utan att behöva köra ett oändligt/timeout-test: med spärren
+    // (korrekt kod) görs bara EN refresh totalt och requesten kastar
+    // originalfelet; utan spärren (muterad kod) görs en andra, misslyckad
+    // refresh som i stället triggar sessionExpired() ("Session expired").
+    const loc = stubLocation();
+    localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 3600));
+    localStorage.setItem('user', JSON.stringify({ id: 'u1' }));
+    let refreshCalls = 0;
+    let targetCalls = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${BASE}/csrf-token`) {
+        return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ csrfToken: 'csrf-1' }) }));
+      }
+      if (url === `${BASE}/auth/refresh`) {
+        refreshCalls++;
+        if (refreshCalls === 1) {
+          return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ accessToken: 'nytt-token' }) }));
+        }
+        return Promise.resolve(fakeResponse({ ok: false, status: 401 })); // andra refreshen ska aldrig behöva ske
+      }
+      if (url === `${BASE}/tickets/import/preview`) {
+        targetCalls++;
+        return Promise.resolve(fakeResponse({ ok: false, status: 401, json: () => Promise.resolve({ error: 'Fortfarande obehörig' }) }));
+      }
+      return Promise.resolve(fakeResponse({}));
+    });
+
+    const api = await freshApi();
+    const file = new File(['a,b,c'], 'x.csv', { type: 'text/csv' });
+    await expect(api.importTicketsPreview(file)).rejects.toThrow('Fortfarande obehörig');
+
+    expect(targetCalls).toBe(2); // original + exakt EN omkörning
+    expect(refreshCalls).toBe(1); // spärren stoppar en andra refresh på den redan omkörda requesten
+    // sessionExpired() ska INTE ha triggats — bara en trasig andra refresh (om spärren saknas) gör det
+    expect(localStorage.getItem('auth_token')).not.toBeNull();
+    expect(loc.href).not.toBe('/login');
+
+    // Ny FormData per försök: bodyn i original- och omkörningsanropet ska
+    // vara OLIKA objektreferenser (inte samma instans återanvänd över två
+    // fetch-anrop), och båda ska ändå innehålla filen under fältet "file".
+    const targetFetchCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/tickets/import/preview`);
+    expect(targetFetchCalls).toHaveLength(2);
+    const firstBody = (targetFetchCalls[0][1] as RequestInit).body as FormData;
+    const secondBody = (targetFetchCalls[1][1] as RequestInit).body as FormData;
+    expect(firstBody).toBeInstanceOf(FormData);
+    expect(secondBody).toBeInstanceOf(FormData);
+    expect(secondBody).not.toBe(firstBody);
+    expect((firstBody.get('file') as File).name).toBe('x.csv');
+    expect((secondBody.get('file') as File).name).toBe('x.csv');
+  });
 });
 
 describe('importContactsPreview', () => {
@@ -367,6 +529,7 @@ describe('importContactsPreview', () => {
     const call = fetchMock.mock.calls.find((c) => urlOfCall(c) === `${BASE}/contacts/import/preview`);
     expect(call).toBeDefined();
     expect(headersOfCall(call)['X-CSRF-Token']).toBe('csrf-c1');
+    expect(headersOfCall(call)['Content-Type']).toBeUndefined(); // browsern sätter multipart-boundary
     const body = (call as [string, RequestInit])[1].body as FormData;
     expect((body.get('file') as File).name).toBe('kontakter.csv');
   });
@@ -380,6 +543,83 @@ describe('importContactsPreview', () => {
 
     const api = await freshApi();
     await expect(api.importContactsPreview(new File(['x'], 'dup.csv'))).rejects.toThrow('Dubblett');
+  });
+
+  it('401 → EN /auth/refresh → EN omkörning som lyckas, med nya token i Authorization', async () => {
+    localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 3600));
+    let retryHeaders: Record<string, string> | undefined;
+    fetchMock.mockImplementation(
+      targetDispatch(
+        `${BASE}/contacts/import/preview`,
+        'csrf-1',
+        (call, opts) => {
+          if (call === 1) return fakeResponse({ ok: false, status: 401 });
+          retryHeaders = (opts.headers ?? {}) as Record<string, string>;
+          return fakeResponse({ json: () => Promise.resolve({ preview: ['kontakt'] }) });
+        },
+        () => fakeResponse({ json: () => Promise.resolve({ accessToken: 'nytt-token' }) }),
+      ),
+    );
+
+    const api = await freshApi();
+    const result = await api.importContactsPreview(new File(['a'], 'k.csv'));
+
+    expect(result).toEqual({ preview: ['kontakt'] });
+    expect(retryHeaders?.['Authorization']).toBe('Bearer nytt-token');
+    const targetCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/contacts/import/preview`);
+    expect(targetCalls).toHaveLength(2);
+    const refreshCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`);
+    expect(refreshCalls).toHaveLength(1);
+  });
+
+  it('401, refresh misslyckas → session expired: token rensad, redirect till /login, kastar', async () => {
+    const loc = stubLocation();
+    localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 3600));
+    localStorage.setItem('user', JSON.stringify({ id: 'u1' }));
+    fetchMock.mockImplementation(
+      targetDispatch(
+        `${BASE}/contacts/import/preview`,
+        'csrf-1',
+        () => fakeResponse({ ok: false, status: 401 }),
+        () => fakeResponse({ ok: false, status: 401 }),
+      ),
+    );
+
+    const api = await freshApi();
+    await expect(api.importContactsPreview(new File(['a'], 'k.csv'))).rejects.toThrow('Session expired');
+
+    const targetCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/contacts/import/preview`);
+    expect(targetCalls).toHaveLength(1);
+    const refreshCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`);
+    expect(refreshCalls).toHaveLength(1);
+    expect(localStorage.getItem('auth_token')).toBeNull();
+    expect(localStorage.getItem('user')).toBeNull();
+    expect(loc.href).toBe('/login');
+  });
+
+  it('proaktiv refresh: nära-utgången token förnyas INNAN anropet', async () => {
+    localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 10));
+    let firstCallHeaders: Record<string, string> | undefined;
+    fetchMock.mockImplementation(
+      targetDispatch(
+        `${BASE}/contacts/import/preview`,
+        'csrf-1',
+        (call, opts) => {
+          firstCallHeaders = (opts.headers ?? {}) as Record<string, string>;
+          return fakeResponse({ json: () => Promise.resolve({ preview: [] }) });
+        },
+        () => fakeResponse({ json: () => Promise.resolve({ accessToken: 'proaktivt-token' }) }),
+      ),
+    );
+
+    const api = await freshApi();
+    await api.importContactsPreview(new File(['a'], 'k.csv'));
+
+    const targetCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/contacts/import/preview`);
+    expect(targetCalls).toHaveLength(1);
+    expect(firstCallHeaders?.['Authorization']).toBe('Bearer proaktivt-token');
+    const refreshCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`);
+    expect(refreshCalls).toHaveLength(1);
   });
 });
 
@@ -398,6 +638,7 @@ describe('uploadKbImage', () => {
     expect(call).toBeDefined();
     expect((call as [string, RequestInit])[1].method).toBe('POST');
     expect(headersOfCall(call)['X-CSRF-Token']).toBe('csrf-img');
+    expect(headersOfCall(call)['Content-Type']).toBeUndefined(); // browsern sätter multipart-boundary
     const body = (call as [string, RequestInit])[1].body as FormData;
     expect(body).toBeInstanceOf(FormData);
     expect((body.get('image') as File).name).toBe('skärmdump.png');
@@ -413,6 +654,132 @@ describe('uploadKbImage', () => {
 
     const api = await freshApi();
     await expect(api.uploadKbImage(new File(['x'], 'x.png'))).rejects.toThrow('Upload failed');
+  });
+
+  it('401 → EN /auth/refresh → EN omkörning som lyckas, med nya token i Authorization', async () => {
+    localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 3600));
+    let retryHeaders: Record<string, string> | undefined;
+    fetchMock.mockImplementation(
+      targetDispatch(
+        `${BASE}/kb/upload-image`,
+        'csrf-1',
+        (call, opts) => {
+          if (call === 1) return fakeResponse({ ok: false, status: 401 });
+          retryHeaders = (opts.headers ?? {}) as Record<string, string>;
+          return fakeResponse({ json: () => Promise.resolve({ url: '/files/retry.png' }) });
+        },
+        () => fakeResponse({ json: () => Promise.resolve({ accessToken: 'nytt-token' }) }),
+      ),
+    );
+
+    const api = await freshApi();
+    const result = await api.uploadKbImage(new File(['a'], 'bild.png'));
+
+    expect(result).toEqual({ url: '/files/retry.png' });
+    expect(retryHeaders?.['Authorization']).toBe('Bearer nytt-token');
+    const targetCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/kb/upload-image`);
+    expect(targetCalls).toHaveLength(2);
+    const refreshCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`);
+    expect(refreshCalls).toHaveLength(1);
+  });
+
+  it('401, refresh misslyckas → session expired: token rensad, redirect till /login, kastar', async () => {
+    const loc = stubLocation();
+    localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 3600));
+    localStorage.setItem('user', JSON.stringify({ id: 'u1' }));
+    fetchMock.mockImplementation(
+      targetDispatch(
+        `${BASE}/kb/upload-image`,
+        'csrf-1',
+        () => fakeResponse({ ok: false, status: 401 }),
+        () => fakeResponse({ ok: false, status: 401 }),
+      ),
+    );
+
+    const api = await freshApi();
+    await expect(api.uploadKbImage(new File(['a'], 'bild.png'))).rejects.toThrow('Session expired');
+
+    const targetCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/kb/upload-image`);
+    expect(targetCalls).toHaveLength(1);
+    const refreshCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`);
+    expect(refreshCalls).toHaveLength(1);
+    expect(localStorage.getItem('auth_token')).toBeNull();
+    expect(localStorage.getItem('user')).toBeNull();
+    expect(loc.href).toBe('/login');
+  });
+
+  it('proaktiv refresh: nära-utgången token förnyas INNAN anropet', async () => {
+    localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 10));
+    let firstCallHeaders: Record<string, string> | undefined;
+    fetchMock.mockImplementation(
+      targetDispatch(
+        `${BASE}/kb/upload-image`,
+        'csrf-1',
+        (call, opts) => {
+          firstCallHeaders = (opts.headers ?? {}) as Record<string, string>;
+          return fakeResponse({ json: () => Promise.resolve({ url: '/files/proaktiv.png' }) });
+        },
+        () => fakeResponse({ json: () => Promise.resolve({ accessToken: 'proaktivt-token' }) }),
+      ),
+    );
+
+    const api = await freshApi();
+    await api.uploadKbImage(new File(['a'], 'bild.png'));
+
+    const targetCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/kb/upload-image`);
+    expect(targetCalls).toHaveLength(1);
+    expect(firstCallHeaders?.['Authorization']).toBe('Bearer proaktivt-token');
+    const refreshCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`);
+    expect(refreshCalls).toHaveLength(1);
+  });
+
+  it('401 på BÅDE originalanropet och den omkörda requesten → EXAKT en refresh, EXAKT två anrop mot endpointen, ingen oändlig loop — och en FÄRSK FormData-instans per försök', async () => {
+    // Se motsvarande test i importTicketsPreview för fullständig motivering:
+    // !isRetry-spärren i postFile() förhindrar en andra refresh på den redan
+    // omkörda requesten. Utan den skulle en andra (här: misslyckad) refresh
+    // triggas och sessionExpired() ta över — vilket den INTE ska göra här.
+    const loc = stubLocation();
+    localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 3600));
+    localStorage.setItem('user', JSON.stringify({ id: 'u1' }));
+    let refreshCalls = 0;
+    let targetCalls = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${BASE}/csrf-token`) {
+        return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ csrfToken: 'csrf-1' }) }));
+      }
+      if (url === `${BASE}/auth/refresh`) {
+        refreshCalls++;
+        if (refreshCalls === 1) {
+          return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ accessToken: 'nytt-token' }) }));
+        }
+        return Promise.resolve(fakeResponse({ ok: false, status: 401 })); // andra refreshen ska aldrig behöva ske
+      }
+      if (url === `${BASE}/kb/upload-image`) {
+        targetCalls++;
+        return Promise.resolve(fakeResponse({ ok: false, status: 401, json: () => Promise.resolve({ error: 'Fortfarande obehörig' }) }));
+      }
+      return Promise.resolve(fakeResponse({}));
+    });
+
+    const api = await freshApi();
+    const file = new File(['binärdata'], 'bild.png', { type: 'image/png' });
+    await expect(api.uploadKbImage(file)).rejects.toThrow('Fortfarande obehörig');
+
+    expect(targetCalls).toBe(2); // original + exakt EN omkörning
+    expect(refreshCalls).toBe(1); // spärren stoppar en andra refresh på den redan omkörda requesten
+    expect(localStorage.getItem('auth_token')).not.toBeNull(); // sessionExpired() ska INTE ha triggats
+    expect(loc.href).not.toBe('/login');
+
+    // Ny FormData per försök: olika objektreferenser, båda med filen under "image".
+    const targetFetchCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/kb/upload-image`);
+    expect(targetFetchCalls).toHaveLength(2);
+    const firstBody = (targetFetchCalls[0][1] as RequestInit).body as FormData;
+    const secondBody = (targetFetchCalls[1][1] as RequestInit).body as FormData;
+    expect(firstBody).toBeInstanceOf(FormData);
+    expect(secondBody).toBeInstanceOf(FormData);
+    expect(secondBody).not.toBe(firstBody);
+    expect((firstBody.get('image') as File).name).toBe('bild.png');
+    expect((secondBody.get('image') as File).name).toBe('bild.png');
   });
 });
 

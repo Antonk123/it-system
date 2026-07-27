@@ -227,9 +227,23 @@ class ApiClient {
   }
 
   async uploadFile<T>(endpoint: string, file: File, isRetry = false): Promise<T> {
+    return this.postFile<T>(endpoint, file, 'file', 'Upload failed', isRetry);
+  }
+
+  // Delad hjälpare för alla FormData-uppladdningar (fil eller bild). Samma
+  // 401-refresh-retry och 403-CSRF-retry som request()/uploadFile — bygger
+  // en ny FormData per försök så en retry inte återanvänder en redan
+  // konsumerad instans.
+  private async postFile<T>(
+    endpoint: string,
+    file: File,
+    fieldName: string,
+    fallbackMessage: string,
+    isRetry = false,
+  ): Promise<T> {
     const token = await this.getFreshToken(isRetry);
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append(fieldName, file);
 
     // Ingen Content-Type — browsern måste sätta multipart-boundary själv.
     const headers: Record<string, string> = {};
@@ -248,19 +262,19 @@ class ApiClient {
     if (!response.ok) {
       if (response.status === 401 && !isRetry) {
         if (await this.tryRefresh()) {
-          return this.uploadFile<T>(endpoint, file, true);
+          return this.postFile<T>(endpoint, file, fieldName, fallbackMessage, true);
         }
         this.sessionExpired();
       }
 
-      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
+      const error = await response.json().catch(() => ({ error: fallbackMessage }));
 
       if (response.status === 403 && !isRetry && this.isCsrfError(error)) {
         this.csrfToken = null;
-        return this.uploadFile<T>(endpoint, file, true);
+        return this.postFile<T>(endpoint, file, fieldName, fallbackMessage, true);
       }
 
-      throw new Error(error.error || error.message || 'Upload failed');
+      throw new Error(error.error || error.message || fallbackMessage);
     }
 
     return response.json();
@@ -428,29 +442,7 @@ class ApiClient {
   }
 
   async importTicketsPreview(file: File) {
-    const token = this.getToken();
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    headers['X-CSRF-Token'] = await this.getCsrfToken();
-
-    const response = await fetch(`${this.baseUrl}/tickets/import/preview`, {
-      method: 'POST',
-      headers,
-      body: formData,
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Preview failed' }));
-      throw new Error(error.error || 'Preview failed');
-    }
-
-    return response.json();
+    return this.postFile<any>(`/tickets/import/preview`, file, 'file', 'Preview failed');
   }
 
   async importTicketsConfirm(tickets: any[]) {
@@ -794,29 +786,7 @@ class ApiClient {
   }
 
   async importContactsPreview(file: File) {
-    const token = this.getToken();
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    headers['X-CSRF-Token'] = await this.getCsrfToken();
-
-    const response = await fetch(`${this.baseUrl}/contacts/import/preview`, {
-      method: 'POST',
-      headers,
-      body: formData,
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Preview failed' }));
-      throw new Error(error.error || 'Preview failed');
-    }
-
-    return response.json();
+    return this.postFile<any>(`/contacts/import/preview`, file, 'file', 'Preview failed');
   }
 
   async importContactsConfirm(contacts: any[]) {
@@ -1148,29 +1118,7 @@ class ApiClient {
   }
 
   async uploadKbImage(file: File): Promise<{ url: string }> {
-    const token = this.getToken();
-    const formData = new FormData();
-    formData.append('image', file);
-
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-    headers['X-CSRF-Token'] = await this.getCsrfToken();
-
-    const response = await fetch(`${this.baseUrl}/kb/upload-image`, {
-      method: 'POST',
-      headers,
-      body: formData,
-      credentials: 'include',
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Upload failed' }));
-      throw new Error(error.error || error.message || 'Upload failed');
-    }
-
-    return response.json();
+    return this.postFile<{ url: string }>('/kb/upload-image', file, 'image', 'Upload failed');
   }
 
   // Public endpoints (no auth)
