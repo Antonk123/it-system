@@ -1,0 +1,20 @@
+{
+  "_readme": [
+    "Advisories som medvetet undantas från CI:s security-audit-gate.",
+    "Gaten (scripts/audit-check.mjs) fäller fortfarande bygget på ALLA andra high/critical.",
+    "Varje post kräver en motivering som förklarar varför den inte är nåbar i DEN HÄR appen,",
+    "och ett 'expires'-datum. När datumet passeras fäller gaten posten igen — undantag ska",
+    "omprövas, inte glömmas bort. Ta bort posten så fort en riktig fix finns."
+  ],
+  "allow": [
+    {
+      "id": "GHSA-qwww-vcr4-c8h2",
+      "package": "react-router",
+      "severity": "high",
+      "title": "React Router: RSC Mode CSRF Bypass Allows Action Execution Before 400 Response",
+      "reason": "Advisoryn gäller uteslutande React Routers RSC-läge (React Server Components). Den här appen är en ren klientrenderad SPA: den monterar BrowserRouter i src/App.tsx och använder inga RSC-API:er, ingen server-rendering och ingen framework-mode-router. Sårbarheten är därmed inte nåbar. Hela 7.x ligger dessutom i det sårbara intervallet (7.12.0-8.2.0) och react-router-dom finns inte i v8 — en riktig fix kräver migrering till react-router 8, dvs. paketbyte plus omskrivning av ~42 importer i ~34 filer. Det är planerat som ett eget arbetspass med egen verifiering.",
+      "reviewed": "2026-07-28",
+      "expires": "2026-10-31"
+    }
+  ]
+}

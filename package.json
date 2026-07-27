@@ -65,7 +65,8 @@
     "zod": "^4.4.3"
   },
   "overrides": {
-    "serialize-javascript": "^7.0.5"
+    "serialize-javascript": "^7.0.5",
+    "brace-expansion": "^5.0.8"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -87,7 +88,7 @@
     "husky": "^9.1.7",
     "jsdom": "^29.1.1",
     "lint-staged": "^17.0.4",
-    "postcss": "^8.5.16",
+    "postcss": "^8.5.23",
     "tailwindcss": "^4.3.2",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.36.0",

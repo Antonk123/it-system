@@ -5,12 +5,24 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege: inget jobb här skriver till repot, öppnar PR:er eller publicerar
+# paket. Utan den här raden kör GITHUB_TOKEN med repots default-behörighet, som kan
+# vara write — onödig blast radius om en tredjeparts-action blir komprometterad.
+permissions:
+  contents: read
+
+# Actions är pinnade till commit-SHA i stället för flyttbara taggar (@v7). En tagg
+# kan pekas om av den som äger actionen — exakt vägen in i tj-actions/changed-files-
+# attacken 2025. En SHA kan inte pekas om.
+# Uppdatera med: gh api repos/<ägare>/<action>/commits/<tagg> -q .sha
+# Dependabot bumpar dem automatiskt (github_actions-ekosystemet i dependabot.yml).
+
 jobs:
   lint-and-typecheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
@@ -27,8 +39,8 @@ jobs:
   lint-server:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
@@ -42,23 +54,25 @@ jobs:
   docker-build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - run: docker build -f Dockerfile.server -t test-backend .
       - run: docker build -f Dockerfile.client -t test-frontend .
 
   security-audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 22
           cache: npm
       - run: npm ci
       - run: cd server && npm ci
-      # Fäll bygget på en känd HIGH/CRITICAL-advisory i något av träden. Båda är
-      # rena idag (0 vulns) → detta är en framåtblickande spärr, inte en gate som
-      # fäller nuvarande kod. Flykt om en OFIXBAR transitiv high dyker upp: sänk
-      # till '--audit-level=critical' tillfälligt eller lägg en `npm audit`-override.
-      - run: npm audit --audit-level=high
-      - run: cd server && npm audit --audit-level=high
+      # Fäller bygget på ALLA high/critical-advisories utom de som uttryckligen
+      # undantagits i audit-allowlist.json. Varje undantag kräver en motivering för
+      # varför advisoryn inte är nåbar i den här appen, plus ett expires-datum som
+      # fäller gaten igen när det passeras — undantag ska omprövas, inte glömmas.
+      # Ersätter `npm audit --audit-level=high`, som bara kunde vara helt på eller
+      # sänkt till critical (och då tystat även framtida high-advisories).
+      - run: node scripts/audit-check.mjs .
+      - run: node scripts/audit-check.mjs server
