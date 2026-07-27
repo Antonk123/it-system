@@ -71,7 +71,22 @@ class ApiClient {
     }
   }
 
-  private async tryRefresh(): Promise<boolean> {
+  private refreshPromise: Promise<boolean> | null = null;
+
+  // Samtidiga 401:or ska dela EN förnyelse. Servern roterar refresh-token
+  // atomiskt (DELETE + INSERT i samma transaktion), så parallella anrop med
+  // samma cookie skulle ogiltigförklara varandra: den första lyckas, resten
+  // får "Invalid refresh token" → falsk utloggning. Spärren nollställs alltid
+  // (finally) så nästa 401, efter att förnyelsen är klar, gör ett nytt anrop.
+  private tryRefresh(): Promise<boolean> {
+    if (this.refreshPromise) return this.refreshPromise;
+    this.refreshPromise = this.performRefresh().finally(() => {
+      this.refreshPromise = null;
+    });
+    return this.refreshPromise;
+  }
+
+  private async performRefresh(): Promise<boolean> {
     try {
       // Refresh-token ligger i en HttpOnly-cookie (ej läsbar för JS).
       // credentials:'include' skickar cookien; servern roterar och sätter ny cookie.

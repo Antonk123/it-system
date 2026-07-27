@@ -10,11 +10,13 @@
  *     ska proaktiv-refresh-kollen inte köras igen, även om den nya token också råkar
  *     vara nära utgång — annars dubbla /auth/refresh på samma request-cykel.
  *  4. Samma mekanik gäller alla tre ingångarna: request(), requestBlob(), uploadFile().
- *
- * OBS — känd bugg som INTE ska cementeras här: N parallella 401:or ger N separata
- * /auth/refresh-anrop (ingen deduplicering), vilket kan trigga oväntad utloggning pga
- * atomisk refresh-token-rotation på backend. Inga tester nedan antar eller assertar att
- * detta är korrekt — vi undviker medvetet scenarier med flera samtidiga 401:or.
+ *  5. Refresh-deduplicering (tryRefresh): N samtidiga 401:or delar EN pågående
+ *     /auth/refresh — inte N separata anrop. Servern roterar refresh-token atomiskt
+ *     (DELETE + INSERT i samma transaktion), så parallella anrop med samma cookie
+ *     skulle annars ogiltigförklara varandra (första lyckas, resten får "Invalid
+ *     refresh token") → falsk utloggning. Spärren (this.refreshPromise) nollställs
+ *     alltid när förnyelsen är klar (finally), så en senare, separat 401-cykel gör
+ *     ett nytt, riktigt anrop.
  *
  * Mönster (fetch-stub, localStorage-stub, färsk modul-instans) kopierat från
  * src/lib/api.test.ts — se den filen för kommentarer kring varför.
@@ -357,5 +359,210 @@ describe('retry-spärr — isRetry=true gör ingen andra proaktiv förnyelse', (
 
     const retryCall = fetchMock.mock.calls.filter((c) => urlOfCall(c).endsWith('/attachments'))[1];
     expect(headersOfCall(retryCall)['Authorization']).toBe(`Bearer ${rotatedToken}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. Refresh-deduplicering — N samtidiga 401:or delar EN pågående /auth/refresh
+// ---------------------------------------------------------------------------
+
+// Manuellt styrd promise — låter testet bestämma exakt NÄR ett fetch-svar
+// blir klart, istället för att förlita sig på setTimeout/väggklocka.
+function deferredResponse() {
+  let resolve!: (value: ReturnType<typeof fakeResponse>) => void;
+  const promise = new Promise<ReturnType<typeof fakeResponse>>((res) => { resolve = res; });
+  return { promise, resolve };
+}
+
+// Flusha microtask-kön ett antal varv. await-kedjan fetch → response.ok-koll →
+// this.tryRefresh() består bara av microtasks (inga timers), så det här är
+// deterministiskt — inte tidskänsligt.
+async function flushMicrotasks(times = 8): Promise<void> {
+  for (let i = 0; i < times; i++) {
+    await Promise.resolve();
+  }
+}
+
+const FAR_FUTURE_EXP = () => (Date.now() + 3_600_000) / 1000; // 1h kvar — ingen proaktiv refresh
+
+describe('tryRefresh-deduplicering — samtidiga 401:or delar EN förnyelse', () => {
+  it('N samtidiga request()-anrop får 401 → exakt ETT /auth/refresh, alla N retryar och lyckas med ny token', async () => {
+    localStorage.setItem('auth_token', makeToken(FAR_FUTURE_EXP()));
+    const freshToken = 'delad-fresh-token';
+    const N = 4;
+
+    const initial = Array.from({ length: N }, () => deferredResponse());
+    const retry = Array.from({ length: N }, () => deferredResponse());
+    const refresh = deferredResponse();
+    const attempts = new Array(N).fill(0);
+    let refreshCalls = 0;
+
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${BASE}/auth/refresh`) {
+        refreshCalls++;
+        return refresh.promise;
+      }
+      const m = /\/thing-(\d+)$/.exec(url);
+      const idx = Number(m![1]);
+      attempts[idx]++;
+      return attempts[idx] === 1 ? initial[idx].promise : retry[idx].promise;
+    });
+
+    const api = await freshApi();
+    const calls = Array.from({ length: N }, (_, i) => api.request<{ ok: boolean; idx: number }>(`/thing-${i}`));
+
+    await flushMicrotasks();
+    initial.forEach((d) => d.resolve(fakeResponse({ ok: false, status: 401 })));
+    await flushMicrotasks();
+
+    // Alla N har nu fått 401 och anropat tryRefresh() — men bara ETT har faktiskt nått fetch().
+    expect(refreshCalls).toBe(1);
+
+    refresh.resolve(fakeResponse({ json: () => Promise.resolve({ accessToken: freshToken }) }));
+    await flushMicrotasks();
+    retry.forEach((d, i) => d.resolve(fakeResponse({ json: () => Promise.resolve({ ok: true, idx: i }) })));
+
+    const results = await Promise.all(calls);
+
+    expect(refreshCalls).toBe(1); // fortfarande bara ett anrop totalt
+    results.forEach((r, i) => expect(r).toEqual({ ok: true, idx: i }));
+
+    // Alla N retry-anrop bar den NYA, delade token
+    for (let i = 0; i < N; i++) {
+      const retryCall = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/thing-${i}`)[1];
+      expect(headersOfCall(retryCall)['Authorization']).toBe(`Bearer ${freshToken}`);
+    }
+  });
+
+  it('om den delade förnyelsen failar → alla N går session-expired-vägen, fortfarande bara ETT refresh-anrop', async () => {
+    localStorage.setItem('auth_token', makeToken(FAR_FUTURE_EXP()));
+    const N = 3;
+
+    const initial = Array.from({ length: N }, () => deferredResponse());
+    const refresh = deferredResponse();
+    const attempts = new Array(N).fill(0);
+    let refreshCalls = 0;
+
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${BASE}/auth/refresh`) {
+        refreshCalls++;
+        return refresh.promise;
+      }
+      const m = /\/thing-(\d+)$/.exec(url);
+      const idx = Number(m![1]);
+      attempts[idx]++;
+      return initial[idx].promise; // ingen retry förväntas nå fram
+    });
+
+    const api = await freshApi();
+    const calls = Array.from({ length: N }, (_, i) => api.request(`/thing-${i}`).catch((e: unknown) => e as Error));
+
+    await flushMicrotasks();
+    initial.forEach((d) => d.resolve(fakeResponse({ ok: false, status: 401 })));
+    await flushMicrotasks();
+
+    expect(refreshCalls).toBe(1);
+
+    refresh.resolve(fakeResponse({ ok: false, status: 401 })); // den delade förnyelsen failar
+    const results = await Promise.all(calls);
+
+    expect(refreshCalls).toBe(1); // fortfarande bara ett — trots N väntande anropare
+    results.forEach((r) => {
+      expect(r).toBeInstanceOf(Error);
+      expect((r as Error).message).toBe('Session expired');
+    });
+    expect(window.location.href).toBe('/login');
+    expect(localStorage.getItem('auth_token')).toBeNull();
+  });
+
+  it('en förnyelse som startar EFTER att den förra är helt klar ger ett NYTT anrop — spärren fastnar inte', async () => {
+    localStorage.setItem('auth_token', makeToken(FAR_FUTURE_EXP()));
+    const firstFreshToken = 'forsta-fresh-token';
+    const secondFreshToken = 'andra-fresh-token';
+
+    let thingAttempts = 0;
+    let refreshCalls = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${BASE}/auth/refresh`) {
+        refreshCalls++;
+        const token = refreshCalls === 1 ? firstFreshToken : secondFreshToken;
+        return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ accessToken: token }) }));
+      }
+      thingAttempts++;
+      // 1:a och 3:e anropet (varje cykels första försök) nekas, resten lyckas.
+      if (thingAttempts === 1 || thingAttempts === 3) {
+        return Promise.resolve(fakeResponse({ ok: false, status: 401 }));
+      }
+      return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ ok: true }) }));
+    });
+
+    const api = await freshApi();
+
+    await api.request('/thing');
+    expect(refreshCalls).toBe(1);
+    expect(localStorage.getItem('auth_token')).toBe(firstFreshToken);
+
+    // Helt separat, senare 401-cykel — den delade förnyelsen ovan är för länge sedan klar
+    // (this.refreshPromise nollställdes i finally). Spärren får inte återanvända den.
+    await api.request('/thing');
+    expect(refreshCalls).toBe(2); // nytt, riktigt anrop
+    expect(localStorage.getItem('auth_token')).toBe(secondFreshToken);
+  });
+
+  it('request() och requestBlob() samtidigt delar samma refresh-spärr', async () => {
+    localStorage.setItem('auth_token', makeToken(FAR_FUTURE_EXP()));
+    const freshToken = 'blandad-fresh-token';
+
+    const reqInitial = deferredResponse();
+    const reqRetry = deferredResponse();
+    const blobInitial = deferredResponse();
+    const blobRetry = deferredResponse();
+    const refresh = deferredResponse();
+    let reqAttempts = 0;
+    let blobAttempts = 0;
+    let refreshCalls = 0;
+
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${BASE}/auth/refresh`) {
+        refreshCalls++;
+        return refresh.promise;
+      }
+      if (url === `${BASE}/mixed-request`) {
+        reqAttempts++;
+        return reqAttempts === 1 ? reqInitial.promise : reqRetry.promise;
+      }
+      if (url === `${BASE}/mixed-blob`) {
+        blobAttempts++;
+        return blobAttempts === 1 ? blobInitial.promise : blobRetry.promise;
+      }
+      throw new Error(`Oväntad URL i test: ${url}`);
+    });
+
+    const api = await freshApi();
+    const reqCall = api.request<{ ok: boolean }>('/mixed-request');
+    const blobCall = api.requestBlob('/mixed-blob');
+
+    await flushMicrotasks();
+    reqInitial.resolve(fakeResponse({ ok: false, status: 401 }));
+    blobInitial.resolve(fakeResponse({ ok: false, status: 401 }));
+    await flushMicrotasks();
+
+    // Två helt olika ingångar (request/requestBlob), samtidigt — ändå EN delad förnyelse.
+    expect(refreshCalls).toBe(1);
+
+    refresh.resolve(fakeResponse({ json: () => Promise.resolve({ accessToken: freshToken }) }));
+    await flushMicrotasks();
+    reqRetry.resolve(fakeResponse({ json: () => Promise.resolve({ ok: true }) }));
+    blobRetry.resolve(fakeResponse({ blob: () => Promise.resolve(new Blob(['data'])) }));
+
+    const [reqResult] = await Promise.all([reqCall, blobCall]);
+
+    expect(refreshCalls).toBe(1);
+    expect(reqResult).toEqual({ ok: true });
+
+    const reqRetryCall = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/mixed-request`)[1];
+    const blobRetryCall = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/mixed-blob`)[1];
+    expect(headersOfCall(reqRetryCall)['Authorization']).toBe(`Bearer ${freshToken}`);
+    expect(headersOfCall(blobRetryCall)['Authorization']).toBe(`Bearer ${freshToken}`);
   });
 });
