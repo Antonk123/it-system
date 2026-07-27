@@ -22,6 +22,14 @@ updates:
       # som inte finns i drift.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
+      # TypeScript 7 är EKOSYSTEM-BLOCKERAD: typescript-eslint (senaste 8.65.0)
+      # peer-kräver typescript <6.1.0, och en skarp install av 7.x kraschar
+      # typescript-estree (den nativa Go-kompilatorn saknar JS-API:t). Lint är en
+      # obligatorisk gate via husky → 7.x är omöjlig att merga och PR:en blir bara
+      # brus varje vecka. Vi ligger på 6.0.3, som är inom peer-intervallet.
+      # TA BORT DEN HÄR SPÄRREN när typescript-eslint släpper TS7-stöd.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
 
   # Backend (server/package.json)
   - package-ecosystem: "npm"
@@ -40,6 +48,10 @@ updates:
     ignore:
       # Samma som frontend: håll @types/node i linje med Node-runtime (22).
       - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # Samma som frontend: TypeScript 7 är ekosystem-blockerad av typescript-eslint.
+      # Ta bort spärren samtidigt i båda när stödet landar.
+      - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
 
   # GitHub Actions i workflowsen (pinnade actions hålls aktuella)
