@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { motion, type Variants } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import { Ticket, Clock, CheckCircle, AlertTriangle, ArrowRight, PauseCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { useActiveQueue } from '@/hooks/useActiveQueue';
 import { useUsers } from '@/hooks/useUsers';

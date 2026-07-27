@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { TagAnalyticsRow } from '@/lib/api';
 import { cn } from '@/lib/utils';
 

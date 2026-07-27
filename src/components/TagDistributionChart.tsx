@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, BarRectangleItem } from 'recharts';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { TagAnalyticsRow } from '@/lib/api';
 import { cn } from '@/lib/utils';
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { BookOpen, Folder, AlertCircle, Calendar } from 'lucide-react';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { KBImageLightbox } from '@/components/KBImageLightbox';

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { Link as LinkIcon, X, Loader2, Search } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { TicketLink } from '@/types/ticket';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PriorityBadge } from '@/components/PriorityBadge';

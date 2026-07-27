@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, CheckCircle2, Circle, Loader2, AlertCircle, Tag } from 'lucide-react';

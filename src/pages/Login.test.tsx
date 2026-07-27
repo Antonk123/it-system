@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StrictMode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 
 const completeSsoLogin = vi.fn();
 vi.mock('@/contexts/AuthContext', () => ({
@@ -16,8 +16,8 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 const navigate = vi.fn();
-vi.mock('react-router-dom', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('react-router-dom')>()),
+vi.mock('react-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-router')>()),
   useNavigate: () => navigate,
 }));
 

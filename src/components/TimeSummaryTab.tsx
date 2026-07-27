@@ -13,7 +13,7 @@ import { formatDuration } from '@/lib/duration';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Clock } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 
 const COLORS = [
   'hsl(var(--primary))',

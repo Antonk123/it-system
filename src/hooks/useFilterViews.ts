@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FilterView, FilterViewsState } from '@/types/filterView';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 const STORAGE_KEY = 'filter-views';
 

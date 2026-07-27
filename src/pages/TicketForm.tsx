@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router';
 import { ArrowLeft, Loader2, PlusCircle, Pencil, ChevronDown } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { ticketKeys } from '@/hooks/useTickets';

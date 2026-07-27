@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { memo, useEffect, useMemo, useState } from 'react';

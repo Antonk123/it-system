@@ -1,7 +1,7 @@
 import { memo, useRef } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { Ticket as TicketType } from '@/types/ticket';
 import { TagBadges } from './TagBadges';
 import { PriorityBadge } from './PriorityBadge';

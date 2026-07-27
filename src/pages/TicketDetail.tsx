@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { useNavigate, useParams, Link, useLocation } from 'react-router-dom';
+import { useNavigate, useParams, Link, useLocation } from 'react-router';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Loader2, ListChecks, Plus, Camera, Sparkles, RefreshCw, Check, X, MoreVertical, Bell } from 'lucide-react';

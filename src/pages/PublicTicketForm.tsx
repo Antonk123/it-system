@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, Send, AlertCircle, Loader2, ArrowLeft, Sparkles, ThumbsUp, ArrowRight, FileText } from 'lucide-react';
-import { Link, Navigate } from 'react-router-dom';
+import { Link, Navigate } from 'react-router';
 import { api, CustomFieldInput, TemplateFieldRow } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';

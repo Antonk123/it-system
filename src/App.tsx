@@ -2,7 +2,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useNavigationType } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useNavigationType } from "react-router";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
 import { parseSwNavigateMessage } from "@/lib/swNavigation";

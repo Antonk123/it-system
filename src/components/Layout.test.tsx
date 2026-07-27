@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // Layout pulls in several heavy children (command palette, FAB, tab bar,

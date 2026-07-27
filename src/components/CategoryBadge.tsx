@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router';
 import { Badge } from '@/components/ui/badge';
 import { useCategories } from '@/hooks/useCategories';
 import { Tag } from 'lucide-react';

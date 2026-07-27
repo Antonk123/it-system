@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useSearchParams, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate, useLocation } from 'react-router';
 import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Loader2, Inbox } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';

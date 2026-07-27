@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Layout } from '@/components/Layout';
 import { useRecurringTemplates, RecurringTemplate, CreateTemplateInput } from '@/hooks/useRecurringTemplates';
 import { useCategories } from '@/hooks/useCategories';

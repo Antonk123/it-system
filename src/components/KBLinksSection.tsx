@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { BookOpen, X, Search, Loader2, FilePlus, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
