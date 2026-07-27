@@ -60,7 +60,7 @@ Exceptions in `eslint.config.js`:
 ## Import Organization
 
 **Order (frontend):**
-1. React/framework imports (`react`, `react-router-dom`, `date-fns`)
+1. React/framework imports (`react`, `react-router`, `date-fns`)
 2. Third-party libraries (`lucide-react`, `@tanstack/react-query`, etc.)
 3. Internal hooks (`@/hooks/...`)
 4. Internal components (`@/components/...`)
