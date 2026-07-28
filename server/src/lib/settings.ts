@@ -28,7 +28,7 @@ export function getBoolSetting(key: string, fallback: boolean): boolean {
 /**
  * Shared gate for the customer-facing email senders. Today it's a plain on/off
  * read of two_way_email_enabled and IGNORES the recipient. The recipient arg is
- * here so a future "internal-only" mode (only @prefabmastarna.se) is a one-place
+ * here so a future "internal-only" mode (e.g. only @your-company.example) is a one-place
  * change — see docs/superpowers/specs/2026-06-26-two-way-email-toggle-design.md.
  */
 export function shouldEmailCustomer(_recipientEmail: string): boolean {

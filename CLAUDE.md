@@ -10,7 +10,7 @@ Affärsmodell: open source + betald support/managed hosting. Ingen multi-tenancy
 
 | Lager | Teknologi |
 |-------|-----------|
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS, shadcn/ui, Framer Motion, TipTap, @tanstack/react-query |
+| Frontend | React 19, TypeScript, Vite, react-router, Tailwind CSS, shadcn/ui, Framer Motion, TipTap, @tanstack/react-query |
 | Backend | Node.js, Express 5, TypeScript |
 | Databas | SQLite via better-sqlite3, FTS5 contentless för fulltext |
 | AI | Anthropic Claude SDK (deflection, draft, summary, kategorisering) |

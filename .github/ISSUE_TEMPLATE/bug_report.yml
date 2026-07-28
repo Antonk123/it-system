@@ -1,0 +1,74 @@
+name: Bug report
+description: Report something that is broken or behaving unexpectedly.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please keep this focused — short reports get triaged faster.
+  - type: checkboxes
+    id: no-secrets
+    attributes:
+      label: No secrets included
+      description: Double-check logs, screenshots, and config snippets before submitting — this is a public issue.
+      options:
+        - label: I have removed any tokens, passwords, API keys, or other secrets from this report.
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What did you observe?
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+  - type: textarea
+    id: repro-steps
+    attributes:
+      label: Steps to reproduce
+      description: Number the steps so they can be followed exactly.
+      placeholder: |
+        1. Go to '...'
+        2. Click on '...'
+        3. See error
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment type
+      options:
+        - Docker Compose
+        - setup.sh
+        - Local development (npm run dev / tsx watch)
+        - Other / not sure
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit SHA
+      description: Output of `git rev-parse HEAD`, a release tag, or the version shown in the app if available.
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser (if this is a frontend issue)
+      description: Name and version, e.g. "Chrome 126". Leave blank for backend-only issues.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Server logs, browser console output, or stack traces. This will be formatted as code automatically.
+      render: shell
+    validations:
+      required: false

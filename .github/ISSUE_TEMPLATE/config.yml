@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/Antonk123/it-system/security/advisories/new
+    about: Please do not report security vulnerabilities through public issues. Use GitHub's private advisory form instead.

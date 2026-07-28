@@ -1,58 +1,63 @@
-# Säkerhetspolicy
+# Security Policy
 
-IT-Ticket hanterar autentisering, kunddata, fakturering och e-postintegration.
-Vi tar säkerhetsrapporter på allvar och uppskattar ansvarsfull rapportering.
+IT-Ticket handles authentication, customer data, billing, and email
+integration. We take security reports seriously and appreciate responsible
+disclosure.
 
-## Rapportera en sårbarhet
+## Reporting a vulnerability
 
-**Öppna inte ett publikt issue för säkerhetsbrister.**
+**Do not open a public issue for security vulnerabilities.**
 
-Använd istället GitHubs privata kanal:
+Instead, use GitHub's private channel:
 
-1. Gå till repots **Security**-flik → **Report a vulnerability**
-   ([Privata security advisories](https://github.com/Antonk123/it-system/security/advisories/new)).
-2. Beskriv sårbarheten, påverkan och reproduktionssteg.
+1. Go to the repo's **Security** tab → **Report a vulnerability**
+   ([private security advisories](https://github.com/Antonk123/it-system/security/advisories/new)).
+2. Describe the vulnerability, its impact, and reproduction steps.
 
-Om du inte kan använda GitHub-flödet, kontakta underhållaren via profilen
-[@Antonk123](https://github.com/Antonk123).
+If you can't use the GitHub flow, contact the maintainer via the
+[@Antonk123](https://github.com/Antonk123) profile.
 
-### Vad du kan förvänta dig
+### What to expect
 
-| Steg | Mål |
-|------|-----|
-| Bekräftelse på mottagen rapport | inom 3 arbetsdagar |
-| Första bedömning (allvarsgrad, scope) | inom 7 arbetsdagar |
-| Åtgärd / fix | beroende på allvarsgrad; CRITICAL/HIGH prioriteras |
+| Step | Target |
+|------|--------|
+| Acknowledgement of receipt | within 3 business days |
+| Initial assessment (severity, scope) | within 7 business days |
+| Fix / remediation | depends on severity; CRITICAL/HIGH are prioritized |
 
-Vi krediterar gärna rapportörer i release-noteringen om så önskas.
+We're happy to credit reporters in the release notes if desired.
 
 ## Scope
 
-**I scope:** autentisering/sessioner (JWT, refresh tokens), CSRF, API-nyckel-
-hantering, webhook-signering, behörighetskontroller (IDOR), SQL-injection, XSS,
-SSRF, exponering av hemligheter eller kunddata, samt den publika deflection-
-portalen och e-post→ärende-flödet.
+**In scope:** authentication/sessions (JWT, refresh tokens), CSRF, API key
+handling, webhook signing, authorization checks (IDOR), SQL injection, XSS,
+SSRF, exposure of secrets or customer data, and the public deflection portal
+and email-to-ticket flow.
 
-**Utanför scope:** sårbarheter som kräver fysisk åtkomst till servern, social
-engineering, eller brister i tredjepartsberoenden utan en demonstrerbar
-exploaterbar väg i IT-Ticket (rapportera dessa uppströms; vi spårar dem via
-Dependabot + `npm audit` i CI).
+**Out of scope:** vulnerabilities requiring physical access to the server,
+social engineering, or issues in third-party dependencies without a
+demonstrable, exploitable path through IT-Ticket (report those upstream; we
+track them via Dependabot + a CI audit gate).
 
-## Säkerhetsmodell (kort)
+## Security model (summary)
 
-- **Auth:** JWT-access tokens (15 min) + roterande refresh tokens.
-- **API-nycklar:** SHA-256-hashade, prefix-lookup — rånyckeln lagras aldrig.
-- **Webhooks:** HMAC-signerade event.
-- **CSRF:** dubbel-submit via `csrf-csrf`, `X-CSRF-Token`-header på muterande anrop.
-- **Hemligheter:** backend vägrar starta (`process.exit(1)`) om `JWT_SECRET`
-  eller `CSRF_SECRET` saknas, eller är kortare än 32 tecken (fail-closed; svag-
-  secret-opt-in endast i dev/test bakom dubbel-gate).
-- **SQL:** parametriserade frågor; dynamiska kolumnnamn allow-listas.
-- **Beroenden:** `npm audit --audit-level=high` blockerar CI; Dependabot
-  veckovis.
+- **Auth:** JWT access tokens (15 min) + rotating refresh tokens.
+- **API keys:** SHA-256 hashed with prefix lookup — the raw key is never
+  stored.
+- **Webhooks:** HMAC-signed events.
+- **CSRF:** double-submit via `csrf-csrf`, `X-CSRF-Token` header on mutating
+  requests.
+- **Secrets:** the backend refuses to start (`process.exit(1)`) if
+  `JWT_SECRET` or `CSRF_SECRET` is missing or shorter than 32 characters
+  (fail-closed; the weak-secret opt-in only works in dev/test behind a
+  double gate).
+- **SQL:** parameterized queries; dynamic column names are allow-listed.
+- **Dependencies:** a CI gate (`scripts/audit-check.mjs`) blocks the build on
+  high/critical `npm audit` advisories, with a narrow, justified allowlist
+  for advisories confirmed unreachable in this app; Dependabot runs weekly.
 
-## Versioner som stöds
+## Supported versions
 
-IT-Ticket driftas som **en instans per deployment** (ingen multi-tenancy) och
-levereras rullande från `main`. Säkerhetsfixar landar på `main` — kör senaste
-`main` för att vara skyddad. Det finns ingen separat LTS-gren.
+IT-Ticket is deployed as **one instance per deployment** (no multi-tenancy)
+and shipped on a rolling basis from `main`. Security fixes land on `main` —
+run the latest `main` to stay protected. There is no separate LTS branch.

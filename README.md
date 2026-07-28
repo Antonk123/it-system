@@ -1,162 +1,259 @@
-# IT Ticket System
+# IT-Ticket
+
+**A self-hosted helpdesk for the technician doing the work, not the manager tracking it — ticket to invoice in one system, with no per-agent license fee.**
+
+[![CI](https://github.com/Antonk123/it-system/actions/workflows/ci.yml/badge.svg)](https://github.com/Antonk123/it-system/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-22-339933?logo=node.js&logoColor=white)](.nvmrc)
+
+![Ticket board](docs/screenshots/ticket-board.png)
+
+> **Read this first:** the application UI is currently **Swedish only**. There is no i18n layer —
+> interface strings are hardcoded and `index.html` ships `lang="sv"`. The code, API and
+> documentation are English. If you need an English UI today, this is not ready for you yet;
+> translating it is the most valuable contribution available right now.
+
+---
+
+## Why this instead of Jira / Freshdesk / Zendesk
+
+If you are a one-person IT shop or a small MSP, those tools charge per agent per month, forever,
+for a workflow built around software project management or enterprise support tiers you will
+never use. The concrete differences:
+
+- **No per-user pricing.** MIT-licensed and self-hosted. Add ten technicians tomorrow and your
+  bill does not change, because there is no bill.
+- **Your data stays on your infrastructure.** A SQLite file on your disk, your backups, your
+  retention policy. Nothing leaves the server unless you configure it to — SMTP, IMAP, or the
+  optional Anthropic API for the AI features.
+- **Ticket → invoice in the same system.** Time logged against a ticket rolls up into
+  per-customer invoicing without exporting to a second tool.
+- **Built around the technician's loop**, not a project board: email-to-ticket, a knowledge base
+  the AI cites back to you, SLA tracking, and a public deflection portal that tries to answer the
+  customer's question before it becomes a ticket at all.
+
+**Where it is genuinely weaker.** Read this before you install it:
+
+- **Swedish-only UI**, as above.
+- **No multi-tenancy.** One deployment serves one organization. Isolating clients from each other
+  means running separate instances — there is no tenant-scoping layer to audit or trust.
+- **Not built for horizontal scaling.** SQLite is a single-writer store and rate limiting is
+  in-memory per process. More than one backend replica behind a load balancer gives you
+  inconsistent rate limiting and `SQLITE_BUSY` contention as soon as two writers collide.
+- **No native mobile app.** It is an installable PWA, not an App Store listing.
+- **No 2FA on password login.** OIDC SSO is an alternative login path, not a second factor
+  layered on top of the password flow.
+- **Young project, small community.** It runs in daily production use at one organization, but it
+  has not had years of diverse deployments hammering on it. Read the code before you trust it
+  with something critical — the same way you would with any young open-source tool.
 
 ## Features
 
-- Ärendehantering med full livscykel, anpassade fält och mallar
-- Kunskapsbas med fulltext-sökning (FTS5)
-- AI-stöd: svarsförslag, sammanfattning, kategorisering, deflection-portal
-- Tidsrapportering och fakturering per kund
-- E-post → ärende (IMAP-polling med OAuth2)
-- Web push-notiser och e-postnotifieringar
-- Multi-user med roller och API-nycklar
-- SSO-inloggning via OIDC (t.ex. Microsoft Entra ID) — valfritt tillägg till lösenordsinloggning
-- 6 teman, PWA, responsiv design
+**Ticketing** — full lifecycle with custom fields and templates, checklists, ticket linking,
+public share links, and recurring tickets for maintenance that repeats on a schedule.
 
-## Snabbstart
+**Knowledge base & AI** — full-text search (SQLite FTS5) over a knowledge base the AI features
+cite. Optional Claude-powered draft replies, ticket summaries, category suggestions, and an
+unauthenticated deflection portal that offers a KB-backed answer before a ticket is filed. All AI
+is opt-in: leave `ANTHROPIC_API_KEY` unset and everything else behaves identically.
 
-Kräver Docker och Docker Compose.
+**Time & billing** — time tracking per ticket, rolled up into per-customer invoices with gapless
+invoice numbering.
 
-### Automatisk installation (rekommenderat)
+**Communication** — email-to-ticket over IMAP (basic auth or Microsoft 365 OAuth2 client
+credentials), outbound notification mail, and web push notifications.
+
+**Access & integration** — multi-user accounts with roles, API keys with read/write scopes,
+HMAC-signed outbound webhooks, and optional OIDC SSO (e.g. Microsoft Entra ID) alongside password
+login.
+
+**Operations** — SLA tracking with escalation, automatic closing of idle tickets, scheduled
+backups with retention and an optional off-site copy step, an audit log, and six UI themes.
+
+![Ticket detail](docs/screenshots/ticket-detail.png)
+
+## Quickstart
+
+Requires Docker and Docker Compose v2.
 
 ```sh
 bash <(curl -fsSL https://raw.githubusercontent.com/Antonk123/it-system/main/setup.sh)
 ```
 
-Scriptet guidar dig genom konfigurationen och startar systemet. När det är klart visas URL och inloggningsuppgifter. Avinstallera med [`uninstall.sh`](uninstall.sh).
+The installer checks prerequisites, prompts for organization name, admin credentials and optional
+API/SMTP settings, generates a `.env` with fresh secrets, builds the images and starts the stack.
+It prints a URL and the admin login when it finishes. Remove it again with
+[`uninstall.sh`](uninstall.sh).
 
-### Lokal utveckling
+Manual equivalent:
 
 ```sh
 git clone https://github.com/Antonk123/it-system.git
 cd it-system
-cp .env.example .env          # Fyll i JWT_SECRET och CSRF_SECRET
-# Lägg till i .env vid lokal körning (docker-compose.local kör NODE_ENV=production):
-# CORS_ORIGIN=http://localhost:8082
+cp .env.example .env      # set JWT_SECRET and CSRF_SECRET — openssl rand -base64 32
 docker compose -f docker-compose.local.yml up --build
 ```
 
-Frontend: `http://localhost:8082` — Backend: `http://localhost:3002/api`
+Frontend on `:8082`, API on `:3002/api`.
 
-### Miljövariabler
+## Architecture
 
-All konfiguration sker via `.env`. Se [`.env.example`](.env.example) för dokumenterade variabler.
+Single-tenant by design: one Compose stack serves one organization. There is no tenant-routing
+layer and no shared database between customers — isolation is "separate deployment", not
+"separate row".
 
-| Variabel | Krävs | Beskrivning |
-|----------|-------|-------------|
-| `JWT_SECRET` | Ja | JWT-signeringsnyckel |
-| `CSRF_SECRET` | Ja (prod) | CSRF-tokensignering |
-| `CORS_ORIGIN` | Ja (prod) | Tillåtna origins (kommaseparerat) |
-| `APP_BASE_URL` | Ja | Bas-URL för länkar i mejl |
-| `BRAND_NAME` | Nej | Varumärke i utgående mejl (default: `IT-Support`) |
-| `ANTHROPIC_API_KEY` | Nej | Aktiverar AI-funktioner |
-| `AI_MODEL` | Nej | Claude-modell för AI-funktioner (default: Haiku 4.5) |
-| `AI_MODEL_SMART` | Nej | Starkare modell för draft och summary |
-| `AI_MONTHLY_TOKEN_LIMIT` | Nej | Circuit-breaker för månatlig tokenanvändning (default: 5 000 000) |
-| `AUTO_CLOSE_DAYS` | Nej | Dagar tills lösta ärenden stängs automatiskt (default: 30) |
-| `BACKUP_RETENTION_DAYS` | Nej | Antal dagar att behålla automatiska backupar (default: 7) |
-| `PUSH_AGING_DAYS` | Nej | Push-notis om ärenden utan uppdatering i X dagar (default: 7) |
-| `SMTP_HOST/PORT/USER/PASS` | Nej | Utgående e-post |
-| `IMAP_HOST/PORT/USER` | Nej | E-post → ärende |
-| `VAPID_PUBLIC_KEY/PRIVATE_KEY` | Nej | Push-notiser |
-| `OIDC_ISSUER_URL/CLIENT_ID/CLIENT_SECRET/REDIRECT_URI` | Nej | SSO-inloggning via OIDC — knappen visas när alla fyra är satta |
-
-## API-översikt
-
-**Maskinläsbart kontrakt:** [`docs/openapi.yaml`](docs/openapi.yaml) (OpenAPI 3.0).
-Öppna [`docs/api.html`](docs/api.html) i en webbläsare för en renderad, klickbar
-referens (Redoc) — eller generera en klient-SDK från specen. Validera med
-`npm run openapi:lint` (körs även i CI). Snabböversikt nedan; `docs/API.md` har prosan.
-
-Alla endpoints ligger under `/api`. Autentisering via JWT Bearer-token **eller**
-API-nyckel (`Authorization: Bearer itk_live_...`). CSRF-skydd via `x-csrf-token`-header
-på muterande sessions-anrop (API-nyckel-anrop är undantagna).
-
-| Endpoint | Beskrivning |
-|----------|-------------|
-| `POST /api/auth/login` | Logga in, få JWT + refresh token |
-| `GET /api/auth/oidc/*` | SSO-inloggning via OIDC (enabled/login/callback) |
-| `GET /api/tickets` | Lista ärenden (filter, sökning, paginering) |
-| `POST /api/tickets` | Skapa ärende |
-| `GET /api/tickets/:id` | Hämta ärende med kommentarer |
-| `PUT /api/tickets/:id` | Uppdatera ärende |
-| `GET /api/contacts` | Lista kontakter/kunder |
-| `GET /api/companies` | Lista företag |
-| `GET /api/categories` | Lista kategorier |
-| `GET /api/tags` | Lista taggar |
-| `GET /api/templates` | Ärendemallar |
-| `GET /api/kb` | Kunskapsbas-artiklar |
-| `GET /api/reports/*` | Rapporter och statistik |
-| `GET /api/billing/*` | Fakturering per kund |
-| `GET /api/sla` | SLA-konfiguration och status |
-| `GET /api/webhooks` | Webhook-konfiguration |
-| `GET /api/api-keys` | API-nyckelhantering |
-| `GET /api/time-entries` | Tidsrapportering |
-| `GET /api/recurring` | Återkommande ärenden |
-| `GET /api/users` | Användare och roller (admin) |
-| `POST /api/comments/:ticketId` | Kommentarer på ärenden |
-| `GET /api/attachments/ticket/:ticketId` | Bilagor per ärende |
-| `GET /api/links` | Länkade ärenden |
-| `GET /api/shares` | Publika dela-länkar |
-| `GET /api/checklists` | Checklistor |
-| `GET /api/checklist-templates` | Checklistmallar (separat router) |
-| `POST /api/push/subscribe` | Web push-prenumerationer |
-| `POST /api/public/ai-suggest` | Publik deflection-AI (oautentiserad portal) |
-| `POST /api/email-inbound/*` | Inkommande e-post → ärende |
-| `GET /api/backup` | Ladda ner backup (admin) |
-| `POST /api/backup/restore` | Återställ backup (admin) |
-| `GET /api/health` | Hälsokontroll |
-
-Se respektive routfil i `server/src/routes/` för fullständig dokumentation.
-
-## Tech stack
-
-| Lager | Teknologi |
-|-------|-----------|
-| Frontend | React, TypeScript, Vite, Tailwind CSS, shadcn/ui |
-| Backend | Node.js, Express, TypeScript |
-| Databas | SQLite via better-sqlite3, FTS5 |
-| AI | Claude API (Anthropic) |
-| Deploy | Docker (nginx + Node), Docker Compose |
-
-En interaktiv arkitekturkarta (moduler, flöden och samtliga endpoints) finns i
-[`docs/architecture-map.html`](docs/architecture-map.html) — öppna den i en webbläsare.
-
-## Portainer
-
-Om du föredrar att hantera containers via Portainer istället för Docker Compose:
-
-1. Klona och bygg images:
-```sh
-git clone https://github.com/Antonk123/it-system.git /opt/it-ticketing
-cd /opt/it-ticketing
-docker build -t it-ticketing-backend:latest -f Dockerfile.server .
-docker build -t it-ticketing-frontend:latest -f Dockerfile.client .
+```
+                    ┌──────────────────────────┐
+                    │  React SPA (Vite)        │
+                    │  served by nginx         │
+                    └────────────┬─────────────┘
+                                 │ JWT bearer + CSRF
+                                 ▼
+┌──────────────────────────────────────────────────────────────┐
+│                   Express 5 API (Node 22)                    │
+│  passport (JWT + local) · csrf-csrf · helmet                 │
+│  27 route modules under /api/*                               │
+│                                                              │
+│  background schedulers (node-cron):                          │
+│   reminders · backups · auto-close · recurring tickets ·     │
+│   webhook retry · SLA breach checks · push aging             │
+│                                                              │
+│  IMAP poller (ImapFlow + @azure/msal-node) → mail-to-ticket  │
+└───────────┬──────────────────────────────┬───────────────────┘
+            ▼                              ▼
+ ┌────────────────────────┐   ┌──────────────────────────────┐
+ │ SQLite (better-sqlite3)│   │ Outbound webhooks            │
+ │ WAL mode, single file  │   │ HMAC-SHA256 signed, persisted│
+ │ 2 contentless FTS5     │   │ before delivery, retried with│
+ │ tables (tickets, KB)   │   │ exponential backoff          │
+ └────────────────────────┘   └──────────────────────────────┘
 ```
 
-2. Skapa en **Stack** i Portainer med innehållet från [`docker-compose.local.yml`](docker-compose.local.yml) (genereras av setup.sh), eller skapa containers manuellt.
+An interactive map of every module and endpoint is checked in:
+[`docs/architecture-map.html`](docs/architecture-map.html) — open it in a browser.
 
-3. Konfigurera environment-variabler i Portainer — se [`.env.example`](.env.example) för alla tillgängliga variabler. Minst dessa krävs:
-   - `JWT_SECRET` — generera med `openssl rand -base64 32`
-   - `CSRF_SECRET` — generera med `openssl rand -base64 32`
-   - `CORS_ORIGIN` — din app-URL
-   - `APP_BASE_URL` — samma som ovan
+## Security model
 
-4. Initiera databasen:
+Full detail in [`SECURITY.md`](SECURITY.md). The short version, each row traced to the file that
+implements it:
+
+| Mechanism | Implementation | Where |
+|---|---|---|
+| Access tokens | JWT, HS256, 15-minute lifetime, verified by `passport-jwt` | `server/src/config/passport.ts` |
+| Refresh | Rotating refresh tokens in an HttpOnly cookie | `server/src/routes/auth.ts` |
+| API keys | `Bearer itk_live_…`, SHA-256 hashed at rest, constant-time compare; the raw key is never stored | `server/src/middleware/auth.ts` |
+| API key scopes | `read` (default) / `write`. A key without `write` gets **403** on every mutating request — the key's scope is the credential, not the user's role | `server/src/middleware/auth.ts` |
+| CSRF | Double-submit cookie; `x-csrf-token` required on cookie-authenticated mutations. Exempt: `/api/auth/login`, `/api/auth/refresh`, `/api/public/*`, and API-key requests, none of which ride on an ambient cookie | `server/src/app.ts` |
+| Secrets fail closed | The backend exits with code 1 at boot if `JWT_SECRET` or `CSRF_SECRET` is missing — unconditionally, in every environment. Same exit if either is shorter than 32 characters, unless **both** `ALLOW_WEAK_SECRETS=1` **and** `NODE_ENV` is `development`/`test`, so a misconfigured production with `NODE_ENV` unset cannot silently fail open | `server/src/config/secretValidation.ts` |
+| Webhooks | Payloads signed HMAC-SHA256 in `X-Webhook-Signature`; the delivery row is persisted *before* the first attempt so retries survive a crash; the target URL is re-resolved immediately before each request, guarding against a registered host that later resolves to an internal address | `server/src/lib/webhookDispatcher.ts` |
+| Headers | `helmet` with an explicit CSP (`default-src 'self'`, no inline scripts), HSTS with preload, `noSniff` | `server/src/app.ts` |
+
+**Not solved:** rate limiting is in-memory and per-process; there is no 2FA on password login;
+there is no encryption at rest for the SQLite file, so confidentiality is delegated to filesystem
+and host security; and public ticket share links do not expire — they stay valid until an
+authenticated user revokes them.
+
+Found a vulnerability? **Do not open a public issue** — use the private
+[security advisory form](https://github.com/Antonk123/it-system/security/advisories/new).
+
+## Data & operations
+
+**Storage.** SQLite via `better-sqlite3` in WAL mode with `foreign_keys=ON`. One writer at a
+time, no separate database process to operate, and a backup is "copy a file" rather than
+coordinating a dump against a running cluster. Full-text search uses two *contentless* FTS5
+tables kept in sync by triggers, so ticket and article bodies are not stored on disk twice.
+
+**Migrations.** Forward-only, no `down()`. Each migration is id-stamped in a `schema_migrations`
+table so re-runs are idempotent, executes inside a transaction, and halts startup if it throws
+rather than leaving the schema half-applied. Migrations run automatically on every server start —
+there is no separate "remember to migrate" deploy step.
+
+**Backup and restore are both exercised by tests, not merely documented.** Backups take a
+WAL-safe online snapshot, run `PRAGMA integrity_check` before the snapshot enters rotation, zip
+it together with uploads, and `chmod 0600` the archive because it contains the entire database.
+Restore is protected against zip-slip, verifies the SQLite magic header, sanity-checks that the
+expected tables exist before anything is swapped, and keeps a rollback copy until the swap
+succeeds.
+
+**Where data lives.** `data/database.sqlite` plus `data/uploads/` inside the backend container,
+expected to sit on a persistent volume; `DB_PATH` and `UPLOAD_DIR` override the location.
+Operational detail is in [`docs/OPERATIONS.md`](docs/OPERATIONS.md), upgrade and rollback steps in
+[`docs/RUNBOOK.md`](docs/RUNBOOK.md).
+
+## Quality gates
+
+What CI runs on every push and pull request — four jobs, all required:
+
+| Job | Runs | Fails on |
+|---|---|---|
+| `lint-and-typecheck` | ESLint across the repo, `tsc --noEmit` against both tsconfigs, the frontend suite, `redocly lint docs/openapi.yaml` | any lint or type error, any failing test, an invalid OpenAPI spec |
+| `lint-server` | server typecheck, backend suite with coverage enforced | a failing test, or coverage dropping below the ratchet thresholds — which are raised as coverage improves and never lowered to make a build pass |
+| `docker-build` | builds both production images | image build failure, catching Dockerfile drift a green test suite would not |
+| `security-audit` | `scripts/audit-check.mjs` against both dependency trees | **any high or critical advisory**, unless listed in `audit-allowlist.json` with a written justification *and* an expiry date. That allowlist currently has **zero entries** — nothing is being suppressed |
+
+**1,225 tests across 86 files**, frontend and backend suites combined. Every GitHub Actions step
+is pinned to a commit SHA rather than a movable tag. Husky and lint-staged run the same ESLint
+rules before a commit is allowed to land.
+
+## Development setup
+
+Node 22 (pinned in [`.nvmrc`](.nvmrc)) and **two independent `package.json` trees**, each with its
+own lockfile and test suite: the repo root is the React/Vite frontend, `server/` is the Express
+backend.
+
 ```sh
-docker exec -e ADMIN_EMAIL="admin@example.com" \
-  -e ADMIN_PASSWORD="DittLösenord123!" \
-  -e ADMIN_NAME="Admin" \
-  it-ticketing-backend node dist/db/init.js
+npm ci                        # frontend deps
+cd server && npm ci && cd ..  # backend deps
 ```
 
-## Konfiguration
+| Where | Command | Does |
+|---|---|---|
+| root | `npm run dev` | Vite dev server |
+| root | `npm test` | frontend suite |
+| root | `npm run lint` | ESLint over the whole repo |
+| root | `npm run build` | production frontend build |
+| `server/` | `npm run dev` | `tsx watch`, no build step |
+| `server/` | `npm test` | backend suite |
+| `server/` | `npm run build` | `tsc` plus copying `schema.sql` into `dist/` |
 
-All konfiguration sker via `.env`-filen som skapas av setup-scriptet. Se [`.env.example`](.env.example) för alla tillgängliga variabler med dokumentation.
+## Configuration
 
-- **AI:** Sätt `ANTHROPIC_API_KEY` för AI-funktioner
-- **E-post:** SMTP för notifieringar, IMAP för e-post → ärende
-- **Push:** VAPID-nycklar genereras automatiskt vid installation
+Everything is environment variables — see [`.env.example`](.env.example) for the full commented
+list. What actually gates startup:
 
-## Licens
+| Variable | Required | If missing or weak |
+|---|---|---|
+| `JWT_SECRET` | yes | process exits with code 1 at boot; same if under 32 characters |
+| `CSRF_SECRET` | yes | same fail-closed behavior |
+| `CORS_ORIGIN` | in production | no browser origin is allowlisted and the SPA cannot call the API |
+| `APP_BASE_URL` | yes | used to build links in outgoing email |
+| `ANTHROPIC_API_KEY` | no | AI features are disabled; nothing else changes |
+| `SMTP_*` / `IMAP_*` | no | outbound mail and mail-to-ticket, independently optional |
+| `VAPID_*` | no | web push; generated by the setup script |
+| `OIDC_*` | no | the SSO button appears only once all four values are set |
 
-MIT
+## API
+
+Machine-readable contract: [`docs/openapi.yaml`](docs/openapi.yaml) (OpenAPI 3.0, validated in
+CI). Rendered reference: [`docs/api.html`](docs/api.html). Prose reference with auth chains and
+rate limits per route: [`docs/API.md`](docs/API.md).
+
+Everything is mounted under `/api`. Authentication is a JWT bearer token **or** an API key;
+mutating requests additionally require the `x-csrf-token` header unless authenticated by API key.
+
+## Contributing
+
+Setup, quality bar and PR process: [`CONTRIBUTING.md`](CONTRIBUTING.md). Your branch clears the
+same lint, typecheck, test and audit gates CI runs — there is no looser bar for external
+contributions.
+
+## Project status
+
+IT-Ticket runs in daily production use at one organization and is developed as a general-purpose
+product rather than a one-off internal tool. Core ticketing, billing, email and AI features are
+solid and covered by the test suite; expect rougher edges than a project with years of external
+users behind it. Issues and pull requests are welcome.
+
+## License
+
+[MIT](LICENSE)

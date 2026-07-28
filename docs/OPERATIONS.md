@@ -35,8 +35,8 @@ load-balancer eller orchestrator (Docker/Portainer healthcheck) ska sluta
 dirigera trafik till instansen vid 503.
 
 ```bash
-# Snabbkoll mot prod
-curl -s https://ticket.prefabmastarna.se/api/health
+# Snabbkoll mot prod (byt ut mot din egen instans URL)
+curl -s https://helpdesk.example.com/api/health
 # Mot dev
 curl -s http://<server-ip>:5174/api/health
 ```

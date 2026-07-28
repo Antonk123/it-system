@@ -245,5 +245,6 @@ docker compose -f docker-compose.local.yml --env-file .env up -d
 
 Vid problem som inte löses av denna handbok, kontakta:
 
-- **E-post:** support@prefabmastarna.se
-- **SLA:** Svar inom 1 arbetsdag, fix inom 5 arbetsdagar
+- **Driftansvarig för din instans** — fyll i kontaktvägen som gäller hos er.
+- **Buggar och säkerhetsproblem i själva projektet:** se `SECURITY.md` (säkerhet rapporteras
+  privat via GitHub Security Advisories, inte som publik issue).

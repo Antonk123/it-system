@@ -7,7 +7,7 @@
 > Accuracy over exhaustive prose — where a request input or response shape was not
 > trivially inferable from the handler it is omitted rather than invented.
 
-All paths are relative to the server origin (e.g. `https://ticket.prefabmastarna.se`).
+All paths are relative to the server origin (e.g. `https://helpdesk.example.com`).
 All API routes are mounted under `/api`. Responses are JSON unless noted (file
 downloads return binary with `Content-Disposition: attachment`).
 

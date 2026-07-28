@@ -1,90 +1,99 @@
-# Bidra till IT-Ticket
+# Contributing to IT-Ticket
 
-Tack för att du vill bidra! Det här dokumentet beskriver hur du får upp en
-utvecklingsmiljö, vilka kvalitetskrav som gäller och hur du skickar in ändringar.
+Thanks for wanting to contribute! This document describes how to set up a
+development environment, what quality gates apply, and how to submit changes.
 
-## Förutsättningar
+## Prerequisites
 
-- **Node 22** (se [`.nvmrc`](.nvmrc))
-- Docker + Docker Compose (för helhetskörning)
-- Repot har **två** `package.json` — roten (frontend) och [`server/`](server/)
-  (backend) — med separata beroenden och testsviter.
+- **Node 22** (see [`.nvmrc`](.nvmrc))
+- Docker + Docker Compose (for running the full stack)
+- The repo has **two** `package.json` files — the root (frontend) and
+  [`server/`](server/) (backend) — with separate dependencies and test suites.
 
-## Kom igång
+## Getting started
 
 ```sh
 git clone https://github.com/Antonk123/it-system.git
 cd it-system
 
-# Frontend-beroenden
+# Frontend dependencies
 npm ci
-# Backend-beroenden
+# Backend dependencies
 cd server && npm ci && cd ..
 
-cp .env.example .env   # fyll i minst JWT_SECRET och CSRF_SECRET (≥32 tecken)
+cp .env.example .env   # fill in at least JWT_SECRET and CSRF_SECRET (>=32 chars)
 ```
 
-Kör hela stacken lokalt:
+Run the whole stack locally:
 
 ```sh
 docker compose -f docker-compose.local.yml up --build
 # Frontend: http://localhost:8082 · Backend: http://localhost:3002/api
 ```
 
-Eller utveckla mot hot-reload (två terminaler):
+Or develop against hot-reload (two terminals):
 
 ```sh
 npm run dev              # Vite (frontend)
 cd server && npm run dev # tsx watch (backend)
 ```
 
-## Kvalitetskrav (gates)
+## Quality gates
 
-Alla måste passera lokalt **och** i CI innan en ändring mergas. Kör dem innan du
-öppnar en PR:
+All of these must pass locally **and** in CI before a change is merged. Run
+them before opening a PR:
 
-| Var | Kommando | Vad |
-|-----|----------|-----|
-| rot | `npm run lint` | ESLint över hela repot |
-| rot | `npx tsc --noEmit -p tsconfig.app.json && npx tsc --noEmit -p tsconfig.node.json` | Typecheck frontend |
-| rot | `npm test` | Frontend-tester (vitest) |
-| rot | `npm run build` | Prod-build |
-| `server/` | `cd server && npx tsc --noEmit` | Typecheck backend |
-| `server/` | `cd server && npm test` | Backend-tester (vitest) |
+| Where | Command | What |
+|-------|---------|------|
+| root | `npm run lint` | ESLint across the whole repo (frontend + backend) |
+| root | `npx tsc --noEmit -p tsconfig.app.json && npx tsc --noEmit -p tsconfig.node.json` | Frontend typecheck |
+| root | `npm test` | Frontend tests (vitest) |
+| root | `npm run build` | Production build |
+| root | `npm run openapi:lint` | Validates `docs/openapi.yaml` |
+| `server/` | `cd server && npx tsc --noEmit` | Backend typecheck |
+| `server/` | `cd server && npm test` | Backend tests (vitest) |
 
-CI kör dessutom Docker-bygge av båda images och `npm audit --audit-level=high`
-i båda beroendeträden.
+CI additionally builds Docker images for both services and runs
+`node scripts/audit-check.mjs` (root and `server/`) — a stricter gate than
+plain `npm audit --audit-level=high`: it fails the build on every high/critical
+advisory except ones explicitly listed in `audit-allowlist.json` with a
+justification and an expiry date. The backend suite also runs with
+`--coverage` in CI, enforced against ratchet thresholds in
+`server/vitest.config.ts` (a regression floor set just under current coverage,
+not a fixed target).
 
-> **Husky:** en pre-commit-hook kör `lint-staged` automatiskt. Använd **aldrig**
-> `git commit --no-verify`.
+> **Husky:** a pre-commit hook runs `lint-staged` automatically. **Never**
+> bypass it with `git commit --no-verify`.
 
-## Kodkonventioner
+## Code conventions
 
-- **API-anrop:** muterande anrop går via `api.request()` i `src/lib/api.ts`
-  (hanterar CSRF-token, auth-header och 401-refresh). Rå `fetch('/api/...')` är
-  **blockerad av ESLint** (`no-restricted-syntax`).
-- **DB-migrations:** läggs in i `migrations`-arrayen i
-  `server/src/db/migrations.ts` (körs av `runMigrations()` vid serverstart).
-  Fristående `tsx`-script körs **inte** vid uppstart och appliceras aldrig i
-  drift. Migrationer ska vara idempotenta (guarda med `columnExists`/
-  `tableExists`) och `schema.sql` hållas i synk där relevant.
-- **SQL:** alltid parametriserat. Dynamiska kolumnnamn ska allow-listas, aldrig
-  interpoleras från klientinput.
-- **Tester:** ny funktionalitet och buggfixar ska ha test. Projektet jobbar
-  testdrivet — skriv testet först när det går.
+- **API calls:** mutating calls go through `api.request()` in
+  `src/lib/api.ts` (handles the CSRF token, auth header, and 401 refresh).
+  Raw `fetch('/api/...')` is **blocked by ESLint**
+  (`no-restricted-syntax`).
+- **DB migrations:** add them to the `migrations` array in
+  `server/src/db/migrations.ts` (run by `runMigrations()` at server startup).
+  Standalone `tsx` scripts do **not** run at startup and are never applied in
+  production. Migrations should be idempotent (guard with `columnExists`/
+  `tableExists`) and `schema.sql` kept in sync where relevant.
+- **SQL:** always parameterized. Dynamic column names must be allow-listed,
+  never interpolated from client input.
+- **Tests:** new functionality and bug fixes should come with tests. The
+  project favors a test-first workflow where practical.
 
-## Commits & PR
+## Commits & PRs
 
-- **Commit-meddelanden:** [Conventional Commits](https://www.conventionalcommits.org/)
-  — t.ex. `feat(tickets): ...`, `fix(billing): ...`, `test(db): ...`,
-  `ci: ...`, `docs: ...`.
-- **Pull requests:** utgå från `main`, håll PR:n fokuserad, beskriv *vad* och
-  *varför*. Länka relevant issue. Se till att alla gates ovan är gröna.
-- En underhållare granskar och mergar. Större eller säkerhetskänsliga ändringar
-  kan kräva extra granskning.
+- **Commit messages:** [Conventional Commits](https://www.conventionalcommits.org/)
+  — e.g. `feat(tickets): ...`, `fix(billing): ...`, `test(db): ...`,
+  `chore(deps): ...`, `ci: ...`, `docs: ...`. Use a trailing `!` (e.g.
+  `chore(deps)!: ...`) for breaking changes.
+- **Pull requests:** branch off `main`, keep the PR focused, describe *what*
+  and *why*. Link the relevant issue. Make sure all gates above are green.
+- A maintainer reviews and merges. Larger or security-sensitive changes may
+  require extra review.
 
-## Rapportera buggar & säkerhet
+## Reporting bugs & security issues
 
-- **Buggar / funktioner:** öppna ett GitHub-issue med reproduktionssteg.
-- **Säkerhetsbrister:** öppna **inte** ett publikt issue — följ
+- **Bugs / feature requests:** open a GitHub issue with reproduction steps.
+- **Security vulnerabilities:** do **not** open a public issue — follow
   [`SECURITY.md`](SECURITY.md).

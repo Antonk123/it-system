@@ -10,22 +10,19 @@ info:
     Versionen ovan spårar API-kontraktet, inte appens git-tagg.
 
 
-    ## ⚠ PARTIELL SPEC — inte det fullständiga API-kontraktet
+    ## API coverage
 
-    Den här filen dokumenterar bara kärnflödena (30 av ~170 endpoints, se
-    `docs/API.md`): hälsa/CSRF, auth, tickets, categories, contacts, companies,
-    billing, time-entries, kb och public. Den är INTE en fullständig referens.
-
-
-    **Fullständig endpoint-referens:** `docs/API.md` — genererad från de
-    faktiska Express-routrarna i `server/src/routes/` och hålls uppdaterad
-    vid route-ändringar. Använd den filen som facit.
+    This spec documents the full API surface: 128 operations
+    across every route file — health/CSRF, auth, tickets, categories,
+    contacts, companies, billing, time-entries, kb, public, users, API keys,
+    settings, comments, attachments, shares, links, checklists, checklist
+    templates, templates, template fields, tags, SLA, recurring tickets,
+    reports, backup, push notifications, webhooks, and inbound email.
 
 
-    Routrar som saknas helt i denna OpenAPI-spec (se `docs/API.md` för dem):
-    attachments, checklists, checklist-templates, comments, links, shares,
-    users, templates, template-fields, tags, reports, recurring, backup,
-    push, api-keys, webhooks, email-inbound, sla, settings.
+    **Prose reference:** `docs/API.md` — generated from the actual Express
+    routers in `server/src/routes/` and kept up to date on route changes. Use
+    it as a narrative cross-check alongside this machine-readable spec.
 
 
     ## Autentisering
@@ -51,8 +48,8 @@ info:
     url: https://github.com/Antonk123/it-system
 
 servers:
-  - url: https://ticket.prefabmastarna.se/api
-    description: Produktion
+  - url: https://helpdesk.example.com/api
+    description: Your own instance's API base URL (placeholder)
   - url: http://localhost:3002/api
     description: Lokal (docker-compose.local)
 
@@ -77,6 +74,44 @@ tags:
     description: Kunskapsbas-artiklar
   - name: Public
     description: Oautentiserad portal (deflection, publika ärenden)
+  - name: Comments
+    description: Comments on tickets
+  - name: Attachments
+    description: File attachments on tickets
+  - name: Checklists
+    description: Per-ticket checklist items
+  - name: Links
+    description: Relationships between tickets
+  - name: Shares
+    description: Public, unauthenticated share links for tickets
+  - name: Checklist templates
+    description: Reusable checklist item sets applicable to tickets
+  - name: Templates
+    description: Reusable ticket blueprints, including dynamic form templates
+  - name: Template fields
+    description: Custom form fields belonging to a dynamic template
+  - name: Tags
+    description: Ticket labels
+  - name: SLA
+    description: Response/resolution time policies
+  - name: Recurring tickets
+    description: Templates that auto-generate tickets on a schedule
+  - name: Users
+    description: System user accounts (admin)
+  - name: API keys
+    description: Personal API keys for programmatic access
+  - name: Settings
+    description: System-wide configuration
+  - name: Reports
+    description: Aggregate ticket, time, and requester analytics
+  - name: Backup
+    description: Full database/uploads backup and restore (admin)
+  - name: Push notifications
+    description: Web Push subscription management
+  - name: Webhooks
+    description: Outgoing event webhooks (admin)
+  - name: Inbound email
+    description: Mail-to-ticket (IMAP) ingestion status
 
 # Default: de flesta endpoints accepterar antingen session-JWT eller API-nyckel.
 # Publika endpoints sätter `security: []`, muterande lägger till csrfToken för
@@ -1036,6 +1071,2598 @@ paths:
         "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /users:
+    get:
+      operationId: usersList
+      tags: [Users]
+      summary: List system users
+      description: >
+        Returns all users, ordered newest-first. The payload shape depends on the
+        caller's role: admins get the full admin view (email, timestamps,
+        last sign-in); non-admins get a reduced view used for assignee dropdowns
+        and @-mentions (no email, no timestamps). `password_hash` is never
+        returned to either role.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: List of users (shape varies by caller role, see description)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      oneOf:
+                        - $ref: "#/components/schemas/UserAdminView"
+                        - $ref: "#/components/schemas/UserSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: usersCreate
+      tags: [Users]
+      summary: Create a user (admin)
+      description: >
+        Admin-only. Role is checked after authentication, so a write-scoped API
+        key belonging to an admin user also qualifies, in addition to a session
+        with CSRF token. If `password` is omitted, a random 32-char hex password
+        is generated and returned once as `temporaryPassword`; an explicitly
+        supplied password must satisfy the same password policy as
+        `/auth/change-password`, while an auto-generated one does not need to.
+        A `role` value other than `"admin"` (including a missing field) is
+        silently treated as `"user"` — unlike `PATCH /users/{id}`, invalid role
+        strings are not rejected here.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserCreateRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: User created }
+                  user:
+                    type: object
+                    properties:
+                      id: { type: string }
+                      email: { type: string, format: email }
+                      role: { type: string, enum: [admin, user] }
+                      displayName: { type: string, nullable: true }
+                  temporaryPassword:
+                    type: string
+                    nullable: true
+                    description: >
+                      Only present when `password` was omitted from the request
+                      (auto-generated password, must be changed at first login).
+        "400":
+          description: >
+            Missing/invalid email, invalid displayName, password fails policy,
+            or the email is already registered (fast-path check).
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Email already registered (detected via UNIQUE constraint race condition)
+          $ref: "#/components/responses/Error"
+
+  /users/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: usersUpdate
+      tags: [Users]
+      summary: Update a user's role and/or display name (admin)
+      description: >
+        Admin-only. Role is checked after authentication, so a write-scoped API
+        key belonging to an admin user also qualifies, in addition to a session
+        with CSRF token. At least one of `role`/`displayName` must be supplied.
+        An admin cannot demote their own account (change their own `role` away
+        from `"admin"`). Setting `displayName` to an empty string or `null`
+        clears it (stored as NULL).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdateRequest"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: Användaren uppdaterades }
+        "400":
+          description: >
+            Invalid role value, self-demotion attempt, invalid/too-long
+            displayName, or neither field supplied.
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      operationId: usersDelete
+      tags: [Users]
+      summary: Delete a user (admin)
+      description: >
+        Admin-only. Role is checked after authentication, so a write-scoped API
+        key belonging to an admin user also qualifies, in addition to a session
+        with CSRF token. An admin cannot delete their own account.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: User deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: User deleted }
+        "400":
+          description: Attempted to delete own account
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api-keys:
+    get:
+      operationId: apiKeysList
+      tags: [API keys]
+      summary: List the current user's API keys
+      description: >
+        Returns keys owned by the authenticated caller only. `key_hash` and
+        `user_id` are never returned; the raw key value is only ever returned
+        once, at creation time (see `POST /api-keys`).
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Array of API keys (no key material)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ApiKey"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: apiKeysCreate
+      tags: [API keys]
+      summary: Create a new API key for the current user
+      description: >
+        Limited to 20 keys per user. The raw key (`itk_live_...`) is returned
+        only in this response — it is never retrievable again afterwards, only
+        its hash is stored. If `expires_at` is omitted it defaults to one year
+        from creation; if supplied it must be a valid, future ISO date/time.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApiKeyCreateRequest"
+      responses:
+        "201":
+          description: API key created — raw key is only ever shown here
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeyCreated"
+        "400":
+          description: >
+            Missing/blank name, malformed or non-future expires_at, or the
+            20-key-per-user limit was reached.
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api-keys/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: apiKeysDelete
+      tags: [API keys]
+      summary: Delete an API key
+      description: Deletes one of the current user's own keys. Cannot delete keys owned by other users (scoped by user_id).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: API key deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: API key deleted }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /settings:
+    get:
+      operationId: settingsGet
+      tags: [Settings]
+      summary: Get the current two-way-email setting
+      description: >
+        Readable by any authenticated user (not admin-only) — the frontend uses
+        it to decide whether to show the public-reply toggle in the comment box.
+        Currently the only setting exposed through this endpoint, even though
+        the underlying store (`app_settings`) is a generic key-value table.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Current setting value
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  twoWayEmailEnabled: { type: boolean }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /settings/two-way-email:
+    put:
+      operationId: settingsUpdateTwoWayEmail
+      tags: [Settings]
+      summary: Toggle the two-way-email policy (admin)
+      description: >
+        Admin-only. Role is checked after authentication, so a write-scoped API
+        key belonging to an admin user also qualifies, in addition to a session
+        with CSRF token. Controls system-wide whether outbound mail replies are
+        sent to customers.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        "200":
+          description: Setting updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  twoWayEmailEnabled: { type: boolean }
+        "400":
+          description: enabled missing or not a boolean
+          $ref: "#/components/responses/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /comments/ticket/{ticketId}:
+    get:
+      operationId: commentsListByTicket
+      tags: [Comments]
+      summary: List comments for a ticket
+      description: >
+        Returns up to 500 non-deleted comments for the ticket, oldest first.
+        Authorization mirrors `PUT /tickets/:id` exactly: if the ticket is
+        unassigned, any authenticated agent may read its comments
+        (self-service pickup). If the ticket is assigned, only an admin, the
+        requester, the assignee, or the creator may read them.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Comments for the ticket
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/commentsComment" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Ticket is assigned and caller is not admin/requester/assignee/creator
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Error" }
+
+    post:
+      operationId: commentsCreate
+      tags: [Comments]
+      summary: Add a comment to a ticket
+      description: >
+        Creates a comment and bumps the ticket's `updated_at`. Content is
+        HTML-sanitized server-side (defense in depth against the TipTap
+        rich-text editor). Same authorization rule as the list endpoint
+        (self-service pickup on unassigned tickets, otherwise
+        admin/requester/assignee/creator only). If `isInternal` is `false`,
+        the comment is treated as the agent's public reply and triggers a
+        fire-and-forget email notification to the customer.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content:
+                  type: string
+                  description: Rich-text HTML content (non-empty after trim).
+                isInternal:
+                  type: boolean
+                  default: true
+                  description: >
+                    `false` marks the comment as a public reply visible to the
+                    customer and triggers a notification email.
+      responses:
+        "201":
+          description: Comment created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/commentsComment" }
+        "400":
+          description: Missing or empty `content`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Ticket is assigned and caller is not admin/requester/assignee/creator
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /comments/{id}:
+    put:
+      operationId: commentsUpdate
+      tags: [Comments]
+      summary: Edit a comment
+      description: >
+        Updates the comment's content (re-sanitized server-side). Only the
+        comment's own author or an admin may edit it — ownership is checked
+        against `ticket_comments.user_id`, independent of ticket assignment.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties:
+                content: { type: string }
+      responses:
+        "200":
+          description: Updated comment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/commentsComment" }
+        "400":
+          description: Missing or empty `content`
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Caller is neither the comment's author nor an admin
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Error" }
+
+    delete:
+      operationId: commentsDelete
+      tags: [Comments]
+      summary: Soft-delete a comment
+      description: >
+        Sets `deleted_at` (the comment is no longer returned by the list
+        endpoint but is not physically removed). Only the comment's own
+        author or an admin may delete it.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Caller is neither the comment's author nor an admin
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /attachments/ticket/{ticketId}:
+    get:
+      operationId: attachmentsListByTicket
+      tags: [Attachments]
+      summary: List attachment metadata for a ticket
+      description: >
+        Returns attachment metadata (not the file bytes) plus a download
+        `url` per attachment. Requires `canAccessTicket`: admin, or the
+        ticket's requester/assignee/creator.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Attachment metadata
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/attachmentsAttachment" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Error" }
+
+    post:
+      operationId: attachmentsUpload
+      tags: [Attachments]
+      summary: Upload a file attachment to a ticket
+      description: >
+        Accepts a single multipart file under field name `file`. Requires
+        `canAccessTicket` (admin, or the ticket's requester/assignee/creator);
+        the file is deleted from disk again if authorization fails after
+        upload. Enforced, in order: max file size 10 MB (multer `limits.fileSize`,
+        rejects with 400 before the handler runs), MIME type + extension
+        allowlist, then a magic-byte signature check against the declared
+        MIME type for known binary types (PDF, PNG, JPEG, GIF, ZIP-based
+        Office formats) — mismatches are rejected and the uploaded file is
+        deleted. A per-ticket cap of 50 attachments is enforced before insert.
+        Rate-limited via `writeRateLimiter` (60 requests/minute per IP).
+
+
+        **Allowed MIME types:** `image/jpeg`, `image/png`, `image/gif`,
+        `image/webp`, `image/svg+xml`, `application/pdf`, `text/plain`,
+        `text/csv`, `text/markdown`, `message/rfc822`, `application/msword`,
+        `application/vnd.openxmlformats-officedocument.wordprocessingml.document`,
+        `application/vnd.ms-excel`,
+        `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`,
+        `application/vnd.ms-powerpoint`,
+        `application/vnd.openxmlformats-officedocument.presentationml.presentation`,
+        `application/zip`, `application/x-zip-compressed`,
+        `application/x-rar-compressed`, `application/x-7z-compressed`.
+
+
+        **Allowed extensions:** `jpg`, `jpeg`, `png`, `gif`, `webp`, `svg`,
+        `pdf`, `txt`, `csv`, `md`, `markdown`, `eml`, `doc`, `docx`, `xls`,
+        `xlsx`, `ppt`, `pptx`, `zip`, `rar`, `7z`. Both the declared MIME type
+        and the extension must be on their respective allowlist.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Max 10 MB. See allowlist in the description above.
+      responses:
+        "201":
+          description: Attachment created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/attachmentsAttachment" }
+        "400":
+          description: >
+            No file uploaded, file exceeds 10 MB, disallowed MIME
+            type/extension, magic-byte mismatch, or the ticket already has 50
+            attachments.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429":
+          description: Rate limit exceeded (60 requests/minute per IP)
+          headers:
+            Retry-After:
+              schema: { type: integer }
+              description: Seconds until the rate-limit window resets.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  retryAfter: { type: integer }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /attachments/file/{id}:
+    get:
+      operationId: attachmentsDownload
+      tags: [Attachments]
+      summary: Download an attachment's file bytes
+      description: >
+        Streams the stored file. Authorization is checked via the
+        attachment's parent ticket (`canAccessTicket`: admin, or the ticket's
+        requester/assignee/creator). Always served with
+        `Content-Disposition: attachment` (never `inline`) regardless of
+        file type — this is what makes it safe to allow `image/svg+xml` in
+        the upload allowlist, since a downloaded SVG is never rendered
+        inline in the app's origin.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: File bytes
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+              description: "`attachment; filename=\"...\"; filename*=UTF-8''...`"
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: Attachment record not found, or its file is missing on disk
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /attachments/{id}:
+    delete:
+      operationId: attachmentsDelete
+      tags: [Attachments]
+      summary: Delete an attachment
+      description: >
+        Deletes the database row first, then the file on disk. A file that
+        fails to delete afterward is logged and left orphaned rather than
+        failing the request; an orphaned DB row is never left behind.
+        Authorization via the attachment's parent ticket (`canAccessTicket`).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /shares/ticket/{ticketId}:
+    get:
+      operationId: sharesGetToken
+      tags: [Shares]
+      summary: Get the existing public share token for a ticket
+      description: >
+        Returns the ticket's share token if one exists, otherwise `null`.
+        Requires `canAccessTicket` (admin, or the ticket's
+        requester/assignee/creator). This endpoint itself is authenticated;
+        the token it returns grants **unauthenticated** public access (see
+        `GET /shares/public/{token}`).
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Existing token, or null if none exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  share_token:
+                    type: string
+                    nullable: true
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Error" }
+
+    post:
+      operationId: sharesCreate
+      tags: [Shares]
+      summary: Create (or idempotently return) a public share link for a ticket
+      description: >
+        If a share already exists for the ticket, returns it unchanged with
+        `200`. Otherwise generates a new 128-bit random token
+        (`crypto.randomBytes(16)`, hex-encoded) and returns `201`.
+        Requires `canAccessTicket`. **The resulting token never expires** —
+        there is no `expires_at` column on `ticket_shares` and no TTL check
+        anywhere in the route; a share link is valid until explicitly deleted
+        via `DELETE /shares/ticket/{ticketId}`.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Share already existed — returned unchanged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  share_token: { type: string }
+        "201":
+          description: New share created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  share_token: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Error" }
+
+    delete:
+      operationId: sharesDelete
+      tags: [Shares]
+      summary: Revoke a ticket's public share link
+      description: >
+        Deletes the share row, immediately invalidating the token for public
+        access. Requires `canAccessTicket`.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: No share exists for this ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /shares/public/{token}:
+    get:
+      operationId: sharesGetPublic
+      tags: [Shares]
+      summary: Read a shared ticket by its public token (no login required)
+      description: >
+        **Public, unauthenticated endpoint.** Anyone holding a valid,
+        non-revoked share token (a random 32-hex-character string, or a
+        legacy 24-character token — the column has no length constraint) can
+        call this with no credentials. Rate-limited to 30 requests/minute per
+        IP (`sharePublicRateLimiter`) to slow brute-forcing of tokens. Tokens
+        do not expire (see `sharesCreate`).
+
+
+        An anonymous caller with a valid token receives: the ticket's
+        `title`, `description`, `status`, `priority`, `category`,
+        `created_at`/`updated_at`/`resolved_at`/`closed_at`, its `solution`
+        text, the full `requester` contact record (`id`, `name`, `email`,
+        `company`), all attachment metadata with public download URLs, and
+        all checklist items. The ticket's `notes` field (internal agent
+        notes) is explicitly stripped and never included. Comments and
+        ticket links are not exposed by this endpoint.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Shared ticket view
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/sharesPublicTicketView" }
+        "404":
+          description: Invalid/unknown token, or the ticket no longer exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: Rate limit exceeded (30 requests/minute per IP)
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  retryAfter: { type: integer }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /shares/public/file/{token}/{attachmentId}:
+    get:
+      operationId: sharesDownloadPublicFile
+      tags: [Shares]
+      summary: Download an attachment of a shared ticket (no login required)
+      description: >
+        **Public, unauthenticated endpoint.** Valid for any attachment
+        belonging to the ticket identified by `token` — the query verifies
+        `attachmentId` belongs to `share.ticket_id`, so a token only ever
+        exposes attachments of the one ticket it was created for. Served
+        with `Content-Disposition: attachment` (forced download, never
+        inline) to prevent in-origin script execution from an uploaded SVG
+        or similar. Rate-limited to 30 requests/minute per IP
+        (`sharePublicRateLimiter`).
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema: { type: string }
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: File bytes
+          headers:
+            Content-Disposition:
+              schema: { type: string }
+              description: "`attachment; filename=\"...\"`"
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Invalid token, attachment not found for this ticket, or file missing on disk
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: Rate limit exceeded (30 requests/minute per IP)
+          headers:
+            Retry-After:
+              schema: { type: integer }
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string }
+                  retryAfter: { type: integer }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /links/ticket/{ticketId}:
+    get:
+      operationId: linksListByTicket
+      tags: [Links]
+      summary: List a ticket's links to other tickets
+      description: >
+        Returns links where the ticket is either the source or the target
+        (bidirectional), each enriched with the linked ticket's id, title,
+        status, priority, and created_at. Requires `canAccessTicket`.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Links for the ticket
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/linksTicketLink" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Error" }
+
+    post:
+      operationId: linksCreate
+      tags: [Links]
+      summary: Link a ticket to another ticket
+      description: >
+        Creates a bidirectional relationship between `ticketId` (source) and
+        `targetTicketId`. Requires `canAccessTicket` on **both** tickets
+        (closes an IDOR that would otherwise let a caller link a ticket they
+        can access to one they cannot). Rejects self-links and duplicate
+        links in either direction.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetTicketId]
+              properties:
+                targetTicketId: { type: string }
+                linkType:
+                  type: string
+                  default: related
+                  enum: [related, blocks, blocked_by, duplicate, parent, child]
+                  description: >
+                    Validated against a fixed allowlist. Note the DB CHECK
+                    constraint on `ticket_links.link_type` only permits
+                    `related` as of the current schema; other allowlisted
+                    values are accepted by this route's validation but would
+                    fail the database constraint if inserted.
+      responses:
+        "201":
+          description: Link created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/linksTicketLink" }
+        "400":
+          description: Missing/invalid `targetTicketId`, invalid `linkType`, or self-link attempt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Caller lacks `canAccessTicket` on the source and/or target ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Source or target ticket not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: A link already exists between these two tickets (either direction)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /links/{id}:
+    delete:
+      operationId: linksDelete
+      tags: [Links]
+      summary: Delete a ticket link
+      description: >
+        Admins may delete any link. Non-admins must be the assignee or
+        creator of at least one of the two linked tickets
+        (`assigned_to = caller` OR `created_by = caller` on either
+        `source_ticket_id` or `target_ticket_id`) — note this is a narrower,
+        separate check from `canAccessTicket` (it excludes the requester
+        role and unassigned self-service pickup).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: Caller is not admin and not assignee/creator of either linked ticket
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Link not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /checklists/progress:
+    post:
+      operationId: checklistsBatchProgress
+      tags: [Checklists]
+      summary: Batch checklist progress for multiple tickets
+      description: >
+        Returns `{ total, completed }` counts per ticket for the given ticket
+        ids. Any caller ids that the caller may not access (see `canAccessTicket`
+        — admin, or the ticket's requester/assignee/creator) are silently
+        dropped rather than causing a 403; this is a batch convenience
+        endpoint, not a per-ticket read.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticketIds]
+              properties:
+                ticketIds:
+                  type: array
+                  items: { type: string }
+      responses:
+        "200":
+          description: Progress per accessible ticket id (empty object if none are accessible)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChecklistProgress" }
+        "400": { $ref: "#/components/responses/Error" }
+
+  /checklists/ticket/{ticketId}:
+    parameters:
+      - { name: ticketId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: checklistsListByTicket
+      tags: [Checklists]
+      summary: List checklist items for a ticket
+      description: Caller must be able to access the ticket (admin, requester, assignee, or creator).
+      responses:
+        "200":
+          description: Checklist items ordered by position
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChecklistItem" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: checklistsCreate
+      tags: [Checklists]
+      summary: Add a checklist item to a ticket
+      description: Caller must be able to access the ticket (admin, requester, assignee, or creator).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChecklistItemCreateInput" }
+      responses:
+        "201":
+          description: Created item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChecklistItem" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /checklists/ticket/{ticketId}/bulk:
+    parameters:
+      - { name: ticketId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: checklistsBulkCreate
+      tags: [Checklists]
+      summary: Bulk-add checklist items to a ticket
+      description: >
+        Caller must be able to access the ticket (admin, requester, assignee,
+        or creator). Blank/invalid entries are silently dropped; if none
+        remain after filtering, `201 []` is returned rather than an error.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChecklistItemBulkInput" }
+      responses:
+        "201":
+          description: Created items (may be an empty array)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChecklistItem" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /checklists/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: checklistsUpdate
+      tags: [Checklists]
+      summary: Update a checklist item
+      description: >
+        Partial update — only supplied fields are changed. Caller must be
+        able to access the item's ticket (admin, requester, assignee, or
+        creator).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChecklistItemUpdateInput" }
+      responses:
+        "200":
+          description: Updated item
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChecklistItem" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: checklistsDelete
+      tags: [Checklists]
+      summary: Delete a checklist item
+      description: Hard delete. Caller must be able to access the item's ticket.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /checklist-templates:
+    get:
+      operationId: checklistTemplatesList
+      tags: [Checklist templates]
+      summary: List checklist templates
+      description: Any authenticated user. Returns every reusable checklist template with its items.
+      responses:
+        "200":
+          description: Checklist templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChecklistTemplate" }
+    post:
+      operationId: checklistTemplatesCreate
+      tags: [Checklist templates]
+      summary: Create a checklist template (admin)
+      description: Admin only. Creates the template and its items in one transaction.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChecklistTemplateInput" }
+      responses:
+        "201":
+          description: Created template with items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChecklistTemplate" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: A template with that name already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /checklist-templates/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: checklistTemplatesUpdate
+      tags: [Checklist templates]
+      summary: Update a checklist template (admin)
+      description: >
+        Admin only. `name`/`description` are updated in place when `name` is
+        present; if `items` is supplied, ALL existing items for the template
+        are replaced (delete + reinsert) in one transaction.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChecklistTemplateUpdateInput" }
+      responses:
+        "200":
+          description: Updated template with items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ChecklistTemplate" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: A template with that name already exists
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+    delete:
+      operationId: checklistTemplatesDelete
+      tags: [Checklist templates]
+      summary: Delete a checklist template (admin)
+      description: Admin only. Cascades to the template's own items (existing ticket checklists created from it are unaffected).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /checklist-templates/{id}/apply:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: checklistTemplatesApply
+      tags: [Checklist templates]
+      summary: Apply a checklist template's items to a ticket
+      description: >
+        Copies the template's items onto the target ticket's checklist,
+        appended after any existing items and preserving parent/child nesting
+        (matched by label, not by id). Caller must be able to access the
+        target ticket (admin, requester, assignee, or creator); no admin role
+        is required to apply a template.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticketId]
+              properties:
+                ticketId: { type: string }
+      responses:
+        "201":
+          description: The ticket's full checklist after the template items were applied
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ChecklistItem" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /templates:
+    get:
+      operationId: templatesList
+      tags: [Templates]
+      summary: List ticket templates
+      description: Any authenticated user. Returns every ticket template with its dynamic fields (empty array for standard templates).
+      responses:
+        "200":
+          description: Ticket templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Template" }
+    post:
+      operationId: templatesCreate
+      tags: [Templates]
+      summary: Create a ticket template (admin)
+      description: >
+        Admin only. `description_template` is required unless `template_type`
+        is `dynamic`. When `template_type` is `dynamic`, `fields` (if given)
+        is inserted inline as the template's fields in the same request —
+        there is no need to call the template-fields endpoints separately at
+        creation time.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TemplateInput" }
+      responses:
+        "201":
+          description: Created template with fields
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /templates/reorder:
+    put:
+      operationId: templatesReorder
+      tags: [Templates]
+      summary: Reorder ticket templates (admin)
+      description: >
+        Admin only. `ids` is the full list of template ids in the desired
+        order; each id's `position` is set to its index in the array. Must be
+        registered before `/templates/{id}` in the router so `reorder` is not
+        captured as an `:id` path segment.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items: { type: string }
+      responses:
+        "200":
+          description: All templates in their new order
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Template" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /templates/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: templatesGet
+      tags: [Templates]
+      summary: Get a single ticket template with its fields
+      description: Any authenticated user.
+      responses:
+        "200":
+          description: The template with its fields
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: templatesUpdate
+      tags: [Templates]
+      summary: Update a ticket template (admin)
+      description: >
+        Admin only. Partial update (each omitted field keeps its current
+        value). Does NOT accept `fields` — dynamic-template fields are
+        managed exclusively through the `/templates/{templateId}/fields`
+        endpoints.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TemplateUpdateInput" }
+      responses:
+        "200":
+          description: Updated template with its (unchanged) fields
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Template" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: templatesDelete
+      tags: [Templates]
+      summary: Delete a ticket template (admin)
+      description: Admin only. Cascades to the template's fields (`template_fields.template_id` is `ON DELETE CASCADE`).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /templates/{templateId}/fields:
+    parameters:
+      - { name: templateId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: templateFieldsList
+      tags: [Template fields]
+      summary: List a template's dynamic fields
+      description: Any authenticated user.
+      responses:
+        "200":
+          description: Fields ordered by position
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TemplateField" }
+    post:
+      operationId: templateFieldsCreate
+      tags: [Template fields]
+      summary: Add a dynamic field to a template (admin)
+      description: Admin only. Appended at the end (`position` = current max + 1).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TemplateFieldInput" }
+      responses:
+        "201":
+          description: Created field
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateField" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /templates/{templateId}/fields/reorder:
+    parameters:
+      - { name: templateId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: templateFieldsReorder
+      tags: [Template fields]
+      summary: Reorder a template's dynamic fields (admin)
+      description: >
+        Admin only. `ids` is the full list of field ids in the desired order;
+        each id's `position` is set to its index. Must be registered before
+        `/templates/{templateId}/fields/{fieldId}` so `reorder` is not
+        captured as a `:fieldId` path segment. `ids` is not validated to
+        belong to `templateId` — callers are expected to pass ids scoped to
+        this template.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items: { type: string }
+      responses:
+        "200":
+          description: The template's fields in their new order
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TemplateField" }
+        "400": { $ref: "#/components/responses/Error" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /templates/{templateId}/fields/{fieldId}:
+    parameters:
+      - { name: templateId, in: path, required: true, schema: { type: string } }
+      - { name: fieldId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: templateFieldsUpdate
+      tags: [Template fields]
+      summary: Update a template's dynamic field (admin)
+      description: Admin only. Partial update (each omitted field keeps its current value).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TemplateFieldInput" }
+      responses:
+        "200":
+          description: Updated field
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemplateField" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: templateFieldsDelete
+      tags: [Template fields]
+      summary: Delete a template's dynamic field (admin)
+      description: Admin only.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /tags:
+    get:
+      operationId: tagsList
+      tags: [Tags]
+      summary: List ticket tags
+      description: >
+        Returns all ticket tags (id, name, color, created_at), ordered by name
+        ascending. "Tags" here means ticket labels, unrelated to OpenAPI's own
+        `tags:` grouping concept. Available to any authenticated user.
+      responses:
+        "200":
+          description: List of ticket tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TagsTag" }
+    post:
+      operationId: tagsCreate
+      tags: [Tags]
+      summary: Create a ticket tag
+      description: >
+        Creates a new ticket tag. Admin-only. `name` is required (trimmed,
+        non-empty) and must be unique; `color` defaults to `#3b82f6` when
+        omitted.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TagsInput" }
+      responses:
+        "201":
+          description: Created tag
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TagsTag" }
+        "400":
+          description: Missing/empty `name`, or a tag with that name already exists
+          $ref: "#/components/responses/Error"
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /tags/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: tagsUpdate
+      tags: [Tags]
+      summary: Update a ticket tag
+      description: >
+        Replaces name and color of an existing tag. Admin-only. `name` is
+        required (trimmed, non-empty) and must remain unique; `color` defaults
+        to `#3b82f6` if not provided.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TagsInput" }
+      responses:
+        "200":
+          description: Updated tag
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TagsTag" }
+        "400":
+          description: Missing/empty `name`, or a tag with that name already exists
+          $ref: "#/components/responses/Error"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: tagsDelete
+      tags: [Tags]
+      summary: Delete a ticket tag
+      description: Deletes a ticket tag by id. Admin-only.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /sla:
+    get:
+      operationId: slaRulesList
+      tags: [SLA]
+      summary: List SLA policies
+      description: >
+        Returns SLA policies (per-priority response/resolution time targets in
+        minutes). Available to any authenticated user. These policies are read
+        elsewhere (ticket creation/update) to stamp `sla_response_deadline` and
+        `sla_resolution_deadline` on a ticket — this route only manages the
+        policy rows themselves, it never touches a ticket.
+      parameters:
+        - name: company_id
+          in: query
+          required: false
+          description: >
+            Optional filter. `default` returns the global policies (rows with
+            `company_id IS NULL`). Any other non-empty value is matched
+            literally against `company_id` — if it does not correspond to a
+            real company, the result is an empty array (there is no `all`
+            sentinel; the code has no special-case for it). Omitting the
+            parameter entirely returns every policy for every company plus
+            the defaults, ordered by `company_id` then `priority`.
+          schema: { type: string }
+      responses:
+        "200":
+          description: SLA policies matching the filter
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SlaPolicy" }
+    put:
+      operationId: slaRulesUpdate
+      tags: [SLA]
+      summary: Replace SLA policies for a company (or the global default)
+      description: >
+        Admin-only: policy changes affect every ticket's SLA deadline
+        calculation, so non-admins may not retune them. Atomically deletes all
+        existing policies for the given `company_id` (or, when `company_id` is
+        omitted/null, all global-default policies where `company_id IS NULL`)
+        and inserts the supplied `policies`. Each entry is silently skipped
+        (not an error) if `priority` is not one of `low`, `medium`, `high`,
+        `critical`, or if `response_time_minutes`/`resolution_time_minutes` is
+        missing or falsy — the response simply omits invalid entries, and can
+        be an empty array if every entry was invalid. The only validation
+        error is `policies` not being an array. This endpoint only writes
+        policy targets; whether a deadline is currently paused (ticket status
+        `waiting`, tracked via `sla_paused_at` on the ticket) is set elsewhere
+        and is unaffected here. Breach detection/escalation (webhook, email,
+        and push notification to the assignee, or to all admins if
+        unassigned) runs from a background job on a 5-minute cron
+        (`checkSlaBreaches`), not from this endpoint.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SlaPoliciesInput" }
+      responses:
+        "200":
+          description: The policies now in effect for this company/default (after skipping invalid entries)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SlaPolicy" }
+        "400":
+          description: "`policies` is not an array"
+          $ref: "#/components/responses/Error"
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /sla/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: slaRulesDelete
+      tags: [SLA]
+      summary: Delete a single SLA policy
+      description: Deletes one SLA policy row by id. Admin-only.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /recurring:
+    get:
+      operationId: recurringList
+      tags: [Recurring tickets]
+      summary: List recurring ticket templates
+      description: >
+        Returns all recurring templates ordered by `created_at` descending,
+        each with `tags` resolved from stored JSON to a string array (falls
+        back to `[]` on unparseable JSON) and a `history` array of its most
+        recent 10 generated tickets. Available to any authenticated user.
+      responses:
+        "200":
+          description: Templates with recent history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RecurringTemplate" }
+    post:
+      operationId: recurringCreate
+      tags: [Recurring tickets]
+      summary: Create a recurring ticket template
+      description: >
+        Admin-only. Creates a template that a background scheduler (running
+        every minute) uses to auto-generate tickets once `next_run` is
+        reached; the newly created template starts active (`is_active = 1`)
+        with `last_run = null`. `next_run` is computed server-side from
+        `interval_type`/`interval_day` — see the `RecurringInput` schema for
+        the exact recurrence semantics. `interval_day` is required when
+        `interval_type` is `weekly` or `monthly`, and is validated before
+        that; supplying it while `interval_type` is `daily` is accepted but
+        ignored by the recurrence calculation.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecurringInput" }
+      responses:
+        "201":
+          description: Created template (empty `history`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecurringTemplate" }
+        "400":
+          description: Missing `name`/`title`, invalid `interval_type`, or missing `interval_day` for `weekly`/`monthly`
+          $ref: "#/components/responses/Error"
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /recurring/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: recurringUpdate
+      tags: [Recurring tickets]
+      summary: Update a recurring ticket template
+      description: >
+        Admin-only partial update — omitted fields keep their existing value.
+        `next_run` is recomputed only when `interval_type` and/or
+        `interval_day` is present in the request body, or when the update
+        resumes a paused template (`is_active` changes from `0` to `1`); in
+        the resume case, the recurrence is recomputed from the *current*
+        (possibly unchanged) `interval_type`/`interval_day`, so a paused
+        template does not fire immediately for time that passed while it was
+        paused. `interval_day` is required (and validated before recomputing)
+        whenever the effective `interval_type` is `weekly` or `monthly` and a
+        recompute is triggered. Setting `is_active` to `0` pauses the
+        template: the scheduler skips it and its stale `next_run` is left
+        untouched until it is resumed.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecurringUpdateInput" }
+      responses:
+        "200":
+          description: Updated template with its recent history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecurringTemplate" }
+        "400":
+          description: Missing `interval_day` for `weekly`/`monthly` when the recurrence is recomputed
+          $ref: "#/components/responses/Error"
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: recurringDelete
+      tags: [Recurring tickets]
+      summary: Delete a recurring ticket template
+      description: >
+        Admin-only. Deletes the template; `recurring_ticket_history` rows for
+        it cascade via the foreign key. Already-created tickets are not
+        affected or deleted.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "204":
+          description: Deleted
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /recurring/{id}/toggle:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: recurringToggle
+      tags: [Recurring tickets]
+      summary: Pause or resume a recurring ticket template
+      description: >
+        Admin-only. Flips `is_active` (no request body). Resuming (`0` → `1`)
+        recomputes `next_run` from the template's stored `interval_type`/
+        `interval_day` relative to now, so it schedules the next occurrence
+        going forward rather than catching up on missed runs. Pausing (`1` →
+        `0`) leaves `next_run` untouched — it becomes stale until the template
+        is resumed (here or via `PUT /recurring/{id}`).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: New active state and next-run timestamp
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  is_active: { type: integer, enum: [0, 1] }
+                  next_run: { type: string, format: date-time }
+                required: [id, is_active, next_run]
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /reports/summary:
+    get:
+      operationId: reportsSummary
+      tags: [Reports]
+      summary: Ticket KPI summary
+      description: >
+        Aggregate ticket counts (totals by status, by category, by priority),
+        a 12-month created/closed trend, average resolution time, and the count
+        of open tickets aging past 7 days. Available to any authenticated user
+        (no admin requirement) — reports are not role-restricted.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: year
+          in: query
+          description: >
+            Filters by `tickets.created_at`. Either the literal `all` (no filter,
+            default) or a 4-digit calendar year (2000-2100), matched as a
+            `[year-01-01, year+1-01-01)` UTC-naive range against the stored
+            ISO timestamp — not a strftime comparison.
+          schema: { type: string, example: "2026" }
+        - name: month
+          in: query
+          description: >
+            Either the literal `all` (no filter, default) or a 0-based month
+            index (0=January .. 11=December, matching JS `Date#getMonth()`).
+            Internally converted to 1-based and compared via
+            `strftime('%m', created_at)`. Independent of `year` — passing only
+            `month` filters across all years.
+          schema: { type: string, example: "0" }
+      responses:
+        "200":
+          description: Aggregated summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportsSummary" }
+        "400":
+          description: Invalid `year` (not 2000-2100) or `month` (not 0-11)
+          $ref: "#/components/responses/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /reports/time-summary:
+    get:
+      operationId: reportsTimeSummary
+      tags: [Reports]
+      summary: Time-tracking summary
+      description: >
+        Total logged minutes grouped by ticket category, plus the top 10
+        tickets by logged time. Any authenticated user.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: year
+          in: query
+          description: >
+            Same `all` / 4-digit-year range-filter semantics as
+            `/reports/summary`, applied to `time_entries.created_at`.
+          schema: { type: string, example: "2026" }
+        - name: month
+          in: query
+          description: >
+            Same 0-based-month semantics as `/reports/summary`, applied to
+            `time_entries.created_at`. Unlike `/reports/summary`, this
+            endpoint does not validate the numeric range before use.
+          schema: { type: string, example: "0" }
+      responses:
+        "200":
+          description: Time summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  byCategory:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        category: { type: string }
+                        total_minutes: { type: integer }
+                  topTickets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        title: { type: string }
+                        total_minutes: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /reports/requester-analytics:
+    get:
+      operationId: reportsRequesterAnalytics
+      tags: [Reports]
+      summary: Per-requester ticket analytics
+      description: >
+        Per-requester metrics (status/priority breakdown, completion rate,
+        average resolution time, aging count, ticket velocity, top 3
+        categories and tags) for the top 15 requesters by ticket count. Any
+        authenticated user.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: year
+          in: query
+          description: >
+            Same `all` / 4-digit-year range-filter semantics as
+            `/reports/summary`, applied to `tickets.created_at`.
+          schema: { type: string, example: "2026" }
+        - name: month
+          in: query
+          description: Same 0-based-month semantics as `/reports/summary`.
+          schema: { type: string, example: "0" }
+      responses:
+        "200":
+          description: Requester analytics array (up to 15 rows)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ReportsRequesterAnalyticsRow" }
+        "400":
+          description: Invalid `year` (not 2000-2100) or `month` (not 0-11)
+          $ref: "#/components/responses/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /reports/status-flow:
+    get:
+      operationId: reportsStatusFlow
+      tags: [Reports]
+      summary: 12-month ticket status flow
+      description: >
+        For each of the last 12 calendar months (by `created_at`), counts
+        tickets by their CURRENT status (not the status they had that month).
+        No query parameters — always the trailing 12-month window ending
+        with the current month. Any authenticated user.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: One row per month, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    month: { type: string, example: "2026-01", description: "YYYY-MM" }
+                    open: { type: integer }
+                    in-progress: { type: integer }
+                    waiting: { type: integer }
+                    resolved: { type: integer }
+                    closed: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /reports/tag-analytics:
+    get:
+      operationId: reportsTagAnalytics
+      tags: [Reports]
+      summary: Tag-frequency counts
+      description: >
+        Number of tickets carrying each tag, across the full dataset (tags
+        with zero tickets are omitted). Any authenticated user.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Tag counts, descending
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+                    color: { type: string }
+                    count: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /reports/kpi-tickets:
+    get:
+      operationId: reportsKpiTickets
+      tags: [Reports]
+      summary: KPI drill-down ticket rows
+      description: >
+        Server-side drill-down rows backing the Reports page KPI detail
+        modals — the raw ticket row shape (snake_case) plus a `tags[]` array,
+        capped at 200 rows. `scope=aging` is always unfiltered by year/month
+        (mirrors `/reports/summary`'s `agingTickets`: open tickets older than
+        7 days); `scope=total` applies the year/month filter. Any
+        authenticated user.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      parameters:
+        - name: scope
+          in: query
+          required: true
+          description: Which KPI drill-down to return.
+          schema: { type: string, enum: [total, aging] }
+        - name: year
+          in: query
+          description: >
+            Ignored when `scope=aging`. Same `all` / 4-digit-year
+            range-filter semantics as `/reports/summary` otherwise.
+          schema: { type: string, example: "2026" }
+        - name: month
+          in: query
+          description: Ignored when `scope=aging`. Same 0-based-month semantics as `/reports/summary` otherwise.
+          schema: { type: string, example: "0" }
+      responses:
+        "200":
+          description: Up to 200 ticket rows (snake_case columns) with tags[]
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  description: Raw ticket row (snake_case) plus tags[]
+        "400":
+          description: Missing/invalid `scope`, or invalid `year`/`month`
+          $ref: "#/components/responses/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /backup:
+    get:
+      operationId: backupDownload
+      tags: [Backup]
+      summary: Download a full database backup
+      description: >
+        Streams a ZIP archive containing the entire SQLite database
+        (`data/database.sqlite`, via `db.backup()`) and the full uploads
+        directory (`data/uploads/`). **Admin only.** The archive contains
+        every secret stored in the database (password hashes, API key
+        hashes, webhook HMAC secrets, OAuth tokens, etc.) — treat the
+        downloaded file as highly sensitive. Rate-limited to 10 downloads
+        per 15 minutes per IP.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: ZIP archive stream
+          headers:
+            Content-Disposition:
+              description: 'attachment; filename="it-ticket-backup-YYYY-MM-DD.zip"'
+              schema: { type: string }
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429":
+          description: Rate limit exceeded (10 downloads / 15 min / IP)
+          $ref: "#/components/responses/Error"
+        "500": { $ref: "#/components/responses/Error" }
+
+  /backup/restore:
+    post:
+      operationId: backupRestore
+      tags: [Backup]
+      summary: Restore the database from an uploaded backup ZIP
+      description: >
+        **The single most destructive endpoint in this API. Admin only**
+        (`authenticate` + `requireAdmin`). Uploads a backup ZIP (max 500 MB,
+        `multipart/form-data`, field name `file`) produced by `GET /backup`,
+        validates every ZIP entry (path-traversal / zip-slip rejection,
+        allowlist restricted to exactly `data/database.sqlite` and
+        `data/uploads/*`, SQLite magic-header check, and a check that the
+        `tickets` and `users` tables exist), then **irrecoverably replaces
+        the live database and the entire uploads directory with the
+        uploaded content**. A `.pre-restore` copy of the current database is
+        kept only long enough to roll back if the swap itself fails, then
+        deleted — it is not a way to recover the pre-restore state
+        afterwards. On success the process calls `process.exit(0)` ~1.5s
+        after responding so the container restarts and picks up the new
+        database (the response body sets `restartRequired: true`); on
+        certain failure paths after the DB handle has already been closed,
+        the process instead exits with code 1 to force a clean restart.
+        Rate-limited to 5 attempts per 15 minutes per IP.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Backup ZIP as produced by `GET /backup`.
+      responses:
+        "200":
+          description: Restore accepted; process will restart shortly
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+                  restartRequired: { type: boolean }
+        "400":
+          description: >
+            No file uploaded, non-ZIP file, zip-slip/unexpected-entry
+            detected, missing `data/database.sqlite`, invalid SQLite magic
+            header, or missing `tickets`/`users` tables in the uploaded DB.
+          $ref: "#/components/responses/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "429":
+          description: Rate limit exceeded (5 attempts / 15 min / IP)
+          $ref: "#/components/responses/Error"
+        "500":
+          description: Restore failed (e.g. mid-swap I/O error); rolled back where possible
+          $ref: "#/components/responses/Error"
+
+  /backup/config:
+    get:
+      operationId: backupGetConfig
+      tags: [Backup]
+      summary: Get the scheduled-backup configuration
+      description: Admin only.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Current backup schedule config
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BackupConfigResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    put:
+      operationId: backupUpdateConfig
+      tags: [Backup]
+      summary: Update the scheduled-backup configuration
+      description: >
+        Admin only. Reconfigures the in-process backup scheduler
+        immediately (no restart required).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled, time, retentionDays]
+              properties:
+                enabled: { type: boolean }
+                time:
+                  type: string
+                  description: 24h local time, `HH:MM` (00:00-23:59).
+                  example: "02:00"
+                retentionDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 3650
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BackupConfigResponse" }
+        "400":
+          description: Invalid `enabled`/`time`/`retentionDays`
+          $ref: "#/components/responses/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /backup/run-now:
+    post:
+      operationId: backupRunNow
+      tags: [Backup]
+      summary: Trigger a backup immediately
+      description: >
+        Admin only. Runs the same backup job the scheduler would run
+        (database + uploads snapshot to the configured backup location);
+        does not stream a file back — use `GET /backup` to download.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Backup completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, enum: [success, offsite_failed] }
+                  lastRunAt: { type: string, format: date-time, nullable: true }
+                  lastSizeBytes: { type: integer, nullable: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: A backup is already running
+          $ref: "#/components/responses/Error"
+        "500":
+          description: Backup failed
+          $ref: "#/components/responses/Error"
+
+  /push/vapid-public-key:
+    get:
+      operationId: pushGetVapidPublicKey
+      tags: [Push notifications]
+      summary: Get the VAPID public key
+      description: >
+        Returns the server's VAPID public key so the client can create a
+        Web Push subscription. Any authenticated user.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: VAPID public key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vapidPublicKey: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503":
+          description: Push notifications not configured (no VAPID key set)
+          $ref: "#/components/responses/Error"
+
+  /push/subscribe:
+    post:
+      operationId: pushSubscribe
+      tags: [Push notifications]
+      summary: Register or update a Web Push subscription
+      description: >
+        Upserts a push subscription for the authenticated user, keyed on
+        `endpoint` — resubscribing the same endpoint updates its keys and
+        owning user rather than creating a duplicate row.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint, keys]
+              properties:
+                endpoint:
+                  type: string
+                  description: Push service endpoint URL from the browser's PushSubscription.
+                keys:
+                  type: object
+                  required: [p256dh, auth]
+                  description: The two keys from `PushSubscription.toJSON().keys`.
+                  properties:
+                    p256dh: { type: string, description: Base64url-encoded P-256 public key. }
+                    auth: { type: string, description: Base64url-encoded authentication secret. }
+      responses:
+        "201":
+          description: Subscribed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        "400":
+          description: Missing `endpoint` or `keys.p256dh`/`keys.auth`
+          $ref: "#/components/responses/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /push/unsubscribe:
+    delete:
+      operationId: pushUnsubscribe
+      tags: [Push notifications]
+      summary: Remove a Web Push subscription
+      description: >
+        Deletes the subscription matching `endpoint`, regardless of which
+        user it belonged to (no ownership check — any authenticated user can
+        remove any subscription by endpoint). Idempotent: succeeds even if
+        no row matched.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint]
+              properties:
+                endpoint: { type: string }
+      responses:
+        "200":
+          description: Removed (or already absent)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        "400":
+          description: Missing `endpoint`
+          $ref: "#/components/responses/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /webhooks:
+    get:
+      operationId: webhooksList
+      tags: [Webhooks]
+      summary: List configured outgoing webhooks
+      description: Admin only. The `secret` (HMAC signing key) is never returned.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Webhooks (without secret)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WebhooksWebhook" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: webhooksCreate
+      tags: [Webhooks]
+      summary: Create an outgoing webhook
+      description: >
+        Admin only. `url` is validated against SSRF (see
+        `lib/webhookValidator.ts`; blocks e.g. internal/loopback targets) and
+        re-validated at delivery time to defend against DNS-rebinding.
+        `events` must be a non-empty subset of the fixed event list. A
+        32-byte random hex `secret` is generated and stored in **readable
+        (not hashed) form** — by design, since it is an HMAC signing key that
+        both this server and the receiving endpoint need in raw form to
+        compute/verify signatures (the same pattern used by GitHub and
+        Stripe), not a password. The `secret` is returned **only in this
+        create response** — subsequent `GET`/`PUT` responses omit it.
+
+
+        **Delivery &amp; signature verification** (not itself an HTTP
+        endpoint on this API — this is what the *receiving* server, at
+        `url`, must implement): on each matching event, this server POSTs
+        the JSON event payload to `url` with header `X-Webhook-Signature`
+        set to the hex-encoded HMAC-SHA256 digest of the exact raw request
+        body, computed with `secret` as the HMAC key, and header
+        `X-Webhook-Event` set to the event type string. To verify, the
+        receiver recomputes `HMAC-SHA256(secret, rawBody)` over the raw
+        bytes it received and compares it to `X-Webhook-Signature` (hex).
+        Deliveries retry up to 5 times with exponential backoff
+        (1m/5m/30m/2h/6h) on non-2xx responses or network/DNS-safety
+        failures, then stop.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url, events]
+              properties:
+                url: { type: string, format: uri }
+                events:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+                    enum:
+                      - ticket.created
+                      - ticket.updated
+                      - ticket.closed
+                      - ticket.deleted
+                      - ticket.status_changed
+                      - comment.created
+                      - contact.created
+                      - contact.updated
+                      - sla.response.breached
+                      - sla.resolution.breached
+      responses:
+        "201":
+          description: Created webhook, including the one-time-visible secret
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhooksWebhookWithSecret" }
+        "400":
+          description: Missing/unsafe `url`, or missing/invalid `events`
+          $ref: "#/components/responses/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /webhooks/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: webhooksUpdate
+      tags: [Webhooks]
+      summary: Update a webhook (partial)
+      description: >
+        Admin only. Any of `url`, `events`, `active` may be omitted to leave
+        unchanged; a new `url` is SSRF-validated the same way as creation.
+        The secret cannot be changed or re-viewed through this endpoint.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url: { type: string, format: uri }
+                events:
+                  type: array
+                  items: { type: string }
+                active: { type: boolean }
+      responses:
+        "200":
+          description: Updated webhook (without secret)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhooksWebhook" }
+        "400":
+          description: Unsafe `url`
+          $ref: "#/components/responses/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Error" }
+    delete:
+      operationId: webhooksDelete
+      tags: [Webhooks]
+      summary: Delete a webhook
+      description: Admin only.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /webhooks/{id}/deliveries:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: webhooksListDeliveries
+      tags: [Webhooks]
+      summary: List recent delivery attempts for a webhook
+      description: >
+        Admin only. Returns the last 50 delivery attempts (most recent
+        first), including HTTP response code, attempt count, and last error.
+        There is no dedicated test/redelivery endpoint — deliveries are
+        created only as a side effect of the triggering domain events
+        (ticket/contact/SLA changes) via the async dispatcher, not on
+        demand through this router.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Delivery attempts (up to 50)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WebhooksDelivery" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "500": { $ref: "#/components/responses/Error" }
+
+  /email-inbound/status:
+    get:
+      operationId: emailInboundStatus
+      tags: [Inbound email]
+      summary: Get mail-to-ticket (IMAP) configuration status
+      description: >
+        Reports whether IMAP mail-to-ticket ingestion is configured and
+        currently polling, plus the configured host/user/poll-interval/
+        auto-create-contact flag. Any authenticated user. Note: actual
+        message ingestion happens out-of-band via periodic IMAP polling
+        (`lib/emailInbound.ts`), not through any HTTP endpoint — this router
+        exposes only this one read-only status check.
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configured: { type: boolean }
+                  active: { type: boolean, description: Whether the polling timer is currently running. }
+                  host: { type: string, nullable: true }
+                  user: { type: string, nullable: true }
+                  polling_interval: { type: integer, description: Seconds between IMAP polls. }
+                  auto_create_contact: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/Error" }
 components:
   securitySchemes:
     bearerAuth:
@@ -1299,3 +3926,746 @@ components:
         tag_ids:
           type: array
           items: { type: string }
+
+    UserAdminView:
+      type: object
+      description: Shape returned from `GET /users` when the caller is an admin.
+      properties:
+        id: { type: string }
+        email: { type: string, format: email }
+        displayName: { type: string, nullable: true }
+        role: { type: string, enum: [admin, user] }
+        createdAt: { type: string, format: date-time }
+        lastSignIn: { type: string, format: date-time, nullable: true }
+        emailConfirmed:
+          type: boolean
+          description: Always `true` — hardcoded in the response, not backed by a real verification flag.
+
+    UserSummary:
+      type: object
+      description: Reduced shape returned from `GET /users` for non-admin callers.
+      properties:
+        id: { type: string }
+        displayName: { type: string, nullable: true }
+        role: { type: string, enum: [admin, user] }
+
+    UserCreateRequest:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string, format: email }
+        password:
+          type: string
+          format: password
+          description: >
+            Optional. If omitted, a random password is generated and returned
+            as `temporaryPassword`. If supplied, must satisfy the password
+            policy (same as change-password/reset-password).
+        role:
+          type: string
+          description: Any value other than `"admin"` (or omission) becomes `"user"`.
+          enum: [admin, user]
+        displayName:
+          type: string
+          nullable: true
+          description: 1–100 characters after trim; falls back to a matching contact's name if omitted.
+
+    UserUpdateRequest:
+      type: object
+      description: At least one property is required.
+      properties:
+        role: { type: string, enum: [admin, user] }
+        displayName:
+          type: string
+          nullable: true
+          description: Empty string or null clears the field. Max 100 characters after trim.
+
+    ApiKey:
+      type: object
+      description: An API key as returned by list/create, with key material omitted (except the one-time raw value on create).
+      properties:
+        id: { type: string }
+        name: { type: string }
+        key_prefix:
+          type: string
+          description: First 8 hex chars of the raw key, shown for identification.
+        permissions:
+          type: string
+          description: >
+            JSON-encoded array of scope strings (e.g. `["read"]` or
+            `["read","write"]`), returned verbatim as stored — not parsed
+            into a JSON array by the API.
+        last_used_at: { type: string, format: date-time, nullable: true }
+        expires_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    ApiKeyCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, description: "Required, non-blank after trim." }
+        permissions:
+          type: array
+          items: { type: string }
+          description: >
+            Optional array of scope strings, e.g. `["read"]` or
+            `["read","write"]`. If omitted or not an array, defaults to
+            `["read"]` without an error.
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional ISO date/time; must be in the future. Defaults to one year from creation if omitted.
+
+    ApiKeyCreated:
+      type: object
+      description: Response from key creation — the only time the raw key value is ever returned.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        key:
+          type: string
+          description: Raw key value (`itk_live_...`). Shown once; only its SHA-256 hash is stored server-side.
+        key_prefix: { type: string }
+        permissions:
+          type: string
+          description: JSON-encoded array of scope strings, as stored (see `ApiKey.permissions`).
+        expires_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }
+
+    commentsComment:
+      type: object
+      description: A comment on a ticket (row from `ticket_comments`, joined with author display info).
+      properties:
+        id: { type: string }
+        ticket_id: { type: string }
+        user_id: { type: string }
+        content:
+          type: string
+          description: Sanitized rich-text HTML.
+        is_internal:
+          type: integer
+          description: SQLite boolean (0 or 1) — 0 means the comment is a public reply visible to the customer.
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        deleted_at: { type: string, format: date-time, nullable: true }
+        user_name:
+          type: string
+          nullable: true
+          description: "`display_name`, falling back to the matching contact's name, then the user's email."
+        user_email: { type: string, nullable: true, format: email }
+      required: [id, ticket_id, user_id, content, is_internal, created_at, updated_at]
+
+    attachmentsAttachment:
+      type: object
+      description: Metadata row from `ticket_attachments`, plus a computed download `url`.
+      properties:
+        id: { type: string }
+        ticket_id: { type: string }
+        file_name:
+          type: string
+          description: Original uploaded filename.
+        file_path:
+          type: string
+          description: Server-side stored filename (opaque, not the original name).
+        file_size: { type: integer, nullable: true, description: Bytes. }
+        file_type: { type: string, nullable: true, description: Declared MIME type. }
+        created_at: { type: string, format: date-time }
+        url:
+          type: string
+          description: Relative download URL, e.g. `/api/attachments/file/{id}`.
+      required: [id, ticket_id, file_name, file_path, created_at, url]
+
+    linksTicketLink:
+      type: object
+      description: A bidirectional relationship between two tickets, enriched with the "other side"'s summary.
+      properties:
+        id: { type: string }
+        sourceTicketId: { type: string }
+        targetTicketId: { type: string }
+        linkType: { type: string }
+        createdBy: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        linkedTicket:
+          type: object
+          description: Summary of whichever ticket is NOT the one the request was scoped to.
+          properties:
+            id: { type: string }
+            title: { type: string }
+            status: { type: string }
+            priority: { type: string }
+            created_at: { type: string, format: date-time }
+          required: [id, title, status, priority, created_at]
+      required: [id, sourceTicketId, targetTicketId, linkType, createdAt, linkedTicket]
+
+    sharesPublicTicketView:
+      type: object
+      description: >
+        Public (unauthenticated) view of a shared ticket. Same shape as the
+        internal Ticket resource with `notes` (internal agent notes) removed,
+        plus the requester's contact record, attachments, and checklist items.
+      properties:
+        ticket:
+          allOf:
+            - $ref: "#/components/schemas/Ticket"
+            - type: object
+              description: The `notes` field is always absent here even though it is present on the internal Ticket schema.
+              properties:
+                category:
+                  $ref: "#/components/schemas/Category"
+                  nullable: true
+        requester:
+          allOf:
+            - $ref: "#/components/schemas/Contact"
+          nullable: true
+        attachments:
+          type: array
+          items:
+            allOf:
+              - $ref: "#/components/schemas/attachmentsAttachment"
+              - type: object
+                properties:
+                  url:
+                    type: string
+                    description: "Public download URL: `/api/shares/public/file/{token}/{attachmentId}` (no auth required)."
+        checklistItems:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              label: { type: string }
+              completed: { type: boolean }
+              position: { type: integer }
+            required: [id, label, completed, position]
+      required: [ticket, attachments, checklistItems]
+
+    ChecklistItem:
+      type: object
+      description: A single item on a ticket's checklist. May be nested one level via `parent_id`.
+      properties:
+        id: { type: string }
+        ticket_id: { type: string }
+        label: { type: string }
+        completed: { type: boolean }
+        position: { type: integer }
+        parent_id: { type: string, nullable: true }
+        due_date: { type: string, nullable: true, description: Free-form date string; no format enforced by the route. }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    ChecklistItemCreateInput:
+      type: object
+      required: [label]
+      properties:
+        label: { type: string }
+        parent_id: { type: string, nullable: true }
+        due_date: { type: string, nullable: true }
+
+    ChecklistItemBulkInput:
+      type: object
+      description: >
+        Provide either `labels` (plain strings) or `items` (strings and/or
+        objects). Blank/whitespace-only entries are dropped; if `items` is
+        present it takes precedence over `labels`.
+      properties:
+        labels:
+          type: array
+          items: { type: string }
+        items:
+          type: array
+          items:
+            oneOf:
+              - type: string
+              - type: object
+                required: [label]
+                properties:
+                  label: { type: string }
+                  parent_id: { type: string, nullable: true }
+                  due_date: { type: string, nullable: true }
+
+    ChecklistItemUpdateInput:
+      type: object
+      description: All fields optional; only supplied keys are updated.
+      properties:
+        label: { type: string }
+        completed: { type: boolean }
+        due_date: { type: string, nullable: true }
+        parent_id: { type: string, nullable: true }
+
+    ChecklistProgress:
+      type: object
+      description: Keyed by ticket id; only ids the caller may access are present.
+      additionalProperties:
+        type: object
+        properties:
+          total: { type: integer }
+          completed: { type: integer }
+
+    ChecklistTemplate:
+      type: object
+      description: >
+        A reusable, named list of checklist item labels that can be applied
+        (copied) onto any ticket's checklist. Distinct from a `Template`
+        (ticket template) — this only produces checklist items, not a ticket.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ChecklistTemplateItem" }
+
+    ChecklistTemplateItem:
+      type: object
+      description: One row of a checklist template; nesting is expressed by `parent_label` matching another item's `label` within the same template (not by id).
+      properties:
+        id: { type: string }
+        template_id: { type: string }
+        label: { type: string }
+        parent_label: { type: string, nullable: true }
+        position: { type: integer }
+
+    ChecklistTemplateInput:
+      type: object
+      required: [name, items]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        items:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required: [label]
+            properties:
+              label: { type: string }
+              parent_label: { type: string }
+
+    ChecklistTemplateUpdateInput:
+      type: object
+      description: >
+        `name`/`description` are only touched if `name` is present. If
+        `items` is present, it fully replaces the template's existing items.
+      properties:
+        name: { type: string }
+        description: { type: string }
+        items:
+          type: array
+          items:
+            type: object
+            required: [label]
+            properties:
+              label: { type: string }
+              parent_label: { type: string }
+
+    Template:
+      type: object
+      description: >
+        A reusable ticket blueprint used to prefill `POST /tickets`. `standard`
+        templates prefill title/description/etc.; `dynamic` templates instead
+        carry a set of custom form `fields` used to compose the ticket body.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        description: { type: string, nullable: true }
+        template_type: { type: string, enum: [standard, dynamic] }
+        title_template: { type: string }
+        description_template: { type: string, description: Empty string for dynamic templates rather than null (column is NOT NULL). }
+        priority: { type: string, enum: [low, medium, high, critical] }
+        category_id: { type: string, nullable: true }
+        notes_template: { type: string, nullable: true }
+        solution_template: { type: string, nullable: true }
+        position: { type: integer }
+        created_by: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/TemplateField" }
+
+    TemplateInput:
+      type: object
+      required: [name, title_template]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        template_type: { type: string, enum: [standard, dynamic], default: standard }
+        title_template: { type: string }
+        description_template: { type: string, description: Required unless template_type is dynamic. }
+        priority: { type: string, enum: [low, medium, high, critical], default: medium }
+        category_id: { type: string, nullable: true }
+        notes_template: { type: string, nullable: true }
+        solution_template: { type: string, nullable: true }
+        fields:
+          type: array
+          description: Only used when template_type is dynamic; inserted inline for this template.
+          items: { $ref: "#/components/schemas/TemplateFieldInput" }
+
+    TemplateUpdateInput:
+      type: object
+      description: All fields optional; each omitted field keeps its current value. Fields (custom form fields) cannot be set here.
+      properties:
+        name: { type: string }
+        description: { type: string, nullable: true }
+        template_type: { type: string, enum: [standard, dynamic] }
+        title_template: { type: string }
+        description_template: { type: string }
+        priority: { type: string, enum: [low, medium, high, critical] }
+        category_id: { type: string, nullable: true }
+        notes_template: { type: string, nullable: true }
+        solution_template: { type: string, nullable: true }
+
+    TemplateField:
+      type: object
+      description: A single custom form field belonging to a dynamic Template.
+      properties:
+        id: { type: string }
+        template_id: { type: string }
+        field_name: { type: string }
+        field_label: { type: string }
+        field_type: { type: string, enum: [text, textarea, number, select, date, checkbox] }
+        placeholder: { type: string, nullable: true }
+        default_value: { type: string, nullable: true }
+        required:
+          type: integer
+          enum: [0, 1]
+          description: >
+            SQLite boolean stored/returned as 0 or 1. Unlike ticket-checklist
+            items, this route does not map it to a JSON boolean.
+        options:
+          type: string
+          nullable: true
+          description: >
+            JSON-encoded array of option strings, used when field_type is
+            select. Stored/returned as the raw serialized string, not parsed.
+        position: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+
+    TemplateFieldInput:
+      type: object
+      required: [field_name, field_label, field_type]
+      description: >
+        Used for both create (all required fields must be present) and
+        update (all fields optional — omitted ones keep their current value).
+      properties:
+        field_name: { type: string }
+        field_label: { type: string }
+        field_type: { type: string, enum: [text, textarea, number, select, date, checkbox] }
+        placeholder: { type: string, nullable: true }
+        default_value: { type: string, nullable: true }
+        required:
+          type: boolean
+          description: Coerced to 0/1 on write.
+        options:
+          description: >
+            Options for a select field. The route re-serializes whatever is
+            sent with JSON.stringify before storing it — send a plain array
+            of strings here, not a pre-encoded JSON string.
+          type: array
+          items: { type: string }
+        position: { type: integer }
+
+    TagsTag:
+      type: object
+      description: A ticket tag (label), not an OpenAPI `tags:` grouping.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string, example: "#3b82f6" }
+        created_at: { type: string, format: date-time }
+      required: [id, name, color, created_at]
+
+    TagsInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          description: Trimmed server-side; must be non-empty and unique among tags.
+        color:
+          type: string
+          description: Defaults to `#3b82f6` when omitted or falsy.
+          example: "#3b82f6"
+
+    SlaPolicy:
+      type: object
+      properties:
+        id: { type: string }
+        company_id:
+          type: string
+          nullable: true
+          description: Null for the global-default policy set.
+        priority: { type: string, enum: [low, medium, high, critical] }
+        response_time_minutes: { type: integer }
+        resolution_time_minutes: { type: integer }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+      required:
+        - id
+        - company_id
+        - priority
+        - response_time_minutes
+        - resolution_time_minutes
+        - created_at
+        - updated_at
+
+    SlaPolicyInput:
+      type: object
+      description: >
+        Entries with an unrecognized `priority`, or a missing/falsy
+        `response_time_minutes`/`resolution_time_minutes`, are silently
+        dropped rather than rejected.
+      properties:
+        priority: { type: string, enum: [low, medium, high, critical] }
+        response_time_minutes: { type: integer, minimum: 1 }
+        resolution_time_minutes: { type: integer, minimum: 1 }
+
+    SlaPoliciesInput:
+      type: object
+      required: [policies]
+      properties:
+        company_id:
+          type: string
+          nullable: true
+          description: >
+            Omitted or null targets the global-default policy set
+            (`company_id IS NULL`).
+        policies:
+          type: array
+          items: { $ref: "#/components/schemas/SlaPolicyInput" }
+
+    RecurringHistoryEntry:
+      type: object
+      description: One previously auto-generated ticket for a template.
+      properties:
+        id: { type: string }
+        ticket_id: { type: string }
+        created_at: { type: string, format: date-time }
+        ticket_title: { type: string }
+      required: [id, ticket_id, created_at, ticket_title]
+
+    RecurringTemplate:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        title: { type: string }
+        description: { type: string }
+        priority: { type: string, enum: [low, medium, high, critical] }
+        category_id: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+          description: Tag ids, parsed from stored JSON (`[]` if the JSON is missing/invalid).
+        interval_type: { type: string, enum: [daily, weekly, monthly] }
+        interval_day:
+          type: integer
+          nullable: true
+          description: >
+            Meaning depends on `interval_type`: unused for `daily`; day of
+            week `0`(Sunday)-`6`(Saturday) for `weekly`; day of month `1`-`31`
+            for `monthly` (clamped to the last valid day of the target month).
+        is_active: { type: integer, enum: [0, 1] }
+        last_run: { type: string, format: date-time, nullable: true }
+        next_run: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        history:
+          type: array
+          items: { $ref: "#/components/schemas/RecurringHistoryEntry" }
+      required:
+        - id
+        - name
+        - title
+        - priority
+        - tags
+        - interval_type
+        - interval_day
+        - is_active
+        - last_run
+        - next_run
+        - history
+
+    RecurringInput:
+      type: object
+      required: [name, title, interval_type]
+      description: >
+        Recurrence format (server/src/lib/recurringScheduler.ts:31-73,
+        `computeNextRun`) is a fixed set of interval types, not cron: `daily`
+        fires at the next local midnight; `weekly` requires `interval_day`
+        0-6 (Sunday-Saturday) and fires at the next occurrence of that
+        weekday at local midnight, always at least 1 day ahead; `monthly`
+        requires `interval_day` 1-31 and fires next month on
+        `min(interval_day, daysInThatMonth)` at local midnight (e.g. day 31
+        becomes Feb 28/29). `next_run` is always recomputed from the current
+        time, not from the previous `next_run`, so it never drifts.
+      properties:
+        name: { type: string }
+        title: { type: string }
+        description: { type: string, default: "" }
+        priority: { type: string, enum: [low, medium, high, critical], default: medium }
+        category_id: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+          description: Tag ids; stored as JSON, defaults to `[]`.
+        interval_type: { type: string, enum: [daily, weekly, monthly] }
+        interval_day:
+          type: integer
+          nullable: true
+          description: >
+            Required when `interval_type` is `weekly` (0-6) or `monthly`
+            (1-31); rejected with 400 before creation if missing in those
+            cases.
+
+    RecurringUpdateInput:
+      type: object
+      description: All fields optional; omitted fields keep their current value.
+      properties:
+        name: { type: string }
+        title: { type: string }
+        description: { type: string }
+        priority: { type: string, enum: [low, medium, high, critical] }
+        category_id: { type: string, nullable: true }
+        tags:
+          type: array
+          items: { type: string }
+        interval_type: { type: string, enum: [daily, weekly, monthly] }
+        interval_day: { type: integer, nullable: true }
+        is_active:
+          type: integer
+          enum: [0, 1]
+          description: Set to `0` to pause, `1` to resume (resuming recomputes `next_run`).
+
+    ReportsSummary:
+      type: object
+      properties:
+        totals:
+          type: object
+          properties:
+            open: { type: integer }
+            inProgress: { type: integer }
+            waiting: { type: integer }
+            resolved: { type: integer }
+            closed: { type: integer }
+            total: { type: integer }
+        byCategory:
+          type: array
+          items:
+            type: object
+            properties:
+              category: { type: string }
+              count: { type: integer }
+        byPriority:
+          type: array
+          items:
+            type: object
+            properties:
+              priority: { type: string, enum: [critical, high, medium, low] }
+              count: { type: integer }
+        trend:
+          type: array
+          items:
+            type: object
+            properties:
+              month: { type: string, example: "2026-01" }
+              created: { type: integer }
+              closed: { type: integer }
+        avgResolutionDays: { type: number }
+        agingTickets:
+          type: integer
+          description: Open tickets older than 7 days, always unfiltered by year/month.
+
+    ReportsRequesterAnalyticsRow:
+      type: object
+      properties:
+        userId: { type: string, description: "Contact id, or the literal `unassigned`." }
+        name: { type: string }
+        totalTickets: { type: integer }
+        statusBreakdown:
+          type: object
+          properties:
+            open: { type: integer }
+            in-progress: { type: integer }
+            waiting: { type: integer }
+            resolved: { type: integer }
+            closed: { type: integer }
+        priorityBreakdown:
+          type: object
+          properties:
+            low: { type: integer }
+            medium: { type: integer }
+            high: { type: integer }
+            critical: { type: integer }
+        completionRate: { type: number, description: "Percentage 0-100." }
+        avgResolutionTime: { type: number, description: Days. }
+        agingTickets: { type: integer }
+        lastTicketDate: { type: string, format: date-time }
+        ticketVelocity: { type: number, description: Tickets per month since the requester's first ticket. }
+        topCategories:
+          type: array
+          maxItems: 3
+          items:
+            type: object
+            properties:
+              category: { type: string }
+              count: { type: integer }
+        topTags:
+          type: array
+          maxItems: 3
+          items:
+            type: object
+            properties:
+              tag: { type: string }
+              count: { type: integer }
+
+    BackupConfigResponse:
+      type: object
+      properties:
+        enabled: { type: boolean }
+        time: { type: string, example: "02:00", description: "HH:MM, container-local time." }
+        retentionDays: { type: integer }
+        lastRunAt: { type: string, format: date-time, nullable: true }
+        lastStatus: { type: string, enum: [success, failed, offsite_failed], nullable: true }
+        lastSizeBytes: { type: integer, nullable: true }
+        nextRunAt: { type: string, format: date-time, nullable: true, description: "null when paused (enabled=false)." }
+        consecutiveFailures: { type: integer }
+        offsiteFailureCount: { type: integer }
+
+    WebhooksWebhook:
+      type: object
+      description: Webhook row without the HMAC secret.
+      properties:
+        id: { type: string }
+        url: { type: string, format: uri }
+        events: { type: string, description: JSON-encoded array of event-type strings. }
+        active: { type: integer, enum: [0, 1] }
+        created_at: { type: string, format: date-time }
+        last_triggered_at: { type: string, format: date-time, nullable: true }
+
+    WebhooksWebhookWithSecret:
+      allOf:
+        - $ref: "#/components/schemas/WebhooksWebhook"
+        - type: object
+          properties:
+            secret:
+              type: string
+              description: >
+                32-byte hex HMAC-SHA256 signing key. Returned only on
+                creation — store it now, it cannot be retrieved again.
+
+    WebhooksDelivery:
+      type: object
+      properties:
+        id: { type: string }
+        webhook_id: { type: string }
+        event: { type: string }
+        payload: { type: string, description: JSON-encoded delivered event payload. }
+        response_code: { type: integer, nullable: true, description: "0 if the URL failed re-validation (e.g. DNS-rebind to an internal address) before any request was sent." }
+        attempts: { type: integer }
+        delivered_at: { type: string, format: date-time, nullable: true }
+        created_at: { type: string, format: date-time }

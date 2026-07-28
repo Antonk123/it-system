@@ -174,7 +174,7 @@ describe('contactUpdateSchema', () => {
 // companySchema
 // ---------------------------------------------------------------------------
 describe('companySchema', () => {
-  const validCompany = { name: 'Prefabmästarna AB' };
+  const validCompany = { name: 'Nordvik Snickeri AB' };
 
   it('godkänner minimalt giltigt företag', () => {
     expect(() => companySchema.parse(validCompany)).not.toThrow();
@@ -198,7 +198,7 @@ describe('companySchema', () => {
 
   it('godkänner giltig e-post för företag', () => {
     expect(() =>
-      companySchema.parse({ ...validCompany, email: 'info@prefabmastarna.se' })
+      companySchema.parse({ ...validCompany, email: 'info@example.com' })
     ).not.toThrow();
   });
 

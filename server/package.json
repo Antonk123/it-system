@@ -2,6 +2,7 @@
   "name": "it-ticketing-backend",
   "version": "1.0.0",
   "type": "module",
+  "license": "MIT",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc; cp src/db/schema.sql dist/db/schema.sql",
