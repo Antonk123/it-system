@@ -1,3 +1,6 @@
+<!-- Decorative: the heading immediately below already carries the product name. -->
+<img src="docs/assets/logo.png" alt="" width="84">
+
 # IT-Ticket
 
 **A self-hosted helpdesk for the technician doing the work, not the manager tracking it — ticket to invoice in one system, with no per-agent license fee.**
