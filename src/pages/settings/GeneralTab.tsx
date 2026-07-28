@@ -15,6 +15,7 @@ import { FONT_OPTIONS, FontTheme, applyFontTheme, getStoredFontTheme, isFontThem
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
+import { BrandingSection } from '@/components/settings/BrandingSection';
 
 const themeOptions = [
   { value: 'theme-default', label: 'Slate' },
@@ -131,6 +132,8 @@ const GeneralTab = () => {
 
   return (
     <>
+        <BrandingSection />
+
         <Collapsible open={sectionsOpen.appearance} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, appearance: open }))}>
           <Card>
             <CollapsibleTrigger className="w-full">

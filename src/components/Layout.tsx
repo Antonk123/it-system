@@ -11,6 +11,7 @@ import { OnboardingWizard } from '@/components/OnboardingWizard';
 import { applyMode, getStoredMode, saveModeTheme, ModeTheme } from '@/lib/appearance';
 import { dispatchModeChange } from '@/hooks/useMode';
 import { RouteBreadcrumbs } from '@/components/RouteBreadcrumbs';
+import { BrandLogo } from '@/components/BrandLogo';
 
 interface LayoutProps {
   children: ReactNode;
@@ -111,7 +112,9 @@ const TitleSection = ({ open }: TitleSectionProps) => {
     <div className="p-4 border-b border-sidebar-border">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg">
-          <img src="/icons/pfm-logo-lg.png" alt="PFM" className="w-full h-full object-cover" />
+          {/* Icke-tom alt: "IT-ärenden"-texten intill visas bara när sidofältet är
+              expanderat (open) — i kollapsat läge är logotypen ensam varumärkesbärare. */}
+          <BrandLogo alt="IT-Ticket" className="w-full h-full object-cover" />
         </div>
 
         {open && (

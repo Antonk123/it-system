@@ -296,6 +296,51 @@ class ApiClient {
     return this.request('/auth/oidc/enabled');
   }
 
+  // Branding — publik logotyp-URL. Anropas från oinloggade sidor (Login,
+  // PublicTicketForm) och får ALDRIG trigga refresh-kedjan eller
+  // sessionExpired()-redirecten som request() gör vid 401: en oautentiserad
+  // besökare har typiskt ingen/en utgången token liggande i localStorage, och
+  // ett fel här ska tyst degradera till standardlogotypen — inte kasta ut
+  // användaren från inloggningssidan. Därför en egen minimal fetch utan
+  // Authorization-header, CSRF eller retry-logik, istället för att gå via
+  // request().
+  async getBranding(): Promise<{ logoUrl: string | null }> {
+    try {
+      const response = await fetch(`${this.baseUrl}/public/branding`);
+      if (!response.ok) return { logoUrl: null };
+      const data = await response.json();
+      const logoUrl = typeof data?.logoUrl === 'string' ? data.logoUrl : null;
+      return { logoUrl: this.resolveBrandingLogoUrl(logoUrl) };
+    } catch {
+      return { logoUrl: null };
+    }
+  }
+
+  // Backendens svar är alltid en app-relativ sökväg ("/api/public/branding/logo?v=...")
+  // — ett publikt API-kontrakt som inte ska ändras här. Men API_BASE_URL kan vara
+  // absolut (VITE_API_URL satt till en annan origin, t.ex. dev-miljön där frontend
+  // och backend körs på olika portar/hostar, se Dockerfile.client). En relativ
+  // logoUrl skulle då resolva mot FRONTENDENS origin i <img src>, inte backendens
+  // — trasig bild. Byt ut prefixet "/api/" mot den faktiska basen; rör INGET
+  // om strängen mot förmodan inte har det exakta prefixet (t.ex. redan absolut,
+  // eller ett framtida kontraktsbyte) — bättre att låta en oväntad form passera
+  // orörd än att gissa fel.
+  private resolveBrandingLogoUrl(logoUrl: string | null): string | null {
+    if (!logoUrl || !logoUrl.startsWith('/api/')) return logoUrl;
+    return `${this.baseUrl}${logoUrl.slice('/api'.length)}`;
+  }
+
+  // Admin: ladda upp egen logotyp. Går via den delade postFile-vägen så den
+  // ärver CSRF-header + 401-refresh-retry precis som övriga uppladdningar.
+  async uploadBrandingLogo(file: File): Promise<{ logoUrl: string }> {
+    return this.postFile<{ logoUrl: string }>('/settings/branding/logo', file, 'file', 'Uppladdning misslyckades');
+  }
+
+  // Admin: återställ till standardlogotypen.
+  async deleteBrandingLogo(): Promise<void> {
+    return this.request<void>('/settings/branding/logo', { method: 'DELETE' });
+  }
+
   /** Absolut URL till SSO-inloggningen (vanlig länk-navigation, ingen fetch). */
   oidcLoginUrl(): string {
     return `${this.baseUrl}/auth/oidc/login`;

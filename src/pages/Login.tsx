@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Lock, Mail, LogIn, Ticket } from "lucide-react";
 import { toast } from "sonner";
+import { BrandLogo } from "@/components/BrandLogo";
 
 const SSO_ERROR_MESSAGES: Record<string, string> = {
   unknown_user: "Ditt konto finns inte i IT-Ticket — kontakta administratören.",
@@ -74,7 +75,8 @@ const Login = () => {
           {/* Header */}
           <div className="text-center mb-8">
             <div className="mx-auto w-16 h-16 rounded-2xl overflow-hidden mb-5 ring-1 ring-primary/20 shadow-lg shadow-primary/10">
-              <img src="/icons/pfm-logo-lg.png" alt="PFM" className="w-full h-full object-cover" />
+              {/* Dekorativ (alt=""): rubriken "IT-Ticket" direkt under förmedlar redan namnet */}
+              <BrandLogo alt="" className="w-full h-full object-cover" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">IT-Ticket</h1>
             <p className="text-sm text-muted-foreground mt-1.5">Logga in för att fortsätta</p>

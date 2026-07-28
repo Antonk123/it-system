@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DynamicFieldsForm } from '@/components/DynamicFieldsForm';
+import { BrandLogo } from '@/components/BrandLogo';
 
 interface Category { id: string; label: string; }
 interface Template {
@@ -242,7 +243,10 @@ const PublicTicketForm = () => {
         {/* Brand header */}
         <div className="text-center mb-8">
           <div className="inline-flex w-16 h-16 rounded-2xl overflow-hidden mb-5 ring-1 ring-primary/20 shadow-lg shadow-primary/10">
-            <img src="/icons/pfm-logo-lg.png" alt="PFM" className="w-full h-full object-cover" />
+            {/* Icke-tom alt: rubriken här är formulärets syfte ("Skicka en
+                supportförfrågan"), inte appnamnet — logotypen är enda varumärkesbäraren
+                på den här oinloggade sidan. */}
+            <BrandLogo alt="IT-Ticket" className="w-full h-full object-cover" />
           </div>
           <h1 className="text-2xl font-semibold text-foreground tracking-tight">Skicka en supportförfrågan</h1>
           <p className="text-sm text-muted-foreground mt-1.5">Fyll i formuläret så återkommer vi så snart som möjligt.</p>

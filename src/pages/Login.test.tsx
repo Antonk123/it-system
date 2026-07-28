@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StrictMode } from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const completeSsoLogin = vi.fn();
 vi.mock('@/contexts/AuthContext', () => ({
@@ -13,6 +14,9 @@ vi.mock('@/lib/api', () => ({
   api: {
     getOidcStatus: vi.fn(),
     oidcLoginUrl: () => 'http://api.test/auth/oidc/login',
+    // BrandLogo → useBranding() anropar denna; degraderar precis som den
+    // riktiga implementationen gör vid fel — aldrig relevant för dessa tester.
+    getBranding: vi.fn().mockResolvedValue({ logoUrl: null }),
   },
 }));
 const navigate = vi.fn();
@@ -25,10 +29,13 @@ import { api } from '@/lib/api';
 import Login from './Login';
 
 function renderLogin(search = '') {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={[`/login${search}`]}>
-      <Login />
-    </MemoryRouter>
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[`/login${search}`]}>
+        <Login />
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }
 
@@ -68,11 +75,14 @@ describe('callback-hantering', () => {
   });
   it('?sso=1 → completeSsoLogin anropas bara EN gång trots StrictMode-dubbelkörning av effekten', async () => {
     completeSsoLogin.mockResolvedValue(true);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <StrictMode>
-        <MemoryRouter initialEntries={['/login?sso=1']}>
-          <Login />
-        </MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <MemoryRouter initialEntries={['/login?sso=1']}>
+            <Login />
+          </MemoryRouter>
+        </QueryClientProvider>
       </StrictMode>
     );
     await waitFor(() => expect(completeSsoLogin).toHaveBeenCalled());

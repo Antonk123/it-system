@@ -5,11 +5,22 @@ import { sendTicketCreatedEmail } from '../lib/email.js';
 import { aiEnabled, suggestSolutionFromKB, findRelevantKbArticles } from '../lib/aiHelper.js';
 import { stripHtml } from '../lib/htmlUtils.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
-import { publicWriteRateLimiter, publicAiRateLimiter } from '../middleware/rateLimit.js';
+import { publicWriteRateLimiter, publicAiRateLimiter, createRateLimiter } from '../middleware/rateLimit.js';
 import { authenticate } from '../middleware/auth.js';
+import { getBrandingInfo, getStoredLogoPath } from '../lib/branding.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
+
+// Same style as kb.ts:kbShareRateLimiter and shares.ts:sharePublicRateLimiter
+// (/templates and /categories below predate rate limiting on this router's
+// plain GETs, but a new unauthenticated read endpoint should not go out
+// without one). Window is wider than those two (120/min, not 30/min):
+// GET /branding is fetched on every load of the public ticket form AND the
+// login screen, so a shared office NAT can plausibly clear 30 req/min from
+// ordinary traffic alone. This is a public, cacheable, non-sensitive read —
+// 120/min still bounds it without degrading the login page for real users.
+const publicBrandingReadRateLimiter = createRateLimiter(60 * 1000, 120);
 
 // ─── Idempotency key store (in-memory, 5-minute TTL) ────────────────────────
 // Prevents duplicate ticket creation from network retries on the public form.
@@ -96,6 +107,77 @@ router.get('/categories', (_req: Request, res: Response) => {
   } catch (error) {
     logger.error('Error fetching public categories:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
+// Instance branding: which logo (if any) the client should render, with a
+// cache-busting query param. { logoUrl: null } means "no custom logo — use
+// the client's built-in default mark".
+router.get('/branding', publicBrandingReadRateLimiter, (_req: Request, res: Response) => {
+  try {
+    res.json(getBrandingInfo());
+  } catch (error) {
+    logger.error('Error fetching branding info:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to fetch branding info' });
+  }
+});
+
+// Serves the configured logo's bytes. Unauthenticated by design (the logo
+// must render on the public ticket form / login screen, before any session
+// exists).
+router.get('/branding/logo', publicBrandingReadRateLimiter, (_req: Request, res: Response) => {
+  try {
+    const logo = getStoredLogoPath();
+    if (!logo) {
+      return res.status(404).json({ error: 'No logo configured' });
+    }
+
+    // Content-Type comes from a server-defined map keyed by the stored mime
+    // string (see lib/branding.ts) — never echoed from any user-controlled input.
+    res.setHeader('Content-Type', logo.contentType);
+
+    // SÄKERHETSUNDANTAG från attachments.ts-invarianten (som ALLTID tvingar
+    // Content-Disposition: attachment): en logotyp måste RENDERAS av
+    // webbläsaren, inte laddas ned, så vi sätter `inline` här. Det vilar på
+    // TRE garantier, inte två — läs (2) noga, den är svagare än den låter:
+    //   (1) lib/branding.ts:ALLOWED_LOGO_MIME_TYPES utesluter image/svg+xml
+    //       (och alla andra script-bärande format).
+    //   (2) hasValidLogoMagicBytes verifierar ett PREFIX av filens faktiska
+    //       byte efter uppladdning (3 byte för JPEG, 8 för PNG, RIFF+4 fria
+    //       byte+WEBP för WebP) — INTE att hela filen är en giltig,
+    //       avkodningsbar bild. En polyglot som börjar med giltiga
+    //       JPEG-magic-bytes och sedan fortsätter med
+    //       `<script>alert(document.domain)</script>` PASSERAR den här
+    //       kontrollen (verifierat i säkerhetsgranskning: upload 200, serve
+    //       200, Content-Type: image/jpeg, Content-Disposition: inline).
+    //       (2) ensam gör alltså INTE `inline` säkert.
+    //   (3) `X-Content-Type-Options: nosniff` (satt av helmet i app.ts och av
+    //       nginx på servernivå) hindrar webbläsaren från att sniffa om
+    //       innehållet till text/html trots Content-Type: image/*. Det är
+    //       DEN HÄR garantin som faktiskt neutraliserar polyglot-fallet ovan
+    //       — se branding.test.ts som asserterar på headern.
+    // Ändra ALDRIG denna route till att servera andra filtyper, och ta
+    // ALDRIG bort nosniff-headern, utan att först ha ersatt (2) med en riktig
+    // bildavkodning (t.ex. läsa in filen med ett bildbibliotek som verifierar
+    // hela strukturen, inte bara de första byten).
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+
+    // CORP: helmet sätter Cross-Origin-Resource-Policy: same-origin globalt
+    // (app.ts), vilket gör att webbläsaren blockerar en <img>-laddning av den
+    // här resursen så fort frontend och API ligger på olika origin — vilket
+    // projektets dev-stack (och andra reverse-proxy-uppsättningar) gör. Denna
+    // fil är AVSIKTLIGT publik, oautentiserad och icke-känslig — CORP skyddar
+    // ingenting här — så vi mjukar upp den ENBART på det här svaret.
+    // Generalisera INTE detta undantag till andra routes: attachments och
+    // andra filer är fortfarande auktoriserade resurser som ska hålla
+    // same-origin.
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+
+    res.sendFile(logo.path);
+  } catch (error) {
+    logger.error('Error serving branding logo:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to serve branding logo' });
   }
 });
 

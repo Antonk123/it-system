@@ -351,6 +351,52 @@ describe('API_BASE_URL', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 3b. getBranding() — logoUrl måste resolva mot API_BASE_URL, inte mot
+// frontendens origin (L2b: trasig bild i dev/prod när VITE_API_URL pekar på
+// en annan origin än frontenden — jsdom med tom VITE_API_URL döljer buggen
+// eftersom '/api' då råkar vara både bas och prefix).
+// ---------------------------------------------------------------------------
+
+describe('getBranding — logoUrl-prefix mot korrekt bas', () => {
+  it("VITE_API_URL absolut (annan origin) → '/api/'-prefixet i svaret byts mot basen", async () => {
+    vi.stubEnv('VITE_API_URL', 'https://api.example.com/api');
+    vi.resetModules();
+    const api = await freshApi();
+
+    fetchMock.mockResolvedValue(
+      fakeResponse({ json: () => Promise.resolve({ logoUrl: '/api/public/branding/logo?v=123' }) })
+    );
+
+    const result = await api.getBranding();
+    expect(result).toEqual({ logoUrl: 'https://api.example.com/api/public/branding/logo?v=123' });
+  });
+
+  it("VITE_API_URL tom (relativ bas) → svaret lämnas oförändrat", async () => {
+    vi.stubEnv('VITE_API_URL', '');
+    vi.resetModules();
+    const api = await freshApi();
+
+    fetchMock.mockResolvedValue(
+      fakeResponse({ json: () => Promise.resolve({ logoUrl: '/api/public/branding/logo?v=123' }) })
+    );
+
+    const result = await api.getBranding();
+    expect(result).toEqual({ logoUrl: '/api/public/branding/logo?v=123' });
+  });
+
+  it('logoUrl null → förblir null oavsett bas', async () => {
+    vi.stubEnv('VITE_API_URL', 'https://api.example.com/api');
+    vi.resetModules();
+    const api = await freshApi();
+
+    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve({ logoUrl: null }) }));
+
+    const result = await api.getBranding();
+    expect(result).toEqual({ logoUrl: null });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 4. Rena URL-byggare
 // ---------------------------------------------------------------------------
 
