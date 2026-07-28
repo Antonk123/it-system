@@ -1,12 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="IT-Ticket">
   <title>IT-Ticket</title>
-  <rect width="512" height="512" rx="116" fill="#151A2E"/>
-  <g>
-    <rect x="88" y="164" width="336" height="184" rx="28" fill="#F4F1EA"/>
-    <circle cx="88" cy="256" r="30" fill="#151A2E"/>
-    <circle cx="424" cy="256" r="30" fill="#151A2E"/>
-  </g>
-  <path d="M168 262 L214 308 L344 194"
-        fill="none" stroke="#E8A33D" stroke-width="38"
-        stroke-linecap="round" stroke-linejoin="round"/>
+  <rect width="512" height="512" fill="#1C1C1E"/>
+  <rect x="32" y="80" width="224" height="80" rx="40" fill="#EDEDED"/>
+  <rect x="144" y="224" width="224" height="80" rx="40" fill="#A9A9A9"/>
+  <rect x="256" y="368" width="224" height="80" rx="40" fill="#6C6C6C"/>
 </svg>
