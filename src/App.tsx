@@ -144,7 +144,7 @@ const SwNavigationBridge = () => {
   return null;
 };
 
-const AppRoutes = () => {
+export const AppRoutes = () => {
   const location = useLocation();
   return (
     <ErrorBoundary>
