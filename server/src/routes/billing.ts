@@ -288,15 +288,14 @@ router.post('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Res
     const vatAmount = round2(computedTotalAmount * vatRate);
 
     db.transaction(() => {
-      // Gapless löpnummer (global serie). MAX+1 inom transaktionen är säkert:
-      // better-sqlite3 är synkront och SQLite serialiserar skrivningar; det
-      // partiella unika indexet på invoice_number är dessutom en backstop.
-      const nextNumber = (db.prepare('SELECT COALESCE(MAX(invoice_number), 0) + 1 AS n FROM invoices').get() as { n: number }).n;
-
+      // invoice_number tilldelas medvetet INTE här. Ett utkast får raderas
+      // (se DELETE /invoices/:id), och ett nummer som tilldelats redan vid
+      // skapandet hade då lämnat ett permanent hål i serien. Numret sätts i
+      // stället när fakturan lämnar draft — se PUT /invoices/:id/status.
       db.prepare(`
-        INSERT INTO invoices (id, company_id, period_start, period_end, invoice_number, total_hours, total_amount, vat_rate, vat_amount, currency)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(invoiceId, company_id, period_start, period_end, nextNumber, computedTotalHours, computedTotalAmount, vatRate, vatAmount, currency || 'SEK');
+        INSERT INTO invoices (id, company_id, period_start, period_end, total_hours, total_amount, vat_rate, vat_amount, currency)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(invoiceId, company_id, period_start, period_end, computedTotalHours, computedTotalAmount, vatRate, vatAmount, currency || 'SEK');
 
       const insertLine = db.prepare(`
         INSERT INTO invoice_lines (id, invoice_id, ticket_id, description, hours, rate, amount)
@@ -355,14 +354,34 @@ router.put('/invoices/:id/status', authenticate, requireAdmin, (req: AuthRequest
       return res.status(400).json({ error: `Cannot transition from '${existing.status}' to '${status}'. Status can only go forward: draft→sent→paid.` });
     }
 
-    const updates: Record<string, string> = { status };
+    const updates: Record<string, string | number> = { status };
     if (status === 'sent') updates.sent_at = new Date().toISOString();
     if (status === 'paid') updates.paid_at = new Date().toISOString();
 
-    const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
-    const values = Object.values(updates);
+    db.transaction(() => {
+      // Gapless löpnummer (global serie): numret tilldelas när fakturan LÄMNAR
+      // draft, inte när den skapas. Ett utkast får raderas och hade annars bränt
+      // ett nummer ur serien. Efter utträdet kan den varken raderas (DELETE
+      // tillåter bara draft) eller gå tillbaka (statusen går bara framåt) — så
+      // serien kan aldrig få hål.
+      //
+      // Villkoret är "lämnar draft", inte "blir sent": statusOrder tillåter
+      // språnget draft→paid direkt, och även den vägen måste ge ett nummer.
+      // invoice_number === null gör tilldelningen idempotent mot rader som mot
+      // förmodan redan bär ett nummer.
+      if (existing.status === 'draft' && existing.invoice_number === null) {
+        // MAX+1 inom transaktionen är säkert: better-sqlite3 är synkront och
+        // SQLite serialiserar skrivningar; det partiella unika indexet på
+        // invoice_number är dessutom en backstop.
+        updates.invoice_number = (db.prepare(
+          'SELECT COALESCE(MAX(invoice_number), 0) + 1 AS n FROM invoices'
+        ).get() as { n: number }).n;
+      }
 
-    db.prepare(`UPDATE invoices SET ${setClauses} WHERE id = ?`).run(...values, req.params.id);
+      // Nycklarna är hårdkodade literaler ovan — bara värdena binds.
+      const setClauses = Object.keys(updates).map(k => `${k} = ?`).join(', ');
+      db.prepare(`UPDATE invoices SET ${setClauses} WHERE id = ?`).run(...Object.values(updates), req.params.id);
+    })();
 
     logAudit(req.user!.id, 'invoice_status_change', 'invoice', req.params.id, `${existing.status} -> ${status}`, req.ip);
 

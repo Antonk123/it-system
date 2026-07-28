@@ -647,7 +647,10 @@ paths:
     post:
       tags: [Billing]
       summary: Skapa faktura (admin)
-      description: Serverberäknar totaler, tilldelar gapless löpnummer och stämplar fakturerade tidsposter.
+      description: >-
+        Serverberäknar totaler och stämplar fakturerade tidsposter. Fakturan skapas som
+        utkast UTAN löpnummer — numret tilldelas först när fakturan lämnar draft (se
+        PUT /billing/invoices/{id}/status), så att ett raderat utkast inte lämnar hål i serien.
       security:
         - bearerAuth: []
           csrfToken: []
@@ -755,7 +758,10 @@ paths:
     put:
       tags: [Billing]
       summary: Ändra fakturastatus (admin)
-      description: "Endast framåt: draft → sent → paid."
+      description: >-
+        Endast framåt: draft → sent → paid. Vid utträde ur draft (både →sent och →paid)
+        tilldelas fakturans gapless löpnummer i samma transaktion. Ett numrerat objekt kan
+        varken raderas eller gå tillbaka till draft, så serien får aldrig hål.
       security:
         - bearerAuth: []
           csrfToken: []

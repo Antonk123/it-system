@@ -146,7 +146,7 @@ describe('E2E: ärende → tid → faktura (happy path)', () => {
     expect(res.body.total_incl_vat).toBe(1500);
   });
 
-  it('4. creates an invoice with a gapless number, persisted VAT, and stamps the billed time', async () => {
+  it('4. creates an UNNUMBERED draft, persists VAT, and stamps the billed time', async () => {
     const res = await auth(agent.post('/api/billing/invoices')).send({
       company_id: companyId,
       period_start: PERIOD_START,
@@ -154,7 +154,9 @@ describe('E2E: ärende → tid → faktura (happy path)', () => {
       lines: [{ ticket_id: ticketId, description: 'E2E: skärm fungerar inte', hours: 1.5, rate: RATE, amount: 1200 }],
     });
     expect(res.status).toBe(201);
-    expect(res.body.invoice_number).toBe(1); // fresh DB → first invoice in the global series
+    // Utkastet är onumrerat — numret bränns först vid utträde ur draft (steg 4b),
+    // så att en raderad draft inte lämnar ett hål i serien.
+    expect(res.body.invoice_number).toBeNull();
     expect(res.body.total_amount).toBe(1200);
     expect(res.body.vat_rate).toBe(0.25);
     expect(res.body.vat_amount).toBe(300);
@@ -177,16 +179,19 @@ describe('E2E: ärende → tid → faktura (happy path)', () => {
     expect(edit.status).toBe(409); // invoiced entry is frozen — editing would desync the invoice
   });
 
-  it('6. status advances forward draft → sent → paid (and stamps timestamps)', async () => {
+  it('6. status advances forward draft → sent → paid, burning the number on the way out of draft', async () => {
     const sent = await auth(agent.put(`/api/billing/invoices/${invoiceId}/status`)).send({ status: 'sent' });
     expect(sent.status).toBe(200);
     expect(sent.body.status).toBe('sent');
     expect(sent.body.sent_at).toBeTruthy();
+    // Numret bränns här, inte vid skapandet: fresh DB → första utskickade i serien.
+    expect(sent.body.invoice_number).toBe(1);
 
     const paid = await auth(agent.put(`/api/billing/invoices/${invoiceId}/status`)).send({ status: 'paid' });
     expect(paid.status).toBe(200);
     expect(paid.body.status).toBe('paid');
     expect(paid.body.paid_at).toBeTruthy();
+    expect(paid.body.invoice_number).toBe(1); // oförändrat vid sent→paid
 
     const backward = await auth(agent.put(`/api/billing/invoices/${invoiceId}/status`)).send({ status: 'draft' });
     expect(backward.status).toBe(400); // forward-only guard

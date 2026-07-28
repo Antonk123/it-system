@@ -92,7 +92,9 @@ describe('preview — billable filter + VAT', () => {
 });
 
 describe('create — gapless number, VAT persistence, re-billing prevention', () => {
-  it('assigns a gapless invoice_number and persists default VAT', async () => {
+  // Ett utkast är ONUMRERAT. Numret bränns först när fakturan lämnar draft,
+  // så att en raderad draft inte lämnar ett hål i serien.
+  it('leaves a draft unnumbered and persists default VAT', async () => {
     const res = await agent.post('/api/billing/invoices')
       .set('Authorization', `Bearer ${token}`).set('x-csrf-token', csrf)
       .send({
@@ -100,8 +102,8 @@ describe('create — gapless number, VAT persistence, re-billing prevention', ()
         lines: [{ ticket_id: ticketId, description: 'Auth Ticket', hours: 1.5, rate: 800, amount: 1200 }],
       });
     expect(res.status).toBe(201);
-    expect(typeof res.body.invoice_number).toBe('number');
-    expect(res.body.invoice_number).toBeGreaterThanOrEqual(1);
+    expect(res.body.status).toBe('draft');
+    expect(res.body.invoice_number).toBeNull();
     expect(res.body.total_amount).toBe(1200);
     expect(res.body.vat_rate).toBe(0.25);
     expect(res.body.vat_amount).toBe(300);
@@ -115,10 +117,7 @@ describe('create — gapless number, VAT persistence, re-billing prevention', ()
     expect(res.body.total_amount).toBe(0);
   });
 
-  it('assigns the next consecutive number to a second invoice and honours a custom VAT rate', async () => {
-    const first = (await agent.get('/api/billing/invoices').set('Authorization', `Bearer ${token}`))
-      .body[0].invoice_number as number;
-
+  it('creates a second draft — also unnumbered — and honours a custom VAT rate', async () => {
     const res = await agent.post('/api/billing/invoices')
       .set('Authorization', `Bearer ${token}`).set('x-csrf-token', csrf)
       .send({
@@ -127,8 +126,71 @@ describe('create — gapless number, VAT persistence, re-billing prevention', ()
         lines: [{ description: 'Fast pris', hours: 2, rate: 1000, amount: 2000 }],
       });
     expect(res.status).toBe(201);
-    expect(res.body.invoice_number).toBe(first + 1);
+    expect(res.body.invoice_number).toBeNull();
     expect(res.body.vat_rate).toBe(0.06);
     expect(res.body.vat_amount).toBe(120); // 2000 * 0.06
+  });
+});
+
+describe('gapless numbering — numret bränns vid utträde ur draft', () => {
+  const newDraft = async (start: string, end: string) =>
+    agent.post('/api/billing/invoices')
+      .set('Authorization', `Bearer ${token}`).set('x-csrf-token', csrf)
+      .send({
+        company_id: companyId, period_start: start, period_end: end,
+        lines: [{ description: 'Arbete', hours: 1, rate: 1000, amount: 1000 }],
+      });
+
+  const setStatus = (id: string, status: string) =>
+    agent.put(`/api/billing/invoices/${id}/status`)
+      .set('Authorization', `Bearer ${token}`).set('x-csrf-token', csrf)
+      .send({ status });
+
+  it('tilldelar nummer först vid draft→sent, och räknar upp per utskickad faktura', async () => {
+    const a = await newDraft('2026-07-01T00:00:00.000Z', '2026-08-01T00:00:00.000Z');
+    expect(a.body.invoice_number).toBeNull();
+
+    const sentA = await setStatus(a.body.id, 'sent');
+    expect(sentA.status).toBe(200);
+    expect(typeof sentA.body.invoice_number).toBe('number');
+
+    const b = await newDraft('2026-08-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z');
+    const sentB = await setStatus(b.body.id, 'sent');
+    expect(sentB.body.invoice_number).toBe(sentA.body.invoice_number + 1);
+  });
+
+  it('en raderad draft lämnar INGET hål i serien', async () => {
+    const before = (await setStatus(
+      (await newDraft('2026-09-01T00:00:00.000Z', '2026-10-01T00:00:00.000Z')).body.id, 'sent'
+    )).body.invoice_number as number;
+
+    // Skapa en draft och kasta den — den ska aldrig ha konsumerat ett nummer.
+    const thrown = await newDraft('2026-10-01T00:00:00.000Z', '2026-11-01T00:00:00.000Z');
+    expect(thrown.body.invoice_number).toBeNull();
+    const del = await agent.delete(`/api/billing/invoices/${thrown.body.id}`)
+      .set('Authorization', `Bearer ${token}`).set('x-csrf-token', csrf);
+    expect(del.status).toBe(200);
+
+    const after = (await setStatus(
+      (await newDraft('2026-11-01T00:00:00.000Z', '2026-12-01T00:00:00.000Z')).body.id, 'sent'
+    )).body.invoice_number as number;
+
+    expect(after).toBe(before + 1); // inget hål, trots den raderade draften
+  });
+
+  it('draft→paid hoppar över sent men får ändå ett nummer', async () => {
+    const d = await newDraft('2026-12-01T00:00:00.000Z', '2027-01-01T00:00:00.000Z');
+    expect(d.body.invoice_number).toBeNull();
+    const paid = await setStatus(d.body.id, 'paid');
+    expect(paid.status).toBe(200);
+    expect(paid.body.status).toBe('paid');
+    expect(typeof paid.body.invoice_number).toBe('number');
+  });
+
+  it('sent→paid behåller numret oförändrat', async () => {
+    const d = await newDraft('2027-01-01T00:00:00.000Z', '2027-02-01T00:00:00.000Z');
+    const sent = await setStatus(d.body.id, 'sent');
+    const paid = await setStatus(d.body.id, 'paid');
+    expect(paid.body.invoice_number).toBe(sent.body.invoice_number);
   });
 });

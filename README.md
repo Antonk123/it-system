@@ -61,7 +61,8 @@ unauthenticated deflection portal that offers a KB-backed answer before a ticket
 is opt-in: leave `ANTHROPIC_API_KEY` unset and everything else behaves identically.
 
 **Time & billing** — time tracking per ticket, rolled up into per-customer invoices with gapless
-invoice numbering.
+invoice numbering: drafts carry no number, and the next number in the series is assigned when an
+invoice is issued — so a discarded draft never leaves a hole in the sequence.
 
 **Communication** — email-to-ticket over IMAP (basic auth or Microsoft 365 OAuth2 client
 credentials), outbound notification mail, and web push notifications.
@@ -209,7 +210,7 @@ What CI runs on every push and pull request — four jobs, all required:
 | `docker-build` | builds both production images | image build failure, catching Dockerfile drift a green test suite would not |
 | `security-audit` | `scripts/audit-check.mjs` against both dependency trees | **any high or critical advisory**, unless listed in `audit-allowlist.json` with a written justification *and* an expiry date. That allowlist currently has **zero entries** — nothing is being suppressed |
 
-**1,253 tests across 89 files**, frontend and backend suites combined. Every GitHub Actions step
+**1,250+ tests across 89 files**, frontend and backend suites combined. Every GitHub Actions step
 is pinned to a commit SHA rather than a movable tag. Husky and lint-staged run the same ESLint
 rules before a commit is allowed to land.
 
