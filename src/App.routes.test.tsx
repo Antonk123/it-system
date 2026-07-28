@@ -161,6 +161,41 @@ function renderWithProbes(initialEntries: string[], initialIndex?: number) {
   );
 }
 
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="location-pathname">{location.pathname}</div>;
+}
+
+function renderWithLocationProbe(path: string) {
+  return render(
+    <QueryClientProvider client={makeQueryClient()}>
+      <MemoryRouter initialEntries={[path]}>
+        <LocationProbe />
+        <AppRoutes />
+      </MemoryRouter>
+    </QueryClientProvider>
+  );
+}
+
+/**
+ * Flushar en väntande makrouppgifts-runda (efter att alla köade
+ * mikrouppgifter — inkl. Promise-kedjan från React.lazy()'s dynamiska
+ * import — har tömts). Behövs för isLoading-guardens frånvaro-assertioner:
+ * körs testfilen ISOLERAT (`-t "isLoading"`) har INGEN tidigare test redan
+ * resolvat de lazy-laddade sidmodulerna, så en trasig guard (isLoading-check
+ * borttagen) hinner annars inte visa sitt symptom innan den synkrona
+ * assertionen körs — Suspense-fallbacken har för övrigt SAMMA klass
+ * ".animate-spin" som guardens egen spinner, så en trasig guard kan annars
+ * maskera sig som en frisk en. Detta är EN deterministisk flush (inte en
+ * flaky sleep-och-hoppas-loop): den väntar in en redan schemalagd
+ * Promise-kedja, inte en godtycklig tidsgräns.
+ */
+async function flushPendingLazyImports() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
 function createFakeServiceWorker() {
   const listeners = new Map<string, Set<(event: { data: unknown }) => void>>();
   return {
@@ -321,25 +356,37 @@ describe('öppna rutter — kräver inte auth', () => {
 // 5. isLoading
 // ---------------------------------------------------------------------------
 describe('isLoading', () => {
-  // Frånvaro av stub-markörer räcker INTE ensamt: den assertionen skulle
-  // vara lika sann om guarden av misstag alltid returnerade null/inget alls
-  // (t.ex. en mutation som gör isLoading-grenen till en no-op). Den positiva
-  // assertionen — att spinnern (App.tsx:68-74 / 86-92, klassen
-  // "animate-spin") faktiskt renderas — låser fast att vi är i den avsedda
-  // spinner-grenen, inte i något annat tomt tillstånd. Ta INTE bort den.
-  it('spinner renderas — varken sida eller redirect — för en skyddad rutt', () => {
-    authState.isLoading = true;
-    const { container } = renderRoutes('/tickets');
-    expect(container.querySelectorAll('[data-testid^="stub:"]')).toHaveLength(0);
-    expect(container.querySelector('.animate-spin')).not.toBeNull();
-  });
+  // Det AVGÖRANDE beviset här är att location.pathname INTE har ändrats —
+  // inte frånvaro av stub-markörer och inte ens spinnerns närvaro. Bägge de
+  // sistnämnda kan bli sanna av fel skäl: tas isLoading-grinden bort i BARA
+  // ProtectedRoute faller utloggat+isLoading igenom till
+  // `<Navigate to="/login" replace>`, och PublicRoute:s spinner (samma
+  // klass ".animate-spin", inga stub:-markörer) döljer att en redirect
+  // skedde. Ett borttaget isLoading-check ÄNDRAR pathname bort från den
+  // begärda rutten — det gör inget av de andra symptomen pålitligt.
+  // Spinner-assertionen behålls som komplement, men bär INTE beviset själv.
+  it.each([
+    ['/tickets', false],
+    ['/tickets', true],
+    ['/login', false],
+    ['/login', true],
+  ] as const)(
+    'ingen redirect (pathname oförändrad) + spinner renderas för %s när isAuthenticated=%s och isLoading=true',
+    async (path, isAuthenticated) => {
+      authState.isAuthenticated = isAuthenticated;
+      authState.isLoading = true;
+      const { container } = renderWithLocationProbe(path);
+      // Ge en ev. trasig guard en verklig chans att avslöja sig: om
+      // isLoading-checken saknas hinner den lazy-laddade sidan (eller en
+      // Navigate-redirect) manifestera sig här — annars är detta en no-op
+      // eftersom en frisk guard aldrig ens startar den lazy-importen.
+      await flushPendingLazyImports();
 
-  it('spinner renderas — varken sida eller redirect — för en publik auth-rutt', () => {
-    authState.isLoading = true;
-    const { container } = renderRoutes('/login');
-    expect(container.querySelectorAll('[data-testid^="stub:"]')).toHaveLength(0);
-    expect(container.querySelector('.animate-spin')).not.toBeNull();
-  });
+      expect(screen.getByTestId('location-pathname').textContent).toBe(path);
+      expect(container.querySelectorAll('[data-testid^="stub:"]')).toHaveLength(0);
+      expect(container.querySelector('.animate-spin')).not.toBeNull();
+    }
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -582,15 +629,83 @@ describe('SW-bryggan (SwNavigationBridge)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 16. Täckningsvakt
+// 16. Per-rutt ErrorBoundary (withBoundary, App.tsx:107-111)
+// ---------------------------------------------------------------------------
+describe('per-rutt ErrorBoundary (withBoundary)', () => {
+  it('en krasch i EN sida fångas av dess boundary — appen dör inte, och navigering till en annan rutt fungerar sedan', async () => {
+    // Dämpa Reacts (och ErrorBoundary:ns egen componentDidCatch-) förväntade
+    // felloggning så just det här testet inte blir brus i testkörningen.
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // Byt ut EN stub mot en kastande variant direkt i registryt — spara
+    // originalet så vi kan återställa det, annars läcker det till andra
+    // tester som förlitar sig på en fungerande TicketDetail-stub.
+    const originalTicketDetailStub = registry.TicketDetail;
+    registry.TicketDetail = () => {
+      throw new Error('krasch-stub för ErrorBoundary-testet');
+    };
+
+    try {
+      authState.isAuthenticated = true;
+      render(
+        <QueryClientProvider client={makeQueryClient()}>
+          <MemoryRouter initialEntries={['/tickets/42']}>
+            <nav>
+              <Link to="/tickets" data-testid="nav-tickets">Ärenden</Link>
+            </nav>
+            <AppRoutes />
+          </MemoryRouter>
+        </QueryClientProvider>
+      );
+
+      // ErrorBoundary-fallbacken (src/components/ErrorBoundary.tsx) —
+      // rubriken "Något gick fel" är dess route-nivå-fallback (inget
+      // fallback-prop skickas in av withBoundary).
+      expect(await screen.findByRole('heading', { name: 'Något gick fel' })).toBeInTheDocument();
+      expect(screen.queryByTestId('stub:TicketDetail')).toBeNull();
+
+      // Navigering till en annan, icke-kraschande rutt fungerar fortfarande
+      // — boundaryn är scoped till DEN ruttens element (och remountas bort
+      // helt av key={location.pathname} vid navigering), inte hela appen.
+      fireEvent.click(screen.getByTestId('nav-tickets'));
+      expect(await screen.findByTestId('stub:TicketList')).toBeInTheDocument();
+    } finally {
+      registry.TicketDetail = originalTicketDetailStub;
+      consoleErrorSpy.mockRestore();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 17. Täckningsvakt
 // ---------------------------------------------------------------------------
 describe('täckningsvakt — ROUTES-tabellen speglar App.tsx', () => {
-  it('antal <Route path=...> i App.tsx matchar antal rader i ROUTES här', () => {
+  it('path-STRÄNGARNA i App.tsx matchar path-fälten i ROUTES här (inte bara antalet)', () => {
+    // Ett rent antals-jämförelse missar en samtidig add+remove (antalet
+    // förblir detsamma). Extrahera path-värdena och jämför MÄNGDERNA så
+    // felmeddelandet pekar ut exakt vilken path som tillkommit/försvunnit.
+    const pathsInApp = Array.from(appSource.matchAll(/<Route\s+path="([^"]+)"/g)).map((m) => m[1]);
+    const pathsInRoutes = ROUTES.map((r) => r.path);
+
+    const appSet = new Set(pathsInApp);
+    const routesSet = new Set(pathsInRoutes);
+
+    const addedInApp = [...appSet].filter((p) => !routesSet.has(p)).sort();
+    const missingFromApp = [...routesSet].filter((p) => !appSet.has(p)).sort();
+
+    expect(
+      { addedInApp, missingFromApp },
+      'App.tsx:s <Route path="..."> och ROUTES-tabellen i det här testet har olika path-mängder. ' +
+        'addedInApp = paths som finns i App.tsx men saknas i ROUTES (ny rutt tillagd — lägg till den i ROUTES). ' +
+        'missingFromApp = paths som finns i ROUTES men saknas i App.tsx (rutt borttagen — ta bort motsvarande rad ur ROUTES).'
+    ).toEqual({ addedInApp: [], missingFromApp: [] });
+
+    // Bevarar även antals-jämförelsen som ett sanity-larm mot en dubblett
+    // (samma path angiven två gånger, vilket mängd-jämförelsen ovan inte
+    // ensam skulle fånga).
     const matches = appSource.match(/<Route\s+path=/g) ?? [];
     expect(
       matches.length,
-      `App.tsx innehåller ${matches.length} <Route path=...> men ROUTES-tabellen i det här testet har ${ROUTES.length} rader. ` +
-        'En rutt har lagts till/tagits bort i App.tsx — uppdatera ROUTES-tabellen i src/App.routes.test.tsx.'
+      `Antal <Route path=...> (${matches.length}) matchar inte antal rader i ROUTES (${ROUTES.length}) — trolig dubblett-path i App.tsx.`
     ).toBe(ROUTES.length);
   });
 });
