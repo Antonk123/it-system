@@ -52,12 +52,14 @@ för commit-nivå, se git-historiken.
 - Återkommande säkerhetsaudits; fail-closed-validering av `JWT_SECRET`/
   `CSRF_SECRET` (saknad eller < 32 tecken stoppar start), CSRF-skydd, SSRF-skydd,
   rate-limits, parametriserad SQL med allow-listade kolumnnamn.
-- CI-härdning: Dependabot (veckovis) + `npm audit --audit-level=high`-gate,
-  samt verkställd coverage-ratchet i CI.
+- CI-härdning: Dependabot (veckovis) + `scripts/audit-check.mjs`-gate (allowlist
+  med skriven motivering och expiry-datum per undantag), samt verkställd
+  coverage-ratchet i CI.
 
 ## [1.5] – 2026-04-06
 ## [1.4] – 2026-04-05
 ## [1.2] – 2026-03-29
+## [1.1] – 2026-03-29
 ## [1.0] – 2026-03-22
 
 Tidiga releaser med kärnan på plats: ärendehantering med full livscykel,
@@ -68,5 +70,6 @@ faktureringsfunktionerna. Detaljerad changelog infördes från och med
 [Orutinerat]: https://github.com/Antonk123/it-system/compare/v1.5...HEAD
 [1.5]: https://github.com/Antonk123/it-system/compare/v1.4...v1.5
 [1.4]: https://github.com/Antonk123/it-system/compare/v1.2...v1.4
-[1.2]: https://github.com/Antonk123/it-system/compare/v1.0...v1.2
+[1.2]: https://github.com/Antonk123/it-system/compare/v1.1...v1.2
+[1.1]: https://github.com/Antonk123/it-system/compare/v1.0...v1.1
 [1.0]: https://github.com/Antonk123/it-system/releases/tag/v1.0

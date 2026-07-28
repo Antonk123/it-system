@@ -27,8 +27,8 @@ never use. The concrete differences:
 - **No per-user pricing.** MIT-licensed and self-hosted. Add ten technicians tomorrow and your
   bill does not change, because there is no bill.
 - **Your data stays on your infrastructure.** A SQLite file on your disk, your backups, your
-  retention policy. Nothing leaves the server unless you configure it to — SMTP, IMAP, or the
-  optional Anthropic API for the AI features.
+  retention policy. Nothing leaves the server unless you configure it to — SMTP, IMAP, outbound
+  webhooks, web push, or the optional Anthropic API for the AI features.
 - **Ticket → invoice in the same system.** Time logged against a ticket rolls up into
   per-customer invoicing without exporting to a second tool.
 - **Built around the technician's loop**, not a project board: email-to-ticket, a knowledge base
@@ -96,7 +96,20 @@ Manual equivalent:
 git clone https://github.com/Antonk123/it-system.git
 cd it-system
 cp .env.example .env      # set JWT_SECRET and CSRF_SECRET — openssl rand -base64 32
-docker compose -f docker-compose.local.yml up --build
+
+# The compose files reference prebuilt images and declare no build: section,
+# so build them first.
+docker build -f Dockerfile.server -t it-ticketing-backend:latest .
+docker build -f Dockerfile.client -t it-ticketing-frontend:latest .
+docker compose -f docker-compose.local.yml --env-file .env up -d
+
+# Server startup only applies the schema and migrations — it creates no users,
+# and there is no self-registration endpoint. Seed the first admin explicitly,
+# or you will have a running system you cannot log in to.
+docker exec -e ADMIN_EMAIL="you@example.com" \
+            -e ADMIN_PASSWORD="a-strong-password" \
+            -e ADMIN_NAME="Admin" \
+            it-ticketing-backend node dist/db/init.js
 ```
 
 Frontend on `:8082`, API on `:3002/api`.
@@ -148,7 +161,7 @@ implements it:
 | Refresh | Rotating refresh tokens in an HttpOnly cookie | `server/src/routes/auth.ts` |
 | API keys | `Bearer itk_live_…`, SHA-256 hashed at rest, constant-time compare; the raw key is never stored | `server/src/middleware/auth.ts` |
 | API key scopes | `read` (default) / `write`. A key without `write` gets **403** on every mutating request — the key's scope is the credential, not the user's role | `server/src/middleware/auth.ts` |
-| CSRF | Double-submit cookie; `x-csrf-token` required on cookie-authenticated mutations. Exempt: `/api/auth/login`, `/api/auth/refresh`, `/api/public/*`, and API-key requests, none of which ride on an ambient cookie | `server/src/app.ts` |
+| CSRF | Double-submit cookie; `x-csrf-token` required on cookie-authenticated mutations. Exempt: `/api/auth/login` (no session yet — authenticates from the body), `/api/public/*` and API-key requests (no cookie involved), and `/api/auth/refresh`, which *does* read an ambient HttpOnly cookie but is protected instead by single-use rotation — a replayed token is already invalid | `server/src/app.ts` |
 | Secrets fail closed | The backend exits with code 1 at boot if `JWT_SECRET` or `CSRF_SECRET` is missing — unconditionally, in every environment. Same exit if either is shorter than 32 characters, unless **both** `ALLOW_WEAK_SECRETS=1` **and** `NODE_ENV` is `development`/`test`, so a misconfigured production with `NODE_ENV` unset cannot silently fail open | `server/src/config/secretValidation.ts` |
 | Webhooks | Payloads signed HMAC-SHA256 in `X-Webhook-Signature`; the delivery row is persisted *before* the first attempt so retries survive a crash; the target URL is re-resolved immediately before each request, guarding against a registered host that later resolves to an internal address | `server/src/lib/webhookDispatcher.ts` |
 | Headers | `helmet` with an explicit CSP (`default-src 'self'`, no inline scripts), HSTS with preload, `noSniff` | `server/src/app.ts` |
@@ -191,12 +204,12 @@ What CI runs on every push and pull request — four jobs, all required:
 
 | Job | Runs | Fails on |
 |---|---|---|
-| `lint-and-typecheck` | ESLint across the repo, `tsc --noEmit` against both tsconfigs, the frontend suite, `redocly lint docs/openapi.yaml` | any lint or type error, any failing test, an invalid OpenAPI spec |
+| `lint-and-typecheck` | ESLint across the repo, `tsc --noEmit` against both tsconfigs, the full suite (root `npm test` sweeps backend tests too), `redocly lint docs/openapi.yaml` | any lint or type error, any failing test, an invalid OpenAPI spec |
 | `lint-server` | server typecheck, backend suite with coverage enforced | a failing test, or coverage dropping below the ratchet thresholds — which are raised as coverage improves and never lowered to make a build pass |
 | `docker-build` | builds both production images | image build failure, catching Dockerfile drift a green test suite would not |
 | `security-audit` | `scripts/audit-check.mjs` against both dependency trees | **any high or critical advisory**, unless listed in `audit-allowlist.json` with a written justification *and* an expiry date. That allowlist currently has **zero entries** — nothing is being suppressed |
 
-**1,225 tests across 86 files**, frontend and backend suites combined. Every GitHub Actions step
+**1,253 tests across 89 files**, frontend and backend suites combined. Every GitHub Actions step
 is pinned to a commit SHA rather than a movable tag. Husky and lint-staged run the same ESLint
 rules before a commit is allowed to land.
 
@@ -231,7 +244,7 @@ list. What actually gates startup:
 | `JWT_SECRET` | yes | process exits with code 1 at boot; same if under 32 characters |
 | `CSRF_SECRET` | yes | same fail-closed behavior |
 | `CORS_ORIGIN` | in production | no browser origin is allowlisted and the SPA cannot call the API |
-| `APP_BASE_URL` | yes | used to build links in outgoing email |
+| `APP_BASE_URL` | recommended | not fail-closed: the server logs a warning and falls back to the first origin in `CORS_ORIGIN`. With neither set, links in outgoing email (password reset, ticket links) are unusable |
 | `ANTHROPIC_API_KEY` | no | AI features are disabled; nothing else changes |
 | `SMTP_*` / `IMAP_*` | no | outbound mail and mail-to-ticket, independently optional |
 | `VAPID_*` | no | web push; generated by the setup script |
