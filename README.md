@@ -77,7 +77,9 @@ backups with retention and an optional off-site copy step, an audit log, and six
 
 ## Quickstart
 
-Requires Docker and Docker Compose v2.
+Requires Docker and Docker Compose v2. The installer targets **Debian/Ubuntu Linux** — it installs
+missing prerequisites with `apt-get` and uses GNU `grep -P` and `hostname -I`. On macOS or another
+distribution, use the manual steps below instead; the application itself runs anywhere Docker does.
 
 ```sh
 bash <(curl -fsSL https://raw.githubusercontent.com/Antonk123/it-system/main/setup.sh)
@@ -85,8 +87,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Antonk123/it-system/main/set
 
 The installer checks prerequisites, prompts for organization name, admin credentials and optional
 API/SMTP settings, generates a `.env` with fresh secrets, builds the images and starts the stack.
-It prints a URL and the admin login when it finishes. Remove it again with
-[`uninstall.sh`](uninstall.sh).
+It prints a URL and the admin login when it finishes. Its prompts are in Swedish, like the
+application UI. Remove it again with [`uninstall.sh`](uninstall.sh).
 
 Manual equivalent:
 

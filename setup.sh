@@ -61,9 +61,17 @@ ok "openssl hittades"
 header "Hämtar källkod"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
-  info "Katalog finns redan — uppdaterar ($INSTALL_DIR)"
-  git -C "$INSTALL_DIR" pull --quiet
-  ok "Repo uppdaterat"
+  # Steg 2b nedan kopplar bort origin efter första installationen, så en befintlig
+  # installation har normalt ingen remote kvar att hämta från. Ovillkorlig `git pull`
+  # gav då exitkod 1 ("ingen spårningsinformation") och `set -e` dödade hela
+  # omkörningen direkt — setup.sh gick alltså bara att köra en enda gång.
+  if git -C "$INSTALL_DIR" remote get-url origin &>/dev/null; then
+    info "Katalog finns redan — uppdaterar ($INSTALL_DIR)"
+    git -C "$INSTALL_DIR" pull --quiet
+    ok "Repo uppdaterat"
+  else
+    info "Befintlig installation hittad ($INSTALL_DIR) — behåller nuvarande källkod"
+  fi
 else
   info "Klonar $REPO_URL → $INSTALL_DIR"
   git clone --quiet "$REPO_URL" "$INSTALL_DIR"
@@ -73,8 +81,10 @@ fi
 cd "$INSTALL_DIR"
 
 # --- 2b. Disconnecta GitHub ---
-git remote remove origin
-info "GitHub-kopplingen borttagen — systemet är nu lokalt"
+if git remote get-url origin &>/dev/null; then
+  git remote remove origin
+  info "GitHub-kopplingen borttagen — systemet är nu lokalt"
+fi
 
 # --- 3. Konfiguration ---
 header "Företagsinformation"
@@ -166,29 +176,11 @@ ok "JWT_SECRET genererad"
 CSRF_SECRET=$(openssl rand -base64 32)
 ok "CSRF_SECRET genererad"
 
-# VAPID-nycklar för push-notiser (kräver Node)
-if command -v node &>/dev/null; then
-  VAPID_KEYS=$(node -e "
-    try {
-      const wpp = require('web-push');
-      const k = wpp.generateVAPIDKeys();
-      console.log(k.publicKey + ':' + k.privateKey);
-    } catch(e) { console.log(''); }
-  " 2>/dev/null)
-  if [ -n "$VAPID_KEYS" ]; then
-    VAPID_PUBLIC_KEY="${VAPID_KEYS%%:*}"
-    VAPID_PRIVATE_KEY="${VAPID_KEYS##*:}"
-    ok "VAPID-nycklar genererade (push-notiser aktiverade)"
-  else
-    VAPID_PUBLIC_KEY=""
-    VAPID_PRIVATE_KEY=""
-    warn "web-push ej tillgängligt — push-notiser inaktiverade (kan genereras senare)"
-  fi
-else
-  VAPID_PUBLIC_KEY=""
-  VAPID_PRIVATE_KEY=""
-  warn "Node.js ej tillgängligt lokalt — VAPID-nycklar genereras inte"
-fi
+# VAPID-nycklarna genereras i steg 6b, efter att backend-imagen byggts.
+# Tidigare kördes `node -e "require('web-push')"` här, mot en färsk klon utan
+# node_modules — och web-push ligger dessutom i server/package.json, inte i roten.
+# require() kastade alltså alltid MODULE_NOT_FOUND, nycklarna blev alltid tomma och
+# push-notiser var tyst avstängda vid varje installation.
 
 # --- 5. Skriv .env ---
 cat > .env << EOF
@@ -214,8 +206,9 @@ JWT_SECRET=${JWT_SECRET}
 CSRF_SECRET=${CSRF_SECRET}
 
 # --- Push-notiser (VAPID) ---
-VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
-VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
+# Nycklarna fylls i av steg 6b, när backend-imagen finns och web-push går att köra.
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=mailto:${ADMIN_EMAIL}
 
 # --- AI (Anthropic) ---
@@ -233,91 +226,15 @@ EMAIL_TO=${EMAIL_TO}
 EOF
 ok ".env skapad"
 
-# --- 5b. Generera docker-compose.local.yml ---
-cat > docker-compose.local.yml << 'COMPOSE_EOF'
-services:
-  backend:
-    image: it-ticketing-backend:latest
-    container_name: it-ticketing-backend
-    restart: unless-stopped
-    ports:
-      - "${BACKEND_PORT:-3002}:3001"
-    volumes:
-      - it-ticketing-data:/app/data
-    environment:
-      - NODE_ENV=production
-      - COOKIE_SECURE=${COOKIE_SECURE:-false}
-      - JWT_SECRET=${JWT_SECRET}
-      - CSRF_SECRET=${CSRF_SECRET}
-      - DB_PATH=/app/data/database.sqlite
-      - UPLOAD_DIR=/app/data/uploads
-      - ADMIN_EMAIL=${ADMIN_EMAIL:-}
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
-      - ADMIN_NAME=${ADMIN_NAME:-}
-      - BRAND_NAME=${BRAND_NAME:-IT-Support}
-      - AUTO_CLOSE_DAYS=${AUTO_CLOSE_DAYS:-30}
-      - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
-      - CORS_ORIGIN=${CORS_ORIGIN}
-      - APP_BASE_URL=${APP_BASE_URL}
-      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY:-}
-      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY:-}
-      - VAPID_SUBJECT=${VAPID_SUBJECT:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - AI_MODEL=${AI_MODEL:-}
-      - AI_MODEL_SMART=${AI_MODEL_SMART:-}
-      - AI_MAX_SUMMARY_COMMENTS=${AI_MAX_SUMMARY_COMMENTS:-}
-      - AI_MONTHLY_TOKEN_LIMIT=${AI_MONTHLY_TOKEN_LIMIT:-}
-      - SMTP_HOST=${SMTP_HOST:-}
-      - SMTP_PORT=${SMTP_PORT:-587}
-      - SMTP_USER=${SMTP_USER:-}
-      - SMTP_PASS=${SMTP_PASS:-}
-      - EMAIL_FROM=${EMAIL_FROM:-}
-      - EMAIL_TO=${EMAIL_TO:-}
-      - IMAP_HOST=${IMAP_HOST:-}
-      - IMAP_PORT=${IMAP_PORT:-993}
-      - IMAP_USER=${IMAP_USER:-}
-      - IMAP_PASS=${IMAP_PASS:-}
-      - IMAP_SECURE=${IMAP_SECURE:-true}
-      - IMAP_POLL_INTERVAL=${IMAP_POLL_INTERVAL:-60}
-      - IMAP_AUTO_CREATE_CONTACT=${IMAP_AUTO_CREATE_CONTACT:-true}
-      - IMAP_TENANT_ID=${IMAP_TENANT_ID:-}
-      - IMAP_CLIENT_ID=${IMAP_CLIENT_ID:-}
-      - IMAP_CLIENT_SECRET=${IMAP_CLIENT_SECRET:-}
-      - OFFSITE_BACKUP_CMD=${OFFSITE_BACKUP_CMD:-}
-      - PUSH_AGING_DAYS=${PUSH_AGING_DAYS:-7}
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    networks:
-      - ticketing
-
-  frontend:
-    image: it-ticketing-frontend:latest
-    container_name: it-ticketing-frontend
-    restart: unless-stopped
-    ports:
-      - "${FRONTEND_PORT:-8082}:80"
-    depends_on:
-      - backend
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    networks:
-      - ticketing
-
-networks:
-  ticketing:
-    driver: bridge
-
-volumes:
-  it-ticketing-data:
-    driver: local
-COMPOSE_EOF
-ok "docker-compose.local.yml skapad"
+# --- 5b. docker-compose.local.yml ---
+# Filen är versionsspårad i repot och underhålls där — den ligger alltså redan i
+# klonen. Tidigare genererade det här scriptet en egen kopia inline, vilket
+# garanterade drift: repots version fick TZ (utan den kör schemalagda jobb i UTC
+# i stället för svensk tid), OFFSITE_BACKUP_REQUIRED och SHUTDOWN_TIMEOUT_MS,
+# medan scriptets inbakade kopia låg kvar på en äldre uppsättning och skrev över
+# dem vid varje installation.
+[ -f docker-compose.local.yml ] || err "docker-compose.local.yml saknas i repot — kan inte fortsätta."
+ok "docker-compose.local.yml (från repot)"
 
 # --- 6. Bygg Docker-images ---
 header "Bygger Docker-images"
@@ -329,6 +246,35 @@ ok "Backend-image klar"
 info "Frontend... (kan ta 1-2 minuter)"
 docker build -f Dockerfile.client -t it-ticketing-frontend:latest . --quiet > /dev/null
 ok "Frontend-image klar"
+
+# --- 6b. VAPID-nycklar för push-notiser ---
+# Körs HÄR och inte tidigare: web-push är ett runtime-beroende i server/package.json
+# och finns därmed i backend-imagen (npm ci --omit=dev behåller det), men INTE i den
+# nyklonade källkodskatalogen — den har inga node_modules alls.
+header "Push-notiser"
+VAPID_KEYS=$(docker run --rm --entrypoint node it-ticketing-backend:latest \
+  -e "const w=require('web-push');const k=w.generateVAPIDKeys();console.log(k.publicKey+':'+k.privateKey)" \
+  2>/dev/null || true)
+
+if [ -n "$VAPID_KEYS" ] && [ "${VAPID_KEYS%%:*}" != "$VAPID_KEYS" ]; then
+  VAPID_PUBLIC_KEY="${VAPID_KEYS%%:*}"
+  VAPID_PRIVATE_KEY="${VAPID_KEYS##*:}"
+  # Skriv in i .env utan att förlita sig på GNU-specifik `sed -i`.
+  tmp_env=$(mktemp)
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      VAPID_PUBLIC_KEY=*)  echo "VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}" ;;
+      VAPID_PRIVATE_KEY=*) echo "VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}" ;;
+      *) echo "$line" ;;
+    esac
+  done < .env > "$tmp_env"
+  mv "$tmp_env" .env
+  chmod 600 .env
+  ok "VAPID-nycklar genererade — push-notiser aktiverade"
+else
+  warn "Kunde inte generera VAPID-nycklar — push-notiser inaktiverade"
+  warn "Aktivera senare: sätt VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY i .env och starta om stacken"
+fi
 
 # --- 7. Docker-volym ---
 header "Docker-volym"
