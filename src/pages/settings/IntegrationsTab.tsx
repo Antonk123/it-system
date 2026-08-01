@@ -26,6 +26,7 @@ import { useApiKeys } from '@/hooks/useApiKeys';
 import { useWebhooks, useWebhookDeliveries } from '@/hooks/useWebhooks';
 import { Checkbox } from '@/components/ui/checkbox';
 import { EmailBehaviorSection } from '@/components/settings/EmailBehaviorSection';
+import { useAuth } from '@/contexts/AuthContext';
 
 const WebhookDeliveriesPanel = memo(({ webhookId }: { webhookId: string }) => {
   const { deliveries, isLoading } = useWebhookDeliveries(webhookId);
@@ -51,20 +52,50 @@ const WebhookDeliveriesPanel = memo(({ webhookId }: { webhookId: string }) => {
 WebhookDeliveriesPanel.displayName = 'WebhookDeliveriesPanel';
 
 const IntegrationsTab = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const { apiKeys, createApiKey, deleteApiKey, isCreating: isCreatingApiKey } = useApiKeys();
   const { webhooks, createWebhook, updateWebhook, deleteWebhook, isCreating: isCreatingWebhook } = useWebhooks();
 
   const [newApiKeyName, setNewApiKeyName] = useState('');
   const [newApiKeyWrite, setNewApiKeyWrite] = useState(false);
+  const [newApiKeyAdmin, setNewApiKeyAdmin] = useState(false);
   const [createdApiKey, setCreatedApiKey] = useState<string | null>(null);
 
-  // Tolka en nyckels permissions-sträng ('["read"]' / '["read","write"]').
+  // Tolka en nyckels permissions-sträng ('["read"]' / '["read","write"]' / '["read","admin"]').
   const keyCanWrite = (permissions: string): boolean => {
     try {
       return (JSON.parse(permissions || '[]') as string[]).includes('write');
     } catch {
       return false;
     }
+  };
+  const keyHasAdmin = (permissions: string): boolean => {
+    try {
+      return (JSON.parse(permissions || '[]') as string[]).includes('admin');
+    } catch {
+      return false;
+    }
+  };
+
+  // Enda stället som bygger permissions-arrayen och anropar createApiKey —
+  // Enter-tangenten och knappen anropar båda denna, så en ny flagga (t.ex.
+  // admin-scopet) inte kan glömmas på det ena stället.
+  const handleCreateApiKey = () => {
+    const name = newApiKeyName.trim();
+    if (!name) { toast.error('Ange ett namn'); return; }
+    const permissions = ['read'];
+    if (newApiKeyWrite) permissions.push('write');
+    if (isAdmin && newApiKeyAdmin) permissions.push('admin');
+    createApiKey({ name, permissions }).then((result) => {
+      if (result.key) {
+        setCreatedApiKey(result.key);
+      }
+      setNewApiKeyName('');
+      setNewApiKeyWrite(false);
+      setNewApiKeyAdmin(false);
+      toast.success('API-nyckel skapad');
+    }).catch(() => toast.error('Kunde inte skapa nyckel'));
   };
   const [deleteApiKeyId, setDeleteApiKeyId] = useState<string | null>(null);
 
@@ -124,31 +155,12 @@ const IntegrationsTab = () => {
                       value={newApiKeyName}
                       onChange={(e) => setNewApiKeyName(e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && newApiKeyName.trim()) {
-                          createApiKey({ name: newApiKeyName.trim(), permissions: newApiKeyWrite ? ['read', 'write'] : ['read'] }).then((result) => {
-                            if (result.key) {
-                              setCreatedApiKey(result.key);
-                            }
-                            setNewApiKeyName('');
-                            setNewApiKeyWrite(false);
-                            toast.success('API-nyckel skapad');
-                          }).catch(() => toast.error('Kunde inte skapa nyckel'));
-                        }
+                        if (e.key === 'Enter') handleCreateApiKey();
                       }}
                       className="flex-1"
                     />
                     <Button
-                      onClick={() => {
-                        if (!newApiKeyName.trim()) { toast.error('Ange ett namn'); return; }
-                        createApiKey({ name: newApiKeyName.trim(), permissions: newApiKeyWrite ? ['read', 'write'] : ['read'] }).then((result) => {
-                          if (result.key) {
-                            setCreatedApiKey(result.key);
-                          }
-                          setNewApiKeyName('');
-                          setNewApiKeyWrite(false);
-                          toast.success('API-nyckel skapad');
-                        }).catch(() => toast.error('Kunde inte skapa nyckel'));
-                      }}
+                      onClick={handleCreateApiKey}
                       disabled={isCreatingApiKey}
                     >
                       {isCreatingApiKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
@@ -162,6 +174,19 @@ const IntegrationsTab = () => {
                     />
                     Skrivrättigheter — kan skapa och ändra (annars endast läsning)
                   </label>
+                  {isAdmin && (
+                    <label className="flex items-start gap-2 text-sm text-muted-foreground cursor-pointer select-none">
+                      <Checkbox
+                        checked={newApiKeyAdmin}
+                        onCheckedChange={(c) => setNewApiKeyAdmin(c === true)}
+                        aria-label="Ge nyckeln admin-rättigheter"
+                        className="mt-0.5"
+                      />
+                      <span>
+                        <span className="font-medium text-destructive">Admin-scope (varning)</span> — ger full åtkomst till administrativa endpoints: nedladdning av hela databasen (backup), fakturor, granskningslogg och webhook-konfiguration. Ge bara detta till betrodd automation (t.ex. ett schemalagt backup-jobb), aldrig till en klient eller ett verktyg du inte helt litar på.
+                      </span>
+                    </label>
+                  )}
                 </div>
 
                 {createdApiKey && (
@@ -197,6 +222,11 @@ const IntegrationsTab = () => {
                           <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${keyCanWrite(key.permissions) ? 'bg-warning/15 text-warning' : 'bg-muted text-muted-foreground'}`}>
                             {keyCanWrite(key.permissions) ? 'Läs + Skriv' : 'Läs'}
                           </span>
+                          {keyHasAdmin(key.permissions) && (
+                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-destructive/15 text-destructive">
+                              Admin
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground font-mono">itk_live_{key.key_prefix}...</p>
                         {key.last_used_at && (
