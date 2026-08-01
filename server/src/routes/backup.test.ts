@@ -333,6 +333,14 @@ describe('GET /api/backup', () => {
     expect(res.headers['content-disposition']).toMatch(/attachment/);
     expect(res.headers['content-disposition']).toMatch(/\.zip/);
   });
+
+  it('skriver en audit-rad vid nedladdning (session, ingen API-nyckel → api_key_id NULL)', async () => {
+    const row = db.prepare(
+      "SELECT * FROM audit_log WHERE action = 'backup_download' ORDER BY created_at DESC, rowid DESC LIMIT 1"
+    ).get() as { api_key_id: string | null } | undefined;
+    expect(row).toBeDefined();
+    expect(row!.api_key_id).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -571,6 +579,12 @@ describe('POST /api/backup/run-now', () => {
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('success');
     expect(res.body.lastSizeBytes).toBeGreaterThan(0);
+
+    const row = db.prepare(
+      "SELECT * FROM audit_log WHERE action = 'backup_run_now' ORDER BY created_at DESC, rowid DESC LIMIT 1"
+    ).get() as { api_key_id: string | null } | undefined;
+    expect(row).toBeDefined();
+    expect(row!.api_key_id).toBeNull();
   });
 
   it('rejects a concurrent run-now with 409 (in-flight guard)', async () => {

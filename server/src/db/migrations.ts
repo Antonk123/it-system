@@ -1331,4 +1331,18 @@ export const migrations: Migration[] = [
       db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oidc_sub ON users(oidc_sub) WHERE oidc_sub IS NOT NULL').run();
     },
   },
+  {
+    id: '066',
+    name: 'add_audit_log_api_key_id',
+    up: (db, { columnExists }) => {
+      // Spårbarhet: gör det möjligt att se om en admin-åtgärd i audit_log kom
+      // från en inloggad session (user_id, api_key_id = NULL) eller från en
+      // specifik API-nyckel (api_key_id satt). Nullbar — ingen referens/FK mot
+      // api_keys eftersom nyckeln kan raderas efter loggningstillfället utan
+      // att audit-historiken ska försvinna eller gå sönder.
+      if (!columnExists('audit_log', 'api_key_id')) {
+        db.prepare('ALTER TABLE audit_log ADD COLUMN api_key_id TEXT').run();
+      }
+    },
+  },
 ];

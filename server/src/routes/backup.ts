@@ -20,6 +20,7 @@ import {
   type BackupConfig,
 } from '../lib/backupScheduler.js';
 import { getOffsiteFailureCount } from '../lib/offsiteBackup.js';
+import { logAudit } from '../lib/auditLog.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -96,7 +97,7 @@ export function performRestoreSwap(opts: {
 
 const router = Router();
 
-router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (_req: AuthRequest, res: Response) => {
+router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (req: AuthRequest, res: Response) => {
   const tmpFile = join(tmpdir(), `backup-${randomUUID()}.sqlite`);
 
   try {
@@ -141,6 +142,10 @@ router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (_req: 
     });
 
     await archive.finalize();
+
+    // Nedladdning av hela databasen (inkl. hemligheter) — logga alltid, oavsett
+    // om anropet kom från en inloggad session eller en API-nyckel.
+    logAudit(req.user!.id, 'backup_download', 'backup', null, null, req.ip, req.apiKey?.id ?? null);
   } catch (err) {
     try { unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
     if (!res.headersSent) {
@@ -325,6 +330,10 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
     rmSync(tmpDir, { recursive: true, force: true });
     try { unlinkSync(uploadedZip); } catch { /* ignore */ }
 
+    // Överskrivning av hela databasen — logga när återställningen faktiskt
+    // lyckats (efter performRestoreSwap), inte vid inkommande request.
+    logAudit(req.user!.id, 'backup_restore', 'backup', null, null, req.ip, req.apiKey?.id ?? null);
+
     // Fynd 1: Skicka svar och schemalägg process.exit(0) så Docker (restart: unless-stopped)
     // startar om containern med den nya DB:n i ett rent tillstånd.
     res.json({
@@ -426,7 +435,7 @@ router.put('/config', authenticate, requireAdmin, (req: AuthRequest, res: Respon
   return res.json(configResponse(getBackupConfig()));
 });
 
-router.post('/run-now', authenticate, requireAdmin, async (_req: AuthRequest, res: Response) => {
+router.post('/run-now', authenticate, requireAdmin, async (req: AuthRequest, res: Response) => {
   if (isBackupRunning()) {
     return res.status(409).json({ error: 'En backup pågår redan' });
   }
@@ -435,6 +444,10 @@ router.post('/run-now', authenticate, requireAdmin, async (_req: AuthRequest, re
     return res.status(500).json({ status: 'failed', error: 'Backup misslyckades' });
   }
   const cfg = getBackupConfig();
+
+  // Manuell backup-körning lyckades — logga efter genomförd körning.
+  logAudit(req.user!.id, 'backup_run_now', 'backup', null, null, req.ip, req.apiKey?.id ?? null);
+
   return res.json({ status: result.status, lastRunAt: cfg.lastRunAt, lastSizeBytes: cfg.lastSizeBytes });
 });
 
