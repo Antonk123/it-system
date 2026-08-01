@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { existsSync, rmSync } from 'fs';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 
 /**
  * Integration tests for the API-keys routes (/api/api-keys) and the API-key
@@ -86,6 +86,24 @@ async function createKey(
   expect(typeof res.body.key).toBe('string');
   expect(res.body.key.startsWith('itk_live_')).toBe(true);
   return { id: res.body.id, key: res.body.key, expires_at: res.body.expires_at };
+}
+
+// Insert an api_keys row directly, bypassing the POST /api/api-keys route
+// (and its create-time permission validation). Used to simulate a
+// legacy/tampered row that carries an 'admin' scope on a non-admin user's
+// key — the exact shape the old vulnerability (role alone gating
+// requireAdmin) allowed, and which requireAdmin must still reject purely on
+// user.role even though the row itself claims 'admin'.
+function insertKeyDirectly(userId: string, name: string, permissions: string[]): string {
+  const id = randomUUID();
+  const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
+  const keyPrefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
+  const keyHash = createHash('sha256').update(rawKey).digest('hex');
+  const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+  db.prepare(
+    'INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, name, keyPrefix, keyHash, userId, JSON.stringify(permissions), expiresAt);
+  return rawKey;
 }
 
 beforeAll(async () => {
@@ -293,5 +311,126 @@ describe('API-key default TTL (expires_at)', () => {
       .send({ name: 'garbage expiry', permissions: ['read'], expires_at: 'not-a-date' });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/giltigt datum/i);
+  });
+});
+
+/**
+ * requireAdmin + API-key admin scope (security fix): previously an API key
+ * bound to an admin user passed every requireAdmin-guarded route regardless
+ * of the key's own `permissions`, because requireAdmin only ever looked at
+ * `req.user.role`. It now also requires `req.apiKey.permissions` to include
+ * 'admin' whenever the request was authenticated via API key — narrowing
+ * only, matching the write-scope guard's "the key is the credential" stance.
+ *
+ * GET /api/webhooks is used as the probe route: requireAdmin-protected, no
+ * params, always 200s for an authenticated admin with no extra fixtures.
+ */
+describe('requireAdmin: API-key admin scope required (not just owner role)', () => {
+  const ADMIN_ROUTE = '/api/webhooks';
+
+  it('an admin-owned key WITHOUT admin scope is blocked (403) — this is the vulnerability being closed', async () => {
+    const key = (await createKey(admin, 'admin read-only key', ['read'])).key;
+    const res = await request(app)
+      .get(ADMIN_ROUTE)
+      .set('Authorization', `Bearer ${key}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('an admin-owned key WITH admin scope passes (200)', async () => {
+    const key = (await createKey(admin, 'admin scoped key', ['read', 'admin'])).key;
+    const res = await request(app)
+      .get(ADMIN_ROUTE)
+      .set('Authorization', `Bearer ${key}`);
+    expect(res.status).toBe(200);
+  });
+
+  it('a non-admin-owned key carrying admin scope (legacy/tampered row) does NOT gain access (403) — scope only narrows, never widens beyond the owner\'s role', async () => {
+    const key = insertKeyDirectly(ownerId, 'owner admin-scope key (legacy row)', ['read', 'admin']);
+    const res = await request(app)
+      .get(ADMIN_ROUTE)
+      .set('Authorization', `Bearer ${key}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('JWT session with role=admin is unaffected: still passes the same requireAdmin route (200)', async () => {
+    const res = await request(app)
+      .get(ADMIN_ROUTE)
+      .set('Authorization', `Bearer ${admin.token}`);
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('POST /api/api-keys: permissions allowlist + admin-scope grant restriction', () => {
+  it('rejects an unknown scope value (400)', async () => {
+    const res = await other.agent
+      .post('/api/api-keys')
+      .set('Authorization', `Bearer ${other.token}`)
+      .set('x-csrf-token', other.csrf)
+      .send({ name: 'bad scope key', permissions: ['banana'] });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/scope/i);
+  });
+
+  it('rejects a non-admin user requesting admin scope on their own key (403)', async () => {
+    const res = await other.agent
+      .post('/api/api-keys')
+      .set('Authorization', `Bearer ${other.token}`)
+      .set('x-csrf-token', other.csrf)
+      .send({ name: 'non-admin wants admin', permissions: ['read', 'admin'] });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/administratörer/i);
+  });
+
+  it('allows an admin user to create a key with admin scope (201)', async () => {
+    const created = await createKey(admin, 'legit admin-scope key', ['read', 'admin']);
+    expect(created.key).toBeTruthy();
+  });
+});
+
+/**
+ * Direct regression probe against GET /api/backup — the concrete route this
+ * fix exists to protect (it streams the entire SQLite database, secrets
+ * included). The webhooks-based tests above prove the requireAdmin/API-key
+ * scope LOGIC works in isolation; they do NOT prove /api/backup itself is
+ * still wired to that logic. If backup.ts's own gate is ever changed
+ * (different middleware, a bespoke inline check, reordered guards) the
+ * webhooks probe would stay green while the actual vulnerability reopened.
+ * These two tests pin the sensitive route directly.
+ *
+ * Rate limiting note: GET /api/backup carries `backupDownloadLimiter`
+ * (10 downloads / 15 min per IP — server/src/routes/backup.ts), but it sits
+ * AFTER `requireAdmin` in the middleware chain, so the 403 case below never
+ * consumes a slot. Only the second test (admin-scoped key) reaches the
+ * limiter, consuming 1 of 10 for this test file's IP — well under the cap
+ * for a single run and irrelevant to the other describe blocks here, which
+ * never call /api/backup.
+ */
+describe('GET /api/backup: direct regression probe for the admin-scope fix', () => {
+  it('an admin-owned key WITHOUT admin scope is blocked (403) with no database content leaked', async () => {
+    const key = (await createKey(admin, 'admin read-only key (backup probe)', ['read'])).key;
+    const res = await request(app)
+      .get('/api/backup')
+      .set('Authorization', `Bearer ${key}`);
+    expect(res.status).toBe(403);
+    // requireAdmin rejects BEFORE the backup handler ever runs, so the
+    // response must be the plain JSON auth-denial body — never a zip stream
+    // or any fragment of the database.
+    expect(res.headers['content-type']).toMatch(/json/);
+    expect(res.headers['content-disposition']).toBeUndefined();
+    expect(res.body.error).toBeTruthy();
+  });
+
+  it('an admin-owned key WITH admin scope is NOT blocked by requireAdmin (status is not 403)', async () => {
+    const key = (await createKey(admin, 'admin scoped key (backup probe)', ['read', 'admin'])).key;
+    const res = await request(app)
+      .get('/api/backup')
+      .set('Authorization', `Bearer ${key}`);
+    // What this test proves is that requireAdmin let the request past the
+    // auth gate. The eventual outcome of the actual backup/zip-streaming
+    // logic under the test harness (200 with a zip, or a 500 from e.g.
+    // archiver/tmp-file behavior in this environment) is exercised by
+    // backup.test.ts and is out of scope here — we only assert the request
+    // was not rejected by the admin-scope check this fix adds.
+    expect(res.status).not.toBe(403);
   });
 });

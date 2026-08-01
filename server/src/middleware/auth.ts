@@ -10,10 +10,23 @@ export interface AuthUser {
   role: 'admin' | 'user';
 }
 
-// Extend Express Request to include user from passport
+// Identity of the API key that authenticated the current request (absent for
+// JWT-session requests). Carries both the key's id (needed downstream for
+// audit-logging which key acted) and its permissions (needed by requireAdmin
+// to enforce the key's own scope).
+export interface ApiKeyIdentity {
+  id: string;
+  permissions: string[];
+}
+
+// Extend Express Request to include user from passport, and — for API-key
+// requests — the key's own identity/permissions.
 declare global {
   namespace Express {
     interface User extends AuthUser {}
+    interface Request {
+      apiKey?: ApiKeyIdentity;
+    }
   }
 }
 
@@ -32,7 +45,7 @@ type ApiKeyAuthResult =
   | { kind: 'no_key' }                                    // Header missing or wrong prefix → fall through to JWT
   | { kind: 'invalid' }                                   // Bad key, expired, etc → fall through to JWT (which will fail)
   | { kind: 'forbidden_scope' }                           // Valid key but scope insufficient for this method → 403
-  | { kind: 'authenticated'; user: AuthUser };
+  | { kind: 'authenticated'; user: AuthUser; apiKey: ApiKeyIdentity };
 
 /**
  * True if the request carries an API-key bearer token (Bearer itk_live_…).
@@ -104,7 +117,7 @@ function tryApiKeyAuth(req: Request): ApiKeyAuthResult {
     db.prepare('UPDATE api_keys SET last_used_at = ? WHERE id = ?').run(new Date(now).toISOString(), row.id);
   }
 
-  return { kind: 'authenticated', user };
+  return { kind: 'authenticated', user, apiKey: { id: row.id, permissions } };
 }
 
 export const authenticate: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
@@ -112,6 +125,7 @@ export const authenticate: RequestHandler = (req: Request, res: Response, next: 
   const apiKeyResult = tryApiKeyAuth(req);
   if (apiKeyResult.kind === 'authenticated') {
     req.user = apiKeyResult.user;
+    req.apiKey = apiKeyResult.apiKey;
     return next();
   }
   if (apiKeyResult.kind === 'forbidden_scope') {
@@ -141,6 +155,19 @@ export const requireAdmin: RequestHandler = (req: Request, res: Response, next: 
   const user = req.user as AuthUser | undefined;
   if (!user || user.role !== 'admin') {
     logger.warn('Admin access denied', { userId: user?.id, path: req.path });
+    return res.status(403).json({ error: 'Forbidden: Admin access required' });
+  }
+  // If the request was authenticated via API key, the key's own scope must
+  // explicitly include 'admin' — mirroring the write-scope guard above, the
+  // key is the credential and its scope wins. A key without 'admin' never
+  // passes here, even when its owner has role='admin' (scope can only
+  // narrow access, never widen it beyond what the owner already has).
+  if (req.apiKey && !req.apiKey.permissions.includes('admin')) {
+    logger.warn('Admin access denied: API key lacks admin scope', {
+      userId: user.id,
+      apiKeyId: req.apiKey.id,
+      path: req.path,
+    });
     return res.status(403).json({ error: 'Forbidden: Admin access required' });
   }
   next();

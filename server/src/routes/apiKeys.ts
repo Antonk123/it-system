@@ -7,6 +7,12 @@ import { logger } from '../lib/logger.js';
 
 const router = Router();
 
+// The only scope values a key may carry. 'admin' is checked by requireAdmin
+// (server/src/middleware/auth.ts) in addition to the write-method check
+// already done for 'write' — keep these two files in sync if a new scope is
+// ever added.
+const ALLOWED_PERMISSIONS = ['read', 'write', 'admin'] as const;
+
 interface ApiKeyRow {
   id: string;
   name: string;
@@ -65,6 +71,29 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     normalizedExpiresAt = oneYearFromNow.toISOString();
   }
 
+  // Validate requested permissions against the allowlist. Anything outside
+  // {read, write, admin} is rejected outright — an unknown scope value could
+  // otherwise be silently stored and misread later.
+  let perms: string[];
+  if (Array.isArray(permissions)) {
+    const unknown = permissions.filter(
+      (p) => typeof p !== 'string' || !(ALLOWED_PERMISSIONS as readonly string[]).includes(p)
+    );
+    if (unknown.length > 0) {
+      return res.status(400).json({ error: `Okänt scope-värde: ${unknown.join(', ')}` });
+    }
+    // 'admin' scope may only be granted on a key by an admin user — otherwise
+    // a non-admin could mint a key that (once the underlying user is later
+    // promoted, or via some other future path) claims admin scope it never
+    // should have had. Keep the grant restricted to the same trust level.
+    if (permissions.includes('admin') && req.user!.role !== 'admin') {
+      return res.status(403).json({ error: 'Endast administratörer kan skapa nycklar med admin-scope' });
+    }
+    perms = permissions;
+  } else {
+    perms = ['read'];
+  }
+
   try {
     // Limit API keys per user to prevent database bloat
     const keyCount = db.prepare(
@@ -79,11 +108,11 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     const keyPrefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
     const keyHash = createHash('sha256').update(rawKey).digest('hex');
 
-    const perms = Array.isArray(permissions) ? JSON.stringify(permissions) : '["read"]';
+    const permsJson = JSON.stringify(perms);
 
     db.prepare(
       'INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, name.trim(), keyPrefix, keyHash, req.user!.id, perms, normalizedExpiresAt);
+    ).run(id, name.trim(), keyPrefix, keyHash, req.user!.id, permsJson, normalizedExpiresAt);
 
     logAudit(req.user!.id, 'api_key_create', 'api_key', id, `name: ${name.trim()}, prefix: ${keyPrefix}`, req.ip);
 
@@ -92,7 +121,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       name: name.trim(),
       key: rawKey, // Only returned on creation
       key_prefix: keyPrefix,
-      permissions: perms,
+      permissions: permsJson,
       expires_at: normalizedExpiresAt,
       created_at: new Date().toISOString(),
     });
