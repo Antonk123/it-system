@@ -32,14 +32,14 @@ const SharedTicket = () => {
       try {
         const result = await api.getSharedTicket(token);
         setData(result);
-      } catch (err) { setError('Kunde inte hämta ärendet'); }
+      } catch (err) { setError('Delningslänken är ogiltig eller har gått ut.'); }
       finally { setIsLoading(false); }
     };
     fetchSharedTicket();
   }, [token]);
 
   if (isLoading) return <div className="min-h-dvh bg-background flex items-center justify-center"><div className="text-center space-y-4"><Loader2 className="w-8 h-8 animate-spin mx-auto text-primary" /><p className="text-muted-foreground">Laddar ärende...</p></div></div>;
-  if (error || !data) return <div className="min-h-dvh bg-background flex items-center justify-center"><Card className="max-w-md w-full mx-4"><CardContent className="pt-6 text-center space-y-4"><AlertCircle className="w-12 h-12 mx-auto text-destructive" /><h2 className="text-lg font-semibold">Kunde inte visa ärende</h2><p className="text-muted-foreground">{error || 'Delningslänken är ogiltig.'}</p></CardContent></Card></div>;
+  if (error || !data) return <div className="min-h-dvh bg-background flex items-center justify-center"><Card className="max-w-md w-full mx-4"><CardContent className="pt-6 text-center space-y-4"><AlertCircle className="w-12 h-12 mx-auto text-destructive" /><h2 className="text-lg font-semibold">Kunde inte visa ärende</h2><p className="text-muted-foreground">{error || 'Delningslänken är ogiltig eller har gått ut.'}</p></CardContent></Card></div>;
 
   const { ticket, requester, attachments, checklistItems } = data;
 
@@ -58,7 +58,12 @@ const SharedTicket = () => {
             {/* Anteckningar (notes) renderas inte i delade vyer — internt fält, läcker inte till externa länkar. Backend skickar inte heller fältet i payloaden. */}
           </CardContent>
         </Card>
-        <div className="text-center text-sm text-muted-foreground pt-4"><p>Detta är en delad vy av ett ärende.</p></div>
+        <div className="text-center text-sm text-muted-foreground pt-4">
+          <p>Detta är en delad vy av ett ärende.</p>
+          {data.share_expires_at && (
+            <p>Länken är giltig till {format(parseServerDate(data.share_expires_at), 'PPP', { locale: sv })}</p>
+          )}
+        </div>
       </div>
     </div>
   );

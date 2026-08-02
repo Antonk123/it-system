@@ -320,3 +320,75 @@ describe('felpropagering', () => {
     expect(calls).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 5. Delningslänkar (expires_at-kontraktet)
+// ---------------------------------------------------------------------------
+
+describe('shares — createShareToken/getShareToken', () => {
+  it('createShareToken utan argument skickar ingen body och parsar svaret', async () => {
+    let postCallBody: unknown;
+    fetchMock.mockImplementation((url: string, opts?: RequestInit) => {
+      if (url === `${BASE}/csrf-token`) {
+        return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ csrfToken: 'csrf-abc' }) }));
+      }
+      if (url === `${BASE}/shares/ticket/t1` && opts?.method === 'POST') {
+        postCallBody = opts?.body;
+        return Promise.resolve(
+          fakeResponse({ json: () => Promise.resolve({ share_token: 'tok-1', expires_at: '2026-09-01T00:00:00Z' }) })
+        );
+      }
+      return Promise.resolve(fakeResponse({}));
+    });
+
+    const api = await freshApi();
+    const result = await api.createShareToken('t1');
+
+    expect(result).toEqual({ share_token: 'tok-1', expires_at: '2026-09-01T00:00:00Z' });
+    expect(postCallBody).toBeUndefined();
+  });
+
+  it('createShareToken med expiresInDays: 7 skickar body {"expiresInDays":7}', async () => {
+    let postCallBody: unknown;
+    fetchMock.mockImplementation((url: string, opts?: RequestInit) => {
+      if (url === `${BASE}/csrf-token`) {
+        return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ csrfToken: 'csrf-abc' }) }));
+      }
+      if (url === `${BASE}/shares/ticket/t1` && opts?.method === 'POST') {
+        postCallBody = opts?.body;
+        return Promise.resolve(
+          fakeResponse({ json: () => Promise.resolve({ share_token: 'tok-2', expires_at: '2026-08-09T00:00:00Z' }) })
+        );
+      }
+      return Promise.resolve(fakeResponse({}));
+    });
+
+    const api = await freshApi();
+    const result = await api.createShareToken('t1', 7);
+
+    expect(result).toEqual({ share_token: 'tok-2', expires_at: '2026-08-09T00:00:00Z' });
+    expect(postCallBody).toBe(JSON.stringify({ expiresInDays: 7 }));
+  });
+
+  it('getShareToken returnerar { share_token: null, expires_at: null } när ingen aktiv share finns', async () => {
+    fetchMock.mockResolvedValue(
+      fakeResponse({ json: () => Promise.resolve({ share_token: null, expires_at: null }) })
+    );
+
+    const api = await freshApi();
+    const result = await api.getShareToken('t1');
+
+    expect(result).toEqual({ share_token: null, expires_at: null });
+  });
+
+  it('getShareToken returnerar aktivt share_token + expires_at', async () => {
+    fetchMock.mockResolvedValue(
+      fakeResponse({ json: () => Promise.resolve({ share_token: 'tok-3', expires_at: '2026-08-30T00:00:00Z' }) })
+    );
+
+    const api = await freshApi();
+    const result = await api.getShareToken('t1');
+
+    expect(result).toEqual({ share_token: 'tok-3', expires_at: '2026-08-30T00:00:00Z' });
+  });
+});

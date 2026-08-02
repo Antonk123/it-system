@@ -19,6 +19,7 @@ import { useTicketReminders } from '@/hooks/useTicketReminders';
 import { addRecentlyViewedTicket } from '@/lib/recentlyViewed';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { migrateContent } from '@/lib/contentMigration';
+import { parseServerDate } from '@/lib/date';
 import { TicketChecklist } from '@/components/TicketChecklist';
 import { TicketComments } from '@/components/TicketComments';
 import { TicketLinks } from '@/components/TicketLinks';
@@ -126,12 +127,15 @@ const TicketDetail = () => {
   const {
     isLoading: isShareLoading,
     shareUrl,
+    expiresAt: shareExpiresAt,
     createShareLink,
+    deleteShareLink,
     copyToClipboard,
     getExistingShare,
     setShareUrl
   } = useTicketSharing();
   const [sharePopoverOpen, setSharePopoverOpen] = useState(false);
+  const [shareExpiresInDays, setShareExpiresInDays] = useState('30');
   const [mobileReminderOpen, setMobileReminderOpen] = useState(false);
   const [mobileDeleteOpen, setMobileDeleteOpen] = useState(false);
   const [checklistOpen, setChecklistOpen] = useState(false);
@@ -364,16 +368,26 @@ const TicketDetail = () => {
 
   const handleShare = async () => {
     if (!ticket) return;
-    
-    // Check if share already exists
+
+    // Kolla om en aktiv delningslänk redan finns — myntar INGEN ny.
     const existingToken = await getExistingShare(ticket.id);
     if (existingToken) {
       const url = `${window.location.origin}/shared/${existingToken}`;
       setShareUrl(url);
     } else {
-      await createShareLink(ticket.id);
+      setShareUrl(null);
     }
     setSharePopoverOpen(true);
+  };
+
+  const handleCreateShareLink = async () => {
+    if (!ticket) return;
+    await createShareLink(ticket.id, Number(shareExpiresInDays));
+  };
+
+  const handleRevokeShareLink = async () => {
+    if (!ticket) return;
+    await deleteShareLink(ticket.id);
   };
 
   const handleCopyLink = () => {
@@ -468,20 +482,71 @@ const TicketDetail = () => {
                         Vem som helst med länken kan se ärendet.
                       </p>
                     </div>
-                    {shareUrl && (
-                      <div className="flex gap-2">
-                        <Input
-                          value={shareUrl}
-                          readOnly
-                          className="text-xs"
-                        />
+                    {shareUrl ? (
+                      <div className="space-y-3">
+                        <div className="flex gap-2">
+                          <Input
+                            value={shareUrl}
+                            readOnly
+                            className="text-xs"
+                          />
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            onClick={handleCopyLink}
+                            aria-label="Kopiera delningslänk"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        {shareExpiresAt && (
+                          <p className="text-xs text-muted-foreground">
+                            Giltig till {format(parseServerDate(shareExpiresAt), 'PPP', { locale: sv })}
+                          </p>
+                        )}
                         <Button
-                          size="icon"
-                          variant="outline"
-                          onClick={handleCopyLink}
-                          aria-label="Kopiera delningslänk"
+                          variant="destructive"
+                          size="sm"
+                          className="w-full gap-2"
+                          onClick={handleRevokeShareLink}
+                          disabled={isShareLoading}
                         >
-                          <Copy className="w-4 h-4" />
+                          {isShareLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                          Återkalla länk
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor="share-expiry" className="text-xs">
+                            Giltighetstid
+                          </Label>
+                          <Select value={shareExpiresInDays} onValueChange={setShareExpiresInDays}>
+                            <SelectTrigger id="share-expiry" aria-label="Giltighetstid för delningslänk">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="7">7 dagar</SelectItem>
+                              <SelectItem value="30">30 dagar</SelectItem>
+                              <SelectItem value="90">90 dagar</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button
+                          className="w-full gap-2"
+                          onClick={handleCreateShareLink}
+                          disabled={isShareLoading}
+                        >
+                          {isShareLoading ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Share2 className="w-4 h-4" />
+                          )}
+                          Skapa delningslänk
                         </Button>
                       </div>
                     )}

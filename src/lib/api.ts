@@ -965,12 +965,13 @@ class ApiClient {
 
   // Shares
   async getShareToken(ticketId: string) {
-    return this.request<{ share_token: string | null }>(`/shares/ticket/${ticketId}`);
+    return this.request<{ share_token: string | null; expires_at: string | null }>(`/shares/ticket/${ticketId}`);
   }
 
-  async createShareToken(ticketId: string) {
-    return this.request<{ share_token: string }>(`/shares/ticket/${ticketId}`, {
+  async createShareToken(ticketId: string, expiresInDays?: number) {
+    return this.request<{ share_token: string; expires_at: string }>(`/shares/ticket/${ticketId}`, {
       method: 'POST',
+      body: expiresInDays !== undefined ? { expiresInDays } : undefined,
     });
   }
 
@@ -1668,6 +1669,7 @@ export interface SharedTicketData {
     completed: boolean;
     position: number;
   }>;
+  share_expires_at?: string;
 }
 
 export interface TicketLinkRow {
