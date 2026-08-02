@@ -149,6 +149,19 @@ function createSchema(db: InstanceType<typeof Database>) {
       ticket_id TEXT NOT NULL,
       share_token TEXT UNIQUE NOT NULL,
       created_by TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      expires_at TEXT
+    );
+
+    CREATE TABLE audit_log (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT,
+      details TEXT,
+      ip_address TEXT,
+      api_key_id TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
   `);
@@ -429,6 +442,14 @@ describe('processEmail — new ticket', () => {
     expect(
       (memDb.prepare('SELECT COUNT(*) AS n FROM ticket_shares').get() as { n: number }).n
     ).toBe(1);
+    // Token minted via the shared mintShareToken() helper: 16 bytes = 32 hex
+    // chars (fixes the previous inconsistent randomBytes(12) here), and an
+    // expiry must be set (no more eternal share tokens from email-in).
+    const share = memDb
+      .prepare('SELECT share_token, expires_at FROM ticket_shares')
+      .get() as { share_token: string; expires_at: string | null };
+    expect(share.share_token).toMatch(/^[0-9a-f]{32}$/);
+    expect(share.expires_at).toBeTruthy();
     // auto-created the unknown sender as a contact
     expect(countContacts()).toBe(1);
   });

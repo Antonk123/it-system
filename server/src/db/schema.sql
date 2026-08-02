@@ -128,7 +128,8 @@ CREATE TABLE IF NOT EXISTS ticket_shares (
   ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
   share_token TEXT UNIQUE NOT NULL,
   created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  expires_at TEXT
 );
 
 -- Ticket links (bidirectional relationships)

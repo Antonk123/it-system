@@ -1345,4 +1345,18 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    id: '067',
+    name: 'add_ticket_shares_expires_at',
+    up: (db, { columnExists }) => {
+      // Säkerhetsfynd: en läckt/myntad share-token var evig — ingen expiry
+      // fanns. Lägg till expires_at och backfilla legacy-rader med +30 dagar
+      // från nu (samma default som en ny share utan explicit expiresInDays)
+      // så befintliga delade länkar inte dör direkt vid uppgraderingen.
+      if (!columnExists('ticket_shares', 'expires_at')) {
+        db.prepare('ALTER TABLE ticket_shares ADD COLUMN expires_at TEXT').run();
+      }
+      db.prepare("UPDATE ticket_shares SET expires_at = datetime('now', '+30 days') WHERE expires_at IS NULL").run();
+    },
+  },
 ];

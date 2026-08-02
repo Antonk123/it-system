@@ -3,11 +3,13 @@ import { simpleParser } from 'mailparser';
 import { convert } from 'html-to-text';
 import { ConfidentialClientApplication } from '@azure/msal-node';
 import { db } from '../db/connection.js';
-import { randomUUID, randomBytes } from 'crypto';
+import { randomUUID } from 'crypto';
 import { dispatchWebhook } from './webhookDispatcher.js';
 import { sendTicketReceivedConfirmation } from './email.js';
 import { notifyAgentOfCustomerReply, notifyStaffOfNewTicket } from './ticketNotifications.js';
 import { logger } from './logger.js';
+import { logAudit } from './auditLog.js';
+import { mintShareToken } from './shares.js';
 import { ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE, hasMagicByteMatch } from '../routes/attachments.js';
 
 interface EmailConfig {
@@ -338,9 +340,11 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     await saveAttachments(parsed.attachments, ticketId);
   }
 
-  const shareToken = randomBytes(12).toString('hex');
-  db.prepare('INSERT INTO ticket_shares (id, ticket_id, share_token, created_by) VALUES (?, ?, ?, NULL)')
-    .run(randomUUID(), ticketId, shareToken);
+  const { shareToken, expiresAt } = mintShareToken(db, ticketId, null);
+  // logAudit kräver ett userId — mejl-in har ingen inloggad användare, så vi
+  // loggar med userId null (systemhändelse), samma mönster som ticket_history-
+  // raden ovan ('created'/'email' med user_id NULL).
+  logAudit(null, 'share_create', 'ticket_share', ticketId, `ticket_id: ${ticketId}, expires_at: ${expiresAt}, source: email`, undefined);
   const appBaseUrl = process.env.APP_BASE_URL || '';
   const shareUrl = `${appBaseUrl.replace(/\/$/, '')}/shared/${shareToken}`;
 
