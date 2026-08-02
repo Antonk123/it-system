@@ -22,7 +22,7 @@ Authentication is resolved per-request in `server/src/middleware/auth.ts` and
 |-----------|-----|-------|
 | **JWT access token** | `Authorization: Bearer <jwt>` | 15-min lifetime, HS256, verified by passport-jwt. Subject = user id. |
 | **Refresh token** | HttpOnly `refreshToken` cookie (or request body) | Rolling/rotating. Used only by `POST /api/auth/refresh` and `/logout`. |
-| **API key** | `Authorization: Bearer itk_live_<key>` | SHA-256 hashed, constant-time compared. Scopes: `read` (default) and `write`. A key without `write` is rejected with **403** on any `POST/PUT/PATCH/DELETE`. API-key requests are tried **before** JWT. |
+| **API key** | `Authorization: Bearer itk_live_<key>` | SHA-256 hashed, constant-time compared. Scopes: `read` (default), `write` and `admin`. A key without `write` is rejected with **403** on any `POST/PUT/PATCH/DELETE`. A key without `admin` is rejected with **403** on every admin-gated endpoint, *even when the key's owner is an admin* — the key is the credential and its scope can only narrow access, never widen it. Only a request that itself carries `admin` scope (or a logged-in admin session) may create a key with `admin`. API-key requests are tried **before** JWT. |
 | **CSRF** | `x-csrf-token` header + `csrf-token` cookie (double-submit) | Required for all cookie-authenticated mutations (`POST/PUT/PATCH/DELETE`). **Exempt:** API-key requests (`Bearer itk_live_…`), `/api/auth/login`, `/api/auth/refresh`, and everything under `/api/public/`. Fetch a token from `GET /api/csrf-token`. |
 
 ### Middleware vocabulary used in the tables

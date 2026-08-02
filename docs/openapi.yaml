@@ -34,7 +34,12 @@ info:
       `POST /api/auth/refresh`. **Muterande anrop (POST/PUT/PATCH/DELETE) kräver
       även CSRF-token** i `x-csrf-token` (hämtas från `GET /api/csrf-token`).
     - **API-nyckel:** `Authorization: Bearer itk_live_...`. Nycklar har scope
-      `read` eller `read,write`. API-nyckel-anrop är **undantagna från CSRF**.
+      `read`, `read,write` eller — för administrativa endpoints — även `admin`.
+      En nyckel utan `admin` får **403** på admin-skyddade endpoints *även om
+      nyckelns ägare är administratör*: nyckeln är credentialen och dess scope
+      kan bara inskränka åtkomsten, aldrig utöka den. Endast ett anrop som
+      själv har `admin`-scope (eller en inloggad admin-session) får skapa en
+      nyckel med `admin`. API-nyckel-anrop är **undantagna från CSRF**.
 
 
     ## Fel
@@ -3680,7 +3685,7 @@ components:
       type: apiKey
       in: header
       name: Authorization
-      description: "API-nyckel: `Authorization: Bearer itk_live_...` (scope read/write). Undantagen från CSRF."
+      description: "API-nyckel: `Authorization: Bearer itk_live_...` (scope read/write/admin; admin-skyddade endpoints kräver `admin` även när ägaren är administratör). Undantagen från CSRF."
     csrfToken:
       type: apiKey
       in: header

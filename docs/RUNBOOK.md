@@ -149,9 +149,17 @@ Byt `YYYYMMDD-HHMM` mot tidsstämpeln på backupen du vill återställa.
 cd /opt/it-ticketing
 
 # 1. Ta backup först! (inbyggda backup-systemet — se "Backup & Restore" ovan)
-#    Admin-UI: Inställningar → Backup → "Kör backup nu", eller ladda ner en ZIP:
-curl -sf -H "Authorization: Bearer itk_live_<admin-användares API-nyckel>" \
-  -o backup-pre-upgrade.zip http://localhost:3002/api/backup
+#    Admin-UI: Inställningar → Backup → "Kör backup nu", eller ladda ner en ZIP.
+#
+#    OBS: nyckeln måste ha scope "admin". Sedan admin-scopet infördes räcker
+#    varken read eller write för /api/backup — anropet ger 403. Nycklar som
+#    skapades före den ändringen har inget admin-scope och måste ersättas med
+#    en ny nyckel (Inställningar → Integrationer → kryssa i Admin-scope).
+#    Kontrollera utfallet innan du går vidare — curl -sf failar tyst, och en
+#    uppgradering utan pre-upgrade-backup är precis vad steget ska förhindra.
+curl -sf -H "Authorization: Bearer itk_live_<admin-scopad API-nyckel>" \
+  -o backup-pre-upgrade.zip http://localhost:3002/api/backup \
+  || { echo "BACKUP MISSLYCKADES — avbryt uppgraderingen"; exit 1; }
 
 # 2. Hämta ny kod
 git pull

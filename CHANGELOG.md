@@ -37,6 +37,14 @@ för commit-nivå, se git-historiken.
   e-post→ärende via IMAP (M365 OAuth2), web push, PWA.
 
 ### Ändrat
+- **BRYTANDE — API-nycklar kräver `admin`-scope för administrativa endpoints.**
+  Tidigare räckte det att nyckelns *ägare* var administratör, vilket gjorde att
+  en nyckel avsedd för läsning nådde hela admin-ytan. Nyckeln är credentialen
+  och dess scope kan bara inskränka åtkomsten, aldrig utöka den.
+  **Efter uppgradering slutar befintliga nycklar fungera mot admin-endpoints**
+  (inklusive backup-nedladdning) — skapa en ny nyckel med Admin-scope under
+  Inställningar → Integrationer. Detta är avsiktligt: att retroaktivt ge
+  gamla nycklar admin-scope hade bevarat sårbarheten.
 - Tidszonshantering konsekvent `Europe/Stockholm` i hela stacken.
 - Stora refaktorer av Settings; UI/UX- och tillgänglighetslyft (WCAG AA-kontrast
   i ljusa teman, badge-kontraster, Kanban-tangentbordsnavigering).
@@ -49,6 +57,16 @@ för commit-nivå, se git-historiken.
   och `schema.sql` kraschade startup på äldre databaser.
 
 ### Säkerhet
+- **Privilege escalation via API-nycklar stängd.** En nyckel scopad `read`,
+  bunden till en administratör, kunde nå samtliga admin-skyddade endpoints —
+  däribland `GET /api/backup`, som laddar ner hela databasen inklusive
+  hemligheter. En nyckel kan heller inte längre mynta en nyckel med scope den
+  själv saknar.
+- **Spårbarhet för administrativa åtgärder.** `audit_log` har ett nytt fält för
+  vilken API-nyckel som utförde åtgärden, backup-routerna loggar (de gjorde det
+  inte alls tidigare), och granskningsloggen visar nyckelns härkomst.
+  Restore-loggen skrivs i den återställda databasen — annars hade just den
+  åtgärd som raderar historiken varit den enda utan spår.
 - Återkommande säkerhetsaudits; fail-closed-validering av `JWT_SECRET`/
   `CSRF_SECRET` (saknad eller < 32 tecken stoppar start), CSRF-skydd, SSRF-skydd,
   rate-limits, parametriserad SQL med allow-listade kolumnnamn.
