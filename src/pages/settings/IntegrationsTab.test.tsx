@@ -102,6 +102,20 @@ describe('IntegrationsTab — API-nycklar admin-scope', () => {
     expect(screen.getByLabelText('Ge nyckeln admin-rättigheter')).toBeTruthy();
   });
 
+  it('varningstexten för admin-scope är sann (F5): läsåtkomst, och skrivande admin-åtgärder kräver skrivrättigheter också', () => {
+    authValue = { user: { id: 'u1', email: 'admin@example.com', role: 'admin' } };
+    const { container } = render(<IntegrationsTab />, { wrapper });
+    openApiKeysSection();
+    const text = container.textContent ?? '';
+    expect(text).toContain('ger LÄSÅTKOMST till administrativa endpoints');
+    expect(text).toContain('Skrivande admin-åtgärder');
+    expect(text).toContain('kräver att Skrivrättigheter ovan också är ikryssad');
+    // Den gamla, felaktiga formuleringen ("full åtkomst") ska inte finnas kvar —
+    // write-metodkontrollen körs FÖRE requireAdmin, så en ['read','admin']-nyckel
+    // (vilket är vad kryssrutan ensam skapar) får 403 på skrivande endpoints.
+    expect(text).not.toContain('full åtkomst till administrativa endpoints');
+  });
+
   it('döljer admin-kryssrutan för en vanlig användare', () => {
     authValue = { user: { id: 'u2', email: 'user@example.com', role: 'user' } };
     render(<IntegrationsTab />, { wrapper });

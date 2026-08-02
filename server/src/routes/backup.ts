@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { db, closeDatabase } from '../db/connection.js';
+import type { Database as DatabaseType } from 'better-sqlite3';
 import { ZipArchive } from 'archiver';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
@@ -95,6 +96,61 @@ export function performRestoreSwap(opts: {
   try { unlinkSync(dbBackup); } catch { /* ignore — filen kanske redan är borta */ }
 }
 
+// Fynd F1: audit-raden för 'backup_restore' fick tidigare aldrig persisteras.
+// Den skrevs EFTER performRestoreSwap, men swappens closeDb-callback (ovan)
+// hinner köra closeDatabase() innan filbytet — så den delade `db`-anslutningen
+// är redan stängd när logAudit skulle kört sin INSERT (kastar tyst i sitt eget
+// catch-block, fire-and-forget). Även med ett öppet handtag hade raden hamnat
+// fel: `db` pekar fortfarande mot filen som precis ersattes av den återställda
+// backupen.
+//
+// Lösning: öppna en egen, kortlivad anslutning direkt mot dbPath (= filen som
+// performRestoreSwap just skrev den återställda backupen till) och skriv raden
+// där, sedan stäng anslutningen igen. Detta är EN separat anslutning fristående
+// från den delade `db`-singleton i db/connection.ts — helt avsiktligt, eftersom
+// hela poängen är att skriva i den NYA filen efter att den gamla anslutningen
+// stängts.
+//
+// Fallback: om den återställda backupen är äldre än migration 066 saknar
+// audit_log kolumnen api_key_id (migrationskedjan körs först vid nästa
+// serverstart, inte här) — testa med PRAGMA table_info och skriv utan kolumnen
+// i så fall, så att raden inte går förlorad helt i det fallet heller.
+//
+// Får aldrig kasta (precis som logAudit): en misslyckad audit-skrivning är
+// non-fatal och ska bara loggas, aldrig fälla en i övrigt lyckad restore.
+export async function logRestoreAudit(
+  dbPath: string,
+  userId: string | null,
+  ipAddress: string | string[] | undefined,
+  apiKeyId: string | null,
+): Promise<void> {
+  const resolvedIp = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
+  let conn: DatabaseType | undefined;
+  try {
+    const Database = (await import('better-sqlite3')).default;
+    conn = new Database(dbPath);
+    const columns = conn.prepare('PRAGMA table_info(audit_log)').all() as { name: string }[];
+    const hasApiKeyId = columns.some((c) => c.name === 'api_key_id');
+    if (hasApiKeyId) {
+      conn.prepare(
+        `INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, details, ip_address, api_key_id)
+         VALUES (?, ?, 'backup_restore', 'backup', NULL, NULL, ?, ?)`
+      ).run(randomUUID(), userId, resolvedIp ?? null, apiKeyId ?? null);
+    } else {
+      // Pre-066-backup: kolumnen finns inte än (kommer efter nästa migrering) —
+      // skriv raden utan den i stället för att tappa den helt.
+      conn.prepare(
+        `INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, details, ip_address)
+         VALUES (?, ?, 'backup_restore', 'backup', NULL, NULL, ?)`
+      ).run(randomUUID(), userId, resolvedIp ?? null);
+    }
+  } catch (err) {
+    logger.error('Kunde inte skriva backup_restore-audit-raden i den återställda databasen (non-fatal)', { error: String(err) });
+  } finally {
+    try { conn?.close(); } catch { /* ignore */ }
+  }
+}
+
 const router = Router();
 
 router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (req: AuthRequest, res: Response) => {
@@ -115,6 +171,14 @@ router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (req: A
 
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Fynd F2: logga FÖRE strömningen börjar, inte efter finalize(). database.sqlite
+    // läggs i arkivet och strömmas till klienten redan under finalize — en klient
+    // som avbryter anslutningen sent kan i praktiken ha fått hela databasen utan
+    // att en audit-rad skrivits, om loggningen väntar på att strömmen ska bli klar.
+    // Logga alltså avsikten så snart requireAdmin + rate-limitern har passerats,
+    // oavsett om klienten sedan fullföljer nedladdningen eller avbryter den.
+    logAudit(req.user!.id, 'backup_download', 'backup', null, null, req.ip, req.apiKey?.id ?? null);
 
     const archive = new ZipArchive({ zlib: { level: 6 } });
 
@@ -142,10 +206,6 @@ router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (req: A
     });
 
     await archive.finalize();
-
-    // Nedladdning av hela databasen (inkl. hemligheter) — logga alltid, oavsett
-    // om anropet kom från en inloggad session eller en API-nyckel.
-    logAudit(req.user!.id, 'backup_download', 'backup', null, null, req.ip, req.apiKey?.id ?? null);
   } catch (err) {
     try { unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
     if (!res.headersSent) {
@@ -330,9 +390,12 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
     rmSync(tmpDir, { recursive: true, force: true });
     try { unlinkSync(uploadedZip); } catch { /* ignore */ }
 
-    // Överskrivning av hela databasen — logga när återställningen faktiskt
-    // lyckats (efter performRestoreSwap), inte vid inkommande request.
-    logAudit(req.user!.id, 'backup_restore', 'backup', null, null, req.ip, req.apiKey?.id ?? null);
+    // Fynd F1: skriv audit-raden i den ÅTERSTÄLLDA databasen (DB_PATH pekar nu
+    // mot den, eftersom performRestoreSwap redan bytt filen och den delade
+    // `db`-anslutningen redan stängts av closeDb-callbacken ovan). logAudit
+    // (som skriver mot den delade anslutningen) fungerar inte här — den är
+    // stängd och skulle ändå träffat fel fil. Se logRestoreAudit ovan.
+    await logRestoreAudit(DB_PATH, req.user!.id, req.ip, req.apiKey?.id ?? null);
 
     // Fynd 1: Skicka svar och schemalägg process.exit(0) så Docker (restart: unless-stopped)
     // startar om containern med den nya DB:n i ett rent tillstånd.

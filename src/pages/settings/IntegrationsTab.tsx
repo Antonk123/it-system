@@ -183,7 +183,7 @@ const IntegrationsTab = () => {
                         className="mt-0.5"
                       />
                       <span>
-                        <span className="font-medium text-destructive">Admin-scope (varning)</span> — ger full åtkomst till administrativa endpoints: nedladdning av hela databasen (backup), fakturor, granskningslogg och webhook-konfiguration. Ge bara detta till betrodd automation (t.ex. ett schemalagt backup-jobb), aldrig till en klient eller ett verktyg du inte helt litar på.
+                        <span className="font-medium text-destructive">Admin-scope (varning)</span> — ger LÄSÅTKOMST till administrativa endpoints: nedladdning av hela databasen (backup), fakturor, granskningslogg och webhook-konfiguration. Skrivande admin-åtgärder (t.ex. att köra eller återställa en backup) kräver att Skrivrättigheter ovan också är ikryssad — annars nekas de med 403. Ge bara detta till betrodd automation, aldrig till en klient eller ett verktyg du inte helt litar på.
                       </span>
                     </label>
                   )}

@@ -119,7 +119,7 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
         VALUES (?, ?, ?, ?, ?)
       `).run(id, email, passwordHash, userRole, resolvedDisplayName);
 
-      logAudit(req.user!.id, 'user_create', 'user', id, `email: ${email}, role: ${userRole}`, req.ip);
+      logAudit(req.user!.id, 'user_create', 'user', id, `email: ${email}, role: ${userRole}`, req.ip, req.apiKey?.id ?? null);
 
       res.status(201).json({
         message: 'User created',
@@ -190,7 +190,7 @@ router.patch('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respons
     }
 
     const changedFields = updates.map(u => `${u.column}: ${u.value}`).join(', ');
-    logAudit(req.user!.id, 'user_update', 'user', req.params.id, changedFields, req.ip);
+    logAudit(req.user!.id, 'user_update', 'user', req.params.id, changedFields, req.ip, req.apiKey?.id ?? null);
 
     res.json({ message: 'Användaren uppdaterades' });
   } catch (error) {
@@ -213,7 +213,7 @@ router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respon
       return res.status(404).json({ error: 'User not found' });
     }
 
-    logAudit(req.user!.id, 'user_delete', 'user', req.params.id, null, req.ip);
+    logAudit(req.user!.id, 'user_delete', 'user', req.params.id, null, req.ip, req.apiKey?.id ?? null);
 
     res.json({ message: 'User deleted' });
   } catch (error) {

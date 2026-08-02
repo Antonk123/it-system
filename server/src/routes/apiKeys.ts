@@ -94,6 +94,9 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     perms = ['read'];
   }
 
+  // Fynd F6: normalisera bort dubbletter (t.ex. ['read','read']) innan lagring.
+  perms = [...new Set(perms)];
+
   try {
     // Limit API keys per user to prevent database bloat
     const keyCount = db.prepare(
@@ -114,7 +117,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       'INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(id, name.trim(), keyPrefix, keyHash, req.user!.id, permsJson, normalizedExpiresAt);
 
-    logAudit(req.user!.id, 'api_key_create', 'api_key', id, `name: ${name.trim()}, prefix: ${keyPrefix}`, req.ip);
+    logAudit(req.user!.id, 'api_key_create', 'api_key', id, `name: ${name.trim()}, prefix: ${keyPrefix}`, req.ip, req.apiKey?.id ?? null);
 
     res.status(201).json({
       id,
@@ -142,7 +145,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'API key not found' });
     }
 
-    logAudit(req.user!.id, 'api_key_delete', 'api_key', req.params.id, null, req.ip);
+    logAudit(req.user!.id, 'api_key_delete', 'api_key', req.params.id, null, req.ip, req.apiKey?.id ?? null);
 
     res.json({ message: 'API key deleted' });
   } catch (error) {

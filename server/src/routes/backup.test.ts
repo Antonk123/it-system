@@ -2,7 +2,8 @@ import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { existsSync, rmSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join, dirname } from 'node:path';
 import { tmpdir as osTmpdir } from 'node:os';
-import { randomUUID } from 'crypto';
+import http from 'node:http';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 
 /**
  * Integration tests for the backup/restore endpoints.
@@ -56,7 +57,7 @@ import { PassThrough } from 'node:stream';
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
 import { createApp } from '../app.js';
 import { stopBackupScheduler } from '../lib/backupScheduler.js';
-import { performRestoreSwap } from './backup.js';
+import { performRestoreSwap, logRestoreAudit } from './backup.js';
 
 let app: ReturnType<typeof createApp>;
 
@@ -64,6 +65,7 @@ let app: ReturnType<typeof createApp>;
 let adminAgent: ReturnType<typeof request.agent>;
 let adminToken: string;
 let adminCsrfToken: string;
+let adminId: string;
 
 let userAgent: ReturnType<typeof request.agent>;
 let userToken: string;
@@ -197,6 +199,21 @@ async function buildValidBackupZip(
     CREATE TABLE tickets (id INTEGER PRIMARY KEY);
     CREATE TABLE users (id INTEGER PRIMARY KEY);
     CREATE TABLE __restore_marker (id INTEGER PRIMARY KEY, marker TEXT NOT NULL);
+    -- Fynd F1: samma form som produktionsschemat (migration 051 + 066), inkl.
+    -- api_key_id, så att M14-happy-path-testet kan bevisa att backup_restore-
+    -- raden verkligen landar i DEN HÄR (återställda) filen via den riktiga
+    -- routen — inte bara via ett direkt anrop av logRestoreAudit.
+    CREATE TABLE audit_log (
+      id TEXT PRIMARY KEY,
+      user_id TEXT,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT,
+      details TEXT,
+      ip_address TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      api_key_id TEXT
+    );
   `);
   srcDb.prepare('INSERT INTO __restore_marker (marker) VALUES (?)').run(markerValue);
   srcDb.close();
@@ -217,7 +234,7 @@ async function buildValidBackupZip(
 beforeAll(async () => {
   initializeDatabase();
 
-  const adminId = randomUUID();
+  adminId = randomUUID();
   const userId = randomUUID();
 
   const adminHash = await bcrypt.hash(ADMIN_PASSWORD, 10);
@@ -340,6 +357,93 @@ describe('GET /api/backup', () => {
     ).get() as { api_key_id: string | null } | undefined;
     expect(row).toBeDefined();
     expect(row!.api_key_id).toBeNull();
+  });
+
+  // -------------------------------------------------------------------------
+  // Fynd F2: audit-raden för backup_download loggades tidigare EFTER
+  // archive.finalize() — en klient som avbryter anslutningen sent kunde i
+  // praktiken ha fått hela databasen utan att en audit-rad skrevs. Nu loggas
+  // avsikten INNAN archive.pipe(res) börjar strömma. Bevis: avbryt anslutningen
+  // riktigt (socket-destroy) så snart FÖRSTA datachunken kommit — dvs. mitt i
+  // strömmen, innan finalize() hunnit slutföras — och verifiera att raden ändå
+  // finns. supertest buffrar hela svaret internt, så vi går runt det och pratar
+  // rått HTTP mot en riktig lyssnande socket (app.listen(0)).
+  // -------------------------------------------------------------------------
+  it('skriver audit-raden INNAN strömningen är klar (F2): en tidigt avbruten nedladdning ger ändå en rad', async () => {
+    const server = app.listen(0);
+    try {
+      const address = server.address();
+      const port = typeof address === 'object' && address ? address.port : 0;
+
+      await new Promise<void>((resolve) => {
+        const httpReq = http.request(
+          {
+            hostname: '127.0.0.1',
+            port,
+            path: '/api/backup',
+            headers: { Authorization: `Bearer ${adminToken}` },
+          },
+          (res) => {
+            // Förstör anslutningen så fort första chunken kommit — innan
+            // strömmen (och därmed ev. arkivet) hunnit bli klar.
+            res.once('data', () => {
+              httpReq.destroy();
+            });
+            res.on('error', () => resolve());
+            res.on('close', () => resolve());
+          },
+        );
+        httpReq.on('error', () => resolve()); // destroy() ger ett förväntat socket-fel
+        httpReq.end();
+      });
+
+      // Ge servern en kort stund att hantera avbrottet (res 'close'/'error').
+      await new Promise((r) => setTimeout(r, 200));
+
+      const row = db.prepare(
+        "SELECT * FROM audit_log WHERE action = 'backup_download' ORDER BY created_at DESC, rowid DESC LIMIT 1"
+      ).get() as { created_at: string } | undefined;
+      expect(row).toBeDefined();
+    } finally {
+      server.close();
+    }
+  });
+
+  // -------------------------------------------------------------------------
+  // Fynd F4: ände-till-ände-bevis för attributionen (migration 066). Kedjan är
+  // enhetstestad i båda ändar (auth.ts sätter req.apiKey.id, logAudit skriver
+  // kolumnen) men inget test bevisade tidigare att en riktig API-nyckel-
+  // autentiserad admin-åtgärd faktiskt landar med RÄTT nyckels id (inte NULL).
+  // -------------------------------------------------------------------------
+  it('attribuerar audit-raden till den faktiska API-nyckelns id, inte NULL (F4)', async () => {
+    const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
+    const keyPrefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
+    const keyHash = createHash('sha256').update(rawKey).digest('hex');
+    const keyId = randomUUID();
+
+    db.prepare(
+      `INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(keyId, 'F4-test-nyckel', keyPrefix, keyHash, adminId, JSON.stringify(['read', 'admin']));
+
+    const res = await request(app)
+      .get('/api/backup')
+      .set('Authorization', `Bearer ${rawKey}`)
+      .buffer(true)
+      .parse((res, cb) => {
+        const chunks: Buffer[] = [];
+        res.on('data', (c: Buffer) => chunks.push(c));
+        res.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+
+    expect(res.status).toBe(200);
+
+    const row = db.prepare(
+      "SELECT * FROM audit_log WHERE action = 'backup_download' AND api_key_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1"
+    ).get(keyId) as { api_key_id: string | null } | undefined;
+    expect(row).toBeDefined();
+    expect(row!.api_key_id).toBe(keyId);
+    expect(row!.api_key_id).not.toBeNull();
   });
 });
 
@@ -685,6 +789,104 @@ describe('performRestoreSwap (M14)', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Fynd F1: logRestoreAudit — direkt anslutningstest mot en riktig sqlite-fil
+// (ingen mockning), oberoende av den delade `db`-singleton/app-uppstarten.
+// Bevisar dels normalfallet, dels fallbacken för en backup äldre än migration
+// 066 (audit_log utan api_key_id-kolumnen) — utan att behöva köra hela HTTP-
+// routen två gånger (den stänger den delade `db`-anslutningen permanent efter
+// första lyckade restore, se M14-happy-path-kommentaren nedan).
+// ---------------------------------------------------------------------------
+describe('logRestoreAudit (F1)', () => {
+  it('skriver backup_restore-raden i den angivna databasfilen, med api_key_id satt', async () => {
+    const dir = mkdtempSync(join(osTmpdir(), 'restore-audit-'));
+    const dbPath = join(dir, 'restored.sqlite');
+
+    const Database = (await import('better-sqlite3')).default;
+    const seedDb = new Database(dbPath);
+    seedDb.exec(`
+      CREATE TABLE audit_log (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        action TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT,
+        details TEXT,
+        ip_address TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        api_key_id TEXT
+      );
+    `);
+    seedDb.close();
+
+    const userId = randomUUID();
+    const apiKeyId = randomUUID();
+    await logRestoreAudit(dbPath, userId, '203.0.113.7', apiKeyId);
+
+    const verifyDb = new Database(dbPath, { readonly: true });
+    try {
+      const row = verifyDb
+        .prepare("SELECT * FROM audit_log WHERE action = 'backup_restore'")
+        .get() as { user_id: string; ip_address: string; api_key_id: string } | undefined;
+      expect(row).toBeDefined();
+      expect(row!.user_id).toBe(userId);
+      expect(row!.ip_address).toBe('203.0.113.7');
+      expect(row!.api_key_id).toBe(apiKeyId);
+    } finally {
+      verifyDb.close();
+    }
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('faller tillbaka till INSERT utan api_key_id när kolumnen saknas (pre-066-backup) — raden går inte förlorad', async () => {
+    const dir = mkdtempSync(join(osTmpdir(), 'restore-audit-legacy-'));
+    const dbPath = join(dir, 'restored-legacy.sqlite');
+
+    const Database = (await import('better-sqlite3')).default;
+    const seedDb = new Database(dbPath);
+    // Migration 051-formen, INNAN migration 066 lade till api_key_id.
+    seedDb.exec(`
+      CREATE TABLE audit_log (
+        id TEXT PRIMARY KEY,
+        user_id TEXT,
+        action TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT,
+        details TEXT,
+        ip_address TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    seedDb.close();
+
+    const userId = randomUUID();
+    // Ska INTE kasta trots att kolumnen saknas i den återställda (gamla) filen.
+    await expect(logRestoreAudit(dbPath, userId, '198.51.100.9', randomUUID())).resolves.toBeUndefined();
+
+    const verifyDb = new Database(dbPath, { readonly: true });
+    try {
+      const row = verifyDb
+        .prepare("SELECT * FROM audit_log WHERE action = 'backup_restore'")
+        .get() as { user_id: string; ip_address: string } | undefined;
+      expect(row).toBeDefined();
+      expect(row!.user_id).toBe(userId);
+      expect(row!.ip_address).toBe('198.51.100.9');
+    } finally {
+      verifyDb.close();
+    }
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('kastar aldrig, även om databasfilen inte går att öppna (t.ex. saknas)', async () => {
+    const bogusPath = join(osTmpdir(), `does-not-exist-${randomUUID()}`, 'nope.sqlite');
+    await expect(
+      logRestoreAudit(bogusPath, randomUUID(), '127.0.0.1', null)
+    ).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/backup/restore — successful restore path (M14 happy path)
 //
 // MUST run last: a successful restore closes the shared `db` handle (via the
@@ -745,6 +947,19 @@ describe('POST /api/backup/restore — successful restore path (M14 happy path)'
           .prepare('SELECT marker FROM __restore_marker LIMIT 1')
           .get() as { marker: string } | undefined;
         expect(row?.marker).toBe(marker);
+
+        // Fynd F1: audit-raden för 'backup_restore' måste hamna i DEN HÄR
+        // (återställda) databasfilen — inte i den redan stängda, gamla `db`-
+        // anslutningen (som skulle kastat tyst) och inte i den gamla filen som
+        // just ersattes. Bevisar den fulla routen (inte bara logRestoreAudit
+        // direkt) — se de riktade enhetstesterna för logRestoreAudit nedan för
+        // pre-066-fallbacken.
+        const auditRow = restoredDb
+          .prepare("SELECT * FROM audit_log WHERE action = 'backup_restore' ORDER BY created_at DESC, rowid DESC LIMIT 1")
+          .get() as { user_id: string | null; api_key_id: string | null } | undefined;
+        expect(auditRow).toBeDefined();
+        expect(auditRow!.user_id).toBe(adminId);
+        expect(auditRow!.api_key_id).toBeNull(); // sessionsinloggning, ingen API-nyckel
       } finally {
         restoredDb.close();
       }

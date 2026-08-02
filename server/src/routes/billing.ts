@@ -324,7 +324,7 @@ router.post('/invoices', authenticate, requireAdmin, (req: AuthRequest, res: Res
       `SELECT ${INVOICE_COLS} FROM invoices WHERE id = ?`
     ).get(invoiceId);
 
-    logAudit(req.user!.id, 'invoice_create', 'invoice', invoiceId, `company: ${company_id}, amount: ${computedTotalAmount}`, req.ip);
+    logAudit(req.user!.id, 'invoice_create', 'invoice', invoiceId, `company: ${company_id}, amount: ${computedTotalAmount}`, req.ip, req.apiKey?.id ?? null);
 
     res.status(201).json(invoice);
   } catch (error) {
@@ -383,7 +383,7 @@ router.put('/invoices/:id/status', authenticate, requireAdmin, (req: AuthRequest
       db.prepare(`UPDATE invoices SET ${setClauses} WHERE id = ?`).run(...Object.values(updates), req.params.id);
     })();
 
-    logAudit(req.user!.id, 'invoice_status_change', 'invoice', req.params.id, `${existing.status} -> ${status}`, req.ip);
+    logAudit(req.user!.id, 'invoice_status_change', 'invoice', req.params.id, `${existing.status} -> ${status}`, req.ip, req.apiKey?.id ?? null);
 
     const invoice = db.prepare(
       `SELECT ${INVOICE_COLS} FROM invoices WHERE id = ?`
@@ -410,7 +410,7 @@ router.delete('/invoices/:id', authenticate, requireAdmin, (req: AuthRequest, re
 
     db.prepare('DELETE FROM invoices WHERE id = ?').run(req.params.id);
 
-    logAudit(req.user!.id, 'invoice_delete', 'invoice', req.params.id, null, req.ip);
+    logAudit(req.user!.id, 'invoice_delete', 'invoice', req.params.id, null, req.ip, req.apiKey?.id ?? null);
 
     res.json({ message: 'Invoice deleted' });
   } catch (error) {

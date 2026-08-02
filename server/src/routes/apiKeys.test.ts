@@ -385,6 +385,22 @@ describe('POST /api/api-keys: permissions allowlist + admin-scope grant restrict
     const created = await createKey(admin, 'legit admin-scope key', ['read', 'admin']);
     expect(created.key).toBeTruthy();
   });
+
+  // Fynd F6: dubbletter i permissions ska normaliseras bort innan lagring
+  // (['read','read'] sparades tidigare rått).
+  it('normaliserar bort dubbletter i permissions innan lagring (F6)', async () => {
+    const res = await admin.agent
+      .post('/api/api-keys')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ name: 'dup-perms-key', permissions: ['read', 'read', 'write', 'write'] });
+
+    expect(res.status).toBe(201);
+    expect(JSON.parse(res.body.permissions)).toEqual(['read', 'write']);
+
+    const row = db.prepare('SELECT permissions FROM api_keys WHERE id = ?').get(res.body.id) as { permissions: string };
+    expect(JSON.parse(row.permissions)).toEqual(['read', 'write']);
+  });
 });
 
 /**
