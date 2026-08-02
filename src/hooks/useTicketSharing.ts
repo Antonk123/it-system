@@ -6,16 +6,19 @@ export const useTicketSharing = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const [isError, setIsError] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
   const [expiresAt, setExpiresAt] = useState<string | null>(null);
 
   const getExistingShare = useCallback(async (ticketId: string) => {
+    setIsChecking(true);
     try {
       const { share_token, expires_at } = await api.getShareToken(ticketId);
       setExpiresAt(expires_at);
       return share_token;
     }
     catch (error) { if (import.meta.env.DEV) console.error('Error fetching existing share:', error); return null; }
+    finally { setIsChecking(false); }
   }, []);
 
   const createShareLink = useCallback(async (ticketId: string, expiresInDays?: number): Promise<string | null> => {
@@ -27,6 +30,7 @@ export const useTicketSharing = () => {
       const url = `${window.location.origin}/shared/${share_token}`;
       setShareUrl(url);
       setExpiresAt(expires_at);
+      toast.success('Delningslänk skapad');
       return url;
     } catch (error) { toast.error('Kunde inte skapa delningslänk'); setIsError(true); return null; }
     finally { setIsLoading(false); setIsPending(false); }
@@ -46,5 +50,5 @@ export const useTicketSharing = () => {
     catch (error) { toast.error('Kunde inte kopiera länk'); }
   }, []);
 
-  return { isLoading, isPending, isError, shareUrl, expiresAt, createShareLink, deleteShareLink, getExistingShare, copyToClipboard, setShareUrl, setExpiresAt };
+  return { isLoading, isPending, isError, isChecking, shareUrl, expiresAt, createShareLink, deleteShareLink, getExistingShare, copyToClipboard, setShareUrl, setExpiresAt };
 };

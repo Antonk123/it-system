@@ -426,12 +426,18 @@ describe('processEmail — new ticket', () => {
     insertUser(memDb);
     nextParsed = makeEmail({ subject: 'New issue', messageId: '<new-1@x>' });
 
+    const auditCountBefore = (
+      memDb
+        .prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'share_create'")
+        .get() as { n: number }
+    ).n;
+
     await processEmail(Buffer.from('raw'), config);
 
     expect(countTickets()).toBe(1);
     const ticket = memDb
-      .prepare('SELECT title, status, email_message_id FROM tickets')
-      .get() as { title: string; status: string; email_message_id: string };
+      .prepare('SELECT id, title, status, email_message_id FROM tickets')
+      .get() as { id: string; title: string; status: string; email_message_id: string };
     expect(ticket.title).toBe('New issue');
     expect(ticket.status).toBe('open');
     expect(ticket.email_message_id).toBe('<new-1@x>');
@@ -452,6 +458,22 @@ describe('processEmail — new ticket', () => {
     expect(share.expires_at).toBeTruthy();
     // auto-created the unknown sender as a contact
     expect(countContacts()).toBe(1);
+
+    // Mail-in share creation must be audited too: system-triggered (no user),
+    // traceable to the ticket and its email origin.
+    const auditCountAfter = (
+      memDb
+        .prepare("SELECT COUNT(*) AS n FROM audit_log WHERE action = 'share_create'")
+        .get() as { n: number }
+    ).n;
+    expect(auditCountAfter).toBe(auditCountBefore + 1);
+
+    const auditRow = memDb
+      .prepare("SELECT user_id, details FROM audit_log WHERE action = 'share_create'")
+      .get() as { user_id: string | null; details: string | null };
+    expect(auditRow.user_id).toBeNull();
+    expect(auditRow.details).toContain(ticket.id);
+    expect(auditRow.details).toContain('source: email');
   });
 
   it('skips an email that has no from address', async () => {

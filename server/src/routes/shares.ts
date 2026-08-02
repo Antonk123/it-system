@@ -248,7 +248,7 @@ router.get('/public/file/:token/:attachmentId', sharePublicRateLimiter, (req: Re
     const share = getActiveShareByToken(db, req.params.token as string);
 
     if (!share) {
-      return res.status(404).json({ error: 'Invalid share link' });
+      return res.status(404).json({ error: 'Invalid or expired share link' });
     }
 
     // Verify attachment belongs to the shared ticket

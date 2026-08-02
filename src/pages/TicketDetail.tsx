@@ -36,7 +36,7 @@ import { CategoryBadge } from '@/components/CategoryBadge';
 import { TagBadges } from '@/components/TagBadges';
 import { TagSelector } from '@/components/TagSelector';
 import { SecureImage, SecureDownloadLink } from '@/components/SecureAttachment';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import {
   Select,
@@ -126,6 +126,7 @@ const TicketDetail = () => {
   const { reminders, createReminder, deleteReminder, clearSentReminders } = useTicketReminders(id || '');
   const {
     isLoading: isShareLoading,
+    isChecking: isShareChecking,
     shareUrl,
     expiresAt: shareExpiresAt,
     createShareLink,
@@ -136,6 +137,8 @@ const TicketDetail = () => {
   } = useTicketSharing();
   const [sharePopoverOpen, setSharePopoverOpen] = useState(false);
   const [shareExpiresInDays, setShareExpiresInDays] = useState('30');
+  const shareLinkInputRef = useRef<HTMLInputElement>(null);
+  const shareExpiryTriggerRef = useRef<HTMLButtonElement>(null);
   const [mobileReminderOpen, setMobileReminderOpen] = useState(false);
   const [mobileDeleteOpen, setMobileDeleteOpen] = useState(false);
   const [checklistOpen, setChecklistOpen] = useState(false);
@@ -382,12 +385,18 @@ const TicketDetail = () => {
 
   const handleCreateShareLink = async () => {
     if (!ticket) return;
-    await createShareLink(ticket.id, Number(shareExpiresInDays));
+    const url = await createShareLink(ticket.id, Number(shareExpiresInDays));
+    if (url) {
+      requestAnimationFrame(() => shareLinkInputRef.current?.select());
+    }
   };
 
   const handleRevokeShareLink = async () => {
     if (!ticket) return;
-    await deleteShareLink(ticket.id);
+    const success = await deleteShareLink(ticket.id);
+    if (success) {
+      requestAnimationFrame(() => shareExpiryTriggerRef.current?.focus());
+    }
   };
 
   const handleCopyLink = () => {
@@ -474,20 +483,27 @@ const TicketDetail = () => {
                     <span className="hidden sm:inline">Dela</span>
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" align="end">
+                <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" align="end" aria-labelledby="share-heading">
                   <div className="space-y-3">
                     <div className="space-y-1">
-                      <h4 className="font-medium text-sm">Dela ärende</h4>
+                      <h4 id="share-heading" className="font-medium text-sm">Dela ärende</h4>
                       <p className="text-xs text-muted-foreground">
                         Vem som helst med länken kan se ärendet.
                       </p>
                     </div>
-                    {shareUrl ? (
+                    {isShareChecking ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Kontrollerar delningslänk…
+                      </div>
+                    ) : shareUrl ? (
                       <div className="space-y-3">
                         <div className="flex gap-2">
                           <Input
+                            ref={shareLinkInputRef}
                             value={shareUrl}
                             readOnly
+                            aria-label="Delningslänk"
                             className="text-xs"
                           />
                           <Button
@@ -504,20 +520,40 @@ const TicketDetail = () => {
                             Giltig till {format(parseServerDate(shareExpiresAt), 'PPP', { locale: sv })}
                           </p>
                         )}
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          className="w-full gap-2"
-                          onClick={handleRevokeShareLink}
-                          disabled={isShareLoading}
-                        >
-                          {isShareLoading ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                          Återkalla länk
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="w-full gap-2"
+                              disabled={isShareLoading}
+                            >
+                              {isShareLoading ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                              Återkalla länk
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Återkalla delningslänk?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Länken slutar omedelbart att fungera för alla som har den.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Avbryt</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={handleRevokeShareLink}
+                                className={buttonVariants({ variant: 'destructive' })}
+                              >
+                                Återkalla
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     ) : (
                       <div className="space-y-3">
@@ -526,7 +562,7 @@ const TicketDetail = () => {
                             Giltighetstid
                           </Label>
                           <Select value={shareExpiresInDays} onValueChange={setShareExpiresInDays}>
-                            <SelectTrigger id="share-expiry" aria-label="Giltighetstid för delningslänk">
+                            <SelectTrigger id="share-expiry" ref={shareExpiryTriggerRef}>
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
