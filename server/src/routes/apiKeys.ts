@@ -89,6 +89,18 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     if (permissions.includes('admin') && req.user!.role !== 'admin') {
       return res.status(403).json({ error: 'Endast administratörer kan skapa nycklar med admin-scope' });
     }
+    // G1: om requesten själv är autentiserad via en API-nyckel (inte en
+    // JWT-session) och den vill skapa en admin-scopad nyckel, måste den
+    // ANROPANDE nyckeln också ha admin-scope. Utan detta kunde en läckt
+    // ['read','write']-nyckel bunden till en admin-användare passera
+    // write-scope-guarden (den har 'write') och sedan mynta en NY nyckel med
+    // ['read','admin'] — grant-kollen ovan kollar bara ägarens roll, som ÄR
+    // admin. Samma princip som requireAdmin (auth.ts): en nyckels scope kan
+    // bara INSKRÄNKA, aldrig UTÖKA vad den själv redan kan göra. Additiv —
+    // rollkontrollen ovan gäller fortfarande, båda måste passera.
+    if (permissions.includes('admin') && req.apiKey && !req.apiKey.permissions.includes('admin')) {
+      return res.status(403).json({ error: 'API-nyckeln saknar admin-scope för att skapa admin-nycklar' });
+    }
     perms = permissions;
   } else {
     perms = ['read'];

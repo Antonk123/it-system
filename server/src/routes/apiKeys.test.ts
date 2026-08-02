@@ -404,6 +404,43 @@ describe('POST /api/api-keys: permissions allowlist + admin-scope grant restrict
 });
 
 /**
+ * G1: an API-key-authenticated request must never be able to mint a NEW key
+ * with a scope the CALLING key itself lacks. Before this fix, POST
+ * /api/api-keys only checked the underlying user's ROLE (`req.user.role`) —
+ * so a leaked ['read','write'] key bound to an admin user could pass the
+ * write-method guard (it has 'write') and then mint a brand-new
+ * ['read','admin'] key, since the grant check only ever looked at the
+ * owner's role (which IS admin). The new guard additionally requires
+ * `req.apiKey.permissions` to include 'admin' whenever the request itself
+ * was authenticated via API key — narrowing only, the role check above still
+ * applies unchanged.
+ */
+describe('POST /api/api-keys via API-key auth: escalation guard (G1)', () => {
+  it('a ["read","write"]-key bound to an admin user is blocked (403) from minting an admin-scope key — the escalation chain this fix closes', async () => {
+    const rwKey = (await createKey(admin, 'admin rw key (G1 probe)', ['read', 'write'])).key;
+    const res = await request(app)
+      .post('/api/api-keys')
+      .set('Authorization', `Bearer ${rwKey}`)
+      .send({ name: 'escalated admin key', permissions: ['read', 'admin'] });
+    expect(res.status).toBe(403);
+    expect(res.body.error).toMatch(/admin-scope/i);
+    // No such key was actually created — the guard fired before the INSERT.
+    const rows = db.prepare('SELECT id FROM api_keys WHERE name = ?').all('escalated admin key');
+    expect(rows.length).toBe(0);
+  });
+
+  it('a ["read","write","admin"]-key still CAN mint admin-scope keys (legitimate automation is not broken)', async () => {
+    const rwaKey = (await createKey(admin, 'admin rwa key (G1 probe)', ['read', 'write', 'admin'])).key;
+    const res = await request(app)
+      .post('/api/api-keys')
+      .set('Authorization', `Bearer ${rwaKey}`)
+      .send({ name: 'legit automation admin key', permissions: ['read', 'admin'] });
+    expect(res.status).toBe(201);
+    expect(typeof res.body.key).toBe('string');
+  });
+});
+
+/**
  * Direct regression probe against GET /api/backup — the concrete route this
  * fix exists to protect (it streams the entire SQLite database, secrets
  * included). The webhooks-based tests above prove the requireAdmin/API-key

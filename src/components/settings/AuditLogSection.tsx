@@ -29,6 +29,8 @@ interface AuditLogEntry {
   created_at: string;
   user_email: string | null;
   user_display_name: string | null;
+  api_key_id: string | null;
+  api_key_name: string | null;
 }
 
 interface AuditLogResponse {
@@ -42,6 +44,17 @@ const PAGE_SIZE = 50;
 
 function actorLabel(entry: AuditLogEntry): string {
   return entry.user_display_name || entry.user_email || 'System';
+}
+
+// G3: spårbarhet syntes tidigare inte i UI:t — api_key_id fanns i databasen
+// och returnerades redan av API:t, men en admin som läste granskningsloggen
+// kunde inte se att en åtgärd kom från en API-nyckel snarare än en inloggad
+// session. Nyckelns namn (om den fortfarande finns) är mer meningsfullt än
+// dess uuid; en förkortad id-stump är fallbacken om nyckeln raderats sedan
+// dess (api_key_name blir då NULL, men api_key_id är kvar på raden).
+function apiKeyLabel(entry: AuditLogEntry): string | null {
+  if (!entry.api_key_id) return null;
+  return entry.api_key_name ? `via API-nyckel: ${entry.api_key_name}` : `via API-nyckel #${entry.api_key_id.slice(0, 8)}`;
 }
 
 export function AuditLogSection() {
@@ -131,7 +144,14 @@ export function AuditLogSection() {
                   <TableCell className="whitespace-nowrap text-muted-foreground">
                     {formatDate(entry.created_at, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">{actorLabel(entry)}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    {actorLabel(entry)}
+                    {apiKeyLabel(entry) && (
+                      <span className="ml-1.5 inline-flex items-center rounded bg-muted px-1.5 py-0.5 align-middle text-[10px] font-medium text-muted-foreground">
+                        {apiKeyLabel(entry)}
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap font-mono text-xs">{entry.action}</TableCell>
                   <TableCell className="whitespace-nowrap">
                     {entry.entity_type}

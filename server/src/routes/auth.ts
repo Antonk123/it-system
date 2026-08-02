@@ -423,9 +423,16 @@ router.get('/audit-log', authenticate, requireAdmin, (req: AuthRequest, res: Res
     if (entityType) { where += ' AND a.entity_type = ?'; params.push(entityType); }
     if (action) { where += ' AND a.action = ?'; params.push(action); }
 
+    // G3: joina in API-nyckelns NAMN (aldrig key_hash/key_prefix — hemligt) så
+    // granskningsloggens UI kan visa VILKEN nyckel som utförde åtgärden, inte
+    // bara att api_key_id är satt. LEFT JOIN eftersom nyckeln kan ha raderats
+    // sedan dess (api_key_id är då satt men namnet NULL — UI:t faller tillbaka
+    // till ett förkortat id).
     const entries = db.prepare(`
-      SELECT a.*, u.email as user_email, u.display_name as user_display_name
-      FROM audit_log a LEFT JOIN users u ON a.user_id = u.id
+      SELECT a.*, u.email as user_email, u.display_name as user_display_name, k.name as api_key_name
+      FROM audit_log a
+      LEFT JOIN users u ON a.user_id = u.id
+      LEFT JOIN api_keys k ON a.api_key_id = k.id
       ${where} ORDER BY a.created_at DESC LIMIT ? OFFSET ?
     `).all(...params, limit, offset);
 

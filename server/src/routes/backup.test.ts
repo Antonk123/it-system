@@ -370,6 +370,18 @@ describe('GET /api/backup', () => {
   // rått HTTP mot en riktig lyssnande socket (app.listen(0)).
   // -------------------------------------------------------------------------
   it('skriver audit-raden INNAN strömningen är klar (F2): en tidigt avbruten nedladdning ger ändå en rad', async () => {
+    // G2: räkna befintliga backup_download-rader FÖRE denna request och kräv
+    // exakt EN NY rad efteråt. Utan detta hittar `expect(row).toBeDefined()`
+    // bara den gamla raden från ett tidigare test i samma describe ("returns
+    // 200..." ovan skriver redan en rad) — testet blir grönt oavsett om DENNA
+    // request faktiskt loggar något, dvs. regressionsskyddet är verkningslöst.
+    // Bevisat: att flytta tillbaka logAudit-anropet till efter
+    // archive.finalize() (exakt buggen detta test ska skydda mot) gav 31/31
+    // grönt innan denna fix — se rapporten.
+    const before = (
+      db.prepare("SELECT COUNT(*) as count FROM audit_log WHERE action = 'backup_download'").get() as { count: number }
+    ).count;
+
     const server = app.listen(0);
     try {
       const address = server.address();
@@ -400,6 +412,11 @@ describe('GET /api/backup', () => {
       // Ge servern en kort stund att hantera avbrottet (res 'close'/'error').
       await new Promise((r) => setTimeout(r, 200));
 
+      const after = (
+        db.prepare("SELECT COUNT(*) as count FROM audit_log WHERE action = 'backup_download'").get() as { count: number }
+      ).count;
+      expect(after).toBe(before + 1);
+
       const row = db.prepare(
         "SELECT * FROM audit_log WHERE action = 'backup_download' ORDER BY created_at DESC, rowid DESC LIMIT 1"
       ).get() as { created_at: string } | undefined;
@@ -407,6 +424,55 @@ describe('GET /api/backup', () => {
     } finally {
       server.close();
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // G2: den avbrutna-nedladdning-testet ovan (F2) visade sig sakna verkliga
+  // tänder — arkivets `finalize()` beror på arkiverarens EGNA interna modul
+  // ('_module' i archiver/lib/core.js), inte på om HTTP-destinationen (`res`)
+  // faktiskt tog emot bytes. En avbruten socket får därför `finalize()` att
+  // fortfarande lyckas (den lilla test-databasen hinner strömmas/köas innan
+  // avbrottet slår igenom) — testet ovan bevisar alltså inget om ORDNINGEN
+  // mellan logAudit och finalize(), bara att en rad finns (vilket den redan
+  // gjorde från ett tidigare test i samma describe, se G2 i fyndrapporten).
+  //
+  // Detta test bevisar ordningen direkt och deterministiskt: mocka
+  // ZipArchive.prototype.finalize (samma klass-referens som backup.ts's
+  // `new ZipArchive(...)` använder — samma modul-cache) till att kasta
+  // OMEDELBART, utan någon nätverksrace. Om logAudit körs FÖRE finalize()
+  // (den avsedda ordningen) skrivs audit-raden ändå, trots att hela
+  // arkiveringen sedan misslyckas. Om logAudit istället låg EFTER
+  // `await archive.finalize()` (den ursprungliga F2-buggen) skulle undantaget
+  // hoppa förbi logAudit-anropet helt — ingen rad skulle skrivas. Detta test
+  // FALLERAR om buggen återinförs (bevisat i rapporten: temporär flytt av
+  // logAudit-anropet + full körning av filen).
+  // -------------------------------------------------------------------------
+  it('audit-raden är redan skriven innan finalize() ens anropas — överlever ett fel i arkiveringen (G2)', async () => {
+    const before = (
+      db.prepare("SELECT COUNT(*) as count FROM audit_log WHERE action = 'backup_download'").get() as { count: number }
+    ).count;
+
+    const finalizeSpy = vi
+      .spyOn(ZipArchive.prototype, 'finalize')
+      .mockImplementation(() => Promise.reject(new Error('simulated finalize failure (G2 test)')));
+
+    try {
+      const res = await adminAgent
+        .get('/api/backup')
+        .set('Authorization', `Bearer ${adminToken}`);
+      // finalize() kastar innan några headers hunnit skickas → ytterkatchen
+      // i backup.ts svarar 500.
+      expect(res.status).toBe(500);
+    } finally {
+      finalizeSpy.mockRestore();
+    }
+
+    const after = (
+      db.prepare("SELECT COUNT(*) as count FROM audit_log WHERE action = 'backup_download'").get() as { count: number }
+    ).count;
+    // Trots att hela arkiveringen misslyckades skrevs audit-raden — den låg
+    // FÖRE finalize()-anropet, inte efter.
+    expect(after).toBe(before + 1);
   });
 
   // -------------------------------------------------------------------------

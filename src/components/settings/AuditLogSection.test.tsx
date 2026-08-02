@@ -97,6 +97,92 @@ describe('AuditLogSection', () => {
     await waitFor(() => expect(screen.getByText('System')).toBeTruthy());
   });
 
+  it('visar API-nyckelns namn när en rad kommer från en API-nyckel (G3)', async () => {
+    requestMock.mockResolvedValueOnce({
+      entries: [
+        {
+          id: '3',
+          user_id: 'u1',
+          action: 'backup_download',
+          entity_type: 'backup',
+          entity_id: null,
+          details: null,
+          ip_address: '10.0.0.2',
+          created_at: '2026-06-19 08:00:00',
+          user_email: 'admin@example.com',
+          user_display_name: 'Admin Adminsson',
+          api_key_id: 'abcd1234-ef56-7890-abcd-ef1234567890',
+          api_key_name: 'CI-automation',
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    });
+
+    render(<AuditLogSection />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Admin Adminsson')).toBeTruthy());
+    expect(screen.getByText('via API-nyckel: CI-automation')).toBeTruthy();
+  });
+
+  it('faller tillbaka på förkortat id när API-nyckelns namn saknas (t.ex. raderad nyckel) (G3)', async () => {
+    requestMock.mockResolvedValueOnce({
+      entries: [
+        {
+          id: '4',
+          user_id: 'u1',
+          action: 'backup_download',
+          entity_type: 'backup',
+          entity_id: null,
+          details: null,
+          ip_address: null,
+          created_at: '2026-06-19 08:00:00',
+          user_email: 'admin@example.com',
+          user_display_name: 'Admin Adminsson',
+          api_key_id: 'abcd1234-ef56-7890-abcd-ef1234567890',
+          api_key_name: null,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    });
+
+    render(<AuditLogSection />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('via API-nyckel #abcd1234')).toBeTruthy());
+  });
+
+  it('visar ingen API-nyckel-markering för en vanlig sessionsrad', async () => {
+    requestMock.mockResolvedValueOnce({
+      entries: [
+        {
+          id: '5',
+          user_id: 'u1',
+          action: 'user_delete',
+          entity_type: 'user',
+          entity_id: '42',
+          details: null,
+          ip_address: null,
+          created_at: '2026-06-19 08:00:00',
+          user_email: 'admin@example.com',
+          user_display_name: 'Admin Adminsson',
+          api_key_id: null,
+          api_key_name: null,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+    });
+
+    render(<AuditLogSection />, { wrapper });
+
+    await waitFor(() => expect(screen.getByText('Admin Adminsson')).toBeTruthy());
+    expect(screen.queryByText(/via API-nyckel/)).toBeNull();
+  });
+
   it('väntar med att fråga servern tills användaren pausar skrivandet i filtren', async () => {
     requestMock.mockResolvedValueOnce({ entries: [], total: 0, limit: 50, offset: 0 });
     requestMock.mockResolvedValueOnce({ entries: [], total: 0, limit: 50, offset: 0 });
