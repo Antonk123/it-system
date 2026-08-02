@@ -14,6 +14,16 @@ Omfattande vidareutveckling sedan v1.5 (april 2026). Sammanfattat per tema —
 för commit-nivå, se git-historiken.
 
 ### Tillagt
+- **Delningslänks-expiry:** Publika delningslänkar för ärenden får nu konfigurerad
+  utgångstid (default 30 dagar, valbart 1–365 dagar vid skapande). Utgångna länkar
+  returnerar 404 (fail-closed). `POST /api/shares/ticket/{ticketId}` accepterar nu
+  valfri `{ "expiresInDays": <int> }` i body; `GET /api/shares/ticket/{ticketId}`
+  och `GET /api/shares/public/{token}` rapporterar `expires_at` / `share_expires_at`.
+  **Viktig drift-not:** befintliga delningslänkar (skapade före uppgraderingen) får
+  automatiskt `expires_at = uppgraderingstidpunkt + 30 dagar` via migration 067 —
+  de slutar fungera 30 dagar efter deploy om inte beställaren av ärendet/tekniker
+  manuellt förnyar länken. Audit-loggning av `share_create` / `share_delete` med
+  `api_key_id`-attribution vid API-nyckelbaserade åtgärder.
 - **SSO-inloggning (OIDC):** Authorization Code + PKCE mot valfri IdP (t.ex.
   Microsoft Entra ID). Aktiveras med `OIDC_*`-env-vars — SSO-knappen visas bara
   när allt är konfigurerat. Kräver befintligt konto (ingen auto-provisionering)

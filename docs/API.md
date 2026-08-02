@@ -187,11 +187,11 @@ These are the only endpoints reachable without credentials:
 
 | Method | Path | Auth | Purpose | Inputs | Response |
 |--------|------|------|---------|--------|----------|
-| GET | `/api/shares/ticket/:ticketId` | `authenticate` (+ `canAccessTicket`) | Get existing share token | params: `ticketId` | `{ share_token: string\|null }`; 403 |
-| POST | `/api/shares/ticket/:ticketId` | `authenticate` (+ `canAccessTicket`) | Create share link (idempotent) | params: `ticketId` | `{ share_token }` (200 existing / 201 new); 403/404 |
+| GET | `/api/shares/ticket/:ticketId` | `authenticate` (+ `canAccessTicket`) | Get existing share token + expiry | params: `ticketId` | `{ share_token: string\|null, expires_at: string\|null }`; 403 |
+| POST | `/api/shares/ticket/:ticketId` | `authenticate` (+ `canAccessTicket`) | Create share link (idempotent) with optional expiry | params: `ticketId`; body: `expiresInDays?` (int, 1–365, default 30) | `{ share_token, expires_at }` (200 existing / 201 new); 400 if invalid days/404 |
 | DELETE | `/api/shares/ticket/:ticketId` | `authenticate` (+ `canAccessTicket`) | Delete share link | params: `ticketId` | `{ message }`; 403/404 |
-| GET | `/api/shares/public/:token` | `sharePublicRateLimiter` (public) | Public read of a shared ticket (strips internal `notes`) | params: `token` | `{ ticket, requester, attachments[], checklistItems[] }`; 404 |
-| GET | `/api/shares/public/file/:token/:attachmentId` | `sharePublicRateLimiter` (public) | Serve an attachment for a shared ticket (forced download) | params: `token`, `attachmentId` | file download; 404 |
+| GET | `/api/shares/public/:token` | `sharePublicRateLimiter` (public) | Public read of a shared ticket (strips internal `notes`); fails if expired | params: `token` | `{ ticket, requester, attachments[], checklistItems[], share_expires_at }`; 404 if invalid/expired |
+| GET | `/api/shares/public/file/:token/:attachmentId` | `sharePublicRateLimiter` (public) | Serve an attachment for a shared ticket (fails if expired); forced download | params: `token`, `attachmentId` | file download; 404 if invalid/expired/file missing |
 
 ---
 

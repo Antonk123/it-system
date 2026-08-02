@@ -1752,11 +1752,11 @@ paths:
       tags: [Shares]
       summary: Get the existing public share token for a ticket
       description: >
-        Returns the ticket's share token if one exists, otherwise `null`.
-        Requires `canAccessTicket` (admin, or the ticket's
-        requester/assignee/creator). This endpoint itself is authenticated;
-        the token it returns grants **unauthenticated** public access (see
-        `GET /shares/public/{token}`).
+        Returns the ticket's share token and expiry if an **active** (non-expired)
+        share exists, otherwise both fields are `null`. Requires `canAccessTicket`
+        (admin, or the ticket's requester/assignee/creator). This endpoint itself
+        is authenticated; the token it returns grants **unauthenticated** public
+        access until its expiry time (see `GET /shares/public/{token}`).
       security:
         - bearerAuth: []
         - apiKeyAuth: []
@@ -1767,7 +1767,7 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: Existing token, or null if none exists
+          description: Existing active token and expiry, or both null if none exists or expired
           content:
             application/json:
               schema:
@@ -1776,6 +1776,11 @@ paths:
                   share_token:
                     type: string
                     nullable: true
+                  expires_at:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: UTC timestamp when the share link expires
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "500": { $ref: "#/components/responses/Error" }
@@ -1785,13 +1790,13 @@ paths:
       tags: [Shares]
       summary: Create (or idempotently return) a public share link for a ticket
       description: >
-        If a share already exists for the ticket, returns it unchanged with
-        `200`. Otherwise generates a new 128-bit random token
-        (`crypto.randomBytes(16)`, hex-encoded) and returns `201`.
-        Requires `canAccessTicket`. **The resulting token never expires** —
-        there is no `expires_at` column on `ticket_shares` and no TTL check
-        anywhere in the route; a share link is valid until explicitly deleted
-        via `DELETE /shares/ticket/{ticketId}`.
+        If an **active** (non-expired) share already exists for the ticket,
+        returns it unchanged with `200` and its remaining expiry. Otherwise
+        generates a new 128-bit random token (`crypto.randomBytes(16)`,
+        hex-encoded), sets an expiry time (default 30 days; configurable via
+        `expiresInDays` in request body), and returns `201`.
+        Requires `canAccessTicket`. The resulting token is valid until its
+        expiry time or until explicitly deleted via `DELETE /shares/ticket/{ticketId}`.
       security:
         - bearerAuth: []
           csrfToken: []
@@ -1801,23 +1806,46 @@ paths:
           in: path
           required: true
           schema: { type: string }
+      requestBody:
+        required: false
+        description: Optional expiry configuration (ignored if an active share already exists)
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresInDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 365
+                  description: "Days until the share link expires (default: 30). Must be between 1 and 365."
       responses:
         "200":
-          description: Share already existed — returned unchanged
+          description: Active share already existed — returned unchanged with its expiry
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   share_token: { type: string }
+                  expires_at: { type: string, format: date-time }
         "201":
-          description: New share created
+          description: New share created with expiry
           content:
             application/json:
               schema:
                 type: object
                 properties:
                   share_token: { type: string }
+                  expires_at: { type: string, format: date-time, description: "UTC timestamp when the share expires" }
+        "400":
+          description: "Invalid `expiresInDays` — must be an integer between 1 and 365"
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "expiresInDays must be an integer between 1 and 365" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -1857,21 +1885,22 @@ paths:
       summary: Read a shared ticket by its public token (no login required)
       description: >
         **Public, unauthenticated endpoint.** Anyone holding a valid,
-        non-revoked share token (a random 32-hex-character string, or a
-        legacy 24-character token — the column has no length constraint) can
-        call this with no credentials. Rate-limited to 30 requests/minute per
-        IP (`sharePublicRateLimiter`) to slow brute-forcing of tokens. Tokens
-        do not expire (see `sharesCreate`).
+        non-revoked, and non-expired share token (a random 32-hex-character
+        string, or a legacy 24-character token) can call this with no
+        credentials. Rate-limited to 30 requests/minute per IP
+        (`sharePublicRateLimiter`) to slow brute-forcing of tokens. **Expired
+        tokens are treated as invalid** (fail-closed) and return 404.
 
 
-        An anonymous caller with a valid token receives: the ticket's
-        `title`, `description`, `status`, `priority`, `category`,
+        An anonymous caller with a valid, non-expired token receives: the
+        ticket's `title`, `description`, `status`, `priority`, `category`,
         `created_at`/`updated_at`/`resolved_at`/`closed_at`, its `solution`
         text, the full `requester` contact record (`id`, `name`, `email`,
         `company`), all attachment metadata with public download URLs, and
-        all checklist items. The ticket's `notes` field (internal agent
-        notes) is explicitly stripped and never included. Comments and
-        ticket links are not exposed by this endpoint.
+        all checklist items. The ticket's `notes` field (internal agent notes)
+        is explicitly stripped and never included. Comments and ticket links
+        are not exposed by this endpoint. The response also includes
+        `share_expires_at`, the UTC timestamp when the share link expires.
       security: []
       parameters:
         - name: token
@@ -1880,15 +1909,18 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: Shared ticket view
+          description: Shared ticket view (valid, non-expired share)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/sharesPublicTicketView" }
         "404":
-          description: Invalid/unknown token, or the ticket no longer exists
+          description: Invalid/expired token, unknown token, or the ticket no longer exists
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Error" }
+              schema:
+                type: object
+                properties:
+                  error: { type: string, example: "Invalid or expired share link" }
         "429":
           description: Rate limit exceeded (30 requests/minute per IP)
           headers:
@@ -1912,8 +1944,9 @@ paths:
         **Public, unauthenticated endpoint.** Valid for any attachment
         belonging to the ticket identified by `token` — the query verifies
         `attachmentId` belongs to `share.ticket_id`, so a token only ever
-        exposes attachments of the one ticket it was created for. Served
-        with `Content-Disposition: attachment` (forced download, never
+        exposes attachments of the one ticket it was created for. **Expired
+        tokens are treated as invalid** (fail-closed) and return 404.
+        Served with `Content-Disposition: attachment` (forced download, never
         inline) to prevent in-origin script execution from an uploaded SVG
         or similar. Rate-limited to 30 requests/minute per IP
         (`sharePublicRateLimiter`).
@@ -1929,7 +1962,7 @@ paths:
           schema: { type: string }
       responses:
         "200":
-          description: File bytes
+          description: File bytes (valid, non-expired share)
           headers:
             Content-Disposition:
               schema: { type: string }
@@ -1940,7 +1973,7 @@ paths:
                 type: string
                 format: binary
         "404":
-          description: Invalid token, attachment not found for this ticket, or file missing on disk
+          description: Invalid/expired token, attachment not found for this ticket, or file missing on disk
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -4114,7 +4147,8 @@ components:
       description: >
         Public (unauthenticated) view of a shared ticket. Same shape as the
         internal Ticket resource with `notes` (internal agent notes) removed,
-        plus the requester's contact record, attachments, and checklist items.
+        plus the requester's contact record, attachments, checklist items, and
+        the share link's expiry time.
       properties:
         ticket:
           allOf:
@@ -4149,7 +4183,11 @@ components:
               completed: { type: boolean }
               position: { type: integer }
             required: [id, label, completed, position]
-      required: [ticket, attachments, checklistItems]
+        share_expires_at:
+          type: string
+          format: date-time
+          description: UTC timestamp when this share link expires and becomes inaccessible
+      required: [ticket, attachments, checklistItems, share_expires_at]
 
     ChecklistItem:
       type: object
