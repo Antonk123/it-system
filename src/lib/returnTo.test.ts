@@ -108,9 +108,18 @@ describe('sanitizeReturnTo', () => {
     expect(sanitizeReturnTo('/foo/..//evil.com')).toBe('/');
   });
 
-  // Pinnar normaliseringssteget: en "förenkling" tillbaka till `return raw`
-  // skulle tyst återinföra dot-segment-bypassen av loop-skyddet.
+  // Loop-skyddet jämför mot den NORMALISERADE pathen, så ..-segment kan inte
+  // smyga förbi det. (Det här fallet pinnar loop-skyddet, inte returvärdets
+  // normalisering — det gör testet nedan.)
   it('"/foo/../login" → / (loop-skyddet går inte att kringgå med ..)', () => {
     expect(sanitizeReturnTo('/foo/../login')).toBe('/');
+  });
+
+  // Pinnar att returvärdet är den normaliserade pathen och inte råsträngen:
+  // en "förenkling" till `return raw` skulle passera alla fall ovan (origin-
+  // och //-kontrollerna körs på den parsade URL:en oavsett vad som returneras)
+  // men börja lämna ifrån sig onormaliserade paths till routern.
+  it('"/a/../b" → "/b" (returvärdet är normaliserat, inte råsträngen)', () => {
+    expect(sanitizeReturnTo('/a/../b')).toBe('/b');
   });
 });
