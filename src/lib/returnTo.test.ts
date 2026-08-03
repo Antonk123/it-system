@@ -53,4 +53,47 @@ describe('sanitizeReturnTo', () => {
   it('/login/ (sub-path) → / (loop-skydd)', () => {
     expect(sanitizeReturnTo('/login/foo')).toBe('/');
   });
+
+  // Kontrolltecken-varianter — WHATWG-URL-parsern (och browsern) stripprar
+  // tab/LF/CR före tolkning, så en prefix-baserad kontroll kan luras av
+  // strängar som SER interna ut men normaliseras till en extern origin.
+  it('LF-injektion "/\\n/evil.com" → /', () => {
+    expect(sanitizeReturnTo('/\n/evil.com')).toBe('/');
+  });
+
+  it('tab + backslash "/\\t\\\\evil.com" → /', () => {
+    expect(sanitizeReturnTo('/\t\\evil.com')).toBe('/');
+  });
+
+  it('CR-injektion "/\\r/evil.com" → /', () => {
+    expect(sanitizeReturnTo('/\r/evil.com')).toBe('/');
+  });
+
+  it('LF-injektion kringgår INTE loop-skyddet: "/\\nlogin" → /', () => {
+    expect(sanitizeReturnTo('/\nlogin')).toBe('/');
+  });
+
+  it('case-variant "/Login" → / (loop-skydd är case-okänsligt)', () => {
+    expect(sanitizeReturnTo('/Login')).toBe('/');
+  });
+
+  it('/login#frag → / (loop-skydd oavsett hash)', () => {
+    expect(sanitizeReturnTo('/login#frag')).toBe('/');
+  });
+
+  it('giltig path med query OCH hash bevaras oförändrad', () => {
+    expect(sanitizeReturnTo('/tickets/abc?tab=2#section')).toBe('/tickets/abc?tab=2#section');
+  });
+
+  // Diskriminerande fall för origin-kontrollen: kontrolltecken-injektionen
+  // normaliserar till EN ANNAN origin (evil.com) MED en icke-root pathname
+  // ("/tickets/1"). Utan origin-kontrollen skulle funktionen av misstag
+  // returnera den externa sidans path som om den vore vår egen (samma
+  // pathname-sträng som en giltig intern rutt) — de flesta andra
+  // kontrolltecken-testerna ovan råkar normalisera till pathname "/" på den
+  // externa origin, vilket redan matchar fallback-värdet och därför INTE
+  // avslöjar om origin-kontrollen saknas.
+  it('kontrolltecken-injektion till extern host med icke-root path → / (inte den externa pathen)', () => {
+    expect(sanitizeReturnTo('/\n/evil.com/tickets/1')).toBe('/');
+  });
 });

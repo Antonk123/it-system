@@ -2,18 +2,34 @@
 // till en säker, intern path — open-redirect-skydd. Ren funktion, ingen
 // router-import: konsumeras både av App.tsx (PublicRoute) och Login.tsx.
 //
-// Regler (i ordning):
-//  - måste vara en sträng som börjar med "/" (utesluter absoluta URL:er,
-//    protocol-relative "//host", "javascript:"-URI:er, icke-strängar m.m.)
-//  - får inte börja med "//" eller "/\" (browsern tolkar båda som
-//    protocol-relative → öppen redirect till en extern host)
-//  - får inte peka på /login (self eller med query/path under /login) —
-//    loop-skydd mot att landa tillbaka på inloggningssidan efter inloggning
+// Mekanism: låt URL-parsern normalisera i stället för att gissa vad den gör.
+// WHATWG-URL-parsern (samma parser browsern använder) stripprar bl.a.
+// tab/LF/CR ur input INNAN den tolkar strängen — ett rent prefix-baserat
+// skydd (startsWith("//") m.fl.) kan därför luras av t.ex. "/\n/evil.com",
+// som ser ofarligt ut för en naiv strängkontroll men normaliseras av
+// browsern till en extern origin. Genom att köra samma parser här och sedan
+// kräva att resultatet fortfarande har vår interna dummy-origin fångas alla
+// sådana varianter i ETT svep, utan att vi behöver känna till dem alla:
+//  - new URL(raw, INTERNAL_BASE) — parsar raw relativt en fejk-origin.
+//  - url.origin !== INTERNAL_BASE → raw normaliserade till en ANNAN origin
+//    ("//evil.com", "/\evil.com", kontrolltecken-varianter, etc) → "/".
+//  - pathname (utan query/hash) jämförs case-okänsligt mot /login och
+//    /login/* — loop-skydd mot att landa tillbaka på inloggningssidan efter
+//    inloggning. React Router matchar rutter case-okänsligt, så skyddet
+//    måste göra det också (annars slinker "/Login" igenom).
 // Allt annat faller tillbaka till "/".
+const INTERNAL_BASE = 'https://internal.invalid';
+
 export function sanitizeReturnTo(raw: unknown): string {
-  if (typeof raw !== 'string') return '/';
-  if (!raw.startsWith('/')) return '/';
-  if (raw.startsWith('//') || raw.startsWith('/\\')) return '/';
-  if (raw === '/login' || raw.startsWith('/login?') || raw.startsWith('/login/')) return '/';
-  return raw;
+  if (typeof raw !== 'string' || !raw.startsWith('/')) return '/';
+  let url: URL;
+  try {
+    url = new URL(raw, INTERNAL_BASE);
+  } catch {
+    return '/';
+  }
+  if (url.origin !== INTERNAL_BASE) return '/';
+  const pathLower = url.pathname.toLowerCase();
+  if (pathLower === '/login' || pathLower.startsWith('/login/')) return '/';
+  return url.pathname + url.search + url.hash;
 }
