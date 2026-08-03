@@ -96,4 +96,21 @@ describe('sanitizeReturnTo', () => {
   it('kontrolltecken-injektion till extern host med icke-root path → / (inte den externa pathen)', () => {
     expect(sanitizeReturnTo('/\n/evil.com/tickets/1')).toBe('/');
   });
+
+  // Dot-segment behåller VÅR origin (origin-kontrollen godkänner dem) men
+  // normaliseras till en protocol-relativ pathname — returvärdet får aldrig
+  // börja med "//", oavsett att react-router råkar kollapsa dubbelslash.
+  it('"/.//evil.com" → / (dot-segment ger protocol-relativ pathname)', () => {
+    expect(sanitizeReturnTo('/.//evil.com')).toBe('/');
+  });
+
+  it('"/foo/..//evil.com" → / (samma sak via ..-segment)', () => {
+    expect(sanitizeReturnTo('/foo/..//evil.com')).toBe('/');
+  });
+
+  // Pinnar normaliseringssteget: en "förenkling" tillbaka till `return raw`
+  // skulle tyst återinföra dot-segment-bypassen av loop-skyddet.
+  it('"/foo/../login" → / (loop-skyddet går inte att kringgå med ..)', () => {
+    expect(sanitizeReturnTo('/foo/../login')).toBe('/');
+  });
 });

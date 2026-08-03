@@ -18,6 +18,13 @@
 //    inloggning. React Router matchar rutter case-okänsligt, så skyddet
 //    måste göra det också (annars slinker "/Login" igenom).
 // Allt annat faller tillbaka till "/".
+//
+// Origin-kontrollen räcker inte ensam: en path-absolut input med dot-segment
+// ("/.//evil.com", "/foo/..//evil.com") behåller vår origin men normaliseras
+// till pathname "//evil.com", vilket är protocol-relativt om det senare tolkas
+// som en URL. React Router kollapsar dubbelslash innan navigering, men den
+// garantin tillhör biblioteket — inte oss. Vi avvisar därför sådana pathnames
+// själva, så att returvärdet är säkert oavsett vem som konsumerar det.
 const INTERNAL_BASE = 'https://internal.invalid';
 
 export function sanitizeReturnTo(raw: unknown): string {
@@ -29,6 +36,7 @@ export function sanitizeReturnTo(raw: unknown): string {
     return '/';
   }
   if (url.origin !== INTERNAL_BASE) return '/';
+  if (url.pathname.startsWith('//')) return '/';
   const pathLower = url.pathname.toLowerCase();
   if (pathLower === '/login' || pathLower.startsWith('/login/')) return '/';
   return url.pathname + url.search + url.hash;
