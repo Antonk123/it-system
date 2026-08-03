@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useNa
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
 import { parseSwNavigateMessage } from "@/lib/swNavigation";
+import { sanitizeReturnTo } from "@/lib/returnTo";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { lazy, Suspense, useEffect, type ReactNode } from "react";
 
@@ -64,7 +65,8 @@ const AppearanceInitializer = () => {
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
-  
+  const location = useLocation();
+
   if (isLoading) {
     return (
       <div className="min-h-dvh flex items-center justify-center">
@@ -72,17 +74,20 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
       </div>
     );
   }
-  
+
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
+    // Bevarar platsen via router-state så Login kan navigera hit tillbaka
+    // efter lyckad inloggning (se sanitizeReturnTo för open-redirect-skyddet).
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   }
-  
+
   return <>{children}</>;
 };
 
 const PublicRoute = ({ children }: { children: React.ReactNode }) => {
   const { isAuthenticated, isLoading } = useAuth();
-  
+  const location = useLocation();
+
   if (isLoading) {
     return (
       <div className="min-h-dvh flex items-center justify-center">
@@ -90,11 +95,18 @@ const PublicRoute = ({ children }: { children: React.ReactNode }) => {
       </div>
     );
   }
-  
+
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    // Redan inloggad och landar på en publik auth-rutt (t.ex. /login) —
+    // skicka vidare dit ProtectedRoute:s redirect (state.from) eller
+    // ?returnTo= pekade, inte alltid till /. Täcker racet där PublicRoute
+    // hinner före Logins egen navigate, och fliken-redan-inloggad-fallet.
+    const target = sanitizeReturnTo(
+      (location.state as { from?: unknown } | null)?.from ?? new URLSearchParams(location.search).get('returnTo')
+    );
+    return <Navigate to={target} replace />;
   }
-  
+
   return <>{children}</>;
 };
 

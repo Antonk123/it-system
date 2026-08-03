@@ -118,10 +118,24 @@ class ApiClient {
   }
 
   // Refresh-token saknas eller är utgången — tyst redirect, ingen toast.
+  // Bevarar platsen via ?returnTo= (hård redirect, router-state överlever
+  // inte) så Login kan navigera hit tillbaka efter ny inloggning — men bara
+  // om vi inte redan står på /login (undviker en nästlad/loopande param).
+  // Ingen sanering här: vi läser bara vår egen location. Saneringen sker vid
+  // konsumtion i Login (sanitizeReturnTo).
   private sessionExpired(): never {
     this.clearToken();
     localStorage.removeItem('user');
-    window.location.href = '/login';
+    // String(...) skyddar mot minimala window.location-stubbar i andra
+    // testfiler (bara { href }, utan pathname/search) — där skulle
+    // `undefined + undefined` annars ge NaN (taladdition, inte
+    // strängkonkatenering) istället för en tom sträng. En tom `here` (samma
+    // degenererade stubbar, eller bara "/" i praktiken aldrig tom i en
+    // riktig browser) behandlas som "okänd plats" — ingen returnTo-param.
+    const here = String(window.location.pathname ?? '') + String(window.location.search ?? '');
+    window.location.href = !here || here.startsWith('/login')
+      ? '/login'
+      : `/login?returnTo=${encodeURIComponent(here)}`;
     throw new Error('Session expired');
   }
 

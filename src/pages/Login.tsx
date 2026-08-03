@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, Link, useSearchParams } from "react-router";
+import { useNavigate, Link, useSearchParams, useLocation } from "react-router";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
+import { sanitizeReturnTo } from "@/lib/returnTo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,6 +21,7 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { signIn, completeSsoLogin } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const [sso, setSso] = useState<{ enabled: boolean; label: string | null }>({ enabled: false, label: null });
   const ssoError = searchParams.get("sso_error");
@@ -54,7 +56,11 @@ const Login = () => {
       toast.error(error);
     } else {
       toast.success("Inloggad");
-      navigate("/");
+      // Prioritet: router-state (guard-redirect/manuell logout) → ?returnTo=
+      // (hård 401-redirect) → "/" som fallback. sanitizeReturnTo stänger open-
+      // redirect-hålet (icke-intern path, eller peka tillbaka mot /login).
+      const target = sanitizeReturnTo((location.state as { from?: unknown } | null)?.from ?? searchParams.get("returnTo"));
+      navigate(target, { replace: true });
     }
     setIsLoading(false);
   };

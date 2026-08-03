@@ -56,8 +56,13 @@ function urlOfCall(call: unknown[] | undefined): string {
   return String(call?.[0]);
 }
 
-function stubLocation() {
-  const loc = { href: '' };
+// Default pathname="/login" (ingen query) håller de befintliga testerna i
+// den här filen (som bara bryr sig om ATT redirecten sker, inte om
+// returnTo-detaljer) exakt vid "/login" — sessionExpired() lägger bara på
+// ?returnTo= när `here` INTE redan börjar med /login. Se api.test.ts:s
+// egen stubLocation för de tester som exercisar returnTo-varianten.
+function stubLocation(pathname = '/login', search = '') {
+  const loc = { href: '', pathname, search };
   Object.defineProperty(window, 'location', { value: loc, writable: true, configurable: true });
   return loc;
 }

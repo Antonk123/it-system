@@ -54,9 +54,12 @@ function urlOfCall(call: unknown[] | undefined): string {
 
 // jsdom:s location går inte att skriva till direkt (navigation not implemented).
 // Vi ersätter den med ett vanligt objekt så att `window.location.href = ...` bara
-// uppdaterar en sträng och inte kastar.
-function stubLocation() {
-  const loc = { href: '' };
+// uppdaterar en sträng och inte kastar. Default pathname="/login" (ingen
+// query) håller de äldre testerna (som bara bryr sig om att redirecten sker,
+// inte om returnTo-detaljer) exakt vid "/login" — sessionExpired() lägger
+// bara på ?returnTo= när `here` INTE redan börjar med /login.
+function stubLocation(pathname = '/login', search = '') {
+  const loc = { href: '', pathname, search };
   Object.defineProperty(window, 'location', { value: loc, writable: true, configurable: true });
   return loc;
 }
@@ -265,6 +268,42 @@ describe('401 + refresh misslyckas → logout-path', () => {
     expect(localStorage.getItem('auth_token')).toBeNull();
     expect(localStorage.getItem('user')).toBeNull();
     // Redirect till login
+    expect(loc.href).toBe('/login');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3b. sessionExpired() bevarar platsen via ?returnTo=
+// ---------------------------------------------------------------------------
+
+describe('sessionExpired — ?returnTo= bevarar platsen', () => {
+  it('står på /tickets/42?tab=comments → redirect med korrekt encodat ?returnTo=', async () => {
+    const loc = stubLocation('/tickets/42', '?tab=comments');
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${BASE}/auth/refresh`) {
+        return Promise.resolve(fakeResponse({ ok: false, status: 401 }));
+      }
+      return Promise.resolve(fakeResponse({ ok: false, status: 401 }));
+    });
+
+    const api = await freshApi();
+    await expect(api.getTickets()).rejects.toThrow('Session expired');
+
+    expect(loc.href).toBe(`/login?returnTo=${encodeURIComponent('/tickets/42?tab=comments')}`);
+  });
+
+  it('står redan på /login → ingen ?returnTo=-param (undviker loop/nästlad param)', async () => {
+    const loc = stubLocation('/login', '');
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${BASE}/auth/refresh`) {
+        return Promise.resolve(fakeResponse({ ok: false, status: 401 }));
+      }
+      return Promise.resolve(fakeResponse({ ok: false, status: 401 }));
+    });
+
+    const api = await freshApi();
+    await expect(api.getTickets()).rejects.toThrow('Session expired');
+
     expect(loc.href).toBe('/login');
   });
 });

@@ -94,6 +94,7 @@ function makeStub(name: string) {
         data-search={location.search}
         data-searchparams={JSON.stringify(Object.fromEntries(searchParams.entries()))}
         data-pathname={location.pathname}
+        data-state={JSON.stringify(location.state ?? null)}
         data-mount-id={mountId}
       >
         {name}
@@ -412,6 +413,40 @@ describe('replace-semantik vid guard-redirect', () => {
     expect(await screen.findByTestId('stub:PublicTicketForm')).toBeInTheDocument();
     expect(screen.queryByTestId('stub:TicketList')).toBeNull();
     expect(screen.queryByTestId('stub:Login')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6b. returnTo — guard-redirect bevarar platsen via state.from
+// ---------------------------------------------------------------------------
+describe('returnTo — ProtectedRoute skickar med state.from vid redirect', () => {
+  it('state.from = pathname (ingen query)', async () => {
+    renderRoutes('/tickets');
+    const login = await screen.findByTestId('stub:Login');
+    expect(JSON.parse(login.getAttribute('data-state') ?? 'null')).toEqual({ from: '/tickets' });
+  });
+
+  it('state.from = pathname + search (bevarar query)', async () => {
+    renderRoutes('/tickets/42?tab=comments');
+    const login = await screen.findByTestId('stub:Login');
+    expect(JSON.parse(login.getAttribute('data-state') ?? 'null')).toEqual({ from: '/tickets/42?tab=comments' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6c. returnTo — PublicRoute skickar redan inloggade vidare till sanerad plats
+// ---------------------------------------------------------------------------
+describe('returnTo — PublicRoute respekterar state.from/?returnTo= för redan inloggade', () => {
+  it('inloggad + ?returnTo=/tickets/42 på /login → landar på TicketDetail', async () => {
+    authState.isAuthenticated = true;
+    renderRoutes('/login?returnTo=%2Ftickets%2F42');
+    expect(await screen.findByTestId('stub:TicketDetail')).toBeInTheDocument();
+  });
+
+  it('inloggad + skadligt ?returnTo=//evil.com på /login → faller tillbaka till /', async () => {
+    authState.isAuthenticated = true;
+    renderRoutes('/login?returnTo=%2F%2Fevil.com');
+    expect(await screen.findByTestId('stub:Index')).toBeInTheDocument();
   });
 });
 
