@@ -26,8 +26,39 @@ för commit-nivå, se git-historiken.
   `api_key_id`-attribution vid API-nyckelbaserade åtgärder.
 - **SSO-inloggning (OIDC):** Authorization Code + PKCE mot valfri IdP (t.ex.
   Microsoft Entra ID). Aktiveras med `OIDC_*`-env-vars — SSO-knappen visas bara
-  när allt är konfigurerat. Kräver befintligt konto (ingen auto-provisionering)
-  och verifierad e-post från IdP:n; egna rate-limiters för login/callback.
+  när allt är konfigurerat. Kräver befintligt konto (ingen auto-provisionering):
+  en okänd identitet nekas (`/login?sso_error=unknown_user`) i stället för att
+  skapas. Identiteten matchas på **paret** (`oidc_sub`, `oidc_iss`) — `sub` är
+  bara unikt inom en issuer, så issuern lagras bredvid i kolumnen `oidc_iss`
+  (migration 068, som också ersätter unik-indexet på `oidc_sub` med ett på
+  paret). Finns ingen länkad rad härleds **exakt en** adress ur claims och
+  matchas mot `users.email`, i förtroendeordning som beror på om IdP:n är
+  Entra: på en Entra-issuer `preferred_username` när den innehåller `@` (för en
+  tenant-medlem normalt UPN:en, vars suffix Entra kräver ska vara en
+  verifierad domän — men `preferred_username` är Microsofts egen dokumenterat
+  ostabila claim, så förtroendet är gatat till just Entra-issuers), annars
+  `email` men bara när den är positivt verifierad (`xms_edov: true` eller
+  `email_verified: true`); på en generisk OIDC-issuer bara `email` med
+  `email_verified: true` — utan Entras UPN-domängaranti finns inget annat att
+  lita på. **Ingen fallback:** matchar den valda adressen inget konto blir
+  svaret `unknown_user` — nästa claim provas aldrig som andra chans, eftersom
+  en overifierad `email` kan komma från `otherMails` som användaren själv kan
+  sätta (nOAuth). En admin kan **koppla loss SSO-länken** på ett konto
+  (Inställningar → Administration → Systemanvändare → "Koppla loss SSO"); det
+  nollar både `oidc_sub` och `oidc_iss` och återkallar kontots refresh-tokens
+  (ett redan utfärdat access-token lever dock kvar i upp till 15 minuter).
+  **Endast en tenant kan autentisera** — `OIDC_ISSUER_URL` måste namnge exakt
+  en tenant. `/common` och `/organizations` avvisas eftersom deras issuer är en
+  platshållarmall som gör `iss`-kontrollen självrefererande (vilken Entra-tenant
+  som helst skulle validera); `/consumers` avvisas på segmentnamnet, och
+  Microsofts konsument-tenant (`9188040d-…`) även på GUIDen i den upptäckta
+  issuern — den ger nämligen en konkret issuer och fångas inte av
+  platshållarkontrollen. Egna rate-limiters för login/callback.
+  **Viktig drift-not:** konton som SSO-länkades före migration 068 har
+  `oidc_sub` satt men `oidc_iss` NULL — den halva identiteten kan inte bevisas
+  tillhöra den konfigurerade issuern, så de kontona nekas vid SSO-inloggning
+  tills en admin kopplar loss länken (kontot länkas då om vid nästa lyckade
+  inloggning). Lösenordsinloggning påverkas inte.
 - **Markdown-bilagor:** `.md`/`.markdown` tillåtna som ticket-bilagor (validering
   i alla tre lager: filväljare, klient-schema, backend-allowlist).
 - **Tvåvägs-e-post / kundloop:** teknikerns publika svar mejlas trådat till

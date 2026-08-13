@@ -59,6 +59,7 @@ These are the only endpoints reachable without credentials:
 - `POST /api/public/tickets` (rate-limited), `POST /api/public/ai-suggest` (rate-limited), `PATCH /api/public/ai-suggest/:id` (rate-limited)
 - `GET /api/kb/public/:token`, `GET /api/kb/images/:filename`
 - `GET /api/shares/public/:token`, `GET /api/shares/public/file/:token/:attachmentId` (rate-limited)
+- `GET /api/auth/oidc/enabled`, `GET /api/auth/oidc/login` (rate-limited), `GET /api/auth/oidc/callback` (rate-limited) — the SSO handshake runs before any session exists, so it cannot require one
 
 ---
 
@@ -82,10 +83,91 @@ These are the only endpoints reachable without credentials:
 | POST | `/api/auth/change-password` | `authenticate` | Change own password; revokes all refresh tokens | body: `currentPassword`, `newPassword` | `{ message }`; 400/404 |
 | POST | `/api/auth/forgot-password` | `loginRateLimiter` | Issue reset token + email link (enumeration-safe) | body: `email` | generic `{ message }` (always 200) |
 | POST | `/api/auth/reset-password` | `loginRateLimiter` | Reset password via token; revokes all refresh tokens | body: `token`, `newPassword` | `{ message }`; 400 invalid/expired |
-| GET | `/api/auth/oidc/enabled` | public/none | Check if OIDC SSO is configured and get button label | — | `{ enabled, label }` |
-| GET | `/api/auth/oidc/login` | public + `oidcLoginRateLimiter` | Initiate OIDC login flow; redirect to IdP | — | 302 redirect to IdP; 503 if unconfigured or IdP unreachable |
-| GET | `/api/auth/oidc/callback` | public + `oidcCallbackRateLimiter` | OIDC callback receiver (internal; IdP redirects here) | query: `code`, `state` | 302 redirect to `/login?sso=1` or `/login?sso_error=unknown_user\|failed` |
+| GET | `/api/auth/oidc/enabled` | public/none | Check if OIDC SSO is configured and get button label | — | `{ enabled, label }` — `label` is `null` when SSO is off |
+| GET | `/api/auth/oidc/login` | public + `oidcLoginRateLimiter` | Start SSO: Authorization Code + PKCE (S256); state/nonce/verifier are stored in the short-lived HttpOnly `oidcTx` cookie (`SameSite=Lax`, path `/api/auth/oidc`, 10 min) | — | 302 redirect to the IdP; 503 if unconfigured, or if discovery fails or the issuer is rejected |
+| GET | `/api/auth/oidc/callback` | public + `oidcCallbackRateLimiter` | Callback receiver — a browser navigation from the IdP, not an SPA call. Verifies `state`/`nonce`/PKCE plus the `id_token`'s `aud`, `exp`/`nbf` and `iss` (the JWS signature is **not** validated separately — see the token-validation note below), then signs in an **existing** account only | query: `code`, `state`; `oidcTx` cookie (required — no cookie means no in-flight transaction) | 302 to `/login?sso=1` plus a HttpOnly `refreshToken` cookie (the SPA then calls `POST /api/auth/refresh` for its access token), or to `/login?sso_error=unknown_user\|failed`; 503 if unconfigured |
 | GET | `/api/auth/audit-log` | `authenticate` → `requireAdmin` | Paginated audit-log viewer | query: `limit`(≤200), `offset`, `entity_type`, `action` | `{ entries, total, limit, offset }` |
+
+> **SSO token validation (`server/src/routes/auth.ts`).** The callback verifies
+> `state`, `nonce` and PKCE against the `oidcTx` cookie, and the `id_token`'s
+> `aud`, `exp`/`nbf` and `iss`. It does **not** separately validate the JWS
+> signature against the IdP's JWKS — that would require
+> `enableNonRepudiationChecks()` on the discovery config, which this code never
+> calls. The trust comes from elsewhere: the token is fetched straight from the
+> IdP's token endpoint over TLS using confidential-client authentication, which
+> OIDC Core 3.1.3.7 item 6 accepts in place of signature validation for exactly
+> this flow. `iss` (and, on Entra, `tid`) is then re-checked by our own code —
+> see below.
+
+> **SSO account rules (`server/src/lib/oidc.ts`).** OIDC authenticates, it never
+> provisions. Before any account lookup the callback runs its **own** `iss` check
+> against the issuer that discovery returned and — on Entra — compares the `tid`
+> to the tenant named in that issuer, so exactly one tenant can ever authenticate.
+> (The library's built-in `iss` check is not trusted on Entra: it derives the
+> expected issuer from the token's own `tid` claim. See `.env.example`.)
+>
+> An identity is matched on the (`oidc_sub`, `oidc_iss`) pair — never on `sub`
+> alone, which is unique only within an issuer. If that finds nothing, **exactly
+> one** address is derived from the claims, and which claim is even eligible
+> depends on whether the discovered issuer is Entra (has a tenant ID) or a
+> generic OIDC provider:
+>
+> **On an Entra issuer**, in order of trust, compared case-insensitively
+> against `users.email`:
+>
+> 1. `preferred_username`, if it is a string containing `@`. For a tenant
+>    member this is normally the UPN, whose suffix Entra requires to be a
+>    verified domain in the tenant — but "normally" is not "guaranteed":
+>    Microsoft documents `preferred_username` as a mutable, unstable claim not
+>    intended to be used as a key. Trusting it at all rests on Entra's
+>    structural UPN guarantee, which is why this branch only runs for Entra
+>    issuers in the first place.
+> 2. otherwise `email`, and **only** when positively verified, i.e.
+>    `xms_edov: true` or `email_verified: true`. An unverified `email` claim may
+>    come from `otherMails`, which a tenant member can set themselves via
+>    self-service registration — that is the nOAuth class of attack: a member
+>    points their alternate address at an admin's address and links themselves to
+>    the admin account. `xms_edov` is Microsoft's own countermeasure.
+> 3. otherwise the attempt is refused for want of a usable address (`no_email`).
+>
+> **On a generic (non-Entra) OIDC issuer**, only `email` is ever tried, and
+> only with `email_verified: true` — `preferred_username` is never consulted,
+> because the rationale for trusting it (Entra's UPN-domain guarantee) does not
+> hold for an arbitrary IdP; a generic IdP is held to the one verification
+> proof OIDC itself defines. No match → refused (`no_email`).
+>
+> **There is no fallback in either case.** If the chosen address matches no
+> account, the answer is `unknown_user` — no other claim is tried as a second
+> chance, because that would reopen the hole (the attacker's preferred claim
+> matches nothing, but their spoofed one does). The identity is linked to the
+> account on the first successful match.
+>
+> Also refused, fail-closed: a `sub` that is not a non-empty string, an account
+> already linked to a different identity, and an address that matches more than
+> one account row. Guest accounts are refused when the token carries a `#EXT#`
+> marker in `upn`, `preferred_username` or `email`, or `acct: 1` (1 = guest,
+> 0 = tenant member) — but both `upn` and `acct` are **optional** claims that
+> Entra only emits if the app registration asks for them, and a guest's
+> `preferred_username` often carries their home-tenant address with no `#EXT#` at
+> all. Treat the guest check as defence in depth, not as the guest barrier: the
+> real barriers are that the account must already exist in IT-Ticket and that the
+> enterprise application is configured with **Assignment required** in Entra
+> (Enterprise applications → the app → Properties → *Assignment required?* →
+> Yes, then assign only the intended users/groups) — see `.env.example`.
+>
+> Roles always come from the database row, never from a claim. Every refusal
+> that reaches the claims-comparison step (`verifyOidcClaims`, i.e.
+> `issuer_mismatch`/`tenant_mismatch`) or the account lookup is audit-logged as
+> `login_failure`. One rejection is **not**: discovering an untrustworthy
+> issuer itself (`getOidcIssuerIdentity` throwing on a placeholder issuer or on
+> Microsoft's consumer tenant) happens *before* that comparison, is caught by
+> the callback's outer error handler, and only reaches the application log —
+> no audit entry is written for it. Protocol-level aborts (no/garbled `oidcTx`
+> cookie, a token without `sub`) are also redirect-only, no audit entry. Only
+> "no such account" surfaces as `/login?sso_error=unknown_user`; every other
+> one of the eight reject reasons — including both audited and unaudited ones
+> above — surfaces as the generic `/login?sso_error=failed`, so a probe cannot
+> tell the cases apart.
 
 ---
 
@@ -93,9 +175,9 @@ These are the only endpoints reachable without credentials:
 
 | Method | Path | Auth | Purpose | Inputs | Response |
 |--------|------|------|---------|--------|----------|
-| GET | `/api/users` | `authenticate` | List users (reduced for non-admins, full for admins) | — | `{ users }` |
+| GET | `/api/users` | `authenticate` | List users (reduced for non-admins, full for admins — the admin shape adds `ssoLinked`, a boolean saying only *whether* the account is SSO-linked; `oidc_sub`/`oidc_iss` are never exposed) | — | `{ users }` |
 | POST | `/api/users` | `authenticate` → `requireAdmin` | Create user (auto-gen password if omitted) | body: `email`, `password?`, `role?`, `displayName?` | 201 `{ message, user, temporaryPassword? }`; 400/409 |
-| PATCH | `/api/users/:id` | `authenticate` → `requireAdmin` | Update `role` / `displayName` | params: `id`; body: `role?`, `displayName?` | `{ message }`; 400 (incl. self-demote)/404 |
+| PATCH | `/api/users/:id` | `authenticate` → `requireAdmin` | Update `role` / `displayName`, and/or unlink SSO. `clearSsoLink: true` nulls **both** `oidc_sub` and `oidc_iss` and revokes every refresh token the user holds, in one transaction — the point of unlinking is that the wrong person may be signed in, and that session's refresh token would otherwise keep rotating for up to 7 days. A refresh token revoked this way stops a *new* access token from being issued; it does not revoke an access token already handed out, which stays valid for up to 15 minutes after unlinking. `clearSsoLink: false` is a no-op | params: `id`; body: `role?`, `displayName?`, `clearSsoLink?` (boolean) | `{ message }`; 400 (incl. self-demote, non-boolean `clearSsoLink`, no updatable field supplied)/404 |
 | DELETE | `/api/users/:id` | `authenticate` → `requireAdmin` | Delete user (blocks self-deletion) | params: `id` | `{ message }`; 400/404 |
 
 ---

@@ -12,7 +12,7 @@ info:
 
     ## API coverage
 
-    This spec documents the full API surface: 128 operations
+    This spec documents the full API surface: 131 operations
     across every route file — health/CSRF, auth, tickets, categories,
     contacts, companies, billing, time-entries, kb, public, users, API keys,
     settings, comments, attachments, shares, links, checklists, checklist
@@ -303,6 +303,160 @@ paths:
       responses:
         "200": { $ref: "#/components/responses/Message" }
         "400": { $ref: "#/components/responses/Error" }
+
+  /auth/oidc/enabled:
+    get:
+      operationId: authOidcEnabled
+      tags: [Auth]
+      summary: Är SSO (OIDC) påslaget?
+      description: >
+        Publik — SPA:n frågar innan inloggningsvyn ritas om SSO-knappen ska visas.
+      security: []
+      responses:
+        "200":
+          description: SSO-status och knapptext
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enabled, label]
+                properties:
+                  enabled:
+                    type: boolean
+                    description: >
+                      Sant först när samtliga OIDC_*-värden är satta och den
+                      konfigurerade issuer-URL:en godkänns statiskt (rätt
+                      protokoll, inte en känd multitenant-endpoint eller
+                      v1.0-värd). Det tenant-lås som jämför den UPPTÄCKTA
+                      issuerns tenant-GUID mot den konfigurerade gäller bara
+                      när `OIDC_ISSUER_URL` skrevs i GUID-form — skrevs den i
+                      domännamnsform (t.ex. `.../foretag.se/v2.0`, som
+                      `.env.example` rekommenderar som lika giltig) hoppar den
+                      jämförelsen medvetet över, eftersom Entra alltid svarar
+                      med GUID-form i issuern och det inte finns något sätt att
+                      slå upp domän→GUID utan ett extra nätverksanrop. Det
+                      grundläggande låset — att id_tokenets `tid` måste matcha
+                      den tenant som den upptäckta issuern faktiskt namnger —
+                      gäller ändå, oavsett vilken form som konfigurerades.
+                      `enabled` blir också falskt när boot-proben fått svar
+                      från discovery men underkänt den upptäckta issuern
+                      (platshållarmall eller Microsofts konsument-tenant) —
+                      SSO stängs då AV även om env-värdena fortfarande är
+                      giltiga, tills konfigurationen rättas och processen
+                      startas om.
+                  label: { type: string, nullable: true, description: Knapptext från OIDC_BUTTON_LABEL — null när SSO är av }
+
+  /auth/oidc/login:
+    get:
+      operationId: authOidcLogin
+      tags: [Auth]
+      summary: Starta SSO-inloggning
+      description: >
+        Browser-navigation (inte fetch/XHR): svarar 302 till IdP:ns
+        authorization-endpoint med Authorization Code + PKCE (S256).
+        `state`, `nonce` och `code_verifier` läggs i en kortlivad HttpOnly-cookie
+        (`oidcTx`, SameSite=Lax, path `/api/auth/oidc`, 10 min) som callbacken
+        verifierar mot. Rate limit: 20 anrop/15 min/IP.
+      security: []
+      responses:
+        "302":
+          description: Redirect till IdP:ns authorization-endpoint
+          headers:
+            Location:
+              description: IdP:ns authorization-URL
+              schema: { type: string, format: uri }
+            Set-Cookie:
+              description: Transaktions-cookien `oidcTx` (HttpOnly)
+              schema: { type: string }
+        "503":
+          description: >
+            SSO är av — antingen okonfigurerat eller avvisat av
+            single-tenant-kontrollen (multitenant-endpoint, v1.0-issuer eller
+            icke-https; se `.env.example`) — eller så kunde IdP:ns discovery
+            inte nås.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /auth/oidc/callback:
+    get:
+      operationId: authOidcCallback
+      tags: [Auth]
+      summary: Ta emot IdP:ns svar och logga in
+      description: >
+        Anropas av webbläsaren via IdP:ns redirect — inte av SPA:n. Kräver
+        `oidcTx`-cookien från `/auth/oidc/login`: `state`, `nonce` och PKCE
+        verifieras mot den, liksom id_tokenets `aud`, `exp`/`nbf` och `iss`.
+        JWS-signaturen valideras **inte** separat mot IdP:ns JWKS — det skulle
+        kräva `enableNonRepudiationChecks()` på discovery-configen, vilket koden
+        aldrig anropar. Förtroendet vilar i stället på att tokenet hämtas direkt
+        från IdP:ns token-endpoint över TLS med confidential-client-
+        autentisering, vilket OIDC Core 3.1.3.7 p. 6 uttryckligen tillåter som
+        alternativ till signaturverifiering i det här flödet. `iss` (och på
+        Entra `tid`) kontrolleras dessutom om av vår egen kod.
+
+
+        Autentiserar **endast konton som redan finns** i IT-Ticket — ingen
+        JIT-provisionering, och en okänd identitet nekas i stället för att
+        skapas. Endast den enda konfigurerade tenantens tokens accepteras.
+
+
+        Identiteten matchas i första hand på paret (`oidc_sub`, `oidc_iss`).
+        Ger det ingen träff härleds **exakt en** adress ur claims, och vilken
+        claim som ens prövas beror på om den upptäckta issuern är Entra eller
+        en generisk OIDC-provider. På Entra, i förtroendeordning:
+        `preferred_username` om den innehåller `@` (för en tenant-medlem
+        normalt UPN:en, vars suffix Entra kräver ska vara en verifierad domän
+        — men `preferred_username` är Microsofts egen dokumenterat ostabila
+        claim, så förtroendet gäller bara här, på Entra), annars `email` men
+        bara om den är positivt verifierad (`xms_edov: true` eller
+        `email_verified: true`), annars avslag. På en generisk OIDC-issuer
+        prövas ENDAST `email` med `email_verified: true` —
+        `preferred_username` konsulteras aldrig där, eftersom Entras
+        UPN-domängaranti inte gäller för en godtycklig IdP. **Ingen fallback i
+        något fall:** matchar den valda adressen inget konto blir svaret
+        `unknown_user` — nästa claim provas inte som andra chans, eftersom
+        den kan komma från `otherMails` som användaren själv kan sätta (nOAuth).
+
+
+        Vid lyckad inloggning sätts refresh-cookien; SPA:n hämtar sedan sin
+        access-token via `POST /auth/refresh`.
+
+
+        Rate limit: 20 anrop/15 min/IP — även 429 svaras som redirect
+        (`/login?sso_error=failed`), eftersom svaret renderas i webbläsaren.
+      security: []
+      parameters:
+        - name: code
+          in: query
+          required: true
+          description: Authorization code från IdP:n
+          schema: { type: string }
+        - name: state
+          in: query
+          required: true
+          description: Måste matcha `state` i `oidcTx`-cookien
+          schema: { type: string }
+      responses:
+        "302":
+          description: >
+            `/login?sso=1` vid lyckad inloggning (refresh-cookie satt),
+            `/login?sso_error=unknown_user` när identiteten saknar konto i
+            IT-Ticket, och `/login?sso_error=failed` vid övriga fel (saknad
+            eller utgången transaktions-cookie, state/nonce/PKCE-fel,
+            rate limit, IdP-fel).
+          headers:
+            Location:
+              description: Alltid en intern path — aldrig en URL från requesten
+              schema: { type: string }
+            Set-Cookie:
+              description: HttpOnly `refreshToken` sätts vid lyckad inloggning
+              schema: { type: string }
+        "503":
+          description: SSO är inte konfigurerat
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /tickets:
     get:
@@ -1177,14 +1331,23 @@ paths:
     patch:
       operationId: usersUpdate
       tags: [Users]
-      summary: Update a user's role and/or display name (admin)
+      summary: Update a user's role, display name and/or SSO link (admin)
       description: >
         Admin-only. Role is checked after authentication, so a write-scoped API
         key belonging to an admin user also qualifies, in addition to a session
-        with CSRF token. At least one of `role`/`displayName` must be supplied.
+        with CSRF token. At least one of `role`/`displayName`/`clearSsoLink`
+        must be supplied, and it must actually change something.
         An admin cannot demote their own account (change their own `role` away
         from `"admin"`). Setting `displayName` to an empty string or `null`
         clears it (stored as NULL).
+
+
+        `clearSsoLink: true` unlinks the account's SSO identity — it nulls both
+        `oidc_sub` and `oidc_iss` and revokes all of the user's refresh tokens in
+        the same transaction, so a refresh call can no longer mint further
+        access tokens for that session. This does not revoke an access token
+        already handed out: that token is a self-contained signed JWT and
+        stays usable for up to 15 minutes after unlinking.
       security:
         - bearerAuth: []
           csrfToken: []
@@ -1207,7 +1370,8 @@ paths:
         "400":
           description: >
             Invalid role value, self-demotion attempt, invalid/too-long
-            displayName, or neither field supplied.
+            displayName, a non-boolean `clearSsoLink`, or no field that changes
+            anything.
           $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
@@ -3984,6 +4148,14 @@ components:
         emailConfirmed:
           type: boolean
           description: Always `true` — hardcoded in the response, not backed by a real verification flag.
+        ssoLinked:
+          type: boolean
+          description: >
+            `true` when the account is linked to an SSO identity (`oidc_sub` is
+            set). Only the fact is exposed, never `oidc_sub`/`oidc_iss`: the
+            subject identifier is a stable key at the IdP and the issuer reveals
+            which tenant the instance trusts. Clear the link with
+            `PATCH /users/{id}` and `clearSsoLink: true`.
 
     UserSummary:
       type: object
@@ -4016,13 +4188,29 @@ components:
 
     UserUpdateRequest:
       type: object
-      description: At least one property is required.
+      description: >
+        At least one property that actually changes something is required —
+        `clearSsoLink: false` on its own counts as nothing to update (400).
       properties:
         role: { type: string, enum: [admin, user] }
         displayName:
           type: string
           nullable: true
           description: Empty string or null clears the field. Max 100 characters after trim.
+        clearSsoLink:
+          type: boolean
+          description: >
+            `true` unlinks the account's SSO identity: both `oidc_sub` and
+            `oidc_iss` are set to NULL **and** every refresh token the user holds
+            is revoked, in the same transaction. Needed when an email address
+            changes owner — otherwise the new employee is stuck on a conflicting
+            link forever, and the previous holder's refresh token would keep
+            rotating for up to 7 days. Revoking the refresh token stops future
+            access tokens from being minted; an access token already issued is
+            a self-contained JWT that is not revoked and stays valid for up to
+            15 minutes regardless. `false` is accepted but does nothing. Any
+            non-boolean value is rejected with 400. Audit-logged as
+            `user_update` with `sso_link: cleared`.
 
     ApiKey:
       type: object

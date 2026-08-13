@@ -56,6 +56,20 @@ services:
       - IMAP_TENANT_ID=${IMAP_TENANT_ID:-}
       - IMAP_CLIENT_ID=${IMAP_CLIENT_ID:-}
       - IMAP_CLIENT_SECRET=${IMAP_CLIENT_SECRET:-}
+      # SSO/OIDC. Tom sträng = SSO fail-closed avstängt (knappen döljs och
+      # /api/auth/oidc/* svarar 503) — men raderna måste ändå stå här, annars
+      # når värdena aldrig containern och SSO blir tyst av trots "lyckad" deploy.
+      # OIDC_ISSUER_URL måste namnge EXAKT EN tenant, t.ex.
+      # https://login.microsoftonline.com/<TENANT_ID>/v2.0. Multitenant-
+      # endpointsen (/common, /organizations, /consumers) avvisas av koden:
+      # deras issuer innehåller platshållaren {tenantid}, vilket gör iss-
+      # kontrollen självrefererande så att vilken Entra-tenant som helst
+      # skulle validera.
+      - OIDC_ISSUER_URL=${OIDC_ISSUER_URL:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+      - OIDC_REDIRECT_URI=${OIDC_REDIRECT_URI:-}
+      - OIDC_BUTTON_LABEL=${OIDC_BUTTON_LABEL:-}
       - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
       - OFFSITE_BACKUP_CMD=${OFFSITE_BACKUP_CMD:-}
       - OFFSITE_BACKUP_REQUIRED=${OFFSITE_BACKUP_REQUIRED:-false}
