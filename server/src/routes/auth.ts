@@ -20,6 +20,7 @@ import {
   getOidcIssuerIdentity,
   verifyOidcClaims,
   findOrLinkOidcUser,
+  getOidcProviderHint,
   type OidcUserClaims,
 } from '../lib/oidc.js';
 
@@ -507,9 +508,36 @@ function truncateForAudit(value: unknown, max = 120): string {
   return sanitized.length > max ? `${sanitized.slice(0, max)}…` : sanitized;
 }
 
+// oauth4webapi kastar STRUKTURERADE fel (ResponseBodyError, AuthorizationResponseError,
+// WWWAuthenticateChallengeError) vars `error`/`error_description` bär IdP:ns FAKTISKA orsak
+// — för Entra är det AADSTS-koden. `String(error)` ger bara den generiska texten
+// "server responded with an error in the response body", och då ser fel client secret
+// (AADSTS7000215), redirect-URI registrerad som SPA i stället för Web (AADSTS7000218) och
+// en förbrukad authorization-kod (invalid_grant) HELT identiska ut i loggen. Det gjorde
+// första skarpa inloggningen på prod 2026-08-13 omöjlig att felsöka utan gissningar.
+// Fälten innehåller inga hemligheter — Entra skickar AADSTS-kod, trace-/correlation-id
+// och tidsstämpel — men de trunkeras och rensas från styrtecken som allt annat vi loggar.
+export function describeIdpError(error: unknown): Record<string, unknown> {
+  const e = error as { error?: unknown; error_description?: unknown; status?: unknown; code?: unknown };
+  const details: Record<string, unknown> = { error: truncateForAudit(String(error), 300) };
+  if (typeof e?.error === 'string') details.idpError = truncateForAudit(e.error, 120);
+  if (typeof e?.error_description === 'string') {
+    details.idpErrorDescription = truncateForAudit(e.error_description, 400);
+  }
+  if (typeof e?.status === 'number') details.idpHttpStatus = e.status;
+  if (typeof e?.code === 'string') details.idpErrorCode = truncateForAudit(e.code, 60);
+  return details;
+}
+
 router.get('/oidc/enabled', (_req: Request, res: Response) => {
   const settings = getOidcSettings();
-  res.json({ enabled: settings !== null, label: settings?.buttonLabel ?? null });
+  res.json({
+    enabled: settings !== null,
+    label: settings?.buttonLabel ?? null,
+    // Härledd ur den KONFIGURERADE issuerns värdnamn — null (aldrig gissad ur
+    // buttonLabel) när SSO är av eller providern inte är Entra.
+    provider: settings ? getOidcProviderHint(settings.issuerUrl) : null,
+  });
 });
 
 router.get('/oidc/login', oidcLoginRateLimiter, async (_req: Request, res: Response) => {
@@ -539,7 +567,7 @@ router.get('/oidc/login', oidcLoginRateLimiter, async (_req: Request, res: Respo
     });
     res.redirect(authUrl.href);
   } catch (error) {
-    logger.error('OIDC login init failed', { error: String(error) });
+    logger.error('OIDC login init failed', describeIdpError(error));
     res.status(503).json({ error: 'SSO-tjänsten kunde inte nås' });
   }
 });
@@ -658,7 +686,7 @@ router.get('/oidc/callback', oidcCallbackRateLimiter, async (req: Request, res: 
     res.redirect('/login?sso=1');
   } catch (error) {
     clearTxCookie();
-    logger.error('OIDC callback failed', { error: String(error) });
+    logger.error('OIDC callback failed', describeIdpError(error));
     res.redirect('/login?sso_error=failed');
   }
 });

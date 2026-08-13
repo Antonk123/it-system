@@ -319,7 +319,7 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [enabled, label]
+                required: [enabled, label, provider]
                 properties:
                   enabled:
                     type: boolean
@@ -345,6 +345,15 @@ paths:
                       giltiga, tills konfigurationen rättas och processen
                       startas om.
                   label: { type: string, nullable: true, description: Knapptext från OIDC_BUTTON_LABEL — null när SSO är av }
+                  provider:
+                    type: string
+                    enum: [microsoft]
+                    nullable: true
+                    description: >
+                      Härledd ur den KONFIGURERADE issuerns värdnamn (aldrig ur
+                      `OIDC_BUTTON_LABEL`, som är fri operatörstext) —
+                      `"microsoft"` när värdnamnet ligger i Entras värdfamilj,
+                      annars `null`. Alltid `null` när `enabled` är `false`.
 
   /auth/oidc/login:
     get:

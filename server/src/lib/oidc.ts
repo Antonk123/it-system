@@ -69,6 +69,22 @@ function isEntraHost(hostname: string): boolean {
   return ENTRA_HOSTS.has(stripped);
 }
 
+export type OidcProviderHint = 'microsoft';
+
+// Härleder en varumärkeshint ur den KONFIGURERADE issuerns värdnamn — ALDRIG ur
+// OIDC_BUTTON_LABEL, som är fri text en operatör kan sätta till vad som helst.
+// Återanvänder isEntraHost (samma värdfamilj som lås 1/2 ovan) istället för att
+// duplicera listan. Generisk: växer med fler providers utan att röra anropsstället.
+export function getOidcProviderHint(issuerUrl: string): OidcProviderHint | null {
+  try {
+    return isEntraHost(new URL(issuerUrl).hostname) ? 'microsoft' : null;
+  } catch {
+    // Ogiltig URL — issuerUrlRejection äger den diagnosen, inte vi. En trasig
+    // issuer ska bara ge "ingen hint", inte kasta och slå ut /oidc/enabled.
+    return null;
+  }
+}
+
 // VARFÖR decodeURIComponent: URL normaliserar INTE procentkodning i pathen.
 // new URL('https://login.microsoftonline.com/%63ommon/v2.0').pathname är
 // '/%63ommon/v2.0' — utan avkodning smiter "common" förbi blocklistan medan

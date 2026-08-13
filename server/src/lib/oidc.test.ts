@@ -21,6 +21,7 @@ import {
   getOidcIssuerIdentity,
   verifyOidcClaims,
   findOrLinkOidcUser,
+  getOidcProviderHint,
   OIDC_REQUIRED_ENV,
 } from './oidc.js';
 
@@ -291,6 +292,24 @@ describe('getOidcIssuerIdentity', () => {
     setFullOidcEnv();
     process.env.OIDC_ISSUER_URL = 'https://login.microsoftonline.com/prefabmastarna.se/v2.0';
     expect(getOidcIssuerIdentity(fakeConfig(ISSUER))).toEqual({ issuer: ISSUER, tenantId: TENANT_GUID });
+  });
+});
+
+describe('getOidcProviderHint', () => {
+  it("'microsoft' för login.microsoftonline.com", () => {
+    expect(getOidcProviderHint(ISSUER)).toBe('microsoft');
+  });
+
+  it("'microsoft' för en annan värd i Entra-familjen (login.windows.net)", () => {
+    expect(getOidcProviderHint(`https://login.windows.net/${TENANT_GUID}/v2.0`)).toBe('microsoft');
+  });
+
+  it('null för en generisk IdP', () => {
+    expect(getOidcProviderHint('https://keycloak.example.se/realms/it')).toBeNull();
+  });
+
+  it('null för en ogiltig issuer-URL (kastar inte)', () => {
+    expect(getOidcProviderHint('inte-en-url')).toBeNull();
   });
 });
 

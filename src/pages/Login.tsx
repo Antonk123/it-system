@@ -27,6 +27,34 @@ const SSO_ERROR_MESSAGES: Record<string, string> = {
 const resolveSsoErrorMessage = (code: string): string =>
   Object.hasOwn(SSO_ERROR_MESSAGES, code) ? SSO_ERROR_MESSAGES[code] : SSO_ERROR_MESSAGES.failed;
 
+// Microsofts fyrfärgsmärke — inline SVG (appens CSP laddar inga tredjeparts-
+// resurser). Färgerna är varumärkesbundna och får ALDRIG ärva currentColor,
+// därför fill sätts direkt per ruta i stället för via CSS/valfri klass.
+// Dekorativ: knappens text bär redan betydelsen ("Logga in med <provider>"),
+// så aria-hidden + focusable="false" håller den borta ur tillgänglighetsträdet.
+// Microsofts fyrfärgsmärke. Storleken sätts av Button-varianten ([&_svg]:size-4
+// → 16px), inte här: egna width/height-attribut hade sett ut att styra men
+// överskrivs av den regeln, dvs. dött kodintent. Kontrasten mot en ljus
+// outline-knapp är låg för grön/blå/gul (1,7–2,7:1), men märket är dekorativt
+// och aria-hidden — formellt undantaget WCAG 1.4.11 — och färgerna är
+// varumärkeslåsta. Så ser Microsofts egen knapp ut överallt.
+const MicrosoftLogo = () => (
+  <svg
+    viewBox="0 0 21 21"
+    aria-hidden="true"
+    focusable="false"
+    className="shrink-0"
+  >
+    {/* Rutor 10x10 med 1 enhets gap fyller viewBoxen exakt (0..21) och matchar
+        Microsofts egna proportioner (gap = 1/10 av rutan). Färgerna är deras
+        fastställda värden och får aldrig ärva currentColor eller färgas om. */}
+    <rect x="0" y="0" width="10" height="10" fill="#F25022" />
+    <rect x="11" y="0" width="10" height="10" fill="#7FBA00" />
+    <rect x="0" y="11" width="10" height="10" fill="#00A4EF" />
+    <rect x="11" y="11" width="10" height="10" fill="#FFB900" />
+  </svg>
+);
+
 const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,7 +63,11 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [sso, setSso] = useState<{ enabled: boolean; label: string | null }>({ enabled: false, label: null });
+  const [sso, setSso] = useState<{ enabled: boolean; label: string | null; provider: 'microsoft' | null }>({
+    enabled: false,
+    label: null,
+    provider: null,
+  });
   // Felmeddelandet lever i state, inte i URL:en. ?sso_error= rensas bort så snart
   // det lästs (se callback-effekten nedan) — annars återuppväcker en reload eller
   // en bokmärkt /login?sso_error=... ett för länge sedan inaktuellt fel.
@@ -45,7 +77,7 @@ const Login = () => {
   const ssoHandled = useRef(false);
 
   useEffect(() => {
-    api.getOidcStatus().then(setSso).catch(() => setSso({ enabled: false, label: null }));
+    api.getOidcStatus().then(setSso).catch(() => setSso({ enabled: false, label: null, provider: null }));
   }, []);
 
   // Hanterar returen från backendens OIDC-callback: den redirectar hit med
@@ -202,7 +234,10 @@ const Login = () => {
                     trimmar redan bort den): en länk utan textinnehåll får inget
                     tillgängligt namn alls och blir omöjlig att identifiera för
                     skärmläsare. ?? räcker inte — "" och "   " är inte null. */}
-                <a href={api.oidcLoginUrl()}>{sso.label?.trim() || "Logga in med SSO"}</a>
+                <a href={api.oidcLoginUrl()} className="inline-flex items-center justify-center gap-2">
+                  {sso.provider === "microsoft" && <MicrosoftLogo />}
+                  {sso.label?.trim() || "Logga in med SSO"}
+                </a>
               </Button>
             </>
           )}

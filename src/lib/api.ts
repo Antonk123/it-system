@@ -312,24 +312,28 @@ class ApiClient {
    * Timeout krävs eftersom ett hängande anrop annars döljer SSO-knappen tyst
    * och permanent — användaren tror då att SSO är avstängt.
    */
-  async getOidcStatus(): Promise<{ enabled: boolean; label: string | null }> {
+  async getOidcStatus(): Promise<{ enabled: boolean; label: string | null; provider: 'microsoft' | null }> {
     try {
       const response = await fetch(`${this.baseUrl}/auth/oidc/enabled`, {
         signal: AbortSignal.timeout(5000),
       });
-      if (!response.ok) return { enabled: false, label: null };
+      if (!response.ok) return { enabled: false, label: null, provider: null };
       const data = await response.json();
       // Labeln trimmas och tomma/whitespace-strängar normaliseras till null:
       // den blir SSO-länkens enda textinnehåll, och "" eller "   " ger då en
       // länk helt utan tillgängligt namn (skärmläsaren läser bara upp "länk").
       // null gör att Login faller tillbaka på standardtexten.
       const label = typeof data?.label === 'string' ? data.label.trim() : '';
+      // Svaret kommer från en rå fetch utan schemavalidering — ett okänt/skräp-
+      // värde (framtida provider vi inte känner, eller en trasig backend) ska
+      // normaliseras till null, aldrig krascha Login vid rendering av märket.
       return {
         enabled: data?.enabled === true,
         label: label === '' ? null : label,
+        provider: data?.provider === 'microsoft' ? 'microsoft' : null,
       };
     } catch {
-      return { enabled: false, label: null };
+      return { enabled: false, label: null, provider: null };
     }
   }
 

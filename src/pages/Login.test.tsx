@@ -103,6 +103,51 @@ describe('SSO-knappen', () => {
   });
 });
 
+describe('Microsoft-märket på SSO-knappen', () => {
+  it('renderas till vänster om texten när provider === "microsoft" — dekorativt, exakta varumärkesfärger', async () => {
+    (api.getOidcStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enabled: true,
+      label: 'Logga in med Microsoft',
+      provider: 'microsoft',
+    });
+    renderLogin();
+    // Etiketten kommer fortfarande från backend — märket äger inte texten.
+    const link = await screen.findByRole('link', { name: 'Logga in med Microsoft' });
+    const svg = link.querySelector('svg');
+    expect(svg).not.toBeNull();
+    // Dekorativ: knappens text bär redan betydelsen, en beskriven grafik
+    // skulle annars annonseras meningslöst för skärmläsare.
+    expect(svg).toHaveAttribute('aria-hidden', 'true');
+    expect(svg).toHaveAttribute('focusable', 'false');
+    const fills = Array.from(svg!.querySelectorAll('rect')).map((r) => r.getAttribute('fill'));
+    expect(fills.sort()).toEqual(['#00A4EF', '#7FBA00', '#F25022', '#FFB900']);
+  });
+
+  it('renderas INTE när provider är null', async () => {
+    (api.getOidcStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enabled: true,
+      label: 'Logga in med SSO',
+      provider: null,
+    });
+    renderLogin();
+    const link = await screen.findByRole('link', { name: 'Logga in med SSO' });
+    expect(link.querySelector('svg')).toBeNull();
+  });
+
+  it('renderas INTE för ett okänt providervärde (aldrig gissat ur labeln)', async () => {
+    // Labeln är fri operatörstext och kan innehålla "Microsoft" utan att
+    // providern faktiskt är det — märket får bara styras av sso.provider.
+    (api.getOidcStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enabled: true,
+      label: 'Logga in med Microsoft',
+      provider: 'okta',
+    });
+    renderLogin();
+    const link = await screen.findByRole('link', { name: 'Logga in med Microsoft' });
+    expect(link.querySelector('svg')).toBeNull();
+  });
+});
+
 describe('callback-hantering', () => {
   it('?sso=1 → completeSsoLogin → navigate("/", { replace: true })', async () => {
     completeSsoLogin.mockResolvedValue(true);
@@ -233,6 +278,7 @@ describe('api.getOidcStatus — label-trimning', () => {
     await expect(callRealGetOidcStatus({ enabled: true, label: '   ' })).resolves.toEqual({
       enabled: true,
       label: null,
+      provider: null,
     });
   });
 
@@ -240,19 +286,41 @@ describe('api.getOidcStatus — label-trimning', () => {
     await expect(callRealGetOidcStatus({ enabled: true, label: '' })).resolves.toEqual({
       enabled: true,
       label: null,
+      provider: null,
     });
   });
 
   it('label med kringliggande blanktecken trimmas', async () => {
     await expect(
       callRealGetOidcStatus({ enabled: true, label: '  Logga in med Microsoft \n' })
-    ).resolves.toEqual({ enabled: true, label: 'Logga in med Microsoft' });
+    ).resolves.toEqual({ enabled: true, label: 'Logga in med Microsoft', provider: null });
   });
 
   it('icke-sträng-label → null (oförändrat)', async () => {
     await expect(callRealGetOidcStatus({ enabled: true, label: 42 })).resolves.toEqual({
       enabled: true,
       label: null,
+      provider: null,
+    });
+  });
+
+  it('provider: "microsoft" från backend bevaras', async () => {
+    await expect(
+      callRealGetOidcStatus({ enabled: true, label: 'Logga in med Microsoft', provider: 'microsoft' })
+    ).resolves.toEqual({ enabled: true, label: 'Logga in med Microsoft', provider: 'microsoft' });
+  });
+
+  it('okänt providervärde normaliseras till null (rå fetch utan schemavalidering, får inte krascha Login)', async () => {
+    await expect(
+      callRealGetOidcStatus({ enabled: true, label: 'SSO', provider: 'okta' })
+    ).resolves.toEqual({ enabled: true, label: 'SSO', provider: null });
+  });
+
+  it('provider saknas i svaret → null', async () => {
+    await expect(callRealGetOidcStatus({ enabled: true, label: 'SSO' })).resolves.toEqual({
+      enabled: true,
+      label: 'SSO',
+      provider: null,
     });
   });
 });

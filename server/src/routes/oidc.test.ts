@@ -33,6 +33,7 @@ import request from 'supertest';
 import { initializeDatabase, closeDatabase, db } from '../db/connection.js';
 import { createApp } from '../app.js';
 import { resetOidcCache, probeOidcAtBoot } from '../lib/oidc.js';
+import { describeIdpError } from './auth.js';
 import * as oidcClient from 'openid-client';
 
 let app: ReturnType<typeof createApp>;
@@ -70,16 +71,26 @@ const oidcCallback = (query = 'code=abc&state=test-state') => {
 };
 
 describe('GET /api/auth/oidc/enabled', () => {
-  it('utan config → { enabled: false, label: null }', async () => {
+  it('utan config → { enabled: false, label: null, provider: null }', async () => {
     const res = await request(app).get('/api/auth/oidc/enabled');
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ enabled: false, label: null });
+    expect(res.body).toEqual({ enabled: false, label: null, provider: null });
   });
-  it('med config → { enabled: true, label }', async () => {
+  it('med Entra-config → { enabled: true, label, provider: "microsoft" }', async () => {
     setFullOidcEnv();
     process.env.OIDC_BUTTON_LABEL = 'Logga in med Microsoft';
     const res = await request(app).get('/api/auth/oidc/enabled');
-    expect(res.body).toEqual({ enabled: true, label: 'Logga in med Microsoft' });
+    expect(res.body).toEqual({ enabled: true, label: 'Logga in med Microsoft', provider: 'microsoft' });
+  });
+  // Providerhinten får ALDRIG gissas ur OIDC_BUTTON_LABEL — en operatör med en
+  // generisk (icke-Entra) IdP kan skriva vad som helst i labeln, inklusive
+  // "Logga in med Microsoft", utan att providern faktiskt är Microsoft.
+  it('med generisk (icke-Entra) config → provider: null trots en Microsoft-liknande label', async () => {
+    setFullOidcEnv();
+    process.env.OIDC_ISSUER_URL = 'https://keycloak.example.se/realms/it';
+    process.env.OIDC_BUTTON_LABEL = 'Logga in med Microsoft';
+    const res = await request(app).get('/api/auth/oidc/enabled');
+    expect(res.body).toEqual({ enabled: true, label: 'Logga in med Microsoft', provider: null });
   });
 });
 
@@ -114,7 +125,7 @@ describe('probeOidcAtBoot', () => {
     discovered.issuer = 'https://login.microsoftonline.com/{tenantid}/v2.0';
     await probeOidcAtBoot();
     const enabled = await request(app).get('/api/auth/oidc/enabled');
-    expect(enabled.body).toEqual({ enabled: false, label: null });
+    expect(enabled.body).toEqual({ enabled: false, label: null, provider: null });
     expect((await request(app).get('/api/auth/oidc/login')).status).toBe(503);
     // Callbacken är en top-level browser-navigation (inte ett fetch-anrop som
     // /oidc/login) — den ska redirecta till inloggningen, inte visa rå JSON.
@@ -479,5 +490,43 @@ describe('GET /api/auth/oidc/callback', () => {
     const res = await oidcCallback('code=abc&state=s');
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe('/login?sso_error=failed');
+  });
+});
+
+// Regression: första skarpa SSO-inloggningen på prod (2026-08-13) failade med
+// "ResponseBodyError: server responded with an error in the response body" och
+// INGET mer. Fel client secret, redirect-URI under fel plattform och förbrukad kod
+// ger alla exakt den strängen — orsaken låg i fälten String(error) kastade bort.
+describe('describeIdpError', () => {
+  it('plockar ut IdP:ns error/error_description/status ur ett oauth4webapi-fel', () => {
+    const err = Object.assign(new Error('server responded with an error in the response body'), {
+      error: 'invalid_client',
+      error_description: 'AADSTS7000215: Invalid client secret provided. Trace ID: abc',
+      status: 401,
+      code: 'OAUTH_RESPONSE_BODY_ERROR',
+    });
+    const d = describeIdpError(err);
+    expect(d.idpError).toBe('invalid_client');
+    expect(d.idpErrorDescription).toContain('AADSTS7000215');
+    expect(d.idpHttpStatus).toBe(401);
+    expect(d.idpErrorCode).toBe('OAUTH_RESPONSE_BODY_ERROR');
+  });
+
+  it('klarar ett vanligt fel utan IdP-fält (inga påhittade nycklar)', () => {
+    const d = describeIdpError(new Error('boom'));
+    expect(d.error).toContain('boom');
+    expect(d).not.toHaveProperty('idpError');
+    expect(d).not.toHaveProperty('idpErrorDescription');
+    expect(d).not.toHaveProperty('idpHttpStatus');
+  });
+
+  it('trunkerar och rensar styrtecken ur IdP-texten (loggförfalskning)', () => {
+    const d = describeIdpError(
+      Object.assign(new Error('x'), { error_description: `AADSTS1\n"level":"info"\r${'y'.repeat(600)}` })
+    );
+    const desc = d.idpErrorDescription as string;
+    expect(desc).not.toMatch(/[\n\r]/);
+    expect(desc.length).toBeLessThanOrEqual(401);
+    expect(desc.endsWith('…')).toBe(true);
   });
 });
