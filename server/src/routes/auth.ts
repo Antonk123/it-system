@@ -289,7 +289,7 @@ router.post('/change-password', authenticate, changePasswordRateLimiter, async (
       db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE user_id = ?').run(req.user!.id);
     })();
 
-    logAudit(req.user!.id, 'password_change', 'user', req.user!.id, null, req.ip);
+    logAudit(req.user!.id, 'password_change', 'user', req.user!.id, null, req.ip, req.apiKey?.id ?? null);
 
     res.json({ message: 'Password changed successfully' });
   } catch (error) {

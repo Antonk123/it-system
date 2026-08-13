@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { existsSync, rmSync } from 'fs';
-import { randomUUID, createHash } from 'crypto';
+import { randomUUID, createHash, randomBytes } from 'crypto';
 
 /**
  * Integration tests for the auth routes (server/src/routes/auth.ts), run against
@@ -412,6 +412,36 @@ describe('POST /api/auth/change-password', () => {
     // First 5 reach the handler (400 for wrong current password), the 6th is 429.
     expect(statuses.slice(0, 5)).toEqual([400, 400, 400, 400, 400]);
     expect(statuses[5]).toBe(429);
+  });
+
+  // Audit-attribution gap: password_change is reachable via an API key (POST,
+  // write-scope) but the logAudit() call omitted req.apiKey?.id, so a
+  // key-initiated password change looked identical to a real session in the
+  // audit log. Proves the fix attributes the row to the actual key, not NULL.
+  it('attributes the audit row to the API key when changed via a key, not NULL', async () => {
+    const email = 'changepw-apikey@authtest.local';
+    const userId = await createUser(email, PASSWORD);
+
+    const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
+    const keyPrefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
+    const keyHash = createHash('sha256').update(rawKey).digest('hex');
+    const keyId = randomUUID();
+    db.prepare(
+      `INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(keyId, 'changepw-test-key', keyPrefix, keyHash, userId, JSON.stringify(['read', 'write']));
+
+    const res = await request(app)
+      .post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${rawKey}`)
+      .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+    expect(res.status).toBe(200);
+
+    const row = db.prepare(
+      "SELECT api_key_id FROM audit_log WHERE action = 'password_change' AND user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1"
+    ).get(userId) as { api_key_id: string | null } | undefined;
+    expect(row).toBeDefined();
+    expect(row!.api_key_id).toBe(keyId);
   });
 });
 
