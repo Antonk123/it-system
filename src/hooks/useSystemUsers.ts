@@ -1,17 +1,13 @@
 import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, type SystemUser } from '@/lib/api';
 import { toast } from 'sonner';
 
-export interface SystemUser {
-  id: string;
-  email: string;
-  displayName?: string | null;
-  createdAt: string;
-  lastSignIn: string | null;
-  role: 'admin' | 'user';
-  emailConfirmed: boolean;
-}
+// Typen ägs av API-lagret (src/lib/api.ts) — den beskriver svaret från GET /users.
+// Tidigare fanns en identisk kopia här, vilket gjorde att ett nytt fält (t.ex.
+// ssoLinked) måste läggas till på två ställen och tyst kunde glida isär.
+// Re-exporteras för bakåtkompatibilitet med importer som pekar på hooken.
+export type { SystemUser };
 
 export const systemUserKeys = {
   all: ['system-users'] as const,
@@ -85,6 +81,19 @@ export const useSystemUsers = (options: { enabled?: boolean } = {}) => {
     },
   });
 
+  // Kopplar loss kontot från dess SSO-identitet. Behövs när en e-postadress
+  // byter ägare — den gamla länken skulle annars neka den nya medarbetaren.
+  const clearSsoLinkMutation = useMutation({
+    mutationFn: (userId: string) => api.clearSystemUserSsoLink(userId),
+    onSuccess: () => {
+      toast.success('SSO-länken är borttagen');
+      queryClient.invalidateQueries({ queryKey: systemUserKeys.list() });
+    },
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : 'Kunde inte ta bort SSO-länken');
+    },
+  });
+
   const inviteUser = useCallback(
     async (email: string, role: 'admin' | 'user' = 'user', displayName?: string) => {
       try {
@@ -121,6 +130,18 @@ export const useSystemUsers = (options: { enabled?: boolean } = {}) => {
     [updateRoleMutation],
   );
 
+  const clearSsoLink = useCallback(
+    async (userId: string) => {
+      try {
+        await clearSsoLinkMutation.mutateAsync(userId);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [clearSsoLinkMutation],
+  );
+
   return {
     users,
     isLoading,
@@ -128,6 +149,7 @@ export const useSystemUsers = (options: { enabled?: boolean } = {}) => {
     inviteUser,
     deleteUser,
     updateRole,
+    clearSsoLink,
     refetch: invalidate,
   };
 };

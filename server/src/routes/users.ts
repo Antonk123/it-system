@@ -7,6 +7,7 @@ import { authenticate, requireAdmin, AuthRequest, isEffectiveAdmin } from '../mi
 import { validatePassword } from '../lib/passwordPolicy.js';
 import { logAudit } from '../lib/auditLog.js';
 import { logger } from '../lib/logger.js';
+import { normalizeEmail } from '../lib/oidc.js';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const DISPLAY_NAME_MAX_LENGTH = 100;
@@ -21,6 +22,7 @@ interface UserRow {
   role: 'admin' | 'user';
   created_at: string;
   last_login: string | null;
+  oidc_sub: string | null;
 }
 
 // Get all system users. Auth:ade users får en reduced payload (för
@@ -29,7 +31,7 @@ interface UserRow {
 router.get('/', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const users = db.prepare(`
-      SELECT id, email, display_name, role, created_at, last_login FROM users ORDER BY created_at DESC
+      SELECT id, email, display_name, role, created_at, last_login, oidc_sub FROM users ORDER BY created_at DESC
     `).all() as Omit<UserRow, 'password_hash'>[];
 
     const isAdmin = isEffectiveAdmin(req);
@@ -43,6 +45,11 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
           createdAt: u.created_at,
           lastSignIn: u.last_login,
           emailConfirmed: true,
+          // Bara *om* kontot är SSO-länkat, aldrig sub/issuer-värdet självt:
+          // subject-identifieraren är en stabil nyckel mot IdP:n och issuern
+          // avslöjar vilken tenant instansen litar på — inget av det behöver
+          // klienten för att rendera en "koppla loss"-knapp.
+          ssoLinked: u.oidc_sub !== null,
         }
       : {
           id: u.id,
@@ -98,8 +105,32 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
   const userPassword = password || crypto.randomBytes(16).toString('hex');
 
   try {
-    // Check if email already exists (fast path)
-    const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+    // Dubblettkontrollen är SKIFTLÄGESOKÄNSLIG trots att users.email är UNIQUE
+    // med BINARY-kollation. VARFÖR: annars kan 'Anton@x.se' skapas bredvid
+    // 'anton@x.se' — UNIQUE-indexet ser dem som olika — och det tillståndet slår
+    // permanent ut SSO för användaren: findOrLinkOidcUser matchar e-post
+    // skiftlägesokänsligt, hittar två rader och avslår fail-closed med
+    // 'email_ambiguous'. Kontrollen här är enda stället som hindrar tillståndet
+    // (ingen migration, unikhetsindexet är orört).
+    //
+    // VARFÖR jämförelse i JS och inte `WHERE lower(email) = ?`: SQLites lower()
+    // är ASCII-only medan JS toLowerCase() är Unicode-medveten — 'Åsa.Ö@x.se'
+    // blir oförändrad i SQLite men 'åsa.ö@x.se' i JS. En SQL-baserad kontroll
+    // skulle alltså missa dubbletter med diakriter, precis de fall som sedan
+    // fastnar i 'email_ambiguous'.
+    //
+    // normalizeEmail (importerad från lib/oidc.ts, INTE en lokal .toLowerCase())
+    // NFC-normaliserar också: 'ö' kan lagras som ETT tecken (NFC) eller som
+    // 'o' + ett kombinerande tremaljud (NFD) — olika strängar i JS, samma
+    // adress för en människa. Utan NFC-steget skulle två rader i olika
+    // Unicode-normalform för samma adress båda passera den här kontrollen och
+    // sedan permanent låsa kontots SSO i 'email_ambiguous' (findOrLinkOidcUser
+    // NFC-normaliserar båda sidor vid matchning). Samma funktion på båda
+    // ställena är avsiktligt — två separata implementationer av samma regel
+    // driver isär förr eller senare.
+    const needle = normalizeEmail(email);
+    const existing = (db.prepare('SELECT email FROM users').all() as { email: string }[])
+      .some(u => normalizeEmail(u.email) === needle);
     if (existing) {
       return res.status(400).json({ error: 'Email already registered' });
     }
@@ -139,11 +170,17 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
   }
 });
 
-// Update user (admin only) — role and/or displayName
+// Update user (admin only) — role, displayName och/eller nollställd SSO-länk
 router.patch('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
-  const { role, displayName } = req.body as { role?: unknown; displayName?: unknown };
+  const { role, displayName, clearSsoLink } = req.body as {
+    role?: unknown;
+    displayName?: unknown;
+    clearSsoLink?: unknown;
+  };
 
-  const updates: { column: string; value: unknown }[] = [];
+  // audit: egen etikett när `kolumn: värde` inte är begripligt i loggen.
+  // null = kolumnen ingår i en annan posts etikett och ska inte dubbelloggas.
+  const updates: { column: string; value: unknown; audit?: string | null }[] = [];
 
   // Role-validering (oförändrad semantik — bara om fältet faktiskt skickas).
   if (role !== undefined) {
@@ -176,20 +213,53 @@ router.patch('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respons
     }
   }
 
+  // clearSsoLink nollar BÅDA identitetskolumnerna. Matchningen sker på paret
+  // (oidc_sub, oidc_iss) — lämnas oidc_iss kvar pekar kontot fortfarande på en
+  // halv identitet. Behövs när en e-postadress byter ägare (någon slutar, en ny
+  // anställd får samma adress): utan en väg att nolla länken fastnar den nya
+  // medarbetaren i sub_conflict för alltid.
+  if (clearSsoLink !== undefined) {
+    if (typeof clearSsoLink !== 'boolean') {
+      return res.status(400).json({ error: 'clearSsoLink måste vara true eller false' });
+    }
+    if (clearSsoLink) {
+      updates.push({ column: 'oidc_sub', value: null, audit: 'sso_link: cleared' });
+      updates.push({ column: 'oidc_iss', value: null, audit: null });
+    }
+  }
+
   if (updates.length === 0) {
-    return res.status(400).json({ error: 'Inget att uppdatera (skicka role och/eller displayName)' });
+    return res.status(400).json({ error: 'Inget att uppdatera (skicka role, displayName och/eller clearSsoLink)' });
   }
 
   try {
     const setClause = updates.map(u => `${u.column} = ?`).join(', ');
     const values = updates.map(u => u.value);
-    const result = db.prepare(`UPDATE users SET ${setClause} WHERE id = ?`).run(...values, req.params.id);
 
-    if (result.changes === 0) {
+    // Att nolla länken räcker inte: hela användningsfallet är att FEL person kan
+    // vara inloggad (e-postadress som bytt ägare, felaktig länkning). Den
+    // sessionen lever kvar i upp till 7 dagar och roterar vidare på egen hand —
+    // så refresh-tokens måste revoke:as i SAMMA transaktion som rensningen,
+    // annars finns ett fönster där länken är borta men sessionen kvar.
+    // Samma mönster som change-password / reset-password i routes/auth.ts.
+    const applyUpdate = db.transaction(() => {
+      const result = db.prepare(`UPDATE users SET ${setClause} WHERE id = ?`).run(...values, req.params.id);
+      if (result.changes === 0) return 0;
+      if (clearSsoLink === true) {
+        db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE user_id = ?').run(req.params.id);
+      }
+      return result.changes;
+    });
+    const changes = applyUpdate();
+
+    if (changes === 0) {
       return res.status(404).json({ error: 'Användaren hittades inte' });
     }
 
-    const changedFields = updates.map(u => `${u.column}: ${u.value}`).join(', ');
+    const changedFields = updates
+      .filter(u => u.audit !== null)
+      .map(u => u.audit ?? `${u.column}: ${u.value}`)
+      .join(', ');
     logAudit(req.user!.id, 'user_update', 'user', req.params.id, changedFields, req.ip, req.apiKey?.id ?? null);
 
     res.json({ message: 'Användaren uppdaterades' });

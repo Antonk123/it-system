@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Trash2, Users, Mail, Shield, Loader2, HardDriveDownload, Upload, ScrollText } from 'lucide-react';
+import { Trash2, Users, Mail, Shield, Loader2, HardDriveDownload, Upload, ScrollText, KeyRound, Unlink } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { BackupScheduleSection } from '@/components/settings/BackupScheduleSection';
@@ -33,7 +33,7 @@ import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 
 const AdminTab = () => {
-  const { users: systemUsers, isLoading: usersLoading, error: usersError, inviteUser, deleteUser, updateRole } = useSystemUsers();
+  const { users: systemUsers, isLoading: usersLoading, error: usersError, inviteUser, deleteUser, updateRole, clearSsoLink } = useSystemUsers();
   const { user: currentUser } = useAuth();
 
   const [inviteEmail, setInviteEmail] = useState('');
@@ -41,11 +41,27 @@ const AdminTab = () => {
   const [inviteRole, setInviteRole] = useState<'admin' | 'user'>('user');
   const [isInviting, setIsInviting] = useState(false);
   const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
+  // Label sparas med id:t så bekräftelsedialogen kan namnge kontot även efter
+  // att listan hunnit refetchas.
+  const [unlinkSso, setUnlinkSso] = useState<{ id: string; label: string } | null>(null);
   const [backupLoading, setBackupLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(false);
   const [confirmRestore, setConfirmRestore] = useState(false);
   const restoreFileRef = useRef<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Frånkopplings- och borttagnings-dialogerna är state-styrda (ingen
+  // AlertDialogTrigger), så Radix egen triggerRef är null och fokus skulle
+  // landa på <body> när de stängs. Vi håller därför reda på knappen som
+  // öppnade respektive dialog själva, plus en delad fallback-container att
+  // lämna fokus till när knappen försvunnit ur DOM:en.
+  const unlinkTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const deleteTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const userListRef = useRef<HTMLDivElement>(null);
+  // Sätts efter en LYCKAD frånkoppling/borttagning (aldrig innan await:en är
+  // klar) — annars flyttar även ett misslyckat anrop fokus till fallback-
+  // containern trots att knappen fortfarande finns kvar i DOM:en.
+  const unlinkConfirmedRef = useRef(false);
+  const deleteConfirmedRef = useRef(false);
 
   const [sectionsOpen, setSectionsOpen] = useState({
     users: false,
@@ -122,10 +138,62 @@ const AdminTab = () => {
 
   const handleDeleteUser = async () => {
     if (deleteUserId) {
-      await deleteUser(deleteUserId);
+      // Radix stänger dialogen själv via onOpenChange när AlertDialogAction
+      // klickas — därför behövs ingen extra state-städning här utöver flaggan.
+      // Flaggan sätts EFTER await och bara vid lyckad borttagning: sätts den
+      // före (eller ovillkorligt) skulle ett misslyckat anrop ändå flytta
+      // fokus till fallback-containern trots att knappen finns kvar.
+      const success = await deleteUser(deleteUserId);
+      if (success) {
+        deleteConfirmedRef.current = true;
+      }
       setDeleteUserId(null);
     }
   };
+
+  const handleClearSsoLink = async () => {
+    if (unlinkSso) {
+      // Flaggan sätts EFTER await och bara vid lyckad frånkoppling — sätts den
+      // före (eller ovillkorligt) skulle ett misslyckat anrop ändå flytta
+      // fokus till fallback-containern trots att knappen finns kvar.
+      const success = await clearSsoLink(unlinkSso.id);
+      if (success) {
+        unlinkConfirmedRef.current = true;
+      }
+    }
+  };
+
+  // Lämnar tillbaka fokus när frånkopplings-dialogen stängs (bekräfta, Avbryt
+  // eller Escape). Utan detta hamnar fokus på <body> och tangentbordsanvändaren
+  // tappar sin plats i listan.
+  const handleUnlinkDialogCloseAutoFocus = useCallback((event: Event) => {
+    event.preventDefault();
+    const trigger = unlinkTriggerRef.current;
+    const shouldFallBackToList = unlinkConfirmedRef.current || !trigger?.isConnected;
+    if (shouldFallBackToList) {
+      userListRef.current?.focus();
+    } else {
+      trigger.focus();
+    }
+    unlinkTriggerRef.current = null;
+    unlinkConfirmedRef.current = false;
+  }, []);
+
+  // Samma mönster som frånkopplings-dialogen: "Ta bort användare" är också
+  // state-styrd utan AlertDialogTrigger, så utan detta hamnar fokus på <body>
+  // när dialogen stängs.
+  const handleDeleteDialogCloseAutoFocus = useCallback((event: Event) => {
+    event.preventDefault();
+    const trigger = deleteTriggerRef.current;
+    const shouldFallBackToList = deleteConfirmedRef.current || !trigger?.isConnected;
+    if (shouldFallBackToList) {
+      userListRef.current?.focus();
+    } else {
+      trigger.focus();
+    }
+    deleteTriggerRef.current = null;
+    deleteConfirmedRef.current = false;
+  }, []);
 
   return (
     <>
@@ -180,7 +248,18 @@ const AdminTab = () => {
               </Button>
             </div>
 
-            <div className="border rounded-lg divide-y">
+            {/* tabIndex={-1}: fokusmål när "Koppla loss SSO"-knappen eller "Ta bort
+                användare"-knappen försvinner ur DOM:en efter en lyckad åtgärd —
+                annars faller fokus till <body>. Går inte att nå med Tab, bara
+                programmatiskt. role="group" + aria-label ger den namnlösa
+                fallback-containern ett tillgängligt namn för skärmläsare. */}
+            <div
+              ref={userListRef}
+              tabIndex={-1}
+              role="group"
+              aria-label="Systemanvändare"
+              className="border rounded-lg divide-y"
+            >
               {usersLoading ? (
                 <div className="p-4 text-center text-muted-foreground">
                   <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />
@@ -196,19 +275,37 @@ const AdminTab = () => {
                 </div>
               ) : (
                 systemUsers.map((sysUser) => (
-                  <div key={sysUser.id} className="flex items-center gap-3 p-3">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium truncate">{sysUser.displayName || sysUser.email}</span>
-                      {sysUser.role === 'admin' && (
-                        <Badge variant="secondary" className="shrink-0">
-                          <Shield className="w-3 h-3 mr-1" />
-                          Admin
-                        </Badge>
+                  /* Staplad rad på mobil: åtgärdsklustret (upp till tre knappar)
+                     är bredare än 390px-viewporten och tryckte annars ihop
+                     namnkolumnen till 0px + gav hela sidan horisontell scroll.
+                     Vänder till en rad först vid sm: (640px) — samma brytpunkt
+                     som Tailwinds sm:, aldrig en JS-brytpunkt (dödzon-risk). */
+                  <div key={sysUser.id} className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-3">
+                    <div className="flex-1 min-w-0">
+                      {/* flex-wrap: badges får radbryta ner under namnet i stället för
+                          att krympa namnet — annars klämdes kontots identitet till 0px
+                          vid smala bredder (uppmätt vid exakt 640px). min-w-0 på namnet
+                          är det som faktiskt låter truncate fungera: en flex-items
+                          default min-width är "auto" (= textens fulla bredd för ett
+                          white-space:nowrap-element som truncate ger), vilket annars
+                          förhindrar all krympning. */}
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-medium truncate min-w-0">{sysUser.displayName || sysUser.email}</span>
+                        {sysUser.role === 'admin' && (
+                          <Badge variant="secondary" className="shrink-0">
+                            <Shield className="w-3 h-3 mr-1" />
+                            Admin
+                          </Badge>
                         )}
                         {!sysUser.emailConfirmed && (
                           <Badge variant="outline" className="shrink-0 text-muted-foreground">
                             Väntar på bekräftelse
+                          </Badge>
+                        )}
+                        {sysUser.ssoLinked && (
+                          <Badge variant="outline" className="shrink-0">
+                            <KeyRound className="w-3 h-3 mr-1" />
+                            SSO-länkad
                           </Badge>
                         )}
                       </div>
@@ -223,27 +320,61 @@ const AdminTab = () => {
                         </p>
                       )}
                     </div>
-                    {sysUser.id !== currentUser?.id && (
-                      <div className="flex items-center gap-1">
+                    {/* Knapparna får radbrytas på mobil (flex-wrap) — på sm: och
+                        uppåt hålls de ihop på en rad som förut. */}
+                    <div className="flex flex-wrap items-center gap-2 sm:flex-nowrap sm:gap-1">
+                      {/* Koppla loss går även på det egna kontot — det tar inte
+                          bort åtkomsten (lösenordsinloggning finns kvar) och en
+                          felaktig länkning måste gå att rätta oavsett vems den är. */}
+                      {sysUser.ssoLinked && (
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => updateRole(sysUser.id, sysUser.role === 'admin' ? 'user' : 'admin')}
-                          title={sysUser.role === 'admin' ? 'Nedgradera till användare' : 'Uppgradera till admin'}
+                          onClick={(e) => {
+                            // Spara knappen så fokus kan lämnas tillbaka hit när
+                            // dialogen stängs (Radix triggerRef är null här).
+                            unlinkTriggerRef.current = e.currentTarget;
+                            setUnlinkSso({ id: sysUser.id, label: sysUser.displayName || sysUser.email });
+                          }}
+                          // Alla rader har annars samma tillgängliga namn ("Koppla loss
+                          // SSO") — skärmläsaranvändaren kan inte skilja dem åt. title
+                          // räcker inte: den ignoreras när elementet redan har ett namn
+                          // från sin text. Den synliga texten ingår i namnet (WCAG 2.5.3).
+                          aria-label={`Koppla loss SSO för ${sysUser.displayName || sysUser.email}`}
+                          title="Koppla loss kontot från dess SSO-identitet"
                         >
-                          <Shield className="w-3 h-3 mr-1" />
-                          {sysUser.role === 'admin' ? 'Ta bort admin' : 'Gör admin'}
+                          <Unlink className="w-3 h-3 mr-1" />
+                          Koppla loss SSO
                         </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setDeleteUserId(sysUser.id)}
-                          aria-label={`Ta bort användare ${sysUser.displayName || sysUser.email}`}
-                        >
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
-                      </div>
-                    )}
+                      )}
+                      {sysUser.id !== currentUser?.id && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => updateRole(sysUser.id, sysUser.role === 'admin' ? 'user' : 'admin')}
+                            title={sysUser.role === 'admin' ? 'Nedgradera till användare' : 'Uppgradera till admin'}
+                          >
+                            <Shield className="w-3 h-3 mr-1" />
+                            {sysUser.role === 'admin' ? 'Ta bort admin' : 'Gör admin'}
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={(e) => {
+                              // Spara knappen så fokus kan lämnas tillbaka hit när
+                              // dialogen stängs (Radix triggerRef är null här) —
+                              // samma mönster som frånkopplings-dialogen.
+                              deleteTriggerRef.current = e.currentTarget;
+                              setDeleteUserId(sysUser.id);
+                            }}
+                            aria-label={`Ta bort användare ${sysUser.displayName || sysUser.email}`}
+                          >
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 ))
               )}
@@ -350,7 +481,7 @@ const AdminTab = () => {
       </AlertDialog>
 
       <AlertDialog open={!!deleteUserId} onOpenChange={() => setDeleteUserId(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent onCloseAutoFocus={handleDeleteDialogCloseAutoFocus}>
           <AlertDialogHeader>
             <AlertDialogTitle>Ta bort användare?</AlertDialogTitle>
             <AlertDialogDescription>
@@ -361,6 +492,27 @@ const AdminTab = () => {
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteUser} className={buttonVariants({ variant: 'destructive' })}>
               Ta bort
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={!!unlinkSso} onOpenChange={() => setUnlinkSso(null)}>
+        <AlertDialogContent onCloseAutoFocus={handleUnlinkDialogCloseAutoFocus}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Koppla loss SSO-länken?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {unlinkSso?.label} kopplas loss från sin nuvarande SSO-identitet och loggas
+              samtidigt ut ur alla aktiva sessioner. Nästa gång någon loggar in med SSO mot
+              samma e-postadress länkas kontot om till den identitet som loggar in då. Använd
+              detta när adressen bytt ägare eller när en länkning blivit fel. Inloggning med
+              lösenord fungerar fortfarande.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction onClick={handleClearSsoLink} className={buttonVariants({ variant: 'destructive' })}>
+              Koppla loss
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
