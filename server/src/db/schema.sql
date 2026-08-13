@@ -7,12 +7,13 @@ CREATE TABLE IF NOT EXISTS users (
   role TEXT DEFAULT 'user' CHECK(role IN ('admin', 'user')),
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   last_login TEXT,
-  oidc_sub TEXT
+  oidc_sub TEXT,
+  oidc_iss TEXT
 );
--- OBS: idx_users_oidc_sub skapas ENDAST i migration 065 (add_users_oidc_sub),
+-- OBS: idx_users_oidc_identity skapas ENDAST i migration 068 (add_users_oidc_iss),
 -- INTE här. schema.sql exec:as före migrationerna vid varje start; på en äldre
--- prod-DB är `CREATE TABLE IF NOT EXISTS users` en no-op så oidc_sub-kolumnen
--- finns inte ännu → ett index på den här skulle krascha starten med
+-- prod-DB är `CREATE TABLE IF NOT EXISTS users` en no-op så oidc_sub/oidc_iss-
+-- kolumnerna finns inte ännu → ett index på dem skulle krascha starten med
 -- "no such column: oidc_sub" (prod-incident 2026-07-05). Index på
 -- migrations-tillagda kolumner måste ligga i migrationen, aldrig i bas-schemat.
 

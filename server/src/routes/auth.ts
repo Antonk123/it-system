@@ -14,7 +14,14 @@ import { logAudit } from '../lib/auditLog.js';
 import { logger } from '../lib/logger.js';
 import { cookieSecure } from '../config/cookies.js';
 import * as oidcClient from 'openid-client';
-import { getOidcSettings, getOidcConfig, findOrLinkOidcUser } from '../lib/oidc.js';
+import {
+  getOidcSettings,
+  getOidcConfig,
+  getOidcIssuerIdentity,
+  verifyOidcClaims,
+  findOrLinkOidcUser,
+  type OidcUserClaims,
+} from '../lib/oidc.js';
 
 /**
  * Rate limiter for token refresh endpoint.
@@ -462,6 +469,44 @@ function oidcTxCookieOptions() {
   return { httpOnly: true, secure: cookieSecure(), sameSite: 'lax' as const, path: OIDC_COOKIE_PATH };
 }
 
+interface OidcTx {
+  state: string;
+  nonce: string;
+  codeVerifier: string;
+}
+
+// Cookien är HttpOnly och vår egen, men den kommer ändå in via requesten och får
+// därför inte castas blint med `as`: en klippt/manipulerad cookie skulle annars
+// ge `undefined` som expectedState/expectedNonce/pkceCodeVerifier ända ned i
+// biblioteket, där felet blir svårläst istället för ett rent avbrott.
+function parseOidcTx(raw: string): OidcTx | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== 'object' || parsed === null) return null;
+  const { state, nonce, codeVerifier } = parsed as Record<string, unknown>;
+  const isNonEmpty = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+  if (!isNonEmpty(state) || !isNonEmpty(nonce) || !isNonEmpty(codeVerifier)) return null;
+  return { state, nonce, codeVerifier };
+}
+
+// Claim-styrda strängar går rakt in i audit-loggens details-kolumn. En IdP (eller
+// ett manipulerat konto) kan skicka godtyckligt långa värden — trunkera så att
+// en enda inloggning inte kan svälla loggen eller göra den oläsbar.
+// Strippar ÄVEN kontrolltecken (inkl. \n/\r) INNAN trunkeringen: audit_log.details
+// är en fri textkolumn utan escaping, och en claim med inbäddade radbrytningar
+// (t.ex. sub: "äkta-sub\n2026-01-01 admin login_success ...") skulle annars
+// rendera som flera skenbart legitima loggrader för den som läser loggen rått.
+function truncateForAudit(value: unknown, max = 120): string {
+  const s = typeof value === 'string' ? value : String(value ?? '');
+  // eslint-disable-next-line no-control-regex -- avsiktligt: vi vill just träffa styrtecken.
+  const sanitized = s.replace(/[\x00-\x1f\x7f]/g, ' ');
+  return sanitized.length > max ? `${sanitized.slice(0, max)}…` : sanitized;
+}
+
 router.get('/oidc/enabled', (_req: Request, res: Response) => {
   const settings = getOidcSettings();
   res.json({ enabled: settings !== null, label: settings?.buttonLabel ?? null });
@@ -502,7 +547,17 @@ router.get('/oidc/login', oidcLoginRateLimiter, async (_req: Request, res: Respo
 router.get('/oidc/callback', oidcCallbackRateLimiter, async (req: Request, res: Response) => {
   const settings = getOidcSettings();
   if (!settings) {
-    return res.status(503).json({ error: 'SSO är inte konfigurerat' });
+    // Callbacken är en top-level browser-navigation (IdP:ns redirect landar
+    // här direkt, inte via fetch/XHR) — samma resonemang som rate-limitern
+    // ovan. Ett rått JSON-503 skulle renderas som text i webbläsaren istället
+    // för att ta användaren tillbaka till inloggningen.
+    // /oidc/login behåller däremot JSON-503: den är visserligen också en
+    // navigation (Login-sidans SSO-knapp är ett <a href>), men SSO-knappen
+    // renderas bara när /oidc/enabled säger true, så en träff på /oidc/login
+    // med avstängd SSO är per definition ett fel — och deploy-runbookets
+    // rök-test skiljer "SSO av" (503) från "SSO uppe" (302 till IdP:n) på just
+    // den statuskoden.
+    return res.redirect('/login?sso_error=failed');
   }
   const clearTxCookie = () => res.clearCookie(OIDC_TX_COOKIE, oidcTxCookieOptions());
   try {
@@ -511,11 +566,23 @@ router.get('/oidc/callback', oidcCallbackRateLimiter, async (req: Request, res: 
       // Ingen pågående SSO-transaktion (cookie utgången/saknas) — starta om flödet.
       return res.redirect('/login?sso_error=failed');
     }
-    const tx = JSON.parse(rawTx) as { state: string; nonce: string; codeVerifier: string };
+    const tx = parseOidcTx(rawTx);
+    if (!tx) {
+      // Trasig/manipulerad transaktionscookie — behandla som ingen transaktion alls.
+      clearTxCookie();
+      return res.redirect('/login?sso_error=failed');
+    }
     const config = await getOidcConfig();
 
     // authorizationCodeGrant läser code/state ur URL:en och verifierar
-    // state/nonce/PKCE + id_token-signatur (JWKS) åt oss.
+    // state/nonce/PKCE samt id_tokenets aud, exp/nbf och iss åt oss.
+    // OBS: SIGNATUREN kontrolleras INTE mot JWKS — det kräver
+    // enableNonRepudiationChecks() på configen, vilket vi aldrig anropar.
+    // Förtroendet vilar istället på att tokenet hämtas direkt från IdP:ns
+    // token-endpoint över TLS med confidential-client-autentisering, vilket
+    // OIDC Core 3.1.3.7 p.6 uttryckligen tillåter som alternativ till
+    // signaturverifiering. iss-kontrollen görs dessutom om av oss i
+    // verifyOidcClaims — bibliotekets egen är opålitlig för Entra.
     const currentUrl = new URL(settings.redirectUri);
     currentUrl.search = new URL(req.originalUrl, 'http://internal').search;
     const tokens = await oidcClient.authorizationCodeGrant(config, currentUrl, {
@@ -529,11 +596,53 @@ router.get('/oidc/callback', oidcCallbackRateLimiter, async (req: Request, res: 
     if (!claims?.sub) {
       return res.redirect('/login?sso_error=failed');
     }
-    const user = findOrLinkOidcUser(claims as { sub: string; email?: unknown; email_verified?: unknown; preferred_username?: unknown });
-    if (!user) {
+
+    // Kastar om discovery gav en platshållar-issuer (multitenant) → catch:en
+    // nedan redirectar till failed. Ingen DB-skrivning har skett vid det laget.
+    const identity = getOidcIssuerIdentity(config);
+
+    // Egen iss-/tid-kontroll INNAN någon skrivning: bibliotekets iss-kontroll
+    // är för Entra härledd ur tokenets egen tid-claim och kan därför inte
+    // ensam garantera att bara vår tenant kommer in.
+    const claimsReason = verifyOidcClaims(claims as unknown as Record<string, unknown>, identity);
+    if (claimsReason) {
+      logAudit(
+        null,
+        'login_failure',
+        'session',
+        null,
+        `oidc: ${claimsReason} (sub ${truncateForAudit(claims.sub)})`,
+        req.ip
+      );
+      return res.redirect('/login?sso_error=failed');
+    }
+
+    const match = findOrLinkOidcUser(claims as unknown as OidcUserClaims, identity);
+    if (!match.ok) {
       // Ingen JIT: okända identiteter nekas. IdP:ns tokens kastas (inget persisteras).
-      logAudit(null, 'login_failure', 'session', null, `oidc: okänd användare (sub ${claims.sub})`, req.ip);
-      return res.redirect('/login?sso_error=unknown_user');
+      // Logga även den försökta e-postadressen — lösenordsloginet gör det, och
+      // utan den går ett avslag inte att felsöka mot rätt konto.
+      logAudit(
+        null,
+        'login_failure',
+        'session',
+        null,
+        `oidc: ${match.reason} (sub ${truncateForAudit(claims.sub)}, e-post ${
+          match.attemptedEmail === null ? 'okänd' : truncateForAudit(match.attemptedEmail)
+        })`,
+        req.ip
+      );
+      // Bara unknown_user särskiljs mot klienten (åtgärdbart för användaren);
+      // övriga orsaker läcker vi inte — de säger något om kontots tillstånd.
+      return res.redirect(
+        match.reason === 'unknown_user' ? '/login?sso_error=unknown_user' : '/login?sso_error=failed'
+      );
+    }
+    const user = match.user;
+    if (match.linked) {
+      // Egen händelse: en länkning ska ske EN gång per konto. Dyker den upp
+      // oväntat igen är det ett tecken på att en identitet bytts ut.
+      logAudit(user.id, 'oidc_link', 'user', user.id, `oidc-identitet länkad (iss ${identity.issuer})`, req.ip);
     }
 
     db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);

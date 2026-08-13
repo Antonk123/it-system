@@ -1359,4 +1359,68 @@ export const migrations: Migration[] = [
       db.prepare("UPDATE ticket_shares SET expires_at = datetime('now', '+30 days') WHERE expires_at IS NULL").run();
     },
   },
+  {
+    id: '068',
+    name: 'add_users_oidc_iss',
+    up: (db, { columnExists }) => {
+      // sub är bara unikt INOM en issuer — två olika IdP:er (eller två Entra-
+      // tenants) kan mynta samma sub-sträng. Att göra sub ensamt unikt var
+      // därför både för hårt (kollision mellan issuers låser ute en giltig
+      // användare) och för löst (identiteten saknar namnrymd vid matchning).
+      // Vi lagrar issuern bredvid och gör PARET unikt istället.
+      if (!columnExists('users', 'oidc_iss')) {
+        db.prepare('ALTER TABLE users ADD COLUMN oidc_iss TEXT').run();
+      }
+      db.prepare('DROP INDEX IF EXISTS idx_users_oidc_sub').run();
+      db.prepare(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_oidc_identity ON users(oidc_iss, oidc_sub) WHERE oidc_sub IS NOT NULL'
+      ).run();
+
+      // Rader som länkades FÖRE den här migrationen har oidc_sub satt men
+      // oidc_iss NULL. De backfillas MEDVETET inte: den gamla subben kan inte
+      // bevisas komma från den nu konfigurerade issuern, och att anta det hade
+      // öppnat exakt det tenant-hopp paret (iss, sub) finns för att stänga.
+      // Följden är att kontona nekas SSO-inloggning (sub_conflict) — räkna dem
+      // och varna, annars blir utelåsningen tyst. Prod har aldrig haft SSO
+      // påslaget, men dev-DB:n och externa OSS-installationer kan ha sådana rader.
+      const legacyLinks = (
+        db
+          .prepare('SELECT COUNT(*) AS n FROM users WHERE oidc_sub IS NOT NULL AND oidc_iss IS NULL')
+          .get() as { n: number }
+      ).n;
+      if (legacyLinks > 0) {
+        console.warn(
+          `[migration 068] ${legacyLinks} användare har en SSO-länk från före issuer-namnrymden ` +
+            '(oidc_sub satt, oidc_iss NULL). Ingen backfill görs — subben kan inte bevisas komma ' +
+            'från den konfigurerade issuern. Kontona NEKAS SSO-inloggning tills en admin kopplar ' +
+            'bort SSO-länken (Inställningar → Administration → Systemanvändare → "Koppla loss SSO"); nästa ' +
+            'inloggning länkar då om identiteten mot rätt issuer.'
+        );
+      }
+
+      // E-postadresser som bara skiljer i skiftläge/normalisering: POST /api/users
+      // (routes/users.ts) blockerar NYA sådana dubbletter, men rader som redan
+      // fanns innan den kontrollen skärptes ligger kvar. findOrLinkOidcUser
+      // matchar skiftlägesokänsligt i JS (inte SQLites ASCII-only lower()) —
+      // hittar den flera rader för samma normaliserade adress avslår den
+      // fail-closed med 'email_ambiguous', och KONTOT LÅSES UTE FRÅN SSO
+      // permanent tills en admin slår ihop/döper om en av raderna. Räkna och
+      // varna här (SQL-nivå, LOWER() räcker för att fånga skiftläges-fallet —
+      // NFC/NFD-fallet kräver JS-normalisering och hanteras av
+      // findOrLinkOidcUser/POST-kontrollen vid själva matchningen) — annars
+      // upptäcks utelåsningen först när en användare rapporterar trasig SSO.
+      const emailDupeGroups = db
+        .prepare('SELECT LOWER(email) AS e, COUNT(*) AS n FROM users GROUP BY LOWER(email) HAVING COUNT(*) > 1')
+        .all() as { e: string; n: number }[];
+      if (emailDupeGroups.length > 0) {
+        const affected = emailDupeGroups.reduce((sum, g) => sum + g.n, 0);
+        console.warn(
+          `[migration 068] ${emailDupeGroups.length} e-postadress(er) har flera användarkonton som ` +
+            `bara skiljer i skiftläge (${affected} konton totalt). Dessa konton låser fail-closed ute ` +
+            "varandra från SSO ('email_ambiguous' i findOrLinkOidcUser). Slå ihop eller döp om " +
+            'dubbletterna manuellt.'
+        );
+      }
+    },
+  },
 ];

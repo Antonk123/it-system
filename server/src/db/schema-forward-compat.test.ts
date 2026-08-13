@@ -19,9 +19,12 @@ const schemaPath = join(__dirname, 'schema.sql');
  * `CREATE INDEX ... ON <existing_table>(<migration_added_column>)` line in
  * schema.sql references a column that isn't there yet → exec throws → the
  * process crash-loops before runMigrations() (which would add the column) ever
- * runs. Indexes on retrofitted columns must therefore live ONLY in the
- * migration that adds the column (e.g. migration 065 for oidc_sub), never in
- * the base schema.sql.
+ * runs. Indexes on retrofitted columns must therefore live ONLY in a migration,
+ * never in the base schema.sql. The OIDC identity index is the live example:
+ * migration 065 first created idx_users_oidc_sub, and migration 068 took over
+ * ownership — it drops that index and creates idx_users_oidc_identity on the
+ * (oidc_iss, oidc_sub) pair instead. Both columns are retrofitted, so the index
+ * stays in 068 and out of schema.sql.
  */
 describe('schema.sql is forward-compatible with an older populated DB', () => {
   it('exec()s cleanly when the users table predates the oidc_sub column', () => {

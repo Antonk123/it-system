@@ -11,6 +11,7 @@ import { initWebPush } from './lib/push.js';
 import { startPushScheduler, stopPushScheduler } from './lib/pushScheduler.js';
 import { startBackupScheduler, stopBackupScheduler } from './lib/backupScheduler.js';
 import { startEmailPolling, stopEmailPolling } from './lib/emailInbound.js';
+import { getOidcConfigStatus, probeOidcAtBoot, OIDC_REQUIRED_ENV } from './lib/oidc.js';
 import cron from 'node-cron';
 import { logger } from './lib/logger.js';
 
@@ -88,6 +89,31 @@ if (pushReady) {
   startPushScheduler();
 } else {
   logger.info('Push notifications disabled (VAPID keys not set)');
+}
+
+// SSO/OIDC är opt-in. Statusen loggas vid start eftersom en avvisad config
+// annars är omöjlig att skilja från "medvetet avstängt" — SSO failar soft.
+// clientSecret loggas ALDRIG.
+// EN ÄGARE PER DIAGNOS: getOidcConfigStatus() loggar redan själv (dedupat) både
+// avvisad config och halvvägs-konfiguration — och anropet nedan är det första,
+// så de raderna hamnar i boot-loggen ändå. Därför loggar vi här BARA de fall
+// som saknar egen diagnos: "på" och "helt osatt". Annars blev varje omstart två
+// rader med exakt samma orsak.
+const oidcStatus = getOidcConfigStatus();
+if (oidcStatus.state === 'on') {
+  logger.info('SSO (OIDC) enabled', {
+    issuer: oidcStatus.settings.issuerUrl,
+    clientId: oidcStatus.settings.clientId,
+    redirectUri: oidcStatus.settings.redirectUri,
+  });
+  // Fire-and-forget: verifierar att discovery svarar med en issuer vi kan lita
+  // på. Får aldrig blockera app.listen() eller kasta — probeOidcAtBoot fångar
+  // allt själv, .catch() här är sista skyddsnätet.
+  void probeOidcAtBoot().catch((error) =>
+    logger.error('OIDC boot-probe kastade oväntat', { error: String(error) })
+  );
+} else if (oidcStatus.state === 'off' && oidcStatus.missing.length === OIDC_REQUIRED_ENV.length) {
+  logger.info('SSO (OIDC) disabled (OIDC_* env not set)');
 }
 
 // Start reminder scheduler (always enabled - push reminders fire even without SMTP)
