@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import ExcelJS from 'exceljs';
 import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail, sendTicketAssignedEmail } from '../lib/email.js';
-import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
 import { applySLAToTicket, handleSLAStatusChange, recalculateSLAOnPriorityChange } from '../lib/slaHelper.js';
@@ -929,7 +929,7 @@ router.post('/:id/ai-draft', aiRateLimiter, authenticate, async (req: AuthReques
     // Behörighetskontroll: bara ägare/admin/tilldeln får generera utkast. Måste
     // köras FÖRE aiEnabled() — annars får en obehörig användare 503 istället
     // för 403, och 403-grenen blir otestbar utan en riktig API-nyckel.
-    if (!canAccessTicket(req.user!, req.params.id)) {
+    if (!canAccessTicket(req, req.params.id)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -1032,7 +1032,7 @@ router.get('/:id/ai-summary', aiRateLimiter, authenticate, async (req: AuthReque
     // Behörighetskontroll: bara ägare/admin/tilldeln får se AI-sammanfattningen.
     // Måste köras FÖRE aiEnabled() — annars får en obehörig användare 503
     // istället för 403, och 403-grenen blir otestbar utan en riktig API-nyckel.
-    if (!canAccessTicket(req.user!, req.params.id)) {
+    if (!canAccessTicket(req, req.params.id)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -1105,7 +1105,7 @@ router.get('/:id/history', authenticate, (req: AuthRequest, res: Response) => {
     if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (t.assigned_to !== null && !canAccessTicket(req.user!, req.params.id)) {
+    if (t.assigned_to !== null && !canAccessTicket(req, req.params.id)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -1216,7 +1216,7 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
         // extra query per ärende. Otillgängliga ärenden tas inte tyst med —
         // de rapporteras i `skipped`.
         if (existing.assigned_to !== null) {
-          const hasAccess = req.user!.role === 'admin'
+          const hasAccess = isEffectiveAdmin(req)
             || existing.requester_id === req.user!.id
             || existing.assigned_to === req.user!.id
             || existing.created_by === req.user!.id;
@@ -1412,7 +1412,7 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
     // (canAccessTicket). Unassigned tickets stay open for self-service pickup —
     // any authenticated agent may claim/work a ticket sitting in the queue. This
     // blocks a non-owner from rewriting a ticket already assigned to a colleague.
-    if (existing.assigned_to !== null && !canAccessTicket(req.user!, req.params.id as string)) {
+    if (existing.assigned_to !== null && !canAccessTicket(req, req.params.id as string)) {
       return res.status(403).json({ error: 'Du har inte behörighet att ändra detta ärende' });
     }
 
@@ -1719,7 +1719,7 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
     if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (t.assigned_to !== null && !canAccessTicket(req.user!, ticketId)) {
+    if (t.assigned_to !== null && !canAccessTicket(req, ticketId)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -1752,7 +1752,7 @@ router.get('/:id/reminders', authenticate, (req: AuthRequest, res: Response) => 
     if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (t.assigned_to !== null && !canAccessTicket(req.user!, ticketId)) {
+    if (t.assigned_to !== null && !canAccessTicket(req, ticketId)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -1787,7 +1787,7 @@ router.delete('/:id/reminders/sent', authenticate, (req: AuthRequest, res: Respo
     if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (t.assigned_to !== null && !canAccessTicket(req.user!, ticketId)) {
+    if (t.assigned_to !== null && !canAccessTicket(req, ticketId)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -1818,7 +1818,7 @@ router.delete('/:id/reminders/:reminderId', authenticate, (req: AuthRequest, res
     }
 
     // Only allow users to delete their own reminders (or admins)
-    if (reminder.user_id !== userId && req.user!.role !== 'admin') {
+    if (reminder.user_id !== userId && !isEffectiveAdmin(req)) {
       return res.status(403).json({ error: 'Not authorized' });
     }
 

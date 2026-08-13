@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { db } from '../db/connection.js';
 import { stripHtml } from '../lib/htmlUtils.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
-import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { hasMagicByteMatch } from './attachments.js';
 import { createRateLimiter, writeRateLimiter } from '../middleware/rateLimit.js';
@@ -253,7 +253,7 @@ router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
 // GET /api/kb/articles/:id
 router.get('/articles/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isEffectiveAdmin(req);
     const article = isAdmin
       ? db.prepare(`
           SELECT
@@ -500,7 +500,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
   const { articleId } = req.body;
   if (!articleId) return res.status(400).json({ error: 'articleId is required' });
   // Kontrollera att användaren har behörighet till ärendet
-  if (!canAccessTicket(req.user!, req.params.ticketId)) {
+  if (!canAccessTicket(req, req.params.ticketId)) {
     return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
   }
   try {
@@ -526,7 +526,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 // DELETE /api/kb/ticket/:ticketId/:articleId
 router.delete('/ticket/:ticketId/:articleId', authenticate, (req: AuthRequest, res: Response) => {
   // Kontrollera att användaren har behörighet till ärendet
-  if (!canAccessTicket(req.user!, req.params.ticketId)) {
+  if (!canAccessTicket(req, req.params.ticketId)) {
     return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
   }
   try {

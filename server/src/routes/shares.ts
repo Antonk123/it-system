@@ -78,7 +78,7 @@ interface ChecklistRow {
 // Get existing share token for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
     // Endast aktiva shares räknas — en utgången rad ska visas som "ingen
@@ -114,7 +114,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     }
     // Behörighet FÖRE den idempotenta returen — annars kan en inloggad
     // användare utan åtkomst till ärendet hämta ut en redan myntad token.
-    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -154,7 +154,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 // Delete share link
 router.delete('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
     const result = db.prepare('DELETE FROM ticket_shares WHERE ticket_id = ?').run(req.params.ticketId);

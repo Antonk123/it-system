@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
 import { existsSync, rmSync } from 'fs';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 
 /**
  * Integration tests for the comments routes (/api/comments). Covers the
@@ -51,6 +51,9 @@ let strangerAgent: ReturnType<typeof request.agent>;
 let strangerToken: string;
 let strangerCsrf: string;
 
+// Bound to the admin user (below) but scoped ['read','write'] — no 'admin'.
+let scopedAdminKey: string;
+
 beforeAll(async () => {
   initializeDatabase();
 
@@ -85,6 +88,15 @@ beforeAll(async () => {
     `INSERT INTO tickets (id, title, description, status, priority, assigned_to)
      VALUES (?, 'Skrivaren krånglar', 'Papper fastnar', 'open', 'low', ?)`
   ).run(assignedTicketId, assigneeUserId);
+
+  const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
+  const keyPrefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
+  const keyHash = createHash('sha256').update(rawKey).digest('hex');
+  db.prepare(
+    `INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(randomUUID(), 'scoped-test-key', keyPrefix, keyHash, userId, JSON.stringify(['read', 'write']));
+  scopedAdminKey = rawKey;
 
   app = createApp();
   agent = request.agent(app);
@@ -232,5 +244,53 @@ describe('GET/POST /api/comments/ticket/:ticketId — authorization (canAccessTi
       .set('x-csrf-token', csrf)
       .send({ content: 'Detta ärende finns inte.' });
     expect(postRes.status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PUT/DELETE /api/comments/:id — ownership check must respect an API key's
+// own scope, not just its owning user's role (isEffectiveAdmin). A key bound
+// to an admin but scoped ['read','write'] (no 'admin') must be treated as a
+// non-admin for the own-comment-or-admin check, mirroring requireAdmin.
+// ---------------------------------------------------------------------------
+describe('PUT/DELETE /api/comments/:id — admin API-key scope', () => {
+  let foreignCommentId: string;
+
+  beforeAll(() => {
+    foreignCommentId = randomUUID();
+    db.prepare(
+      `INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal)
+       VALUES (?, ?, ?, ?, 0)`
+    ).run(foreignCommentId, assignedTicketId, assigneeUserId, 'Kommentar från assignee');
+  });
+
+  it('PUT: admin-owner API key WITHOUT admin scope cannot edit another user\'s comment (403)', async () => {
+    const res = await request(app)
+      .put(`/api/comments/${foreignCommentId}`)
+      .set('Authorization', `Bearer ${scopedAdminKey}`)
+      .send({ content: 'Kapad redigering' });
+    expect(res.status).toBe(403);
+  });
+
+  it('DELETE: same key cannot delete another user\'s comment (403)', async () => {
+    const res = await request(app)
+      .delete(`/api/comments/${foreignCommentId}`)
+      .set('Authorization', `Bearer ${scopedAdminKey}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('sanity: the same admin via a real session (JWT) still may edit/delete any comment', async () => {
+    const res = await agent
+      .put(`/api/comments/${foreignCommentId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-csrf-token', csrf)
+      .send({ content: 'Admin-redigering via riktig session' });
+    expect(res.status).toBe(200);
+
+    const delRes = await agent
+      .delete(`/api/comments/${foreignCommentId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-csrf-token', csrf);
+    expect(delRes.status).toBe(200);
   });
 });

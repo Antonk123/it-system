@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { existsSync, rmSync } from 'fs';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 
 /**
  * IDOR authorization tests for ticket-link routes.
@@ -54,6 +54,9 @@ let ticketB: string;
 // A ticket owned by `stranger` — used to prove the target-side authz check.
 let strangerTicket: string;
 
+// Bound to adminId but scoped ['read','write'] — no 'admin' permission.
+let scopedAdminKey: string;
+
 async function loginAgent(email: string, password: string) {
   const agent = request.agent(app);
   const login = await agent.post('/api/auth/login').send({ email, password });
@@ -91,6 +94,15 @@ beforeAll(async () => {
     .run(ticketB, 'Ticket B', 'owner ticket B', 'open', null, ownerId);
   db.prepare(`INSERT INTO tickets (id, title, description, status, assigned_to, created_by) VALUES (?, ?, ?, ?, ?, ?)`)
     .run(strangerTicket, 'Stranger Ticket', 'stranger ticket', 'open', null, strangerId);
+
+  const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
+  const keyPrefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
+  const keyHash = createHash('sha256').update(rawKey).digest('hex');
+  db.prepare(
+    `INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(randomUUID(), 'scoped-test-key', keyPrefix, keyHash, adminId, JSON.stringify(['read', 'write']));
+  scopedAdminKey = rawKey;
 
   app = createApp();
 
@@ -177,5 +189,38 @@ describe('POST /api/links/ticket/:ticketId — authorization', () => {
       .post(`/api/links/ticket/${ticketA}`)
       .send({ targetTicketId: ticketB, linkType: 'related' });
     expect(res.status).toBe(403);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DELETE /api/links/:id — the ownership check must respect an API key's own
+// scope, not just its owning user's role (isEffectiveAdmin). A key bound to
+// an admin but scoped ['read','write'] (no 'admin') must be treated as a
+// non-admin for the "admin OR assigned/created" check, mirroring requireAdmin.
+// ---------------------------------------------------------------------------
+describe('DELETE /api/links/:id — admin API-key scope', () => {
+  let linkId: string;
+
+  beforeAll(() => {
+    // strangerTicket <-> ticketB — unused pairing, admin has no relation to either.
+    linkId = randomUUID();
+    db.prepare(
+      `INSERT INTO ticket_links (id, source_ticket_id, target_ticket_id, created_by) VALUES (?, ?, ?, ?)`
+    ).run(linkId, strangerTicket, ticketB, ownerId);
+  });
+
+  it('admin-owner API key WITHOUT admin scope cannot delete a link it has no relation to (403)', async () => {
+    const res = await request(app)
+      .delete(`/api/links/${linkId}`)
+      .set('Authorization', `Bearer ${scopedAdminKey}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('sanity: the same admin via a real session (JWT) may still delete any link', async () => {
+    const res = await adminAgent
+      .delete(`/api/links/${linkId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrf);
+    expect(res.status).toBe(200);
   });
 });

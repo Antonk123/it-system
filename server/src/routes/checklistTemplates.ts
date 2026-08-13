@@ -155,7 +155,7 @@ router.post('/:id/apply', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const ticket = db.prepare('SELECT id FROM tickets WHERE id = ?').get(ticketId);
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
-    if (!canAccessTicket(req.user!, ticketId as string)) {
+    if (!canAccessTicket(req, ticketId as string)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { existsSync, rmSync } from 'fs';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 
 /**
  * Integration tests for the /api/users routes (audit-v3 LOW).
@@ -45,6 +45,9 @@ let user: Session;
 let adminId: string;
 let userId: string;
 
+// Bound to adminId but scoped ['read'] — no 'admin' permission.
+let scopedAdminKey: string;
+
 async function login(email: string, password: string): Promise<Session> {
   const agent = request.agent(app);
   const res = await agent.post('/api/auth/login').send({ email, password });
@@ -68,6 +71,15 @@ beforeAll(async () => {
     .run(adminId, 'admin@userstest.local', adminHash, 'admin', 'Users Admin');
   db.prepare(`INSERT INTO users (id, email, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?)`)
     .run(userId, 'user@userstest.local', userHash, 'user', 'Plain User');
+
+  const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
+  const keyPrefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
+  const keyHash = createHash('sha256').update(rawKey).digest('hex');
+  db.prepare(
+    `INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(randomUUID(), 'scoped-test-key', keyPrefix, keyHash, adminId, JSON.stringify(['read']));
+  scopedAdminKey = rawKey;
 
   app = createApp();
 
@@ -111,6 +123,16 @@ describe('GET /api/users — auth required, payload by role', () => {
     const someone = res.body.users[0];
     expect(someone).toHaveProperty('displayName');
     expect(someone).toHaveProperty('role');
+    expect(someone.email).toBeUndefined();
+    expect(someone.lastSignIn).toBeUndefined();
+  });
+
+  it('returns the reduced payload for an admin-owner API key WITHOUT admin scope (isEffectiveAdmin)', async () => {
+    const res = await request(app)
+      .get('/api/users')
+      .set('Authorization', `Bearer ${scopedAdminKey}`);
+    expect(res.status).toBe(200);
+    const someone = res.body.users[0];
     expect(someone.email).toBeUndefined();
     expect(someone.lastSignIn).toBeUndefined();
   });

@@ -83,20 +83,28 @@ afterAll(() => {
   }
 });
 
+// Both functions take a request-shaped object ({ user, apiKey? }) rather than
+// a bare user, so isEffectiveAdmin (server/src/middleware/auth.ts) can see an
+// API key's own scope — asReq() wraps a plain {id,role} for these JWT-session
+// (no apiKey) test cases.
+function asReq(user: { id: string; role: 'admin' | 'user' }) {
+  return { user };
+}
+
 describe('filterAccessibleTicketIds', () => {
   it('returns [] for an empty input array without touching the DB', () => {
-    expect(filterAccessibleTicketIds({ id: strangerId, role: 'user' }, [])).toEqual([]);
+    expect(filterAccessibleTicketIds(asReq({ id: strangerId, role: 'user' }), [])).toEqual([]);
   });
 
   it('returns all ids for an admin, including ones that do not exist', () => {
     const input = [ownedTicketId, assignedTicketId, unrelatedTicketId, missingTicketId];
-    const result = filterAccessibleTicketIds({ id: adminId, role: 'admin' }, input);
+    const result = filterAccessibleTicketIds(asReq({ id: adminId, role: 'admin' }), input);
     expect(result.sort()).toEqual([...input].sort());
   });
 
   it('keeps only the owner-created ticket for a non-admin matched via created_by', () => {
     const result = filterAccessibleTicketIds(
-      { id: ownerId, role: 'user' },
+      asReq({ id: ownerId, role: 'user' }),
       [ownedTicketId, assignedTicketId, unrelatedTicketId]
     );
     expect(result).toEqual([ownedTicketId]);
@@ -104,7 +112,7 @@ describe('filterAccessibleTicketIds', () => {
 
   it('keeps only the assigned ticket for a non-admin matched via assigned_to', () => {
     const result = filterAccessibleTicketIds(
-      { id: assigneeId, role: 'user' },
+      asReq({ id: assigneeId, role: 'user' }),
       [ownedTicketId, assignedTicketId, unrelatedTicketId]
     );
     expect(result).toEqual([assignedTicketId]);
@@ -112,14 +120,14 @@ describe('filterAccessibleTicketIds', () => {
 
   it('drops all ids for a stranger with no relationship to any ticket', () => {
     const result = filterAccessibleTicketIds(
-      { id: strangerId, role: 'user' },
+      asReq({ id: strangerId, role: 'user' }),
       [ownedTicketId, assignedTicketId, unrelatedTicketId]
     );
     expect(result).toEqual([]);
   });
 
   it('excludes non-existent ticket ids for non-admins', () => {
-    const result = filterAccessibleTicketIds({ id: ownerId, role: 'user' }, [missingTicketId]);
+    const result = filterAccessibleTicketIds(asReq({ id: ownerId, role: 'user' }), [missingTicketId]);
     expect(result).toEqual([]);
   });
 
@@ -127,7 +135,7 @@ describe('filterAccessibleTicketIds', () => {
     // 950 missing ids + the one real, accessible id — forces >1 IN(...) chunk.
     const filler = Array.from({ length: 950 }, () => randomUUID());
     const input = [...filler, ownedTicketId];
-    const result = filterAccessibleTicketIds({ id: ownerId, role: 'user' }, input);
+    const result = filterAccessibleTicketIds(asReq({ id: ownerId, role: 'user' }), input);
     expect(result).toEqual([ownedTicketId]);
   });
 
@@ -141,10 +149,24 @@ describe('filterAccessibleTicketIds', () => {
     const ticketIds = [ownedTicketId, assignedTicketId, unrelatedTicketId, missingTicketId];
 
     for (const user of users) {
-      const batched = new Set(filterAccessibleTicketIds(user, ticketIds));
+      const batched = new Set(filterAccessibleTicketIds(asReq(user), ticketIds));
       for (const ticketId of ticketIds) {
-        expect(batched.has(ticketId)).toBe(canAccessTicket(user, ticketId));
+        expect(batched.has(ticketId)).toBe(canAccessTicket(asReq(user), ticketId));
       }
     }
+  });
+
+  it('an admin-owner API key WITHOUT admin scope is treated as non-admin (isEffectiveAdmin)', () => {
+    const req = { user: { id: adminId, role: 'admin' as const }, apiKey: { permissions: ['read', 'write'] } };
+    const result = filterAccessibleTicketIds(req, [ownedTicketId, assignedTicketId, unrelatedTicketId]);
+    expect(result).toEqual([]); // admin has no requester/assignee/creator relation to any of them
+    expect(canAccessTicket(req, ownedTicketId)).toBe(false);
+  });
+
+  it('an admin-owner API key WITH admin scope keeps full access (isEffectiveAdmin)', () => {
+    const req = { user: { id: adminId, role: 'admin' as const }, apiKey: { permissions: ['read', 'admin'] } };
+    const result = filterAccessibleTicketIds(req, [ownedTicketId, assignedTicketId, unrelatedTicketId]);
+    expect(result.sort()).toEqual([ownedTicketId, assignedTicketId, unrelatedTicketId].sort());
+    expect(canAccessTicket(req, ownedTicketId)).toBe(true);
   });
 });

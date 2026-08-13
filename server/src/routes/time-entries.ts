@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { randomUUID } from 'crypto';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
 
@@ -28,7 +28,7 @@ router.get('/:ticketId', authenticate, (req: AuthRequest, res) => {
     const { ticketId } = req.params;
 
     // Kontrollera att användaren har behörighet till ärendet
-    if (!canAccessTicket(req.user!, ticketId)) {
+    if (!canAccessTicket(req, ticketId)) {
       res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
       return;
     }
@@ -104,7 +104,7 @@ router.post('/:ticketId', authenticate, (req: AuthRequest, res) => {
     }
 
     const userId = req.user!.id;
-    const isAdmin = req.user!.role === 'admin';
+    const isAdmin = isEffectiveAdmin(req);
     if (!isAdmin && ticket.assigned_to !== userId && ticket.created_by !== userId) {
       res.status(403).json({ error: 'Du kan bara logga tid på ärenden du är tilldelad eller skapare av' });
       return;
@@ -146,7 +146,7 @@ router.put('/:ticketId/:id', authenticate, (req: AuthRequest, res) => {
     }
 
     // Only the creator or an admin may edit (mirrors DELETE).
-    if (req.user!.role !== 'admin' && entry.user_id !== req.user!.id) {
+    if (!isEffectiveAdmin(req) && entry.user_id !== req.user!.id) {
       res.status(403).json({ error: 'Du kan bara redigera dina egna tidsregistreringar' });
       return;
     }
@@ -221,7 +221,7 @@ router.delete('/:ticketId/:id', authenticate, (req: AuthRequest, res) => {
     }
 
     // Only the creator or an admin can delete a time entry
-    if (req.user!.role !== 'admin' && entry.user_id !== req.user!.id) {
+    if (!isEffectiveAdmin(req) && entry.user_id !== req.user!.id) {
       res.status(403).json({ error: 'Du kan bara ta bort dina egna tidsregistreringar' });
       return;
     }

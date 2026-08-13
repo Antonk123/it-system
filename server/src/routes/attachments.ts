@@ -170,7 +170,7 @@ export function hasMagicByteMatch(filePath: string, declaredMime: string): boole
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
     // Authorization: verify user has access to the parent ticket before listing metadata
-    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string)) {
       return res.status(403).json({ error: 'Forbidden: you do not have access to this ticket' });
     }
 
@@ -223,7 +223,7 @@ router.post('/ticket/:ticketId', writeRateLimiter, authenticate, (req: AuthReque
       return res.status(404).json({ error: 'Ticket not found' });
     }
 
-    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string)) {
       // Unauthorized: remove the file multer already wrote to disk, then reject.
       try { unlinkSync(uploadedPath); } catch { /* ignore cleanup error */ }
       return res.status(403).json({ error: 'Forbidden: you do not have access to this ticket' });
@@ -275,7 +275,7 @@ router.get('/file/:id', authenticate, (req: AuthRequest, res: Response) => {
     }
 
     // Authorization: verify user has access to the parent ticket
-    if (!canAccessTicket(req.user!, attachment.ticket_id)) {
+    if (!canAccessTicket(req, attachment.ticket_id)) {
       return res.status(403).json({ error: 'Forbidden: you do not have access to this attachment' });
     }
 
@@ -327,7 +327,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
     }
 
     // Authorization: verify user has access to the parent ticket
-    if (!canAccessTicket(req.user!, attachment.ticket_id)) {
+    if (!canAccessTicket(req, attachment.ticket_id)) {
       return res.status(403).json({ error: 'Forbidden: you do not have access to this attachment' });
     }
 

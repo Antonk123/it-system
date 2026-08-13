@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { existsSync, mkdirSync, rmSync } from 'fs';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -86,6 +86,9 @@ let anonAgent: ReturnType<typeof request.agent>;
 let anonCsrfToken: string;
 
 let categoryId: string;
+let adminId: string;
+// Bound to adminId but scoped ['read','write'] — no 'admin' permission.
+let scopedAdminKey: string;
 
 // A fresh, unique source IP per call, so functional /public/:token calls never
 // share a rate-limit bucket with each other or with the dedicated trip test.
@@ -106,7 +109,7 @@ beforeAll(async () => {
 
   initializeDatabase();
 
-  const adminId = randomUUID();
+  adminId = randomUUID();
   const userId = randomUUID();
 
   const adminHash = await bcrypt.hash('Admin-P@ss1234!', 10);
@@ -124,6 +127,17 @@ beforeAll(async () => {
   db.prepare(
     `INSERT INTO kb_categories (id, name, color, position) VALUES (?, ?, ?, ?)`
   ).run(categoryId, 'Test Category', '#3b82f6', 0);
+
+  {
+    const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
+    const keyPrefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
+    const keyHash = createHash('sha256').update(rawKey).digest('hex');
+    db.prepare(
+      `INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(randomUUID(), 'scoped-test-key', keyPrefix, keyHash, adminId, JSON.stringify(['read', 'write']));
+    scopedAdminKey = rawKey;
+  }
 
   app = createApp();
 
@@ -389,6 +403,14 @@ describe('KB article draft visibility (GET /api/kb/articles/:id)', () => {
     const res = await userAgent
       .get(`/api/kb/articles/${draftId}`)
       .set('Authorization', `Bearer ${userToken}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 for an admin-owner API key WITHOUT admin scope (isEffectiveAdmin)', async () => {
+    const res = await request(app)
+      .get(`/api/kb/articles/${draftId}`)
+      .set('Authorization', `Bearer ${scopedAdminKey}`);
 
     expect(res.status).toBe(404);
   });

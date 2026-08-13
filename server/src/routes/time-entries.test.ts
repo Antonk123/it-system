@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { existsSync, rmSync } from 'fs';
-import { randomUUID } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 
 /**
  * Tests for time-entries (#3): the billable flag, work_date, and the edit (PUT)
@@ -27,6 +27,12 @@ let app: ReturnType<typeof createApp>;
 let owner: { agent: ReturnType<typeof request.agent>; token: string; csrf: string; id: string };
 let other: { agent: ReturnType<typeof request.agent>; token: string; csrf: string; id: string };
 let ticketId: string;
+let adminId: string;
+let adminAgent: ReturnType<typeof request.agent>;
+let adminToken: string;
+let adminCsrf: string;
+// Bound to adminId but scoped ['read','write'] — no 'admin' permission.
+let scopedAdminKey: string;
 
 async function login(email: string, password: string) {
   const agent = request.agent(app);
@@ -51,11 +57,28 @@ beforeAll(async () => {
   db.prepare('INSERT INTO tickets (id, title, description, assigned_to, created_by) VALUES (?, ?, ?, ?, ?)')
     .run(ticketId, 'Time Ticket', 'Desc', ownerId, ownerId);
 
+  adminId = randomUUID();
+  db.prepare('INSERT INTO users (id, email, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?)')
+    .run(adminId, 'admin@time.local', hash, 'admin', 'Admin');
+
+  const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
+  const keyPrefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
+  const keyHash = createHash('sha256').update(rawKey).digest('hex');
+  db.prepare(
+    `INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(randomUUID(), 'scoped-test-key', keyPrefix, keyHash, adminId, JSON.stringify(['read', 'write']));
+  scopedAdminKey = rawKey;
+
   app = createApp();
   const o = await login('owner@time.local', 'Time-P@ss-1234!');
   owner = { ...o, id: ownerId };
   const ot = await login('other@time.local', 'Time-P@ss-1234!');
   other = { ...ot, id: otherId };
+  const a = await login('admin@time.local', 'Time-P@ss-1234!');
+  adminAgent = a.agent;
+  adminToken = a.token;
+  adminCsrf = a.csrf;
 });
 
 afterAll(() => {
@@ -140,5 +163,48 @@ describe('PUT /api/time-entries/:ticketId/:id — edit', () => {
       .set('Authorization', `Bearer ${owner.token}`).set('x-csrf-token', owner.csrf)
       .send({ duration_minutes: 25 });
     expect(res.status).toBe(409);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// API-key scope must narrow admin rights, not just the owning user's role.
+// A key bound to an admin user but scoped ['read','write'] (no 'admin')
+// must be treated as non-admin by every inline ownership check — mirrors the
+// requireAdmin scope rule (server/src/middleware/auth.ts) which the inline
+// checks in this route bypassed before isEffectiveAdmin() existed.
+// ---------------------------------------------------------------------------
+describe('Admin API key without the admin scope loses admin rights inline', () => {
+  it('POST: cannot log time on a ticket it is not assigned to/creator of (403, not admin bypass)', async () => {
+    const res = await request(app)
+      .post(`/api/time-entries/${ticketId}`) // ticket is assigned to owner, not admin
+      .set('Authorization', `Bearer ${scopedAdminKey}`)
+      .send({ duration_minutes: 15 });
+    expect(res.status).toBe(403);
+  });
+
+  it('PUT: cannot edit an entry it does not own (403, not admin bypass)', async () => {
+    const created = await postEntry({ duration_minutes: 12, note: 'owner-only' });
+    const res = await request(app)
+      .put(`/api/time-entries/${ticketId}/${created.body.id}`)
+      .set('Authorization', `Bearer ${scopedAdminKey}`)
+      .send({ duration_minutes: 99 });
+    expect(res.status).toBe(403);
+  });
+
+  it('DELETE: cannot delete an entry it does not own (403, not admin bypass)', async () => {
+    const created = await postEntry({ duration_minutes: 8, note: 'owner-only-2' });
+    const res = await request(app)
+      .delete(`/api/time-entries/${ticketId}/${created.body.id}`)
+      .set('Authorization', `Bearer ${scopedAdminKey}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('sanity: the same admin via a real session (JWT, no key) still bypasses ownership as intended', async () => {
+    const created = await postEntry({ duration_minutes: 5, note: 'for-real-admin-check' });
+    const res = await adminAgent
+      .delete(`/api/time-entries/${ticketId}/${created.body.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrf);
+    expect(res.status).toBe(204);
   });
 });

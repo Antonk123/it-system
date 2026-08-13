@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
 
@@ -41,7 +41,7 @@ interface TicketLinkWithDetails {
 // GET /api/links/ticket/:ticketId - Fetch all links for a ticket (bidirectional)
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
     // Get links where ticket is either source or target
@@ -146,8 +146,8 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     }
 
     // Authz: must be able to access BOTH tickets to link them (closes IDOR).
-    if (!canAccessTicket(req.user, req.params.ticketId as string) ||
-        !canAccessTicket(req.user, targetTicketId)) {
+    if (!canAccessTicket(req, req.params.ticketId as string) ||
+        !canAccessTicket(req, targetTicketId)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -228,7 +228,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
     // Ownership-check: admin får alltid radera. Övriga måste vara assigned_to
     // eller created_by på något av de länkade ärendena.
-    if (req.user.role !== 'admin') {
+    if (!isEffectiveAdmin(req)) {
       const userId = req.user.id;
       const ticketAccess = db.prepare(`
         SELECT 1 FROM tickets

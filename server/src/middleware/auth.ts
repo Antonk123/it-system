@@ -172,3 +172,21 @@ export const requireAdmin: RequestHandler = (req: Request, res: Response, next: 
   }
   next();
 };
+
+/**
+ * Same scope rule as requireAdmin, exposed as a boolean for route handlers
+ * that branch on admin-ness inline (own-resource-or-admin ownership checks,
+ * reduced-vs-full read payloads) instead of gating the whole route. Without
+ * this, those inline `req.user.role === 'admin'` checks let an API key
+ * without the 'admin' scope inherit its owner's admin rights for that one
+ * branch — the same escalation requireAdmin already closes for full routes.
+ */
+export function isEffectiveAdmin(req: {
+  user?: Pick<AuthUser, 'role'>;
+  apiKey?: Pick<ApiKeyIdentity, 'permissions'>;
+}): boolean {
+  const user = req.user;
+  if (!user || user.role !== 'admin') return false;
+  if (req.apiKey && !req.apiKey.permissions.includes('admin')) return false;
+  return true;
+}

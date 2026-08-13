@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest } from '../middleware/auth.js';
+import { authenticate, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
 import { sanitizeRichText } from '../lib/htmlSanitizer.js';
 import { notifyCustomerOfPublicReply } from '../lib/ticketNotifications.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
@@ -33,7 +33,7 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
     if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (t.assigned_to !== null && !canAccessTicket(req.user!, req.params.ticketId)) {
+    if (t.assigned_to !== null && !canAccessTicket(req, req.params.ticketId)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -78,7 +78,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (t.assigned_to !== null && !canAccessTicket(req.user!, req.params.ticketId)) {
+    if (t.assigned_to !== null && !canAccessTicket(req, req.params.ticketId)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -144,7 +144,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     }
 
     // Only allow editing own comments or if admin
-    if (existing.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (existing.user_id !== req.user.id && !isEffectiveAdmin(req)) {
       return res.status(403).json({ error: 'Not authorized to edit this comment' });
     }
 
@@ -185,7 +185,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
     }
 
     // Only allow deleting own comments or if admin
-    if (existing.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (existing.user_id !== req.user.id && !isEffectiveAdmin(req)) {
       return res.status(403).json({ error: 'Not authorized to delete this comment' });
     }
 

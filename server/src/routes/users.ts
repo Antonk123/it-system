@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { db } from '../db/connection.js';
-import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
+import { authenticate, requireAdmin, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
 import { validatePassword } from '../lib/passwordPolicy.js';
 import { logAudit } from '../lib/auditLog.js';
 import { logger } from '../lib/logger.js';
@@ -32,7 +32,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
       SELECT id, email, display_name, role, created_at, last_login FROM users ORDER BY created_at DESC
     `).all() as Omit<UserRow, 'password_hash'>[];
 
-    const isAdmin = req.user?.role === 'admin';
+    const isAdmin = isEffectiveAdmin(req);
 
     const mapped = users.map(u => isAdmin
       ? {

@@ -42,7 +42,7 @@ router.post('/progress', authenticate, (req: AuthRequest, res: Response) => {
     // access-scoped ticket list. The typeof guard also hardens against
     // non-string ids reaching the query.
     const candidateIds = (ticketIds as unknown[]).filter((id): id is string => typeof id === 'string');
-    const accessibleIds = filterAccessibleTicketIds(req.user!, candidateIds);
+    const accessibleIds = filterAccessibleTicketIds(req, candidateIds);
 
     if (accessibleIds.length === 0) {
       return res.json({});
@@ -71,7 +71,7 @@ router.post('/progress', authenticate, (req: AuthRequest, res: Response) => {
 // Get checklists for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
     const items = db.prepare(`
@@ -98,7 +98,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -156,7 +156,7 @@ router.post('/ticket/:ticketId/bulk', authenticate, (req: AuthRequest, res: Resp
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (!canAccessTicket(req.user!, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -203,7 +203,7 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (!existing) {
       return res.status(404).json({ error: 'Checklist item not found' });
     }
-    if (!canAccessTicket(req.user!, existing.ticket_id)) {
+    if (!canAccessTicket(req, existing.ticket_id)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -247,7 +247,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (!existing) {
       return res.status(404).json({ error: 'Checklist item not found' });
     }
-    if (!canAccessTicket(req.user!, existing.ticket_id)) {
+    if (!canAccessTicket(req, existing.ticket_id)) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 

@@ -319,6 +319,32 @@ describe('POST /api/shares/ticket/:ticketId — authorization precedes the idemp
     expect(res.status).toBe(403);
     expect(res.body.share_token).toBeUndefined();
   });
+
+  // Sharpest instance of the isEffectiveAdmin bug class: canAccessTicket()
+  // used to take a bare `{id, role}` and short-circuit true for role==='admin'
+  // regardless of the authenticating API key's own scope. A key scoped only
+  // ['write'] (no 'admin'), bound to an admin who has no relation to the
+  // ticket, could mint an UNAUTHENTICATED public share token for it — worse
+  // than the 8 inline-check sites fixed alongside this, since the payoff here
+  // is a standing public credential, not just a one-off action.
+  it('an admin-owner API key WITHOUT admin scope cannot mint a share for a ticket it has no relation to (403)', async () => {
+    const tid = insertTicket(ownerId, 'Scoped-Key Escalation Ticket');
+
+    const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
+    const keyPrefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
+    const keyHash = createHash('sha256').update(rawKey).digest('hex');
+    db.prepare(
+      `INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(randomUUID(), 'scoped-test-key', keyPrefix, keyHash, adminId, JSON.stringify(['read', 'write']));
+
+    const res = await request(app)
+      .post(`/api/shares/ticket/${tid}`)
+      .set('Authorization', `Bearer ${rawKey}`)
+      .send({});
+    expect(res.status).toBe(403);
+    expect(res.body.share_token).toBeUndefined();
+  });
 });
 
 describe('migration 067 — add_ticket_shares_expires_at, run directly against a fresh test DB', () => {
