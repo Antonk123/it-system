@@ -62,6 +62,13 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -85,6 +92,27 @@ import { STATUS_LABELS } from '@/lib/constants';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+// Whether the share Popover (desktop row, "hidden sm:flex" below) or the
+// share Sheet (mobile row, "flex sm:hidden") should be mounted. Deliberately
+// its own 640px check rather than the shared useIsMobile() hook (768px,
+// used elsewhere for layout decisions unrelated to this page) — the two
+// surfaces must switch at EXACTLY the same width as the surrounding sm:
+// classes decide which row is visible, or there's a dead band where neither
+// the visible row's trigger nor its overlay component are mounted at all.
+function useIsAtOrAboveSm(): boolean {
+  const [isDesktopRow, setIsDesktopRow] = useState(
+    () => typeof window !== 'undefined' && window.innerWidth >= 640
+  );
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 640px)');
+    const onChange = () => setIsDesktopRow(mql.matches);
+    mql.addEventListener('change', onChange);
+    onChange();
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+  return isDesktopRow;
+}
 
 const formatFileSize = (bytes: number | null) => {
   if (!bytes) return '';
@@ -139,6 +167,7 @@ const TicketDetail = () => {
   const [shareExpiresInDays, setShareExpiresInDays] = useState('30');
   const shareLinkInputRef = useRef<HTMLInputElement>(null);
   const shareExpiryTriggerRef = useRef<HTMLButtonElement>(null);
+  const isDesktopShareRow = useIsAtOrAboveSm();
   const [mobileReminderOpen, setMobileReminderOpen] = useState(false);
   const [mobileDeleteOpen, setMobileDeleteOpen] = useState(false);
   const [checklistOpen, setChecklistOpen] = useState(false);
@@ -405,6 +434,111 @@ const TicketDetail = () => {
     }
   };
 
+  // Shared by the desktop Popover and the mobile Sheet (below) — each surface
+  // supplies its own heading (PopoverContent has none built in, Sheet has
+  // SheetHeader/SheetTitle) so this renders only the functional part.
+  function renderShareControls() {
+    return (
+      <div className="space-y-3">
+        {isShareChecking ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Kontrollerar delningslänk…
+          </div>
+        ) : shareUrl ? (
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Input
+                ref={shareLinkInputRef}
+                value={shareUrl}
+                readOnly
+                aria-label="Delningslänk"
+                className="text-xs"
+              />
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={handleCopyLink}
+                aria-label="Kopiera delningslänk"
+              >
+                <Copy className="w-4 h-4" />
+              </Button>
+            </div>
+            {shareExpiresAt && (
+              <p className="text-xs text-muted-foreground">
+                Giltig till {format(parseServerDate(shareExpiresAt), 'PPP', { locale: sv })}
+              </p>
+            )}
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="w-full gap-2"
+                  disabled={isShareLoading}
+                >
+                  {isShareLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  Återkalla länk
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Återkalla delningslänk?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Länken slutar omedelbart att fungera för alla som har den.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Avbryt</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleRevokeShareLink}
+                    className={buttonVariants({ variant: 'destructive' })}
+                  >
+                    Återkalla
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="share-expiry" className="text-xs">
+                Giltighetstid
+              </Label>
+              <Select value={shareExpiresInDays} onValueChange={setShareExpiresInDays}>
+                <SelectTrigger id="share-expiry" ref={shareExpiryTriggerRef}>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7">7 dagar</SelectItem>
+                  <SelectItem value="30">30 dagar</SelectItem>
+                  <SelectItem value="90">90 dagar</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              className="w-full gap-2"
+              onClick={handleCreateShareLink}
+              disabled={isShareLoading}
+            >
+              {isShareLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Share2 className="w-4 h-4" />
+              )}
+              Skapa delningslänk
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const handleClone = () => {
     navigate('/tickets/new', {
       state: {
@@ -466,6 +600,16 @@ const TicketDetail = () => {
           <div className="flex gap-2">
             {/* Desktop: alla knappar synliga */}
             <div className="hidden sm:flex gap-2">
+              {/* The "hidden sm:flex" above only hides this visually — React still
+                  mounts it. Gating with isDesktopShareRow too (not just CSS) keeps
+                  this Popover from mounting at all below the sm breakpoint: it shares
+                  sharePopoverOpen with the mobile Sheet below, and a controlled
+                  Popover anchored to a hidden/zero-size trigger dismisses itself right
+                  after opening — resetting the shared state back to false and closing
+                  the Sheet with it (reproduced via logging: state flips true then
+                  false ~50ms later, no user action, tracing back to this Popover's own
+                  auto-dismiss). */}
+              {isDesktopShareRow && (
               <Popover open={sharePopoverOpen} onOpenChange={setSharePopoverOpen}>
                 <PopoverTrigger asChild>
                   <Button
@@ -491,104 +635,11 @@ const TicketDetail = () => {
                         Vem som helst med länken kan se ärendet.
                       </p>
                     </div>
-                    {isShareChecking ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Kontrollerar delningslänk…
-                      </div>
-                    ) : shareUrl ? (
-                      <div className="space-y-3">
-                        <div className="flex gap-2">
-                          <Input
-                            ref={shareLinkInputRef}
-                            value={shareUrl}
-                            readOnly
-                            aria-label="Delningslänk"
-                            className="text-xs"
-                          />
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            onClick={handleCopyLink}
-                            aria-label="Kopiera delningslänk"
-                          >
-                            <Copy className="w-4 h-4" />
-                          </Button>
-                        </div>
-                        {shareExpiresAt && (
-                          <p className="text-xs text-muted-foreground">
-                            Giltig till {format(parseServerDate(shareExpiresAt), 'PPP', { locale: sv })}
-                          </p>
-                        )}
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              className="w-full gap-2"
-                              disabled={isShareLoading}
-                            >
-                              {isShareLoading ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                              Återkalla länk
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Återkalla delningslänk?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Länken slutar omedelbart att fungera för alla som har den.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Avbryt</AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={handleRevokeShareLink}
-                                className={buttonVariants({ variant: 'destructive' })}
-                              >
-                                Återkalla
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <div className="space-y-1.5">
-                          <Label htmlFor="share-expiry" className="text-xs">
-                            Giltighetstid
-                          </Label>
-                          <Select value={shareExpiresInDays} onValueChange={setShareExpiresInDays}>
-                            <SelectTrigger id="share-expiry" ref={shareExpiryTriggerRef}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="7">7 dagar</SelectItem>
-                              <SelectItem value="30">30 dagar</SelectItem>
-                              <SelectItem value="90">90 dagar</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button
-                          className="w-full gap-2"
-                          onClick={handleCreateShareLink}
-                          disabled={isShareLoading}
-                        >
-                          {isShareLoading ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Share2 className="w-4 h-4" />
-                          )}
-                          Skapa delningslänk
-                        </Button>
-                      </div>
-                    )}
+                    {renderShareControls()}
                   </div>
                 </PopoverContent>
               </Popover>
+              )}
               <ReminderDialog onCreateReminder={createReminder} />
               <Button
                 variant="outline"
@@ -669,6 +720,17 @@ const TicketDetail = () => {
         </div>
 
         {/* Mobil-styrda dialoger */}
+        {!isDesktopShareRow && (
+          <Sheet open={sharePopoverOpen} onOpenChange={setSharePopoverOpen}>
+            <SheetContent side="bottom">
+              <SheetHeader>
+                <SheetTitle>Dela ärende</SheetTitle>
+                <SheetDescription>Vem som helst med länken kan se ärendet.</SheetDescription>
+              </SheetHeader>
+              <div className="mt-4">{renderShareControls()}</div>
+            </SheetContent>
+          </Sheet>
+        )}
         <ReminderDialog onCreateReminder={createReminder} open={mobileReminderOpen} onOpenChange={setMobileReminderOpen} />
         <AlertDialog open={mobileDeleteOpen} onOpenChange={setMobileDeleteOpen}>
           <AlertDialogContent>
