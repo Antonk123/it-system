@@ -10,7 +10,7 @@ import { useTemplates } from '@/hooks/useTemplates';
 import { useChecklistTemplates } from '@/hooks/useChecklistTemplates';
 import { useSLAPolicies } from '@/hooks/useSLAPolicies';
 import { useCompanies } from '@/hooks/useCompanies';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -1268,7 +1268,7 @@ const TicketsTab = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteCategory} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeleteCategory} className={buttonVariants({ variant: 'destructive' })}>
               Ta bort
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1285,7 +1285,7 @@ const TicketsTab = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteTag} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeleteTag} className={buttonVariants({ variant: 'destructive' })}>
               Ta bort
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1302,7 +1302,7 @@ const TicketsTab = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction onClick={handleTemplateDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleTemplateDelete} className={buttonVariants({ variant: 'destructive' })}>
               Ta bort
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -1319,7 +1319,7 @@ const TicketsTab = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction onClick={handleClDeleteTemplate} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleClDeleteTemplate} className={buttonVariants({ variant: 'destructive' })}>
               Ta bort
             </AlertDialogAction>
           </AlertDialogFooter>

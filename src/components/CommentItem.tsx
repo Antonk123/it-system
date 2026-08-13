@@ -3,7 +3,7 @@ import { Comment } from '@/types/ticket';
 import { hasVisibleText } from '@/lib/textValidation';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Pencil, Trash2, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
@@ -100,7 +100,7 @@ export const CommentItem = memo(function CommentItem({ comment, onUpdate, onDele
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Avbryt</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  <AlertDialogAction onClick={handleDelete} className={buttonVariants({ variant: 'destructive' })}>
                     Ta bort
                   </AlertDialogAction>
                 </AlertDialogFooter>

@@ -22,7 +22,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -503,7 +503,7 @@ function TemplateCard({ template, onEdit }: TemplateCardProps) {
                   <AlertDialogCancel>Avbryt</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={() => deleteTemplate.mutate(template.id)}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    className={buttonVariants({ variant: 'destructive' })}
                   >
                     Ta bort
                   </AlertDialogAction>

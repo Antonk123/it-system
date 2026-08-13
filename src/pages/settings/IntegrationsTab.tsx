@@ -1,6 +1,6 @@
 import { useState, memo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -454,7 +454,7 @@ const IntegrationsTab = () => {
                   }).catch(() => toast.error('Kunde inte ta bort nyckel'));
                 }
               }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className={buttonVariants({ variant: 'destructive' })}
             >
               Ta bort
             </AlertDialogAction>
@@ -481,7 +481,7 @@ const IntegrationsTab = () => {
                   }).catch(() => toast.error('Kunde inte ta bort webhook'));
                 }
               }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className={buttonVariants({ variant: 'destructive' })}
             >
               Ta bort
             </AlertDialogAction>

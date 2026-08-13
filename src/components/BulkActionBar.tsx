@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { TicketPriority } from '@/types/ticket';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -154,7 +154,7 @@ export function BulkActionBar({
                 setDeleteDialogOpen(false);
                 onDeletePermanently();
               }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className={buttonVariants({ variant: 'destructive' })}
             >
               Ja, radera {selectedCount} permanent
             </AlertDialogAction>

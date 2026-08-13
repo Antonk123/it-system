@@ -10,7 +10,13 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-linear-to-r from-primary to-primary/90 text-primary-foreground hover:from-primary/90 hover:to-primary/80 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5",
-        destructive: "bg-linear-to-r from-destructive to-destructive/90 text-destructive-foreground hover:from-destructive/90 hover:to-destructive/80 shadow-lg shadow-destructive/25 hover:shadow-xl hover:shadow-destructive/30 hover:-translate-y-0.5",
+        // dark:text overrides --destructive-foreground specifically in dark mode: five
+        // of the six dark themes pair a pale destructive background (60% lightness)
+        // with white text (~3.78:1, below WCAG AA's 4.5:1) — near-black text against
+        // the same background clears AA (~4.96:1) without needing a per-theme CSS edit,
+        // since @custom-variant dark (&:is(.dark *)) only fires when applyMode() has
+        // already added .dark (src/lib/appearance.ts), never in light mode.
+        destructive: "bg-linear-to-r from-destructive to-destructive/90 text-destructive-foreground dark:text-[hsl(0_0%_7%)] hover:from-destructive/90 hover:to-destructive/80 shadow-lg shadow-destructive/25 hover:shadow-xl hover:shadow-destructive/30 hover:-translate-y-0.5",
         outline: "border-2 border-primary/30 bg-background/50 backdrop-blur-xs hover:bg-primary/10 hover:text-primary hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10",
         secondary: "bg-linear-to-r from-secondary to-secondary/80 text-secondary-foreground hover:from-secondary/90 hover:to-secondary/70 shadow-md hover:shadow-lg",
         ghost: "hover:bg-accent/80 hover:text-accent-foreground backdrop-blur-xs",

@@ -2,7 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
 import { useAuth } from '@/contexts/AuthContext';
 import { parseServerDate } from '@/lib/date';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -342,7 +342,7 @@ const AdminTab = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction onClick={handleRestore} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleRestore} className={buttonVariants({ variant: 'destructive' })}>
               Återställ
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -359,7 +359,7 @@ const AdminTab = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteUser} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+            <AlertDialogAction onClick={handleDeleteUser} className={buttonVariants({ variant: 'destructive' })}>
               Ta bort
             </AlertDialogAction>
           </AlertDialogFooter>
