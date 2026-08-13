@@ -9,11 +9,23 @@ import { Label } from "@/components/ui/label";
 import { Lock, Mail, LogIn, Ticket } from "lucide-react";
 import { toast } from "sonner";
 import { BrandLogo } from "@/components/BrandLogo";
+import { cn } from "@/lib/utils";
 
 const SSO_ERROR_MESSAGES: Record<string, string> = {
   unknown_user: "Ditt konto finns inte i IT-Ticket — kontakta administratören.",
   failed: "SSO-inloggningen misslyckades. Försök igen eller logga in med lösenord.",
 };
+
+// sso_error-koden kommer rakt från query-strängen och är alltså helt besökarstyrd.
+// En vanlig uppslagning (SSO_ERROR_MESSAGES[code] ?? fallback) når även
+// Object.prototype: ?sso_error=constructor / =toString / =valueOf ger då en
+// FUNKTION, som ?? inte fångar eftersom den varken är null eller undefined.
+// Värdet hamnar sedan i en state-setter, och React tolkar ett funktionsargument
+// som en updater — den anropas med föregående state och resultatet renderas, så
+// hela login-sidan kraschar ("Objects are not valid as a React child") i stället
+// för att visa det generiska felet. Därför slår vi bara upp EGNA nycklar.
+const resolveSsoErrorMessage = (code: string): string =>
+  Object.hasOwn(SSO_ERROR_MESSAGES, code) ? SSO_ERROR_MESSAGES[code] : SSO_ERROR_MESSAGES.failed;
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -22,9 +34,12 @@ const Login = () => {
   const { signIn, completeSsoLogin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sso, setSso] = useState<{ enabled: boolean; label: string | null }>({ enabled: false, label: null });
-  const ssoError = searchParams.get("sso_error");
+  // Felmeddelandet lever i state, inte i URL:en. ?sso_error= rensas bort så snart
+  // det lästs (se callback-effekten nedan) — annars återuppväcker en reload eller
+  // en bokmärkt /login?sso_error=... ett för länge sedan inaktuellt fel.
+  const [ssoErrorMessage, setSsoErrorMessage] = useState<string | null>(null);
   // Dedup-guard: StrictMode (dev) dubbel-invokerar effekter — utan guard skulle
   // två nära-samtidiga POST /auth/refresh race:a mot den roterande refresh-tokenen.
   const ssoHandled = useRef(false);
@@ -33,18 +48,52 @@ const Login = () => {
     api.getOidcStatus().then(setSso).catch(() => setSso({ enabled: false, label: null }));
   }, []);
 
+  // Hanterar returen från backendens OIDC-callback: den redirectar hit med
+  // antingen ?sso=1 (lyckad) eller ?sso_error=<kod> (misslyckad).
   useEffect(() => {
-    if (searchParams.get("sso") !== "1" || ssoHandled.current) return;
+    const errorCode = searchParams.get("sso_error");
+    const isSsoCallback = searchParams.get("sso") === "1";
+    if (errorCode === null && !isSsoCallback) return;
+
+    if (errorCode !== null) setSsoErrorMessage(resolveSsoErrorMessage(errorCode));
+
+    // Rensa BÅDA parametrarna i EN enda uppdatering: react-router bygger inte
+    // vidare på föregående värde när setSearchParams anropas flera gånger i
+    // samma tick, så två separata anrop skulle skriva tillbaka varandras param.
+    // replace, eftersom städningen inte ska lägga en extra post i historiken.
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("sso");
+        next.delete("sso_error");
+        return next;
+      },
+      { replace: true }
+    );
+
+    if (!isSsoCallback || ssoHandled.current) return;
     ssoHandled.current = true;
     completeSsoLogin().then((ok) => {
       if (ok) {
         toast.success("Inloggad");
-        navigate("/");
+        // SSO landar ALLTID på "/" — medvetet val: backendens OIDC-callback bär
+        // inte med returnTo genom redirect-kedjan, så det finns ingen sparad
+        // plats att återvända till. replace krävs för att bakåtknappen inte ska
+        // leda tillbaka till /login?sso=1, vars nya mount annars skulle köra hela
+        // completion-flödet en gång till mot en redan förbrukad refresh-token.
+        navigate("/", { replace: true });
       } else {
+        // Toasten försvinner efter ~4 sekunder och annonseras bara i förbifarten.
+        // Backend-felet (?sso_error=) ger däremot ett KVARSTÅENDE role="alert" —
+        // utan samma behandling här får en skärmläsaranvändare som missar toasten
+        // aldrig veta varför inloggningen uteblev, bara att den inte hände.
+        // Toasten behålls för seende (fångar blicken direkt), meddelandet är för
+        // alla som behöver kunna gå tillbaka och läsa orsaken.
+        setSsoErrorMessage(SSO_ERROR_MESSAGES.failed);
         toast.error(SSO_ERROR_MESSAGES.failed);
       }
     });
-  }, [searchParams, completeSsoLogin, navigate]);
+  }, [searchParams, setSearchParams, completeSsoLogin, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -144,16 +193,28 @@ const Login = () => {
                   <span className="bg-card px-2 text-muted-foreground">eller</span>
                 </div>
               </div>
+              {/* MÅSTE vara ett <a> (vanlig navigering), aldrig ett <form> som
+                  postar till backend: CSP:ns form-action 'self' (nginx.conf +
+                  helmets default) blockerar en formulärsubmit så snart
+                  redirect-kedjan lämnar vår egen origin på väg mot Entra. */}
               <Button asChild variant="outline" className="w-full">
-                <a href={api.oidcLoginUrl()}>{sso.label ?? "Logga in med SSO"}</a>
+                {/* Andra försvarslinjen mot en tom/whitespace-label (getOidcStatus
+                    trimmar redan bort den): en länk utan textinnehåll får inget
+                    tillgängligt namn alls och blir omöjlig att identifiera för
+                    skärmläsare. ?? räcker inte — "" och "   " är inte null. */}
+                <a href={api.oidcLoginUrl()}>{sso.label?.trim() || "Logga in med SSO"}</a>
               </Button>
             </>
           )}
-          {ssoError && (
-            <p role="alert" className="mt-4 text-sm text-destructive text-center">
-              {SSO_ERROR_MESSAGES[ssoError] ?? SSO_ERROR_MESSAGES.failed}
-            </p>
-          )}
+          {/* Live-regionen renderas ALLTID, inte bara när felet finns. En
+              role="alert" som monteras in i DOM:en i samma ögonblick som texten
+              sätts annonseras opålitligt (flera skärmläsare/browser-kombinationer
+              hinner inte uppfatta den nya regionen) — regionen ska finnas i
+              tillgänglighetsträdet i förväg och bara FYLLAS. Marginalen villkoras
+              så att den tomma regionen inte lägger till luft i layouten. */}
+          <p role="alert" className={cn("text-sm text-destructive text-center", ssoErrorMessage && "mt-4")}>
+            {ssoErrorMessage}
+          </p>
 
           <div className="mt-6 pt-5 border-t border-border/50 text-center">
             <p className="text-xs text-muted-foreground mb-2">Behöver du hjälp?</p>

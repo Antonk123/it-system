@@ -305,9 +305,32 @@ class ApiClient {
     return data;
   }
 
-  /** Publik status för SSO-knappen på login-sidan. */
+  /**
+   * Publik status för SSO-knappen på login-sidan. Samma resonemang som
+   * getBranding() nedan: anropas från den OINLOGGADE login-sidan och får aldrig
+   * gå via request(), vars 401-gren triggar refresh-kedjan + sessionExpired().
+   * Timeout krävs eftersom ett hängande anrop annars döljer SSO-knappen tyst
+   * och permanent — användaren tror då att SSO är avstängt.
+   */
   async getOidcStatus(): Promise<{ enabled: boolean; label: string | null }> {
-    return this.request('/auth/oidc/enabled');
+    try {
+      const response = await fetch(`${this.baseUrl}/auth/oidc/enabled`, {
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) return { enabled: false, label: null };
+      const data = await response.json();
+      // Labeln trimmas och tomma/whitespace-strängar normaliseras till null:
+      // den blir SSO-länkens enda textinnehåll, och "" eller "   " ger då en
+      // länk helt utan tillgängligt namn (skärmläsaren läser bara upp "länk").
+      // null gör att Login faller tillbaka på standardtexten.
+      const label = typeof data?.label === 'string' ? data.label.trim() : '';
+      return {
+        enabled: data?.enabled === true,
+        label: label === '' ? null : label,
+      };
+    } catch {
+      return { enabled: false, label: null };
+    }
   }
 
   // Branding — publik logotyp-URL. Anropas från oinloggade sidor (Login,
@@ -1024,6 +1047,18 @@ class ApiClient {
     });
   }
 
+  /**
+   * Kopplar loss ett konto från dess SSO-identitet (nollar oidc_sub/oidc_iss).
+   * Behövs när samma e-postadress byter ägare (offboard→onboard) — annars pekar
+   * länken på den gamla identiteten och den nya medarbetaren nekas för alltid.
+   */
+  async clearSystemUserSsoLink(userId: string) {
+    return this.request<{ message: string }>(`/users/${userId}`, {
+      method: 'PATCH',
+      body: { clearSsoLink: true },
+    });
+  }
+
   // Tags
   async getTags() {
     return this.request<{ id: string; name: string; color: string; created_at: string }[]>('/tags');
@@ -1632,6 +1667,8 @@ export interface SystemUser {
   createdAt: string;
   lastSignIn: string | null;
   emailConfirmed: boolean;
+  /** true när kontot är länkat till en SSO-identitet. Själva sub/issuer exponeras aldrig. */
+  ssoLinked?: boolean;
 }
 
 export interface SLAPolicyRow {
