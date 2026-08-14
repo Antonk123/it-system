@@ -1423,4 +1423,120 @@ export const migrations: Migration[] = [
       }
     },
   },
+  {
+    id: '069',
+    name: 'create_indexes_missed_by_columnexists_guards',
+    up: (db) => {
+      // Nio index existerade BARA på uppgraderade databaser. Sju av dem skapades
+      // inuti `if (!columnExists(tabell, kolumn)) { ALTER …; CREATE INDEX … }`:
+      // på en fresh install står kolumnen redan i schema.sql, guarden blir false
+      // och hoppar därmed över CREATE INDEX också — indexet uppstod alltså bara
+      // där ALTER faktiskt behövdes. Samma miss som migration 059 lappade för
+      // refresh_tokens, i sju nya instanser. Här skapas de utanför alla guards:
+      // kolumnerna finns garanterat vid det här laget, oavsett väg.
+      //
+      // De två sista (status_priority, field_values_search) fanns aldrig i någon
+      // migration. De skapades av `server/src/db/add-performance-indexes.ts`, ett
+      // standalone-script som kördes manuellt mot prod och sedan raderades i
+      // d5b9ce1 — så prod har dem, ingen ny installation får dem, och
+      // definitionen försvann ur kodbasen med filen. Återinförda här som den
+      // enda väg som faktiskt körs vid start.
+      const indexes: [string, string][] = [
+        ['idx_companies_name', 'companies(name)'],
+        ['idx_contacts_company', 'contacts(company_id)'],
+        ['idx_tickets_assigned', 'tickets(assigned_to)'],
+        ['idx_tickets_company', 'tickets(company_id)'],
+        ['idx_tickets_email_message_id', 'tickets(email_message_id)'],
+        ['idx_tickets_sla_response', 'tickets(sla_response_deadline)'],
+        ['idx_tickets_sla_resolution', 'tickets(sla_resolution_deadline)'],
+        // Från det raderade scriptet:
+        ['idx_tickets_status_priority', 'tickets(status, priority)'],
+        ['idx_ticket_field_values_search', 'ticket_field_values(field_name, field_value)'],
+      ];
+      for (const [name, target] of indexes) {
+        db.prepare(`CREATE INDEX IF NOT EXISTS ${name} ON ${target}`).run();
+      }
+    },
+  },
+  {
+    id: '070',
+    name: 'rebuild_kb_article_tags_drop_legacy_tag',
+    up: (db, { columnExists }) => {
+      // KB-taggar har aldrig kunnat sparas på en uppgraderad databas.
+      //
+      // Migration 016 skapar tabellen i sin nya form (tag_id NOT NULL) men bara
+      // om den INTE redan finns. Migration 017 flyttade i stället befintliga
+      // text-taggar till delade tags-rader och la till tag_id med ALTER — utan
+      // att kunna ta bort den gamla `tag TEXT NOT NULL` (SQLite kan inte släppa
+      // en kolumn med ALTER här) eller UNIQUE(article_id, tag).
+      //
+      // Följden: appen skriver `INSERT OR IGNORE INTO kb_article_tags
+      // (id, article_id, tag_id)` (kb.ts:333/392). På en uppgraderad databas
+      // bryter det NOT NULL på `tag` — och OR IGNORE sväljer felet, så taggen
+      // försvinner TYST. Läsvägen joinar på tag_id, så artiklarna ser
+      // otaggade ut och ingenting loggas. En fresh install har den nya formen
+      // och fungerar, vilket är varför inget test fångade det.
+      //
+      // Rebuild till exakt migration 016:s form. Säkert att göra som DROP +
+      // RENAME: ingen tabell refererar kb_article_tags, så inget CASCADE kan
+      // träffa något annat (till skillnad från t.ex. ticket_templates, som
+      // template_fields hänger på med ON DELETE CASCADE).
+      if (!columnExists('kb_article_tags', 'tag')) return; // redan kanonisk form
+
+      const orphaned = (
+        db.prepare('SELECT COUNT(*) AS n FROM kb_article_tags WHERE tag_id IS NULL').get() as {
+          n: number;
+        }
+      ).n;
+
+      db.prepare(
+        `CREATE TABLE kb_article_tags_new (
+          id TEXT PRIMARY KEY,
+          article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
+          tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(article_id, tag_id)
+        )`
+      ).run();
+
+      // Explicit kolumnlista, ALDRIG SELECT * — kolumnordningen skiljer sig
+      // mellan vägarna och en positionsberoende kopia hade blandat om värdena.
+      // Den gamla unikheten var (article_id, tag): två text-taggar som bara
+      // skilde i skiftläge mappades av 017 till SAMMA tag_id, så paret
+      // (article_id, tag_id) kan förekomma flera gånger. Behåll äldsta raden.
+      const copied = db
+        .prepare(
+          `INSERT INTO kb_article_tags_new (id, article_id, tag_id, created_at)
+           SELECT id, article_id, tag_id, created_at FROM kb_article_tags
+           WHERE tag_id IS NOT NULL
+             AND rowid IN (
+               SELECT MIN(rowid) FROM kb_article_tags
+               WHERE tag_id IS NOT NULL GROUP BY article_id, tag_id
+             )`
+        )
+        .run().changes;
+
+      db.prepare('DROP TABLE kb_article_tags').run();
+      db.prepare('ALTER TABLE kb_article_tags_new RENAME TO kb_article_tags').run();
+
+      // Samma index som migration 016 ger en fresh install — varken mer eller
+      // mindre (den uppgraderade formens extra idx_kb_article_tags_tag_id föll
+      // bort med tabellen och ska inte återskapas).
+      db.prepare(
+        'CREATE INDEX IF NOT EXISTS idx_kb_article_tags_article ON kb_article_tags(article_id)'
+      ).run();
+      db.prepare(
+        'CREATE INDEX IF NOT EXISTS idx_kb_article_tags_tag ON kb_article_tags(tag_id)'
+      ).run();
+
+      if (orphaned > 0) {
+        console.warn(
+          `[migration 070] ${orphaned} rad(er) i kb_article_tags saknade tag_id och kunde inte ` +
+            'flyttas över (den nya formen kräver en delad tagg). De var redan osynliga för appen — ' +
+            'läsvägen joinar på tag_id — och taggarna får sättas om på artikeln vid behov. ' +
+            `${copied} rad(er) migrerades.`
+        );
+      }
+    },
+  },
 ];
