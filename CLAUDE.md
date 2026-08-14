@@ -80,6 +80,7 @@ Standardflöde: lokal utveckling → `git push` → SSH till servern, `git pull`
 - Husky pre-commit kör lint-staged. Skippa aldrig `--no-verify`.
 - ESLint `no-restricted-syntax` blockerar raw `fetch('/api/...')` — alla mutating-anrop ska gå via `api.request()` i `src/lib/api.ts` (för CSRF-token + auth-header + 401-refresh).
 - DB-migrations måste in i `migrations.ts`-arrayen (`runMigrations()` i `initializeDatabase()`). Standalone `npx tsx`-scripts körs inte vid serverstart.
+- **Två installationsvägar måste landa i samma schema:** prod är *uppgraderad* (ALTER för ALTER sedan feb 2026), CI/dev/nya installationer är *fresh* (dagens `schema.sql`). `server/src/db/schema-path-parity.test.ts` kör båda och fäller på skillnader — se `db-migration`-skillen för fällorna (index inuti `columnExists`-guard, retrofittad kolumn deklarerad inline, rebuild av tabell med CASCADE-barn).
 - Dokumentera lärdomar i Obsidian: `Projekt/IT-System/lessons.md`
 - Obsidian-dokumentation i övrigt: se `Projekt/IT-System/` i vaultet
 - Generella arbetsregler (plan mode, verifiering, subagenter, kvalitet) ärvs från `~/.claude/CLAUDE.md`
