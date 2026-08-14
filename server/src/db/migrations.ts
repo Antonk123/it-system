@@ -1503,7 +1503,9 @@ export const migrations: Migration[] = [
       // mellan vägarna och en positionsberoende kopia hade blandat om värdena.
       // Den gamla unikheten var (article_id, tag): två text-taggar som bara
       // skilde i skiftläge mappades av 017 till SAMMA tag_id, så paret
-      // (article_id, tag_id) kan förekomma flera gånger. Behåll äldsta raden.
+      // (article_id, tag_id) kan förekomma flera gånger. Behåll raden med lägst
+      // rowid — dvs. den som skrevs först (insättningsordning, inte created_at;
+      // deterministiskt vilket är det som spelar roll här).
       const copied = db
         .prepare(
           `INSERT INTO kb_article_tags_new (id, article_id, tag_id, created_at)
@@ -1532,8 +1534,9 @@ export const migrations: Migration[] = [
       if (orphaned > 0) {
         console.warn(
           `[migration 070] ${orphaned} rad(er) i kb_article_tags saknade tag_id och kunde inte ` +
-            'flyttas över (den nya formen kräver en delad tagg). De var redan osynliga för appen — ' +
-            'läsvägen joinar på tag_id — och taggarna får sättas om på artikeln vid behov. ' +
+            'flyttas över till den nya formen (som kräver en delad tagg) — de är därmed ' +
+            'BORTTAGNA. De var redan osynliga för appen (läsvägen joinar på tag_id), så inget ' +
+            'beteende ändras, men taggarna får sättas om på artikeln om de ska tillbaka. ' +
             `${copied} rad(er) migrerades.`
         );
       }

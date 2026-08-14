@@ -188,10 +188,21 @@ const columnOrder = (db: DatabaseType, table: string) => columnRows(db, table).m
 const indexSignatures = (db: DatabaseType, table: string) =>
   (db.prepare(`PRAGMA index_list("${table}")`).all() as IndexListRow[])
     .map((idx) => {
+      // index_xinfo (inte index_info) ger även kollationen per kolumn — ett index
+      // med COLLATE NOCASE är ett annat index än samma kolumner utan.
       const cols = (
-        db.prepare(`PRAGMA index_info("${idx.name}")`).all() as { name: string | null }[]
+        db.prepare(`PRAGMA index_xinfo("${idx.name}")`).all() as {
+          name: string | null;
+          coll: string | null;
+          key: number;
+        }[]
       )
-        .map((c) => c.name ?? '<expr>')
+        .filter((c) => c.key === 1)
+        .map((c) => {
+          const name = c.name ?? '<expr>';
+          const coll = (c.coll ?? 'BINARY').toUpperCase();
+          return coll === 'BINARY' ? name : `${name} COLLATE ${coll}`;
+        })
         .join(',');
       const where = idx.partial
         ? collapse(
@@ -215,6 +226,13 @@ const foreignKeys = (db: DatabaseType, table: string) =>
     )
     .sort();
 
+const tableSql = (db: DatabaseType, table: string) =>
+  (
+    db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table) as
+      | { sql: string | null }
+      | undefined
+  )?.sql ?? '';
+
 /**
  * CHECK-villkor som mängd. Inget PRAGMA exponerar dem, så de plockas ur
  * CREATE TABLE-texten — utan dem skulle ett borttappat CHECK(status IN (…))
@@ -222,12 +240,7 @@ const foreignKeys = (db: DatabaseType, table: string) =>
  * ('a','b') är samma villkor.
  */
 const checkConstraints = (db: DatabaseType, table: string) => {
-  const sql =
-    (
-      db.prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table) as
-        | { sql: string | null }
-        | undefined
-    )?.sql ?? '';
+  const sql = tableSql(db, table);
   const found: string[] = [];
   const re = /\bCHECK\s*\(/gi;
   let match: RegExpExecArray | null;
@@ -243,6 +256,67 @@ const checkConstraints = (db: DatabaseType, table: string) => {
   }
   return found.sort();
 };
+
+/**
+ * Kolumnernas kollation. Inte heller den exponeras av PRAGMA table_info, så den
+ * plockas ur CREATE TABLE-texten: en kolumn som får COLLATE NOCASE inline i
+ * schema.sql kan inte rättas i den uppgraderade formen (ALTER kan inte ändra
+ * kollation på en befintlig kolumn), och skillnaden ändrar likhets- och
+ * sorteringssemantik — t.ex. om e-postmatchning är skiftlägeskänslig eller inte.
+ * Endast kolumner med explicit COLLATE listas; BINARY är SQLites default.
+ */
+const columnCollations = (db: DatabaseType, table: string) => {
+  const sql = tableSql(db, table);
+  const open = sql.indexOf('(');
+  if (open === -1) return [];
+  // Dela kroppen vid kommatecken på djup 0 → en post per kolumn/tabellvillkor.
+  const body = sql.slice(open + 1, sql.lastIndexOf(')'));
+  const parts: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of body) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) {
+      parts.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  parts.push(current);
+
+  const TABLE_CONSTRAINT = /^(CONSTRAINT|PRIMARY|UNIQUE|CHECK|FOREIGN)\b/i;
+  return parts
+    .map((p) => collapse(p))
+    .filter((p) => p && !TABLE_CONSTRAINT.test(p))
+    .map((p) => {
+      const name = p.split(/\s+/)[0].replace(/["'`[\]]/g, '');
+      const coll = p.match(/\bCOLLATE\s+(\w+)/i);
+      return coll ? `${name} COLLATE ${coll[1].toUpperCase()}` : null;
+    })
+    .filter((x): x is string => x !== null)
+    .sort();
+};
+
+/**
+ * Virtuella tabellers definition (FTS5). PRAGMA table_info visar bara
+ * kolumnnamnen — tokenize=, content= och contentless_delete= syns inte alls, så
+ * en ändrad tokenizer skulle ge nya installationer en annan sökkonfiguration än
+ * en uppgraderad databas utan att något test märkte det.
+ */
+const virtualTableSql = (db: DatabaseType) =>
+  Object.fromEntries(
+    (
+      db
+        .prepare(
+          `SELECT name, sql FROM sqlite_master
+           WHERE type = 'table' AND sql LIKE 'CREATE VIRTUAL TABLE%' AND name NOT LIKE 'sqlite_%'
+           ORDER BY name`
+        )
+        .all() as { name: string; sql: string }[]
+    ).map((r) => [r.name, collapse(r.sql).replace(/,\s+/g, ',')])
+  );
 
 // ── godtagna avvikelser ────────────────────────────────────────────────────
 
@@ -276,8 +350,11 @@ const ACCEPTED_COLUMN_ATTRIBUTES: Record<string, string> = {
     'uppgraderad: NOT NULL DEFAULT #6366f1, fresh: nullable DEFAULT #3b82f6. Ofarligt — ' +
     'routes/tags.ts skickar alltid color explicit, så defaulten används aldrig.',
   'ticket_templates.description_template':
-    'uppgraderad: nullable, fresh: NOT NULL. Ofarligt — routes/templates.ts skriver ' +
-    "`description_template || ''`, aldrig NULL.",
+    'uppgraderad: nullable, fresh: NOT NULL. Ofarligt — routes/templates.ts:104 (POST) ' +
+    "skriver `description_template || ''`, aldrig NULL. PUT (:190) skriver " +
+    '`description_template ?? existing.description_template` och kan alltså bevara ett ' +
+    'redan befintligt NULL, men bara på den uppgraderade formen där kolumnen tillåter det — ' +
+    'på fresh är den NOT NULL, så existing kan aldrig vara NULL.',
   'refresh_tokens.last_used_at':
     'uppgraderad: DEFAULT CURRENT_TIMESTAMP, fresh: utan default. Ofarligt — kolumnen ' +
     'skrivs alltid explicit av den som uppdaterar den.',
@@ -286,8 +363,9 @@ const ACCEPTED_COLUMN_ATTRIBUTES: Record<string, string> = {
 /**
  * Främmande nycklar och CHECK-villkor som skiljer sig. ticket_templates skapades
  * i den uppgraderade formen av ett äldre schema.sql (med template_type + dess
- * CHECK, utan FK på created_by); fresh får migration 006:s form (FK på
- * created_by, template_type via ALTER och därmed utan CHECK).
+ * CHECK, utan FK på created_by); fresh får migration 005:s form
+ * (ensure_ticket_templates_table — FK på created_by, template_type tillagd med
+ * ALTER av migration 046 och därmed utan CHECK).
  *
  * Rebuild är MEDVETET inte gjord: template_fields hänger på ticket_templates med
  * ON DELETE CASCADE, och migrationsrunnern kör varje migration i en transaktion
@@ -434,9 +512,21 @@ describe('schema-vägar: fresh install ↔ uppgraderad install', () => {
     expect(stale).toEqual([]);
   });
 
+  it('varje tabell har samma kollationer', () => {
+    const { unexpected, stale } = diffByTable(columnCollations, {});
+    expect(unexpected).toEqual([]);
+    expect(stale).toEqual([]);
+  });
+
   it('samma triggers och vyer med samma definition', () => {
     expect(objectSql(upgraded, 'trigger')).toEqual(objectSql(fresh, 'trigger'));
     expect(objectSql(upgraded, 'view')).toEqual(objectSql(fresh, 'view'));
+  });
+
+  it('samma virtuella FTS5-tabeller med samma konfiguration', () => {
+    // tokenize/content/contentless_delete syns inte i PRAGMA table_info —
+    // jämförs som DDL-text i stället.
+    expect(virtualTableSql(upgraded)).toEqual(virtualTableSql(fresh));
   });
 
   it('kolumnordningen skiljer sig bara där det är godtaget och dokumenterat', () => {
