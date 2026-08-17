@@ -43,7 +43,7 @@ const KBArticleDetail = () => {
   const renderCountRef = useRef(0);
   renderCountRef.current += 1;
   // eslint-disable-next-line no-console
-  console.log('[TOC-DEBUG] render #' + renderCountRef.current, { t: performance.now() });
+  console.log(`[TOC-DEBUG] render #${renderCountRef.current} t=${performance.now().toFixed(1)}`);
 
   const { data: kbData, isLoading, isError } = useKbArticle(id);
 
@@ -84,8 +84,9 @@ const KBArticleDetail = () => {
   // slug som id-attribut på rubrik-DOM:en (ankarmål för TOC-länkarna).
   const computeToc = useCallback((container: HTMLDivElement) => {
     const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    const callId = Math.random().toString(36).slice(2, 7);
     // eslint-disable-next-line no-console
-    console.log('[TOC-DEBUG] computeToc called', { t: performance.now(), headingCount: headings.length, containerHtmlLen: container.innerHTML.length, isConnected: container.isConnected });
+    console.log(`[TOC-DEBUG] computeToc[${callId}] called t=${performance.now().toFixed(1)} headingCount=${headings.length} htmlLen=${container.innerHTML.length} isConnected=${container.isConnected}`);
     const usedSlugs = new Set<string>();
     const items: TocItem[] = [];
     headings.forEach((el) => {
@@ -101,7 +102,15 @@ const KBArticleDetail = () => {
       el.setAttribute('id', slug);
       items.push({ id: slug, text, level: parseInt(el.tagName[1]) });
     });
+    // eslint-disable-next-line no-console
+    console.log(`[TOC-DEBUG] computeToc[${callId}] set ${items.length} ids: ${items.map(i => i.id).join(',')}`);
     setTocItems(items);
+    setTimeout(() => {
+      const stillThere = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
+      const idsNow = Array.from(stillThere).map(h => h.id).join(',');
+      // eslint-disable-next-line no-console
+      console.log(`[TOC-DEBUG] computeToc[${callId}] +800ms check: containerConnected=${container.isConnected} liveIds=${idsNow} documentHasSameNode=${document.contains(container)}`);
+    }, 800);
   }, []);
 
   // Körs SYNKRONT när content-diven monteras (dangerouslySetInnerHTML har då
@@ -114,7 +123,7 @@ const KBArticleDetail = () => {
   // faktiskt finns i DOM:en, oavsett hur många render-pass Suspense gjorde dit.
   const attachContentRef = useCallback((node: HTMLDivElement | null) => {
     // eslint-disable-next-line no-console
-    console.log('[TOC-DEBUG] attachContentRef fired', { t: performance.now(), nodeTruthy: !!node });
+    console.log(`[TOC-DEBUG] attachContentRef fired t=${performance.now().toFixed(1)} nodeTruthy=${!!node} prevNodeWasSame=${contentRef.current === node}`);
     contentRef.current = node;
     if (node) computeToc(node);
   }, [computeToc]);
@@ -123,7 +132,7 @@ const KBArticleDetail = () => {
   // artikeln redigeras och vyn får nytt content i samma komponentinstans).
   useEffect(() => {
     // eslint-disable-next-line no-console
-    console.log('[TOC-DEBUG] fallback effect', { t: performance.now(), hasRef: !!contentRef.current, hasContent: !!article?.content });
+    console.log(`[TOC-DEBUG] fallback effect t=${performance.now().toFixed(1)} hasRef=${!!contentRef.current} hasContent=${!!article?.content} sameNodeAsWindow=${contentRef.current === document.querySelector('.prose-wrapper')}`);
     if (contentRef.current && article?.content) computeToc(contentRef.current);
   }, [article?.content, computeToc]);
 
