@@ -162,10 +162,10 @@ const Login = () => {
           {/* Header */}
           <div className="text-center mb-8">
             <div className="mx-auto w-16 h-16 rounded-2xl overflow-hidden mb-5 ring-1 ring-primary/20 shadow-lg shadow-primary/10">
-              {/* Dekorativ (alt=""): rubriken "IT-Ticket" direkt under förmedlar redan namnet */}
+              {/* Dekorativ (alt=""): rubriken "Ärendesystem" direkt under förmedlar redan namnet */}
               <BrandLogo alt="" className="w-full h-full object-cover" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">IT-Ticket</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Ärendesystem</h1>
             <p className="text-sm text-muted-foreground mt-1.5">Logga in för att fortsätta</p>
           </div>
 
