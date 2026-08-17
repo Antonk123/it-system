@@ -64,6 +64,9 @@ export const HtmlRenderer = ({ content, className }: HtmlRendererProps) => {
       className={cn(
         "prose prose-base max-w-none dark:prose-invert",
         "prose-headings:font-semibold prose-headings:text-foreground prose-headings:mt-4 prose-headings:mb-2",
+        // Matchar TOC-sidopanelens sticky top-24 (KBArticleDetail) — utan denna
+        // hamnar ankarmålet bakom Layouts sticky top-0-header vid klick i innehållsförteckningen.
+        "prose-headings:scroll-mt-24",
         "prose-h3:text-lg prose-h3:font-bold",
         "prose-h4:text-base prose-h4:font-semibold",
         "prose-p:text-foreground prose-p:leading-relaxed prose-p:text-base",
