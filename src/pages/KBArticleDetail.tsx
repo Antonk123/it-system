@@ -40,11 +40,6 @@ const KBArticleDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const renderCountRef = useRef(0);
-  renderCountRef.current += 1;
-  // eslint-disable-next-line no-console
-  console.log(`[TOC-DEBUG] render #${renderCountRef.current} t=${performance.now().toFixed(1)}`);
-
   const { data: kbData, isLoading, isError } = useKbArticle(id);
 
   // Local mutable state derived from the query (mutations update these in-place)
@@ -81,12 +76,13 @@ const KBArticleDetail = () => {
   const crossRefs = kbData?.crossRefs ?? [];
 
   // Slugifierar rubrikerna i innehållet till TOC-poster och skriver samma
-  // slug som id-attribut på rubrik-DOM:en (ankarmål för TOC-länkarna).
+  // slug som id-attribut på rubrik-DOM:en (ankarmål för TOC-länkarna). Ett
+  // no-op-skydd (jämför mot senast applicerade slugs) hindrar att observern
+  // nedan (som triggas av just detta anrops setAttribute-fria DOM-ändringar)
+  // orsakar en oändlig loop.
+  const lastAppliedRef = useRef<string>('');
   const computeToc = useCallback((container: HTMLDivElement) => {
     const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
-    const callId = Math.random().toString(36).slice(2, 7);
-    // eslint-disable-next-line no-console
-    console.log(`[TOC-DEBUG] computeToc[${callId}] called t=${performance.now().toFixed(1)} headingCount=${headings.length} htmlLen=${container.innerHTML.length} isConnected=${container.isConnected}`);
     const usedSlugs = new Set<string>();
     const items: TocItem[] = [];
     headings.forEach((el) => {
@@ -102,39 +98,33 @@ const KBArticleDetail = () => {
       el.setAttribute('id', slug);
       items.push({ id: slug, text, level: parseInt(el.tagName[1]) });
     });
-    // eslint-disable-next-line no-console
-    console.log(`[TOC-DEBUG] computeToc[${callId}] set ${items.length} ids: ${items.map(i => i.id).join(',')}`);
+    const signature = items.map(i => i.id).join('|');
+    if (signature === lastAppliedRef.current) return;
+    lastAppliedRef.current = signature;
     setTocItems(items);
-    setTimeout(() => {
-      const stillThere = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
-      const idsNow = Array.from(stillThere).map(h => h.id).join(',');
-      // eslint-disable-next-line no-console
-      console.log(`[TOC-DEBUG] computeToc[${callId}] +800ms check: containerConnected=${container.isConnected} liveIds=${idsNow} documentHasSameNode=${document.contains(container)}`);
-    }, 800);
   }, []);
 
-  // Körs SYNKRONT när content-diven monteras (dangerouslySetInnerHTML har då
-  // redan satt sina barn — React fäster refs efter att undanträdet är klart).
-  // En useEffect+setTimeout(0) på article?.content missade tillförlitligt
-  // headings vid en kall/hård sidladdning (lazy-loaded route via Suspense) —
-  // TOC-listan byggdes ändå (från React-state), men id-attributen hamnade
-  // aldrig på rätt DOM-noder, så TOC-länkarna pekade på ingenting. Callback-
-  // refen är immun mot den timingen: den kör exakt en gång, precis när noden
-  // faktiskt finns i DOM:en, oavsett hur många render-pass Suspense gjorde dit.
+  // Content-diven kan monteras, avmonteras och innehållet bytas ut IN PLACE
+  // (dangerouslySetInnerHTML) flera gånger under den initiala renderingen
+  // (Suspense-återförsök / StrictMode) innan React landar på sin slutgiltiga
+  // DOM — empiriskt bevisat: samma fortfarande anslutna nod tappade sina
+  // nyss satta id:n utan att själva diven monterades om. En engångs-effekt
+  // (useEffect+setTimeout eller ens en callback-ref som bara kör vid mount)
+  // missar tillförlitligt det sista steget. En MutationObserver på diven
+  // sig själv självläker i stället: den kör om vid VARJE strukturell ändring
+  // av innehållet, oavsett hur många gånger eller varför det händer, och
+  // konvergerar alltid mot den DOM som faktiskt visas.
+  const contentObserverRef = useRef<MutationObserver | null>(null);
   const attachContentRef = useCallback((node: HTMLDivElement | null) => {
-    // eslint-disable-next-line no-console
-    console.log(`[TOC-DEBUG] attachContentRef fired t=${performance.now().toFixed(1)} nodeTruthy=${!!node} prevNodeWasSame=${contentRef.current === node}`);
     contentRef.current = node;
-    if (node) computeToc(node);
+    contentObserverRef.current?.disconnect();
+    contentObserverRef.current = null;
+    if (!node) return;
+    computeToc(node);
+    const observer = new MutationObserver(() => computeToc(node));
+    observer.observe(node, { childList: true, subtree: true });
+    contentObserverRef.current = observer;
   }, [computeToc]);
-
-  // Täcker fallet där innehållet byts UTAN att diven monteras om (t.ex. om
-  // artikeln redigeras och vyn får nytt content i samma komponentinstans).
-  useEffect(() => {
-    // eslint-disable-next-line no-console
-    console.log(`[TOC-DEBUG] fallback effect t=${performance.now().toFixed(1)} hasRef=${!!contentRef.current} hasContent=${!!article?.content} sameNodeAsWindow=${contentRef.current === document.querySelector('.prose-wrapper')}`);
-    if (contentRef.current && article?.content) computeToc(contentRef.current);
-  }, [article?.content, computeToc]);
 
   useEffect(() => {
     if (tocItems.length < 2 || !contentRef.current) return;
