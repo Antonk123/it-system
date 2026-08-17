@@ -40,6 +40,11 @@ const KBArticleDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
+  const renderCountRef = useRef(0);
+  renderCountRef.current += 1;
+  // eslint-disable-next-line no-console
+  console.log('[TOC-DEBUG] render #' + renderCountRef.current, { t: performance.now() });
+
   const { data: kbData, isLoading, isError } = useKbArticle(id);
 
   // Local mutable state derived from the query (mutations update these in-place)
@@ -79,6 +84,8 @@ const KBArticleDetail = () => {
   // slug som id-attribut på rubrik-DOM:en (ankarmål för TOC-länkarna).
   const computeToc = useCallback((container: HTMLDivElement) => {
     const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    // eslint-disable-next-line no-console
+    console.log('[TOC-DEBUG] computeToc called', { t: performance.now(), headingCount: headings.length, containerHtmlLen: container.innerHTML.length, isConnected: container.isConnected });
     const usedSlugs = new Set<string>();
     const items: TocItem[] = [];
     headings.forEach((el) => {
@@ -106,6 +113,8 @@ const KBArticleDetail = () => {
   // refen är immun mot den timingen: den kör exakt en gång, precis när noden
   // faktiskt finns i DOM:en, oavsett hur många render-pass Suspense gjorde dit.
   const attachContentRef = useCallback((node: HTMLDivElement | null) => {
+    // eslint-disable-next-line no-console
+    console.log('[TOC-DEBUG] attachContentRef fired', { t: performance.now(), nodeTruthy: !!node });
     contentRef.current = node;
     if (node) computeToc(node);
   }, [computeToc]);
@@ -113,6 +122,8 @@ const KBArticleDetail = () => {
   // Täcker fallet där innehållet byts UTAN att diven monteras om (t.ex. om
   // artikeln redigeras och vyn får nytt content i samma komponentinstans).
   useEffect(() => {
+    // eslint-disable-next-line no-console
+    console.log('[TOC-DEBUG] fallback effect', { t: performance.now(), hasRef: !!contentRef.current, hasContent: !!article?.content });
     if (contentRef.current && article?.content) computeToc(contentRef.current);
   }, [article?.content, computeToc]);
 
