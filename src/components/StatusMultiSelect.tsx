@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,6 +32,13 @@ const STATUS_OPTIONS: { value: TicketStatus; label: string; color: string }[] = 
 
 export function StatusMultiSelect({ selectedStatuses, onChange }: StatusMultiSelectProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const filteredStatuses = useMemo(() => {
+    if (!search) return STATUS_OPTIONS;
+    const lowerSearch = search.toLowerCase();
+    return STATUS_OPTIONS.filter((status) => status.label.toLowerCase().includes(lowerSearch));
+  }, [search]);
 
   const toggleStatus = (status: TicketStatus) => {
     const newSelection = selectedStatuses.includes(status)
@@ -57,11 +64,15 @@ export function StatusMultiSelect({ selectedStatuses, onChange }: StatusMultiSel
       </PopoverTrigger>
       <PopoverContent className="w-[200px] p-0">
         <Command>
-          <CommandInput placeholder="Sök status..." />
+          <CommandInput
+            placeholder="Sök status..."
+            value={search}
+            onValueChange={setSearch}
+          />
           <CommandList>
             <CommandEmpty>Ingen status hittades.</CommandEmpty>
             <CommandGroup>
-              {STATUS_OPTIONS.map((status) => {
+              {filteredStatuses.map((status) => {
                 const isSelected = selectedStatuses.includes(status.value);
                 return (
                   <CommandItem

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,7 +24,14 @@ interface TagMultiSelectProps {
 
 export function TagMultiSelect({ selectedTagIds, onChange }: TagMultiSelectProps) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const { tags } = useTags();
+
+  const filteredTags = useMemo(() => {
+    if (!search) return tags;
+    const lowerSearch = search.toLowerCase();
+    return tags.filter((tag) => tag.name.toLowerCase().includes(lowerSearch));
+  }, [tags, search]);
 
   const toggleTag = (tagId: string) => {
     const newSelection = selectedTagIds.includes(tagId)
@@ -50,11 +57,15 @@ export function TagMultiSelect({ selectedTagIds, onChange }: TagMultiSelectProps
       </PopoverTrigger>
       <PopoverContent className="w-[200px] p-0">
         <Command>
-          <CommandInput placeholder="Sök taggar..." />
+          <CommandInput
+            placeholder="Sök taggar..."
+            value={search}
+            onValueChange={setSearch}
+          />
           <CommandList>
             <CommandEmpty>Inga taggar hittades.</CommandEmpty>
             <CommandGroup>
-              {tags.map((tag) => {
+              {filteredTags.map((tag) => {
                 const isSelected = selectedTagIds.includes(tag.id);
                 return (
                   <CommandItem
