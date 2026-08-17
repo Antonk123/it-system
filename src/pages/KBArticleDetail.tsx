@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X, Printer, CheckCircle, Link2 } from 'lucide-react';
 import { Layout } from '@/components/Layout';
@@ -75,31 +75,46 @@ const KBArticleDetail = () => {
   const linkedTickets = kbData?.linkedTickets ?? [];
   const crossRefs = kbData?.crossRefs ?? [];
 
+  // Slugifierar rubrikerna i innehållet till TOC-poster och skriver samma
+  // slug som id-attribut på rubrik-DOM:en (ankarmål för TOC-länkarna).
+  const computeToc = useCallback((container: HTMLDivElement) => {
+    const headings = container.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    const usedSlugs = new Set<string>();
+    const items: TocItem[] = [];
+    headings.forEach((el) => {
+      const text = el.textContent?.trim() ?? '';
+      if (!text) return;
+      let slug = slugify(text);
+      if (usedSlugs.has(slug)) {
+        let i = 2;
+        while (usedSlugs.has(`${slug}-${i}`)) i++;
+        slug = `${slug}-${i}`;
+      }
+      usedSlugs.add(slug);
+      el.setAttribute('id', slug);
+      items.push({ id: slug, text, level: parseInt(el.tagName[1]) });
+    });
+    setTocItems(items);
+  }, []);
+
+  // Körs SYNKRONT när content-diven monteras (dangerouslySetInnerHTML har då
+  // redan satt sina barn — React fäster refs efter att undanträdet är klart).
+  // En useEffect+setTimeout(0) på article?.content missade tillförlitligt
+  // headings vid en kall/hård sidladdning (lazy-loaded route via Suspense) —
+  // TOC-listan byggdes ändå (från React-state), men id-attributen hamnade
+  // aldrig på rätt DOM-noder, så TOC-länkarna pekade på ingenting. Callback-
+  // refen är immun mot den timingen: den kör exakt en gång, precis när noden
+  // faktiskt finns i DOM:en, oavsett hur många render-pass Suspense gjorde dit.
+  const attachContentRef = useCallback((node: HTMLDivElement | null) => {
+    contentRef.current = node;
+    if (node) computeToc(node);
+  }, [computeToc]);
+
+  // Täcker fallet där innehållet byts UTAN att diven monteras om (t.ex. om
+  // artikeln redigeras och vyn får nytt content i samma komponentinstans).
   useEffect(() => {
-    if (!contentRef.current || !article?.content) return;
-    // Defer to next tick so the DOM has committed after content render
-    const timer = setTimeout(() => {
-      if (!contentRef.current) return;
-      const headings = contentRef.current.querySelectorAll('h1, h2, h3, h4, h5, h6');
-      const usedSlugs = new Set<string>();
-      const items: TocItem[] = [];
-      headings.forEach((el) => {
-        const text = el.textContent?.trim() ?? '';
-        if (!text) return;
-        let slug = slugify(text);
-        if (usedSlugs.has(slug)) {
-          let i = 2;
-          while (usedSlugs.has(`${slug}-${i}`)) i++;
-          slug = `${slug}-${i}`;
-        }
-        usedSlugs.add(slug);
-        el.setAttribute('id', slug);
-        items.push({ id: slug, text, level: parseInt(el.tagName[1]) });
-      });
-      setTocItems(items);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [article?.content]);
+    if (contentRef.current && article?.content) computeToc(contentRef.current);
+  }, [article?.content, computeToc]);
 
   useEffect(() => {
     if (tocItems.length < 2 || !contentRef.current) return;
@@ -367,7 +382,7 @@ const KBArticleDetail = () => {
             )}
 
             {/* Article content */}
-            <div ref={contentRef} className="prose-wrapper border border-border rounded-lg p-5 bg-card min-h-[200px]">
+            <div ref={attachContentRef} className="prose-wrapper border border-border rounded-lg p-5 bg-card min-h-[200px]">
               {article.content ? (
                 <>
                   <HtmlRenderer content={article.content} />
