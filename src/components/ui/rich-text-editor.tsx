@@ -396,7 +396,17 @@ export const RichTextEditor = ({
     // what the editor itself just emitted, which would clobber the caret while
     // typing. See rich-text-sync.ts for why the old isLocalChange ref was
     // replaced (it got stuck and swallowed the post-submit clear).
-    if (!editor) return;
+    //
+    // isDestroyed-vakten är inte defensiv kosmetika: @tiptap/react beväpnar en
+    // 1 ms självdestruktion i EditorInstanceManagers konstruktor (StrictMode-
+    // skydd) och hinner React inte spola sina passiva effekter inom den
+    // millisekunden förstörs exakt den instans React redan renderat med.
+    // Editor.destroy() nollar schema/extensionManager/commandManager men lämnar
+    // state kvar, så getHTML() — getHTMLFromFragment(state.doc.content, schema)
+    // — kastar "Cannot read properties of null (reading 'cached')" i stället för
+    // att returnera tomt. Det sänkte hela /submit-ticket till ErrorBoundary.
+    // Se rich-text-editor.test.tsx.
+    if (!editor || editor.isDestroyed) return;
     if (shouldApplyExternalValue(value, editor.getHTML(), lastEmittedHtml.current, isInserting)) {
       lastEmittedHtml.current = value;
       // emitUpdate:false — this is not a user edit, so it must not feed back
@@ -405,9 +415,10 @@ export const RichTextEditor = ({
     }
   }, [value, editor, isInserting]);
 
-  // Update editable state when disabled prop changes
+  // Update editable state when disabled prop changes. Samma isDestroyed-vakt som
+  // ovan — setEditable() går via commandManager, som destroy() också nollar.
   useEffect(() => {
-    if (editor) {
+    if (editor && !editor.isDestroyed) {
       editor.setEditable(!disabled);
     }
   }, [disabled, editor]);
@@ -884,7 +895,10 @@ export const RichTextEditor = ({
       {required && (
         <input
           type="text"
-          value={editor.getText().trim()}
+          // getText() slår upp textSerializers ur editor.schema och kastar
+          // ("...reading 'nodes'") på en förstörd instans — och det här körs
+          // UNDER RENDER, alltså utanför effekternas vakter ovan.
+          value={editor.isDestroyed ? '' : editor.getText().trim()}
           onChange={() => {}}
           required
           onInvalid={(e) => {
