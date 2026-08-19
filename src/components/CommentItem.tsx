@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import { Pencil, Trash2, Check, X } from 'lucide-react';
+import { Pencil, Trash2, Check, X, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
@@ -36,6 +36,12 @@ export const CommentItem = memo(function CommentItem({ comment, onUpdate, onDele
 
   const canEdit = user?.id === comment.userId || user?.role === 'admin';
 
+  // Inkommande mejlkommentarer ägs tekniskt av systemanvändaren (FK-krav), så
+  // comment.userName är inte avsändaren — email_from_* är det.
+  const viaEmail = Boolean(comment.emailFromAddress);
+  const authorName =
+    comment.emailFromName || comment.userName || comment.userEmail || 'Okänd användare';
+
   const handleUpdate = async () => {
     if (!hasVisibleText(editContent)) return;
     setIsUpdating(true);
@@ -63,7 +69,14 @@ export const CommentItem = memo(function CommentItem({ comment, onUpdate, onDele
     <div className="border rounded p-2 bg-muted/20">
       <div className="flex items-start justify-between mb-2">
         <div>
-          <span className="font-medium text-sm">{comment.userName || comment.userEmail || 'Okänd användare'}</span>
+          <span className="font-medium text-sm">{authorName}</span>
+          {viaEmail && (
+            <span className="ml-2 inline-flex items-center gap-1 rounded-sm bg-muted px-1.5 py-0.5 align-middle text-[11px] font-medium text-muted-foreground">
+              <Mail className="h-3 w-3" aria-hidden="true" />
+              via e-post
+              <span className="sr-only">{` från ${comment.emailFromAddress}`}</span>
+            </span>
+          )}
           <span className="text-sm text-muted-foreground ml-2">
             {format(comment.createdAt, 'PPp', { locale: sv })}
             {comment.updatedAt > comment.createdAt && ' (redigerad)'}

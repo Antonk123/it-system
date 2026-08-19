@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto';
 import { dispatchWebhook } from './webhookDispatcher.js';
 import { sendTicketReceivedConfirmation } from './email.js';
 import { notifyAgentOfCustomerReply, notifyStaffOfNewTicket } from './ticketNotifications.js';
+import { stripQuotedReply } from './emailQuote.js';
 import { logger } from './logger.js';
 import { logAudit } from './auditLog.js';
 import { mintShareToken } from './shares.js';
@@ -164,10 +165,13 @@ function addCommentToTicket(ticketId: string, body: string, fromAddress: string,
     return;
   }
 
-  const attribution = `**Från:** ${fromName} (${fromAddress})\n\n`;
+  // user_id måste peka på en riktig användare (FK), men systemanvändaren säger
+  // inget om vem som faktiskt skrev — avsändaren bärs av email_from_*-kolumnerna
+  // (migration 071) och renderas i kommentarhuvudet, inte i brödtexten.
   db.prepare(
-    'INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal) VALUES (?, ?, ?, ?, 0)'
-  ).run(commentId, ticketId, systemUserId, attribution + body);
+    `INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal, email_from_name, email_from_address)
+     VALUES (?, ?, ?, ?, 0, ?, ?)`
+  ).run(commentId, ticketId, systemUserId, body, fromName, fromAddress);
 
   db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(ticketId);
 
@@ -269,8 +273,13 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
   }
 
   if (existingTicket) {
+    // Bara svarsvägen strippar citat. Ett vidarebefordrat mail som skapar ett
+    // NYTT ärende (längre ner) måste behålla hela texten — där är citatet
+    // själva innehållet.
+    const replyBody = stripQuotedReply(body);
+
     resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
-    addCommentToTicket(existingTicket.id, body, fromAddress, fromName);
+    addCommentToTicket(existingTicket.id, replyBody, fromAddress, fromName);
 
     if (parsed.attachments && parsed.attachments.length > 0) {
       await saveAttachments(parsed.attachments, existingTicket.id);
@@ -278,7 +287,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
 
     // Close the loop the other way: surface the customer's reply to the assigned
     // technician (webhook + push + email). Fire-and-forget.
-    notifyAgentOfCustomerReply(existingTicket.id, body)
+    notifyAgentOfCustomerReply(existingTicket.id, replyBody)
       .catch((err) => logger.error('notifyAgentOfCustomerReply failed', { error: String(err) }));
     return;
   }
@@ -311,7 +320,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     if (recentDuplicate) {
       logger.info('Near-duplicate email, adding as comment', { subject, from: fromAddress, ticketId: recentDuplicate.id });
       resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
-      addCommentToTicket(recentDuplicate.id, body, fromAddress, fromName);
+      addCommentToTicket(recentDuplicate.id, stripQuotedReply(body), fromAddress, fromName);
       if (parsed.attachments && parsed.attachments.length > 0) {
         await saveAttachments(parsed.attachments, recentDuplicate.id);
       }

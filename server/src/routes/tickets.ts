@@ -1059,7 +1059,7 @@ router.get('/:id/ai-summary', aiRateLimiter, authenticate, async (req: AuthReque
 
     // Hämta senaste 20 kommentarerna med författarnamn
     const comments = db.prepare(`
-      SELECT COALESCE(u.display_name, u.email, 'System') as author, c.content, c.created_at
+      SELECT COALESCE(c.email_from_name, u.display_name, u.email, 'System') as author, c.content, c.created_at
       FROM ticket_comments c
       LEFT JOIN users u ON c.user_id = u.id
       WHERE c.ticket_id = ? AND c.deleted_at IS NULL

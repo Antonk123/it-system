@@ -20,6 +20,10 @@ interface CommentRow {
   deleted_at: string | null;
   user_name?: string;
   user_email?: string;
+  // Satta när kommentaren kom in via e-post (migration 071). user_name pekar då
+  // på systemanvändaren och är inte den faktiska avsändaren.
+  email_from_name?: string | null;
+  email_from_address?: string | null;
 }
 
 // GET /api/comments/ticket/:ticketId - Fetch all comments for a ticket
@@ -41,7 +45,8 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
       SELECT
         c.id, c.ticket_id, c.user_id, c.content, c.is_internal, c.created_at, c.updated_at, c.deleted_at,
         COALESCE(u.display_name, contact.name, u.email) as user_name,
-        u.email as user_email
+        u.email as user_email,
+        c.email_from_name, c.email_from_address
       FROM ticket_comments c
       LEFT JOIN users u ON c.user_id = u.id
       LEFT JOIN contacts contact ON contact.email = u.email
@@ -103,7 +108,8 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
       SELECT
         c.id, c.ticket_id, c.user_id, c.content, c.is_internal, c.created_at, c.updated_at, c.deleted_at,
         COALESCE(u.display_name, contact.name, u.email) as user_name,
-        u.email as user_email
+        u.email as user_email,
+        c.email_from_name, c.email_from_address
       FROM ticket_comments c
       LEFT JOIN users u ON c.user_id = u.id
       LEFT JOIN contacts contact ON contact.email = u.email
@@ -157,7 +163,8 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
       SELECT
         c.id, c.ticket_id, c.user_id, c.content, c.is_internal, c.created_at, c.updated_at, c.deleted_at,
         COALESCE(u.display_name, contact.name, u.email) as user_name,
-        u.email as user_email
+        u.email as user_email,
+        c.email_from_name, c.email_from_address
       FROM ticket_comments c
       LEFT JOIN users u ON c.user_id = u.id
       LEFT JOIN contacts contact ON contact.email = u.email

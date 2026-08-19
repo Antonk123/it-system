@@ -22,6 +22,8 @@ const mapComment = (c: CommentRow): Comment => ({
   deletedAt: c.deleted_at ? parseServerDate(c.deleted_at) : undefined,
   userName: c.user_name,
   userEmail: c.user_email,
+  emailFromName: c.email_from_name ?? undefined,
+  emailFromAddress: c.email_from_address ?? undefined,
 });
 
 export const useTicketComments = (ticketId: string) => {

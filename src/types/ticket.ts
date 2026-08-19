@@ -104,6 +104,10 @@ export interface Comment {
   // Optional fields populated by joins
   userName?: string;
   userEmail?: string;
+  // Satta när kommentaren kom in via e-post. userName är då systemanvändaren
+  // (inkommande kommentarer måste ha ett user_id) — visa dessa i stället.
+  emailFromName?: string;
+  emailFromAddress?: string;
 }
 
 export interface CommentRow {
@@ -118,6 +122,8 @@ export interface CommentRow {
   // Optional join fields
   user_name?: string;
   user_email?: string;
+  email_from_name?: string | null;
+  email_from_address?: string | null;
 }
 
 export interface TicketLink {

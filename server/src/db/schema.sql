@@ -120,7 +120,14 @@ CREATE TABLE IF NOT EXISTS ticket_comments (
   is_internal INTEGER DEFAULT 1,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  deleted_at TEXT DEFAULT NULL
+  deleted_at TEXT DEFAULT NULL,
+  -- Avsändaren när kommentaren kom in via e-post (migration 071). Icke-null
+  -- email_from_address betyder "inkommen via e-post"; user_id pekar då på
+  -- systemanvändaren och säger inget om vem som faktiskt skrev.
+  -- Deklarerade SIST för att matcha ALTER TABLE ADD COLUMN på uppgraderings-
+  -- vägen (schema-path-parity.test.ts jämför kolumnordning).
+  email_from_name TEXT DEFAULT NULL,
+  email_from_address TEXT DEFAULT NULL
 );
 
 -- Ticket shares (public share tokens)

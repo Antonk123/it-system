@@ -15,6 +15,7 @@
 import type { Database as DatabaseType } from 'better-sqlite3';
 import { randomUUID } from 'crypto';
 import { stripHtml } from '../lib/htmlUtils.js';
+import { stripQuotedReply } from '../lib/emailQuote.js';
 
 interface MigrationHelpers {
   tableExists: (name: string) => boolean;
@@ -1538,6 +1539,78 @@ export const migrations: Migration[] = [
             'BORTTAGNA. De var redan osynliga för appen (läsvägen joinar på tag_id), så inget ' +
             'beteende ändras, men taggarna får sättas om på artikeln om de ska tillbaka. ' +
             `${copied} rad(er) migrerades.`
+        );
+      }
+    },
+  },
+  {
+    id: '071',
+    name: 'add_comment_email_sender',
+    up: (db, { columnExists }) => {
+      // Inkommande mejlsvar sparas som kommentar på systemanvändaren
+      // (emailInbound.ts: SELECT id FROM users LIMIT 1) eftersom user_id har en
+      // FK mot users. Avsändaren bars därför av en "**Från:** Namn (adress)"-rad
+      // först i content — redundant brus i UI:t och osynlig för alla joins.
+      // Här får den ett eget hem.
+      //
+      // Varje kolumn har EGEN guard. Att nästla den andra inuti den förstas
+      // if-sats gör att en halvt applicerad databas aldrig läker.
+      if (!columnExists('ticket_comments', 'email_from_name')) {
+        db.prepare('ALTER TABLE ticket_comments ADD COLUMN email_from_name TEXT DEFAULT NULL').run();
+      }
+      if (!columnExists('ticket_comments', 'email_from_address')) {
+        db.prepare(
+          'ALTER TABLE ticket_comments ADD COLUMN email_from_address TEXT DEFAULT NULL'
+        ).run();
+      }
+
+      // Backfill: flytta attributionsraden från content till kolumnerna på
+      // befintliga mejlkommentarer och städa bort den citerade tråden med samma
+      // funktion som inläsningsvägen använder, så att fixen syns även på de
+      // kommentarer som redan finns. Kommentarer som inte matchar mönstret exakt
+      // lämnas orörda (agentkommentarer är TipTap-HTML och börjar med '<').
+      const rows = db
+        .prepare(
+          `SELECT id, content, updated_at FROM ticket_comments
+           WHERE email_from_address IS NULL AND content LIKE '**Från:** %'`
+        )
+        .all() as { id: string; content: string; updated_at: string | null }[];
+
+      // update_comment_updated_at fyrar på ALLA UPDATE och skulle stämpla varje
+      // backfillad rad som nyss ändrad — UI:t visar då "(redigerad)" på
+      // kommentarer ingen har rört. Släpp triggern under backfillen och
+      // återskapa den exakt som den låg (samma SQL på fresh som uppgraderad
+      // väg). Hela up() kör i en transaktion, så en krasch rullar tillbaka
+      // både data och trigger.
+      const trigger = db
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?")
+        .get('update_comment_updated_at') as { sql: string } | undefined;
+      if (trigger) db.exec('DROP TRIGGER update_comment_updated_at');
+
+      const attribution = /^\*\*Från:\*\* (.+?) \(([^)]+)\)\r?\n\r?\n/;
+      const update = db.prepare(
+        `UPDATE ticket_comments
+         SET content = ?, email_from_name = ?, email_from_address = ?, updated_at = ?
+         WHERE id = ?`
+      );
+
+      let migrated = 0;
+      for (const row of rows) {
+        const match = row.content.match(attribution);
+        if (!match) continue;
+        const rest = stripQuotedReply(row.content.slice(match[0].length).trim());
+        // Skulle raden vara allt som fanns lämnas kommentaren orörd hellre än
+        // att bli tom — då syns åtminstone avsändaren kvar i texten.
+        if (rest.length === 0) continue;
+        update.run(rest, match[1], match[2], row.updated_at, row.id);
+        migrated++;
+      }
+
+      if (trigger) db.exec(trigger.sql);
+
+      if (migrated > 0) {
+        console.log(
+          `[migration 071] Flyttade avsändaren ur brödtexten på ${migrated} mejlkommentar(er).`
         );
       }
     },

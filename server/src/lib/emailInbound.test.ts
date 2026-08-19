@@ -121,7 +121,9 @@ function createSchema(db: InstanceType<typeof Database>) {
       user_id TEXT NOT NULL,
       content TEXT NOT NULL,
       is_internal INTEGER DEFAULT 1,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      email_from_name TEXT DEFAULT NULL,
+      email_from_address TEXT DEFAULT NULL
     );
 
     CREATE TABLE ticket_history (
@@ -379,21 +381,33 @@ describe('resolveOrCreateContact', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('addCommentToTicket', () => {
-  it('inserts a public comment row with sender attribution and bumps updated_at', () => {
+  it('stores the sender in email_from_* and keeps the body free of attribution', () => {
     insertUser(memDb);
     insertTicket(memDb, { id: 't1', title: 'A' });
 
     addCommentToTicket('t1', 'Here is my reply', 'alice@example.com', 'Alice');
 
     const rows = memDb
-      .prepare('SELECT ticket_id, user_id, content, is_internal FROM ticket_comments')
-      .all() as { ticket_id: string; user_id: string; content: string; is_internal: number }[];
+      .prepare(
+        'SELECT ticket_id, user_id, content, is_internal, email_from_name, email_from_address FROM ticket_comments'
+      )
+      .all() as {
+      ticket_id: string;
+      user_id: string;
+      content: string;
+      is_internal: number;
+      email_from_name: string | null;
+      email_from_address: string | null;
+    }[];
     expect(rows).toHaveLength(1);
     expect(rows[0].ticket_id).toBe('t1');
+    // user_id är systemanvändaren (FK-krav) — avsändaren bärs av kolumnerna.
     expect(rows[0].user_id).toBe('system-user');
     expect(rows[0].is_internal).toBe(0);
-    expect(rows[0].content).toContain('alice@example.com');
-    expect(rows[0].content).toContain('Here is my reply');
+    expect(rows[0].email_from_name).toBe('Alice');
+    expect(rows[0].email_from_address).toBe('alice@example.com');
+    // Ingen "**Från:**"-rad i brödtexten — den dubblerade kommentarhuvudet.
+    expect(rows[0].content).toBe('Here is my reply');
   });
 
   it('does nothing when there is no system user', () => {
@@ -583,6 +597,66 @@ describe('processEmail — threading attaches reply to existing ticket', () => {
       .all() as { ticket_id: string }[];
     expect(comments).toHaveLength(1);
     expect(comments[0].ticket_id).toBe('t-thread');
+  });
+
+  it('strips the quoted thread so the reply comment holds only the new text', async () => {
+    insertUser(memDb);
+    insertContact(memDb, { id: 'c1', email: 'alice@example.com' });
+    insertTicket(memDb, {
+      id: 't-thread',
+      title: 'Original',
+      requester_id: 'c1',
+      email_message_id: '<root@x>',
+    });
+
+    nextParsed = makeEmail({
+      subject: 'Re: Original',
+      messageId: '<reply@x>',
+      inReplyTo: '<root@x>',
+      text: [
+        'Ja, jag har kollat med min chef. Vi har slut på licenser..',
+        '',
+        'Från: Prefabmästarna Sverige AB noreply@example.com',
+        'Datum: onsdag, 19 augusti 2026 08:36',
+        'Till: Alice alice@example.com',
+        'Ämne: [#4D684770] Beställning av licens',
+        '',
+        'Är detta godkänt? Kolla om chefen godkänner inköp först',
+      ].join('\n'),
+    });
+
+    await processEmail(Buffer.from('raw'), config);
+
+    const comments = memDb
+      .prepare('SELECT content FROM ticket_comments')
+      .all() as { content: string }[];
+    expect(comments).toHaveLength(1);
+    expect(comments[0].content).toBe('Ja, jag har kollat med min chef. Vi har slut på licenser..');
+    expect(comments[0].content).not.toContain('Är detta godkänt?');
+    expect(comments[0].content).not.toContain('Datum:');
+  });
+
+  it('does NOT strip quoted text when the email creates a NEW ticket (forward)', async () => {
+    insertUser(memDb);
+    const forwarded = [
+      'Kan ni titta på det här?',
+      '',
+      '-----Ursprungligt meddelande-----',
+      'Från: Kund kund@example.com',
+      'Ämne: Skrivaren fungerar inte',
+      '',
+      'Skrivaren på plan 2 skriver bara ut blanka sidor.',
+    ].join('\n');
+
+    nextParsed = makeEmail({ subject: 'VS: Skrivaren', messageId: '<fwd@x>', text: forwarded });
+
+    await processEmail(Buffer.from('raw'), config);
+
+    const ticket = memDb
+      .prepare('SELECT description FROM tickets')
+      .get() as { description: string };
+    expect(ticket.description).toContain('Skrivaren på plan 2 skriver bara ut blanka sidor.');
+    expect(ticket.description).toBe(forwarded);
   });
 });
 
