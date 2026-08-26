@@ -19,6 +19,11 @@ export function setSetting(key: string, value: string): void {
   ).run(key, value);
 }
 
+/** Remove a runtime setting. Deleting a public-share token revokes it at once. */
+export function deleteSetting(key: string): void {
+  db.prepare('DELETE FROM app_settings WHERE key = ?').run(key);
+}
+
 export function getBoolSetting(key: string, fallback: boolean): boolean {
   const v = getSetting(key);
   if (v === null) return fallback;

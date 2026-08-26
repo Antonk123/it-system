@@ -431,3 +431,56 @@ describe('shares — createShareToken/getShareToken', () => {
     expect(result).toEqual({ share_token: 'tok-3', expires_at: '2026-08-30T00:00:00Z' });
   });
 });
+
+describe('Kunskapsbasens publika portal — API-klient', () => {
+  it('hanterar adminlivscykeln med CSRF på skapa och återkalla', async () => {
+    fetchMock.mockImplementation((url: string, opts?: RequestInit) => {
+      if (url === `${BASE}/csrf-token`) {
+        return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ csrfToken: 'csrf-kb' }) }));
+      }
+      if (url === `${BASE}/kb/portal-share` && (!opts?.method || opts.method === 'GET')) {
+        return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ share_token: null }) }));
+      }
+      if (url === `${BASE}/kb/portal-share` && opts?.method === 'POST') {
+        return Promise.resolve(fakeResponse({
+          status: 201,
+          json: () => Promise.resolve({ share_token: 'portal-token' }),
+        }));
+      }
+      if (url === `${BASE}/kb/portal-share` && opts?.method === 'DELETE') {
+        return Promise.resolve(fakeResponse({ status: 204, contentType: null }));
+      }
+      return Promise.resolve(fakeResponse({}));
+    });
+
+    const api = await freshApi();
+    await expect(api.getKbPortalShare()).resolves.toEqual({ share_token: null });
+    await expect(api.createKbPortalShare()).resolves.toEqual({ share_token: 'portal-token' });
+    await expect(api.revokeKbPortalShare()).resolves.toBeNull();
+
+    const postCall = fetchMock.mock.calls.find(([, opts]) => (opts as RequestInit | undefined)?.method === 'POST');
+    const deleteCall = fetchMock.mock.calls.find(([, opts]) => (opts as RequestInit | undefined)?.method === 'DELETE');
+    expect(urlOfCall(postCall)).toBe(`${BASE}/kb/portal-share`);
+    expect(urlOfCall(deleteCall)).toBe(`${BASE}/kb/portal-share`);
+    expect(headersOfCall(postCall)['X-CSRF-Token']).toBe('csrf-kb');
+    expect(headersOfCall(deleteCall)['X-CSRF-Token']).toBe('csrf-kb');
+  });
+
+  it('kodar portalparametrar och bygger sök-/kategorifrågan utan authkrav', async () => {
+    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve([]) }));
+
+    const api = await freshApi();
+    await api.getKbPortalCategories('tok/en');
+    await api.getKbPortalArticles('tok/en', { search: 'server fel', category_id: 'cat/1' });
+    await api.getKbPortalArticle('tok/en', 'article/1');
+
+    expect(fetchMock.mock.calls.map(urlOfCall)).toEqual([
+      `${BASE}/kb/portal/tok%2Fen/categories`,
+      `${BASE}/kb/portal/tok%2Fen/articles?search=server+fel&category_id=cat%2F1`,
+      `${BASE}/kb/portal/tok%2Fen/articles/article%2F1`,
+    ]);
+    for (const call of fetchMock.mock.calls) {
+      expect(headersOfCall(call).Authorization).toBeUndefined();
+    }
+  });
+});

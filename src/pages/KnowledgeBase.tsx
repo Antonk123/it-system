@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router';
-import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle, Upload } from 'lucide-react';
+import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle, Upload, Link2 } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { KBImportDialog } from '@/components/KBImportDialog';
+import { KBPortalShareDialog } from '@/components/KBPortalShareDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -31,6 +32,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/EmptyState';
+import { useAuth } from '@/contexts/AuthContext';
 
 const listContainer: Variants = {
   hidden: {},
@@ -62,6 +64,7 @@ const KnowledgeBase = () => {
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const { categories, refetch: refetchCategories } = useKbCategories();
@@ -98,6 +101,7 @@ const KnowledgeBase = () => {
 
   // Import dialog state
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [showPortalShareDialog, setShowPortalShareDialog] = useState(false);
 
   // Category management state
   const [showCategoryManager, setShowCategoryManager] = useState(false);
@@ -361,7 +365,7 @@ const KnowledgeBase = () => {
         <main className="flex-1 overflow-y-auto">
           <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-4">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 rounded-lg bg-primary/10">
                   <BookOpen className="w-5 h-5 text-primary" />
@@ -371,7 +375,7 @@ const KnowledgeBase = () => {
                   <p className="text-sm text-muted-foreground">{articles.length} artiklar</p>
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2 sm:justify-end">
                 <Button
                   variant="outline"
                   onClick={() => setShowImportDialog(true)}
@@ -380,6 +384,16 @@ const KnowledgeBase = () => {
                   <Upload className="w-4 h-4 mr-2" />
                   Importera
                 </Button>
+                {user?.role === 'admin' && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowPortalShareDialog(true)}
+                    size="sm"
+                  >
+                    <Link2 className="w-4 h-4 mr-2" />
+                    Publik länk
+                  </Button>
+                )}
                 <Button
                   onClick={() => navigate(`/kb/new${selectedCategoryId ? `?category=${selectedCategoryId}` : ''}`)}
                   size="sm"
@@ -579,6 +593,12 @@ const KnowledgeBase = () => {
         defaultCategoryId={selectedCategoryId}
         onImported={refetchArticles}
       />
+      {user?.role === 'admin' && (
+        <KBPortalShareDialog
+          open={showPortalShareDialog}
+          onOpenChange={setShowPortalShareDialog}
+        />
+      )}
     </Layout>
   );
 };

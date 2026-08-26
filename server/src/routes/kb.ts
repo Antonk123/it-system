@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
 import multer from 'multer';
@@ -13,6 +13,8 @@ import { canAccessTicket } from '../lib/ticketAccess.js';
 import { hasMagicByteMatch } from './attachments.js';
 import { createRateLimiter, writeRateLimiter } from '../middleware/rateLimit.js';
 import { logger } from '../lib/logger.js';
+import { deleteSetting, getSetting, setSetting } from '../lib/settings.js';
+import { logAudit } from '../lib/auditLog.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -49,6 +51,8 @@ const uploadImage = multer({
 
 
 const kbShareRateLimiter = createRateLimiter(60 * 1000, 30);
+const kbPortalRateLimiter = createRateLimiter(60 * 1000, 120);
+const KB_PORTAL_SHARE_TOKEN_SETTING = 'kb_public_share_token';
 
 const router = Router();
 
@@ -121,6 +125,42 @@ function getTagsForArticles(articleIds: string[]): Map<string, KbTagRow[]> {
     map.get(row.article_id)!.push({ id: row.id, name: row.name, color: row.color });
   }
   return map;
+}
+
+function publicArticleSummary(article: KbArticleRow, tags: KbTagRow[]) {
+  return {
+    id: article.id,
+    title: article.title,
+    snippet: stripHtml(article.content).slice(0, 240),
+    category_id: article.category_id,
+    category_name: article.category_name || null,
+    category_color: article.category_color || null,
+    article_type: article.article_type || null,
+    tags,
+    updated_at: article.updated_at,
+  };
+}
+
+function applyPortalSecurityHeaders(res: Response): void {
+  res.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+  res.set('Cache-Control', 'private, no-store');
+}
+
+function publicPortalHeaders(_req: Request, res: Response, next: NextFunction): void {
+  applyPortalSecurityHeaders(res);
+  next();
+}
+
+/** Validates the global portal token without revealing whether it was revoked. */
+function requirePublicPortalToken(req: Request, res: Response): boolean {
+  applyPortalSecurityHeaders(res);
+  const token = req.params.token;
+  const activeToken = getSetting(KB_PORTAL_SHARE_TOKEN_SETTING);
+  if (!activeToken || token !== activeToken) {
+    res.status(404).json({ error: 'Not found' });
+    return false;
+  }
+  return true;
 }
 
 // ─── Categories ───────────────────────────────────────────────────────────────
@@ -613,6 +653,131 @@ router.delete('/articles/:id/links/:targetId', authenticate, requireAdmin, async
   }
 });
 
+// ─── Global Public KB Portal ─────────────────────────────────────────────────
+
+// GET /api/kb/portal-share — retrieve the one global portal token
+router.get('/portal-share', authenticate, requireAdmin, (_req: AuthRequest, res: Response) => {
+  try {
+    res.json({ share_token: getSetting(KB_PORTAL_SHARE_TOKEN_SETTING) });
+  } catch (error) {
+    logger.error('Error fetching KB portal share:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to fetch portal share' });
+  }
+});
+
+// POST /api/kb/portal-share — create the global token once (idempotent)
+router.post('/portal-share', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
+  try {
+    const existing = getSetting(KB_PORTAL_SHARE_TOKEN_SETTING);
+    if (existing) return res.json({ share_token: existing });
+
+    // 128-bit CSPRNG value. It is intentionally persisted only in app_settings,
+    // not in env or a migration, so revocation takes effect immediately.
+    const shareToken = randomBytes(16).toString('hex');
+    setSetting(KB_PORTAL_SHARE_TOKEN_SETTING, shareToken);
+    logAudit(req.user!.id, 'share_create', 'kb_portal_share', 'global', null, req.ip, req.apiKey?.id ?? null);
+    res.status(201).json({ share_token: shareToken });
+  } catch (error) {
+    logger.error('Error creating KB portal share:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to create portal share' });
+  }
+});
+
+// DELETE /api/kb/portal-share — revoke the global token (idempotent)
+router.delete('/portal-share', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
+  try {
+    const existing = getSetting(KB_PORTAL_SHARE_TOKEN_SETTING);
+    if (existing) {
+      deleteSetting(KB_PORTAL_SHARE_TOKEN_SETTING);
+      logAudit(req.user!.id, 'share_delete', 'kb_portal_share', 'global', null, req.ip, req.apiKey?.id ?? null);
+    }
+    res.status(204).end();
+  } catch (error) {
+    logger.error('Error revoking KB portal share:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to revoke portal share' });
+  }
+});
+
+// GET /api/kb/portal/:token/categories — public categories with published content
+router.get('/portal/:token/categories', publicPortalHeaders, kbPortalRateLimiter, (req: Request, res: Response) => {
+  if (!requirePublicPortalToken(req, res)) return;
+  try {
+    const categories = db.prepare(`
+      SELECT c.id, c.name, c.color, COUNT(a.id) AS article_count
+      FROM kb_categories c
+      JOIN kb_articles a ON a.category_id = c.id AND a.status = 'published'
+      GROUP BY c.id, c.name, c.color
+      ORDER BY c.position ASC, c.name ASC
+    `).all();
+    res.json(categories);
+  } catch (error) {
+    logger.error('Error fetching public KB portal categories:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to fetch categories' });
+  }
+});
+
+// GET /api/kb/portal/:token/articles?search=&category_id= — public summaries only
+router.get('/portal/:token/articles', publicPortalHeaders, kbPortalRateLimiter, (req: Request, res: Response) => {
+  if (!requirePublicPortalToken(req, res)) return;
+  try {
+    const { search, category_id } = req.query as Record<string, string | undefined>;
+    const trimmedSearch = search?.trim();
+    let articles: KbArticleRow[];
+
+    if (trimmedSearch) {
+      const safeQuery = '"' + trimmedSearch.replace(/"/g, '""') + '"';
+      articles = db.prepare(`
+        SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.created_at, a.updated_at,
+          c.name AS category_name, c.color AS category_color
+        FROM kb_articles_fts fts
+        JOIN kb_articles a ON a.rowid = fts.rowid
+        LEFT JOIN kb_categories c ON a.category_id = c.id
+        WHERE kb_articles_fts MATCH @search
+          AND a.status = 'published'
+          AND (@category_id IS NULL OR a.category_id = @category_id)
+        ORDER BY rank
+      `).all({ search: safeQuery, category_id: category_id || null }) as KbArticleRow[];
+    } else {
+      articles = db.prepare(`
+        SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.created_at, a.updated_at,
+          c.name AS category_name, c.color AS category_color
+        FROM kb_articles a
+        LEFT JOIN kb_categories c ON a.category_id = c.id
+        WHERE a.status = 'published'
+          AND (@category_id IS NULL OR a.category_id = @category_id)
+        ORDER BY a.updated_at DESC
+      `).all({ category_id: category_id || null }) as KbArticleRow[];
+    }
+
+    const tagsByArticle = getTagsForArticles(articles.map(article => article.id));
+    res.json(articles.map(article => publicArticleSummary(article, tagsByArticle.get(article.id) || [])));
+  } catch (error) {
+    logger.error('Error fetching public KB portal articles:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to fetch articles' });
+  }
+});
+
+// GET /api/kb/portal/:token/articles/:articleId — public published article detail
+router.get('/portal/:token/articles/:articleId', publicPortalHeaders, kbPortalRateLimiter, (req: Request, res: Response) => {
+  if (!requirePublicPortalToken(req, res)) return;
+  try {
+    const article = db.prepare(`
+      SELECT a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.created_at, a.updated_at,
+        c.name AS category_name, c.color AS category_color
+      FROM kb_articles a
+      LEFT JOIN kb_categories c ON a.category_id = c.id
+      WHERE a.id = ? AND a.status = 'published'
+    `).get(req.params.articleId) as KbArticleRow | undefined;
+    if (!article) return res.status(404).json({ error: 'Not found' });
+
+    const tags = getTagsForArticles([article.id]).get(article.id) || [];
+    res.json({ ...publicArticleSummary(article, tags), content: article.content });
+  } catch (error) {
+    logger.error('Error fetching public KB portal article:', { error: String(error) });
+    res.status(500).json({ error: 'Failed to fetch article' });
+  }
+});
+
 // ─── Article Sharing ──────────────────────────────────────────────────────────
 
 // GET /api/kb/articles/:id/share — get existing share token
@@ -629,11 +794,12 @@ router.get('/articles/:id/share', authenticate, (req: AuthRequest, res: Response
 // POST /api/kb/articles/:id/share — create share token (idempotent)
 router.post('/articles/:id/share', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
+    const article = db.prepare('SELECT id, status FROM kb_articles WHERE id = ?').get(req.params.id) as { id: string; status: 'draft' | 'published' } | undefined;
+    if (!article) return res.status(404).json({ error: 'Article not found' });
+    if (article.status !== 'published') return res.status(409).json({ error: 'Only published articles can be shared' });
+
     const existing = db.prepare('SELECT share_token FROM kb_article_shares WHERE article_id = ?').get(req.params.id) as { share_token: string } | undefined;
     if (existing) return res.json({ share_token: existing.share_token });
-
-    const article = db.prepare('SELECT id FROM kb_articles WHERE id = ?').get(req.params.id);
-    if (!article) return res.status(404).json({ error: 'Article not found' });
 
     const id = uuidv4();
     const shareToken = randomBytes(12).toString('hex');
@@ -672,7 +838,7 @@ router.get('/public/:token', kbShareRateLimiter, (_req: Request, res: Response) 
         c.name as category_name, c.color as category_color
       FROM kb_articles a
       LEFT JOIN kb_categories c ON a.category_id = c.id
-      WHERE a.id = ?
+      WHERE a.id = ? AND a.status = 'published'
     `).get(share.article_id) as KbArticleRow | undefined;
 
     if (!article) return res.status(404).json({ error: 'Article not found' });

@@ -1194,6 +1194,23 @@ class ApiClient {
     });
   }
 
+  // Knowledge Base - Public portal sharing (admin)
+  async getKbPortalShare() {
+    return this.request<{ share_token: string | null }>('/kb/portal-share');
+  }
+
+  async createKbPortalShare() {
+    return this.request<{ share_token: string }>('/kb/portal-share', {
+      method: 'POST',
+    });
+  }
+
+  async revokeKbPortalShare() {
+    return this.request<void>('/kb/portal-share', {
+      method: 'DELETE',
+    });
+  }
+
   // Knowledge Base - Cross-References
   async getKbArticleLinks(articleId: string) {
     return this.request<LinkedArticleRow[]>(`/kb/articles/${articleId}/links`);
@@ -1214,6 +1231,30 @@ class ApiClient {
 
   async getPublicKbArticle(token: string) {
     return this.request<KbArticleRow>(`/kb/public/${token}`);
+  }
+
+  // Knowledge Base - Public portal (no authentication required)
+  async getKbPortalCategories(token: string) {
+    return this.request<KbPortalCategoryRow[]>(`/kb/portal/${encodeURIComponent(token)}/categories`);
+  }
+
+  async getKbPortalArticles(
+    token: string,
+    params?: { search?: string; category_id?: string },
+  ) {
+    const qs = new URLSearchParams();
+    if (params?.search) qs.set('search', params.search);
+    if (params?.category_id) qs.set('category_id', params.category_id);
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<KbPortalArticleSummary[]>(
+      `/kb/portal/${encodeURIComponent(token)}/articles${query}`,
+    );
+  }
+
+  async getKbPortalArticle(token: string, articleId: string) {
+    return this.request<KbPortalArticle>(
+      `/kb/portal/${encodeURIComponent(token)}/articles/${encodeURIComponent(articleId)}`,
+    );
   }
 
   async uploadKbImage(file: File): Promise<{ url: string }> {
@@ -1799,6 +1840,38 @@ export interface KbArticleRow {
   created_at: string;
   updated_at: string;
   last_reviewed_at?: string | null;
+}
+
+export interface KbPortalCategoryRow {
+  id: string;
+  name: string;
+  color: string | null;
+  article_count: number;
+}
+
+export interface KbPortalTagRow {
+  id: string;
+  name: string;
+  color: string;
+}
+
+interface KbPortalArticleBase {
+  id: string;
+  title: string;
+  category_id: string | null;
+  category_name: string | null;
+  category_color: string | null;
+  article_type: string | null;
+  tags: KbPortalTagRow[];
+  updated_at: string;
+}
+
+export interface KbPortalArticleSummary extends KbPortalArticleBase {
+  snippet: string;
+}
+
+export interface KbPortalArticle extends KbPortalArticleSummary {
+  content: string;
 }
 
 export interface LinkedTicketRow {

@@ -28,6 +28,8 @@ const KnowledgeBase = lazy(() => import("./pages/KnowledgeBase"));
 const KBArticleDetail = lazy(() => import("./pages/KBArticleDetail"));
 const KBArticleForm = lazy(() => import("./pages/KBArticleForm"));
 const SharedKBArticle = lazy(() => import("./pages/SharedKBArticle"));
+const PublicKnowledgeBase = lazy(() => import("./pages/PublicKnowledgeBase"));
+const PublicKBArticle = lazy(() => import("./pages/PublicKBArticle"));
 const Recurring = lazy(() => import("./pages/Recurring"));
 const CompanyList = lazy(() => import("./pages/CompanyList"));
 const CompanyDetail = lazy(() => import("./pages/CompanyDetail"));
@@ -176,6 +178,8 @@ export const AppRoutes = () => {
           <Route path="/submit-ticket" element={withBoundary(<PublicTicketForm />)} />
           <Route path="/shared/:token" element={withBoundary(<SharedTicket />)} />
           <Route path="/kb/shared/:token" element={withBoundary(<SharedKBArticle />)} />
+          <Route path="/kb/public/:token" element={withBoundary(<PublicKnowledgeBase />)} />
+          <Route path="/kb/public/:token/article/:articleId" element={withBoundary(<PublicKBArticle />)} />
           <Route path="/" element={withBoundary(<ProtectedRoute><Index /></ProtectedRoute>)} />
           <Route path="/tickets" element={withBoundary(<ProtectedRoute><TicketList /></ProtectedRoute>)} />
           <Route path="/my-tickets" element={withBoundary(<ProtectedRoute><TicketList /></ProtectedRoute>)} />

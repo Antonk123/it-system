@@ -58,6 +58,8 @@ vi.mock('@/pages/KnowledgeBase', () => ({ default: (p: unknown) => registry.Know
 vi.mock('@/pages/KBArticleDetail', () => ({ default: (p: unknown) => registry.KBArticleDetail(p) }));
 vi.mock('@/pages/KBArticleForm', () => ({ default: (p: unknown) => registry.KBArticleForm(p) }));
 vi.mock('@/pages/SharedKBArticle', () => ({ default: (p: unknown) => registry.SharedKBArticle(p) }));
+vi.mock('@/pages/PublicKnowledgeBase', () => ({ default: (p: unknown) => registry.PublicKnowledgeBase(p) }));
+vi.mock('@/pages/PublicKBArticle', () => ({ default: (p: unknown) => registry.PublicKBArticle(p) }));
 vi.mock('@/pages/Recurring', () => ({ default: (p: unknown) => registry.Recurring(p) }));
 vi.mock('@/pages/CompanyList', () => ({ default: (p: unknown) => registry.CompanyList(p) }));
 vi.mock('@/pages/CompanyDetail', () => ({ default: (p: unknown) => registry.CompanyDetail(p) }));
@@ -111,7 +113,7 @@ function makeStub(name: string) {
 const STUB_NAMES = [
   'Index', 'TicketList', 'TicketForm', 'TicketDetail', 'Archive', 'UserList', 'Settings',
   'Reports', 'Login', 'ForgotPassword', 'ResetPassword', 'PublicTicketForm', 'SharedTicket',
-  'NotFound', 'KnowledgeBase', 'KBArticleDetail', 'KBArticleForm', 'SharedKBArticle',
+  'NotFound', 'KnowledgeBase', 'KBArticleDetail', 'KBArticleForm', 'SharedKBArticle', 'PublicKnowledgeBase', 'PublicKBArticle',
   'Recurring', 'CompanyList', 'CompanyDetail', 'Invoices',
 ] as const;
 
@@ -233,6 +235,8 @@ const ROUTES: RouteCase[] = [
   { path: '/submit-ticket', concretePath: '/submit-ticket', stub: 'PublicTicketForm', guard: 'none' },
   { path: '/shared/:token', concretePath: '/shared/share-tok-1', stub: 'SharedTicket', guard: 'none' },
   { path: '/kb/shared/:token', concretePath: '/kb/shared/kb-share-tok', stub: 'SharedKBArticle', guard: 'none' },
+  { path: '/kb/public/:token', concretePath: '/kb/public/portal-tok', stub: 'PublicKnowledgeBase', guard: 'none' },
+  { path: '/kb/public/:token/article/:articleId', concretePath: '/kb/public/portal-tok/article/article-7', stub: 'PublicKBArticle', guard: 'none' },
   { path: '/', concretePath: '/', stub: 'Index', guard: 'protected' },
   { path: '/tickets', concretePath: '/tickets', stub: 'TicketList', guard: 'protected' },
   { path: '/my-tickets', concretePath: '/my-tickets', stub: 'TicketList', guard: 'protected' },
@@ -502,6 +506,8 @@ describe('useParams levereras korrekt', () => {
     { path: '/kb/9/edit', stub: 'KBArticleForm', expected: { id: '9' }, auth: true },
     { path: '/shared/tok-123', stub: 'SharedTicket', expected: { token: 'tok-123' }, auth: false },
     { path: '/kb/shared/kb-tok-9', stub: 'SharedKBArticle', expected: { token: 'kb-tok-9' }, auth: false },
+    { path: '/kb/public/portal-tok', stub: 'PublicKnowledgeBase', expected: { token: 'portal-tok' }, auth: false },
+    { path: '/kb/public/portal-tok/article/article-7', stub: 'PublicKBArticle', expected: { token: 'portal-tok', articleId: 'article-7' }, auth: false },
     { path: '/reset-password/reset-tok-7', stub: 'ResetPassword', expected: { token: 'reset-tok-7' }, auth: false },
     // URL-kodat värde som ska avkodas av react-router:
     { path: '/shared/a%20b', stub: 'SharedTicket', expected: { token: 'a b' }, auth: false },

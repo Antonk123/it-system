@@ -12,7 +12,7 @@ info:
 
     ## API coverage
 
-    This spec documents the full API surface: 131 operations
+    This spec documents the full API surface: 137 operations
     across every route file — health/CSRF, auth, tickets, categories,
     contacts, companies, billing, time-entries, kb, public, users, API keys,
     settings, comments, attachments, shares, links, checklists, checklist
@@ -1139,6 +1139,124 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/KbArticle" }
         "404": { $ref: "#/components/responses/NotFound" }
+
+  /kb/portal-share:
+    get:
+      tags: [Knowledge base]
+      summary: Hämta den globala publika KB-länken (admin)
+      security:
+        - bearerAuth: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Aktiv token eller null när portalen är avstängd
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [share_token]
+                properties:
+                  share_token: { type: string, nullable: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Knowledge base]
+      summary: Skapa eller hämta den globala publika KB-länken (admin)
+      description: Idempotent. Skapar en 128-bitars token när ingen aktiv token finns.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Befintlig token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [share_token]
+                properties:
+                  share_token: { type: string }
+        "201":
+          description: Ny token
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [share_token]
+                properties:
+                  share_token: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      tags: [Knowledge base]
+      summary: Återkalla den globala publika KB-länken (admin)
+      description: Idempotent; efteråt ger den tidigare tokenen 404.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "204": { description: Länken är återkallad }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /kb/portal/{token}/categories:
+    parameters:
+      - { name: token, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Knowledge base]
+      summary: Lista portalens kategorier
+      description: Oautentiserad, olistad och rate-limited. Endast kategorier med publicerade artiklar returneras.
+      security: []
+      responses:
+        "200":
+          description: Kategorier med artikelantal
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/KbPortalCategory" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /kb/portal/{token}/articles:
+    parameters:
+      - { name: token, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Knowledge base]
+      summary: Lista eller sök publicerade portalartiklar
+      security: []
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: category_id, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Publika sammanfattningar utan full artikel-HTML
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/KbPortalArticleSummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/Error" }
+
+  /kb/portal/{token}/articles/{articleId}:
+    parameters:
+      - { name: token, in: path, required: true, schema: { type: string } }
+      - { name: articleId, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Knowledge base]
+      summary: Hämta en publicerad portalartikel
+      security: []
+      responses:
+        "200":
+          description: Publik artikel
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KbPortalArticle" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429": { $ref: "#/components/responses/Error" }
 
   /public/tickets:
     post:
@@ -4143,6 +4261,47 @@ components:
         tag_ids:
           type: array
           items: { type: string }
+
+    KbPortalTag:
+      type: object
+      required: [id, name, color]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string }
+
+    KbPortalCategory:
+      type: object
+      required: [id, name, article_count]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string, nullable: true }
+        article_count: { type: integer, minimum: 1 }
+
+    KbPortalArticleSummary:
+      type: object
+      required: [id, title, snippet, category_id, category_name, category_color, article_type, tags, updated_at]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        snippet: { type: string }
+        category_id: { type: string, nullable: true }
+        category_name: { type: string, nullable: true }
+        category_color: { type: string, nullable: true }
+        article_type: { type: string, enum: [how-to, solution], nullable: true }
+        tags:
+          type: array
+          items: { $ref: "#/components/schemas/KbPortalTag" }
+        updated_at: { type: string, format: date-time }
+
+    KbPortalArticle:
+      allOf:
+        - $ref: "#/components/schemas/KbPortalArticleSummary"
+        - type: object
+          required: [content]
+          properties:
+            content: { type: string }
 
     UserAdminView:
       type: object

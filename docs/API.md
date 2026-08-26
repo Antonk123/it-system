@@ -58,6 +58,7 @@ These are the only endpoints reachable without credentials:
 - `GET /api/public/templates`, `GET /api/public/categories`
 - `POST /api/public/tickets` (rate-limited), `POST /api/public/ai-suggest` (rate-limited), `PATCH /api/public/ai-suggest/:id` (rate-limited)
 - `GET /api/kb/public/:token`, `GET /api/kb/images/:filename`
+- `GET /api/kb/portal/:token/categories`, `GET /api/kb/portal/:token/articles`, `GET /api/kb/portal/:token/articles/:articleId` (rate-limited, olistad portal)
 - `GET /api/shares/public/:token`, `GET /api/shares/public/file/:token/:attachmentId` (rate-limited)
 - `GET /api/auth/oidc/enabled`, `GET /api/auth/oidc/login` (rate-limited), `GET /api/auth/oidc/callback` (rate-limited) — the SSO handshake runs before any session exists, so it cannot require one
 
@@ -310,9 +311,15 @@ These are the only endpoints reachable without credentials:
 | POST | `/api/kb/articles/:id/links` | `authenticate` → `requireAdmin` | Create cross-link | params: `id`; body: `targetArticleId` | 201 link; 400/409 |
 | DELETE | `/api/kb/articles/:id/links/:targetId` | `authenticate` → `requireAdmin` | Remove cross-link | params: `id`, `targetId` | `{ message }`; 404 |
 | GET | `/api/kb/articles/:id/share` | `authenticate` | Get share token | params: `id` | `{ share_token }` |
-| POST | `/api/kb/articles/:id/share` | `authenticate` → `requireAdmin` | Create share token (idempotent) | params: `id` | `{ share_token }`; 404 |
+| POST | `/api/kb/articles/:id/share` | `authenticate` → `requireAdmin` | Create share token for a published article (idempotent) | params: `id` | `{ share_token }`; 404/409 for draft |
 | DELETE | `/api/kb/articles/:id/share` | `authenticate` → `requireAdmin` | Revoke share token | params: `id` | `{ message }`; 404 |
-| GET | `/api/kb/public/:token` | **public/none** | Public read-only shared article | params: `token` | `{ ...article, tags }`; 404 |
+| GET | `/api/kb/public/:token` | **public/none** | Public read-only shared published article | params: `token` | `{ ...article, tags }`; 404 |
+| GET | `/api/kb/portal-share` | `authenticate` → `requireAdmin` | Get the single global KB portal token | — | `{ share_token: string\|null }` |
+| POST | `/api/kb/portal-share` | `authenticate` → `requireAdmin` | Create/get the global KB portal token (idempotent, 128-bit) | — | `{ share_token }` (200 existing / 201 new) |
+| DELETE | `/api/kb/portal-share` | `authenticate` → `requireAdmin` | Revoke the global portal token (idempotent) | — | 204 |
+| GET | `/api/kb/portal/:token/categories` | **public/none** (`kbPortalRateLimiter`) | List non-empty categories with published-article counts | params: `token` | public category array; 404/429 |
+| GET | `/api/kb/portal/:token/articles` | **public/none** (`kbPortalRateLimiter`) | List/search published article summaries only | params: `token`; query: `search?`, `category_id?` | public summary array; 404/429 |
+| GET | `/api/kb/portal/:token/articles/:articleId` | **public/none** (`kbPortalRateLimiter`) | Read one published article through the portal | params: `token`, `articleId` | public article + tags; 404/429 |
 | POST | `/api/kb/upload-image` | `authenticate` → `requireAdmin` (+ multer `uploadImage.single('image')` 10 MB, magic-byte) | Upload KB image | multipart `image` | 201 `{ url }`; 400 |
 | GET | `/api/kb/images/:filename` | **public/none** | Serve KB image (kb- prefix, traversal-guarded) | params: `filename` | image file; 400/404 |
 

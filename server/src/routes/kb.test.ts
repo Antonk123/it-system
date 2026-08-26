@@ -89,6 +89,8 @@ let categoryId: string;
 let adminId: string;
 // Bound to adminId but scoped ['read','write'] — no 'admin' permission.
 let scopedAdminKey: string;
+let portalAdminKey: string;
+let portalAdminKeyId: string;
 
 // A fresh, unique source IP per call, so functional /public/:token calls never
 // share a rate-limit bucket with each other or with the dedicated trip test.
@@ -137,6 +139,16 @@ beforeAll(async () => {
        VALUES (?, ?, ?, ?, ?, ?)`
     ).run(randomUUID(), 'scoped-test-key', keyPrefix, keyHash, adminId, JSON.stringify(['read', 'write']));
     scopedAdminKey = rawKey;
+  }
+  {
+    portalAdminKey = `itk_live_${randomBytes(16).toString('hex')}`;
+    portalAdminKeyId = randomUUID();
+    const keyPrefix = portalAdminKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
+    const keyHash = createHash('sha256').update(portalAdminKey).digest('hex');
+    db.prepare(
+      `INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions)
+       VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(portalAdminKeyId, 'portal-admin-test-key', keyPrefix, keyHash, adminId, JSON.stringify(['read', 'write', 'admin']));
   }
 
   app = createApp();
@@ -592,5 +604,94 @@ describe('KB article FTS5 sync', () => {
       .set('Authorization', `Bearer ${adminToken}`);
     expect(searchNewTitle.status).toBe(200);
     expect(searchNewTitle.body.some((a: { id: string }) => a.id === articleId)).toBe(true);
+  });
+});
+
+describe('KB public portal', () => {
+  let portalToken: string;
+  let categoryId: string;
+  let publishedId: string;
+  let draftId: string;
+
+  it('requires admins, creates an auditable 128-bit token, is idempotent, and revokes/rotates it', async () => {
+    expect((await request(app).get('/api/kb/portal-share')).status).toBe(401);
+    expect((await userAgent.get('/api/kb/portal-share').set('Authorization', `Bearer ${userToken}`)).status).toBe(403);
+    expect((await request(app).get('/api/kb/portal-share').set('Authorization', `Bearer ${scopedAdminKey}`)).status).toBe(403);
+    expect((await adminAgent.post('/api/kb/portal-share').set('Authorization', `Bearer ${adminToken}`)).status).toBe(403);
+
+    const created = await adminAgent.post('/api/kb/portal-share')
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken);
+    expect(created.status).toBe(201);
+    expect(created.body.share_token).toMatch(/^[a-f0-9]{32}$/);
+    const firstToken = created.body.share_token;
+    expect(db.prepare("SELECT value FROM app_settings WHERE key = 'kb_public_share_token'").get()).toMatchObject({ value: firstToken });
+    const repeated = await adminAgent.post('/api/kb/portal-share')
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken);
+    expect(repeated.status).toBe(200);
+    expect(repeated.body.share_token).toBe(firstToken);
+    const current = await adminAgent.get('/api/kb/portal-share').set('Authorization', `Bearer ${adminToken}`);
+    expect(current.body).toEqual({ share_token: firstToken });
+    expect(db.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE action = 'share_create' AND entity_type = 'kb_portal_share'").get()).toMatchObject({ count: 1 });
+
+    expect((await adminAgent.delete('/api/kb/portal-share').set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken)).status).toBe(204);
+    expect((await request(app).get(`/api/kb/portal/${firstToken}/categories`).set('X-Forwarded-For', freshIp())).body).toEqual({ error: 'Not found' });
+    expect((await adminAgent.delete('/api/kb/portal-share').set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken)).status).toBe(204);
+    expect(db.prepare("SELECT COUNT(*) AS count FROM audit_log WHERE action = 'share_delete' AND entity_type = 'kb_portal_share'").get()).toMatchObject({ count: 1 });
+
+    const rotated = await request(app).post('/api/kb/portal-share').set('Authorization', `Bearer ${portalAdminKey}`);
+    expect(rotated.status).toBe(201);
+    portalToken = rotated.body.share_token;
+    expect(portalToken).not.toBe(firstToken);
+    expect(db.prepare("SELECT api_key_id FROM audit_log WHERE action = 'share_create' AND entity_type = 'kb_portal_share' ORDER BY rowid DESC LIMIT 1").get()).toMatchObject({ api_key_id: portalAdminKeyId });
+  });
+
+  it('exposes published summary/detail DTOs only, supports search/filter, and excludes drafts', async () => {
+    const category = await adminAgent.post('/api/kb/categories').set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken)
+      .send({ name: `Portal category ${Date.now()}`, color: '#0ea5e9' });
+    categoryId = category.body.id;
+    const published = await adminAgent.post('/api/kb/articles').set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken)
+      .send({ title: 'PublicPortalNeedle', content: '<p>Public <strong>portal</strong> content</p>', category_id: categoryId, status: 'published' });
+    const draft = await adminAgent.post('/api/kb/articles').set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken)
+      .send({ title: 'DraftPortalNeedle', content: '<p>secret</p>', category_id: categoryId, status: 'draft' });
+    publishedId = published.body.id;
+    draftId = draft.body.id;
+
+    const categories = await request(app).get(`/api/kb/portal/${portalToken}/categories`).set('X-Forwarded-For', freshIp());
+    expect(categories.headers['x-robots-tag']).toBe('noindex, nofollow, noarchive');
+    expect(categories.headers['cache-control']).toBe('private, no-store');
+    expect(categories.body.find((row: { id: string }) => row.id === categoryId)).toMatchObject({ article_count: 1 });
+    const list = await request(app).get(`/api/kb/portal/${portalToken}/articles?category_id=${categoryId}`).set('X-Forwarded-For', freshIp());
+    expect(list.headers['x-robots-tag']).toBe('noindex, nofollow, noarchive');
+    expect(list.headers['cache-control']).toBe('private, no-store');
+    expect(list.body.map((row: { id: string }) => row.id)).toEqual([publishedId]);
+    const summary = list.body[0];
+    expect(Object.keys(summary).sort()).toEqual(['article_type', 'category_color', 'category_id', 'category_name', 'id', 'snippet', 'tags', 'title', 'updated_at']);
+    expect(summary.snippet).toBe('Public portal content');
+    expect((await request(app).get(`/api/kb/portal/${portalToken}/articles?search=DraftPortalNeedle`).set('X-Forwarded-For', freshIp())).body).toEqual([]);
+    expect((await request(app).get(`/api/kb/portal/${portalToken}/articles?search=PublicPortalNeedle`).set('X-Forwarded-For', freshIp())).body[0].id).toBe(publishedId);
+    expect((await request(app).get(`/api/kb/portal/${portalToken}/articles?search=portal%20content`).set('X-Forwarded-For', freshIp())).body[0].id).toBe(publishedId);
+    const detail = await request(app).get(`/api/kb/portal/${portalToken}/articles/${publishedId}`).set('X-Forwarded-For', freshIp());
+    expect(detail.headers['x-robots-tag']).toBe('noindex, nofollow, noarchive');
+    expect(detail.headers['cache-control']).toBe('private, no-store');
+    expect(detail.body.content).toBe('<p>Public <strong>portal</strong> content</p>');
+    expect(Object.keys(detail.body).sort()).toEqual(['article_type', 'category_color', 'category_id', 'category_name', 'content', 'id', 'snippet', 'tags', 'title', 'updated_at']);
+    expect((await request(app).get(`/api/kb/portal/${portalToken}/articles/${draftId}`).set('X-Forwarded-For', freshIp())).status).toBe(404);
+  });
+
+  it('includes newly published content, limits at 120/min/IP, and blocks draft individual links', async () => {
+    const added = await adminAgent.post('/api/kb/articles').set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken)
+      .send({ title: 'Auto visible', content: '<p>public</p>', category_id: categoryId, status: 'published' });
+    const refreshed = await request(app).get(`/api/kb/portal/${portalToken}/articles?category_id=${categoryId}`).set('X-Forwarded-For', freshIp());
+    expect(refreshed.body.map((row: { id: string }) => row.id)).toContain(added.body.id);
+    const statuses: number[] = [];
+    for (let i = 0; i < 121; i++) statuses.push((await request(app).get(`/api/kb/portal/${portalToken}/categories`).set('X-Forwarded-For', '192.0.2.229')).status);
+    expect(statuses.slice(0, 120).every(status => status !== 429)).toBe(true);
+    expect(statuses[120]).toBe(429);
+
+    expect((await adminAgent.post(`/api/kb/articles/${draftId}/share`).set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken)).status).toBe(409);
+    const legacyToken = randomBytes(12).toString('hex');
+    db.prepare('INSERT INTO kb_article_shares (id, article_id, share_token, created_at) VALUES (?, ?, ?, ?)').run(randomUUID(), draftId, legacyToken, new Date().toISOString());
+    expect((await adminAgent.post(`/api/kb/articles/${draftId}/share`).set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken)).status).toBe(409);
+    expect((await request(app).get(`/api/kb/public/${legacyToken}`).set('X-Forwarded-For', freshIp())).status).toBe(404);
   });
 });
