@@ -64,6 +64,7 @@ describe('PublicKnowledgeBase', () => {
     expect(screen.getAllByText('Nätverk')).not.toHaveLength(0);
     expect(screen.getByText('Instruktion')).toBeInTheDocument();
     expect(screen.getByText('Wi-Fi')).toBeInTheDocument();
+    expect(screen.getByText('Så ansluter du säkert.')).toHaveClass('line-clamp-2');
     expect(screen.queryByText('Tom kategori')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /ny artikel|skapa|redigera|importera|dela/i })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Alla artiklar/i })).toHaveAttribute('aria-pressed', 'true');

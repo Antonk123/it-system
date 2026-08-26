@@ -175,7 +175,7 @@ function ArticleCard({ article, to }: { article: KbPortalArticleSummary; to: { p
   const snippet = plainSnippet(article.snippet);
   return <Link to={to} state={{ fromPortal: true }} className="group flex min-h-44 flex-col rounded-xl border border-border bg-card p-5 shadow-sm transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 motion-reduce:transition-none">
     <div className="flex items-start gap-3"><BookOpen className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><h3 className="font-semibold leading-snug group-hover:text-primary">{article.title}</h3></div>
-    {snippet && <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-muted-foreground">{snippet}</p>}
+    {snippet && <p className="mt-3 line-clamp-2 text-sm leading-relaxed text-muted-foreground">{snippet}</p>}
     <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2 pt-4 text-xs text-muted-foreground">
       {article.category_name && <span className="inline-flex items-center gap-1"><Folder className="h-3.5 w-3.5" />{article.category_name}</span>}
       {article.article_type && <span>{TYPE_LABELS[article.article_type] ?? article.article_type}</span>}
