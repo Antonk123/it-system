@@ -459,10 +459,10 @@ const KBArticleDetail = () => {
 
         {/* Linked Tickets panel */}
         <div className="max-w-3xl pt-2 border-t">
-          <h3 className="text-sm font-semibold mb-3">Länkade biljetter</h3>
+          <h3 className="text-sm font-semibold mb-3">Länkade ärenden</h3>
           {linkedTickets.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Ingen biljett är länkad till den här artikeln
+              Inget ärende är länkat till den här artikeln
             </p>
           ) : (
             <div className="space-y-2">
