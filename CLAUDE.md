@@ -155,3 +155,19 @@ Avoid generic AI-generated aesthetics:
 
 Interpret creatively and make unexpected choices that feel genuinely designed for the context. Vary between light and dark themes, different fonts, different aesthetics. You still tend to converge on common choices (Space Grotesk, for example) across generations. Avoid this: it is critical that you think outside the box!
 </frontend_aesthetics>
+
+## Obsidian-skills — auto-trigg (gäller allt vault-arbete)
+
+Trigg-registret ligger i globala `~/.claude/CLAUDE.md` → Kunskapsbas → **"Obsidian-skills — register"**.
+Claude konsulterar det själv — Anton ska aldrig behöva be om en skill. Kort:
+
+| Skill | Trigga när |
+|-------|-----------|
+| `obsidian:obsidian-markdown` | **Alltid** vid skapa/redigera `.md` i `~/Obsidian` (properties, `[[wikilinks]]`, callouts) |
+| `obsidian:obsidian-bases` | Översikt/index/filtrerad vy över noter → `.base` i stället för handskriven lista |
+| `obsidian:json-canvas` | Något ska förklaras visuellt (arkitektur, flöde, beslutsträd) → `.canvas` |
+| `obsidian:obsidian-cli` | Sök över hela vaultet, eller Obsidian-plugin/tema-debug (kräver att appen körs) |
+| `obsidian:defuddle` | Anton klistrar in en artikel-/dok-URL som ska läsas eller sparas |
+
+Dokumentation för det här projektet skrivs till `~/Obsidian/Projekt/IT-System/`
+(`decisions.md`, `bugs.md`, `notes.md`, `SUMMARY.md`) — inte i repot.
