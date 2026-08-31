@@ -241,7 +241,9 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
   body = body
     .replace(/\[data:image\/[^\]]+\]/g, '')
     .replace(/data:image\/[^\s)]+/g, '')
-    .replace(/https?:\/\/\S*safelinks\.protection\.outlook\.com\S*/g, (match) => {
+    // `]` undantas: html-to-text renderar länkar som `text [href]`, och ett girigt
+    // `\S*` slukar den avslutande hakparentesen så att den försvinner ur ärendetexten.
+    .replace(/https?:\/\/[^\s\]]*safelinks\.protection\.outlook\.com[^\s\]]*/g, (match) => {
       try {
         const url = new URL(match);
         return decodeURIComponent(url.searchParams.get('url') || match);
