@@ -12,6 +12,7 @@ import { applyMode, getStoredMode, saveModeTheme, ModeTheme } from '@/lib/appear
 import { dispatchModeChange } from '@/hooks/useMode';
 import { RouteBreadcrumbs } from '@/components/RouteBreadcrumbs';
 import { BrandLogo } from '@/components/BrandLogo';
+import { forwardSearchToPrefabnavet } from '@/lib/prefabnavetBridge';
 
 interface LayoutProps {
   children: ReactNode;
@@ -210,6 +211,9 @@ export const Layout = ({
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
+        if (forwardSearchToPrefabnavet()) {
+          return;
+        }
         setPaletteOpen(prev => !prev);
       }
     };

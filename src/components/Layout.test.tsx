@@ -9,7 +9,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 // onboarding wizard) with their own data/auth dependencies that are
 // irrelevant to this a11y-structure test — stub them out.
 vi.mock('@/components/CommandPalette', () => ({
-  CommandPalette: () => null,
+  CommandPalette: ({ open }: { open: boolean }) => (
+    <div data-testid="command-palette-state" data-open={String(open)} />
+  ),
 }));
 vi.mock('@/components/QuickCaptureFAB', () => ({
   QuickCaptureFAB: () => null,
@@ -58,6 +60,14 @@ function renderLayout() {
 }
 
 describe('"Nytt ärende" — a11y-struktur (audit v5 MEDIUM-4/5)', () => {
+  it('behåller den lokala kommandopaletten för Cmd/Ctrl+K när sidan körs fristående', () => {
+    renderLayout();
+
+    expect(screen.getByTestId('command-palette-state')).toHaveAttribute('data-open', 'false');
+    fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
+    expect(screen.getByTestId('command-palette-state')).toHaveAttribute('data-open', 'true');
+  });
+
   it('renderas som en enda länk med accessible name "Nytt ärende"', () => {
     renderLayout();
     const link = screen.getByRole('link', { name: 'Nytt ärende' });
