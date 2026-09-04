@@ -29,7 +29,11 @@ services:
     # den delade checkouten (itticket-main), så `git pull --ff-only` slutar blockeras.
     # Kräver att lockfilen är i synk med package.json (den är det) — annars failar boot
     # med flit, vilket är önskat. Gäller även frontend nedan.
-    command: sh -c "apk add --no-cache tzdata && npm ci && npm run dev"   # tzdata: så TZ-env löser namngiven zon (alpine saknar den) → dev speglar prods schematider
+    # --ignore-scripts: samma skäl som i Dockerfile.server. better-sqlite3 13 satte
+    # `gypfile: true`, så npm kör node-gyp rebuild trots att en musl-prebuild finns i
+    # tarballen — och node:22-alpine saknar python3/g++. Utan flaggan crash-loopar
+    # dev-backenden på "Could not find any Python installation to use" (hände 2026-09-04).
+    command: sh -c "apk add --no-cache tzdata && npm ci --ignore-scripts && npm run dev"   # tzdata: så TZ-env löser namngiven zon (alpine saknar den) → dev speglar prods schematider
     ports:
       - "3003:3001"
     volumes:
@@ -69,7 +73,7 @@ services:
     image: node:22-alpine   # matchar prod (Dockerfile.server) → prebyggd better-sqlite3 på musl, ingen kompilering
     container_name: it-ticketing-frontend-dev
     working_dir: /app
-    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5174"   # npm ci: se backend-kommentaren
+    command: sh -c "npm ci --ignore-scripts && npm run dev -- --host 0.0.0.0 --port 5174"   # npm ci: se backend-kommentaren; --ignore-scripts: se backend-kommentaren
     ports:
       - "5174:5174"
     volumes:
