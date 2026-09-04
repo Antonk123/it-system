@@ -2,7 +2,17 @@ FROM node:22-alpine AS build
 WORKDIR /app
 
 COPY server/package*.json ./
-RUN npm ci
+# --ignore-scripts: better-sqlite3 13 satte `gypfile: true` i sin package.json
+# (13.0.2) men levererar samtidigt färdiga prebuilds i tarballen — bl.a.
+# `prebuilds/linuxmusl-x64.node` som är den vi behöver. npm ser gypfile och kör
+# ändå `node-gyp rebuild`, som dör på att alpine-imagen saknar python3/g++:
+# "Could not find any Python installation to use". Verifierat i ett rent
+# node:22-alpine-bygge: v12 går igenom, v13 failar, v13 + --ignore-scripts går
+# igenom och laddar musl-prebuilden (SQLite 3.53.4, FTS5 + WAL bekräftade).
+# Inget produktionsberoende har install/postinstall-script, och det enda
+# dev-beroendet som har det (esbuild) behövs inte av `npm run build`, som bara
+# kör tsc. Ta bort flaggan när better-sqlite3 sätter gypfile: false igen.
+RUN npm ci --ignore-scripts
 
 COPY server/ .
 RUN npm run build
@@ -18,7 +28,8 @@ ENV NODE_ENV=production
 RUN apk add --no-cache tzdata
 
 COPY server/package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+# --ignore-scripts: se motiveringen i build-steget ovan.
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
 COPY --from=build /app/dist ./dist
 RUN mkdir -p /app/data/uploads
