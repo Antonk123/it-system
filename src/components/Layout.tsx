@@ -313,7 +313,7 @@ export const Layout = ({
               <span>Sök överallt...</span>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">
+          <Button className="prefabnavet-standalone-only" variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">
             {mode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </Button>
         </div>
@@ -333,7 +333,7 @@ export const Layout = ({
               </div>
               <RouteBreadcrumbs />
             </div>
-            <Button variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">
+            <Button className="prefabnavet-standalone-only" variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">
               {mode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </Button>
           </div>

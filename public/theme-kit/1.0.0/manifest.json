@@ -1,0 +1,25 @@
+{
+  "files": {
+    "prefabnavet-theme-bridge.js": {
+      "sha256": "bb667e4fddcb1c4f6b4263bc54096f56465d15bf0d5e53e331ee96b571154eb2"
+    },
+    "prefabnavet-theme.css": {
+      "sha256": "8b9ee3af10504b5d91bd43686b618a16a874e3b6643995031e00dfe91292352e"
+    }
+  },
+  "packageVersion": "1.0.0",
+  "palettes": [
+    "bibliotek",
+    "violett",
+    "odysseus",
+    "terminal",
+    "gpt",
+    "claude"
+  ],
+  "protocolVersion": 1,
+  "sourceFingerprint": "3c74d683f733c00b0ab68cab0c9b54b7bb5e372bd0cdf7ed207893700b0417b2",
+  "themes": [
+    "light",
+    "dark"
+  ]
+}

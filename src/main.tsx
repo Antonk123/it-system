@@ -13,3 +13,5 @@ createRoot(document.getElementById("root")!).render(
 // Register the PWA service worker with periodic update checks + auto-reload so
 // installed PWAs pick up new builds without a manual reinstall.
 registerServiceWorker();
+
+import "./prefabnavet-theme.css";

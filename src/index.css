@@ -19,7 +19,7 @@ layer(base);
 @plugin 'tailwindcss-animate';
 @plugin '@tailwindcss/typography';
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark:not([data-prefabnavet-embedded="true"]) *, [data-prefabnavet-embedded="true"][data-prefabnavet-theme="dark"] *));
 
 @utility container {
   margin-inline: auto;
