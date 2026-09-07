@@ -94,6 +94,29 @@ describe('Prefabnavet theme integration', () => {
     expect(app.attributes.size).toBe(0);
   });
 
+  it('keeps input text and placeholders readable on the inset surface in every palette', () => {
+    const luminance = (hex: string) => [0, 2, 4].reduce((sum, offset, index) => {
+      const channel = parseInt(hex.slice(offset, offset + 2), 16) / 255;
+      return sum + [0.2126, 0.7152, 0.0722][index] *
+        (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+    }, 0);
+    const palettes = [...read(`${packagePath}/prefabnavet-theme.css`).matchAll(/(html[^{}]+)\{([^}]+)/g)]
+      .filter(([, selector]) => selector.includes('data-prefabnavet-palette'));
+    expect(palettes).toHaveLength(12);
+    for (const [, selector, body] of palettes) {
+      const colors = Object.fromEntries([...body.matchAll(/--(pn-[\w-]+): #([\da-f]{6});/g)]
+        .map(([, token, hex]) => [token, luminance(hex)]));
+      for (const token of ['pn-text', 'pn-text-muted']) {
+        const [darker, lighter] = [colors[token], colors['pn-surface-inset']].sort((a, b) => a - b);
+        expect((lighter + 0.05) / (darker + 0.05), `${selector}: ${token} on input`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+    // bg-input consumes this token as a surface, so a border/text color is unsafe.
+    const inputs = [...read('src/prefabnavet-theme.css').matchAll(/--input:\s*([^;]+);/g)];
+    expect(inputs.length).toBeGreaterThan(0);
+    for (const [, value] of inputs) expect(value).toBe('var(--search-input-bg)');
+  });
+
   it('keeps waiting and high-priority badge text at WCAG AA contrast in every palette', () => {
     const rgb = (hsl: string) => {
       const [h, s, l] = hsl.replaceAll('%', '').split(' ').map(Number);

@@ -19,7 +19,7 @@ html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="light"][data-pref
   --destructive: 4.0678 54.1284% 42.7451%;
   --destructive-foreground: 40.0000 65.2174% 95.4902%;
   --border: 38.3890 19.9358% 82.9059%;
-  --input: 34.2857 14.4330% 38.0392%;
+  --input: var(--search-input-bg);
   --ring: 9.1139 46.1988% 33.5294%;
   --sidebar-background: 39.1304 41.8182% 89.2157%;
   --sidebar: 39.1304 41.8182% 89.2157%;
@@ -71,7 +71,7 @@ html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="light"][data-pref
   --destructive: 3.8095 53.3898% 46.2745%;
   --destructive-foreground: 0.0000 0.0000% 100.0000%;
   --border: 240.0000 13.2780% 90.5490%;
-  --input: 240.0000 10.9091% 43.1373%;
+  --input: var(--search-input-bg);
   --ring: 251.9008 55.7604% 57.4510%;
   --sidebar-background: 240.0000 40.0000% 96.0784%;
   --sidebar: 240.0000 40.0000% 96.0784%;
@@ -123,7 +123,7 @@ html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="light"][data-pref
   --destructive: 3.7500 55.1724% 45.4902%;
   --destructive-foreground: 0.0000 0.0000% 100.0000%;
   --border: 195.7895 18.8119% 80.1961%;
-  --input: 198.6207 15.0259% 37.8431%;
+  --input: var(--search-input-bg);
   --ring: 352.3529 43.2203% 46.2745%;
   --sidebar-background: 193.3333 25.7143% 93.1373%;
   --sidebar: 193.3333 25.7143% 93.1373%;
@@ -175,7 +175,7 @@ html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="light"][data-pref
   --destructive: 357.0423 60.1695% 46.2745%;
   --destructive-foreground: 0.0000 0.0000% 100.0000%;
   --border: 135.0000 29.0909% 78.4314%;
-  --input: 136.1538 32.5000% 31.3725%;
+  --input: var(--search-input-bg);
   --ring: 139.3701 100.0000% 24.9020%;
   --sidebar-background: 132.6316 57.5758% 93.5294%;
   --sidebar: 132.6316 57.5758% 93.5294%;
@@ -227,7 +227,7 @@ html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="light"][data-pref
   --destructive: 3.7500 55.1724% 45.4902%;
   --destructive-foreground: 0.0000 0.0000% 100.0000%;
   --border: 0.0000 0.0000% 81.1765%;
-  --input: 0.0000 0.0000% 37.2549%;
+  --input: var(--search-input-bg);
   --ring: 0.0000 0.0000% 40.0000%;
   --sidebar-background: 0.0000 0.0000% 93.3333%;
   --sidebar: 0.0000 0.0000% 93.3333%;
@@ -279,7 +279,7 @@ html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="light"][data-pref
   --destructive: 4.7244 54.5064% 45.6863%;
   --destructive-foreground: 0.0000 0.0000% 100.0000%;
   --border: 35.2941 17.8947% 81.3725%;
-  --input: 34.2857 7.4468% 36.8627%;
+  --input: var(--search-input-bg);
   --ring: 13.9655 53.7037% 42.3529%;
   --sidebar-background: 40.0000 30.0000% 92.1569%;
   --sidebar: 40.0000 30.0000% 92.1569%;
@@ -331,7 +331,7 @@ html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="dark"][data-prefa
   --destructive: 5.6250 51.6129% 63.5294%;
   --destructive-foreground: 33.6000 60.9756% 8.0392%;
   --border: 29.6552 10.8614% 15.7059%;
-  --input: 36.0000 15.9817% 57.0588%;
+  --input: var(--search-input-bg);
   --ring: 28.1081 50.6849% 57.0588%;
   --sidebar-background: 34.2857 23.3333% 11.7647%;
   --sidebar: 34.2857 23.3333% 11.7647%;
@@ -383,7 +383,7 @@ html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="dark"][data-prefa
   --destructive: 5.8929 64.3678% 65.8824%;
   --destructive-foreground: 253.1250 47.0588% 13.3333%;
   --border: 240.0000 14.3497% 17.5176%;
-  --input: 240.0000 15.8470% 64.1176%;
+  --input: var(--search-input-bg);
   --ring: 250.9091 84.6154% 74.5098%;
   --sidebar-background: 240.0000 23.2558% 16.8627%;
   --sidebar: 240.0000 23.2558% 16.8627%;
@@ -435,7 +435,7 @@ html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="dark"][data-prefa
   --destructive: 0.0000 100.0000% 72.7451%;
   --destructive-foreground: 348.0000 23.8095% 8.2353%;
   --border: 194.6939 31.6129% 30.3922%;
-  --input: 207.2727 33.8462% 74.5098%;
+  --input: var(--search-input-bg);
   --ring: 355.3448 65.1685% 65.0980%;
   --sidebar-background: 216.0000 14.2857% 13.7255%;
   --sidebar: 216.0000 14.2857% 13.7255%;
@@ -487,7 +487,7 @@ html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="dark"][data-prefa
   --destructive: 0.0000 100.0000% 65.0980%;
   --destructive-foreground: 0.0000 0.0000% 0.0000%;
   --border: 120.0000 100.0000% 11.5686%;
-  --input: 135.0993 100.0000% 70.3922%;
+  --input: var(--search-input-bg);
   --ring: 135.2941 100.0000% 50.0000%;
   --sidebar-background: 140.0000 50.0000% 4.7059%;
   --sidebar: 140.0000 50.0000% 4.7059%;
@@ -539,7 +539,7 @@ html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="dark"][data-prefa
   --destructive: 3.9344 80.2632% 70.1961%;
   --destructive-foreground: 0.0000 0.0000% 9.0196%;
   --border: 0.0000 0.0000% 25.8824%;
-  --input: 0.0000 0.0000% 70.9804%;
+  --input: var(--search-input-bg);
   --ring: 0.0000 0.0000% 58.0392%;
   --sidebar-background: 0.0000 0.0000% 18.4314%;
   --sidebar: 0.0000 0.0000% 18.4314%;
@@ -591,7 +591,7 @@ html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="dark"][data-prefa
   --destructive: 7.0213 64.3836% 71.3725%;
   --destructive-foreground: 22.5000 21.0526% 7.4510%;
   --border: 60.0000 2.0690% 28.4314%;
-  --input: 45.0000 9.2308% 74.5098%;
+  --input: var(--search-input-bg);
   --ring: 15.1111 54.2169% 51.1765%;
   --sidebar-background: 60.0000 2.6549% 22.1569%;
   --sidebar: 60.0000 2.6549% 22.1569%;
@@ -633,3 +633,10 @@ html[data-prefabnavet-embedded="true"] {
   --shadow-lg: var(--pn-shadow-large);
 }
 html[data-prefabnavet-embedded="true"] .prefabnavet-standalone-only { display: none !important; }
+
+html[data-prefabnavet-embedded="true"] input:not([type="checkbox"]):not([type="radio"]),
+html[data-prefabnavet-embedded="true"] textarea,
+html[data-prefabnavet-embedded="true"] [role="combobox"],
+html[data-prefabnavet-embedded="true"] .border-input {
+  border-color: var(--pn-control-border);
+}
