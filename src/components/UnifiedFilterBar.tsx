@@ -3,7 +3,6 @@ import { FilterView } from '@/types/filterView';
 import { TicketStatus, TicketPriority } from '@/types/ticket';
 import { SearchBar } from '@/components/SearchBar';
 import { StatusMultiSelect } from '@/components/StatusMultiSelect';
-import { TagMultiSelect } from '@/components/TagMultiSelect';
 import { DateRangePopover } from '@/components/DateRangePopover';
 import { ActiveFilterChips } from '@/components/ActiveFilterChips';
 import { FilterViewSelector } from '@/components/FilterViewSelector';
@@ -24,8 +23,6 @@ interface UnifiedFilterBarProps {
   selectedStatuses: TicketStatus[];
   priorityFilter: TicketPriority | 'all';
   categoryFilter: string;
-  selectedTagIds: string[];
-  tagMode: 'or' | 'and';
   checklistFilter: string;
   dateFrom: string;
   dateTo: string;
@@ -54,8 +51,6 @@ export function UnifiedFilterBar({
   selectedStatuses,
   priorityFilter,
   categoryFilter,
-  selectedTagIds,
-  tagMode,
   checklistFilter,
   dateFrom,
   dateTo,
@@ -116,7 +111,6 @@ export function UnifiedFilterBar({
     !hideStatus && selectedStatuses.length > 0,
     priorityFilter !== 'all',
     categoryFilter !== 'all',
-    selectedTagIds.length > 0,
     checklistFilter !== '' && checklistFilter !== 'all',
     dateFrom !== '',
     dateTo !== '',
@@ -173,11 +167,6 @@ export function UnifiedFilterBar({
         </SelectContent>
       </Select>
 
-      {/* 5. Tags */}
-      <TagMultiSelect
-        selectedTagIds={selectedTagIds}
-        onChange={(tagIds) => onChange({ tags: tagIds })}
-      />
 
       {/* 6. Checklist Select */}
       <Select
@@ -274,8 +263,6 @@ export function UnifiedFilterBar({
         selectedStatuses={selectedStatuses}
         priorityFilter={priorityFilter}
         categoryFilter={categoryFilter}
-        selectedTagIds={selectedTagIds}
-        tagMode={tagMode}
         checklistFilter={checklistFilter}
         dateFrom={dateFrom}
         dateTo={dateTo}

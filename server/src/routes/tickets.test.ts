@@ -552,3 +552,79 @@ describe('POST /api/tickets/import/preview — multer error handling (M10-ticket
     expect(res.body.error).toBeDefined();
   });
 });
+
+
+describe('Retired ticket tags and shared knowledge-base tags', () => {
+  it('keeps categories, ignores legacy ticket tags and preserves stored associations', async () => {
+    const tagId = randomUUID();
+    const categoryId = randomUUID();
+    db.prepare('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)').run(tagId, `legacy-${tagId}`, '#123456');
+    db.prepare('INSERT INTO categories (id, name, label) VALUES (?, ?, ?)').run(categoryId, 'retired-category', 'Category after tag retirement');
+    // Ensure a former auto-tag keyword has a matching shared tag.
+    db.prepare('INSERT OR IGNORE INTO tags (id, name, color) VALUES (?, ?, ?)').run(randomUUID(), 'dator', '#123456');
+    const created = await admin.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ title: 'Dator och telefon', description: 'Still uses categories', category_id: categoryId, tag_ids: [tagId] });
+    expect(created.status).toBe(201);
+    const id = created.body.id as string;
+    expect(db.prepare('SELECT COUNT(*) AS count FROM ticket_tags WHERE ticket_id = ?').get(id)).toEqual({ count: 0 });
+    const linkId = randomUUID();
+    db.prepare('INSERT INTO ticket_tags (id, ticket_id, tag_id) VALUES (?, ?, ?)').run(linkId, id, tagId);
+    const updated = await admin.agent.put(`/api/tickets/${id}`)
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ title: 'Updated historical ticket', category_id: categoryId, tag_ids: [] });
+    expect(updated.status).toBe(200);
+    expect(updated.body.category_id).toBe(categoryId);
+    expect(db.prepare('SELECT id, tag_id FROM ticket_tags WHERE ticket_id = ?').get(id)).toEqual({ id: linkId, tag_id: tagId });
+    const list = await admin.agent.get(`/api/tickets?limit=100&category=${categoryId}&tags=nonexistent&tagMode=and`)
+      .set('Authorization', `Bearer ${admin.token}`);
+    expect(list.status).toBe(200);
+    expect(list.body.data.map((ticket: { id: string }) => ticket.id)).toContain(id);
+    const retired = await admin.agent.get('/api/reports/tag-analytics').set('Authorization', `Bearer ${admin.token}`);
+    expect(retired.status).toBe(404);
+    const deletion = await admin.agent.delete(`/api/tags/${tagId}`)
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf);
+    expect(deletion.status).toBe(409);
+    expect(db.prepare('SELECT tag_id FROM ticket_tags WHERE id = ?').get(linkId)).toEqual({ tag_id: tagId });
+
+  });
+
+  it('preserves historical recurring tags on updates and blocks deletion of referenced tags', async () => {
+    const tagId = randomUUID();
+    db.prepare('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)').run(tagId, `recurring-${tagId}`, '#123456');
+    const created = await admin.agent.post('/api/recurring')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ name: 'Historical schedule', title: 'Recurring task', interval_type: 'daily' });
+    expect(created.status).toBe(201);
+    const tags = JSON.stringify([tagId]);
+    db.prepare('UPDATE recurring_templates SET tags = ? WHERE id = ?').run(tags, created.body.id);
+    const update = await admin.agent.put(`/api/recurring/${created.body.id}`)
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ name: 'Renamed schedule', tags: [] });
+    expect(update.status).toBe(200);
+    expect(db.prepare('SELECT tags FROM recurring_templates WHERE id = ?').get(created.body.id)).toEqual({ tags });
+    const deletion = await admin.agent.delete(`/api/tags/${tagId}`)
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf);
+    expect(deletion.status).toBe(409);
+    expect(db.prepare('SELECT id FROM tags WHERE id = ?').get(tagId)).toEqual({ id: tagId });
+  });
+
+  it('still creates shared tags and associates them with knowledge-base articles', async () => {
+    const tag = await admin.agent.post('/api/tags')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ name: `kb-preserved-${randomUUID()}`, color: '#123456' });
+    expect(tag.status).toBe(201);
+    const categoryId = randomUUID();
+    db.prepare('INSERT INTO kb_categories (id, name) VALUES (?, ?)').run(categoryId, 'Preserved KB category');
+    const article = await admin.agent.post('/api/kb/articles')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ title: 'KB tags still work', category_id: categoryId, content: '<p>Help</p>', tag_ids: [tag.body.id] });
+    expect(article.status).toBe(201);
+    expect(db.prepare('SELECT tag_id FROM kb_article_tags WHERE article_id = ?').get(article.body.id))
+      .toEqual({ tag_id: tag.body.id });
+    const fetched = await admin.agent.get(`/api/kb/articles/${article.body.id}`)
+      .set('Authorization', `Bearer ${admin.token}`);
+    expect(fetched.status).toBe(200);
+    expect(fetched.body.tags).toEqual(expect.arrayContaining([expect.objectContaining({ id: tag.body.id, name: tag.body.name })]));
+  });
+});

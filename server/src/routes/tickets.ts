@@ -9,7 +9,7 @@ import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail, sendTicketAssignedEmail } from '../lib/email.js';
 import { authenticate, requireAdmin, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
-import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
+import { detectAutoPriority } from '../lib/automationHelper.js';
 import { writeRateLimiter, createRateLimiter } from '../middleware/rateLimit.js';
 
 const aiRateLimiter = createRateLimiter(60 * 1000, 5);
@@ -83,13 +83,6 @@ const upload = multer({
 
 const router = Router();
 
-interface TagRow {
-  id: string;
-  name: string;
-  color: string;
-  created_at: string;
-  ticket_id?: string;
-}
 
 interface CustomFieldInput {
   fieldName: string;
@@ -157,49 +150,10 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
       LIMIT ? OFFSET ?
     `).all(...params, limit, offset) as TicketRow[];
 
-    // Fetch tags for all tickets in a single query (fixes N+1 problem)
-    let ticketsWithTags: (TicketRow & { tags: { id: string; name: string; color: string; createdAt: Date }[] })[];
-
-    if (tickets.length > 0) {
-      const ticketIds = tickets.map(t => t.id);
-      const placeholders = ticketIds.map(() => '?').join(',');
-
-      // Single query to fetch all tags for all tickets
-      const allTags = db.prepare(`
-        SELECT tt.ticket_id, t.id, t.name, t.color, t.created_at
-        FROM tags t
-        JOIN ticket_tags tt ON t.id = tt.tag_id
-        WHERE tt.ticket_id IN (${placeholders})
-        ORDER BY t.name
-      `).all(...ticketIds) as (TagRow & { ticket_id: string })[];
-
-      // Group tags by ticket_id in memory
-      const tagsByTicket: Record<string, { id: string; name: string; color: string; createdAt: Date }[]> = {};
-      allTags.forEach((tag) => {
-        if (!tagsByTicket[tag.ticket_id]) {
-          tagsByTicket[tag.ticket_id] = [];
-        }
-        tagsByTicket[tag.ticket_id].push({
-          id: tag.id,
-          name: tag.name,
-          color: tag.color,
-          createdAt: new Date(tag.created_at),
-        });
-      });
-
-      // Attach tags to tickets
-      ticketsWithTags = tickets.map((ticket) => ({
-        ...ticket,
-        tags: tagsByTicket[ticket.id] || [],
-      }));
-    } else {
-      ticketsWithTags = [];
-    }
-
     // Build pagination metadata
     const totalPages = Math.ceil(total / limit);
-    const paginatedResponse: PaginatedResponse<TicketRow & { tags: { id: string; name: string; color: string; createdAt: Date }[] }> = {
-      data: ticketsWithTags,
+    const paginatedResponse: PaginatedResponse<TicketRow> = {
+      data: tickets,
       pagination: {
         page,
         limit,
@@ -714,23 +668,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
       'SELECT field_name, field_label, field_value FROM ticket_field_values WHERE ticket_id = ? ORDER BY rowid ASC'
     ).all(ticket.id) as { field_name: string; field_label: string; field_value: string }[];
 
-    // Fetch tags for this ticket
-    const tags = db.prepare(`
-      SELECT t.id, t.name, t.color, t.created_at
-      FROM tags t
-      JOIN ticket_tags tt ON t.id = tt.tag_id
-      WHERE tt.ticket_id = ?
-      ORDER BY t.name
-    `).all(ticket.id) as TagRow[];
-
-    const formattedTags = tags.map((tag) => ({
-      id: tag.id,
-      name: tag.name,
-      color: tag.color,
-      createdAt: new Date(tag.created_at),
-    }));
-
-    res.json({ ...ticket, field_values: fieldValues, tags: formattedTags });
+    res.json({ ...ticket, field_values: fieldValues });
   } catch (error) {
     logger.error('Error fetching ticket:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch ticket' });
@@ -840,13 +778,6 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
     });
 
     createTransaction();
-
-    // Auto-tag based on keyword rules (runs after transaction so tags can be created separately)
-    try {
-      applyAutoTags(id, title, finalDescription);
-    } catch (error) {
-      logger.error('Auto-tag error (non-fatal):', { error: String(error) });
-    }
 
     // AI-kategorisering: kör non-blocking så ärendet returneras direkt.
     // Sparas på ärendet om confidence > 0.6. Användare ser förslaget i UI:t
@@ -1346,7 +1277,7 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: 
 
 // Update ticket
 router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
-  let { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id, tag_ids, ai_suggested_category_id } = req.body;
+  let { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id, ai_suggested_category_id } = req.body;
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return res.status(400).json({ error: 'Invalid status value' });
@@ -1516,15 +1447,6 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
         });
       }
 
-      // Update tags if provided
-      if (tag_ids && Array.isArray(tag_ids)) {
-        db.prepare('DELETE FROM ticket_tags WHERE ticket_id = ?').run(req.params.id);
-        const insertTag = db.prepare('INSERT INTO ticket_tags (id, ticket_id, tag_id) VALUES (?, ?, ?)');
-        tag_ids.forEach((tagId: string) => {
-          insertTag.run(uuidv4(), req.params.id, tagId);
-        });
-      }
-
       // FTS5 synkas automatiskt via triggers (migration 050)
     });
 
@@ -1564,22 +1486,6 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
 
     const ticket = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(req.params.id) as TicketRow;
 
-    // Fetch tags for response
-    const tags = db.prepare(`
-      SELECT t.id, t.name, t.color, t.created_at
-      FROM tags t
-      JOIN ticket_tags tt ON t.id = tt.tag_id
-      WHERE tt.ticket_id = ?
-      ORDER BY t.name
-    `).all(req.params.id) as TagRow[];
-
-    const formattedTags = tags.map((tag) => ({
-      id: tag.id,
-      name: tag.name,
-      color: tag.color,
-      createdAt: new Date(tag.created_at),
-    }));
-
     const warnings: string[] = [];
 
     // Dispatch webhook for ticket update
@@ -1609,7 +1515,7 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
       }).catch((error) => logger.error('Error sending ticket closed email:', { error: String(error) }));
     }
 
-    res.json({ ...ticket, tags: formattedTags, warnings: warnings.length > 0 ? warnings : undefined });
+    res.json({ ...ticket, warnings: warnings.length > 0 ? warnings : undefined });
   } catch (error) {
     logger.error('Error updating ticket:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update ticket' });

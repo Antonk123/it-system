@@ -9,7 +9,6 @@ export interface RecurringTemplate {
   description: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
   category_id: string | null;
-  tags: string[];
   interval_type: 'daily' | 'weekly' | 'monthly';
   interval_day: number | null;
   is_active: number; // 0 or 1 (SQLite integer boolean)
@@ -31,7 +30,6 @@ export type CreateTemplateInput = {
   description: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
   category_id: string | null;
-  tags: string[];
   interval_type: 'daily' | 'weekly' | 'monthly';
   interval_day: number | null;
 };

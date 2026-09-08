@@ -86,6 +86,17 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
 // Delete tag
 router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
+    if (db.prepare('SELECT 1 FROM ticket_tags WHERE tag_id = ? LIMIT 1').get(req.params.id)) {
+      return res.status(409).json({ error: 'Taggen finns i sparad ärendehistorik och kan inte tas bort' });
+    }
+    // Recurring templates store historical tag IDs as JSON (no separate join table).
+    const recurringHistory = db.prepare(`SELECT 1 FROM recurring_templates rt, json_each(
+      CASE WHEN json_valid(rt.tags) THEN rt.tags ELSE '[]' END
+    ) tag WHERE tag.value = ? LIMIT 1`).get(req.params.id);
+    if (recurringHistory) {
+      return res.status(409).json({ error: 'Taggen finns i sparad mallhistorik och kan inte tas bort' });
+    }
+
     const result = db.prepare('DELETE FROM tags WHERE id = ?').run(req.params.id);
 
     if (result.changes === 0) {

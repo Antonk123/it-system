@@ -3,6 +3,8 @@ import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router';
 import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle, Upload, Link2 } from 'lucide-react';
 import { Layout } from '@/components/Layout';
+import { KBTagSettings } from '@/components/KBTagSettings';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { KBImportDialog } from '@/components/KBImportDialog';
 import { KBPortalShareDialog } from '@/components/KBPortalShareDialog';
 import { Button } from '@/components/ui/button';
@@ -213,6 +215,21 @@ const KnowledgeBase = () => {
               <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
             </Button>
           </div>
+
+          {user?.role === 'admin' && (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" className="mx-2 mb-2 justify-start min-h-11">Hantera KB-taggar</Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-xl max-h-[85dvh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Hantera kunskapsbasens taggar</DialogTitle>
+                  <DialogDescription>Skapa och redigera taggar för artiklar.</DialogDescription>
+                </DialogHeader>
+                <KBTagSettings />
+              </DialogContent>
+            </Dialog>
+          )}
 
           <nav className="flex-1 overflow-y-auto px-2 space-y-0.5">
             {categories.map((cat) => (

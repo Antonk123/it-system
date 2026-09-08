@@ -1,17 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock the DB module before importing the module under test.
-// matchesWord() and detectAutoPriority() are pure (no DB access),
-// but the module-level import of `db` would open the real file otherwise.
-vi.mock('../db/connection.js', () => ({
-  db: {
-    prepare: vi.fn().mockReturnValue({
-      get: vi.fn().mockReturnValue(undefined),
-      run: vi.fn(),
-    }),
-  },
-}));
-
 // Mock logger to suppress output during tests
 vi.mock('./logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },

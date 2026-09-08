@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router';
-import { LayoutDashboard, Ticket, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search, Building2 } from 'lucide-react';
+import { LayoutDashboard, Ticket, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isTicketSection } from '@/lib/ticketNavigation';
 import { Button } from '@/components/ui/button';
@@ -34,10 +34,6 @@ const navItems = [{
   path: '/reports',
   icon: BarChart3,
   label: 'Rapporter'
-}, {
-  path: '/companies',
-  icon: Building2,
-  label: 'Företag'
 }, {
   path: '/users',
   icon: Users,
@@ -268,7 +264,7 @@ export const Layout = ({
             <NavOption
               key={item.path}
               item={item}
-              isActive={item.path === '/tickets' ? isTicketSection(location.pathname) : item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)}
+              isActive={item.path === '/tickets' ? isTicketSection(location.pathname) : item.path === '/settings' ? location.pathname.startsWith('/settings') || location.pathname.startsWith('/companies') : item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)}
               open={!sidebarCollapsed}
               onClick={() => setSidebarOpen(false)}
             />

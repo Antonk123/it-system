@@ -74,7 +74,6 @@ function FilterSummary({ filters }: { filters: FilterView['filters'] }) {
     parts.push(`Prioritet: ${p?.label || filters.priority}`);
   }
   if (filters.category && filters.category !== 'all') parts.push('Kategori');
-  if (filters.tags && filters.tags.length > 0) parts.push(`${filters.tags.length} taggar`);
   if (filters.search) parts.push(`Sök: "${filters.search}"`);
   return <span className="text-xs text-muted-foreground">{parts.join(' · ') || 'Inga filter'}</span>;
 }
@@ -264,7 +263,6 @@ export function FilterViewManager({
     (currentFilters.filters.status && currentFilters.filters.status.length > 0) ||
     currentFilters.filters.priority ||
     currentFilters.filters.category ||
-    (currentFilters.filters.tags && currentFilters.filters.tags.length > 0) ||
     currentFilters.filters.search;
 
   const allViews = [builtInView, ...customViews].filter(Boolean) as FilterView[];

@@ -144,7 +144,7 @@ describe('POST /api/recurring — create templates for each schedule', () => {
     expect(new Date(res.body.next_run).getDate()).toBe(interval_day);
   });
 
-  it('persists tags and priority on the created template', async () => {
+  it('ignores retired tags and persists priority on the created template', async () => {
     const res = await admin.agent
       .post('/api/recurring')
       .set('Authorization', `Bearer ${admin.token}`)
@@ -158,13 +158,13 @@ describe('POST /api/recurring — create templates for each schedule', () => {
       });
     expect(res.status).toBe(201);
     expect(res.body.priority).toBe('high');
-    expect(res.body.tags).toEqual(['a', 'b']);
+    expect(res.body.tags).toBeUndefined();
 
     // Persisted tags are stored as JSON; verify the row directly.
     const row = db.prepare('SELECT tags, priority FROM recurring_templates WHERE id = ?').get(res.body.id) as
       | { tags: string; priority: string }
       | undefined;
-    expect(JSON.parse(row!.tags)).toEqual(['a', 'b']);
+    expect(JSON.parse(row!.tags)).toEqual([]);
     expect(row!.priority).toBe('high');
   });
 });
@@ -227,7 +227,7 @@ describe('GET /api/recurring — list', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns the created templates with parsed tags + history array (200, any auth user)', async () => {
+  it('returns the created templates with history array (200, any auth user)', async () => {
     const res = await request(app)
       .get('/api/recurring')
       .set('Authorization', `Bearer ${user.token}`);
@@ -235,7 +235,7 @@ describe('GET /api/recurring — list', () => {
     expect(Array.isArray(res.body)).toBe(true);
     expect(res.body.length).toBeGreaterThan(0);
     const t = res.body[0];
-    expect(Array.isArray(t.tags)).toBe(true);
+    expect(t.tags).toBeUndefined();
     expect(Array.isArray(t.history)).toBe(true);
   });
 });

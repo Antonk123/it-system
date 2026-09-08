@@ -14,13 +14,11 @@ interface UseTicketsOptions {
   priority?: TicketPriority | 'all';
   category?: string | 'all';
   search?: string;
-  tags?: string;
-  tagMode?: 'or' | 'and';
   dateFrom?: string;
   dateTo?: string;
   dateField?: 'created_at' | 'updated_at' | 'closed_at';
   checklist?: string;
-  sortBy?: 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
+  sortBy?: 'createdAt' | 'status' | 'priority' | 'category';
   sortDir?: 'asc' | 'desc';
   company_id?: string;
   assigned_to?: string;
@@ -32,7 +30,7 @@ interface UseTicketsOptions {
 // reflects a status/category/solution change instantly, instead of waiting for
 // a network round-trip — the difference between "instant" and 30s on a slow
 // VPN/5G link.
-function applyOptimisticRow(row: TicketRow, updates: Partial<Ticket> & { tag_ids?: string[] }): TicketRow {
+function applyOptimisticRow(row: TicketRow, updates: Partial<Ticket>): TicketRow {
   const next = { ...row } as TicketRow & Record<string, unknown>;
   const u = updates as Partial<Ticket> & { assigned_to?: string | null; company_id?: string | null };
   if (u.title !== undefined) next.title = u.title;
@@ -119,7 +117,7 @@ export function buildAddTicketMutationOptions(queryClient: QueryClient) {
 
 export function buildUpdateTicketMutationOptions(queryClient: QueryClient) {
   return {
-    mutationFn: async ({ id, updates, customFields, tagIds }: { id: string; updates: Partial<Ticket> & { tag_ids?: string[] }; customFields?: CustomFieldInput[]; tagIds?: string[] }) => {
+    mutationFn: async ({ id, updates, customFields }: { id: string; updates: Partial<Ticket>; customFields?: CustomFieldInput[] }) => {
       const validation = ticketUpdateSchema.safeParse(updates);
       if (!validation.success) {
         const errorMsg = getValidationError(validation.error);
@@ -141,12 +139,7 @@ export function buildUpdateTicketMutationOptions(queryClient: QueryClient) {
       if ((updates as any).assigned_to !== undefined) updateData.assigned_to = (updates as any).assigned_to || null;
       if ((updates as any).company_id !== undefined) updateData.company_id = (updates as any).company_id || null;
 
-      // Handle tags
-      if (tagIds !== undefined || updates.tag_ids !== undefined) {
-        updateData.tag_ids = tagIds || updates.tag_ids || [];
-      }
-
-      // Single round-trip: the PUT response IS the fresh ticket row (+ tags).
+      // Single round-trip: the PUT response IS the fresh ticket row.
       // We deliberately no longer follow with a second GET /tickets/:id — that
       // doubled latency on slow links (VPN/5G) for every status/category/solution
       // change, since the detail page then also had to wait for a third refetch.
@@ -158,7 +151,7 @@ export function buildUpdateTicketMutationOptions(queryClient: QueryClient) {
 
       return { id, updated, hadCustomFields: !!(customFields && customFields.length > 0) };
     },
-    onMutate: async ({ id, updates }: { id: string; updates: Partial<Ticket> & { tag_ids?: string[] } }) => {
+    onMutate: async ({ id, updates }: { id: string; updates: Partial<Ticket> }) => {
       // Cancel outgoing refetches för alla list-instanser och denna tickets detail.
       await queryClient.cancelQueries({ queryKey: ticketKeys.lists() });
       await queryClient.cancelQueries({ queryKey: ticketKeys.detail(id) });
@@ -286,8 +279,6 @@ export const useTickets = (options?: UseTicketsOptions) => {
     if (opts.priority && opts.priority !== 'all') params.append('priority', opts.priority);
     if (opts.category && opts.category !== 'all') params.append('category', opts.category);
     if (opts.search) params.append('search', opts.search);
-    if (opts.tags) params.append('tags', opts.tags);
-    if (opts.tagMode && opts.tagMode !== 'or') params.append('tagMode', opts.tagMode);
     if (opts.dateFrom) params.append('dateFrom', opts.dateFrom);
     if (opts.dateTo) params.append('dateTo', opts.dateTo);
     if (opts.dateField && opts.dateField !== 'created_at') params.append('dateField', opts.dateField);

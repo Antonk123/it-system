@@ -4,7 +4,7 @@ import Database from 'better-sqlite3';
 // ─────────────────────────────────────────────────────────────────────────────
 // In-memory DB setup.
 // These are the FIRST tests for the reports endpoints. They cover the SQL
-// aggregation behind GET /reports/status-flow and GET /reports/tag-analytics —
+// aggregation behind GET /reports/status-flow and KPI drill-down —
 // the whole point of moving this work server-side is that it counts the FULL
 // dataset (including > 1000 tickets), which the old client-side aggregation
 // could not. We mock the DB connection so importing the route module is cheap,
@@ -28,7 +28,7 @@ vi.mock('../lib/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-import { computeStatusFlow, computeTagAnalytics, computeKpiTickets } from './reports.js';
+import { computeStatusFlow, computeKpiTickets } from './reports.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Schema + fixtures
@@ -202,65 +202,13 @@ describe('computeStatusFlow', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// tag-analytics
-// ─────────────────────────────────────────────────────────────────────────────
-
-describe('computeTagAnalytics', () => {
-  it('returns empty array when no tags are attached', () => {
-    insertTag(memDb, 't1', 'orphan'); // tag exists but attached to nothing
-    expect(computeTagAnalytics(memDb)).toEqual([]);
-  });
-
-  it('counts tickets per tag and sorts by count desc, then name asc', () => {
-    insertTag(memDb, 't1', 'network', '#ff0000');
-    insertTag(memDb, 't2', 'hardware', '#00ff00');
-    insertTag(memDb, 't3', 'aaa', '#0000ff'); // same count as t2 → name tiebreak
-
-    insertTicket(memDb, 'k1', 'open', dateIn(0));
-    insertTicket(memDb, 'k2', 'open', dateIn(0));
-    insertTicket(memDb, 'k3', 'open', dateIn(0));
-
-    // network: 3, hardware: 1, aaa: 1
-    attachTag(memDb, 'k1', 't1');
-    attachTag(memDb, 'k2', 't1');
-    attachTag(memDb, 'k3', 't1');
-    attachTag(memDb, 'k1', 't2');
-    attachTag(memDb, 'k2', 't3');
-
-    const result = computeTagAnalytics(memDb);
-    expect(result).toEqual([
-      { id: 't1', name: 'network', color: '#ff0000', count: 3 },
-      { id: 't3', name: 'aaa', color: '#0000ff', count: 1 }, // name tiebreak: aaa < hardware
-      { id: 't2', name: 'hardware', color: '#00ff00', count: 1 },
-    ]);
-  });
-
-  it('counts correctly with MORE THAN 1000 tagged tickets (the whole point)', () => {
-    insertTag(memDb, 'big', 'recurring');
-
-    const insertTk = memDb.prepare(`INSERT INTO tickets (id, status, created_at) VALUES (?, ?, ?)`);
-    const insertTt = memDb.prepare(`INSERT INTO ticket_tags (id, ticket_id, tag_id) VALUES (?, ?, ?)`);
-    const seed = memDb.transaction(() => {
-      for (let i = 0; i < 1200; i++) {
-        insertTk.run(`tk-${i}`, 'open', dateIn(0));
-        insertTt.run(`tt-${i}`, `tk-${i}`, 'big');
-      }
-    });
-    seed();
-
-    const result = computeTagAnalytics(memDb);
-    expect(result).toEqual([{ id: 'big', name: 'recurring', color: '#3b82f6', count: 1200 }]);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
 // kpi-tickets
 //
 // Drill-down rows for the Reports KPI detail modals. Server-side replacement for
 // the old client-side ?limit=1000 fetch + in-memory filtering. Two scopes:
 //   'total' → created_at filtered by year/month
 //   'aging' → status='open' AND age > 7d, ALWAYS ignoring year/month
-// We assert column parity (assigned_to_name + tags[]), the LIMIT cap, and that
+// We assert column parity (assigned_to_name), the LIMIT cap, and that
 // the aging semantics ignore year/month even when supplied.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -302,7 +250,7 @@ describe('computeKpiTickets', () => {
     });
   });
 
-  it("scope='total' with no filter returns all rows (created_at DESC) with assigned_to_name + tags[]", () => {
+  it("scope='total' with no filter returns all rows (created_at DESC) with assigned_to_name", () => {
     insertUser(memDb, 'u1', 'Anna Andersson');
     insertKpiTicket(memDb, 'a', 'open', dateIn(2), 'u1'); // older
     insertKpiTicket(memDb, 'b', 'resolved', dateIn(0)); // newer, unassigned
@@ -318,11 +266,11 @@ describe('computeKpiTickets', () => {
 
     const a = result.find(r => r.id === 'a')!;
     expect(a.assigned_to_name).toBe('Anna Andersson'); // correlated subquery resolved
-    expect(a.tags).toEqual([{ id: 't1', name: 'network', color: '#ff0000' }]);
+    expect(a.tags).toBeUndefined();
 
     const b = result.find(r => r.id === 'b')!;
     expect(b.assigned_to_name).toBeNull(); // unassigned → subquery returns NULL
-    expect(b.tags).toEqual([]); // ticket without tags gets empty array
+    expect(b.tags).toBeUndefined(); // ticket tags no longer appear in report rows
   });
 
   it("scope='total' with year/month only returns tickets in that range", () => {
@@ -355,7 +303,7 @@ describe('computeKpiTickets', () => {
     const result = computeKpiTickets(memDb, 'aging', { year: '2099', month: '0' });
 
     expect(result.map(r => r.id)).toEqual(['old-open']);
-    expect(result[0].tags).toEqual([]);
+    expect(result[0].tags).toBeUndefined();
   });
 
   it('caps results at LIMIT 200 even with 250 matching tickets (the whole point)', () => {

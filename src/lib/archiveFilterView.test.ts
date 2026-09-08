@@ -14,8 +14,8 @@ describe('Arkivets markering av sparad vy', () => {
     expect(archiveFilterViewMatches(active, new URLSearchParams('status=open,in-progress,waiting'))).toBe(false);
   });
 
-  it('markerar en matchande avslutad vy oberoende av sidnummer och taggordning', () => {
-    expect(archiveFilterViewMatches(view({ status: ['closed'], priority: 'high', tags: ['a', 'b'] }),
+  it('markerar en matchande avslutad vy oberoende av sidnummer och inaktuella taggparametrar', () => {
+    expect(archiveFilterViewMatches(view({ status: ['closed'], priority: 'high' }),
       new URLSearchParams('priority=high&tags=b,a&page=2&limit=10'))).toBe(true);
   });
 

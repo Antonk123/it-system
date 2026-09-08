@@ -14,7 +14,6 @@ interface RecurringTemplateRow {
   description: string;
   priority: string;
   category_id: string | null;
-  tags: string;
   interval_type: 'daily' | 'weekly' | 'monthly';
   interval_day: number | null;
   is_active: number;
@@ -35,7 +34,7 @@ interface HistoryRow {
 router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
   try {
     const templates = db.prepare(
-      'SELECT * FROM recurring_templates ORDER BY created_at DESC'
+      'SELECT id, name, title, description, priority, category_id, interval_type, interval_day, is_active, last_run, next_run, created_at, updated_at FROM recurring_templates ORDER BY created_at DESC'
     ).all() as RecurringTemplateRow[];
 
     // Batch-load last 10 history entries per template i en query.
@@ -57,16 +56,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
       }
     }
 
-    const result = templates.map(t => {
-      let parsedTags: string[];
-      try {
-        parsedTags = JSON.parse(t.tags || '[]');
-      } catch {
-        parsedTags = [];
-      }
-
-      return { ...t, tags: parsedTags, history: historyByTemplate.get(t.id) || [] };
-    });
+    const result = templates.map(t => ({ ...t, history: historyByTemplate.get(t.id) || [] }));
 
     res.json(result);
   } catch (error) {
@@ -77,7 +67,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
 
 // POST /api/recurring — create a new template
 router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
-  const { name, title, description, priority, category_id, tags, interval_type, interval_day } = req.body;
+  const { name, title, description, priority, category_id, interval_type, interval_day } = req.body;
 
   try {
     if (!name || !title) {
@@ -98,11 +88,10 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
 
     const id = uuidv4();
     const next_run = computeNextRun(interval_type, interval_day);
-    const tagsJson = JSON.stringify(tags || []);
 
     db.prepare(`
-      INSERT INTO recurring_templates (id, name, title, description, priority, category_id, tags, interval_type, interval_day, is_active, last_run, next_run)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
+      INSERT INTO recurring_templates (id, name, title, description, priority, category_id, interval_type, interval_day, is_active, last_run, next_run)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NULL, ?)
     `).run(
       id,
       name,
@@ -110,7 +99,6 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
       description || '',
       priority || 'medium',
       category_id || null,
-      tagsJson,
       interval_type,
       interval_day ?? null,
       next_run
@@ -123,7 +111,6 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
       description: description || '',
       priority: priority || 'medium',
       category_id: category_id || null,
-      tags: tags || [],
       interval_type,
       interval_day: interval_day ?? null,
       is_active: 1,
@@ -139,11 +126,11 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
 
 // PUT /api/recurring/:id — update a template
 router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
-  const { name, title, description, priority, category_id, tags, interval_type, interval_day, is_active } = req.body;
+  const { name, title, description, priority, category_id, interval_type, interval_day, is_active } = req.body;
 
   try {
     const existing = db.prepare(
-      'SELECT * FROM recurring_templates WHERE id = ?'
+      'SELECT id, name, title, description, priority, category_id, interval_type, interval_day, is_active, last_run, next_run, created_at, updated_at FROM recurring_templates WHERE id = ?'
     ).get(req.params.id) as RecurringTemplateRow | undefined;
 
     if (!existing) {
@@ -155,7 +142,6 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
     const newDescription = description !== undefined ? description : existing.description;
     const newPriority = priority !== undefined ? priority : existing.priority;
     const newCategoryId = category_id !== undefined ? (category_id || null) : existing.category_id;
-    const newTagsJson = tags !== undefined ? JSON.stringify(tags) : existing.tags;
     const newIntervalType: 'daily' | 'weekly' | 'monthly' = interval_type !== undefined ? interval_type : existing.interval_type;
     const newIntervalDay = interval_day !== undefined ? interval_day : existing.interval_day;
     const newIsActive = is_active !== undefined ? is_active : existing.is_active;
@@ -181,7 +167,7 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
 
     db.prepare(`
       UPDATE recurring_templates
-      SET name = ?, title = ?, description = ?, priority = ?, category_id = ?, tags = ?,
+      SET name = ?, title = ?, description = ?, priority = ?, category_id = ?,
           interval_type = ?, interval_day = ?, is_active = ?, next_run = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).run(
@@ -190,7 +176,6 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
       newDescription,
       newPriority,
       newCategoryId,
-      newTagsJson,
       newIntervalType,
       newIntervalDay,
       newIsActive,
@@ -198,7 +183,7 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
       req.params.id
     );
 
-    const updated = db.prepare('SELECT * FROM recurring_templates WHERE id = ?').get(req.params.id) as RecurringTemplateRow;
+    const updated = db.prepare('SELECT id, name, title, description, priority, category_id, interval_type, interval_day, is_active, last_run, next_run, created_at, updated_at FROM recurring_templates WHERE id = ?').get(req.params.id) as RecurringTemplateRow;
     const history = db.prepare(`
       SELECT rth.id, rth.ticket_id, rth.created_at, tk.title AS ticket_title
       FROM recurring_ticket_history rth
@@ -208,14 +193,7 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
       LIMIT 10
     `).all(req.params.id) as HistoryRow[];
 
-    let parsedTags: string[] = [];
-    try {
-      parsedTags = JSON.parse(updated.tags || '[]');
-    } catch {
-      parsedTags = [];
-    }
-
-    res.json({ ...updated, tags: parsedTags, history });
+    res.json({ ...updated, history });
   } catch (error) {
     logger.error('Error updating recurring template:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update recurring template' });

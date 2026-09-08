@@ -197,14 +197,14 @@ These are the only endpoints reachable without credentials:
 | GET | `/api/tickets/status-counts` | `authenticate` | Ticket counts per status | — | `{ open, in-progress, waiting, resolved, closed }` |
 | GET | `/api/tickets/requester-open-counts` | `authenticate` | Non-closed ticket count per requester | — | `Record<requesterId, count>` |
 | GET | `/api/tickets/upcoming-reminders` | `authenticate` | Unsent future reminders (top 6) | — | reminder array |
-| GET | `/api/tickets/:id` | `authenticate` | Get one ticket + custom fields + tags | params: `id` | `{ ...ticket, field_values[], tags[] }`; 404 |
-| POST | `/api/tickets` | `writeRateLimiter` → `authenticate` | Create ticket (+ custom fields, auto-priority/tags, async AI category, email, webhook) | body: `title`(req), `description`/`customFields`(one req), + optional fields | 201 `{ ...ticket, warnings? }`; 400 |
+| GET | `/api/tickets/:id` | `authenticate` | Get one ticket + custom fields | params: `id` | `{ ...ticket, field_values[] }`; 404 |
+| POST | `/api/tickets` | `writeRateLimiter` → `authenticate` | Create ticket (+ custom fields, auto-priority, async AI category, email, webhook) | body: `title`(req), `description`/`customFields`(one req), + optional fields | 201 `{ ...ticket, warnings? }`; 400 |
 | POST | `/api/tickets/:id/ai-draft` | `aiRateLimiter` → `authenticate` (+ `canAccessTicket`) | AI reply draft from KB + text attachments; persists draft | params: `id` | `{ draft, kbArticlesUsed, kbTitles[], attachmentsUsed[] }`; 403/404/502/503 |
 | GET | `/api/tickets/:id/ai-summary` | `aiRateLimiter` → `authenticate` | Cached (<1h) or fresh AI ticket summary | params: `id`; query: `force=1` | `{ summary, cached, ageMinutes }` or `{ summary:null, reason }`; 404/502/503 |
 | GET | `/api/tickets/:id/history` | `authenticate` (+ `canAccessTicket`) | Ticket change history (cap 500) | params: `id` | history-row array; 403/404 |
 | PUT | `/api/tickets/bulk` | `writeRateLimiter` → `authenticate` (+ per-ticket `canAccessTicket`) | Bulk-update status/priority/category/assignee (≤500) | body: `ids[]`, `updates{}` | `{ updated, skipped[] }`; 400 |
 | POST | `/api/tickets/bulk-delete` | `writeRateLimiter` → `authenticate` → `requireAdmin` | Permanently delete many tickets + attachment files | body: `ids[]` | `{ deleted, alreadyGone? }`; 400 |
-| PUT | `/api/tickets/:id` | `writeRateLimiter` → `authenticate` (+ `canAccessTicket`) | Update ticket fields/custom fields/tags; logs history, email, webhooks | params: `id`; body: optional ticket fields + `customFields`, `tag_ids`, `ai_suggested_category_id` | `{ ...ticket, tags[], warnings? }`; 400/403/404 |
+| PUT | `/api/tickets/:id` | `writeRateLimiter` → `authenticate` (+ `canAccessTicket`) | Update ticket fields/custom fields; logs history, email, webhooks | params: `id`; body: optional ticket fields + `customFields`, `ai_suggested_category_id` | `{ ...ticket, warnings? }`; 400/403/404 |
 | DELETE | `/api/tickets/:id` | `writeRateLimiter` → `authenticate` → `requireAdmin` | Permanently delete one ticket + attachment files | params: `id` | `{ message }`; 404 |
 | POST | `/api/tickets/:id/reminders` | `authenticate` | Create reminder | params: `id`; body: `reminder_time`(future, req), `message` | 201 reminder; 400/404 |
 | GET | `/api/tickets/:id/reminders` | `authenticate` | List reminders for a ticket | params: `id` | reminder array |
@@ -337,14 +337,14 @@ These are the only endpoints reachable without credentials:
 
 ---
 
-## Tags — `/api/tags`
+## Knowledge-base tags — `/api/tags`
 
 | Method | Path | Auth | Purpose | Inputs | Response |
 |--------|------|------|---------|--------|----------|
 | GET | `/api/tags` | `authenticate` | List tags | — | `TagRow[]` |
 | POST | `/api/tags` | `authenticate` → `requireAdmin` | Create tag (default color `#3b82f6`) | body: `name`, `color?` | 201 tag; 400 (incl. duplicate) |
 | PUT | `/api/tags/:id` | `authenticate` → `requireAdmin` | Update name/color | params: `id`; body: `name`, `color?` | tag; 400/404 |
-| DELETE | `/api/tags/:id` | `authenticate` → `requireAdmin` | Delete tag | params: `id` | `{ message }`; 404 |
+| DELETE | `/api/tags/:id` | `authenticate` → `requireAdmin` | Delete tag without historical ticket/template references | params: `id` | `{ message }`; 404/409 |
 
 ---
 
@@ -407,7 +407,6 @@ Mounted as a sub-router on the templates router (`mergeParams`).
 | GET | `/api/reports/summary` | `authenticate` | KPI summary (totals, byCategory, byPriority, trend, avg resolution, aging) | query: `year?`, `month?` | `{ totals, byCategory, byPriority, trend, avgResolutionDays, agingTickets }`; 400 |
 | GET | `/api/reports/requester-analytics` | `authenticate` | Per-requester analytics (top 15) | query: `year?`, `month?` | requester-metrics array; 400 |
 | GET | `/api/reports/status-flow` | `authenticate` | 12-month per-status series | — | status-flow array |
-| GET | `/api/reports/tag-analytics` | `authenticate` | Tag-frequency counts | — | tag-analytics array |
 | GET | `/api/reports/kpi-tickets` | `authenticate` | KPI drill-down ticket rows (cap 200) | query: `scope`(`total`\|`aging`, req), `year?`, `month?` | ticket-row array; 400 |
 
 ---

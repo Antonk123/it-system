@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FilterView, FilterViewsState } from '@/types/filterView';
 import { useSearchParams } from 'react-router';
+import { normalizeTicketFilterParams, normalizeTicketFilterView } from '@/lib/ticketFilterView';
 
 const STORAGE_KEY = 'filter-views';
 
@@ -39,7 +40,7 @@ function loadState(): FilterViewsState {
       ];
 
       return {
-        views,
+        views: views.map(normalizeTicketFilterView),
         activeViewId: parsed.activeViewId || null,
       };
     }
@@ -59,13 +60,23 @@ export function useFilterViews() {
 
   const initializedRef = useRef(false);
   useEffect(() => {
-    if (initializedRef.current) return;
+    if (initializedRef.current) {
+      const normalized = normalizeTicketFilterParams(searchParams);
+      if (normalized.toString() !== searchParams.toString()) {
+        setSearchParams(normalized, { replace: true });
+      }
+      return;
+    }
     initializedRef.current = true;
 
     const hasUrlFilters = searchParams.get('status') || searchParams.get('priority')
-      || searchParams.get('category') || searchParams.get('tags') || searchParams.get('search');
+      || searchParams.get('category') || searchParams.get('search');
 
-    if (hasUrlFilters) return;
+    if (hasUrlFilters) {
+      const normalized = normalizeTicketFilterParams(searchParams);
+      if (normalized.toString() !== searchParams.toString()) setSearchParams(normalized, { replace: true });
+      return;
+    }
 
     const viewToApply = state.activeViewId
       ? state.views.find((v) => v.id === state.activeViewId)
@@ -73,7 +84,7 @@ export function useFilterViews() {
 
     if (!viewToApply) return;
 
-    const newParams = new URLSearchParams(searchParams);
+    const newParams = normalizeTicketFilterParams(searchParams);
     if (viewToApply.filters.status?.length) {
       newParams.set('status', viewToApply.filters.status.join(','));
     }
@@ -83,14 +94,8 @@ export function useFilterViews() {
     if (viewToApply.filters.category && viewToApply.filters.category !== 'all') {
       newParams.set('category', viewToApply.filters.category);
     }
-    if (viewToApply.filters.tags?.length) {
-      newParams.set('tags', viewToApply.filters.tags.join(','));
-    }
     if (viewToApply.filters.search) {
       newParams.set('search', viewToApply.filters.search);
-    }
-    if (viewToApply.filters.tagMode && viewToApply.filters.tagMode !== 'or') {
-      newParams.set('tagMode', viewToApply.filters.tagMode);
     }
     if (viewToApply.filters.checklist) {
       newParams.set('checklist', viewToApply.filters.checklist);
@@ -107,7 +112,9 @@ export function useFilterViews() {
 
     setSearchParams(newParams, { replace: true });
     setState((prev) => ({ ...prev, activeViewId: viewToApply.id }));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Saved state is read only on initialization; later renders normalize URL changes.
+  // Depending on state here would race the router transition when activeViewId changes.
+  }, [searchParams, setSearchParams]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     try {
@@ -138,7 +145,7 @@ export function useFilterViews() {
 
       setState((prev) => ({
         ...prev,
-        views: [...prev.views, newView],
+        views: [...prev.views, normalizeTicketFilterView(newView)],
       }));
 
       return newView.id;
@@ -152,7 +159,7 @@ export function useFilterViews() {
         ...prev,
         views: prev.views.map((v) =>
           v.id === id
-            ? { ...v, ...updates, updatedAt: new Date().toISOString() }
+            ? normalizeTicketFilterView({ ...v, ...updates, updatedAt: new Date().toISOString() })
             : v
         ),
       }));
@@ -193,7 +200,7 @@ export function useFilterViews() {
 
   const applyView = useCallback(
     (view: FilterView, context: 'ticketlist' | 'archive' = 'ticketlist') => {
-      const newParams = new URLSearchParams(searchParams);
+      const newParams = normalizeTicketFilterParams(searchParams);
 
       if (context !== 'archive') {
         if (view.filters.status && view.filters.status.length > 0) {
@@ -215,11 +222,6 @@ export function useFilterViews() {
         newParams.delete('category');
       }
 
-      if (view.filters.tags && view.filters.tags.length > 0) {
-        newParams.set('tags', view.filters.tags.join(','));
-      } else {
-        newParams.delete('tags');
-      }
 
       if (view.filters.search) {
         newParams.set('search', view.filters.search);
@@ -227,11 +229,6 @@ export function useFilterViews() {
         newParams.delete('search');
       }
 
-      if (view.filters.tagMode && view.filters.tagMode !== 'or') {
-        newParams.set('tagMode', view.filters.tagMode);
-      } else {
-        newParams.delete('tagMode');
-      }
 
       if (view.filters.checklist) {
         newParams.set('checklist', view.filters.checklist);
@@ -275,10 +272,7 @@ export function useFilterViews() {
       ? statusParam.split(',').filter((s) => s)
       : [];
 
-    const tagsParam = searchParams.get('tags') || '';
-    const selectedTags = tagsParam ? tagsParam.split(',').filter((t) => t) : [];
 
-    const tagModeParam = searchParams.get('tagMode');
     const checklistParam = searchParams.get('checklist');
     const dateFromParam = searchParams.get('dateFrom');
     const dateToParam = searchParams.get('dateTo');
@@ -291,9 +285,7 @@ export function useFilterViews() {
         status: selectedStatuses.length > 0 ? selectedStatuses : undefined,
         priority: searchParams.get('priority') || undefined,
         category: searchParams.get('category') || undefined,
-        tags: selectedTags.length > 0 ? selectedTags : undefined,
         search: searchParams.get('search') || undefined,
-        tagMode: (tagModeParam && tagModeParam !== 'or') ? tagModeParam as 'or' | 'and' : undefined,
         checklist: checklistParam || undefined,
         dateFrom: dateFromParam || undefined,
         dateTo: dateToParam || undefined,

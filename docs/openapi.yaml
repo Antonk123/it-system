@@ -2644,14 +2644,14 @@ paths:
     get:
       operationId: tagsList
       tags: [Tags]
-      summary: List ticket tags
+      summary: List knowledge-base tags
       description: >
-        Returns all ticket tags (id, name, color, created_at), ordered by name
+        Returns all knowledge-base tags (id, name, color, created_at), ordered by name
         ascending. "Tags" here means ticket labels, unrelated to OpenAPI's own
         `tags:` grouping concept. Available to any authenticated user.
       responses:
         "200":
-          description: List of ticket tags
+          description: List of knowledge-base tags
           content:
             application/json:
               schema:
@@ -2660,9 +2660,9 @@ paths:
     post:
       operationId: tagsCreate
       tags: [Tags]
-      summary: Create a ticket tag
+      summary: Create a knowledge-base tag
       description: >
-        Creates a new ticket tag. Admin-only. `name` is required (trimmed,
+        Creates a new knowledge-base tag. Admin-only. `name` is required (trimmed,
         non-empty) and must be unique; `color` defaults to `#3b82f6` when
         omitted.
       security:
@@ -2691,7 +2691,7 @@ paths:
     put:
       operationId: tagsUpdate
       tags: [Tags]
-      summary: Update a ticket tag
+      summary: Update a knowledge-base tag
       description: >
         Replaces name and color of an existing tag. Admin-only. `name` is
         required (trimmed, non-empty) and must remain unique; `color` defaults
@@ -2719,13 +2719,15 @@ paths:
     delete:
       operationId: tagsDelete
       tags: [Tags]
-      summary: Delete a ticket tag
-      description: Deletes a ticket tag by id. Admin-only.
+      summary: Delete a knowledge-base tag
+      description: Deletes a knowledge-base tag by id. Admin-only.
       security:
         - bearerAuth: []
           csrfToken: []
         - apiKeyAuth: []
       responses:
+        "409":
+          description: Taggen finns i sparad ärende- eller mallhistorik och kan inte tas bort.
         "200": { $ref: "#/components/responses/Message" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -2983,34 +2985,6 @@ paths:
                     waiting: { type: integer }
                     resolved: { type: integer }
                     closed: { type: integer }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "500": { $ref: "#/components/responses/Error" }
-
-  /reports/tag-analytics:
-    get:
-      operationId: reportsTagAnalytics
-      tags: [Reports]
-      summary: Tag-frequency counts
-      description: >
-        Number of tickets carrying each tag, across the full dataset (tags
-        with zero tickets are omitted). Any authenticated user.
-      security:
-        - bearerAuth: []
-        - apiKeyAuth: []
-      responses:
-        "200":
-          description: Tag counts, descending
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    id: { type: string }
-                    name: { type: string }
-                    color: { type: string }
-                    count: { type: integer }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "500": { $ref: "#/components/responses/Error" }
 
@@ -4277,7 +4251,7 @@ components:
 
     TagsTag:
       type: object
-      description: A ticket tag (label), not an OpenAPI `tags:` grouping.
+      description: A knowledge-base tag (label), not an OpenAPI `tags:` grouping.
       properties:
         id: { type: string }
         name: { type: string }
@@ -4316,10 +4290,6 @@ components:
         description: { type: string }
         priority: { type: string, enum: [low, medium, high, critical] }
         category_id: { type: string, nullable: true }
-        tags:
-          type: array
-          items: { type: string }
-          description: Tag ids, parsed from stored JSON (`[]` if the JSON is missing/invalid).
         interval_type: { type: string, enum: [daily, weekly, monthly] }
         interval_day:
           type: integer
@@ -4341,7 +4311,6 @@ components:
         - name
         - title
         - priority
-        - tags
         - interval_type
         - interval_day
         - is_active
@@ -4368,10 +4337,6 @@ components:
         description: { type: string, default: "" }
         priority: { type: string, enum: [low, medium, high, critical], default: medium }
         category_id: { type: string, nullable: true }
-        tags:
-          type: array
-          items: { type: string }
-          description: Tag ids; stored as JSON, defaults to `[]`.
         interval_type: { type: string, enum: [daily, weekly, monthly] }
         interval_day:
           type: integer
@@ -4390,9 +4355,6 @@ components:
         description: { type: string }
         priority: { type: string, enum: [low, medium, high, critical] }
         category_id: { type: string, nullable: true }
-        tags:
-          type: array
-          items: { type: string }
         interval_type: { type: string, enum: [daily, weekly, monthly] }
         interval_day: { type: integer, nullable: true }
         is_active:
@@ -4472,14 +4434,6 @@ components:
             type: object
             properties:
               category: { type: string }
-              count: { type: integer }
-        topTags:
-          type: array
-          maxItems: 3
-          items:
-            type: object
-            properties:
-              tag: { type: string }
               count: { type: integer }
 
     BackupConfigResponse:

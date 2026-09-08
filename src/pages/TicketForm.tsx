@@ -421,8 +421,9 @@ const TicketForm = () => {
   const detailsBadgeCount = useMemo(() => {
     let count = 0;
     if (formData.priority !== 'medium') count++;
+    if (formData.company_id) count++;
     return count;
-  }, [formData.priority]);
+  }, [formData.priority, formData.company_id]);
 
   const attachmentsBadgeCount = useMemo(() => {
     const fileCount = (attachments?.length || 0) + pendingFiles.length;
@@ -692,6 +693,27 @@ const TicketForm = () => {
     }
   };
 
+  const requester = users.find(contact => contact.id === formData.requesterId);
+  const companyName = companies.find(company => company.id === formData.company_id)?.name
+    || (requester?.company_id === formData.company_id ? requester?.company_name : undefined)
+    || 'Valt företag';
+  const companyField = (
+    <div className="space-y-2">
+      <Label htmlFor="ticket-company">Företag</Label>
+      <Select value={formData.company_id || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, company_id: v === 'none' ? '' : v }))} disabled={isSubmitting}>
+        <SelectTrigger id="ticket-company">
+          <SelectValue placeholder="Inget företag" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">Inget företag</SelectItem>
+          {companies.map(c => (
+            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6">
@@ -951,8 +973,8 @@ const TicketForm = () => {
                     value={formData.requesterId}
                     onValueChange={(v) => {
                       const contact = users.find(u => u.id === v);
-                      const autoCompany = (contact as any)?.company_id || '';
-                      setFormData(prev => ({ ...prev, requesterId: v, company_id: autoCompany || prev.company_id }));
+                      const autoCompany = contact?.company_id || '';
+                      setFormData(prev => ({ ...prev, requesterId: v, company_id: autoCompany }));
                       setErrors(prev => { const p = { ...prev }; delete p['requesterId']; return p; });
                     }}
                     placeholder="Välj användare"
@@ -963,11 +985,14 @@ const TicketForm = () => {
                       <a href="/users" className="text-primary hover:underline">Lägg till användare</a> för att tilldela ärenden
                     </p>
                   )}
+                  {formData.company_id && (
+                    <p className="text-sm text-muted-foreground">Företag: {companyName} — kan ändras under Detaljer.</p>
+                  )}
                   {errors.requesterId && <p className="text-sm text-destructive mt-1">{errors.requesterId}</p>}
                 </div>
               </div>
 
-              {/* Tilldelad + Företag row */}
+              {/* Tilldelad */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="ticket-assigned">Tilldelad</Label>
@@ -983,25 +1008,14 @@ const TicketForm = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ticket-company">Företag</Label>
-                  <Select value={formData.company_id || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, company_id: v === 'none' ? '' : v }))} disabled={isSubmitting}>
-                    <SelectTrigger id="ticket-company">
-                      <SelectValue placeholder="Inget företag" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Inget företag</SelectItem>
-                      {companies.map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+
               </div>
 
               {/* Detaljer collapsible — collapsed in create mode, always open in edit mode */}
               {isEditing ? (
                 <div className="space-y-4">
+                  <h2 className="font-medium">Detaljer</h2>
+                  {companyField}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="ticket-priority-edit">Prioritet</Label>
@@ -1065,6 +1079,7 @@ const TicketForm = () => {
                   </CollapsibleTrigger>
                   <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
                     <div className="space-y-4 pt-4">
+                      {companyField}
                       <div className="space-y-2">
                         <Label htmlFor="ticket-priority-create">Prioritet</Label>
                         <Select

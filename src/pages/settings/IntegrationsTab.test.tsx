@@ -66,6 +66,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 // Sektionen är kollapsad by default (open=false via Collapsible) — öppna den
 // innan vi letar efter formulärfälten.
 const openApiKeysSection = () => {
+  fireEvent.click(screen.getByText('Avancerat'));
   fireEvent.click(screen.getByText('API-nycklar'));
 };
 
@@ -229,5 +230,19 @@ describe('IntegrationsTab — API-nycklar admin-scope', () => {
     expect(screen.getAllByText('Admin')).toHaveLength(1);
     expect(screen.getByText('Läs')).toBeTruthy();
     expect(screen.getByText('Läs + Skriv')).toBeTruthy();
+  });
+});
+
+
+describe('Primär e-post och avancerade integrationer', () => {
+  it('visar inkommande e-post direkt och gömmer API/webhook-hantering tills Avancerat öppnas', () => {
+    render(<IntegrationsTab />, { wrapper });
+    expect(screen.getByText('E-post-ingång')).toBeTruthy();
+    expect(screen.queryByText('API-nycklar')).toBeNull();
+    expect(screen.queryByText('Webhooks')).toBeNull();
+    expect(screen.getByText('Avancerat')).toBeTruthy();
+    fireEvent.click(screen.getByText('Avancerat'));
+    expect(screen.getByText('API-nycklar')).toBeTruthy();
+    expect(screen.getByText('Webhooks')).toBeTruthy();
   });
 });

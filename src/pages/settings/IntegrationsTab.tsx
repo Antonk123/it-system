@@ -132,6 +132,92 @@ const IntegrationsTab = () => {
   return (
     <>
         <EmailBehaviorSection />
+        <Collapsible open={sectionsOpen.emailInbound} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, emailInbound: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <Inbox className="w-5 h-5" />
+                  E-post-ingång
+                  {emailInboundStatus?.configured && (
+                    <Badge variant={emailInboundStatus.active ? 'default' : 'secondary'} className="ml-2">
+                      {emailInboundStatus.active ? 'Aktiv' : 'Konfigurerad'}
+                    </Badge>
+                  )}
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.emailInbound ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Skapa ärenden automatiskt från inkommande e-post via IMAP.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent className="space-y-4">
+                {isEmailStatusLoading && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Hämtar status...
+                  </div>
+                )}
+                {isEmailStatusError && (
+                  <div className="flex items-center gap-2 text-sm text-destructive">
+                    <AlertTriangle className="w-4 h-4" />
+                    Kunde inte hämta e-post-status
+                  </div>
+                )}
+                {!isEmailStatusLoading && !isEmailStatusError && emailInboundStatus?.configured ? (
+                  <div className="space-y-3">
+                    <div className="rounded-md border p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">IMAP-server</span>
+                        <span className="text-sm font-mono">{emailInboundStatus.host}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Användare</span>
+                        <span className="text-sm font-mono">{emailInboundStatus.user}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Pollningsintervall</span>
+                        <span className="text-sm">{emailInboundStatus.polling_interval}s</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Skapa kontakt automatiskt</span>
+                        <Badge variant={emailInboundStatus.auto_create_contact ? 'default' : 'secondary'}>
+                          {emailInboundStatus.auto_create_contact ? 'Ja' : 'Nej'}
+                        </Badge>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Olästa e-postmeddelanden hämtar och skapar ärenden automatiskt. Avsändaren matchas mot befintliga kontakter.
+                    </p>
+                  </div>
+                ) : !isEmailStatusLoading && !isEmailStatusError ? (
+                  <div className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      E-post-ingång är inte konfigurerad. Ange följande miljövariabler på servern:
+                    </p>
+                    <div className="rounded-md border p-3 space-y-1 font-mono text-xs">
+                      <p>IMAP_HOST=imap.example.com</p>
+                      <p>IMAP_PORT=993</p>
+                      <p>IMAP_USER=support@example.com</p>
+                      <p>IMAP_PASS=***</p>
+                      <p>IMAP_SECURE=true</p>
+                      <p>IMAP_POLL_INTERVAL=60</p>
+                      <p>IMAP_AUTO_CREATE_CONTACT=true</p>
+                    </div>
+                  </div>
+                ) : null}
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        <Collapsible className="space-y-4">
+          <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between rounded-lg border px-4 py-3 text-left font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <span>Avancerat</span>
+            <span className="text-sm font-normal text-muted-foreground">API-nycklar och webhooks</span>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-4">
         <Collapsible open={sectionsOpen.apiKeys} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, apiKeys: open }))}>
           <Card>
             <CollapsibleTrigger className="w-full">
@@ -246,86 +332,6 @@ const IntegrationsTab = () => {
           </Card>
         </Collapsible>
 
-        <Collapsible open={sectionsOpen.emailInbound} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, emailInbound: open }))}>
-          <Card>
-            <CollapsibleTrigger className="w-full">
-              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
-                  <Inbox className="w-5 h-5" />
-                  E-post-ingång
-                  {emailInboundStatus?.configured && (
-                    <Badge variant={emailInboundStatus.active ? 'default' : 'secondary'} className="ml-2">
-                      {emailInboundStatus.active ? 'Aktiv' : 'Konfigurerad'}
-                    </Badge>
-                  )}
-                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.emailInbound ? '−' : '+'}</span>
-                </CardTitle>
-                <CardDescription>
-                  Skapa ärenden automatiskt från inkommande e-post via IMAP.
-                </CardDescription>
-              </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CardContent className="space-y-4">
-                {isEmailStatusLoading && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Hämtar status...
-                  </div>
-                )}
-                {isEmailStatusError && (
-                  <div className="flex items-center gap-2 text-sm text-destructive">
-                    <AlertTriangle className="w-4 h-4" />
-                    Kunde inte hämta e-post-status
-                  </div>
-                )}
-                {!isEmailStatusLoading && !isEmailStatusError && emailInboundStatus?.configured ? (
-                  <div className="space-y-3">
-                    <div className="rounded-md border p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">IMAP-server</span>
-                        <span className="text-sm font-mono">{emailInboundStatus.host}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Användare</span>
-                        <span className="text-sm font-mono">{emailInboundStatus.user}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Pollningsintervall</span>
-                        <span className="text-sm">{emailInboundStatus.polling_interval}s</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Skapa kontakt automatiskt</span>
-                        <Badge variant={emailInboundStatus.auto_create_contact ? 'default' : 'secondary'}>
-                          {emailInboundStatus.auto_create_contact ? 'Ja' : 'Nej'}
-                        </Badge>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Olästa e-postmeddelanden hämtar och skapar ärenden automatiskt. Avsändaren matchas mot befintliga kontakter.
-                    </p>
-                  </div>
-                ) : !isEmailStatusLoading && !isEmailStatusError ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-muted-foreground">
-                      E-post-ingång är inte konfigurerad. Ange följande miljövariabler på servern:
-                    </p>
-                    <div className="rounded-md border p-3 space-y-1 font-mono text-xs">
-                      <p>IMAP_HOST=imap.example.com</p>
-                      <p>IMAP_PORT=993</p>
-                      <p>IMAP_USER=support@example.com</p>
-                      <p>IMAP_PASS=***</p>
-                      <p>IMAP_SECURE=true</p>
-                      <p>IMAP_POLL_INTERVAL=60</p>
-                      <p>IMAP_AUTO_CREATE_CONTACT=true</p>
-                    </div>
-                  </div>
-                ) : null}
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-
         <Collapsible open={sectionsOpen.webhooks} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, webhooks: open }))}>
           <Card>
             <CollapsibleTrigger className="w-full">
@@ -433,6 +439,9 @@ const IntegrationsTab = () => {
               </CardContent>
             </CollapsibleContent>
           </Card>
+        </Collapsible>
+
+          </CollapsibleContent>
         </Collapsible>
 
       <AlertDialog open={!!deleteApiKeyId} onOpenChange={() => setDeleteApiKeyId(null)}>

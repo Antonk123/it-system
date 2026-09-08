@@ -7,7 +7,6 @@ import { Ticket, User, TicketStatus, TicketPriority } from '@/types/ticket';
 import { PriorityBadge } from './PriorityBadge';
 import { StatusBadge } from './StatusBadge';
 import { CategoryBadge } from './CategoryBadge';
-import { TagBadges } from './TagBadges';
 import { cn } from '@/lib/utils';
 import { getInitials, hashColor } from '@/lib/avatar';
 import { Progress } from '@/components/ui/progress';
@@ -48,7 +47,7 @@ interface TicketTableProps {
   tickets: Ticket[];
   users: User[];
   onTicketClick?: (ticketId: string) => void;
-  sortKey?: 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
+  sortKey?: 'createdAt' | 'status' | 'priority' | 'category';
   sortDirection?: 'asc' | 'desc';
   onSortChange?: (key: 'status' | 'priority' | 'category') => void;
   enableStatusSort?: boolean;
@@ -382,7 +381,7 @@ export const TicketTable = memo(function TicketTable({
                   />
                 </TableCell>
               )}
-              {/* Ärende: Title + Category/Tags row */}
+              {/* Ärende: Title + Category row */}
               <TableCell className={cn("py-2.5 px-4", compact && "py-1.5")}>
                 <div className="flex flex-col gap-1">
                   <span className="font-semibold text-foreground group-hover:text-primary transition-colors duration-200">
@@ -390,9 +389,6 @@ export const TicketTable = memo(function TicketTable({
                   </span>
                   <div className="flex items-center gap-2 flex-wrap">
                     <CategoryBadge category={ticket.category} />
-                    {ticket.tags && ticket.tags.length > 0 && (
-                      <TagBadges tags={ticket.tags} maxDisplay={2} />
-                    )}
                   </div>
                 </div>
               </TableCell>

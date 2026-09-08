@@ -320,38 +320,6 @@ router.get('/requester-analytics', authenticate, (req: AuthRequest, res) => {
       }
     }
 
-    // Top tags per requester (up to 3 each)
-    const tagMap = new Map<string, Array<{ tag: string; count: number }>>();
-
-    if (requesterIds.length > 0) {
-      const placeholders = requesterIds.map(() => '?').join(', ');
-      const tagFilterParams = [...filterParams];
-      const tagWhere = filterConditions.length > 0
-        ? `WHERE (${filterConditions.join(' AND ')}) AND COALESCE(t.requester_id, 'unassigned') IN (${placeholders})`
-        : `WHERE COALESCE(t.requester_id, 'unassigned') IN (${placeholders})`;
-
-      const tagRows = db.prepare(`
-        SELECT
-          COALESCE(t.requester_id, 'unassigned') AS userId,
-          tg.name                                 AS tagName,
-          COUNT(*)                                AS cnt
-        FROM tickets t
-        JOIN ticket_tags tt ON tt.ticket_id = t.id
-        JOIN tags tg ON tg.id = tt.tag_id
-        ${tagWhere}
-        GROUP BY COALESCE(t.requester_id, 'unassigned'), tt.tag_id
-        ORDER BY COALESCE(t.requester_id, 'unassigned'), cnt DESC
-      `).all(...tagFilterParams, ...requesterIds) as Array<{ userId: string; tagName: string; cnt: number }>;
-
-      for (const row of tagRows) {
-        const existing = tagMap.get(row.userId) ?? [];
-        if (existing.length < 3) {
-          existing.push({ tag: row.tagName, count: row.cnt });
-          tagMap.set(row.userId, existing);
-        }
-      }
-    }
-
     const now = new Date();
 
     const result = rows.map(r => {
@@ -389,7 +357,6 @@ router.get('/requester-analytics', authenticate, (req: AuthRequest, res) => {
         lastTicketDate: r.lastTicketDate,
         ticketVelocity,
         topCategories: categoryMap.get(r.userId) ?? [],
-        topTags: tagMap.get(r.userId) ?? [],
       };
     });
 
@@ -476,48 +443,11 @@ router.get('/status-flow', authenticate, (_req: AuthRequest, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /reports/tag-analytics
-// Tag-frequency counts across the FULL dataset (no 1000-row cap). Returns one
-// row per tag that is attached to at least one ticket, with the canonical tag
-// id/name/color and the number of tickets carrying it. Mirrors the client-side
-// TagCloud / TagDistributionChart counting.
-// ─────────────────────────────────────────────────────────────────────────────
-export interface TagAnalyticsRow {
-  id: string;
-  name: string;
-  color: string;
-  count: number;
-}
-
-// Pure aggregation extracted so it can be unit-tested against an in-memory DB.
-export function computeTagAnalytics(database: AggregationDb = db): TagAnalyticsRow[] {
-  return database.prepare(`
-    SELECT tg.id    AS id,
-           tg.name  AS name,
-           tg.color AS color,
-           COUNT(tt.ticket_id) AS count
-    FROM tags tg
-    JOIN ticket_tags tt ON tt.tag_id = tg.id
-    GROUP BY tg.id
-    ORDER BY count DESC, tg.name ASC
-  `).all() as TagAnalyticsRow[];
-}
-
-router.get('/tag-analytics', authenticate, (_req: AuthRequest, res) => {
-  try {
-    res.json(computeTagAnalytics());
-  } catch (error) {
-    logger.error('Error generating tag analytics:', { error: String(error) });
-    res.status(500).json({ error: 'Failed to generate tag analytics' });
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
 // GET /reports/kpi-tickets
 // Server-aggregated drill-down rows for the KPI detail modals on the Reports
 // page. Replaces a client-side ?limit=1000 fetch + in-memory filtering. Returns
 // raw TicketRow shape (snake_case) — exactly what mapTicketRow() consumes — so
-// the modal keeps every column/badge (assigned_to_name, all SLA fields, tags[]).
+// the modal keeps every column/badge (assigned_to_name and historical SLA fields).
 //   scope=total → created_at filtered by year/month (same range-filter as
 //                 /summary so idx_tickets_created_at applies, strftime for month).
 //   scope=aging → open tickets older than 7 days, ALWAYS unfiltered by year/month
@@ -584,25 +514,7 @@ export function computeKpiTickets(
     LIMIT ${KPI_TICKET_LIMIT}
   `).all(...params) as Array<{ id: string } & Record<string, unknown>>;
 
-  if (tickets.length === 0) return [];
-
-  // Batch-fetch tags for all returned tickets (same pattern as tickets.ts GET /).
-  const ticketIds = tickets.map(t => t.id);
-  const placeholders = ticketIds.map(() => '?').join(',');
-  const tagRows = database.prepare(`
-    SELECT tt.ticket_id, t.id, t.name, t.color
-    FROM tags t
-    JOIN ticket_tags tt ON t.id = tt.tag_id
-    WHERE tt.ticket_id IN (${placeholders})
-    ORDER BY t.name
-  `).all(...ticketIds) as Array<{ ticket_id: string; id: string; name: string; color: string }>;
-
-  const tagsByTicket: Record<string, Array<{ id: string; name: string; color: string }>> = {};
-  for (const row of tagRows) {
-    (tagsByTicket[row.ticket_id] ??= []).push({ id: row.id, name: row.name, color: row.color });
-  }
-
-  return tickets.map(t => ({ ...t, tags: tagsByTicket[t.id] ?? [] }));
+  return tickets;
 }
 
 router.get('/kpi-tickets', authenticate, (req: AuthRequest, res) => {

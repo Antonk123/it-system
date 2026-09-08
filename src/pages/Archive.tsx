@@ -31,9 +31,6 @@ const Archive = () => {
   const search = searchParams.get('search') || '';
   const categoryFilter = searchParams.get('category') || 'all';
   const priorityFilter = (searchParams.get('priority') || 'all') as TicketPriority | 'all';
-  const tagsFilter = searchParams.get('tags') || '';
-  const selectedTagIds = tagsFilter ? tagsFilter.split(',').filter(id => id.trim()) : [];
-  const tagMode = (searchParams.get('tagMode') || 'or') as 'or' | 'and';
   const checklistFilter = searchParams.get('checklist') || '';
   const dateField = 'closed_at' as const; // Locked per D-06
   const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'priority' | 'category';
@@ -67,8 +64,6 @@ const Archive = () => {
     priority: priorityFilter,
     category: categoryFilter,
     search,
-    tags: tagsFilter,
-    tagMode,
     dateFrom,
     dateTo,
     dateField: 'closed_at',
@@ -102,7 +97,7 @@ const Archive = () => {
   // Clear selection when filters or page changes
   useEffect(() => {
     setSelectedIds([]);
-  }, [page, priorityFilter, categoryFilter, tagsFilter, search, checklistFilter, dateFrom, dateTo]);
+  }, [page, priorityFilter, categoryFilter, search, checklistFilter, dateFrom, dateTo]);
 
   // Update URL params
   const updateFilters = useCallback((updates: Record<string, any>) => {
@@ -261,8 +256,6 @@ const Archive = () => {
           selectedStatuses={[]}
           priorityFilter={priorityFilter}
           categoryFilter={categoryFilter}
-          selectedTagIds={selectedTagIds}
-          tagMode={tagMode}
           checklistFilter={checklistFilter}
           dateFrom={dateFrom}
           dateTo={dateTo}
@@ -276,7 +269,7 @@ const Archive = () => {
           onChange={updateFilters}
           onClearAll={() => updateFilters({
             search: '', priority: 'all', category: 'all',
-            tags: [], tagMode: 'or', checklist: '', dateFrom: '', dateTo: ''
+            checklist: '', dateFrom: '', dateTo: ''
           })}
           searchPlaceholder="Sök arkiverade ärenden..."
         />
@@ -289,7 +282,7 @@ const Archive = () => {
             ))}
           </div>
         ) : tickets.length === 0 ? (
-          search === '' && categoryFilter === 'all' && priorityFilter === 'all' && selectedTagIds.length === 0 && !checklistFilter && !dateFrom && !dateTo ? (
+          search === '' && categoryFilter === 'all' && priorityFilter === 'all' && !checklistFilter && !dateFrom && !dateTo ? (
             <EmptyState
               icon={<ArchiveIcon />}
               title="Inga arkiverade ärenden ännu"
@@ -302,7 +295,7 @@ const Archive = () => {
               hasFilters
               onClearFilters={() => updateFilters({
                 search: '', priority: 'all', category: 'all',
-                tags: [], tagMode: 'or', checklist: '', dateFrom: '', dateTo: ''
+                checklist: '', dateFrom: '', dateTo: ''
               })}
             />
           )

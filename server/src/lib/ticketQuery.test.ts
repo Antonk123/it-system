@@ -45,7 +45,7 @@ describe('validatePaginationParams', () => {
   });
 
   it('accepts allowed sort columns', () => {
-    for (const s of ['createdAt', 'status', 'priority', 'category', 'tags']) {
+    for (const s of ['createdAt', 'status', 'priority', 'category']) {
       expect(validatePaginationParams({ sortBy: s }).sortBy).toBe(s);
     }
   });
@@ -142,22 +142,10 @@ describe('buildWhereClause', () => {
     expect(params).toEqual(['open']);
   });
 
-  it('builds an OR tag filter (EXISTS) by default', () => {
-    const { whereClause, params } = buildWhereClause({ status: 'open', tags: 't1,t2' });
-    expect(whereClause).toContain('EXISTS (');
-    expect(whereClause).toContain('ticket_tags.tag_id IN (?,?)');
-    expect(params).toEqual(['open', 't1', 't2']);
-  });
-
-  it('builds an AND tag filter (COUNT DISTINCT) when tagMode=and', () => {
-    const { whereClause, params } = buildWhereClause({
-      status: 'open',
-      tags: 't1,t2',
-      tagMode: 'and',
-    });
-    expect(whereClause).toContain('COUNT(DISTINCT tag_id)');
-    expect(whereClause).toContain(') = 2');
-    expect(params).toEqual(['open', 't1', 't2']);
+  it.each(['or', 'and'])('ignores retired tag filters (%s) without hiding tickets', (tagMode) => {
+    const { whereClause, params } = buildWhereClause({ status: 'open', tags: 't1,t2', tagMode });
+    expect(whereClause).toBe('tickets.status = ?');
+    expect(params).toEqual(['open']);
   });
 
   it('applies a date range on the default created_at field', () => {
@@ -214,7 +202,7 @@ describe('buildWhereClause', () => {
     // params: status + 1 FTS term + 6 LIKE patterns
     expect(params[0]).toBe('open');
     expect(params[1]).toBe('"printer"*');
-    expect(params.slice(2)).toEqual(Array(6).fill('%printer%'));
+    expect(params.slice(2)).toEqual(Array(5).fill('%printer%'));
     expect(joins).toContain('LEFT JOIN contacts');
     expect(joins).toContain('LEFT JOIN ticket_field_values');
   });
@@ -234,7 +222,7 @@ describe('buildWhereClause', () => {
     // FTS sanitization does not strip % or _, so the FTS term keeps them
     expect(params[1]).toBe('"50%_x"*');
     // The LIKE fallback pattern escapes % and _ with a backslash
-    expect(params.slice(2)).toEqual(Array(6).fill('%50\\%\\_x%'));
+    expect(params.slice(2)).toEqual(Array(5).fill('%50\\%\\_x%'));
   });
 
   it('applies checklist all_done filter conditions', () => {
@@ -271,9 +259,7 @@ describe('buildOrderByClause', () => {
     expect(buildOrderByClause('category', 'asc')).toBe('tickets.category_id ASC');
   });
 
-  it('builds a correlated subquery for tags sort', () => {
-    const sql = buildOrderByClause('tags', 'desc');
-    expect(sql).toContain('SELECT MIN(tags.name) COLLATE NOCASE');
-    expect(sql.trimEnd().endsWith('DESC')).toBe(true);
+  it('falls back to created_at for retired tag sorting', () => {
+    expect(buildOrderByClause('tags', 'desc')).toBe('tickets.created_at DESC');
   });
 });

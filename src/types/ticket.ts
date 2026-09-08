@@ -7,18 +7,13 @@ export interface Category {
   position?: number;
 }
 
-export interface Tag {
-  id: string;
-  name: string;
-  color: string;
-  createdAt: Date;
-}
-
 export interface User {
   id: string;
   name: string;
   email: string;
   department?: string;
+  company_id?: string;
+  company_name?: string;
   createdAt: Date;
 }
 
@@ -53,9 +48,8 @@ export interface RequesterAnalytics {
   lastTicketDate: Date;
   ticketVelocity: number;        // tickets per month
 
-  // Top categories/tags (for tooltips)
+  // Top categories (for tooltips)
   topCategories: Array<{ category: string; count: number }>;
-  topTags: Array<{ tag: string; count: number }>;
 }
 
 export interface Ticket {
@@ -80,11 +74,8 @@ export interface Ticket {
   solution?: string;
   templateId?: string;
   fieldValues?: CustomFieldInput[];
-  tags?: Tag[];
   ai_suggested_category_id?: string | null;
   ai_suggested_confidence?: number | null;
-  // Skrivbart fält i update-payload (PUT /tickets/:id) för att sätta taggar
-  tag_ids?: string[];
 }
 
 export interface Comment {

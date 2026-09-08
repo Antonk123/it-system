@@ -62,18 +62,12 @@ const TicketList = () => {
   );
   const priorityFilter = (searchParams.get('priority') || 'all') as TicketPriority | 'all';
   const categoryFilter = searchParams.get('category') || 'all';
-  const tagsFilter = searchParams.get('tags') || '';
-  const selectedTagIds = useMemo(
-    () => (tagsFilter ? tagsFilter.split(',').filter(id => id.trim()) : []),
-    [tagsFilter]
-  );
-  const tagMode = (searchParams.get('tagMode') || 'or') as 'or' | 'and';
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
   const dateField = (searchParams.get('dateField') || 'created_at') as 'created_at' | 'updated_at' | 'closed_at';
   const checklistFilter = searchParams.get('checklist') || '';
   const companyFilter = searchParams.get('company_id') || 'all';
-  const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'status' | 'priority' | 'category' | 'tags';
+  const sortKey = (searchParams.get('sortBy') === 'tags' ? 'createdAt' : searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'status' | 'priority' | 'category';
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
   const [compactView, setCompactView] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -112,8 +106,6 @@ const TicketList = () => {
     priority: priorityFilter,
     category: categoryFilter,
     search,
-    tags: tagsFilter,
-    tagMode,
     dateFrom,
     dateTo,
     dateField,
@@ -210,8 +202,6 @@ const TicketList = () => {
       if (priorityFilter && priorityFilter !== 'all') params.append('priority', priorityFilter);
       if (categoryFilter && categoryFilter !== 'all') params.append('category', categoryFilter);
       if (search) params.append('search', search);
-      if (tagsFilter) params.append('tags', tagsFilter);
-      if (tagMode && tagMode !== 'or') params.append('tagMode', tagMode);
       if (dateFrom) params.append('dateFrom', dateFrom);
       if (dateTo) params.append('dateTo', dateTo);
       if (dateField && dateField !== 'created_at') params.append('dateField', dateField);
@@ -225,7 +215,7 @@ const TicketList = () => {
       if (import.meta.env.DEV) console.error('Export failed:', error);
       toast.error('Misslyckades att exportera ärenden');
     }
-  }, [selectedStatuses, priorityFilter, categoryFilter, search, tagsFilter, tagMode, dateFrom, dateTo, dateField, checklistFilter, companyFilter]);
+  }, [selectedStatuses, priorityFilter, categoryFilter, search, dateFrom, dateTo, dateField, checklistFilter, companyFilter]);
 
   return (
     <Layout>
@@ -381,8 +371,6 @@ const TicketList = () => {
           selectedStatuses={selectedStatuses}
           priorityFilter={priorityFilter}
           categoryFilter={categoryFilter}
-          selectedTagIds={selectedTagIds}
-          tagMode={tagMode}
           checklistFilter={checklistFilter}
           dateFrom={dateFrom}
           dateTo={dateTo}
@@ -394,7 +382,7 @@ const TicketList = () => {
           onChange={updateFilters}
           onClearAll={() => updateFilters({
             search: '', status: [], priority: 'all', category: 'all',
-            tags: [], tagMode: 'or', checklist: '', dateFrom: '', dateTo: '', dateField: 'created_at'
+            checklist: '', dateFrom: '', dateTo: '', dateField: 'created_at'
           })}
           searchPlaceholder="Sök ärenden..."
         />

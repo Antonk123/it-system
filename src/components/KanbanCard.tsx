@@ -3,7 +3,6 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useNavigate } from 'react-router';
 import { Ticket as TicketType } from '@/types/ticket';
-import { TagBadges } from './TagBadges';
 import { PriorityBadge } from './PriorityBadge';
 import { useCategories } from '@/hooks/useCategories';
 import { cn } from '@/lib/utils';
@@ -97,12 +96,6 @@ export const KanbanCard = memo(function KanbanCard({ ticket, onTicketClick }: Ka
         <PriorityBadge priority={ticket.priority} />
       </div>
 
-      {/* Tags */}
-      {ticket.tags && ticket.tags.length > 0 && (
-        <div className="flex gap-1 flex-wrap mb-2">
-          <TagBadges tags={ticket.tags} maxDisplay={2} />
-        </div>
-      )}
 
       {/* Category */}
       {ticket.category && (

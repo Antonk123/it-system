@@ -6,10 +6,8 @@ export interface FilterView {
     status?: string[];
     priority?: string;
     category?: string;
-    tags?: string[];
     search?: string;
     // Extended filter fields (Phase 04)
-    tagMode?: 'or' | 'and';
     checklist?: string;
     dateFrom?: string;
     dateTo?: string;

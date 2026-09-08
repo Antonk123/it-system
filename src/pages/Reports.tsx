@@ -17,7 +17,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { KPICard } from '@/components/KPICard';
 import { StatusFlowChart } from '@/components/StatusFlowChart';
-import { TagAnalytics } from '@/components/TagAnalytics';
 import { KPIDetailDialog } from '@/components/KPIDetailDialog';
 import {
   Dialog,
@@ -562,11 +561,10 @@ const Reports = () => {
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           {/* Mobile: horizontal scroll. Desktop: 4-col grid. */}
-          <TabsList className="w-full h-auto flex overflow-x-auto whitespace-nowrap md:grid md:grid-cols-4">
+          <TabsList className="w-full h-auto flex overflow-x-auto whitespace-nowrap md:grid md:grid-cols-3">
             <TabsTrigger value="översikt" className="shrink-0 md:shrink">Översikt</TabsTrigger>
             <TabsTrigger value="trend" className="shrink-0 md:shrink">Trend</TabsTrigger>
             <TabsTrigger value="personer" className="shrink-0 md:shrink">Personer</TabsTrigger>
-            <TabsTrigger value="taggar" className="shrink-0 md:shrink">Taggar</TabsTrigger>
           </TabsList>
 
           {/* ── Flik 1: Översikt ── */}
@@ -965,13 +963,6 @@ const Reports = () => {
                   )}
               </CardContent>
             </Card>
-          </TabsContent>
-
-          {/* ── Flik 4: Taggar ── */}
-          <TabsContent value="taggar" className="space-y-5 mt-5">
-            <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
-              <TagAnalytics />
-            </div>
           </TabsContent>
 
         </Tabs>

@@ -31,8 +31,6 @@ import { Layout } from '@/components/Layout';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PriorityBadge } from '@/components/PriorityBadge';
 import { CategoryBadge } from '@/components/CategoryBadge';
-import { TagBadges } from '@/components/TagBadges';
-import { TagSelector } from '@/components/TagSelector';
 import { SecureImage, SecureDownloadLink } from '@/components/SecureAttachment';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -89,7 +87,7 @@ import { mapTicketRow } from '@/lib/mapTicket';
 import { STATUS_LABELS } from '@/lib/constants';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 
 // Mount only one sharing surface: Popover from 640px, Sheet below it.
 // Keep this aligned with Tailwind sm, not useIsMobile's 768px breakpoint.
@@ -118,7 +116,6 @@ const TicketDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const queryClient = useQueryClient();
   // M9: detail-only mutations — does NOT mount useTickets()'s unfiltered list
   // query (which previously hit the backend's legacy LIMIT-1000 branch on
   // every ticket open just to reach update/delete).
@@ -187,7 +184,6 @@ const TicketDetail = () => {
   const [ticketFieldValues, setTicketFieldValues] = useState<
     { field_name: string; field_label: string; field_value: string }[]
   >([]);
-  const [tagsFromAPI, setTagsFromAPI] = useState<{ id: string; name: string; color: string }[]>([]);
 
   // Single-ticket detail query is the sole source now (M9): the old list-cache
   // fallback came from useTickets()'s own unfiltered fetch (a distinct cache
@@ -196,22 +192,13 @@ const TicketDetail = () => {
   const ticket = ticketDetail ? mapTicketRow(ticketDetail) : null;
   const user = ticket ? getUserById(ticket.requesterId) : null;
 
-  // Sync field_values and tags from the authoritative single-ticket query
+  // Sync field_values from the authoritative single-ticket query
   useEffect(() => {
     if (!ticketDetail) return;
     if (ticketDetail.field_values && ticketDetail.field_values.length > 0) {
       setTicketFieldValues(ticketDetail.field_values);
     }
-    if (ticketDetail.tags) setTagsFromAPI(ticketDetail.tags);
   }, [ticketDetail]);
-
-  // Tags to display — prefer fresh data from single-ticket query
-  const effectiveTags = tagsFromAPI.length > 0 ? tagsFromAPI : (ticket?.tags || []);
-
-  // Ogiltigförklarar detail-queryn så befintlig useQuery refetchar och cachen förblir auktoritativ.
-  const refreshTagsFromAPI = (ticketId: string) => {
-    queryClient.invalidateQueries({ queryKey: ticketKeys.detail(ticketId) });
-  };
 
   useEffect(() => {
     if (id) {
@@ -373,17 +360,6 @@ const TicketDetail = () => {
     updateTicket(ticket.id, { status })
       .then(() => toast.success(`Status uppdaterad till ${STATUS_LABELS[status]}`))
       .catch(() => toast.error('Kunde inte uppdatera status'));
-  };
-
-  const handleTagsChange = (tagIds: string[]) => {
-    updateTicket(ticket.id, { tag_ids: tagIds }).then(() => {
-      refreshTagsFromAPI(ticket.id);
-      queryClient.invalidateQueries({ queryKey: ['tickets'] });
-      toast.success('Taggar uppdaterade');
-    }).catch(() => {
-      refreshTagsFromAPI(ticket.id);
-      toast.error('Kunde inte uppdatera taggar');
-    });
   };
 
   const handleDelete = async () => {
@@ -697,9 +673,6 @@ const TicketDetail = () => {
                   <StatusBadge status={ticket.status} />
                   <PriorityBadge priority={ticket.priority} />
                   <CategoryBadge category={ticket.category} />
-                  {effectiveTags.length > 0 && (
-                    <TagBadges tags={effectiveTags as any} maxDisplay={5} />
-                  )}
                 </div>
               </div>
             </div>
@@ -768,12 +741,6 @@ const TicketDetail = () => {
                   </SelectContent>
                 </Select>
               </div>
-              <TagSelector
-                selectedTagIds={effectiveTags.map(t => t.id)}
-                preloadedTags={effectiveTags as any}
-                onTagsChange={handleTagsChange}
-                label="Taggar"
-              />
             </div>
 
             {/* Description / Dynamic fields */}

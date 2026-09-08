@@ -58,3 +58,14 @@ describe('Gemensamma ärendevyer', () => {
     expect(mobile.getByRole('link', { name: 'Ärenden' })).not.toHaveAttribute('aria-current');
   });
 });
+
+
+describe('Mobil företagsåtkomst', () => {
+  it('visar fyra primärval och markerar Mer för bevarad företagsroute', () => {
+    renderAt('/companies/ett-foretag');
+    const mobile = within(screen.getByRole('navigation', { name: 'Huvudnavigation' }));
+    expect(mobile.getAllByRole('link')).toHaveLength(4);
+    expect(mobile.queryByRole('link', { name: 'Företag' })).toBeNull();
+    expect(mobile.getByRole('link', { name: 'Mer' })).toHaveAttribute('aria-current', 'page');
+  });
+});

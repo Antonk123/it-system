@@ -1310,9 +1310,6 @@ class ApiClient {
     return this.request<StatusFlowRow[]>('/reports/status-flow');
   }
 
-  async getTagAnalytics() {
-    return this.request<TagAnalyticsRow[]>('/reports/tag-analytics');
-  }
 
   // KPI drill-down rows for the Reports detail modals. Server-aggregated +
   // LIMIT-capped (replaces the old client-side ?limit=1000 fetch). For 'aging'
@@ -1490,7 +1487,6 @@ export interface TicketRow {
   closed_at: string | null;
   template_id?: string | null;
   field_values?: { field_name: string; field_label: string; field_value: string }[];
-  tags?: Array<{ id: string; name: string; color: string }>;
   ai_suggested_category_id?: string | null;
   ai_suggested_confidence?: number | null;
   // Sätts på create/update-svaret när bakgrundsåtgärder (t.ex. mailutskick) gav icke-fatala varningar
@@ -1838,7 +1834,6 @@ export interface RequesterAnalyticsRow {
   lastTicketDate: string;
   ticketVelocity: number;
   topCategories: Array<{ category: string; count: number }>;
-  topTags: Array<{ tag: string; count: number }>;
 }
 
 // One row per month (YYYY-MM) over the trailing 12-month window. Counts are
@@ -1853,14 +1848,6 @@ export interface StatusFlowRow {
   closed: number;
 }
 
-// One row per tag attached to at least one ticket. count = number of tickets
-// carrying the tag, aggregated server-side over the full dataset.
-export interface TagAnalyticsRow {
-  id: string;
-  name: string;
-  color: string;
-  count: number;
-}
 
 // Export singleton instance
 export const api = new ApiClient(API_BASE_URL);

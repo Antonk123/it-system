@@ -3,7 +3,6 @@ import { Link } from 'react-router';
 import { Layout } from '@/components/Layout';
 import { useRecurringTemplates, RecurringTemplate, CreateTemplateInput } from '@/hooks/useRecurringTemplates';
 import { useCategories } from '@/hooks/useCategories';
-import { useTags } from '@/hooks/useTags';
 import { Card, CardContent } from '@/components/ui/card';
 import {
   Dialog,
@@ -33,7 +32,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   RefreshCw,
   Plus,
@@ -86,7 +84,6 @@ type FormState = {
   description: string;
   priority: 'low' | 'medium' | 'high' | 'critical';
   category_id: string;
-  tags: string[];
   interval_type: 'daily' | 'weekly' | 'monthly';
   interval_day: string;
 };
@@ -97,7 +94,6 @@ const emptyForm: FormState = {
   description: '',
   priority: 'medium',
   category_id: '',
-  tags: [],
   interval_type: 'weekly',
   interval_day: '1',
 };
@@ -109,7 +105,6 @@ function templateToForm(t: RecurringTemplate): FormState {
     description: t.description,
     priority: t.priority,
     category_id: t.category_id ?? '',
-    tags: t.tags ?? [],
     interval_type: t.interval_type,
     interval_day: String(t.interval_day ?? 1),
   };
@@ -126,7 +121,6 @@ function formToInput(f: FormState): CreateTemplateInput {
     description: f.description,
     priority: f.priority,
     category_id: f.category_id || null,
-    tags: f.tags,
     interval_type: f.interval_type,
     interval_day,
   };
@@ -143,7 +137,6 @@ interface TemplateFormDialogProps {
 function TemplateFormDialog({ open, onOpenChange, editing }: TemplateFormDialogProps) {
   const { createTemplate, updateTemplate } = useRecurringTemplates();
   const { categories } = useCategories();
-  const { tags: allTags } = useTags();
 
   const [form, setForm] = useState<FormState>(
     editing ? templateToForm(editing) : emptyForm
@@ -169,15 +162,6 @@ function TemplateFormDialog({ open, onOpenChange, editing }: TemplateFormDialogP
     } else {
       createTemplate.mutate(input, { onSuccess: () => onOpenChange(false) });
     }
-  }
-
-  function toggleTag(tagId: string) {
-    setForm((f) => ({
-      ...f,
-      tags: f.tags.includes(tagId)
-        ? f.tags.filter((t) => t !== tagId)
-        : [...f.tags, tagId],
-    }));
   }
 
   return (
@@ -272,27 +256,6 @@ function TemplateFormDialog({ open, onOpenChange, editing }: TemplateFormDialogP
               </SelectContent>
             </Select>
           </div>
-
-          {/* tags */}
-          {allTags.length > 0 && (
-            <div className="space-y-1">
-              <Label>Taggar</Label>
-              <div className="border rounded-md p-2 max-h-32 overflow-y-auto space-y-1">
-                {allTags.map((tag) => (
-                  <label
-                    key={tag.id}
-                    className="flex items-center gap-2 text-sm cursor-pointer select-none px-1 py-0.5 hover:bg-accent/30 rounded"
-                  >
-                    <Checkbox
-                      checked={form.tags.includes(tag.id)}
-                      onCheckedChange={() => toggleTag(tag.id)}
-                    />
-                    <span>{tag.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* interval_type */}
           <div className="space-y-1">

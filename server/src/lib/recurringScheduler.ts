@@ -12,7 +12,6 @@ interface RecurringTemplate {
   description: string;
   priority: string;
   category_id: string | null;
-  tags: string;
   interval_type: 'daily' | 'weekly' | 'monthly';
   interval_day: number | null;
   is_active: number;
@@ -80,36 +79,6 @@ function createTicketFromTemplate(template: RecurringTemplate): void {
   const ticketId = uuidv4();
   const now = new Date().toISOString();
 
-  // Parse tags JSON, default to empty array on failure
-  let tagIds: string[] = [];
-  try {
-    const parsed = JSON.parse(template.tags || '[]');
-    if (Array.isArray(parsed)) {
-      tagIds = parsed;
-    } else {
-      logger.warn(`Recurring: template ${template.id} (${template.name}) has non-array tags JSON — ignoring tags`, { tags: template.tags });
-    }
-  } catch {
-    // Korrupt tags-JSON: skapa ärendet utan taggar men varna så admin kan rätta mallen.
-    logger.warn(`Recurring: template ${template.id} (${template.name}) has unparseable tags JSON — ignoring tags`, { tags: template.tags });
-    tagIds = [];
-  }
-
-  // Filter out tag IDs that no longer exist (Pitfall 4: stale tag refs)
-  let validTagIds: string[] = [];
-  if (tagIds.length > 0) {
-    const placeholders = tagIds.map(() => '?').join(',');
-    const existingTags = db.prepare(
-      `SELECT id FROM tags WHERE id IN (${placeholders})`
-    ).all(...tagIds) as { id: string }[];
-    validTagIds = existingTags.map(t => t.id);
-
-    if (validTagIds.length < tagIds.length) {
-      const removed = tagIds.filter(id => !validTagIds.includes(id));
-      logger.warn(`Recurring: removed stale tag IDs for template ${template.id} (${template.name}): ${removed.join(', ')}`);
-    }
-  }
-
   const createTransaction = db.transaction(() => {
     // Insert ticket
     db.prepare(`
@@ -127,14 +96,6 @@ function createTicketFromTemplate(template: RecurringTemplate): void {
       null, // solution
       null  // template_id (not referencing ticket_templates)
     );
-
-    // Insert ticket tags
-    if (validTagIds.length > 0) {
-      const insertTag = db.prepare('INSERT INTO ticket_tags (id, ticket_id, tag_id) VALUES (?, ?, ?)');
-      for (const tagId of validTagIds) {
-        insertTag.run(uuidv4(), ticketId, tagId);
-      }
-    }
 
     // Insert ticket history (system action: user_id=NULL)
     db.prepare(`

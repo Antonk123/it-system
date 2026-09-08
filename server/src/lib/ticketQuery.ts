@@ -36,7 +36,7 @@ export function validatePaginationParams(query: TicketQueryParams) {
   const limit = allowedLimits.includes(parseInt(query.limit || '10'))
     ? parseInt(query.limit!)
     : 10;
-  const sortBy = ['createdAt', 'status', 'priority', 'category', 'tags'].includes(query.sortBy || '')
+  const sortBy = ['createdAt', 'status', 'priority', 'category'].includes(query.sortBy || '')
     ? query.sortBy!
     : 'createdAt';
   const sortDir = query.sortDir === 'asc' ? 'asc' : 'desc';
@@ -104,29 +104,7 @@ export function buildWhereClause(filters: TicketQueryParams) {
     params.push(filters.requester_id);
   }
 
-  // Tag filtering (OR or AND logic for multiple tags)
-  if (filters.tags) {
-    const tagIds = filters.tags.split(',').map(id => id.trim()).filter(id => id.length > 0);
-    if (tagIds.length > 0) {
-      const tagPlaceholders = tagIds.map(() => '?').join(',');
-      if (filters.tagMode === 'and' && tagIds.length > 1) {
-        // AND logic: ticket must have ALL specified tags
-        conditions.push(`(
-          SELECT COUNT(DISTINCT tag_id) FROM ticket_tags
-          WHERE ticket_tags.ticket_id = tickets.id
-          AND ticket_tags.tag_id IN (${tagPlaceholders})
-        ) = ${tagIds.length}`);
-      } else {
-        // OR logic (default): ticket has ANY of the specified tags
-        conditions.push(`EXISTS (
-          SELECT 1 FROM ticket_tags
-          WHERE ticket_tags.ticket_id = tickets.id
-          AND ticket_tags.tag_id IN (${tagPlaceholders})
-        )`);
-      }
-      params.push(...tagIds);
-    }
-  }
+  // Legacy tags/tagMode query parameters are ignored after ticket tags were retired.
 
   // Date range filtering
   const allowedDateFields = ['created_at', 'updated_at', 'closed_at'];
@@ -201,14 +179,13 @@ export function buildWhereClause(filters: TicketQueryParams) {
 
     if (ftsSearch) {
       // FTS5 MATCH for ticket content (title, description, notes, solution)
-      // + LIKE fallback for relation fields (contacts, categories, comments, tags, custom fields)
+      // + LIKE fallback for relation fields (contacts, categories, comments, custom fields)
       const ftsCondition = `tickets.rowid IN (SELECT rowid FROM tickets_fts WHERE tickets_fts MATCH ?)`;
       const relationConditions = [
         "contacts.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
         "contacts.email LIKE ? ESCAPE '\\' COLLATE NOCASE",
         "categories.label LIKE ? ESCAPE '\\' COLLATE NOCASE",
         "ticket_comments.content LIKE ? ESCAPE '\\' COLLATE NOCASE",
-        "tags.name LIKE ? ESCAPE '\\' COLLATE NOCASE",
         "ticket_field_values.field_value LIKE ? ESCAPE '\\' COLLATE NOCASE"
       ];
 
@@ -216,8 +193,8 @@ export function buildWhereClause(filters: TicketQueryParams) {
 
       // FTS5 MATCH-term (prefix-sökning med *)
       params.push(ftsSearch.split(/\s+/).map(w => `"${w}"*`).join(' '));
-      // LIKE-parametrar för relationsfält (6 st)
-      for (let i = 0; i < 6; i++) {
+      // LIKE-parametrar för relationsfält (5 st)
+      for (let i = 0; i < 5; i++) {
         params.push(pattern);
       }
     } else {
@@ -238,8 +215,6 @@ export function buildWhereClause(filters: TicketQueryParams) {
       LEFT JOIN contacts ON tickets.requester_id = contacts.id
       LEFT JOIN categories ON tickets.category_id = categories.id
       LEFT JOIN ticket_comments ON tickets.id = ticket_comments.ticket_id
-      LEFT JOIN ticket_tags ON tickets.id = ticket_tags.ticket_id
-      LEFT JOIN tags ON ticket_tags.tag_id = tags.id
       LEFT JOIN ticket_field_values ON tickets.id = ticket_field_values.ticket_id
     `;
   }
@@ -272,13 +247,6 @@ export function buildOrderByClause(sortBy: string, sortDir: string) {
       END ${dir}`;
     case 'category':
       return `tickets.category_id ${dir}`;
-    case 'tags':
-      return `(
-        SELECT MIN(tags.name) COLLATE NOCASE
-        FROM tags
-        JOIN ticket_tags ON tags.id = ticket_tags.tag_id
-        WHERE ticket_tags.ticket_id = tickets.id
-      ) ${dir}`;
     default:
       return `tickets.created_at ${dir}`;
   }

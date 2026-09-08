@@ -30,7 +30,7 @@ export const useUsers = () => {
         company_name: u.company_name || undefined,
         createdAt: parseServerDate(u.created_at),
       }));
-      return mapped as (User & { company_id?: string; company_name?: string })[];
+      return mapped as User[];
     },
     staleTime: 1000 * 60 * 5, // Users don't change very often, cache for 5 minutes
   });
@@ -53,6 +53,8 @@ export const useUsers = () => {
         name: data.name,
         email: data.email,
         department: data.department || undefined,
+        company_id: data.company_id || undefined,
+        company_name: data.company_name || undefined,
         createdAt: parseServerDate(data.created_at),
       };
     },

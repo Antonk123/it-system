@@ -25,7 +25,6 @@ export function mapTicketRow(t: TicketRow): Ticket {
     notes: t.notes || undefined,
     solution: t.solution || undefined,
     templateId: t.template_id || undefined,
-    tags: (t.tags || []) as Ticket['tags'],
     assignedTo: (t as any).assigned_to ?? null,
     assignedToName: (t as any).assigned_to_name ?? null,
     companyId: (t as any).company_id ?? null,

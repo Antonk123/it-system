@@ -26,17 +26,17 @@ export function EmailBehaviorSection() {
           E-postbeteende
         </CardTitle>
         <CardDescription>
-          Styr om systemet skickar utgående e-post till kunder/externa.
+          Styr om beställare får svar och mottagningsbekräftelser via e-post.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-col gap-1">
             <Label htmlFor="two-way-email-switch" className="font-medium">
-              Två-vägs e-postkommunikation med kunder
+              E-post till beställare
             </Label>
             <span id="two-way-email-desc" className="text-sm text-muted-foreground">
-              När av: inga svar eller mottagningsbekräftelser mejlas till kunder.
+              När av: inga svar eller mottagningsbekräftelser mejlas till beställare.
               Interna notiser och inkommande mejl→ärende påverkas inte.
             </span>
           </div>
