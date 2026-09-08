@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router';
 import { Ticket, Clock, CheckCircle, AlertTriangle, ArrowRight, PauseCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { useActiveQueue } from '@/hooks/useActiveQueue';
 import { useUsers } from '@/hooks/useUsers';
+import { useCategories } from '@/hooks/useCategories';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useUpcomingReminders } from '@/hooks/useUpcomingReminders';
@@ -69,6 +70,7 @@ const Dashboard = () => {
   // Smal fetch: bara aktiva ärenden, sorterade på priority, max 30 — driver TicketQueueTable
   const { data: activeQueue, isLoading: isQueueLoading, isError: isQueueError, refetch: refetchQueue } = useActiveQueue(30);
   const { getUserById } = useUsers();
+  const { categories } = useCategories();
   const { user } = useAuth();
   const greetingName = getGreetingName(user?.email);
   const navigate = useNavigate();
@@ -236,6 +238,7 @@ const Dashboard = () => {
               tickets={activeQueue ?? []}
               isLoading={isQueueLoading}
               getUserName={getUserName}
+              categories={categories}
               isError={isQueueError}
               onRetry={refetchQueue}
             />

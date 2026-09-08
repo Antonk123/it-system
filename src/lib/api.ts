@@ -417,22 +417,6 @@ class ApiClient {
     });
   }
 
-  // SLA policies
-  async getSLAPolicies(companyId?: string) {
-    const query = companyId ? `?company_id=${encodeURIComponent(companyId)}` : '?company_id=default';
-    return this.request<SLAPolicyRow[]>(`/sla${query}`);
-  }
-
-  async upsertSLAPolicies(
-    companyId: string | null,
-    policies: Array<{ priority: string; response_time_minutes: number; resolution_time_minutes: number }>
-  ) {
-    return this.request<SLAPolicyRow[]>('/sla', {
-      method: 'PUT',
-      body: { company_id: companyId, policies },
-    });
-  }
-
   async logout() {
     try {
       // Refresh-token-cookien skickas automatiskt (credentials:'include');
@@ -1397,54 +1381,6 @@ class ApiClient {
     return this.request('/push/unsubscribe', { method: 'DELETE', body: { endpoint } });
   }
 
-  // Billing
-  async getBillingRate(companyId: string) {
-    return this.request<BillingRateRow | null>(`/billing/rates/${companyId}`);
-  }
-
-  async upsertBillingRate(companyId: string, ratePerHour: number, currency?: string) {
-    return this.request<BillingRateRow>(`/billing/rates/${companyId}`, {
-      method: 'PUT',
-      body: { rate_per_hour: ratePerHour, currency: currency || 'SEK' },
-    });
-  }
-
-  async getInvoices(companyId?: string) {
-    const query = companyId ? `?company_id=${companyId}` : '';
-    return this.request<InvoiceRow[]>(`/billing/invoices${query}`);
-  }
-
-  async getInvoice(id: string) {
-    return this.request<InvoiceDetail>(`/billing/invoices/${id}`);
-  }
-
-  async previewInvoice(companyId: string, periodStart: string, periodEnd: string) {
-    return this.request<InvoicePreview>('/billing/invoices/preview', {
-      method: 'POST',
-      body: { company_id: companyId, period_start: periodStart, period_end: periodEnd },
-    });
-  }
-
-  async createInvoice(data: { company_id: string; period_start: string; period_end: string; lines: any[]; total_hours: number; total_amount: number; currency: string; vat_rate?: number }) {
-    return this.request<InvoiceRow>('/billing/invoices', {
-      method: 'POST',
-      body: data,
-    });
-  }
-
-  async updateInvoiceStatus(id: string, status: string) {
-    return this.request<InvoiceRow>(`/billing/invoices/${id}/status`, {
-      method: 'PUT',
-      body: { status },
-    });
-  }
-
-  async deleteInvoice(id: string) {
-    return this.request<{ message: string }>(`/billing/invoices/${id}`, {
-      method: 'DELETE',
-    });
-  }
-
   // API Keys
   async getApiKeys() {
     return this.request<ApiKeyRow[]>('/api-keys');
@@ -1582,6 +1518,8 @@ export interface TicketRow {
   priority: string;
   category_id: string | null;
   requester_id: string | null;
+  requester_name?: string | null;
+  category_label?: string | null;
   company_id: string | null;
   company_name?: string | null;
   assigned_to: string | null;
@@ -1597,13 +1535,6 @@ export interface TicketRow {
   tags?: Array<{ id: string; name: string; color: string }>;
   ai_suggested_category_id?: string | null;
   ai_suggested_confidence?: number | null;
-  // SLA-fält (kolumner på tickets-tabellen, migration i migrations.ts) — returneras rått (snake_case)
-  sla_response_deadline?: string | null;
-  sla_resolution_deadline?: string | null;
-  sla_paused_at?: string | null;
-  sla_paused_duration?: number | null;
-  sla_response_met?: number | null;
-  sla_resolution_met?: number | null;
   // Sätts på create/update-svaret när bakgrundsåtgärder (t.ex. mailutskick) gav icke-fatala varningar
   warnings?: string[];
 }
@@ -1645,7 +1576,6 @@ export interface CompanyRow {
   email: string | null;
   phone: string | null;
   address: string | null;
-  sla_disabled: number;
   contact_count: number;
   open_ticket_count: number;
   total_ticket_count: number;
@@ -1714,16 +1644,6 @@ export interface SystemUser {
   emailConfirmed: boolean;
   /** true när kontot är länkat till en SSO-identitet. Själva sub/issuer exponeras aldrig. */
   ssoLinked?: boolean;
-}
-
-export interface SLAPolicyRow {
-  id: string;
-  company_id: string | null;
-  priority: 'low' | 'medium' | 'high' | 'critical';
-  response_time_minutes: number;
-  resolution_time_minutes: number;
-  created_at: string;
-  updated_at: string;
 }
 
 export interface SharedTicketData {
@@ -1936,62 +1856,6 @@ export interface WebhookDeliveryRow {
   attempts: number;
   delivered_at: string | null;
   created_at: string;
-}
-
-export interface BillingRateRow {
-  id: string;
-  company_id: string;
-  rate_per_hour: number;
-  currency: string;
-}
-
-export interface InvoiceRow {
-  id: string;
-  company_id: string;
-  company_name?: string;
-  invoice_number: number | null;
-  period_start: string;
-  period_end: string;
-  status: string;
-  total_hours: number;
-  total_amount: number; // NETTO (exkl moms)
-  vat_rate: number;     // t.ex. 0.25
-  vat_amount: number;
-  currency: string;
-  created_at: string;
-  sent_at: string | null;
-  paid_at: string | null;
-}
-
-export interface InvoiceLineRow {
-  id: string;
-  ticket_id: string | null;
-  ticket_title?: string;
-  description: string;
-  hours: number;
-  rate: number;
-  amount: number;
-}
-
-export interface InvoiceDetail extends InvoiceRow {
-  org_number?: string;
-  company_email?: string;
-  company_address?: string;
-  lines: InvoiceLineRow[];
-}
-
-export interface InvoicePreview {
-  company_id: string;
-  period_start: string;
-  period_end: string;
-  rate_per_hour: number;
-  currency: string;
-  lines: Array<InvoiceLineRow & { entry_count: number }>;
-  total_hours: number;
-  total_amount: number;   // NETTO (exkl moms)
-  vat_rate: number;       // t.ex. 0.25
-  vat_amount: number;
-  total_incl_vat: number;
 }
 
 export interface RequesterAnalyticsRow {

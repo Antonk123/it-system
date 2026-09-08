@@ -5,8 +5,8 @@ import { existsSync, rmSync } from 'fs';
 /**
  * Integration tests for the companies routes (audit L21: previously untested).
  * Priority file (200 lines) — extra coverage for the company→contacts
- * relation exposed on GET /:id, and for the sla_disabled toggle side-effect
- * that re-syncs open tickets' SLA deadlines on PUT /:id.
+ * relation exposed on GET /:id, and preservation of historical SLA data when
+ * an old client attempts to use the retired SLA toggle.
  */
 
 const { DB_PATH } = vi.hoisted(() => {
@@ -194,7 +194,7 @@ describe('Company CRUD cycle (admin)', () => {
     expect(found.contact_count).toBe(1);
   });
 
-  it('sla_disabled toggle clears SLA deadlines on open tickets for that company', async () => {
+  it('rejects the retired SLA toggle and preserves historical deadlines', async () => {
     const ticketId = randomUUID();
     db.prepare(`
       INSERT INTO tickets (id, title, description, status, priority, company_id, sla_response_deadline, sla_resolution_deadline)
@@ -206,13 +206,12 @@ describe('Company CRUD cycle (admin)', () => {
       .set('Authorization', `Bearer ${adminToken}`)
       .set('x-csrf-token', adminCsrf)
       .send({ sla_disabled: true });
-    expect(res.status).toBe(200);
-    expect(res.body.sla_disabled).toBe(1);
+    expect(res.status).toBe(400);
 
     const ticket = db.prepare('SELECT sla_response_deadline, sla_resolution_deadline FROM tickets WHERE id = ?').get(ticketId) as
       { sla_response_deadline: string | null; sla_resolution_deadline: string | null };
-    expect(ticket.sla_response_deadline).toBeNull();
-    expect(ticket.sla_resolution_deadline).toBeNull();
+    expect(ticket.sla_response_deadline).toBe('2099-01-01T00:00:00.000Z');
+    expect(ticket.sla_resolution_deadline).toBe('2099-01-02T00:00:00.000Z');
   });
 
   it('deletes the company via DELETE /:id (contacts survive, company_id set null)', async () => {

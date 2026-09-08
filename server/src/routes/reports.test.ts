@@ -62,6 +62,8 @@ function createSchema(db: InstanceType<typeof Database>) {
       sla_paused_at TEXT,
       sla_paused_duration INTEGER
     );
+    CREATE TABLE contacts (id TEXT PRIMARY KEY, name TEXT);
+    CREATE TABLE categories (id TEXT PRIMARY KEY, label TEXT);
     CREATE TABLE users (
       id TEXT PRIMARY KEY,
       display_name TEXT,
@@ -288,6 +290,18 @@ function dateDaysAgo(daysAgo: number): string {
 }
 
 describe('computeKpiTickets', () => {
+  it('returns requester and category labels alongside their IDs', () => {
+    memDb.prepare('INSERT INTO contacts VALUES (?, ?)').run('requester-1', 'Anna Beställare');
+    memDb.prepare('INSERT INTO categories VALUES (?, ?)').run('category-1', 'Telefoni');
+    insertKpiTicket(memDb, 'ticket-1', 'open', '2026-09-08 12:00:00');
+    memDb.prepare('UPDATE tickets SET requester_id = ?, category_id = ? WHERE id = ?')
+      .run('requester-1', 'category-1', 'ticket-1');
+    expect(computeKpiTickets(memDb, 'total')[0]).toMatchObject({
+      requester_id: 'requester-1', requester_name: 'Anna Beställare',
+      category_id: 'category-1', category_label: 'Telefoni',
+    });
+  });
+
   it("scope='total' with no filter returns all rows (created_at DESC) with assigned_to_name + tags[]", () => {
     insertUser(memDb, 'u1', 'Anna Andersson');
     insertKpiTicket(memDb, 'a', 'open', dateIn(2), 'u1'); // older

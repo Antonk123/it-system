@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import type { Ticket } from '@/types/ticket';
+import type { Category, Ticket } from '@/types/ticket';
 import { getInitials, hashColor } from '@/lib/avatar';
 import { PRIORITY_LABELS, STATUS_LABELS } from '@/lib/constants';
 
@@ -10,6 +10,7 @@ interface TicketQueueTableProps {
   tickets: Ticket[];
   isLoading: boolean;
   getUserName?: (id: string) => string | undefined;
+  categories?: Category[];
   isError?: boolean;
   onRetry?: () => void;
 }
@@ -37,7 +38,7 @@ const PRIORITY_STYLES: Record<string, string> = {
   low: 'bg-[hsl(var(--priority-low))]/14 text-[hsl(var(--priority-low))] border-[hsl(var(--priority-low))]/35',
 };
 
-export const TicketQueueTable = ({ tickets, isLoading, getUserName, isError, onRetry }: TicketQueueTableProps) => {
+export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories = [], isError, onRetry }: TicketQueueTableProps) => {
   const navigate = useNavigate();
   const activeTickets = tickets
     .filter(t => t.status !== 'closed')
@@ -96,6 +97,8 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, isError, onR
               <tbody>
                 {activeTickets.map(ticket => {
                   const assigneeName = ticket.assignedToName || (ticket.assignedTo && getUserName?.(ticket.assignedTo)) || null;
+                  const requesterName = ticket.requesterName || getUserName?.(ticket.requesterId) || 'Okänd beställare';
+                  const categoryLabel = ticket.categoryLabel || categories.find(category => category.id === ticket.category)?.label;
 
                   return (
                     <tr
@@ -120,10 +123,11 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, isError, onR
                         <div className="font-semibold text-foreground text-[13.5px] tracking-tight truncate max-w-[280px]">
                           {ticket.title}
                         </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          {ticket.category && (
+                        <p className="text-[12px] text-muted-foreground mt-0.5 break-words">Beställare: {requesterName}</p>
+                        <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                          {categoryLabel && (
                             <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded-full bg-muted/60 text-foreground/75 border border-border">
-                              {ticket.category}
+                              {categoryLabel}
                             </span>
                           )}
                           {ticket.companyName && (

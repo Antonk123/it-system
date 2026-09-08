@@ -862,3 +862,26 @@ describe('POST/GET/DELETE .../sent /:id/reminders — authorization (canAccessTi
     expect(deleteSentRes.status).toBe(404);
   });
 });
+
+
+describe('GET /api/tickets — display labels', () => {
+  it('returns linked requester and category names even beyond the contacts list limit', async () => {
+    const requesterId = seedContact('Äldre beställare', 'aldre-bestallare@example.com');
+    db.prepare('UPDATE contacts SET created_at = ? WHERE id = ?').run('2000-01-01', requesterId);
+    db.transaction(() => {
+      for (let i = 0; i < 501; i++) seedContact(`Ny kontakt ${i}`, `ny-kontakt-${i}@example.com`);
+    })();
+    const categoryId = seedCategory('Mobiltelefoni');
+    const ticketId = seedTicket({ createdBy: aliceId, requesterId, categoryId, status: 'in-progress', priority: 'critical' });
+    const contacts = await alice.agent.get('/api/contacts').set('Authorization', `Bearer ${alice.token}`);
+    expect(contacts.status).toBe(200);
+    expect(contacts.body.some((contact: { id: string }) => contact.id === requesterId)).toBe(false);
+    const res = await alice.agent.get(`/api/tickets?status=open,in-progress,waiting&limit=30&sortBy=priority&sortDir=asc&requester_id=${requesterId}`)
+      .set('Authorization', `Bearer ${alice.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.find((ticket: { id: string }) => ticket.id === ticketId)).toMatchObject({
+      requester_id: requesterId, requester_name: 'Äldre beställare',
+      category_id: categoryId, category_label: 'Mobiltelefoni',
+    });
+  });
+});

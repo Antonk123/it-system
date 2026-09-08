@@ -198,13 +198,13 @@ These are the only endpoints reachable without credentials:
 | GET | `/api/tickets/requester-open-counts` | `authenticate` | Non-closed ticket count per requester | — | `Record<requesterId, count>` |
 | GET | `/api/tickets/upcoming-reminders` | `authenticate` | Unsent future reminders (top 6) | — | reminder array |
 | GET | `/api/tickets/:id` | `authenticate` | Get one ticket + custom fields + tags | params: `id` | `{ ...ticket, field_values[], tags[] }`; 404 |
-| POST | `/api/tickets` | `writeRateLimiter` → `authenticate` | Create ticket (+ custom fields, auto-priority/tags, SLA, async AI category, email, webhook) | body: `title`(req), `description`/`customFields`(one req), + optional fields | 201 `{ ...ticket, warnings? }`; 400 |
+| POST | `/api/tickets` | `writeRateLimiter` → `authenticate` | Create ticket (+ custom fields, auto-priority/tags, async AI category, email, webhook) | body: `title`(req), `description`/`customFields`(one req), + optional fields | 201 `{ ...ticket, warnings? }`; 400 |
 | POST | `/api/tickets/:id/ai-draft` | `aiRateLimiter` → `authenticate` (+ `canAccessTicket`) | AI reply draft from KB + text attachments; persists draft | params: `id` | `{ draft, kbArticlesUsed, kbTitles[], attachmentsUsed[] }`; 403/404/502/503 |
 | GET | `/api/tickets/:id/ai-summary` | `aiRateLimiter` → `authenticate` | Cached (<1h) or fresh AI ticket summary | params: `id`; query: `force=1` | `{ summary, cached, ageMinutes }` or `{ summary:null, reason }`; 404/502/503 |
 | GET | `/api/tickets/:id/history` | `authenticate` (+ `canAccessTicket`) | Ticket change history (cap 500) | params: `id` | history-row array; 403/404 |
 | PUT | `/api/tickets/bulk` | `writeRateLimiter` → `authenticate` (+ per-ticket `canAccessTicket`) | Bulk-update status/priority/category/assignee (≤500) | body: `ids[]`, `updates{}` | `{ updated, skipped[] }`; 400 |
 | POST | `/api/tickets/bulk-delete` | `writeRateLimiter` → `authenticate` → `requireAdmin` | Permanently delete many tickets + attachment files | body: `ids[]` | `{ deleted, alreadyGone? }`; 400 |
-| PUT | `/api/tickets/:id` | `writeRateLimiter` → `authenticate` (+ `canAccessTicket`) | Update ticket fields/custom fields/tags; logs history, SLA, email, webhooks | params: `id`; body: optional ticket fields + `customFields`, `tag_ids`, `ai_suggested_category_id` | `{ ...ticket, tags[], warnings? }`; 400/403/404 |
+| PUT | `/api/tickets/:id` | `writeRateLimiter` → `authenticate` (+ `canAccessTicket`) | Update ticket fields/custom fields/tags; logs history, email, webhooks | params: `id`; body: optional ticket fields + `customFields`, `tag_ids`, `ai_suggested_category_id` | `{ ...ticket, tags[], warnings? }`; 400/403/404 |
 | DELETE | `/api/tickets/:id` | `writeRateLimiter` → `authenticate` → `requireAdmin` | Permanently delete one ticket + attachment files | params: `id` | `{ message }`; 404 |
 | POST | `/api/tickets/:id/reminders` | `authenticate` | Create reminder | params: `id`; body: `reminder_time`(future, req), `message` | 201 reminder; 400/404 |
 | GET | `/api/tickets/:id/reminders` | `authenticate` | List reminders for a ticket | params: `id` | reminder array |
@@ -380,7 +380,7 @@ Mounted as a sub-router on the templates router (`mergeParams`).
 | GET | `/api/companies` | `authenticate` | List companies + contact/ticket-count stats | — | company-with-stats array |
 | GET | `/api/companies/:id` | `authenticate` | Single company + contacts + aggregate stats | params: `id` | `{ ...company, contacts[], stats }`; 404 |
 | POST | `/api/companies` | `authenticate` → `requireAdmin` | Create company | body: `name`(req), `org_number?`, `email?`, `phone?`, `address?` | 201 company; 400 |
-| PUT | `/api/companies/:id` | `authenticate` → `requireAdmin` | Update company (re-syncs SLA on `sla_disabled` change) | params: `id`; body: optional company fields + `sla_disabled?` | company; 400/404 |
+| PUT | `/api/companies/:id` | `authenticate` → `requireAdmin` | Update company | params: `id`; body: optional company fields | company; 400/404 |
 | DELETE | `/api/companies/:id` | `authenticate` → `requireAdmin` | Delete company (nulls contacts' `company_id`) | params: `id` | `{ message }`; 404 |
 
 ---
@@ -397,23 +397,6 @@ Mounted as a sub-router on the templates router (`mergeParams`).
 | POST | `/api/contacts` | `authenticate` → `requireAdmin` | Create contact | body: `name`(req), `email`(req), `phone?`, `company_id?`, `department?` | 201 contact; 400 |
 | PUT | `/api/contacts/:id` | `authenticate` → `requireAdmin` | Update contact (whitelisted fields) | params: `id`; body: optional contact fields | contact; 400/404 |
 | DELETE | `/api/contacts/:id` | `authenticate` → `requireAdmin` | Delete contact | params: `id` | `{ message }`; 404 |
-
----
-
-## Billing — `/api/billing`
-
-All routes require `authenticate` → `requireAdmin`. Invoice mutations are audit-logged.
-
-| Method | Path | Auth | Purpose | Inputs | Response |
-|--------|------|------|---------|--------|----------|
-| GET | `/api/billing/rates/:companyId` | admin | Get billing rate for a company | params: `companyId` | `BillingRateRow` or `null` |
-| PUT | `/api/billing/rates/:companyId` | admin | Upsert billing rate | params: `companyId`; body: `rate_per_hour`(>0, req), `currency`(default `SEK`) | rate row; 400 |
-| GET | `/api/billing/invoices` | admin | List invoices (optional company filter) | query: `company_id?` | invoice array |
-| GET | `/api/billing/invoices/:id` | admin | Single invoice with lines + company details | params: `id` | `{ ...invoice, lines[] }`; 404 |
-| POST | `/api/billing/invoices/preview` | admin | Compute draft invoice from time entries (no save) | body: `company_id`, `period_start`, `period_end` (all req) | draft invoice; 400 |
-| POST | `/api/billing/invoices` | admin | Create invoice (server recomputes totals; blocks overlap) | body: `company_id`, `period_start`, `period_end`, `lines[]`, `currency?` | 201 invoice; 400/409 |
-| PUT | `/api/billing/invoices/:id/status` | admin | Forward-only status transition (draft→sent→paid) | params: `id`; body: `status` | invoice; 400/404 |
-| DELETE | `/api/billing/invoices/:id` | admin | Delete invoice (draft only) | params: `id` | `{ message }`; 400/404 |
 
 ---
 
@@ -449,16 +432,6 @@ All routes require `authenticate` → `requireAdmin`. Invoice mutations are audi
 | PUT | `/api/recurring/:id` | `authenticate` → `requireAdmin` | Update template (recomputes next_run) | params: `id`; body: partial of create + `is_active?` | template; 400/404 |
 | DELETE | `/api/recurring/:id` | `authenticate` → `requireAdmin` | Delete template (cascades history) | params: `id` | 204; 404 |
 | PATCH | `/api/recurring/:id/toggle` | `authenticate` → `requireAdmin` | Pause/resume toggle | params: `id` | `{ id, is_active, next_run }`; 404 |
-
----
-
-## SLA — `/api/sla`
-
-| Method | Path | Auth | Purpose | Inputs | Response |
-|--------|------|------|---------|--------|----------|
-| GET | `/api/sla` | `authenticate` | List SLA policies (filter by company) | query: `company_id?` (`default`/id/`all`) | `SLAPolicyRow[]` |
-| PUT | `/api/sla` | `authenticate` → `requireAdmin` | Upsert policies for a company/default | body: `company_id?`, `policies[]` | policy array; 400 |
-| DELETE | `/api/sla/:id` | `authenticate` → `requireAdmin` | Delete single policy | params: `id` | `{ message }`; 404 |
 
 ---
 

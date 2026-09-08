@@ -7,7 +7,6 @@ import { format, parseISO } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -37,7 +36,6 @@ const TimeSection = ({ ticketId }: TimeSectionProps) => {
 
   const [durationInput, setDurationInput] = useState('');
   const [noteInput, setNoteInput] = useState('');
-  const [billable, setBillable] = useState(true);
   const [workDate, setWorkDate] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +43,6 @@ const TimeSection = ({ ticketId }: TimeSectionProps) => {
   const [editingEntry, setEditingEntry] = useState<TimeEntryRow | null>(null);
   const [editDuration, setEditDuration] = useState('');
   const [editNote, setEditNote] = useState('');
-  const [editBillable, setEditBillable] = useState(true);
   const [editWorkDate, setEditWorkDate] = useState('');
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -59,12 +56,11 @@ const TimeSection = ({ ticketId }: TimeSectionProps) => {
     addEntry({
       duration_minutes: parsed,
       note: noteInput.trim() || undefined,
-      billable,
+      billable: false,
       work_date: workDate || null,
     });
     setDurationInput('');
     setNoteInput('');
-    setBillable(true);
     setWorkDate('');
   };
 
@@ -72,7 +68,6 @@ const TimeSection = ({ ticketId }: TimeSectionProps) => {
     setEditingEntry(entry);
     setEditDuration(formatDuration(entry.duration_minutes));
     setEditNote(entry.note ?? '');
-    setEditBillable(entry.billable !== 0);
     setEditWorkDate(entry.work_date ?? '');
     setEditError(null);
   };
@@ -91,7 +86,6 @@ const TimeSection = ({ ticketId }: TimeSectionProps) => {
         payload: {
           duration_minutes: parsed,
           note: editNote.trim() || null,
-          billable: editBillable,
           work_date: editWorkDate || null,
         },
       });
@@ -130,11 +124,6 @@ const TimeSection = ({ ticketId }: TimeSectionProps) => {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium">{formatDuration(entry.duration_minutes)}</span>
                     <span className="text-muted-foreground">{entryDateLabel(entry)}</span>
-                    {entry.billable === 0 && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-                        Ej fakturerbar
-                      </Badge>
-                    )}
                     {invoiced && (
                       <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
                         Fakturerad
@@ -155,13 +144,15 @@ const TimeSection = ({ ticketId }: TimeSectionProps) => {
                       <Pencil size={15} />
                     </button>
                   )}
-                  <button
-                    onClick={() => deleteEntry(entry.id)}
-                    className="md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-destructive inline-flex items-center justify-center h-9 w-9 md:h-7 md:w-7 rounded"
-                    aria-label="Ta bort tidpost"
-                  >
-                    <X size={16} />
-                  </button>
+                  {!invoiced && (
+                    <button
+                      onClick={() => deleteEntry(entry.id)}
+                      className="md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity text-muted-foreground hover:text-destructive inline-flex items-center justify-center h-9 w-9 md:h-7 md:w-7 rounded"
+                      aria-label="Ta bort tidpost"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -207,16 +198,6 @@ const TimeSection = ({ ticketId }: TimeSectionProps) => {
             onChange={(e) => setWorkDate(e.target.value)}
             className="h-8 text-sm"
           />
-        </div>
-        <div className="flex items-center gap-2">
-          <Checkbox
-            id="time-billable"
-            checked={billable}
-            onCheckedChange={(checked) => setBillable(checked === true)}
-          />
-          <Label htmlFor="time-billable" className="text-sm font-normal cursor-pointer">
-            Fakturerbar
-          </Label>
         </div>
         {error !== null && (
           <p className="text-xs text-destructive">{error}</p>
@@ -276,16 +257,6 @@ const TimeSection = ({ ticketId }: TimeSectionProps) => {
                 onChange={(e) => setEditWorkDate(e.target.value)}
                 className="h-8 text-sm"
               />
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="edit-time-billable"
-                checked={editBillable}
-                onCheckedChange={(checked) => setEditBillable(checked === true)}
-              />
-              <Label htmlFor="edit-time-billable" className="text-sm font-normal cursor-pointer">
-                Fakturerbar
-              </Label>
             </div>
             {editError !== null && (
               <p className="text-xs text-destructive">{editError}</p>

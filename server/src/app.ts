@@ -33,11 +33,9 @@ import timeEntryRoutes from './routes/time-entries.js';
 import backupRoutes from './routes/backup.js';
 import pushRoutes from './routes/push.js';
 import companiesRoutes from './routes/companies.js';
-import billingRoutes from './routes/billing.js';
 import apiKeyRoutes from './routes/apiKeys.js';
 import webhookRoutes from './routes/webhooks.js';
 import emailInboundRoutes from './routes/emailInbound.js';
-import slaRoutes from './routes/sla.js';
 import settingsRoutes from './routes/settings.js';
 
 /**
@@ -242,11 +240,9 @@ export function createApp() {
   app.use('/api/backup', backupRoutes);
   app.use('/api/push', pushRoutes);
   app.use('/api/companies', companiesRoutes);
-  app.use('/api/billing', billingRoutes);
   app.use('/api/api-keys', apiKeyRoutes);
   app.use('/api/webhooks', webhookRoutes);
   app.use('/api/email-inbound', emailInboundRoutes);
-  app.use('/api/sla', slaRoutes);
   app.use('/api/settings', settingsRoutes);
 
   // Catch-all for unknown /api/* routes — without this, Express falls back to

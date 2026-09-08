@@ -29,6 +29,8 @@ export const useActiveQueue = (limit = 30) => {
         priority: t.priority as TicketPriority,
         category: t.category_id || undefined,
         requesterId: t.requester_id || '',
+        requesterName: t.requester_name ?? undefined,
+        categoryLabel: t.category_label ?? undefined,
         createdAt: parseServerDate(t.created_at),
         updatedAt: parseServerDate(t.updated_at),
         resolvedAt: t.resolved_at ? parseServerDate(t.resolved_at) : undefined,

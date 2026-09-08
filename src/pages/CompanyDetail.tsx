@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { Building2, ArrowLeft, Clock, Ticket, Users, Timer, Pencil, Receipt } from 'lucide-react';
+import { Building2, ArrowLeft, Clock, Ticket, Users, Timer, Pencil } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,22 +11,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useCompanyDetail, useCompanies } from '@/hooks/useCompanies';
 import { toast } from 'sonner';
-import { useBillingRate } from '@/hooks/useBilling';
 
 const CompanyDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { company, isLoading, isError } = useCompanyDetail(id!);
   const { updateCompany } = useCompanies();
-  const [rateInput, setRateInput] = useState('');
-  const { rate, upsertRate } = useBillingRate(id!);
-
-  useEffect(() => {
-    if (rate?.rate_per_hour != null) {
-      setRateInput(String(rate.rate_per_hour));
-    }
-  }, [rate]);
-
   const [editOpen, setEditOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState({
@@ -244,35 +234,6 @@ const CompanyDetail = () => {
           </CardContent>
         </Card>
 
-        {/* Billing rate */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Receipt className="h-4 w-4" /> Timpris
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-end gap-3">
-              <div className="flex-1">
-                <Label className="text-xs text-muted-foreground">kr/timme</Label>
-                <Input
-                  type="number"
-                  value={rateInput}
-                  onChange={e => setRateInput(e.target.value)}
-                  placeholder="0"
-                />
-              </div>
-              <Button size="sm" onClick={() => upsertRate(Number(rateInput))} disabled={!rateInput}>
-                Spara
-              </Button>
-            </div>
-            {rate && (
-              <p className="text-xs text-muted-foreground mt-2">
-                Nuvarande: {rate.rate_per_hour} {rate.currency}/h
-              </p>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       {/* Edit dialog */}

@@ -63,7 +63,6 @@ vi.mock('@/pages/PublicKBArticle', () => ({ default: (p: unknown) => registry.Pu
 vi.mock('@/pages/Recurring', () => ({ default: (p: unknown) => registry.Recurring(p) }));
 vi.mock('@/pages/CompanyList', () => ({ default: (p: unknown) => registry.CompanyList(p) }));
 vi.mock('@/pages/CompanyDetail', () => ({ default: (p: unknown) => registry.CompanyDetail(p) }));
-vi.mock('@/pages/Invoices', () => ({ default: (p: unknown) => registry.Invoices(p) }));
 
 // react-router MOCKAS INTE — äkta router i den här filen, annars bevisar
 // testerna ingenting om routing.
@@ -114,7 +113,7 @@ const STUB_NAMES = [
   'Index', 'TicketList', 'TicketForm', 'TicketDetail', 'Archive', 'UserList', 'Settings',
   'Reports', 'Login', 'ForgotPassword', 'ResetPassword', 'PublicTicketForm', 'SharedTicket',
   'NotFound', 'KnowledgeBase', 'KBArticleDetail', 'KBArticleForm', 'SharedKBArticle', 'PublicKnowledgeBase', 'PublicKBArticle',
-  'Recurring', 'CompanyList', 'CompanyDetail', 'Invoices',
+  'Recurring', 'CompanyList', 'CompanyDetail',
 ] as const;
 
 STUB_NAMES.forEach((name) => {
@@ -246,7 +245,6 @@ const ROUTES: RouteCase[] = [
   { path: '/recurring', concretePath: '/recurring', stub: 'Recurring', guard: 'protected' },
   { path: '/companies', concretePath: '/companies', stub: 'CompanyList', guard: 'protected' },
   { path: '/companies/:id', concretePath: '/companies/7', stub: 'CompanyDetail', guard: 'protected' },
-  { path: '/invoices', concretePath: '/invoices', stub: 'Invoices', guard: 'protected' },
   { path: '/archive', concretePath: '/archive', stub: 'Archive', guard: 'protected' },
   { path: '/users', concretePath: '/users', stub: 'UserList', guard: 'protected' },
   { path: '/reports', concretePath: '/reports', stub: 'Reports', guard: 'protected' },

@@ -580,12 +580,14 @@ router.get('/tag-analytics', authenticate, (_req: AuthRequest, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Column list identical to tickets.ts TICKET_COLUMNS — keep in sync, otherwise
-// the modal loses assigned_to_name (Tilldelad) or SLA badges. assigned_to_name
-// is a correlated subquery (not a JOIN) so non-admins can render it too.
+// the modal loses the display names for assignee, requester or category.
+// Correlated subqueries keep labels independent of paginated lookup lists.
 const KPI_TICKET_COLUMNS = [
   'tickets.id', 'tickets.title', 'tickets.description', 'tickets.status', 'tickets.priority',
   'tickets.category_id', 'tickets.requester_id', 'tickets.company_id', 'tickets.assigned_to',
   '(SELECT COALESCE(display_name, email) FROM users WHERE id = tickets.assigned_to) AS assigned_to_name',
+  '(SELECT name FROM contacts WHERE id = tickets.requester_id) AS requester_name',
+  '(SELECT label FROM categories WHERE id = tickets.category_id) AS category_label',
   'tickets.notes', 'tickets.solution', 'tickets.template_id',
   'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at',
   'tickets.ai_suggested_category_id', 'tickets.ai_suggested_confidence',

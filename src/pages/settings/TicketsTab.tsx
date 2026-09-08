@@ -1,4 +1,4 @@
-import { useState, useCallback, memo, useEffect, useMemo, lazy, Suspense } from 'react';
+import { useState, useCallback, memo, useEffect, lazy, Suspense } from 'react';
 
 // Lazy-ladda TemplateEditorModal så TipTap-vendor-chunken inte laddas förrän dialogen öppnas
 const TemplateEditorModal = lazy(() =>
@@ -8,12 +8,8 @@ import { useCategories } from '@/hooks/useCategories';
 import { useTags } from '@/hooks/useTags';
 import { useTemplates } from '@/hooks/useTemplates';
 import { useChecklistTemplates } from '@/hooks/useChecklistTemplates';
-import { useSLAPolicies } from '@/hooks/useSLAPolicies';
-import { useCompanies } from '@/hooks/useCompanies';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -32,38 +28,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Type, ListChecks, CornerDownRight, ArrowUp, ArrowDown, Timer, Save, RotateCcw, Loader2 } from 'lucide-react';
-import { Select as UiSelect, SelectContent as UiSelectContent, SelectItem as UiSelectItem, SelectTrigger as UiSelectTrigger, SelectValue as UiSelectValue } from '@/components/ui/select';
+import { Plus, Pencil, Trash2, Check, X, Tag, Tags, Type, ListChecks, CornerDownRight, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const TAG_COLORS = [
   '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
   '#3b82f6', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6',
 ];
-
-type SlaUnit = 'min' | 'h' | 'd';
-
-function formatSlaMinutes(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`;
-  if (minutes < 1440) {
-    const h = minutes / 60;
-    return Number.isInteger(h) ? `${h} h` : `${h.toFixed(1)} h`;
-  }
-  const days = minutes / 1440;
-  return Number.isInteger(days) ? `${days} dygn` : `${days.toFixed(1)} dygn`;
-}
-
-function minutesToParts(minutes: number): { value: number; unit: SlaUnit } {
-  if (minutes >= 1440 && minutes % 1440 === 0) return { value: minutes / 1440, unit: 'd' };
-  if (minutes >= 60 && minutes % 60 === 0) return { value: minutes / 60, unit: 'h' };
-  return { value: minutes, unit: 'min' };
-}
-
-function partsToMinutes(value: number, unit: SlaUnit): number {
-  if (unit === 'd') return value * 1440;
-  if (unit === 'h') return value * 60;
-  return value;
-}
 
 const CategoryItem = memo(({
   category,
@@ -203,7 +174,6 @@ const TemplateItem = memo(({
 TemplateItem.displayName = 'TemplateItem';
 
 // Stabil modul-konstant — utanför komponenten för att undvika react-hooks/exhaustive-deps-varningar
-const PRIO_ORDER = ['critical', 'high', 'medium', 'low'] as const;
 
 const TicketsTab = () => {
   const { categories, addCategory, updateCategory, deleteCategory, reorderCategories } = useCategories();
@@ -253,156 +223,7 @@ const TicketsTab = () => {
     tags: false,
     templates: false,
     checklistTemplates: false,
-    sla: false,
   });
-
-  // SLA-policy scope: 'default' = global, eller specifikt företags-id
-  const [slaScope, setSlaScope] = useState<string>('default');
-  const { companies, updateCompany } = useCompanies();
-  const { policies: defaultSlaPolicies } = useSLAPolicies('default');
-  const { policies: slaPolicies, isLoading: isSlaLoading, upsertPolicies } = useSLAPolicies(slaScope);
-
-  // SLA-disable per företag (interna ärenden behöver oftast ingen SLA)
-  const selectedCompany = useMemo(
-    () => slaScope !== 'default' ? companies.find(c => c.id === slaScope) : null,
-    [companies, slaScope]
-  );
-  const slaDisabled = !!selectedCompany?.sla_disabled;
-  const [isTogglingSla, setIsTogglingSla] = useState(false);
-
-  const handleToggleSlaDisabled = useCallback(async (disabled: boolean) => {
-    if (!selectedCompany) return;
-    setIsTogglingSla(true);
-    try {
-      await updateCompany(selectedCompany.id, { sla_disabled: disabled ? 1 : 0 } as any);
-      toast.success(disabled
-        ? `SLA inaktiverad för ${selectedCompany.name} — aktiva ärenden rensade`
-        : `SLA aktiverad för ${selectedCompany.name} — applicerad på aktiva ärenden`
-      );
-    } catch (err) {
-      toast.error('Kunde inte ändra SLA-status: ' + (err instanceof Error ? err.message : 'okänt fel'));
-    } finally {
-      setIsTogglingSla(false);
-    }
-  }, [selectedCompany, updateCompany]);
-
-  // Företag som har egna overrides (för att markera i dropdown)
-  const { policies: allSlaPolicies } = useSLAPolicies();
-  const companiesWithOverrides = useMemo(() => {
-    const set = new Set<string>();
-    for (const p of allSlaPolicies) {
-      if (p.company_id) set.add(p.company_id);
-    }
-    return set;
-  }, [allSlaPolicies]);
-
-  // SLA edit-state: per prioritet, response/resolution som {value, unit}
-  type SlaDraft = { response: { value: number; unit: SlaUnit }; resolution: { value: number; unit: SlaUnit } };
-  const [slaDraft, setSlaDraft] = useState<Record<string, SlaDraft>>({});
-  const [isSavingSla, setIsSavingSla] = useState(false);
-
-  // Synka draft. Om vald scope saknar policies, använd default som startpunkt
-  // (företag utan override använder default-policy i prod ändå).
-  useEffect(() => {
-    const source = slaPolicies.length > 0 ? slaPolicies : defaultSlaPolicies;
-    if (source.length === 0) return;
-    const next: Record<string, SlaDraft> = {};
-    for (const prio of PRIO_ORDER) {
-      const p = source.find(x => x.priority === prio);
-      if (p) {
-        next[prio] = {
-          response: minutesToParts(p.response_time_minutes),
-          resolution: minutesToParts(p.resolution_time_minutes),
-        };
-      }
-    }
-    setSlaDraft(next);
-  }, [slaPolicies, defaultSlaPolicies, slaScope]);
-
-  // Om scope saknar overrides är "dirty" = någon prio skiljer från default,
-  // dvs admin håller på att SKAPA en första override för det företaget.
-  const scopeHasOverrides = slaPolicies.length > 0;
-  const slaIsDirty = useMemo(() => {
-    const compareTo = scopeHasOverrides ? slaPolicies : defaultSlaPolicies;
-    return PRIO_ORDER.some(prio => {
-      const p = compareTo.find(x => x.priority === prio);
-      const d = slaDraft[prio];
-      if (!p || !d) return false;
-      return (
-        partsToMinutes(d.response.value, d.response.unit) !== p.response_time_minutes ||
-        partsToMinutes(d.resolution.value, d.resolution.unit) !== p.resolution_time_minutes
-      );
-    });
-  }, [slaPolicies, defaultSlaPolicies, slaDraft, scopeHasOverrides]);
-
-  const handleSlaUpdate = useCallback((prio: string, field: 'response' | 'resolution', patch: Partial<{ value: number; unit: SlaUnit }>) => {
-    setSlaDraft(prev => ({
-      ...prev,
-      [prio]: {
-        ...prev[prio],
-        [field]: { ...prev[prio][field], ...patch },
-      },
-    }));
-  }, []);
-
-  const handleSlaReset = useCallback(() => {
-    const source = scopeHasOverrides ? slaPolicies : defaultSlaPolicies;
-    const next: Record<string, SlaDraft> = {};
-    for (const prio of PRIO_ORDER) {
-      const p = source.find(x => x.priority === prio);
-      if (p) {
-        next[prio] = {
-          response: minutesToParts(p.response_time_minutes),
-          resolution: minutesToParts(p.resolution_time_minutes),
-        };
-      }
-    }
-    setSlaDraft(next);
-  }, [slaPolicies, defaultSlaPolicies, scopeHasOverrides]);
-
-  const handleSlaSave = useCallback(async () => {
-    // Validera: båda tider > 0, response < resolution
-    for (const prio of PRIO_ORDER) {
-      const d = slaDraft[prio];
-      if (!d) continue;
-      const resp = partsToMinutes(d.response.value, d.response.unit);
-      const reso = partsToMinutes(d.resolution.value, d.resolution.unit);
-      if (resp <= 0 || reso <= 0) {
-        toast.error(`${prio}: tider måste vara större än 0`);
-        return;
-      }
-      if (resp >= reso) {
-        toast.error(`${prio}: svar (${formatSlaMinutes(resp)}) måste vara kortare än lösning (${formatSlaMinutes(reso)})`);
-        return;
-      }
-    }
-    setIsSavingSla(true);
-    try {
-      const payload = PRIO_ORDER.map(prio => {
-        const d = slaDraft[prio];
-        return {
-          priority: prio,
-          response_time_minutes: partsToMinutes(d.response.value, d.response.unit),
-          resolution_time_minutes: partsToMinutes(d.resolution.value, d.resolution.unit),
-        };
-      }).filter(p => p.response_time_minutes > 0 && p.resolution_time_minutes > 0);
-      const targetCompanyId = slaScope === 'default' ? null : slaScope;
-      await upsertPolicies(targetCompanyId, payload);
-    } finally {
-      setIsSavingSla(false);
-    }
-  }, [slaDraft, upsertPolicies, slaScope]);
-
-  const handleSlaRemoveOverrides = useCallback(async () => {
-    if (slaScope === 'default') return;
-    setIsSavingSla(true);
-    try {
-      // PUT med tom array deletas alla policies för det företaget → default-policy gäller igen.
-      await upsertPolicies(slaScope, []);
-    } finally {
-      setIsSavingSla(false);
-    }
-  }, [slaScope, upsertPolicies]);
 
   useEffect(() => { fetchChecklistTemplates(); }, [fetchChecklistTemplates]);
 
@@ -1071,188 +892,6 @@ const TicketsTab = () => {
                     </div>
                   )}
                 </div>
-              </CardContent>
-            </CollapsibleContent>
-          </Card>
-        </Collapsible>
-
-        <Collapsible open={sectionsOpen.sla} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, sla: open }))}>
-          <Card>
-            <CollapsibleTrigger className="w-full">
-              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
-                  <Timer className="w-5 h-5" />
-                  SLA-policy
-                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.sla ? '−' : '+'}</span>
-                </CardTitle>
-                <CardDescription>
-                  Service Level Agreement: hur snabbt ärenden ska kvitteras (svar) och stängas (lösning) per prioritet.
-                </CardDescription>
-              </CardHeader>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <CardContent className="space-y-4">
-                <p className="text-xs text-muted-foreground">
-                  SLA räknas från ärendets skapad-tid. Svar = tid till första statusbyte (open → annat). Lösning = tid till resolved/closed.
-                  Default-policyn gäller om inget annat anges. Företag kan ha egna overrides — välj i listan nedan.
-                </p>
-                <div className="flex items-center gap-3">
-                  <label className="text-xs font-medium text-muted-foreground shrink-0">Policy för:</label>
-                  <UiSelect value={slaScope} onValueChange={setSlaScope}>
-                    <UiSelectTrigger className="w-full md:w-72 h-9" aria-label="Välj SLA-scope">
-                      <UiSelectValue />
-                    </UiSelectTrigger>
-                    <UiSelectContent>
-                      <UiSelectItem value="default">Default (alla företag)</UiSelectItem>
-                      {companies.map(c => (
-                        <UiSelectItem key={c.id} value={c.id}>
-                          {c.name}{companiesWithOverrides.has(c.id) ? ' • har egen' : ''}
-                        </UiSelectItem>
-                      ))}
-                    </UiSelectContent>
-                  </UiSelect>
-                  {slaScope !== 'default' && !scopeHasOverrides && (
-                    <Badge variant="outline" className="text-xs shrink-0">Använder default</Badge>
-                  )}
-                  {slaScope !== 'default' && scopeHasOverrides && !slaDisabled && (
-                    <Badge variant="secondary" className="text-xs shrink-0">Egen override</Badge>
-                  )}
-                  {slaScope !== 'default' && slaDisabled && (
-                    <Badge variant="outline" className="text-xs shrink-0 border-destructive/40 text-destructive">SLA inaktiverad</Badge>
-                  )}
-                </div>
-
-                {selectedCompany && (
-                  <div className="flex items-start gap-3 p-3 mb-3 border rounded-lg bg-muted/30">
-                    <Switch
-                      id="sla-enabled-toggle"
-                      checked={!slaDisabled}
-                      onCheckedChange={(v) => handleToggleSlaDisabled(!v)}
-                      disabled={isTogglingSla}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <Label htmlFor="sla-enabled-toggle" className="text-sm font-medium cursor-pointer">
-                        SLA aktiverad för {selectedCompany.name}
-                      </Label>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Stänger du av räknas ingen SLA-deadline för det här företaget — passar interna ärenden eller företag utan avtal. Aktiva (öppna) ärenden synkas direkt; stängda lämnas orörda för rapporter.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {isSlaLoading ? (
-                  <div className="text-sm text-muted-foreground p-3">Hämtar policies...</div>
-                ) : slaDisabled ? (
-                  <div className="text-sm text-muted-foreground p-3 border rounded-lg">
-                    SLA är inaktiverat för det här företaget. Inga deadlines beräknas och inga SLA-badges visas. Slå på igen ovan för att återaktivera.
-                  </div>
-                ) : Object.keys(slaDraft).length === 0 ? (
-                  <div className="text-sm text-muted-foreground p-3 border rounded-lg">
-                    Inga policies hittades. Default-policy seedas automatiskt vid serverstart.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="border rounded-lg overflow-hidden">
-                      <table className="w-full text-sm">
-                        <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
-                          <tr>
-                            <th className="text-left px-3 py-2 font-medium">Prioritet</th>
-                            <th className="text-left px-3 py-2 font-medium">Svar inom</th>
-                            <th className="text-left px-3 py-2 font-medium">Lösning inom</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {PRIO_ORDER.map(prio => {
-                            const d = slaDraft[prio];
-                            if (!d) return null;
-                            const prioLabel = prio === 'critical' ? 'Kritisk' : prio === 'high' ? 'Hög' : prio === 'medium' ? 'Medium' : 'Låg';
-                            return (
-                              <tr key={prio}>
-                                <td className="px-3 py-2 font-medium align-middle">{prioLabel}</td>
-                                <td className="px-3 py-2">
-                                  <div className="flex items-center gap-2">
-                                    <Input
-                                      type="number"
-                                      min={1}
-                                      value={d.response.value}
-                                      onChange={(e) => handleSlaUpdate(prio, 'response', { value: Math.max(0, Number(e.target.value) || 0) })}
-                                      className="w-20 h-9"
-                                      aria-label={`Svarstid för ${prioLabel}`}
-                                    />
-                                    <UiSelect
-                                      value={d.response.unit}
-                                      onValueChange={(v) => handleSlaUpdate(prio, 'response', { unit: v as SlaUnit })}
-                                    >
-                                      <UiSelectTrigger className="w-28 h-9" aria-label={`Tidsenhet för svar ${prioLabel}`}>
-                                        <UiSelectValue />
-                                      </UiSelectTrigger>
-                                      <UiSelectContent>
-                                        <UiSelectItem value="min">Minuter</UiSelectItem>
-                                        <UiSelectItem value="h">Timmar</UiSelectItem>
-                                        <UiSelectItem value="d">Dygn</UiSelectItem>
-                                      </UiSelectContent>
-                                    </UiSelect>
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2">
-                                  <div className="flex items-center gap-2">
-                                    <Input
-                                      type="number"
-                                      min={1}
-                                      value={d.resolution.value}
-                                      onChange={(e) => handleSlaUpdate(prio, 'resolution', { value: Math.max(0, Number(e.target.value) || 0) })}
-                                      className="w-20 h-9"
-                                      aria-label={`Lösningstid för ${prioLabel}`}
-                                    />
-                                    <UiSelect
-                                      value={d.resolution.unit}
-                                      onValueChange={(v) => handleSlaUpdate(prio, 'resolution', { unit: v as SlaUnit })}
-                                    >
-                                      <UiSelectTrigger className="w-28 h-9" aria-label={`Tidsenhet för lösning ${prioLabel}`}>
-                                        <UiSelectValue />
-                                      </UiSelectTrigger>
-                                      <UiSelectContent>
-                                        <UiSelectItem value="min">Minuter</UiSelectItem>
-                                        <UiSelectItem value="h">Timmar</UiSelectItem>
-                                        <UiSelectItem value="d">Dygn</UiSelectItem>
-                                      </UiSelectContent>
-                                    </UiSelect>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    <div className="flex items-center justify-between gap-3 flex-wrap">
-                      <p className="text-xs text-muted-foreground">
-                        {slaIsDirty ? 'Osparade ändringar' : 'Inga ändringar'}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        {slaScope !== 'default' && scopeHasOverrides && (
-                          <Button variant="outline" size="sm" onClick={handleSlaRemoveOverrides} disabled={isSavingSla}>
-                            <Trash2 className="w-4 h-4 mr-2 text-destructive" />
-                            Ta bort override
-                          </Button>
-                        )}
-                        <Button variant="outline" size="sm" onClick={handleSlaReset} disabled={!slaIsDirty || isSavingSla}>
-                          <RotateCcw className="w-4 h-4 mr-2" />
-                          Återställ
-                        </Button>
-                        <Button size="sm" onClick={handleSlaSave} disabled={!slaIsDirty || isSavingSla}>
-                          <Save className="w-4 h-4 mr-2" />
-                          {isSavingSla ? 'Sparar...' : (slaScope !== 'default' && !scopeHasOverrides ? 'Spara som override' : 'Spara')}
-                        </Button>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Ändringar påverkar bara <strong>nya ärenden</strong>. Existerande ärenden behåller sina ursprungliga deadlines.
-                      {slaScope !== 'default' && ' Företag utan egen override använder default-policyn.'}
-                    </p>
-                  </div>
-                )}
               </CardContent>
             </CollapsibleContent>
           </Card>

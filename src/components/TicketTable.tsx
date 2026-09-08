@@ -6,7 +6,6 @@ import { ArrowUpDown, Loader2, X } from 'lucide-react';
 import { Ticket, User, TicketStatus, TicketPriority } from '@/types/ticket';
 import { PriorityBadge } from './PriorityBadge';
 import { StatusBadge } from './StatusBadge';
-import { SLABadge } from './SLABadge';
 import { CategoryBadge } from './CategoryBadge';
 import { TagBadges } from './TagBadges';
 import { cn } from '@/lib/utils';
@@ -383,7 +382,7 @@ export const TicketTable = memo(function TicketTable({
                   />
                 </TableCell>
               )}
-              {/* Ärende: Title + Category/Tags/SLA row */}
+              {/* Ärende: Title + Category/Tags row */}
               <TableCell className={cn("py-2.5 px-4", compact && "py-1.5")}>
                 <div className="flex flex-col gap-1">
                   <span className="font-semibold text-foreground group-hover:text-primary transition-colors duration-200">
@@ -394,12 +393,6 @@ export const TicketTable = memo(function TicketTable({
                     {ticket.tags && ticket.tags.length > 0 && (
                       <TagBadges tags={ticket.tags} maxDisplay={2} />
                     )}
-                    <SLABadge
-                      deadline={ticket.sla_resolution_deadline}
-                      met={ticket.sla_resolution_met}
-                      pausedAt={ticket.sla_paused_at}
-                      ticketStatus={ticket.status}
-                    />
                   </div>
                 </div>
               </TableCell>

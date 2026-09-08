@@ -14,7 +14,6 @@ const sectionLabels: Record<string, string> = {
   kb: 'Kunskapsbas',
   companies: 'Företag',
   recurring: 'Återkommande',
-  invoices: 'Fakturering',
   archive: 'Arkiv',
   users: 'Kontakter',
   reports: 'Rapporter',

@@ -33,7 +33,6 @@ const PublicKBArticle = lazy(() => import("./pages/PublicKBArticle"));
 const Recurring = lazy(() => import("./pages/Recurring"));
 const CompanyList = lazy(() => import("./pages/CompanyList"));
 const CompanyDetail = lazy(() => import("./pages/CompanyDetail"));
-const Invoices = lazy(() => import("./pages/Invoices"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -189,7 +188,6 @@ export const AppRoutes = () => {
           <Route path="/recurring" element={withBoundary(<ProtectedRoute><Recurring /></ProtectedRoute>)} />
           <Route path="/companies" element={withBoundary(<ProtectedRoute><CompanyList /></ProtectedRoute>)} />
           <Route path="/companies/:id" element={withBoundary(<ProtectedRoute><CompanyDetail /></ProtectedRoute>)} />
-          <Route path="/invoices" element={withBoundary(<ProtectedRoute><Invoices /></ProtectedRoute>)} />
           <Route path="/archive" element={withBoundary(<ProtectedRoute><Archive /></ProtectedRoute>)} />
           <Route path="/users" element={withBoundary(<ProtectedRoute><UserList /></ProtectedRoute>)} />
           <Route path="/reports" element={withBoundary(<ProtectedRoute><Reports /></ProtectedRoute>)} />

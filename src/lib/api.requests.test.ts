@@ -5,7 +5,7 @@
  *
  * Den här filen täcker det api.test.ts INTE gör:
  *  1. Querystring-byggarna med egen villkorslogik (getKbArticles, getRequesterAnalytics,
- *     getKpiTickets, getSLAPolicies, getInvoices) — exakt URL för olika parameterkombinationer,
+ *     getKpiTickets) — exakt URL för olika parameterkombinationer,
  *     utelämnade parametrar, 'all'-värden och specialtecken som ska/inte ska URL-kodas.
  *  2. request()s svarsgrenar (rad 160–178): 204 → null, content-type-grenar, JSON.parse-fallback.
  *  3. API_BASE_URL (rad 3) — läses en gång vid modulladdning, båda grenarna (env satt/ej satt).
@@ -196,67 +196,6 @@ describe('getKpiTickets — querystring', () => {
     await api.getKpiTickets('aging', '2026', '7');
 
     expect(urlOfCall(fetchMock.mock.calls[0])).toBe(`${BASE}/reports/kpi-tickets?scope=aging`);
-  });
-});
-
-describe('getSLAPolicies — querystring med default-fallback', () => {
-  it('company_id satt → company_id i query (URL-kodad via encodeURIComponent)', async () => {
-    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve([]) }));
-    const api = await freshApi();
-    await api.getSLAPolicies('comp-1');
-
-    expect(urlOfCall(fetchMock.mock.calls[0])).toBe(`${BASE}/sla?company_id=comp-1`);
-  });
-
-  it('company_id utelämnad → default-fallback "?company_id=default"', async () => {
-    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve([]) }));
-    const api = await freshApi();
-    await api.getSLAPolicies();
-
-    expect(urlOfCall(fetchMock.mock.calls[0])).toBe(`${BASE}/sla?company_id=default`);
-  });
-
-  it('company_id tom sträng → falsy → default-fallback (inte "?company_id=")', async () => {
-    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve([]) }));
-    const api = await freshApi();
-    await api.getSLAPolicies('');
-
-    expect(urlOfCall(fetchMock.mock.calls[0])).toBe(`${BASE}/sla?company_id=default`);
-  });
-
-  it('specialtecken i company_id kodas med encodeURIComponent (mellanslag → %20, "&" → %26)', async () => {
-    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve([]) }));
-    const api = await freshApi();
-    await api.getSLAPolicies('a b&c');
-
-    expect(urlOfCall(fetchMock.mock.calls[0])).toBe(`${BASE}/sla?company_id=a%20b%26c`);
-  });
-});
-
-describe('getInvoices — querystring (OBS: ingen URL-kodning i källkoden)', () => {
-  it('company_id satt → company_id i query', async () => {
-    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve([]) }));
-    const api = await freshApi();
-    await api.getInvoices('comp-1');
-
-    expect(urlOfCall(fetchMock.mock.calls[0])).toBe(`${BASE}/billing/invoices?company_id=comp-1`);
-  });
-
-  it('company_id utelämnad → ingen "?" alls', async () => {
-    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve([]) }));
-    const api = await freshApi();
-    await api.getInvoices();
-
-    expect(urlOfCall(fetchMock.mock.calls[0])).toBe(`${BASE}/billing/invoices`);
-  });
-
-  it('specialtecken i company_id URL-kodas INTE (dokumenterar faktiskt beteende — rå template-literal)', async () => {
-    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve([]) }));
-    const api = await freshApi();
-    await api.getInvoices('a&b');
-
-    // encodeURIComponent skulle ha gett "a%26b" — koden gör det inte, så "&" slinker igenom rått.
-    expect(urlOfCall(fetchMock.mock.calls[0])).toBe(`${BASE}/billing/invoices?company_id=a&b`);
   });
 });
 

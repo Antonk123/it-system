@@ -32,7 +32,7 @@ never use. The concrete differences:
 - **Ticket → invoice in the same system.** Time logged against a ticket rolls up into
   per-customer invoicing without exporting to a second tool.
 - **Built around the technician's loop**, not a project board: email-to-ticket, a knowledge base
-  the AI cites back to you, SLA tracking, and a public deflection portal that tries to answer the
+  the AI cites back to you, and a public deflection portal that tries to answer the
   customer's question before it becomes a ticket at all.
 
 **Where it is genuinely weaker.** Read this before you install it:
@@ -66,9 +66,8 @@ cite. Optional Claude-powered draft replies, ticket summaries, category suggesti
 unauthenticated deflection portal that offers a KB-backed answer before a ticket is filed. All AI
 is opt-in: leave `ANTHROPIC_API_KEY` unset and everything else behaves identically.
 
-**Time & billing** — time tracking per ticket, rolled up into per-customer invoices with gapless
-invoice numbering: drafts carry no number, and the next number in the series is assigned when an
-invoice is issued — so a discarded draft never leaves a hole in the sequence.
+**Time tracking** — record time, work dates and notes per ticket. Historical invoiced entries
+remain locked to preserve their original records.
 
 **Communication** — email-to-ticket over IMAP (basic auth or Microsoft 365 OAuth2 client
 credentials), outbound notification mail, and web push notifications.
@@ -77,7 +76,7 @@ credentials), outbound notification mail, and web push notifications.
 HMAC-signed outbound webhooks, and optional OIDC SSO (e.g. Microsoft Entra ID) alongside password
 login.
 
-**Operations** — SLA tracking with escalation, automatic closing of idle tickets, scheduled
+**Operations** — automatic closing of idle tickets, scheduled
 backups with retention and an optional off-site copy step, an audit log, and six UI themes.
 
 ![Ticket detail](docs/screenshots/ticket-detail.png)
@@ -141,7 +140,7 @@ layer and no shared database between customers — isolation is "separate deploy
 │                                                              │
 │  background schedulers (node-cron):                          │
 │   reminders · backups · auto-close · recurring tickets ·     │
-│   webhook retry · SLA breach checks · push aging             │
+│   webhook retry · push aging                                │
 │                                                              │
 │  IMAP poller (ImapFlow + @azure/msal-node) → mail-to-ticket  │
 └───────────┬──────────────────────────────┬───────────────────┘
@@ -275,7 +274,7 @@ contributions.
 ## Project status
 
 IT-Ticket runs in daily production use at one organization and is developed as a general-purpose
-product rather than a one-off internal tool. Core ticketing, billing, email and AI features are
+product rather than a one-off internal tool. Core ticketing, time tracking, email and AI features are
 solid and covered by the test suite; expect rougher edges than a project with years of external
 users behind it. Issues and pull requests are welcome.
 

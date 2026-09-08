@@ -45,7 +45,6 @@ vi.mock('../lib/email.js', () => ({
   sendTicketReceivedConfirmation: vi.fn(async () => {}),
   sendTicketReplyEmail: vi.fn(async () => {}),
   sendAgentReplyNotificationEmail: vi.fn(async () => {}),
-  sendSlaBreachEmail: vi.fn(async () => {}),
   sendTicketReminderEmail: vi.fn(async () => {}),
   sendPasswordResetEmail: vi.fn(async () => {}),
 }));

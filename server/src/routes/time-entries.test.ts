@@ -95,10 +95,10 @@ function postEntry(body: Record<string, unknown>) {
 }
 
 describe('POST /api/time-entries/:ticketId — billable + work_date', () => {
-  it('defaults billable to true (1) when not provided', async () => {
+  it('defaults new entries to non-billable (0)', async () => {
     const res = await postEntry({ duration_minutes: 60 });
     expect(res.status).toBe(201);
-    expect(res.body.billable).toBe(1);
+    expect(res.body.billable).toBe(0);
   });
 
   it('persists billable=false and work_date when provided', async () => {
@@ -148,7 +148,7 @@ describe('PUT /api/time-entries/:ticketId/:id — edit', () => {
     expect(res.status).toBe(404);
   });
 
-  it('forbids editing an already-invoiced entry (409) — would desync the invoice', async () => {
+  it('preserves an already-invoiced entry against editing and deletion (409)', async () => {
     const created = await postEntry({ duration_minutes: 20 });
     const id = created.body.id;
     // Stamp with a real invoice (invoice_id has a FK to invoices(id)).
@@ -163,6 +163,12 @@ describe('PUT /api/time-entries/:ticketId/:id — edit', () => {
       .set('Authorization', `Bearer ${owner.token}`).set('x-csrf-token', owner.csrf)
       .send({ duration_minutes: 25 });
     expect(res.status).toBe(409);
+    const deletion = await owner.agent.delete(`/api/time-entries/${ticketId}/${id}`)
+      .set('Authorization', `Bearer ${owner.token}`).set('x-csrf-token', owner.csrf);
+    expect(deletion.status).toBe(409);
+    expect(db.prepare('SELECT invoice_id, duration_minutes FROM time_entries WHERE id = ?').get(id))
+      .toEqual({ invoice_id: invId, duration_minutes: 20 });
+
   });
 });
 

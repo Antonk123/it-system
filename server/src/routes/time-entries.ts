@@ -93,7 +93,7 @@ router.post('/:ticketId', authenticate, (req: AuthRequest, res) => {
     }
 
     const noteValue = (note as string | null | undefined) ?? null;
-    const billableValue = billable === undefined ? 1 : (billable ? 1 : 0);
+    const billableValue = billable ? 1 : 0;
     const workDateValue = (work_date as string | null | undefined) ?? null;
 
     // Verify ticket exists and check ownership
@@ -211,9 +211,9 @@ router.delete('/:ticketId/:id', authenticate, (req: AuthRequest, res) => {
     const { ticketId, id } = req.params;
 
     const entry = db.prepare(`
-      SELECT id, user_id FROM time_entries
+      SELECT id, user_id, invoice_id FROM time_entries
       WHERE id = ? AND ticket_id = ?
-    `).get(id, ticketId) as { id: string; user_id: string | null } | undefined;
+    `).get(id, ticketId) as { id: string; user_id: string | null; invoice_id: string | null } | undefined;
 
     if (!entry) {
       res.status(404).json({ error: 'Time entry not found' });
@@ -223,6 +223,11 @@ router.delete('/:ticketId/:id', authenticate, (req: AuthRequest, res) => {
     // Only the creator or an admin can delete a time entry
     if (!isEffectiveAdmin(req) && entry.user_id !== req.user!.id) {
       res.status(403).json({ error: 'Du kan bara ta bort dina egna tidsregistreringar' });
+      return;
+    }
+
+    if (entry.invoice_id) {
+      res.status(409).json({ error: 'Tidsposten är redan fakturerad och kan inte tas bort' });
       return;
     }
 

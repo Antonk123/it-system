@@ -18,8 +18,7 @@ import { randomUUID } from 'crypto';
  *  5. Visibility/access: GET list + GET /:id do NOT filter by ticket access — any
  *     authenticated user can read any ticket (asserts the ACTUAL handler
  *     behavior). The access gate lives on PUT /:id instead (assigned tickets).
- *  6. Custom-field round-trip + SLA deadline set on create (default SLA policies
- *     are seeded by initializeDatabase()).
+ *  6. Custom-field round-trip + no new SLA deadlines; historical SLA is preserved.
  *
  * Harness mirrors checklists.test.ts / app.test.ts: a UNIQUE DB_PATH (-tickets
  * suffix) is set in vi.hoisted() BEFORE any import that pulls in db/connection.ts.
@@ -438,7 +437,7 @@ describe('Read visibility — GET list/detail do NOT filter by ticket access', (
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('Custom fields round-trip + SLA deadline on create', () => {
+describe('Custom fields round-trip + retired SLA', () => {
   it('persists customFields and returns them via GET /:id', async () => {
     const res = await admin.agent
       .post('/api/tickets')
@@ -473,7 +472,7 @@ describe('Custom fields round-trip + SLA deadline on create', () => {
     expect(get.body.description).toContain('Windows 11');
   });
 
-  it('sets SLA deadlines on create from the seeded default policy', async () => {
+  it('does not apply historical SLA policies to newly created tickets', async () => {
     const res = await admin.agent
       .post('/api/tickets')
       .set('Authorization', `Bearer ${admin.token}`)
@@ -482,111 +481,57 @@ describe('Custom fields round-trip + SLA deadline on create', () => {
     expect(res.status).toBe(201);
     const id = res.body.id as string;
 
-    // applySLAToTicket runs synchronously after the create transaction; the
-    // default 'critical' policy (seeded by initializeDatabase) sets both deadlines.
+    // Historical policies remain in the database, but are no longer applied.
     const row = db.prepare(
       'SELECT sla_response_deadline, sla_resolution_deadline FROM tickets WHERE id = ?'
     ).get(id) as { sla_response_deadline: string | null; sla_resolution_deadline: string | null };
-    expect(row.sla_response_deadline).toBeTruthy();
-    expect(row.sla_resolution_deadline).toBeTruthy();
-    // Resolution deadline must be after the response deadline (240m > 30m).
-    expect(new Date(row.sla_resolution_deadline!).getTime())
-      .toBeGreaterThan(new Date(row.sla_response_deadline!).getTime());
+    expect(row.sla_response_deadline).toBeNull();
+    expect(row.sla_resolution_deadline).toBeNull();
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// H4 regression: recalculateSLAOnPriorityChange (lib/slaHelper.ts) exists but
-// was never wired up — priority changes left stale SLA deadlines from the
-// original priority. Covers both PUT /:id and PUT /bulk.
-describe('SLA recalculation on priority change (H4 regression)', () => {
-  it('recalculates SLA deadlines when priority changes via PUT /:id', async () => {
-    const create = await admin.agent
-      .post('/api/tickets')
-      .set('Authorization', `Bearer ${admin.token}`)
-      .set('x-csrf-token', admin.csrf)
-      .send({ title: 'Priority SLA ticket', description: 'starts medium', priority: 'medium' });
+// Existing SLA data stays unchanged while tickets continue to work normally.
+describe('Retired SLA history', () => {
+  it.each([
+    { status: 'in-progress' },
+    { status: 'waiting' },
+    { status: 'resolved' },
+    { priority: 'critical' },
+  ])('preserves historical SLA fields on ticket update %j', async (updates) => {
+    const create = await admin.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ title: 'Historical SLA', description: 'Preserve stored history', priority: 'medium' });
     expect(create.status).toBe(201);
     const id = create.body.id as string;
-
-    const before = db.prepare(
-      'SELECT sla_response_deadline, sla_resolution_deadline FROM tickets WHERE id = ?'
-    ).get(id) as { sla_response_deadline: string; sla_resolution_deadline: string };
-    expect(before.sla_response_deadline).toBeTruthy();
-
-    const put = await admin.agent
-      .put(`/api/tickets/${id}`)
-      .set('Authorization', `Bearer ${admin.token}`)
-      .set('x-csrf-token', admin.csrf)
-      .send({ priority: 'critical' });
-    expect(put.status).toBe(200);
-    expect(put.body.priority).toBe('critical');
-
-    const after = db.prepare(
-      'SELECT sla_response_deadline, sla_resolution_deadline FROM tickets WHERE id = ?'
-    ).get(id) as { sla_response_deadline: string; sla_resolution_deadline: string };
-
-    // Default 'critical' policy (30m/240m) is tighter than 'medium' (240m/1440m)
-    // → deadlines must move earlier once recalculateSLAOnPriorityChange fires.
-    expect(new Date(after.sla_response_deadline).getTime())
-      .toBeLessThan(new Date(before.sla_response_deadline).getTime());
-    expect(new Date(after.sla_resolution_deadline).getTime())
-      .toBeLessThan(new Date(before.sla_resolution_deadline).getTime());
+    db.prepare(`UPDATE tickets SET sla_response_deadline = '2026-01-01T00:00:00.000Z',
+      sla_resolution_deadline = '2026-01-02T00:00:00.000Z', sla_response_met = 1,
+      sla_paused_duration = 15 WHERE id = ?`).run(id);
+    const readHistory = () => db.prepare(`SELECT sla_response_deadline, sla_resolution_deadline,
+      sla_response_met, sla_resolution_met, sla_paused_at, sla_paused_duration FROM tickets WHERE id = ?`).get(id);
+    const before = readHistory();
+    const result = await admin.agent.put(`/api/tickets/${id}`)
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).send(updates);
+    expect(result.status).toBe(200);
+    expect(result.body).toMatchObject(updates);
+    expect(readHistory()).toEqual(before);
   });
 
-  it('leaves SLA deadlines untouched when priority is unchanged via PUT /:id', async () => {
-    const create = await admin.agent
-      .post('/api/tickets')
-      .set('Authorization', `Bearer ${admin.token}`)
-      .set('x-csrf-token', admin.csrf)
-      .send({ title: 'Priority unchanged ticket', description: 'stays medium', priority: 'medium' });
+  it('preserves historical deadlines during bulk priority updates', async () => {
+    const create = await admin.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ title: 'Bulk history', description: 'Preserve SLA', priority: 'low' });
     expect(create.status).toBe(201);
     const id = create.body.id as string;
-
-    const before = db.prepare(
-      'SELECT sla_response_deadline FROM tickets WHERE id = ?'
-    ).get(id) as { sla_response_deadline: string };
-
-    const put = await admin.agent
-      .put(`/api/tickets/${id}`)
-      .set('Authorization', `Bearer ${admin.token}`)
-      .set('x-csrf-token', admin.csrf)
-      .send({ priority: 'medium', notes: 'just a note update' });
-    expect(put.status).toBe(200);
-
-    const after = db.prepare(
-      'SELECT sla_response_deadline FROM tickets WHERE id = ?'
-    ).get(id) as { sla_response_deadline: string };
-    expect(after.sla_response_deadline).toBe(before.sla_response_deadline);
-  });
-
-  it('recalculates SLA deadlines when priority changes via PUT /bulk', async () => {
-    const create = await admin.agent
-      .post('/api/tickets')
-      .set('Authorization', `Bearer ${admin.token}`)
-      .set('x-csrf-token', admin.csrf)
-      .send({ title: 'Bulk priority SLA ticket', description: 'starts low', priority: 'low' });
-    expect(create.status).toBe(201);
-    const id = create.body.id as string;
-
-    const before = db.prepare(
-      'SELECT sla_response_deadline FROM tickets WHERE id = ?'
-    ).get(id) as { sla_response_deadline: string };
-    expect(before.sla_response_deadline).toBeTruthy();
-
-    const bulk = await admin.agent
-      .put('/api/tickets/bulk')
-      .set('Authorization', `Bearer ${admin.token}`)
-      .set('x-csrf-token', admin.csrf)
+    const deadline = '2026-01-01T00:00:00.000Z';
+    db.prepare('UPDATE tickets SET sla_response_deadline = ? WHERE id = ?').run(deadline, id);
+    const result = await admin.agent.put('/api/tickets/bulk')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
       .send({ ids: [id], updates: { priority: 'critical' } });
-    expect(bulk.status).toBe(200);
-    expect(bulk.body.updated).toBe(1);
-
-    const after = db.prepare(
-      'SELECT sla_response_deadline FROM tickets WHERE id = ?'
-    ).get(id) as { sla_response_deadline: string };
-    expect(new Date(after.sla_response_deadline).getTime())
-      .toBeLessThan(new Date(before.sla_response_deadline).getTime());
+    expect(result.status).toBe(200);
+    expect(result.body.updated).toBe(1);
+    expect(db.prepare('SELECT priority, sla_response_deadline FROM tickets WHERE id = ?').get(id))
+      .toEqual({ priority: 'critical', sla_response_deadline: deadline });
   });
 });
 

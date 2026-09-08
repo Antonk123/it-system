@@ -356,3 +356,11 @@ describe('Ticket lifecycle (create → status transitions)', () => {
     expect(res.status).toBe(400);
   });
 });
+
+
+describe('Retired SLA and billing endpoints', () => {
+  it.each(['/api/sla', '/api/billing/invoices', '/api/billing/rates/example'])('does not expose %s', async (path) => {
+      const response = await request(app).get(path);
+      expect(response.status).toBe(404);
+    });
+});

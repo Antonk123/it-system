@@ -14,9 +14,9 @@ info:
 
     This spec documents the full API surface: 137 operations
     across every route file — health/CSRF, auth, tickets, categories,
-    contacts, companies, billing, time-entries, kb, public, users, API keys,
+    contacts, companies, time-entries, kb, public, users, API keys,
     settings, comments, attachments, shares, links, checklists, checklist
-    templates, templates, template fields, tags, SLA, recurring tickets,
+    templates, template fields, tags, recurring tickets,
     reports, backup, push notifications, webhooks, and inbound email.
 
 
@@ -71,8 +71,6 @@ tags:
     description: Kontakter/beställare
   - name: Companies
     description: Företag/kunder
-  - name: Billing
-    description: Timpriser och fakturor (admin)
   - name: Time entries
     description: Tidsrapportering per ärende
   - name: Knowledge base
@@ -97,8 +95,6 @@ tags:
     description: Custom form fields belonging to a dynamic template
   - name: Tags
     description: Ticket labels
-  - name: SLA
-    description: Response/resolution time policies
   - name: Recurring tickets
     description: Templates that auto-generate tickets on a schedule
   - name: Users
@@ -760,197 +756,6 @@ paths:
           csrfToken: []
       responses:
         "200": { $ref: "#/components/responses/Message" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /billing/rates/{companyId}:
-    parameters:
-      - { name: companyId, in: path, required: true, schema: { type: string } }
-    get:
-      tags: [Billing]
-      summary: Hämta timpris (admin)
-      responses:
-        "200":
-          description: Timpris för företaget (kroppen är `null` om inget timpris är satt)
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/BillingRate" }
-    put:
-      tags: [Billing]
-      summary: Sätt timpris (admin)
-      security:
-        - bearerAuth: []
-          csrfToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [rate_per_hour]
-              properties:
-                rate_per_hour: { type: number, minimum: 0, exclusiveMinimum: true }
-                currency: { type: string, default: SEK }
-      responses:
-        "200":
-          description: Uppdaterat timpris
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/BillingRate" }
-        "400": { $ref: "#/components/responses/Error" }
-
-  /billing/invoices:
-    get:
-      tags: [Billing]
-      summary: Lista fakturor (admin)
-      parameters:
-        - { name: company_id, in: query, schema: { type: string } }
-      responses:
-        "200":
-          description: Fakturor
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/Invoice" }
-    post:
-      tags: [Billing]
-      summary: Skapa faktura (admin)
-      description: >-
-        Serverberäknar totaler och stämplar fakturerade tidsposter. Fakturan skapas som
-        utkast UTAN löpnummer — numret tilldelas först när fakturan lämnar draft (se
-        PUT /billing/invoices/{id}/status), så att ett raderat utkast inte lämnar hål i serien.
-      security:
-        - bearerAuth: []
-          csrfToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [company_id, period_start, period_end, lines]
-              properties:
-                company_id: { type: string }
-                period_start: { type: string, format: date-time }
-                period_end: { type: string, format: date-time }
-                currency: { type: string, default: SEK }
-                vat_rate: { type: number, minimum: 0, maximum: 1, description: "Momssats 0–1 (default 0.25)" }
-                lines:
-                  type: array
-                  items: { $ref: "#/components/schemas/InvoiceLineInput" }
-      responses:
-        "201":
-          description: Skapad faktura
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Invoice" }
-        "400": { $ref: "#/components/responses/Error" }
-        "409":
-          description: Överlappande fakturaperiod för företaget
-          $ref: "#/components/responses/Error"
-
-  /billing/invoices/preview:
-    post:
-      tags: [Billing]
-      summary: Förhandsgranska faktura (admin)
-      description: Aggregerar billbar, ej fakturerad tid i perioden → rader + totaler + moms.
-      security:
-        - bearerAuth: []
-          csrfToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [company_id, period_start, period_end]
-              properties:
-                company_id: { type: string }
-                period_start: { type: string, format: date-time }
-                period_end: { type: string, format: date-time }
-      responses:
-        "200":
-          description: Förhandsgranskning
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  lines:
-                    type: array
-                    items: { $ref: "#/components/schemas/InvoiceLine" }
-                  total_hours: { type: number }
-                  total_amount: { type: number }
-                  vat_rate: { type: number }
-                  vat_amount: { type: number }
-                  total_incl_vat: { type: number }
-        "400": { $ref: "#/components/responses/Error" }
-
-  /billing/invoices/{id}:
-    parameters:
-      - { name: id, in: path, required: true, schema: { type: string } }
-    get:
-      tags: [Billing]
-      summary: Hämta faktura med rader (admin)
-      responses:
-        "200":
-          description: Fakturan
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - { $ref: "#/components/schemas/Invoice" }
-                  - type: object
-                    properties:
-                      lines:
-                        type: array
-                        items: { $ref: "#/components/schemas/InvoiceLine" }
-        "404": { $ref: "#/components/responses/NotFound" }
-    delete:
-      tags: [Billing]
-      summary: Radera fakturautkast (admin)
-      description: Endast utkast (draft) kan raderas.
-      security:
-        - bearerAuth: []
-          csrfToken: []
-      responses:
-        "200": { $ref: "#/components/responses/Message" }
-        "400":
-          description: Icke-utkast kan inte raderas
-          $ref: "#/components/responses/Error"
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /billing/invoices/{id}/status:
-    parameters:
-      - { name: id, in: path, required: true, schema: { type: string } }
-    put:
-      tags: [Billing]
-      summary: Ändra fakturastatus (admin)
-      description: >-
-        Endast framåt: draft → sent → paid. Vid utträde ur draft (både →sent och →paid)
-        tilldelas fakturans gapless löpnummer i samma transaktion. Ett numrerat objekt kan
-        varken raderas eller gå tillbaka till draft, så serien får aldrig hål.
-      security:
-        - bearerAuth: []
-          csrfToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [status]
-              properties:
-                status: { type: string, enum: [draft, sent, paid] }
-      responses:
-        "200":
-          description: Uppdaterad faktura
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Invoice" }
-        "400":
-          description: Ogiltig bakåt-övergång eller ogiltigt värde
-          $ref: "#/components/responses/Error"
         "404": { $ref: "#/components/responses/NotFound" }
 
   /time-entries/{ticketId}:
@@ -3021,98 +2826,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  /sla:
-    get:
-      operationId: slaRulesList
-      tags: [SLA]
-      summary: List SLA policies
-      description: >
-        Returns SLA policies (per-priority response/resolution time targets in
-        minutes). Available to any authenticated user. These policies are read
-        elsewhere (ticket creation/update) to stamp `sla_response_deadline` and
-        `sla_resolution_deadline` on a ticket — this route only manages the
-        policy rows themselves, it never touches a ticket.
-      parameters:
-        - name: company_id
-          in: query
-          required: false
-          description: >
-            Optional filter. `default` returns the global policies (rows with
-            `company_id IS NULL`). Any other non-empty value is matched
-            literally against `company_id` — if it does not correspond to a
-            real company, the result is an empty array (there is no `all`
-            sentinel; the code has no special-case for it). Omitting the
-            parameter entirely returns every policy for every company plus
-            the defaults, ordered by `company_id` then `priority`.
-          schema: { type: string }
-      responses:
-        "200":
-          description: SLA policies matching the filter
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/SlaPolicy" }
-    put:
-      operationId: slaRulesUpdate
-      tags: [SLA]
-      summary: Replace SLA policies for a company (or the global default)
-      description: >
-        Admin-only: policy changes affect every ticket's SLA deadline
-        calculation, so non-admins may not retune them. Atomically deletes all
-        existing policies for the given `company_id` (or, when `company_id` is
-        omitted/null, all global-default policies where `company_id IS NULL`)
-        and inserts the supplied `policies`. Each entry is silently skipped
-        (not an error) if `priority` is not one of `low`, `medium`, `high`,
-        `critical`, or if `response_time_minutes`/`resolution_time_minutes` is
-        missing or falsy — the response simply omits invalid entries, and can
-        be an empty array if every entry was invalid. The only validation
-        error is `policies` not being an array. This endpoint only writes
-        policy targets; whether a deadline is currently paused (ticket status
-        `waiting`, tracked via `sla_paused_at` on the ticket) is set elsewhere
-        and is unaffected here. Breach detection/escalation (webhook, email,
-        and push notification to the assignee, or to all admins if
-        unassigned) runs from a background job on a 5-minute cron
-        (`checkSlaBreaches`), not from this endpoint.
-      security:
-        - bearerAuth: []
-          csrfToken: []
-        - apiKeyAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/SlaPoliciesInput" }
-      responses:
-        "200":
-          description: The policies now in effect for this company/default (after skipping invalid entries)
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/SlaPolicy" }
-        "400":
-          description: "`policies` is not an array"
-          $ref: "#/components/responses/Error"
-        "403": { $ref: "#/components/responses/Forbidden" }
-
-  /sla/{id}:
-    parameters:
-      - { name: id, in: path, required: true, schema: { type: string } }
-    delete:
-      operationId: slaRulesDelete
-      tags: [SLA]
-      summary: Delete a single SLA policy
-      description: Deletes one SLA policy row by id. Admin-only.
-      security:
-        - bearerAuth: []
-          csrfToken: []
-        - apiKeyAuth: []
-      responses:
-        "200": { $ref: "#/components/responses/Message" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
   /recurring:
     get:
       operationId: recurringList
@@ -3867,8 +3580,6 @@ paths:
                       - comment.created
                       - contact.created
                       - contact.updated
-                      - sla.response.breached
-                      - sla.resolution.breached
       responses:
         "201":
           description: Created webhook, including the one-time-visible secret
@@ -3950,7 +3661,7 @@ paths:
         first), including HTTP response code, attempt count, and last error.
         There is no dedicated test/redelivery endpoint — deliveries are
         created only as a side effect of the triggering domain events
-        (ticket/contact/SLA changes) via the async dispatcher, not on
+        (ticket/contact changes) via the async dispatcher, not on
         demand through this router.
       security:
         - bearerAuth: []
@@ -4071,6 +3782,8 @@ components:
         priority: { type: string, enum: [low, medium, high, critical] }
         category_id: { type: string, nullable: true }
         requester_id: { type: string, nullable: true }
+        requester_name: { type: string, nullable: true }
+        category_label: { type: string, nullable: true }
         company_id: { type: string, nullable: true }
         assigned_to: { type: string, nullable: true }
         assigned_to_name: { type: string, nullable: true }
@@ -4165,58 +3878,6 @@ components:
         email: { type: string }
         phone: { type: string }
         address: { type: string }
-        sla_disabled: { type: boolean }
-
-    BillingRate:
-      type: object
-      properties:
-        id: { type: string }
-        company_id: { type: string }
-        rate_per_hour: { type: number }
-        currency: { type: string }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
-
-    Invoice:
-      type: object
-      properties:
-        id: { type: string }
-        company_id: { type: string }
-        company_name: { type: string, nullable: true }
-        period_start: { type: string, format: date-time }
-        period_end: { type: string, format: date-time }
-        status: { type: string, enum: [draft, sent, paid] }
-        invoice_number: { type: integer, nullable: true }
-        total_hours: { type: number }
-        total_amount: { type: number }
-        vat_rate: { type: number }
-        vat_amount: { type: number }
-        currency: { type: string }
-        pdf_path: { type: string, nullable: true }
-        created_at: { type: string, format: date-time }
-        sent_at: { type: string, format: date-time, nullable: true }
-        paid_at: { type: string, format: date-time, nullable: true }
-
-    InvoiceLine:
-      type: object
-      properties:
-        id: { type: string }
-        invoice_id: { type: string }
-        ticket_id: { type: string, nullable: true }
-        description: { type: string }
-        hours: { type: number }
-        rate: { type: number }
-        amount: { type: number }
-
-    InvoiceLineInput:
-      type: object
-      required: [description, hours, rate, amount]
-      properties:
-        ticket_id: { type: string }
-        description: { type: string }
-        hours: { type: number }
-        rate: { type: number }
-        amount: { type: number }
 
     TimeEntry:
       type: object
@@ -4795,53 +4456,6 @@ components:
           type: string
           description: Defaults to `#3b82f6` when omitted or falsy.
           example: "#3b82f6"
-
-    SlaPolicy:
-      type: object
-      properties:
-        id: { type: string }
-        company_id:
-          type: string
-          nullable: true
-          description: Null for the global-default policy set.
-        priority: { type: string, enum: [low, medium, high, critical] }
-        response_time_minutes: { type: integer }
-        resolution_time_minutes: { type: integer }
-        created_at: { type: string, format: date-time }
-        updated_at: { type: string, format: date-time }
-      required:
-        - id
-        - company_id
-        - priority
-        - response_time_minutes
-        - resolution_time_minutes
-        - created_at
-        - updated_at
-
-    SlaPolicyInput:
-      type: object
-      description: >
-        Entries with an unrecognized `priority`, or a missing/falsy
-        `response_time_minutes`/`resolution_time_minutes`, are silently
-        dropped rather than rejected.
-      properties:
-        priority: { type: string, enum: [low, medium, high, critical] }
-        response_time_minutes: { type: integer, minimum: 1 }
-        resolution_time_minutes: { type: integer, minimum: 1 }
-
-    SlaPoliciesInput:
-      type: object
-      required: [policies]
-      properties:
-        company_id:
-          type: string
-          nullable: true
-          description: >
-            Omitted or null targets the global-default policy set
-            (`company_id IS NULL`).
-        policies:
-          type: array
-          items: { $ref: "#/components/schemas/SlaPolicyInput" }
 
     RecurringHistoryEntry:
       type: object

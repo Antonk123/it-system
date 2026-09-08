@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**IT-Ticket** är ett ärendehanteringssystem positionerat som open source-alternativ till Jira/Freshdesk för IT-konsulter. Drivs i prod på Prefabmästarna men byggs som generell produkt (multi-user med roller, API-nycklar, webhooks, mail-to-ticket, AI-features, fakturering, SLA).
+**IT-Ticket** är ett ärendehanteringssystem positionerat som open source-alternativ till Jira/Freshdesk för IT-konsulter. Drivs i prod på Prefabmästarna men byggs som generell produkt (multi-user med roller, API-nycklar, webhooks, mail-to-ticket, AI-features, tidsregistrering).
 
 Affärsmodell: open source + betald support/managed hosting. Ingen multi-tenancy — en instans per deployment.
 

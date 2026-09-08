@@ -10,7 +10,6 @@ import { sendTicketClosedEmail, sendTicketCreatedEmail, sendTicketAssignedEmail 
 import { authenticate, requireAdmin, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { applyAutoTags, detectAutoPriority } from '../lib/automationHelper.js';
-import { applySLAToTicket, handleSLAStatusChange, recalculateSLAOnPriorityChange } from '../lib/slaHelper.js';
 import { writeRateLimiter, createRateLimiter } from '../middleware/rateLimit.js';
 
 const aiRateLimiter = createRateLimiter(60 * 1000, 5);
@@ -59,6 +58,8 @@ const TICKET_COLUMNS = [
   'tickets.id', 'tickets.title', 'tickets.description', 'tickets.status', 'tickets.priority',
   'tickets.category_id', 'tickets.requester_id', 'tickets.company_id', 'tickets.assigned_to',
   '(SELECT COALESCE(display_name, email) FROM users WHERE id = tickets.assigned_to) AS assigned_to_name',
+  '(SELECT name FROM contacts WHERE id = tickets.requester_id) AS requester_name',
+  '(SELECT label FROM categories WHERE id = tickets.category_id) AS category_label',
   'tickets.notes', 'tickets.solution', 'tickets.template_id',
   'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at',
   'tickets.ai_suggested_category_id', 'tickets.ai_suggested_confidence',
@@ -840,15 +841,6 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
 
     createTransaction();
 
-    // Apply SLA deadlines based on company + priority. Resolves to default policy
-    // if no company-specific override exists. Non-fatal — a missing policy just
-    // leaves sla_*_deadline NULL and the ticket renders without SLA badges.
-    try {
-      applySLAToTicket(id, resolvedCompanyId, finalPriority);
-    } catch (error) {
-      logger.error('SLA apply error (non-fatal):', { error: String(error) });
-    }
-
     // Auto-tag based on keyword rules (runs after transaction so tags can be created separately)
     try {
       applyAutoTags(id, title, finalDescription);
@@ -1189,7 +1181,6 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
     const bulkUpdate = db.transaction(() => {
       let updatedCount = 0;
       const skipped: string[] = [];
-      const priorityChangedIds: string[] = [];
 
       // Pre-fetch alla berörda ärenden i en enda query för att undvika N+1.
       // created_by ingår (utöver TICKET_COLUMNS) så att behörighetskontrollen
@@ -1240,7 +1231,6 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
           safeUpdates.priority = priority;
           if (priority !== existing.priority) {
             historyInsert.run(uuidv4(), ticketId, userId, 'priority', existing.priority as string, priority);
-            priorityChangedIds.push(ticketId);
           }
         }
         if (category_id !== undefined) {
@@ -1274,22 +1264,10 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
         updatedCount++;
       }
 
-      return { updatedCount, skipped, priorityChangedIds };
+      return { updatedCount, skipped };
     });
 
-    const { updatedCount, skipped, priorityChangedIds } = bulkUpdate();
-
-    // SLA deadline recalculation for tickets whose priority changed — mirrors
-    // the PUT /:id hook; runs after the transaction commits, per-ticket
-    // non-fatal (a recalculation failure for one ticket must not block the
-    // response or affect the others).
-    for (const ticketId of priorityChangedIds) {
-      try {
-        recalculateSLAOnPriorityChange(ticketId, priority);
-      } catch (error) {
-        logger.error('SLA priority-change error (non-fatal):', { error: String(error), ticketId });
-      }
-    }
+    const { updatedCount, skipped } = bulkUpdate();
 
     // Bakåtkompatibelt: `updated` (antal) behålls oförändrat. `skipped` läggs
     // till med ID:n för ärenden anroparen saknar behörighet till.
@@ -1551,27 +1529,6 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
     });
 
     updateTransaction();
-
-    // SLA pause/resume + breach marking on status transitions. Runs after the
-    // main update so the latest status is what handleSLAStatusChange reads.
-    if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
-      try {
-        handleSLAStatusChange(req.params.id as string, existing.status as string, safeUpdates.status as string);
-      } catch (error) {
-        logger.error('SLA status-change error (non-fatal):', { error: String(error) });
-      }
-    }
-
-    // SLA deadline recalculation on priority change — mirrors the status hook
-    // above; runs after the main update, non-fatal (a recalculation failure
-    // must not block the ticket update response).
-    if ('priority' in safeUpdates && safeUpdates.priority !== existing.priority) {
-      try {
-        recalculateSLAOnPriorityChange(req.params.id as string, safeUpdates.priority as string);
-      } catch (error) {
-        logger.error('SLA priority-change error (non-fatal):', { error: String(error) });
-      }
-    }
 
     // Notify the new assignee by mail when ticket is reassigned. Only fires on
     // assign (new value non-null) — clearing an assignee sends nothing.
