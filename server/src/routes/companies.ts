@@ -68,19 +68,11 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
       FROM tickets WHERE company_id = ?
     `).get(company.id) as { total: number; open_count: number; closed_count: number; avg_resolution_days: number | null };
 
-    const totalMinutes = db.prepare(`
-      SELECT COALESCE(SUM(te.duration_minutes), 0) as total_minutes
-      FROM time_entries te
-      JOIN tickets t ON te.ticket_id = t.id
-      WHERE t.company_id = ?
-    `).get(company.id) as { total_minutes: number };
-
     res.json({
       ...company,
       contacts,
       stats: {
         ...ticketStats,
-        total_minutes: totalMinutes.total_minutes,
       },
     });
   } catch (error) {

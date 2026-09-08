@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate, useLocation } from 'react-router';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { Layout } from '@/components/Layout';
+import { TicketViewNavigation } from '@/components/TicketViewNavigation';
 import { TicketTable } from '@/components/TicketTable';
 import { EmptyState } from '@/components/EmptyState';
 import { PaginationControls } from '@/components/PaginationControls';
@@ -12,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { TicketPriority } from '@/types/ticket';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { archiveFilterViewMatches } from '@/lib/archiveFilterView';
 import { ImportDialog } from '@/components/ImportDialog';
 import { UnifiedFilterBar } from '@/components/UnifiedFilterBar';
 import { BulkActionBar } from '@/components/BulkActionBar';
@@ -221,9 +223,10 @@ const Archive = () => {
   return (
     <Layout>
       <div className="space-y-6">
+        <TicketViewNavigation />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-foreground">Arkiv</h1>
+            <h1 className="text-xl font-bold text-foreground">Ärenden</h1>
             {pagination && pagination.total > 0 && (
               <p className="text-muted-foreground mt-1">
                 Visar {((pagination.page - 1) * pagination.limit) + 1}-
@@ -267,7 +270,7 @@ const Archive = () => {
           hideStatus={true}
           hideDateFieldSelector={true}
           views={views}
-          activeViewId={activeView?.id ?? null}
+          activeViewId={archiveFilterViewMatches(activeView, searchParams) ? activeView?.id ?? null : null}
           onSelectView={(view) => applyView(view, 'archive')}
           onManageViews={() => setManageViewsOpen(true)}
           onChange={updateFilters}

@@ -1,3 +1,4 @@
+import { DeflectionReportCard } from '@/components/DeflectionReportCard';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useMode } from '@/hooks/useMode';
@@ -17,7 +18,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { KPICard } from '@/components/KPICard';
 import { StatusFlowChart } from '@/components/StatusFlowChart';
 import { TagAnalytics } from '@/components/TagAnalytics';
-import { TimeSummaryTab } from '@/components/TimeSummaryTab';
 import { KPIDetailDialog } from '@/components/KPIDetailDialog';
 import {
   Dialog,
@@ -561,13 +561,12 @@ const Reports = () => {
         )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          {/* Mobile: horizontal scroll. Desktop: 5-col grid. */}
-          <TabsList className="w-full h-auto flex overflow-x-auto whitespace-nowrap md:grid md:grid-cols-5">
+          {/* Mobile: horizontal scroll. Desktop: 4-col grid. */}
+          <TabsList className="w-full h-auto flex overflow-x-auto whitespace-nowrap md:grid md:grid-cols-4">
             <TabsTrigger value="översikt" className="shrink-0 md:shrink">Översikt</TabsTrigger>
             <TabsTrigger value="trend" className="shrink-0 md:shrink">Trend</TabsTrigger>
             <TabsTrigger value="personer" className="shrink-0 md:shrink">Personer</TabsTrigger>
             <TabsTrigger value="taggar" className="shrink-0 md:shrink">Taggar</TabsTrigger>
-            <TabsTrigger value="tid" className="shrink-0 md:shrink">Tid</TabsTrigger>
           </TabsList>
 
           {/* ── Flik 1: Översikt ── */}
@@ -625,6 +624,8 @@ const Reports = () => {
                 />
               </div>
             )}
+
+            <DeflectionReportCard />
 
             {/* Status Distribution */}
             <Card className="animate-fade-in" style={{ animationDelay: '350ms' }}>
@@ -973,12 +974,6 @@ const Reports = () => {
             </div>
           </TabsContent>
 
-          {/* ── Flik 5: Tid ── */}
-          <TabsContent value="tid" className="space-y-5 mt-5">
-            <div className="animate-fade-in" style={{ animationDelay: '600ms' }}>
-              <TimeSummaryTab year={selectedYear} month={selectedMonth} />
-            </div>
-          </TabsContent>
         </Tabs>
 
       </div>

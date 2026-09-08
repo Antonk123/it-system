@@ -364,3 +364,33 @@ describe('Retired SLA and billing endpoints', () => {
       expect(response.status).toBe(404);
     });
 });
+
+
+describe('Retired time tracking preserves stored history', () => {
+  it('rejects former endpoints without changing historical time entries', async () => {
+    const ticketId = randomUUID();
+    const entryId = randomUUID();
+    db.prepare('INSERT INTO tickets (id, title, description) VALUES (?, ?, ?)')
+      .run(ticketId, 'Historical work', 'Keep the existing record');
+    db.prepare('INSERT INTO time_entries (id, ticket_id, user_id, duration_minutes, note) VALUES (?, ?, ?, ?, ?)')
+      .run(entryId, ticketId, adminId, 45, 'Historical work note');
+    const before = db.prepare('SELECT * FROM time_entries WHERE id = ?').get(entryId);
+    const rawKey = 'itk_live_retiredtime0123456789abcdef';
+    db.prepare(`INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions)
+      VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(randomUUID(), 'Retired endpoint test', 'retiredt', createHash('sha256').update(rawKey).digest('hex'),
+        adminId, JSON.stringify(['read', 'write', 'admin']));
+    for (const response of [
+      await request(app).get(`/api/time-entries/${ticketId}`).set('Authorization', `Bearer ${rawKey}`),
+      await request(app).post(`/api/time-entries/${ticketId}`).set('Authorization', `Bearer ${rawKey}`).send({ duration_minutes: 10 }),
+      await request(app).put(`/api/time-entries/${ticketId}/${entryId}`).set('Authorization', `Bearer ${rawKey}`).send({ duration_minutes: 10 }),
+      await request(app).delete(`/api/time-entries/${ticketId}/${entryId}`).set('Authorization', `Bearer ${rawKey}`),
+      await request(app).get('/api/reports/time-summary').set('Authorization', `Bearer ${rawKey}`),
+    ]) {
+      expect(response.status).toBe(404);
+    }
+    expect(db.prepare('SELECT * FROM time_entries WHERE id = ?').get(entryId)).toEqual(before);
+    expect(db.prepare('SELECT COUNT(*) AS count FROM time_entries WHERE ticket_id = ?').get(ticketId))
+      .toEqual({ count: 1 });
+  });
+});

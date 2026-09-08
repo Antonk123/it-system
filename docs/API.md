@@ -400,22 +400,11 @@ Mounted as a sub-router on the templates router (`mergeParams`).
 
 ---
 
-## Time entries — `/api/time-entries`
-
-| Method | Path | Auth | Purpose | Inputs | Response |
-|--------|------|------|---------|--------|----------|
-| GET | `/api/time-entries/:ticketId` | `authenticate` (+ `canAccessTicket`) | List time entries + total minutes | params: `ticketId` | `{ entries[], total_minutes }`; 403 |
-| POST | `/api/time-entries/:ticketId` | `authenticate` (+ admin/assignee/creator) | Create a time entry | params: `ticketId`; body: `duration_minutes`(1–1440, req), `note?` | 201 entry; 400/403/404 |
-| DELETE | `/api/time-entries/:ticketId/:id` | `authenticate` (+ admin or entry creator) | Delete a time entry | params: `ticketId`, `id` | 204; 403/404 |
-
----
-
 ## Reports — `/api/reports`
 
 | Method | Path | Auth | Purpose | Inputs | Response |
 |--------|------|------|---------|--------|----------|
 | GET | `/api/reports/summary` | `authenticate` | KPI summary (totals, byCategory, byPriority, trend, avg resolution, aging) | query: `year?`, `month?` | `{ totals, byCategory, byPriority, trend, avgResolutionDays, agingTickets }`; 400 |
-| GET | `/api/reports/time-summary` | `authenticate` | Time summary by category + top tickets | query: `year?`, `month?` | `{ byCategory, topTickets }` |
 | GET | `/api/reports/requester-analytics` | `authenticate` | Per-requester analytics (top 15) | query: `year?`, `month?` | requester-metrics array; 400 |
 | GET | `/api/reports/status-flow` | `authenticate` | 12-month per-status series | — | status-flow array |
 | GET | `/api/reports/tag-analytics` | `authenticate` | Tag-frequency counts | — | tag-analytics array |

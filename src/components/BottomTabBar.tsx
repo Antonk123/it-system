@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router';
 import { LayoutDashboard, Ticket, Plus, Building2, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isTicketSection } from '@/lib/ticketNavigation';
 
 const tabItems = [
   { path: '/', icon: LayoutDashboard, label: 'Översikt' },
@@ -15,6 +16,7 @@ export const BottomTabBar = () => {
 
   const isActive = (path: string) => {
     if (path === '/') return location.pathname === '/';
+    if (path === '/tickets') return isTicketSection(location.pathname) && location.pathname !== '/tickets/new';
     if (path === '/tickets/new') return location.pathname === '/tickets/new';
     return location.pathname.startsWith(path);
   };

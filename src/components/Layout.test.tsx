@@ -46,11 +46,11 @@ beforeAll(() => {
 
 afterEach(cleanup);
 
-function renderLayout() {
+function renderLayout(path = '/') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/']}>
+      <MemoryRouter initialEntries={[path]}>
         <Layout>
           <div>innehåll</div>
         </Layout>
@@ -102,5 +102,16 @@ describe('"Nytt ärende" — a11y-struktur (audit v5 MEDIUM-4/5)', () => {
     expect(screen.getAllByRole('button', { name: 'Stäng meny' })).toHaveLength(2);
     fireEvent.click(screen.getByRole('link', { name: 'Nytt ärende' }));
     expect(screen.getAllByRole('button', { name: 'Stäng meny' })).toHaveLength(1);
+  });
+});
+
+
+describe('Samlad ärendemeny', () => {
+  it.each(['/my-tickets', '/tickets', '/archive', '/tickets/ett-arende'])('%s markerar samma huvudlänk', (path) => {
+    renderLayout(path);
+    expect(screen.getByRole('link', { name: 'Ärenden' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('link', { name: 'Mina ärenden' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Alla ärenden' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Arkiv' })).toBeNull();
   });
 });

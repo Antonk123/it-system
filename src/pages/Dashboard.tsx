@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { motion, type Variants } from 'framer-motion';
 import { Link, useNavigate } from 'react-router';
-import { Ticket, Clock, CheckCircle, AlertTriangle, ArrowRight, PauseCircle, Sparkles, RefreshCw } from 'lucide-react';
+import { Ticket, Clock, CheckCircle, AlertTriangle, ArrowRight, PauseCircle, RefreshCw } from 'lucide-react';
 import { useActiveQueue } from '@/hooks/useActiveQueue';
 import { useUsers } from '@/hooks/useUsers';
 import { useCategories } from '@/hooks/useCategories';
@@ -10,12 +10,10 @@ import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useUpcomingReminders } from '@/hooks/useUpcomingReminders';
 import { useActivityFeed } from '@/hooks/useActivityFeed';
 import { useStatusCounts } from '@/hooks/useStatusCounts';
-import { useDeflectionStats } from '@/hooks/useDeflectionStats';
 import { Layout } from '@/components/Layout';
 import { KPICard } from '@/components/KPICard';
 import { AgingTicketsPanel } from '@/components/AgingTicketsPanel';
 import { RemindersPanel } from '@/components/RemindersPanel';
-import { StatusFlowPanel } from '@/components/StatusFlowPanel';
 import { ActivityFeedPanel } from '@/components/ActivityFeedPanel';
 import { TicketQueueTable } from '@/components/TicketQueueTable';
 import { Button } from '@/components/ui/button';
@@ -77,10 +75,9 @@ const Dashboard = () => {
   const { data: dashboardOverview, isLoading: isOverviewLoading, isError: isOverviewError, refetch: refetchOverview } = useDashboardOverview();
   const { data: upcomingReminders, isLoading: isRemindersLoading, isError: isRemindersError, refetch: refetchReminders } = useUpcomingReminders();
   const { data: activityEvents, isLoading: isActivityLoading, isError: isActivityError, refetch: refetchActivity } = useActivityFeed(15);
-  const { data: statusCounts, isLoading: isStatusLoading, isError: isStatusError, refetch: refetchStatus } = useStatusCounts();
-  const { data: deflectionStats, isLoading: isDeflectionLoading, isError: isDeflectionError, refetch: refetchDeflection } = useDeflectionStats();
+  const { data: statusCounts, isError: isStatusError, refetch: refetchStatus } = useStatusCounts();
 
-  const hasError = isQueueError || isOverviewError || isRemindersError || isActivityError || isStatusError || isDeflectionError;
+  const hasError = isQueueError || isOverviewError || isRemindersError || isActivityError || isStatusError;
 
   const handleRetryAll = () => {
     refetchQueue();
@@ -88,7 +85,6 @@ const Dashboard = () => {
     refetchReminders();
     refetchActivity();
     refetchStatus();
-    refetchDeflection();
   };
 
   const stats = useMemo(() => {
@@ -155,7 +151,7 @@ const Dashboard = () => {
 
         {/* KPI Grid */}
         <motion.div
-          className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4"
+          className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"
           variants={kpiContainer}
           initial={prefersReducedMotion ? false : 'hidden'}
           animate={prefersReducedMotion ? false : 'visible'}
@@ -206,26 +202,10 @@ const Dashboard = () => {
               }
             />
           </motion.div>
-          <motion.div variants={kpiItem}>
-            <KPICard
-              label="AI-deflection"
-              value={deflectionStats?.deflectionRate ?? 0}
-              valueSuffix="%"
-              icon={<Sparkles className="w-5 h-5" />}
-              onClick={() => navigate('/reports')}
-              subLabel={
-                isDeflectionLoading
-                  ? <Skeleton className="h-3 w-20 mt-1" />
-                  : deflectionStats && deflectionStats.total > 0
-                    ? <span className="text-muted-foreground">{deflectionStats.solved} löst / {deflectionStats.total} (30d)</span>
-                    : <span className="text-muted-foreground">Inga 30d</span>
-              }
-            />
-          </motion.div>
         </motion.div>
 
-        {/* Two-column layout: Ticket queue + Right sidebar */}
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_340px] gap-5">
+        {/* Queue first, supporting information below */}
+        <div className="space-y-5">
           {/* Left: Ticket queue */}
           <motion.div
             className="space-y-5"
@@ -243,8 +223,8 @@ const Dashboard = () => {
               onRetry={refetchQueue}
             />
 
-            {/* Aging + Reminders below the queue */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Aging, reminders and activity below the queue */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <AgingTicketsPanel
                 tickets={dashboardOverview?.agingTickets}
                 isLoading={isOverviewLoading}
@@ -255,26 +235,10 @@ const Dashboard = () => {
                 reminders={upcomingReminders}
                 isLoading={isRemindersLoading}
               />
+              <ActivityFeedPanel events={activityEvents} isLoading={isActivityLoading} />
             </div>
           </motion.div>
 
-          {/* Right column: Status flow + Activity */}
-          <motion.div
-            className="space-y-5"
-            variants={sectionFade}
-            initial={prefersReducedMotion ? false : 'hidden'}
-            animate={prefersReducedMotion ? false : 'visible'}
-            transition={{ delay: 0.25 }}
-          >
-            <StatusFlowPanel
-              counts={statusCounts}
-              isLoading={isStatusLoading}
-            />
-            <ActivityFeedPanel
-              events={activityEvents}
-              isLoading={isActivityLoading}
-            />
-          </motion.div>
         </div>
 
         {/* Critical Tickets Alert */}

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
-import { Building2, ArrowLeft, Clock, Ticket, Users, Timer, Pencil } from 'lucide-react';
+import { Building2, ArrowLeft, Clock, Ticket, Users, Pencil } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -58,8 +58,8 @@ const CompanyDetail = () => {
       <Layout>
         <div className="space-y-6">
           <Skeleton className="h-8 w-48" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {Array.from({ length: 4 }).map((_, i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-28 rounded-lg" />
             ))}
           </div>
@@ -103,10 +103,6 @@ const CompanyDetail = () => {
     ? `${Number(company.stats.avg_resolution_days).toFixed(1)}d`
     : '—';
 
-  const loggedHours = company.stats?.total_minutes != null
-    ? `${(company.stats.total_minutes / 60).toFixed(1)}h`
-    : '—';
-
   return (
     <Layout>
       <div className="space-y-6">
@@ -128,7 +124,7 @@ const CompanyDetail = () => {
         {/* Metadata */}
         <Card>
           <CardContent className="pt-6">
-            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+            <dl className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
               <div>
                 <dt className="text-muted-foreground mb-1">Org.nummer</dt>
                 <dd className="font-medium">{company.org_number || '—'}</dd>
@@ -150,7 +146,7 @@ const CompanyDetail = () => {
         </Card>
 
         {/* Stats cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -187,17 +183,6 @@ const CompanyDetail = () => {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Timer className="w-4 h-4" />
-                Loggad tid
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold font-mono tabular-nums">{loggedHours}</p>
-            </CardContent>
-          </Card>
         </div>
 
         {/* Contacts */}

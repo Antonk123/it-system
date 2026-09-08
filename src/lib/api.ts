@@ -1,4 +1,3 @@
-import type { TimeEntryRow } from '@/types/ticket';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -1299,47 +1298,6 @@ class ApiClient {
     });
   }
 
-  // Time Entries
-  async getTimeEntries(ticketId: string) {
-    return this.request<{ entries: TimeEntryRow[]; total_minutes: number }>(
-      `/time-entries/${ticketId}`
-    );
-  }
-
-  async createTimeEntry(
-    ticketId: string,
-    payload: { duration_minutes: number; note?: string; billable?: boolean; work_date?: string | null }
-  ) {
-    return this.request<TimeEntryRow>(`/time-entries/${ticketId}`, {
-      method: 'POST',
-      body: payload,
-    });
-  }
-
-  async updateTimeEntry(
-    ticketId: string,
-    entryId: string,
-    payload: { duration_minutes?: number; note?: string | null; billable?: boolean; work_date?: string | null }
-  ) {
-    return this.request<TimeEntryRow>(`/time-entries/${ticketId}/${entryId}`, {
-      method: 'PUT',
-      body: payload,
-    });
-  }
-
-  async deleteTimeEntry(ticketId: string, entryId: string) {
-    return this.request<null>(`/time-entries/${ticketId}/${entryId}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async getTimeReportsSummary(year: string, month: string) {
-    return this.request<{
-      byCategory: { category: string; total_minutes: number }[];
-      topTickets: { id: string; title: string; total_minutes: number }[];
-    }>(`/reports/time-summary?year=${year}&month=${month}`);
-  }
-
   async getRequesterAnalytics(year: string, month: string) {
     const params = new URLSearchParams();
     if (year && year !== 'all') params.append('year', year);
@@ -1590,7 +1548,6 @@ export interface CompanyDetail extends CompanyRow {
     open_count: number;
     closed_count: number;
     avg_resolution_days: number | null;
-    total_minutes: number;
   };
 }
 

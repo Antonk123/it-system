@@ -8,6 +8,7 @@ import { useCompanies } from '@/hooks/useCompanies';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Layout } from '@/components/Layout';
+import { TicketViewNavigation } from '@/components/TicketViewNavigation';
 import { TicketTable } from '@/components/TicketTable';
 import { PaginationControls } from '@/components/PaginationControls';
 import { ImportDialog } from '@/components/ImportDialog';
@@ -244,9 +245,10 @@ const TicketList = () => {
         onSetDefault={setDefaultView}
       />
       <div className="space-y-6">
+        <TicketViewNavigation />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-foreground">{isMyTickets ? 'Mina ärenden' : 'Alla ärenden'}</h1>
+            <h1 className="text-xl font-bold text-foreground">Ärenden</h1>
             {pagination && pagination.total > 0 && (
               <p className="text-muted-foreground mt-1">
                 Visar {((pagination.page - 1) * pagination.limit) + 1}-

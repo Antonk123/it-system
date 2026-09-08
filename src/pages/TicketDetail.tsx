@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams, Link, useLocation } from 'react-router';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Loader2, ListChecks, Plus, Camera, Sparkles, RefreshCw, Check, X, MoreVertical, Bell } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Loader2, ListChecks, Plus, Camera, Sparkles, RefreshCw, Check, X, MoreVertical } from 'lucide-react';
 import { ticketKeys } from '@/hooks/useTickets';
 import { useTicketMutations } from '@/hooks/useTicketMutations';
 import { useCategories } from '@/hooks/useCategories';
@@ -24,7 +24,6 @@ import { TicketChecklist } from '@/components/TicketChecklist';
 import { TicketComments } from '@/components/TicketComments';
 import { TicketLinks } from '@/components/TicketLinks';
 import { KBLinksSection } from '@/components/KBLinksSection';
-import TimeSection from '@/components/TimeSection';
 import { TicketActivity } from '@/components/TicketActivity';
 import { ReminderDialog } from '@/components/ReminderDialog';
 import { ReminderList } from '@/components/ReminderList';
@@ -58,7 +57,7 @@ import {
 import {
   Popover,
   PopoverContent,
-  PopoverTrigger,
+  PopoverAnchor,
 } from '@/components/ui/popover';
 import {
   Sheet,
@@ -92,13 +91,8 @@ import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-// Whether the share Popover (desktop row, "hidden sm:flex" below) or the
-// share Sheet (mobile row, "flex sm:hidden") should be mounted. Deliberately
-// its own 640px check rather than the shared useIsMobile() hook (768px,
-// used elsewhere for layout decisions unrelated to this page) — the two
-// surfaces must switch at EXACTLY the same width as the surrounding sm:
-// classes decide which row is visible, or there's a dead band where neither
-// the visible row's trigger nor its overlay component are mounted at all.
+// Mount only one sharing surface: Popover from 640px, Sheet below it.
+// Keep this aligned with Tailwind sm, not useIsMobile's 768px breakpoint.
 function useIsAtOrAboveSm(): boolean {
   const [isDesktopRow, setIsDesktopRow] = useState(
     () => typeof window !== 'undefined' && window.innerWidth >= 640
@@ -167,8 +161,13 @@ const TicketDetail = () => {
   const shareLinkInputRef = useRef<HTMLInputElement>(null);
   const shareExpiryTriggerRef = useRef<HTMLButtonElement>(null);
   const isDesktopShareRow = useIsAtOrAboveSm();
-  const [mobileReminderOpen, setMobileReminderOpen] = useState(false);
-  const [mobileDeleteOpen, setMobileDeleteOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const moreTriggerRef = useRef<HTMLButtonElement>(null);
+  const pendingMenuAction = useRef<(() => void) | null>(null);
+  const restoreMoreFocus = (event: Event) => {
+    event.preventDefault();
+    moreTriggerRef.current?.focus();
+  };
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
@@ -596,132 +595,76 @@ const TicketDetail = () => {
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Tillbaka</span>
           </Button>
-          <div className="flex gap-2">
-            {/* Desktop: alla knappar synliga */}
-            <div className="hidden sm:flex gap-2">
-              {/* The "hidden sm:flex" above only hides this visually — React still
-                  mounts it. Gating with isDesktopShareRow too (not just CSS) keeps
-                  this Popover from mounting at all below the sm breakpoint: it shares
-                  sharePopoverOpen with the mobile Sheet below, and a controlled
-                  Popover anchored to a hidden/zero-size trigger dismisses itself right
-                  after opening — resetting the shared state back to false and closing
-                  the Sheet with it (reproduced via logging: state flips true then
-                  false ~50ms later, no user action, tracing back to this Popover's own
-                  auto-dismiss). */}
+          <div className="flex items-center gap-2">
+            <div className="[&>button]:min-h-11"><ReminderDialog onCreateReminder={createReminder} /></div>
+            <Button
+              variant="outline"
+              className="gap-2 min-h-11 min-w-11"
+              aria-label="Redigera ärende"
+              onClick={() => navigate(`/tickets/${ticket.id}/edit`, {
+                state: { from: location.state?.from || location.pathname + location.search }
+              })}
+            >
+              <Pencil className="w-4 h-4" />
+              <span className="hidden sm:inline">Redigera</span>
+            </Button>
+            <Popover open={isDesktopShareRow && sharePopoverOpen} onOpenChange={setSharePopoverOpen}>
+              <PopoverAnchor asChild>
+                <span className="inline-flex">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button ref={moreTriggerRef} variant="outline" className="gap-2 min-h-11" aria-label="Fler åtgärder">
+                        <MoreVertical className="w-4 h-4" /> Mer
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      onCloseAutoFocus={(event) => {
+                        const action = pendingMenuAction.current;
+                        if (action) {
+                          event.preventDefault();
+                          pendingMenuAction.current = null;
+                          // Open the next surface only after the menu releases focus.
+                          requestAnimationFrame(action);
+                        }
+                      }}
+                    >
+                      <DropdownMenuItem disabled={isShareLoading || isShareChecking} onSelect={() => {
+                        pendingMenuAction.current = () => { void handleShare(); };
+                      }}>
+                        <Share2 className="w-4 h-4 mr-2" /> Dela
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={handleClone}>
+                        <Copy className="w-4 h-4 mr-2" /> Klona
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-destructive" onSelect={() => {
+                        pendingMenuAction.current = () => setDeleteOpen(true);
+                      }}>
+                        <Trash2 className="w-4 h-4 mr-2" /> Ta bort
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </span>
+              </PopoverAnchor>
               {isDesktopShareRow && (
-              <Popover open={sharePopoverOpen} onOpenChange={setSharePopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="gap-2"
-                    onClick={handleShare}
-                    disabled={isShareLoading}
-                    aria-label="Dela"
-                  >
-                    {isShareLoading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Share2 className="w-4 h-4" />
-                    )}
-                    <span className="hidden sm:inline">Dela</span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" align="end" aria-labelledby="share-heading">
+                <PopoverContent className="w-80 max-w-[calc(100vw-2rem)]" align="end" aria-labelledby="share-heading" onCloseAutoFocus={restoreMoreFocus}>
                   <div className="space-y-3">
                     <div className="space-y-1">
                       <h4 id="share-heading" className="font-medium text-sm">Dela ärende</h4>
-                      <p className="text-xs text-muted-foreground">
-                        Vem som helst med länken kan se ärendet.
-                      </p>
+                      <p className="text-xs text-muted-foreground">Vem som helst med länken kan se ärendet.</p>
                     </div>
                     {renderShareControls()}
                   </div>
                 </PopoverContent>
-              </Popover>
               )}
-              <ReminderDialog onCreateReminder={createReminder} />
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={() => navigate(`/tickets/${ticket.id}/edit`, {
-                  state: { from: location.state?.from || location.pathname + location.search }
-                })}
-              >
-                <Pencil className="w-4 h-4" />
-                <span className="hidden sm:inline">Redigera</span>
-              </Button>
-              <Button
-                variant="outline"
-                className="gap-2"
-                onClick={handleClone}
-              >
-                <Copy className="w-4 h-4" />
-                <span className="hidden sm:inline">Klona ärende</span>
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" className="gap-2 text-destructive">
-                    <Trash2 className="w-4 h-4" />
-                    <span className="hidden sm:inline">Ta bort</span>
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Ta bort ärende</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Är du säker på att du vill ta bort detta ärende? Denna åtgärd kan inte ångras.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Avbryt</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDelete}>Ta bort</AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
-
-            {/* Mobil: Redigera + mer-meny */}
-            <div className="flex sm:hidden gap-2">
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => navigate(`/tickets/${ticket.id}/edit`, {
-                  state: { from: location.state?.from || location.pathname + location.search }
-                })}
-                aria-label="Redigera ärende"
-              >
-                <Pencil className="w-4 h-4" />
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" aria-label="Fler åtgärder">
-                    <MoreVertical className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => { handleShare(); }}>
-                    <Share2 className="w-4 h-4 mr-2" /> Dela
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setMobileReminderOpen(true)}>
-                    <Bell className="w-4 h-4 mr-2" /> Påminn mig
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleClone}>
-                    <Copy className="w-4 h-4 mr-2" /> Klona
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="text-destructive" onClick={() => setMobileDeleteOpen(true)}>
-                    <Trash2 className="w-4 h-4 mr-2" /> Ta bort
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            </Popover>
           </div>
         </div>
 
-        {/* Mobil-styrda dialoger */}
         {!isDesktopShareRow && (
           <Sheet open={sharePopoverOpen} onOpenChange={setSharePopoverOpen}>
-            <SheetContent side="bottom">
+            <SheetContent side="bottom" onCloseAutoFocus={restoreMoreFocus}>
               <SheetHeader>
                 <SheetTitle>Dela ärende</SheetTitle>
                 <SheetDescription>Vem som helst med länken kan se ärendet.</SheetDescription>
@@ -730,9 +673,8 @@ const TicketDetail = () => {
             </SheetContent>
           </Sheet>
         )}
-        <ReminderDialog onCreateReminder={createReminder} open={mobileReminderOpen} onOpenChange={setMobileReminderOpen} />
-        <AlertDialog open={mobileDeleteOpen} onOpenChange={setMobileDeleteOpen}>
-          <AlertDialogContent>
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogContent onCloseAutoFocus={restoreMoreFocus}>
             <AlertDialogHeader>
               <AlertDialogTitle>Ta bort ärende</AlertDialogTitle>
               <AlertDialogDescription>
@@ -1130,7 +1072,6 @@ const TicketDetail = () => {
 
             {/* Tid — Time Tracking */}
             <div className="pt-4 border-t">
-              <TimeSection ticketId={ticket.id} />
             </div>
 
             {/* Linked Tickets */}
@@ -1221,16 +1162,6 @@ const TicketDetail = () => {
             ))}
           </SelectContent>
         </Select>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-10"
-          onClick={() => navigate(`/tickets/${ticket.id}/edit`, {
-            state: { from: location.state?.from || location.pathname + location.search, scrollTo: 'time' }
-          })}
-        >
-          <Clock className="h-4 w-4 mr-1" /> Tid
-        </Button>
         <label className="shrink-0">
           <Button size="sm" variant="outline" className="h-10 pointer-events-none" asChild>
             <span><Camera className="h-4 w-4 mr-1" /> Foto</span>

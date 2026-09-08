@@ -66,9 +66,6 @@ cite. Optional Claude-powered draft replies, ticket summaries, category suggesti
 unauthenticated deflection portal that offers a KB-backed answer before a ticket is filed. All AI
 is opt-in: leave `ANTHROPIC_API_KEY` unset and everything else behaves identically.
 
-**Time tracking** — record time, work dates and notes per ticket. Historical invoiced entries
-remain locked to preserve their original records.
-
 **Communication** — email-to-ticket over IMAP (basic auth or Microsoft 365 OAuth2 client
 credentials), outbound notification mail, and web push notifications.
 
@@ -273,8 +270,8 @@ contributions.
 
 ## Project status
 
-IT-Ticket runs in daily production use at one organization and is developed as a general-purpose
-product rather than a one-off internal tool. Core ticketing, time tracking, email and AI features are
+IT-Ticket is focused on daily internal IT support at one organization.
+Core ticketing, email and AI features are
 solid and covered by the test suite; expect rougher edges than a project with years of external
 users behind it. Issues and pull requests are welcome.
 

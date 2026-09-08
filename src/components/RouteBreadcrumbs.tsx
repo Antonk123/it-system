@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router';
+import { ticketViews } from '@/lib/ticketNavigation';
 import { Fragment } from 'react';
 import {
   Breadcrumb,
@@ -10,17 +11,19 @@ import {
 } from '@/components/ui/breadcrumb';
 
 const sectionLabels: Record<string, string> = {
-  tickets: 'Alla ärenden',
+  tickets: 'Ärenden',
   kb: 'Kunskapsbas',
   companies: 'Företag',
   recurring: 'Återkommande',
-  archive: 'Arkiv',
   users: 'Kontakter',
   reports: 'Rapporter',
   settings: 'Inställningar',
 };
 
 function buildCrumbs(pathname: string): { label: string; href?: string }[] {
+  const ticketView = ticketViews.find(view => view.path === pathname);
+  if (ticketView) return [{ label: 'Ärenden', href: '/tickets' }, { label: ticketView.label }];
+
   const segments = pathname.split('/').filter(Boolean);
   if (segments.length === 0) return []; // root "/" — Dashboard har egen h1
 

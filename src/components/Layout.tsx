@@ -1,7 +1,8 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router';
-import { LayoutDashboard, Ticket, Archive, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search, Building2, Inbox } from 'lucide-react';
+import { LayoutDashboard, Ticket, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search, Building2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isTicketSection } from '@/lib/ticketNavigation';
 import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,13 +23,9 @@ const navItems = [{
   icon: LayoutDashboard,
   label: 'Översikt'
 }, {
-  path: '/my-tickets',
-  icon: Inbox,
-  label: 'Mina ärenden'
-}, {
   path: '/tickets',
   icon: Ticket,
-  label: 'Alla ärenden'
+  label: 'Ärenden'
 }, {
   path: '/recurring',
   icon: RefreshCw,
@@ -37,10 +34,6 @@ const navItems = [{
   path: '/reports',
   icon: BarChart3,
   label: 'Rapporter'
-}, {
-  path: '/archive',
-  icon: Archive,
-  label: 'Arkiv'
 }, {
   path: '/companies',
   icon: Building2,
@@ -275,7 +268,7 @@ export const Layout = ({
             <NavOption
               key={item.path}
               item={item}
-              isActive={item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)}
+              isActive={item.path === '/tickets' ? isTicketSection(location.pathname) : item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)}
               open={!sidebarCollapsed}
               onClick={() => setSidebarOpen(false)}
             />
