@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router';
-import { ticketViews } from '@/lib/ticketNavigation';
+import { ticketViews, getTicketScope } from '@/lib/ticketNavigation';
 import { Fragment } from 'react';
 import {
   Breadcrumb,
@@ -14,14 +14,14 @@ const sectionLabels: Record<string, string> = {
   tickets: 'Ärenden',
   kb: 'Kunskapsbas',
   companies: 'Företag',
-  recurring: 'Återkommande',
   users: 'Kontakter',
   reports: 'Rapporter',
   settings: 'Inställningar',
 };
 
-function buildCrumbs(pathname: string): { label: string; href?: string }[] {
-  const ticketView = ticketViews.find(view => view.path === pathname);
+function buildCrumbs(pathname: string, search: string): { label: string; href?: string }[] {
+  const ticketView = ['/tickets', '/my-tickets', '/archive'].includes(pathname)
+    ? ticketViews.find(view => view.id === getTicketScope(pathname, new URLSearchParams(search)).tab) : undefined;
   if (ticketView) return [{ label: 'Ärenden', href: '/tickets' }, { label: ticketView.label }];
 
   const segments = pathname.split('/').filter(Boolean);
@@ -60,8 +60,8 @@ function buildCrumbs(pathname: string): { label: string; href?: string }[] {
 }
 
 export function RouteBreadcrumbs() {
-  const { pathname } = useLocation();
-  const crumbs = buildCrumbs(pathname);
+  const { pathname, search } = useLocation();
+  const crumbs = buildCrumbs(pathname, search);
 
   if (crumbs.length === 0) return null;
 

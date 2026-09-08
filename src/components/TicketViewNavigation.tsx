@@ -1,18 +1,20 @@
 import { Link, useLocation } from 'react-router';
-import { ticketViews } from '@/lib/ticketNavigation';
+import { ticketViews, getTicketScope, ticketTabLink } from '@/lib/ticketNavigation';
 import { cn } from '@/lib/utils';
 
 /** Page links, not ARIA tabs: switching views navigates to an existing route. */
 export function TicketViewNavigation() {
   const { pathname, search } = useLocation();
+  const scope = getTicketScope(pathname, new URLSearchParams(search));
   return (
     <nav aria-label="Ärendevyer" className="flex flex-wrap gap-1 border-b border-border">
-      {ticketViews.map(({ path, label }) => {
-        const active = pathname === path;
+      {ticketViews.map((view) => {
+        const { id, label } = view;
+        const active = scope.tab === id;
         return (
           <Link
-            key={path}
-            to={active ? `${path}${search}` : path}
+            key={id}
+            to={ticketTabLink(view, pathname, search)}
             aria-current={active ? 'page' : undefined}
             className={cn(
               'inline-flex min-h-11 items-center border-b-2 px-4 text-sm font-medium transition-colors',

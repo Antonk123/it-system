@@ -1,3 +1,4 @@
+import { requiredTemplateFieldErrors } from '@/lib/templateValidation';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router';
 import { ArrowLeft, Loader2, PlusCircle, Pencil, ChevronDown } from 'lucide-react';
@@ -480,13 +481,7 @@ const TicketForm = () => {
     // zod schema can't see these (placeholder description), so check required
     // fields here and surface inline errors via DynamicFieldsForm's `errors`.
     if (selectedTemplate?.fields && selectedTemplate.fields.length > 0) {
-      const valueByName = new Map(customFieldValues.map((v) => [v.fieldName, (v.fieldValue ?? '').trim()]));
-      const dynErrors: Record<string, string> = {};
-      selectedTemplate.fields.forEach((field) => {
-        if (field.required && !valueByName.get(field.field_name)) {
-          dynErrors[field.field_name] = `${field.field_label} krävs`;
-        }
-      });
+      const dynErrors = requiredTemplateFieldErrors(selectedTemplate.fields, customFieldValues);
       setDynamicFieldErrors(dynErrors);
       if (Object.keys(dynErrors).length > 0) {
         toast.error('Rätta felen i formuläret');

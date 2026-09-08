@@ -394,3 +394,41 @@ describe('Retired time tracking preserves stored history', () => {
       .toEqual({ count: 1 });
   });
 });
+
+
+describe('Retired recurring tickets preserve stored history', () => {
+  it('rejects old endpoints and leaves templates, generated tickets and history intact', async () => {
+    const templateId = randomUUID();
+    const ticketId = randomUUID();
+    const historyId = randomUUID();
+    db.prepare(`INSERT INTO recurring_templates (id, name, title, interval_type, next_run)
+      VALUES (?, ?, ?, 'daily', ?)`)
+      .run(templateId, 'Historical schedule', 'Scheduled work', '2026-01-01T00:00:00.000Z');
+    db.prepare('INSERT INTO tickets (id, title, description) VALUES (?, ?, ?)')
+      .run(ticketId, 'Previously generated ticket', 'Keep this ticket');
+    db.prepare('INSERT INTO recurring_ticket_history (id, template_id, ticket_id) VALUES (?, ?, ?)')
+      .run(historyId, templateId, ticketId);
+    const readHistory = () => ({
+      template: db.prepare('SELECT * FROM recurring_templates WHERE id = ?').get(templateId),
+      ticket: db.prepare('SELECT * FROM tickets WHERE id = ?').get(ticketId),
+      history: db.prepare('SELECT * FROM recurring_ticket_history WHERE id = ?').get(historyId),
+    });
+    const before = readHistory();
+    const rawKey = 'itk_live_retiredrecurring0123456789abcdef';
+    db.prepare(`INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions)
+      VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(randomUUID(), 'Retired recurring test', 'retiredr', createHash('sha256').update(rawKey).digest('hex'),
+        adminId, JSON.stringify(['read', 'write', 'admin']));
+    for (const response of [
+      await request(app).get('/api/recurring').set('Authorization', `Bearer ${rawKey}`),
+      await request(app).post('/api/recurring').set('Authorization', `Bearer ${rawKey}`)
+        .send({ name: 'Removed', title: 'Removed', interval_type: 'daily' }),
+      await request(app).put(`/api/recurring/${templateId}`).set('Authorization', `Bearer ${rawKey}`).send({ name: 'Changed' }),
+      await request(app).delete(`/api/recurring/${templateId}`).set('Authorization', `Bearer ${rawKey}`),
+      await request(app).patch(`/api/recurring/${templateId}/toggle`).set('Authorization', `Bearer ${rawKey}`),
+    ]) {
+      expect(response.status).toBe(404);
+    }
+    expect(readHistory()).toEqual(before);
+  });
+});

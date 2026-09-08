@@ -1,3 +1,4 @@
+import { normalizeTemplateValues, missingRequiredTemplateFields, type TemplateFieldValue } from '../lib/templateValidation.js';
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import multer from 'multer';
@@ -702,6 +703,15 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
   if (solution !== undefined) solution = sanitizeRichText(solution);
 
   try {
+    if (customFields !== undefined) {
+      const normalized = normalizeTemplateValues(customFields);
+      if (!normalized) return res.status(400).json({ error: 'Invalid custom fields' });
+      customFields = normalized;
+    }
+    const fieldErrors = missingRequiredTemplateFields(template_id || null, customFields ?? []);
+    if (Object.keys(fieldErrors).length > 0) {
+      return res.status(400).json({ error: 'Fyll i obligatoriska mallfält', fieldErrors });
+    }
     const id = uuidv4();
 
     // Auto-set company_id from requester if not provided
@@ -1325,6 +1335,21 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
       return res.status(403).json({ error: 'Du har inte behörighet att ändra detta ärende' });
     }
 
+    if (customFields !== undefined || template_id !== undefined) {
+      const normalized = customFields !== undefined
+        ? normalizeTemplateValues(customFields)
+        : db.prepare(`SELECT field_name AS fieldName, field_label AS fieldLabel,
+            COALESCE(field_value, '') AS fieldValue FROM ticket_field_values WHERE ticket_id = ?`)
+          .all(req.params.id) as TemplateFieldValue[];
+      if (!normalized) return res.status(400).json({ error: 'Invalid custom fields' });
+      const effectiveTemplateId = template_id !== undefined ? (template_id || null) : ((existing as TicketRow & { template_id: string | null }).template_id || null);
+      const fieldErrors = missingRequiredTemplateFields(effectiveTemplateId, normalized);
+      if (Object.keys(fieldErrors).length > 0) {
+        return res.status(400).json({ error: 'Fyll i obligatoriska mallfält', fieldErrors });
+      }
+      if (customFields !== undefined) customFields = normalized;
+    }
+
     // When customFields are provided, compose description from them (same logic as POST)
     let finalDescription: string | undefined = description;
     if (customFields && Array.isArray(customFields) && customFields.length > 0) {
@@ -1433,8 +1458,8 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
         historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'solution', null, isNew ? 'added' : 'updated');
       }
 
-      // Replace field values if customFields were provided
-      if (customFields && Array.isArray(customFields) && customFields.length > 0) {
+      // Replace field values when explicitly supplied, including an empty array.
+      if (Array.isArray(customFields)) {
         db.prepare('DELETE FROM ticket_field_values WHERE ticket_id = ?').run(req.params.id);
         const insertFieldStmt = db.prepare(`
           INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)

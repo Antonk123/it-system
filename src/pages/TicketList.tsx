@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo, lazy, Suspense } from 'react';
+import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useSearchParams, useNavigate, useLocation } from 'react-router';
 import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Loader2, Inbox } from 'lucide-react';
@@ -8,15 +8,13 @@ import { useCompanies } from '@/hooks/useCompanies';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Layout } from '@/components/Layout';
+import { getTicketScope } from '@/lib/ticketNavigation';
 import { TicketViewNavigation } from '@/components/TicketViewNavigation';
 import { TicketTable } from '@/components/TicketTable';
 import { PaginationControls } from '@/components/PaginationControls';
 import { ImportDialog } from '@/components/ImportDialog';
-import { FilterViewManager } from '@/components/FilterViewManager';
 import { UnifiedFilterBar } from '@/components/UnifiedFilterBar';
-import { SearchBar } from '@/components/SearchBar';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useFilterViews } from '@/hooks/useFilterViews';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { TicketStatus, TicketPriority } from '@/types/ticket';
@@ -49,47 +47,28 @@ const TicketList = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
-  const isMyTickets = location.pathname === '/my-tickets';
+  const { statuses: selectedStatuses, mine } = getTicketScope(location.pathname, searchParams);
 
   // Read state from URL
   const page = Number(searchParams.get('page')) || 1;
   const pageSize = Number(searchParams.get('limit')) || 50;
   const search = searchParams.get('search') || '';
-  const statusParam = searchParams.get('status') || '';
-  const selectedStatuses = useMemo<TicketStatus[]>(
-    () => (statusParam ? statusParam.split(',').filter(s => s) as TicketStatus[] : []),
-    [statusParam]
-  );
   const priorityFilter = (searchParams.get('priority') || 'all') as TicketPriority | 'all';
   const categoryFilter = searchParams.get('category') || 'all';
   const dateFrom = searchParams.get('dateFrom') || '';
   const dateTo = searchParams.get('dateTo') || '';
-  const dateField = (searchParams.get('dateField') || 'created_at') as 'created_at' | 'updated_at' | 'closed_at';
+  const dateField = (selectedStatuses.every(status => status === 'resolved' || status === 'closed') ? 'updated_at' : searchParams.get('dateField') || 'created_at') as 'created_at' | 'updated_at' | 'closed_at';
   const checklistFilter = searchParams.get('checklist') || '';
   const companyFilter = searchParams.get('company_id') || 'all';
   const sortKey = (searchParams.get('sortBy') === 'tags' ? 'createdAt' : searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'status' | 'priority' | 'category';
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
   const [compactView, setCompactView] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
-  const [manageViewsOpen, setManageViewsOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>(() => {
     const saved = localStorage.getItem('ticket_view_mode');
     return (saved as 'table' | 'kanban') || 'table';
   });
 
-
-  // Filter views
-  const {
-    views,
-    activeView,
-    createView,
-    updateView,
-    deleteView,
-    setDefaultView,
-    applyView,
-    setActiveView,
-    getCurrentFiltersAsView,
-  } = useFilterViews();
 
   // Save view preference to localStorage
   useEffect(() => {
@@ -98,11 +77,12 @@ const TicketList = () => {
 
   // Fetch with pagination
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  useEffect(() => { setSelectedIds([]); }, [location.pathname, location.search]);
 
   const { tickets, pagination, isLoading, isError, updateTicket, bulkUpdateTickets, refetch } = useTickets({
     page,
     limit: pageSize,
-    status: selectedStatuses.length > 0 ? selectedStatuses.join(',') : 'all',
+    status: selectedStatuses.join(','),
     priority: priorityFilter,
     category: categoryFilter,
     search,
@@ -113,7 +93,7 @@ const TicketList = () => {
     sortBy: sortKey,
     sortDir: sortDirection,
     company_id: companyFilter,
-    assigned_to: isMyTickets && user?.id ? user.id : undefined,
+    assigned_to: mine && user?.id ? user.id : undefined,
   });
 
   const { users } = useUsers();
@@ -122,10 +102,12 @@ const TicketList = () => {
   // Update URL params
   const updateFilters = useCallback((updates: Record<string, any>) => {
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('tags');
+    newParams.delete('tagMode');
 
     Object.entries(updates).forEach(([key, value]) => {
       if (Array.isArray(value)) {
-        // Handle arrays (status, tags)
+        // Handle array-valued filters
         if (value.length > 0) {
           newParams.set(key, value.join(','));
         } else {
@@ -141,15 +123,17 @@ const TicketList = () => {
     // Reset to page 1 on filter/sort changes
     if (Object.keys(updates).some(k => k !== 'page' && k !== 'limit')) {
       newParams.set('page', '1');
-      // Deactivate active view when filters are changed manually
-      setActiveView(null);
       // Clear bulk selection — selected IDs from a previous filter
       // set could refer to tickets no longer visible
       setSelectedIds([]);
     }
 
-    setSearchParams(newParams);
-  }, [searchParams, setSearchParams, setActiveView]);
+    if (location.pathname === '/my-tickets' && updates.mine === '') {
+      navigate(`/tickets?${newParams.toString()}`);
+    } else {
+      setSearchParams(newParams);
+    }
+  }, [searchParams, setSearchParams, location.pathname, navigate]);
 
   // Event handlers
   const handlePageChange = useCallback((newPage: number) => {
@@ -207,6 +191,7 @@ const TicketList = () => {
       if (dateField && dateField !== 'created_at') params.append('dateField', dateField);
       if (checklistFilter && checklistFilter !== 'all') params.append('checklist', checklistFilter);
       if (companyFilter && companyFilter !== 'all') params.append('company_id', companyFilter);
+      if (mine && user?.id) params.append('assigned_to', user.id);
       const queryString = params.toString() ? `?${params.toString()}` : '';
 
       await api.exportTickets(queryString);
@@ -215,7 +200,7 @@ const TicketList = () => {
       if (import.meta.env.DEV) console.error('Export failed:', error);
       toast.error('Misslyckades att exportera ärenden');
     }
-  }, [selectedStatuses, priorityFilter, categoryFilter, search, dateFrom, dateTo, dateField, checklistFilter, companyFilter]);
+  }, [selectedStatuses, priorityFilter, categoryFilter, search, dateFrom, dateTo, dateField, checklistFilter, companyFilter, mine, user?.id]);
 
   return (
     <Layout>
@@ -223,16 +208,6 @@ const TicketList = () => {
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
         onSuccess={refetch}
-      />
-      <FilterViewManager
-        open={manageViewsOpen}
-        onOpenChange={setManageViewsOpen}
-        views={views}
-        currentFilters={getCurrentFiltersAsView()}
-        onCreateView={createView}
-        onUpdateView={updateView}
-        onDeleteView={deleteView}
-        onSetDefault={setDefaultView}
       />
       <div className="space-y-6">
         <TicketViewNavigation />
@@ -247,7 +222,7 @@ const TicketList = () => {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="hidden md:flex items-center gap-2">
+            <div className="flex items-center gap-2">
               <Button
                 variant={viewMode === 'table' ? 'default' : 'outline'}
                 size="sm"
@@ -302,52 +277,13 @@ const TicketList = () => {
           </div>
         </div>
 
-        {/* Mobile simplified filters */}
-        <div className="md:hidden space-y-2">
-          <SearchBar
-            value={search}
-            onChange={(value) => updateFilters({ search: value })}
-            placeholder="Sök ärenden..."
-            ariaLabel="Sök ärenden"
-          />
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {(['open', 'in-progress', 'waiting'] as TicketStatus[]).map(s => (
-              <Badge
-                key={s}
-                variant={selectedStatuses.includes(s) ? 'default' : 'outline'}
-                className="cursor-pointer shrink-0"
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  const next = selectedStatuses.includes(s)
-                    ? selectedStatuses.filter(x => x !== s)
-                    : [...selectedStatuses, s];
-                  updateFilters({ status: next });
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    const next = selectedStatuses.includes(s)
-                      ? selectedStatuses.filter(x => x !== s)
-                      : [...selectedStatuses, s];
-                    updateFilters({ status: next });
-                  }
-                }}
-              >
-                {STATUS_LABELS[s]}
-              </Badge>
-            ))}
-          </div>
-        </div>
-
-        {/* Company filter — desktop only */}
-        <div className="hidden md:flex items-center gap-2">
+        {/* Company filter */}
+        <div className="flex items-center gap-2">
           <Select value={companyFilter} onValueChange={v => {
             const newParams = new URLSearchParams(searchParams);
             if (v === 'all') newParams.delete('company_id');
             else newParams.set('company_id', v);
             newParams.set('page', '1');
-            setActiveView(null);
             setSelectedIds([]);
             setSearchParams(newParams);
           }}>
@@ -364,24 +300,22 @@ const TicketList = () => {
           </Select>
         </div>
 
-        {/* Unified Filter Bar — desktop only */}
-        <div className="hidden md:block">
+        {/* Unified Filter Bar */}
+        <div>
         <UnifiedFilterBar
+          mine={mine}
+          onMineChange={(value) => updateFilters({ mine: value ? '1' : '' })}
           search={search}
-          selectedStatuses={selectedStatuses}
           priorityFilter={priorityFilter}
           categoryFilter={categoryFilter}
           checklistFilter={checklistFilter}
           dateFrom={dateFrom}
           dateTo={dateTo}
           dateField={dateField}
-          views={views}
-          activeViewId={activeView?.id ?? null}
-          onSelectView={(view) => { applyView(view, 'ticketlist'); setSelectedIds([]); }}
-          onManageViews={() => setManageViewsOpen(true)}
+          hideDateFieldSelector={selectedStatuses.every(status => status === 'resolved' || status === 'closed')}
           onChange={updateFilters}
           onClearAll={() => updateFilters({
-            search: '', status: [], priority: 'all', category: 'all',
+            search: '', mine: '', priority: 'all', category: 'all', company_id: 'all',
             checklist: '', dateFrom: '', dateTo: '', dateField: 'created_at'
           })}
           searchPlaceholder="Sök ärenden..."

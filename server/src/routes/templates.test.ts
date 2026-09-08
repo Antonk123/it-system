@@ -273,3 +273,26 @@ describe('Dynamic template with inline fields (relation: template → fields)', 
     expect(single.body.fields.length).toBe(2);
   });
 });
+
+describe('Template default category', () => {
+  it('keeps an omitted category but clears an explicit null from Ingen kategori', async () => {
+    const category = randomUUID();
+    db.prepare('INSERT INTO categories (id, name, label) VALUES (?, ?, ?)').run(category, category, 'Mallkategori');
+    const created = await adminAgent.post('/api/templates')
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf)
+      .send({ name: 'Kategori-test', title_template: 'Rubrik', description_template: 'Beskrivning', category_id: category });
+    expect(created.status).toBe(201);
+    const unchanged = await adminAgent.put(`/api/templates/${created.body.id}`)
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf)
+      .send({ name: 'Nytt namn' });
+    expect(unchanged.status).toBe(200);
+    expect(unchanged.body.category_id).toBe(category);
+    const cleared = await adminAgent.put(`/api/templates/${created.body.id}`)
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf)
+      .send({ category_id: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.category_id).toBeNull();
+    const stored = db.prepare('SELECT category_id FROM ticket_templates WHERE id = ?').get(created.body.id) as { category_id: string | null };
+    expect(stored.category_id).toBeNull();
+  });
+});

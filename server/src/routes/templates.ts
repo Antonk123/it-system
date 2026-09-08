@@ -189,7 +189,7 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
       title_template ?? existing.title_template,
       description_template ?? existing.description_template,
       priority ?? existing.priority,
-      category_id ?? existing.category_id,
+      category_id !== undefined ? category_id : existing.category_id,
       notes_template ?? existing.notes_template,
       solution_template ?? existing.solution_template,
       req.params.id

@@ -30,7 +30,6 @@ const KBArticleForm = lazy(() => import("./pages/KBArticleForm"));
 const SharedKBArticle = lazy(() => import("./pages/SharedKBArticle"));
 const PublicKnowledgeBase = lazy(() => import("./pages/PublicKnowledgeBase"));
 const PublicKBArticle = lazy(() => import("./pages/PublicKBArticle"));
-const Recurring = lazy(() => import("./pages/Recurring"));
 const CompanyList = lazy(() => import("./pages/CompanyList"));
 const CompanyDetail = lazy(() => import("./pages/CompanyDetail"));
 
@@ -185,7 +184,6 @@ export const AppRoutes = () => {
           <Route path="/tickets/new" element={withBoundary(<ProtectedRoute><TicketForm /></ProtectedRoute>)} />
           <Route path="/tickets/:id" element={withBoundary(<ProtectedRoute><TicketDetail /></ProtectedRoute>)} />
           <Route path="/tickets/:id/edit" element={withBoundary(<ProtectedRoute><TicketForm /></ProtectedRoute>)} />
-          <Route path="/recurring" element={withBoundary(<ProtectedRoute><Recurring /></ProtectedRoute>)} />
           <Route path="/companies" element={withBoundary(<ProtectedRoute><CompanyList /></ProtectedRoute>)} />
           <Route path="/companies/:id" element={withBoundary(<ProtectedRoute><CompanyDetail /></ProtectedRoute>)} />
           <Route path="/archive" element={withBoundary(<ProtectedRoute><Archive /></ProtectedRoute>)} />

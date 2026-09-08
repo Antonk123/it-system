@@ -28,7 +28,6 @@ import templateRoutes from './routes/templates.js';
 import tagRoutes from './routes/tags.js';
 import kbRoutes from './routes/kb.js';
 import reportsRoutes from './routes/reports.js';
-import recurringRoutes from './routes/recurring.js';
 import backupRoutes from './routes/backup.js';
 import pushRoutes from './routes/push.js';
 import companiesRoutes from './routes/companies.js';
@@ -234,7 +233,6 @@ export function createApp() {
   app.use('/api/tags', tagRoutes);
   app.use('/api/kb', kbRoutes);
   app.use('/api/reports', reportsRoutes);
-  app.use('/api/recurring', recurringRoutes);
   app.use('/api/backup', backupRoutes);
   app.use('/api/push', pushRoutes);
   app.use('/api/companies', companiesRoutes);

@@ -8,7 +8,6 @@ import {
   Settings,
   BarChart3,
   BookOpen,
-  RefreshCw,
   Clock,
   Plus,
   FilePlus,
@@ -46,10 +45,9 @@ interface CommandPaletteProps {
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/tickets', icon: Ticket, label: 'Alla ärenden' },
-  { path: '/recurring', icon: RefreshCw, label: 'Återkommande' },
+  { path: '/tickets', icon: Ticket, label: 'Aktiva ärenden' },
   { path: '/reports', icon: BarChart3, label: 'Rapporter' },
-  { path: '/archive', icon: Archive, label: 'Arkiv' },
+  { path: '/archive', icon: Archive, label: 'Avslutade ärenden' },
   { path: '/users', icon: Users, label: 'Kontakter' },
   { path: '/kb', icon: BookOpen, label: 'Kunskapsbas' },
   { path: '/settings', icon: Settings, label: 'Inställningar' },

@@ -589,24 +589,19 @@ describe('Retired ticket tags and shared knowledge-base tags', () => {
 
   });
 
-  it('preserves historical recurring tags on updates and blocks deletion of referenced tags', async () => {
+  it('blocks deletion of tags referenced by historical recurring templates', async () => {
     const tagId = randomUUID();
-    db.prepare('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)').run(tagId, `recurring-${tagId}`, '#123456');
-    const created = await admin.agent.post('/api/recurring')
-      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
-      .send({ name: 'Historical schedule', title: 'Recurring task', interval_type: 'daily' });
-    expect(created.status).toBe(201);
+    const templateId = randomUUID();
     const tags = JSON.stringify([tagId]);
-    db.prepare('UPDATE recurring_templates SET tags = ? WHERE id = ?').run(tags, created.body.id);
-    const update = await admin.agent.put(`/api/recurring/${created.body.id}`)
-      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
-      .send({ name: 'Renamed schedule', tags: [] });
-    expect(update.status).toBe(200);
-    expect(db.prepare('SELECT tags FROM recurring_templates WHERE id = ?').get(created.body.id)).toEqual({ tags });
+    db.prepare('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)').run(tagId, `recurring-${tagId}`, '#123456');
+    db.prepare(`INSERT INTO recurring_templates (id, name, title, tags, interval_type, next_run)
+      VALUES (?, ?, ?, ?, 'daily', ?)`)
+      .run(templateId, 'Historical schedule', 'Historical task', tags, '2026-01-01T00:00:00.000Z');
     const deletion = await admin.agent.delete(`/api/tags/${tagId}`)
       .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf);
     expect(deletion.status).toBe(409);
     expect(db.prepare('SELECT id FROM tags WHERE id = ?').get(tagId)).toEqual({ id: tagId });
+    expect(db.prepare('SELECT tags FROM recurring_templates WHERE id = ?').get(templateId)).toEqual({ tags });
   });
 
   it('still creates shared tags and associates them with knowledge-base articles', async () => {
@@ -626,5 +621,72 @@ describe('Retired ticket tags and shared knowledge-base tags', () => {
       .set('Authorization', `Bearer ${admin.token}`);
     expect(fetched.status).toBe(200);
     expect(fetched.body.tags).toEqual(expect.arrayContaining([expect.objectContaining({ id: tag.body.id, name: tag.body.name })]));
+  });
+});
+
+
+describe('Server-required dynamic template fields', () => {
+  let templateId: string;
+  const values = (text: unknown = '<p>Answer</p>', amount: unknown = 0, checkbox: unknown = false) => [
+    { fieldName: 'detail', fieldLabel: 'Client label', fieldValue: text, required: false, fieldType: 'text' },
+    { fieldName: 'amount', fieldLabel: 'Amount', fieldValue: amount },
+    { fieldName: 'checked', fieldLabel: 'Choice', fieldValue: checkbox },
+  ];
+  beforeAll(() => {
+    templateId = randomUUID();
+    db.prepare(`INSERT INTO ticket_templates (id, name, title_template, description_template)
+      VALUES (?, ?, ?, ?)` ).run(templateId, `Required-${templateId}`, 'Title', 'Description');
+    for (const [name, label, type] of [['detail', 'Beskrivning', 'textarea'], ['amount', 'Antal', 'number'], ['checked', 'Val', 'checkbox']]) {
+      db.prepare(`INSERT INTO template_fields (id, template_id, field_name, field_label, field_type, required)
+        VALUES (?, ?, ?, ?, ?, 1)`).run(randomUUID(), templateId, name, label, type);
+    }
+  });
+  it.each(['<p></p>', '<p><br></p>', '<p>&nbsp;&#160;&#xA0;</p>', '  '])('rejects empty required rich text %s without any ticket/history/field writes', async (text) => {
+      const counts = () => ['tickets', 'ticket_history', 'ticket_field_values'].map(table =>
+        db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get());
+      const before = counts();
+      const result = await admin.agent.post('/api/tickets')
+        .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+        .send({ title: 'Required test', description: 'Bypass placeholder', template_id: templateId, customFields: values(text) });
+      expect(result.status).toBe(400);
+      expect(result.body.fieldErrors).toEqual({ detail: 'Beskrivning krävs' });
+      expect(counts()).toEqual(before);
+    });
+  it('rejects missing required values and accepts 0/false with nonempty rich text', async () => {
+    const missing = await admin.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ title: 'Required test', description: 'Placeholder', template_id: templateId });
+    expect(missing.status).toBe(400);
+    expect(Object.keys(missing.body.fieldErrors)).toHaveLength(3);
+    const valid = await admin.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ title: 'Valid fields', template_id: templateId, customFields: values() });
+    expect(valid.status).toBe(201);
+    const stored = db.prepare('SELECT field_name, field_value FROM ticket_field_values WHERE ticket_id = ?').all(valid.body.id);
+    expect(stored).toEqual(expect.arrayContaining([
+      { field_name: 'amount', field_value: '0' }, { field_name: 'checked', field_value: 'false' },
+    ]));
+    const before = db.prepare('SELECT * FROM tickets WHERE id = ?').get(valid.body.id);
+    const invalidUpdate = await admin.agent.put(`/api/tickets/${valid.body.id}`)
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ title: 'Should not change', customFields: [] });
+    expect(invalidUpdate.status).toBe(400);
+    expect(db.prepare('SELECT * FROM tickets WHERE id = ?').get(valid.body.id)).toEqual(before);
+    expect(db.prepare('SELECT field_name, field_value FROM ticket_field_values WHERE ticket_id = ?').all(valid.body.id)).toEqual(stored);
+  });
+  it('validates explicit template changes but permits status changes on historical incomplete tickets', async () => {
+    const id = randomUUID();
+    db.prepare('INSERT INTO tickets (id, title, description, template_id) VALUES (?, ?, ?, ?)')
+      .run(id, 'Historical incomplete', 'Old description', templateId);
+    const status = await admin.agent.put(`/api/tickets/${id}`)
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).send({ status: 'in-progress' });
+    expect(status.status).toBe(200);
+    const template = await admin.agent.put(`/api/tickets/${id}`)
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).send({ template_id: templateId });
+    expect(template.status).toBe(400);
+    const corrected = await admin.agent.put(`/api/tickets/${id}`)
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).send({ customFields: values() });
+    expect(corrected.status).toBe(200);
+    expect(corrected.body.status).toBe('in-progress');
   });
 });

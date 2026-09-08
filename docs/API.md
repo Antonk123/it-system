@@ -411,18 +411,6 @@ Mounted as a sub-router on the templates router (`mergeParams`).
 
 ---
 
-## Recurring tickets — `/api/recurring`
-
-| Method | Path | Auth | Purpose | Inputs | Response |
-|--------|------|------|---------|--------|----------|
-| GET | `/api/recurring` | `authenticate` | List templates with recent history | — | template array |
-| POST | `/api/recurring` | `authenticate` → `requireAdmin` | Create template (computes next_run) | body: `name`, `title`, `interval_type`, `interval_day?`, + optional fields | 201 template; 400 |
-| PUT | `/api/recurring/:id` | `authenticate` → `requireAdmin` | Update template (recomputes next_run) | params: `id`; body: partial of create + `is_active?` | template; 400/404 |
-| DELETE | `/api/recurring/:id` | `authenticate` → `requireAdmin` | Delete template (cascades history) | params: `id` | 204; 404 |
-| PATCH | `/api/recurring/:id/toggle` | `authenticate` → `requireAdmin` | Pause/resume toggle | params: `id` | `{ id, is_active, next_run }`; 404 |
-
----
-
 ## API keys — `/api/api-keys`
 
 User-scoped (any authenticated user manages their own keys).

@@ -27,11 +27,12 @@ function renderAt(path: string) {
 
 describe('Gemensamma ärendevyer', () => {
   it.each([
-    ['/my-tickets', 'Mina'], ['/tickets', 'Alla'], ['/archive', 'Avslutade'],
+    ['/my-tickets', 'Aktiva'], ['/tickets', 'Aktiva'], ['/archive', 'Avslutade'],
+    ['/tickets?status=open&', 'Öppna'],
   ])('markerar gammal direktlänk %s i vyval, mobilmeny och brödsmulor', (path, label) => {
-    renderAt(`${path}?search=skrivare`);
+    renderAt(path.includes('?') ? `${path}search=skrivare` : `${path}?search=skrivare`);
     const views = within(screen.getByRole('navigation', { name: 'Ärendevyer' }));
-    expect(views.getAllByRole('link')).toHaveLength(3);
+    expect(views.getAllByRole('link')).toHaveLength(5);
     expect(views.getByRole('link', { name: label })).toHaveAttribute('aria-current', 'page');
     const mobile = within(screen.getByRole('navigation', { name: 'Huvudnavigation' }));
     expect(mobile.getByRole('link', { name: 'Ärenden' })).toHaveAttribute('aria-current', 'page');
@@ -44,9 +45,9 @@ describe('Gemensamma ärendevyer', () => {
     const initial = '/archive?dateFrom=2026-01-01&dateField=closed_at&search=skrivare';
     renderAt(initial);
     const views = within(screen.getByRole('navigation', { name: 'Ärendevyer' }));
-    expect(views.getByRole('link', { name: 'Avslutade' })).toHaveAttribute('href', initial);
-    fireEvent.click(views.getByRole('link', { name: 'Mina' }));
-    expect(screen.getByLabelText('Aktuell adress')).toHaveTextContent('/my-tickets');
+    expect(views.getByRole('link', { name: 'Avslutade' })).toHaveAttribute('href', '/archive?dateFrom=2026-01-01&dateField=updated_at&search=skrivare');
+    fireEvent.click(views.getByRole('link', { name: 'Öppna' }));
+    expect(screen.getByLabelText('Aktuell adress')).toHaveTextContent('/tickets?dateFrom=2026-01-01&dateField=closed_at&search=skrivare&status=open');
     fireEvent.click(screen.getByRole('button', { name: 'Bakåt' }));
     expect(screen.getByLabelText('Aktuell adress')).toHaveTextContent(initial);
   });

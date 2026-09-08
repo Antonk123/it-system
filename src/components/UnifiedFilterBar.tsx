@@ -1,11 +1,8 @@
 import { useState } from 'react';
-import { FilterView } from '@/types/filterView';
-import { TicketStatus, TicketPriority } from '@/types/ticket';
+import { TicketPriority } from '@/types/ticket';
 import { SearchBar } from '@/components/SearchBar';
-import { StatusMultiSelect } from '@/components/StatusMultiSelect';
 import { DateRangePopover } from '@/components/DateRangePopover';
 import { ActiveFilterChips } from '@/components/ActiveFilterChips';
-import { FilterViewSelector } from '@/components/FilterViewSelector';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -15,12 +12,13 @@ import {
 } from '@/components/ui/select';
 import { useCategories } from '@/hooks/useCategories';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Settings2, SlidersHorizontal } from 'lucide-react';
+import { SlidersHorizontal } from 'lucide-react';
 
 interface UnifiedFilterBarProps {
   // Current filter values (from URL params in parent)
   search: string;
-  selectedStatuses: TicketStatus[];
+  mine: boolean;
+  onMineChange: (mine: boolean) => void;
   priorityFilter: TicketPriority | 'all';
   categoryFilter: string;
   checklistFilter: string;
@@ -29,14 +27,7 @@ interface UnifiedFilterBarProps {
   dateField: 'created_at' | 'updated_at' | 'closed_at';
 
   // Page-specific overrides
-  hideStatus?: boolean;            // true on Archive (per D-05)
   hideDateFieldSelector?: boolean; // true on Archive (per D-06)
-
-  // Filter preset integration
-  views: FilterView[];
-  activeViewId: string | null;
-  onSelectView: (view: FilterView) => void;
-  onManageViews: () => void;
 
   // Single onChange handler — parent updates URL
   onChange: (updates: Record<string, any>) => void;
@@ -48,19 +39,15 @@ interface UnifiedFilterBarProps {
 
 export function UnifiedFilterBar({
   search,
-  selectedStatuses,
+  mine,
+  onMineChange,
   priorityFilter,
   categoryFilter,
   checklistFilter,
   dateFrom,
   dateTo,
   dateField,
-  hideStatus = false,
   hideDateFieldSelector = false,
-  views,
-  activeViewId,
-  onSelectView,
-  onManageViews,
   onChange,
   onClearAll,
   searchPlaceholder = 'Sök ärenden...',
@@ -99,16 +86,8 @@ export function UnifiedFilterBar({
     }
   };
 
-  const handleSelectViewById = (viewId: string) => {
-    const view = views.find((v) => v.id === viewId);
-    if (view) {
-      onSelectView(view);
-    }
-  };
-
   // Count active filters (excluding search) for mobile badge
   const activeFilterCount = [
-    !hideStatus && selectedStatuses.length > 0,
     priorityFilter !== 'all',
     categoryFilter !== 'all',
     checklistFilter !== '' && checklistFilter !== 'all',
@@ -118,14 +97,6 @@ export function UnifiedFilterBar({
 
   const filterControls = (
     <>
-      {/* 2. Status — hidden on Archive */}
-      {!hideStatus && (
-        <StatusMultiSelect
-          selectedStatuses={selectedStatuses}
-          onChange={(statuses) => onChange({ status: statuses })}
-        />
-      )}
-
       {/* 3. Priority Select */}
       <Select
         value={priorityFilter}
@@ -195,22 +166,6 @@ export function UnifiedFilterBar({
         onChange={onChange}
       />
 
-      {/* 8. Filter View Selector + Manage button */}
-      <FilterViewSelector
-        views={views}
-        activeViewId={activeViewId}
-        onSelectView={handleSelectViewById}
-      />
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-10 w-10"
-        onClick={onManageViews}
-        title="Hantera vyer"
-        aria-label="Hantera filtervyer"
-      >
-        <Settings2 className="w-4 h-4" />
-      </Button>
     </>
   );
 
@@ -225,6 +180,7 @@ export function UnifiedFilterBar({
             placeholder={searchPlaceholder}
           />
         </div>
+        <Button variant={mine ? 'secondary' : 'outline'} aria-pressed={mine} onClick={() => onMineChange(!mine)} className="min-h-11 shrink-0">Bara mina</Button>
         {isMobile && (
           <Button
             variant={filtersOpen ? 'secondary' : 'outline'}
@@ -260,14 +216,12 @@ export function UnifiedFilterBar({
 
       {/* Chip row */}
       <ActiveFilterChips
-        selectedStatuses={selectedStatuses}
         priorityFilter={priorityFilter}
         categoryFilter={categoryFilter}
         checklistFilter={checklistFilter}
         dateFrom={dateFrom}
         dateTo={dateTo}
         dateField={dateField}
-        hideStatus={hideStatus}
         onRemove={onChange}
         onClearAll={onClearAll}
       />

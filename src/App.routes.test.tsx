@@ -60,7 +60,6 @@ vi.mock('@/pages/KBArticleForm', () => ({ default: (p: unknown) => registry.KBAr
 vi.mock('@/pages/SharedKBArticle', () => ({ default: (p: unknown) => registry.SharedKBArticle(p) }));
 vi.mock('@/pages/PublicKnowledgeBase', () => ({ default: (p: unknown) => registry.PublicKnowledgeBase(p) }));
 vi.mock('@/pages/PublicKBArticle', () => ({ default: (p: unknown) => registry.PublicKBArticle(p) }));
-vi.mock('@/pages/Recurring', () => ({ default: (p: unknown) => registry.Recurring(p) }));
 vi.mock('@/pages/CompanyList', () => ({ default: (p: unknown) => registry.CompanyList(p) }));
 vi.mock('@/pages/CompanyDetail', () => ({ default: (p: unknown) => registry.CompanyDetail(p) }));
 
@@ -113,7 +112,7 @@ const STUB_NAMES = [
   'Index', 'TicketList', 'TicketForm', 'TicketDetail', 'Archive', 'UserList', 'Settings',
   'Reports', 'Login', 'ForgotPassword', 'ResetPassword', 'PublicTicketForm', 'SharedTicket',
   'NotFound', 'KnowledgeBase', 'KBArticleDetail', 'KBArticleForm', 'SharedKBArticle', 'PublicKnowledgeBase', 'PublicKBArticle',
-  'Recurring', 'CompanyList', 'CompanyDetail',
+  'CompanyList', 'CompanyDetail',
 ] as const;
 
 STUB_NAMES.forEach((name) => {
@@ -242,7 +241,6 @@ const ROUTES: RouteCase[] = [
   { path: '/tickets/new', concretePath: '/tickets/new', stub: 'TicketForm', guard: 'protected' },
   { path: '/tickets/:id', concretePath: '/tickets/42', stub: 'TicketDetail', guard: 'protected' },
   { path: '/tickets/:id/edit', concretePath: '/tickets/42/edit', stub: 'TicketForm', guard: 'protected' },
-  { path: '/recurring', concretePath: '/recurring', stub: 'Recurring', guard: 'protected' },
   { path: '/companies', concretePath: '/companies', stub: 'CompanyList', guard: 'protected' },
   { path: '/companies/:id', concretePath: '/companies/7', stub: 'CompanyDetail', guard: 'protected' },
   { path: '/archive', concretePath: '/archive', stub: 'Archive', guard: 'protected' },
@@ -456,6 +454,12 @@ describe('returnTo — PublicRoute respekterar state.from/?returnTo= för redan 
 // 7. Splat
 // ---------------------------------------------------------------------------
 describe('splat — okänd path', () => {
+  it('avvecklade återkommande ärenden har ingen route', async () => {
+    authState.isAuthenticated = true;
+    renderRoutes('/recurring');
+    expect(await screen.findByTestId('stub:NotFound')).toBeInTheDocument();
+  });
+
   it('okänd path (inloggad) → NotFound', async () => {
     authState.isAuthenticated = true;
     renderRoutes('/definitely/not/a/route/at/all');

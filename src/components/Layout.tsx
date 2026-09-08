@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router';
-import { LayoutDashboard, Ticket, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, RefreshCw, Sun, Moon, Search } from 'lucide-react';
+import { LayoutDashboard, Ticket, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, Sun, Moon, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isTicketSection } from '@/lib/ticketNavigation';
 import { Button } from '@/components/ui/button';
@@ -26,10 +26,6 @@ const navItems = [{
   path: '/tickets',
   icon: Ticket,
   label: 'Ärenden'
-}, {
-  path: '/recurring',
-  icon: RefreshCw,
-  label: 'Återkommande'
 }, {
   path: '/reports',
   icon: BarChart3,

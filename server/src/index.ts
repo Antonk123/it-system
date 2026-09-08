@@ -4,7 +4,6 @@ import { startReminderScheduler, stopReminderScheduler } from './lib/reminderSch
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
 import { cleanupOldAiUsage } from './lib/aiHelper.js';
 import { startAutoCloseScheduler, stopAutoCloseScheduler } from './lib/autoCloseScheduler.js';
-import { startRecurringScheduler, stopRecurringScheduler } from './lib/recurringScheduler.js';
 import { startWebhookRetryScheduler, stopWebhookRetryScheduler } from './lib/webhookRetryScheduler.js';
 import { initWebPush } from './lib/push.js';
 import { startPushScheduler, stopPushScheduler } from './lib/pushScheduler.js';
@@ -146,9 +145,6 @@ startBackupScheduler();
 // Auto-close resolved tickets (daily at 02:30, configurable via AUTO_CLOSE_DAYS env var)
 startAutoCloseScheduler();
 
-// Recurring ticket scheduler (every minute)
-startRecurringScheduler();
-
 // Webhook retry scheduler (every minute) — re-attempts failed deliveries
 // with exponential backoff up to 5 attempts.
 startWebhookRetryScheduler();
@@ -181,7 +177,6 @@ const gracefulShutdown = (signal: string) => {
   stopEmailPolling();
   stopWebhookRetryScheduler();
   stopReminderScheduler();
-  stopRecurringScheduler();
   stopAutoCloseScheduler();
   stopPushScheduler();
 

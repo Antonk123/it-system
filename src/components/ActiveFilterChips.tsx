@@ -2,17 +2,15 @@ import { X } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useCategories } from '@/hooks/useCategories';
-import { PRIORITY_LABELS, STATUS_LABELS } from '@/lib/constants';
+import { PRIORITY_LABELS } from '@/lib/constants';
 
 interface ActiveFilterChipsProps {
-  selectedStatuses: string[];
   priorityFilter: string;
   categoryFilter: string;
   checklistFilter: string;
   dateFrom: string;
   dateTo: string;
   dateField: string;
-  hideStatus?: boolean; // true on Archive
   onRemove: (updates: Record<string, any>) => void;
   onClearAll: () => void;
 }
@@ -29,28 +27,24 @@ const DATE_FIELD_LABELS: Record<string, string> = {
 };
 
 export function ActiveFilterChips({
-  selectedStatuses,
   priorityFilter,
   categoryFilter,
   checklistFilter,
   dateFrom,
   dateTo,
   dateField,
-  hideStatus = false,
   onRemove,
   onClearAll,
 }: ActiveFilterChipsProps) {
   const { categories } = useCategories();
 
   // Count active filters to determine if we should render anything
-  const statusCount = hideStatus ? 0 : selectedStatuses.length;
   const hasPriority = priorityFilter && priorityFilter !== 'all';
   const hasCategory = categoryFilter && categoryFilter !== 'all';
   const hasChecklist = Boolean(checklistFilter);
   const hasDate = Boolean(dateFrom || dateTo);
 
   const totalActive =
-    statusCount +
     (hasPriority ? 1 : 0) +
     (hasCategory ? 1 : 0) +
     (hasChecklist ? 1 : 0) +
@@ -64,28 +58,6 @@ export function ActiveFilterChips({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {/* Status chips */}
-      {!hideStatus &&
-        selectedStatuses.map((status) => (
-          <Badge
-            key={status}
-            variant="secondary"
-            className="flex items-center gap-1 pr-1 border border-primary text-xs font-semibold"
-          >
-            <span className="text-muted-foreground">Status:</span>
-            {STATUS_LABELS[status] || status}
-            <button
-              onClick={() =>
-                onRemove({ status: selectedStatuses.filter((s) => s !== status) })
-              }
-              className="ml-1 rounded-sm hover:text-destructive p-0.5"
-              aria-label={`Ta bort statusfilter ${status}`}
-            >
-              <X className="w-3 h-3" />
-            </button>
-          </Badge>
-        ))}
-
       {/* Priority chip */}
       {hasPriority && (
         <Badge

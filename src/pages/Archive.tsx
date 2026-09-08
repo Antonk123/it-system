@@ -1,29 +1,34 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router';
 import { useTickets } from '@/hooks/useTickets';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCompanies } from '@/hooks/useCompanies';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUsers } from '@/hooks/useUsers';
 import { Layout } from '@/components/Layout';
+import { getTicketScope } from '@/lib/ticketNavigation';
 import { TicketViewNavigation } from '@/components/TicketViewNavigation';
 import { TicketTable } from '@/components/TicketTable';
 import { EmptyState } from '@/components/EmptyState';
 import { PaginationControls } from '@/components/PaginationControls';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Archive as ArchiveIcon, Upload } from 'lucide-react';
+import { Archive as ArchiveIcon, Upload, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { TicketPriority } from '@/types/ticket';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
-import { archiveFilterViewMatches } from '@/lib/archiveFilterView';
 import { ImportDialog } from '@/components/ImportDialog';
 import { UnifiedFilterBar } from '@/components/UnifiedFilterBar';
 import { BulkActionBar } from '@/components/BulkActionBar';
-import { FilterViewManager } from '@/components/FilterViewManager';
-import { useFilterViews } from '@/hooks/useFilterViews';
 
 const Archive = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
+  const { companies } = useCompanies();
+  const { statuses, mine } = getTicketScope(location.pathname, searchParams);
+  const companyFilter = searchParams.get('company_id') || 'all';
 
   // Read state from URL
   const page = Number(searchParams.get('page')) || 1;
@@ -32,7 +37,7 @@ const Archive = () => {
   const categoryFilter = searchParams.get('category') || 'all';
   const priorityFilter = (searchParams.get('priority') || 'all') as TicketPriority | 'all';
   const checklistFilter = searchParams.get('checklist') || '';
-  const dateField = 'closed_at' as const; // Locked per D-06
+  const dateField = 'updated_at' as const; // Includes resolved tickets without closed_at.
   const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'priority' | 'category';
   const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
   const dateFrom = searchParams.get('dateFrom') || '';
@@ -41,32 +46,20 @@ const Archive = () => {
   const [compactView, setCompactView] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [manageViewsOpen, setManageViewsOpen] = useState(false);
 
-  // Filter views
-  const {
-    views,
-    activeView,
-    createView,
-    updateView,
-    deleteView,
-    setDefaultView,
-    applyView,
-    setActiveView,
-    getCurrentFiltersAsView,
-  } = useFilterViews();
-
-  // Fetch with pagination - filter for closed tickets
+  // Both resolved and closed tickets belong to Avslutade.
   const { tickets, pagination, isLoading, refetch } = useTickets({
     page,
     limit: pageSize,
-    status: 'closed',
+    status: statuses.join(','),
+    assigned_to: mine && user?.id ? user.id : undefined,
+    company_id: companyFilter,
     priority: priorityFilter,
     category: categoryFilter,
     search,
     dateFrom,
     dateTo,
-    dateField: 'closed_at',
+    dateField,
     checklist: checklistFilter,
     sortBy: sortKey,
     sortDir: sortDirection,
@@ -75,7 +68,7 @@ const Archive = () => {
   const { users } = useUsers();
 
   // Reopen makes sense whenever any selected ticket is resolved/closed.
-  // Archive lists status=closed exclusively, so a non-empty selection always
+  // Avslutade lists resolved and closed tickets, so a non-empty selection always
   // qualifies — but we compute it from the actual selection for correctness.
   const canReopenSelection = tickets.some(
     (t) => selectedIds.includes(t.id) && (t.status === 'resolved' || t.status === 'closed'),
@@ -97,15 +90,17 @@ const Archive = () => {
   // Clear selection when filters or page changes
   useEffect(() => {
     setSelectedIds([]);
-  }, [page, priorityFilter, categoryFilter, search, checklistFilter, dateFrom, dateTo]);
+  }, [location.pathname, location.search]);
 
   // Update URL params
   const updateFilters = useCallback((updates: Record<string, any>) => {
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete('tags');
+    newParams.delete('tagMode');
 
     Object.entries(updates).forEach(([key, value]) => {
       if (Array.isArray(value)) {
-        // Handle arrays (tags)
+        // Handle array-valued filters
         if (value.length > 0) {
           newParams.set(key, value.join(','));
         } else {
@@ -121,12 +116,10 @@ const Archive = () => {
     // Reset to page 1 on filter/sort changes
     if (Object.keys(updates).some(k => k !== 'page' && k !== 'limit')) {
       newParams.set('page', '1');
-      // Deactivate active view when filters are changed manually
-      setActiveView(null);
     }
 
     setSearchParams(newParams);
-  }, [searchParams, setSearchParams, setActiveView]);
+  }, [searchParams, setSearchParams ]);
 
   // Event handlers
   const handlePageChange = (newPage: number) => {
@@ -192,6 +185,24 @@ const Archive = () => {
     }
   }, [selectedIds]);
 
+  const handleExport = useCallback(async () => {
+    try {
+      const params = new URLSearchParams({ status: statuses.join(','), dateField });
+      if (priorityFilter !== 'all') params.set('priority', priorityFilter);
+      if (categoryFilter !== 'all') params.set('category', categoryFilter);
+      if (companyFilter !== 'all') params.set('company_id', companyFilter);
+      if (search) params.set('search', search);
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
+      if (checklistFilter && checklistFilter !== 'all') params.set('checklist', checklistFilter);
+      if (mine && user?.id) params.set('assigned_to', user.id);
+      await api.exportTickets(`?${params.toString()}`);
+      toast.success('Excel-export lyckades!');
+    } catch {
+      toast.error('Kunde inte exportera avslutade ärenden');
+    }
+  }, [statuses, dateField, priorityFilter, categoryFilter, companyFilter, search, dateFrom, dateTo, checklistFilter, mine, user?.id]);
+
   const handleBulkAssign = useCallback(async (userId: string | null) => {
     if (selectedIds.length === 0) return;
     try {
@@ -225,11 +236,14 @@ const Archive = () => {
             {pagination && pagination.total > 0 && (
               <p className="text-muted-foreground mt-1">
                 Visar {((pagination.page - 1) * pagination.limit) + 1}-
-                {Math.min(pagination.page * pagination.limit, pagination.total)} av {pagination.total} stängda ärenden
+                {Math.min(pagination.page * pagination.limit, pagination.total)} av {pagination.total} avslutade ärenden
               </p>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleExport} className="h-8 gap-2">
+              <Download className="w-4 h-4" /> Exportera Excel
+            </Button>
             <Button
               variant="outline"
               size="sm"
@@ -250,28 +264,33 @@ const Archive = () => {
           </div>
         </div>
 
-        {/* Unified Filter Bar — status hidden, date field locked to closed_at */}
+        <Select value={companyFilter} onValueChange={(value) => updateFilters({ company_id: value })}>
+          <SelectTrigger className="w-[180px]" aria-label="Företag"><SelectValue placeholder="Alla företag" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Alla företag</SelectItem>
+            {companies.map(company => <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">Datumfilter avser senast uppdaterat, för både lösta och stängda ärenden.</p>
+
+        {/* Unified Filter Bar — date field locked to updated_at */}
         <UnifiedFilterBar
+          mine={mine}
+          onMineChange={(value) => updateFilters({ mine: value ? '1' : '' })}
           search={search}
-          selectedStatuses={[]}
           priorityFilter={priorityFilter}
           categoryFilter={categoryFilter}
           checklistFilter={checklistFilter}
           dateFrom={dateFrom}
           dateTo={dateTo}
           dateField={dateField}
-          hideStatus={true}
           hideDateFieldSelector={true}
-          views={views}
-          activeViewId={archiveFilterViewMatches(activeView, searchParams) ? activeView?.id ?? null : null}
-          onSelectView={(view) => applyView(view, 'archive')}
-          onManageViews={() => setManageViewsOpen(true)}
           onChange={updateFilters}
           onClearAll={() => updateFilters({
-            search: '', priority: 'all', category: 'all',
+            search: '', mine: '', priority: 'all', category: 'all', company_id: 'all',
             checklist: '', dateFrom: '', dateTo: ''
           })}
-          searchPlaceholder="Sök arkiverade ärenden..."
+          searchPlaceholder="Sök avslutade ärenden..."
         />
 
         {/* Loading state */}
@@ -282,19 +301,19 @@ const Archive = () => {
             ))}
           </div>
         ) : tickets.length === 0 ? (
-          search === '' && categoryFilter === 'all' && priorityFilter === 'all' && !checklistFilter && !dateFrom && !dateTo ? (
+          search === '' && categoryFilter === 'all' && priorityFilter === 'all' && !checklistFilter && !dateFrom && !dateTo && !mine && companyFilter === 'all' ? (
             <EmptyState
               icon={<ArchiveIcon />}
-              title="Inga arkiverade ärenden ännu"
-              description="Stängda ärenden visas här"
+              title="Inga avslutade ärenden ännu"
+              description="Lösta och stängda ärenden visas här"
             />
           ) : (
             <EmptyState
               icon={<ArchiveIcon />}
-              title="Inga arkiverade ärenden matchar filtret"
+              title="Inga avslutade ärenden matchar filtret"
               hasFilters
               onClearFilters={() => updateFilters({
-                search: '', priority: 'all', category: 'all',
+                search: '', mine: '', priority: 'all', category: 'all', company_id: 'all',
                 checklist: '', dateFrom: '', dateTo: ''
               })}
             />
@@ -342,17 +361,6 @@ const Archive = () => {
         onDeletePermanently={handleBulkDelete}
       />
 
-      {/* Filter view manager dialog */}
-      <FilterViewManager
-        open={manageViewsOpen}
-        onOpenChange={setManageViewsOpen}
-        views={views}
-        currentFilters={getCurrentFiltersAsView()}
-        onCreateView={createView}
-        onUpdateView={updateView}
-        onDeleteView={deleteView}
-        onSetDefault={setDefaultView}
-      />
 
       <ImportDialog
         open={importOpen}

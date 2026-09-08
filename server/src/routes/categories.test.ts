@@ -177,3 +177,27 @@ describe('Category CRUD cycle (admin)', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('Category ordering and linked records', () => {
+  it('reorders categories and preserves linked ticket/template when a category is removed', async () => {
+    const a = randomUUID();
+    const b = randomUUID();
+    db.prepare('INSERT INTO categories (id, name, label) VALUES (?, ?, ?)').run(a, a, 'Kategori A');
+    db.prepare('INSERT INTO categories (id, name, label) VALUES (?, ?, ?)').run(b, b, 'Kategori B');
+    const reordered = await adminAgent.put('/api/categories/reorder')
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf)
+      .send({ ids: [b, a] });
+    expect(reordered.status).toBe(200);
+    expect((db.prepare('SELECT position FROM categories WHERE id = ?').get(b) as { position: number }).position).toBe(0);
+    expect((db.prepare('SELECT position FROM categories WHERE id = ?').get(a) as { position: number }).position).toBe(1);
+    const ticketId = randomUUID();
+    const templateId = randomUUID();
+    db.prepare('INSERT INTO tickets (id, title, description, category_id) VALUES (?, ?, ?, ?)').run(ticketId, 'Bevarat ärende', 'Beskrivning', a);
+    db.prepare('INSERT INTO ticket_templates (id, name, title_template, description_template, category_id) VALUES (?, ?, ?, ?, ?)').run(templateId, 'Bevarad mall', 'Rubrik', 'Beskrivning', a);
+    const removed = await adminAgent.delete(`/api/categories/${a}`)
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf);
+    expect(removed.status).toBe(200);
+    expect(db.prepare('SELECT title, category_id FROM tickets WHERE id = ?').get(ticketId)).toEqual({ title: 'Bevarat ärende', category_id: null });
+    expect(db.prepare('SELECT name, category_id FROM ticket_templates WHERE id = ?').get(templateId)).toEqual({ name: 'Bevarad mall', category_id: null });
+  });
+});
