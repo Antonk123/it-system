@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router';
-import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle, Upload, Link2 } from 'lucide-react';
+import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle, Upload, Link2, ArrowUpRight } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { KBTagSettings } from '@/components/KBTagSettings';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
@@ -118,24 +118,6 @@ const KnowledgeBase = () => {
     return (Date.now() - new Date(ref).getTime()) / (86400 * 1000) > 90;
   };
 
-  // Once categories are loaded set the first one as default (only when no filter is active)
-  const didSetDefaultCategory = useRef(false);
-  useEffect(() => {
-    if (didSetDefaultCategory.current) return;
-    if (categories.length === 0) return;
-    if (searchParams.get('category') || searchParams.get('search')) {
-      didSetDefaultCategory.current = true;
-      return;
-    }
-    didSetDefaultCategory.current = true;
-    setSearchParams((prev) => {
-      const next = new URLSearchParams(prev);
-      next.set('category', categories[0].id);
-      return next;
-    }, { replace: true });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categories]);
-
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key !== '/') return;
@@ -192,24 +174,134 @@ const KnowledgeBase = () => {
   };
 
   const getPreview = (html: string, maxLen = 120) => {
-    const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script, style').forEach(node => node.remove());
+    doc.querySelectorAll('p, div, li, br, h1, h2, h3, h4, h5, h6, tr').forEach(node => node.append(doc.createTextNode(' ')));
+    const text = (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
     return text.length > maxLen ? text.slice(0, maxLen) + '\u2026' : text;
   };
 
+  const selectCategory = (categoryId: string) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      if (categoryId) next.set('category', categoryId);
+      else next.delete('category');
+      next.delete('search');
+      return next;
+    }, { replace: true });
+  };
+  const clearFilters = () => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev);
+      next.delete('search');
+      next.delete('type');
+      return next;
+    }, { replace: true });
+    setStaleFilter(false);
+  };
+
   const activeCategory = categories.find((c) => c.id === selectedCategoryId);
-  const headerTitle = isSearching ? 'Sökresultat' : activeCategory?.name || 'Kunskapsbas';
+  const headerTitle = isSearching ? 'Sökresultat' : activeCategory?.name || 'Alla artiklar';
 
   return (
     <Layout>
-      <div className="flex h-[calc(100dvh-4rem)]">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <section aria-label="Sök i kunskapsbasen" className="rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-card to-card p-5 md:p-8 space-y-6">
+            {/* Header */}
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="hidden sm:flex p-3 rounded-2xl bg-primary/10 border border-primary/15">
+                  <BookOpen className="w-7 h-7 text-primary" />
+                </div>
+                <div>
+                  <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground">Kunskapsbas</h1>
+                  <p className="mt-2 text-sm md:text-base text-muted-foreground">Instruktioner och lösningar för arbetsdagen.</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 sm:justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowImportDialog(true)}
+                  size="sm"
+                  className="min-h-11"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  Importera
+                </Button>
+                {user?.role === 'admin' && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowPortalShareDialog(true)}
+                    size="sm"
+                  className="min-h-11"
+                  >
+                    <Link2 className="w-4 h-4 mr-2" />
+                    Publik länk
+                  </Button>
+                )}
+                <Button
+                  onClick={() => navigate(`/kb/new${selectedCategoryId ? `?category=${selectedCategoryId}` : ''}`)}
+                  size="sm"
+                  className="min-h-11"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Ny artikel
+                </Button>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="flex gap-3 flex-col sm:flex-row flex-wrap">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  ref={searchInputRef}
+                  placeholder="Sök i alla artiklar..."
+                  value={search}
+                  onChange={(e) => updateParam('search', e.target.value || null)}
+                  aria-label="Sök i kunskapsbasen"
+                  className="min-h-12 pl-10 pr-12 bg-background text-base"
+                />
+                {search ? (
+                  <button
+                    onClick={() => updateParam('search', null)}
+                    aria-label="Rensa sökning"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 min-h-11 min-w-11 inline-flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded border font-mono">/</kbd>
+                )}
+              </div>
+              <Select value={typeFilter} onValueChange={(v) => updateParam('type', v === 'all' ? null : v)}>
+                <SelectTrigger aria-label="Artikeltyp" className="min-h-12 w-full sm:w-[180px] bg-background">
+                  <SelectValue placeholder="Alla typer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Alla typer</SelectItem>
+                  <SelectItem value="how-to">Instruktion</SelectItem>
+                  <SelectItem value="solution">Lösning</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-2 shrink-0">
+                <Switch id="stale-filter" checked={staleFilter} onCheckedChange={setStaleFilter} />
+                <Label htmlFor="stale-filter" className="text-sm cursor-pointer whitespace-nowrap">Visa inaktuella</Label>
+              </div>
+            </div>
+
+        </section>
+        <div className="grid min-w-0 gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
         {/* Sidebar */}
-        <aside className="w-60 shrink-0 border-r border-border bg-card/50 flex flex-col">
+        <aside className="min-w-0 self-start rounded-xl border border-border bg-card p-2 space-y-2">
           <div className="p-3 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Kategorier</span>
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 w-7 p-0"
+              aria-label="Hantera kategorier"
+              aria-expanded={showCategoryManager}
+              className="h-11 w-11 p-0"
               onClick={() => setShowCategoryManager((v) => !v)}
             >
               <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
@@ -231,35 +323,31 @@ const KnowledgeBase = () => {
             </Dialog>
           )}
 
-          <nav className="flex-1 overflow-y-auto px-2 space-y-0.5">
-            {categories.map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  setSearchParams((prev) => {
-                    const next = new URLSearchParams(prev);
-                    next.set('category', cat.id);
-                    next.delete('search');
-                    return next;
-                  }, { replace: true });
-                }}
-                className={cn(
-                  'w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm transition-colors',
-                  'hover:bg-accent/50',
-                  selectedCategoryId === cat.id && !isSearching
-                    ? 'bg-primary/10 text-primary font-medium'
-                    : 'text-foreground',
-                  isSearching && 'opacity-50',
-                )}
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ backgroundColor: cat.color || '#888' }}
-                />
-                <span className="flex-1 truncate text-left">{cat.name}</span>
-                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 min-w-0">
-                  {cat.article_count}
-                </Badge>
+          <div className="px-1 pb-1 lg:hidden">
+            <Label htmlFor="kb-category-mobile" className="sr-only">Kategori</Label>
+            <Select value={isSearching ? 'all' : selectedCategoryId || 'all'} onValueChange={value => selectCategory(value === 'all' ? '' : value)}>
+              <SelectTrigger id="kb-category-mobile" className="min-h-11"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Alla artiklar</SelectItem>
+                {categories.map(cat => <SelectItem key={cat.id} value={cat.id}>{cat.name} ({cat.article_count})</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <nav aria-label="Artikelkategorier" className="hidden lg:block space-y-1">
+            <button type="button" onClick={() => selectCategory('')}
+              aria-current={!selectedCategoryId && !isSearching ? 'page' : undefined}
+              className={cn('w-full min-h-11 flex items-center gap-2 rounded-lg px-3 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                !selectedCategoryId && !isSearching ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
+              <BookOpen className="h-4 w-4" aria-hidden="true" />Alla artiklar
+            </button>
+            {categories.map(cat => (
+              <button key={cat.id} type="button" onClick={() => selectCategory(cat.id)}
+                aria-current={selectedCategoryId === cat.id && !isSearching ? 'page' : undefined}
+                className={cn('w-full min-h-11 flex items-center gap-2 rounded-lg px-3 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  selectedCategoryId === cat.id && !isSearching ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
+                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: cat.color || 'currentColor' }} aria-hidden="true" />
+                <span className="min-w-0 flex-1 break-words">{cat.name}</span>
+                <span className="text-xs tabular-nums rounded-md bg-muted px-1.5 py-0.5">{cat.article_count}</span>
               </button>
             ))}
           </nav>
@@ -283,7 +371,7 @@ const KnowledgeBase = () => {
                           <Input
                             value={editingCategoryName}
                             onChange={(e) => setEditingCategoryName(e.target.value)}
-                            className="h-7 text-xs flex-1"
+                            className="h-11 text-sm flex-1"
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') handleUpdateCategory(cat.id);
                               if (e.key === 'Escape') setEditingCategoryId(null);
@@ -293,7 +381,7 @@ const KnowledgeBase = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-9 w-9 md:h-7 md:w-7 p-0 shrink-0"
+                            className="h-11 w-11 p-0 shrink-0"
                             onClick={() => handleUpdateCategory(cat.id)}
                             disabled={isSavingCategoryId === cat.id}
                             aria-label="Spara kategorinamn"
@@ -303,7 +391,7 @@ const KnowledgeBase = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-9 w-9 md:h-7 md:w-7 p-0 shrink-0"
+                            className="h-11 w-11 p-0 shrink-0"
                             onClick={() => setEditingCategoryId(null)}
                             aria-label="Avbryt redigering"
                           >
@@ -316,7 +404,7 @@ const KnowledgeBase = () => {
                           <Button
                             size="sm"
                             variant="ghost"
-                            className="h-9 w-9 md:h-7 md:w-7 p-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity shrink-0"
+                            className="h-11 w-11 p-0 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity shrink-0"
                             onClick={() => {
                               setEditingCategoryId(cat.id);
                               setEditingCategoryName(cat.name);
@@ -330,7 +418,7 @@ const KnowledgeBase = () => {
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                className="h-9 w-9 md:h-7 md:w-7 p-0 md:opacity-0 md:group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive shrink-0"
+                                className="h-11 w-11 p-0 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity text-destructive hover:text-destructive shrink-0"
                                 aria-label={`Ta bort kategorin ${cat.name}`}
                               >
                                 <Trash2 className="w-3 h-3" />
@@ -356,17 +444,18 @@ const KnowledgeBase = () => {
                 </div>
               )}
 
-              <div className="flex gap-1.5">
+              <div className="flex flex-col gap-2">
                 <Input
                   placeholder="Ny kategori..."
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
-                  className="h-7 text-xs"
+                  className="h-11 min-w-0 text-sm"
+                  aria-label="Ny kategori"
                   onKeyDown={(e) => e.key === 'Enter' && handleCreateCategory()}
                 />
                 <Button
                   size="sm"
-                  className="h-7 text-xs px-2"
+                  className="min-h-11 w-full shrink-0 whitespace-nowrap text-sm px-3"
                   onClick={handleCreateCategory}
                   disabled={isCreatingCategory || !newCategoryName.trim()}
                 >
@@ -379,96 +468,22 @@ const KnowledgeBase = () => {
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-4">
-            {/* Header */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <BookOpen className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <h1 className="text-xl font-semibold text-foreground">{headerTitle}</h1>
-                  <p className="text-sm text-muted-foreground">{articles.length} artiklar</p>
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2 sm:justify-end">
-                <Button
-                  variant="outline"
-                  onClick={() => setShowImportDialog(true)}
-                  size="sm"
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Importera
-                </Button>
-                {user?.role === 'admin' && (
-                  <Button
-                    variant="outline"
-                    onClick={() => setShowPortalShareDialog(true)}
-                    size="sm"
-                  >
-                    <Link2 className="w-4 h-4 mr-2" />
-                    Publik länk
-                  </Button>
-                )}
-                <Button
-                  onClick={() => navigate(`/kb/new${selectedCategoryId ? `?category=${selectedCategoryId}` : ''}`)}
-                  size="sm"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Ny artikel
-                </Button>
-              </div>
-            </div>
-
-            {/* Filters */}
-            <div className="flex gap-3 flex-col sm:flex-row flex-wrap">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  ref={searchInputRef}
-                  placeholder="Sök i alla artiklar..."
-                  value={search}
-                  onChange={(e) => updateParam('search', e.target.value || null)}
-                  className="pl-9 pr-8"
-                />
-                {search ? (
-                  <button
-                    onClick={() => updateParam('search', null)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                ) : (
-                  <kbd className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded border font-mono">/</kbd>
-                )}
-              </div>
-              <Select value={typeFilter} onValueChange={(v) => updateParam('type', v === 'all' ? null : v)}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <SelectValue placeholder="Alla typer" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Alla typer</SelectItem>
-                  <SelectItem value="how-to">Instruktion</SelectItem>
-                  <SelectItem value="solution">Lösning</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="flex items-center gap-2 shrink-0">
-                <Switch id="stale-filter" checked={staleFilter} onCheckedChange={setStaleFilter} />
-                <Label htmlFor="stale-filter" className="text-sm cursor-pointer whitespace-nowrap">Visa inaktuella</Label>
-              </div>
-            </div>
-
+        <section aria-labelledby="kb-results-heading" className="min-w-0 space-y-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <h2 id="kb-results-heading" className="text-xl font-semibold tracking-tight">{headerTitle}</h2>
+            <span className="shrink-0 text-sm text-muted-foreground" aria-live="polite">{isLoading ? 'Laddar…' : `${articles.length} ${articles.length === 1 ? 'artikel' : 'artiklar'}`}</span>
+          </div>
+          <div className="space-y-4">
             {/* Articles list */}
             <AnimatePresence mode="wait">
               {isLoading ? (
                 <motion.div
                   key="skeleton"
-                  initial={{ opacity: 0 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="grid grid-cols-1 gap-2"
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
+                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4"
                 >
                   {Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="bg-card rounded-lg border border-border p-4 space-y-2">
@@ -483,10 +498,10 @@ const KnowledgeBase = () => {
               ) : isError ? (
                 <motion.div
                   key="error"
-                  initial={{ opacity: 0 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
                   className="text-center py-12 space-y-2"
                 >
                   <p className="text-destructive text-sm">Kunde inte hämta artiklar</p>
@@ -495,40 +510,35 @@ const KnowledgeBase = () => {
               ) : articles.length === 0 ? (
                 <motion.div
                   key="empty"
-                  initial={{ opacity: 0 }}
+                  initial={prefersReducedMotion ? false : { opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  transition={{ duration: 0.15 }}
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.15 }}
                 >
                   <EmptyState
                     icon={<BookOpen />}
+                    className="rounded-xl border-dashed min-h-64 justify-center"
                     title={
                       isSearching
                         ? `Inga artiklar hittades för "${search}"`
                         : typeFilter !== 'all' || staleFilter
                         ? 'Inga artiklar matchar filtret'
-                        : 'Inga artiklar ännu'
+                        : activeCategory ? `Inga artiklar i ${activeCategory.name} ännu` : 'Samla kunskapen här'
                     }
                     description={
                       !isSearching && typeFilter === 'all' && !staleFilter
                         ? 'Kom igång genom att skapa din första artikel.'
                         : undefined
                     }
-                    hasFilters={isSearching || typeFilter !== 'all' || staleFilter}
-                    onClearFilters={() => {
-                      updateParam('search', null);
-                      updateParam('type', null);
-                      setStaleFilter(false);
-                    }}
-                    action={
-                      <Button
-                        size="sm"
-                        onClick={() => navigate(`/kb/new${selectedCategoryId ? `?category=${selectedCategoryId}` : ''}`)}
-                      >
-                        <Plus className="w-4 h-4 mr-2" />
-                        Skapa artikel
+                    action={isSearching ? (
+                      <Button className="min-h-11" variant="outline" onClick={() => updateParam('search', null)}>Rensa sökning</Button>
+                    ) : typeFilter !== 'all' || staleFilter ? (
+                      <Button className="min-h-11" variant="outline" onClick={clearFilters}>Rensa filter</Button>
+                    ) : (
+                      <Button className="min-h-11" onClick={() => navigate(`/kb/new${selectedCategoryId ? `?category=${selectedCategoryId}` : ''}`)}>
+                        <Plus className="w-4 h-4 mr-2" />Skapa artikel
                       </Button>
-                    }
+                    )}
                   />
                 </motion.div>
               ) : (
@@ -537,47 +547,42 @@ const KnowledgeBase = () => {
                   initial={prefersReducedMotion ? false : 'hidden'}
                   animate={prefersReducedMotion ? false : 'visible'}
                   variants={listContainer}
-                  className="grid grid-cols-1 gap-2"
+                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4"
                 >
                   {articles.map((article) => (
                     <motion.div key={article.id} variants={listItem}>
                       <button
                         onClick={() => navigate(`/kb/${article.id}`)}
                         className={cn(
-                          'w-full text-left p-4 rounded-lg border border-border bg-card',
-                          'hover:bg-accent/50 hover:border-primary/30 transition-colors',
+                          'group h-full w-full text-left p-5 md:p-6 rounded-xl border border-border bg-card shadow-sm',
+                          'hover:bg-muted/30 hover:border-primary/40 transition-colors',
                           'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary'
                         )}
                       >
-                        <div className="flex items-start justify-between gap-3">
+                        <div className="flex h-full flex-col gap-4">
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <Folder className="h-3.5 w-3.5" aria-hidden="true" />
+                            <span>{article.category_name || categories.find(category => category.id === article.category_id)?.name || 'Utan kategori'}</span>
+                            <ArrowUpRight className="ml-auto h-4 w-4 group-hover:text-primary" aria-hidden="true" />
+                          </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-foreground truncate">{article.title}</p>
+                            <h3 className="font-semibold text-lg leading-snug text-foreground line-clamp-2">{article.title}</h3>
                             {article.content ? (
                               isSearching ? (
                                 <p
-                                  className="text-sm text-muted-foreground mt-1 line-clamp-2"
+                                  className="text-sm leading-relaxed text-muted-foreground mt-2 line-clamp-2"
                                   // Säkert: highlightTerms HTML-escapar texten innan den lägger på <mark>,
                                   // så bara <mark>-taggarna är riktig HTML (söktermen är dessutom regex-escapad).
                                   dangerouslySetInnerHTML={{ __html: highlightTerms(getPreview(article.content), search) }}
                                 />
                               ) : (
-                                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                <p className="text-sm leading-relaxed text-muted-foreground mt-2 line-clamp-2">
                                   {getPreview(article.content)}
                                 </p>
                               )
                             ) : null}
                           </div>
-                          <div className="flex flex-col items-end gap-1.5 shrink-0">
-                            {isSearching && article.category_name && (
-                              <Badge
-                                variant="secondary"
-                                className="text-xs"
-                                style={article.category_color ? { backgroundColor: article.category_color + '22', color: article.category_color } : undefined}
-                              >
-                                <Folder className="w-2.5 h-2.5 mr-1" />
-                                {article.category_name}
-                              </Badge>
-                            )}
+                          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
                             {article.article_type && (
                               <Badge variant="outline" className="text-xs">
                                 {TYPE_LABELS[article.article_type]}
@@ -589,7 +594,7 @@ const KnowledgeBase = () => {
                                 Inaktuell
                               </Badge>
                             )}
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <span className="text-xs text-muted-foreground flex items-center gap-1 ml-auto">
                               <Clock className="w-3 h-3" />
                               {formatDate(article.updated_at, { year: 'numeric', month: 'short', day: 'numeric' })}
                             </span>
@@ -602,7 +607,8 @@ const KnowledgeBase = () => {
               )}
             </AnimatePresence>
           </div>
-        </main>
+        </section>
+        </div>
       </div>
       <KBImportDialog
         open={showImportDialog}

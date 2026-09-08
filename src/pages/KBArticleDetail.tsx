@@ -218,17 +218,17 @@ const KBArticleDetail = () => {
 
   return (
     <Layout>
-      <div className="max-w-4xl mx-auto p-4 md:p-6 space-y-6">
+      <div className="max-w-6xl mx-auto rounded-2xl border border-border bg-card p-4 sm:p-6 lg:p-8 space-y-8 print:border-0 print:p-0">
         {/* Back + actions */}
-        <div className="max-w-3xl">
-          <div className="flex items-center justify-between">
+        <div>
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <Button variant="ghost" size="sm" asChild>
               <Link to="/kb">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Kunskapsbas
               </Link>
             </Button>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 print:hidden" data-print-hide>
                 <Printer className="w-4 h-4" />
                 <span>Skriv ut</span>
@@ -315,9 +315,9 @@ const KBArticleDetail = () => {
         )}
 
         {/* Article header */}
-        <div className="max-w-3xl space-y-3">
-          <h1 className="text-2xl font-bold text-foreground">{article.title}</h1>
-          <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+        <div className="max-w-[72ch] text-base space-y-4 border-b border-border pb-6">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight text-foreground break-words">{article.title}</h1>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
             {article.status === 'draft' && (
               <Badge variant="outline" className="border-[hsl(var(--warning))] text-[hsl(var(--warning))]">Utkast</Badge>
             )}
@@ -328,6 +328,11 @@ const KBArticleDetail = () => {
               >
                 <Folder className="w-3 h-3 mr-1.5" />
                 {article.category_name}
+              </Badge>
+            )}
+            {article.article_type && (
+              <Badge variant="outline" className="font-medium">
+                {article.article_type === 'how-to' ? 'Instruktion' : article.article_type === 'solution' ? 'Lösning' : 'Felsökning'}
               </Badge>
             )}
             <span className="flex items-center gap-1.5">
@@ -364,9 +369,9 @@ const KBArticleDetail = () => {
         </div>
 
         {/* Content + ToC side-by-side */}
-        <div className="flex gap-8 items-start">
+        <div className="flex gap-8 xl:gap-12 items-start">
           {/* Main content column */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 max-w-[72ch] text-base">
             {/* Mobile ToC — collapsible */}
             {tocItems.length >= 2 && (
               <details className="lg:hidden mb-4 border rounded-lg p-3 bg-card print:hidden">
@@ -379,7 +384,7 @@ const KBArticleDetail = () => {
                       key={item.id}
                       href={`#${item.id}`}
                       className={cn(
-                        'block text-sm py-0.5 transition-colors',
+                        'block rounded-sm text-sm py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                         item.level >= 3 ? 'pl-4' : item.level === 2 ? 'pl-2' : '',
                         'text-muted-foreground hover:text-foreground'
                       )}
@@ -392,10 +397,10 @@ const KBArticleDetail = () => {
             )}
 
             {/* Article content */}
-            <div ref={attachContentRef} className="prose-wrapper border border-border rounded-lg p-5 bg-card min-h-[200px]">
+            <div ref={attachContentRef} className="prose-wrapper min-h-[200px] break-words">
               {article.content ? (
                 <>
-                  <HtmlRenderer content={article.content} />
+                  <HtmlRenderer content={article.content} className="prose-p:leading-7 prose-p:my-5 prose-headings:mt-8 prose-headings:mb-3 prose-li:leading-7 [&>:first-child]:mt-0" />
                   <KBImageLightbox containerRef={contentRef} contentKey={article.id} />
                 </>
               ) : (
@@ -407,7 +412,7 @@ const KBArticleDetail = () => {
           {/* Desktop ToC sidebar — sticky right side */}
           {tocItems.length >= 2 && (
             <aside className="hidden lg:block w-52 shrink-0 print:hidden">
-              <div className="sticky top-24 space-y-1">
+              <div className="sticky top-24 space-y-1 border-l border-border pl-5">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
                   Innehåll
                 </p>
@@ -416,7 +421,7 @@ const KBArticleDetail = () => {
                     key={item.id}
                     href={`#${item.id}`}
                     className={cn(
-                      'block text-sm py-0.5 transition-colors',
+                      'block rounded-sm text-sm py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       item.level >= 3 ? 'pl-4' : item.level === 2 ? 'pl-2' : '',
                       activeId === item.id
                         ? 'text-primary font-medium'

@@ -211,9 +211,9 @@ const KBArticleForm = () => {
     // reflow when data arrives.
     return (
       <Layout>
-        <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6">
           {/* Header */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="h-9 w-24 bg-muted animate-pulse rounded-md" />
             <div className="h-6 w-40 bg-muted animate-pulse rounded" />
           </div>
@@ -262,16 +262,16 @@ const KBArticleForm = () => {
 
   return (
     <Layout>
-      <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-6">
+      <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button variant="ghost" size="sm" asChild>
             <Link to={isEditing && id ? `/kb/${id}` : '/kb'}>
               <ArrowLeft className="w-4 h-4 mr-2" />
               {isEditing ? 'Avbryt' : 'Kunskapsbas'}
             </Link>
           </Button>
-          <h1 className="text-lg font-semibold text-foreground">
+          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
             {isEditing ? 'Redigera artikel' : 'Ny artikel'}
           </h1>
         </div>
@@ -306,7 +306,7 @@ const KBArticleForm = () => {
         )}
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-border bg-card p-4 sm:p-6 lg:p-8">
           <div className="space-y-2">
             <Label htmlFor="title">
               Titel <span className="text-destructive">*</span>
@@ -324,11 +324,13 @@ const KBArticleForm = () => {
               // Autofocus only on create — editing shouldn't yank focus on
               // mount (user may scroll to a specific section to edit).
               autoFocus={!isEditing}
-              className={errors.title ? 'border-destructive' : ''}
+              className={`h-12 text-lg font-medium ${errors.title ? 'border-destructive' : ''}`}
             />
             {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
           </div>
 
+          <section aria-label="Artikelinformation" className="space-y-4 rounded-xl border border-border bg-muted/20 p-4">
+            <h2 className="text-sm font-semibold text-foreground">Artikelinformation</h2>
           <div className="space-y-2">
             <Label htmlFor="category">Kategori</Label>
             <Select
@@ -353,8 +355,8 @@ const KBArticleForm = () => {
             {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
           </div>
 
-          <div className="flex gap-3">
-            <div className="space-y-2 flex-1">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2 min-w-0">
               <Label htmlFor="article-type">Typ</Label>
               <Select value={articleType} onValueChange={setArticleType}>
                 <SelectTrigger id="article-type">
@@ -370,7 +372,7 @@ const KBArticleForm = () => {
             <div className="space-y-2">
               <Label htmlFor="status-toggle">Status</Label>
               <Select value={status} onValueChange={(val) => setStatus(val as 'draft' | 'published')}>
-                <SelectTrigger id="status-toggle" className="w-[160px]">
+                <SelectTrigger id="status-toggle" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -398,7 +400,7 @@ const KBArticleForm = () => {
                   <Badge key={tagId} variant="secondary" className="gap-1" style={{ backgroundColor: tag.color + '22', color: tag.color, borderColor: tag.color + '44' }}>
                     <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
                     {tag.name}
-                    <button type="button" onClick={() => setSelectedTagIds(prev => prev.filter(id => id !== tagId))} className="ml-0.5 hover:opacity-70">
+                    <button type="button" onClick={() => setSelectedTagIds(prev => prev.filter(id => id !== tagId))} className="ml-0.5 rounded-sm hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Ta bort taggen ${tag.name}`}>
                       <X className="h-3 w-3" />
                     </button>
                   </Badge>
@@ -407,6 +409,8 @@ const KBArticleForm = () => {
               <TagMultiSelect selectedTagIds={selectedTagIds} onChange={setSelectedTagIds} />
             </div>
           </div>
+
+          </section>
 
           {/* Cross-ref link picker — only shown in edit mode */}
           {isEditing && (
@@ -476,14 +480,14 @@ const KBArticleForm = () => {
                   setErrors(prev => { const p = { ...prev }; delete p.content; return p; });
                 }}
                 placeholder="Skriv artikelns innehåll..."
-                minHeight="300px"
+                minHeight="420px"
                 error={!!errors.content}
               />
             </div>
             {errors.content && <p className="text-xs text-destructive">{errors.content}</p>}
           </div>
 
-          <div className="flex gap-3 justify-end pt-2">
+          <div className="flex flex-wrap gap-3 justify-end border-t border-border pt-5">
             <Button
               type="button"
               variant="outline"

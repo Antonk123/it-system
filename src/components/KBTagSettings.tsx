@@ -95,8 +95,8 @@ export function KBTagSettings() {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent className="space-y-4">
-            <div className="flex gap-2 items-end">
-              <div className="flex-1">
+            <div className="flex flex-wrap gap-2 items-end">
+              <div className="min-w-0 basis-full sm:basis-0 flex-1">
                 <Input
                   placeholder="Nytt taggnamn..."
                   value={newTagName}
@@ -131,7 +131,7 @@ export function KBTagSettings() {
                   </div>
                 </PopoverContent>
               </Popover>
-              <Button onClick={handleAddTag} className="shrink-0" disabled={isCreatingTag}>
+              <Button onClick={handleAddTag} className="min-h-11 shrink-0 whitespace-nowrap" disabled={isCreatingTag}>
                 <Plus className="w-4 h-4 mr-2" />
                 Lägg till
               </Button>

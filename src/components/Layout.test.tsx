@@ -13,9 +13,6 @@ vi.mock('@/components/CommandPalette', () => ({
     <div data-testid="command-palette-state" data-open={String(open)} />
   ),
 }));
-vi.mock('@/components/QuickCaptureFAB', () => ({
-  QuickCaptureFAB: () => null,
-}));
 vi.mock('@/components/BottomTabBar', () => ({
   BottomTabBar: () => null,
 }));
@@ -70,6 +67,7 @@ describe('"Nytt ärende" — a11y-struktur (audit v5 MEDIUM-4/5)', () => {
 
   it('renderas som en enda länk med accessible name "Nytt ärende"', () => {
     renderLayout();
+    expect(screen.queryByRole('button', { name: 'Snabbt ärende' })).not.toBeInTheDocument();
     const link = screen.getByRole('link', { name: 'Nytt ärende' });
     expect(link.tagName).toBe('A');
   });

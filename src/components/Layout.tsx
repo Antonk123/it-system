@@ -6,7 +6,6 @@ import { isTicketSection } from '@/lib/ticketNavigation';
 import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/AuthContext';
-import { QuickCaptureFAB } from '@/components/QuickCaptureFAB';
 import { BottomTabBar } from '@/components/BottomTabBar';
 import { OnboardingWizard } from '@/components/OnboardingWizard';
 import { applyMode, getStoredMode, saveModeTheme, ModeTheme } from '@/lib/appearance';
@@ -325,20 +324,12 @@ export const Layout = ({
           <RouteBreadcrumbs />
         </div>
 
-        {/* pb-24 on mobile leaves room for the fixed BottomTabBar + lifted FAB without
+        {/* pb-24 on mobile leaves room for the fixed BottomTabBar without
             clipping the last row of content. lg: keeps the regular desktop padding. */}
         <div className="p-5 pb-28 lg:p-6 lg:pb-6 relative z-10" style={{ paddingBottom: 'max(7rem, calc(5rem + env(safe-area-inset-bottom, 0px)))' }}>
           {children}
         </div>
       </main>
-
-      <div data-print-hide>
-        <QuickCaptureFAB className={cn(
-          "left-4 lg:transition-[left] lg:duration-300",
-          "bottom-[calc(4.5rem+env(safe-area-inset-bottom,0px))] lg:bottom-6",
-          sidebarCollapsed ? "lg:left-20" : "lg:left-68"
-        )} />
-      </div>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
 
