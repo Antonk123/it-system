@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-14T00:00:00Z",
+  "title": "Design System: IT-Ticket — Forge",
+  "extensions": {
+    "colorMeta": {
+      "background-concrete": { "role": "neutral", "displayName": "Concrete", "canonical": "hsl(200, 10%, 8%)", "tonalRamp": ["hsl(200,10%,4%)", "hsl(200,10%,8%)", "hsl(200,9%,11%)", "hsl(200,8%,22%)", "hsl(200,7%,40%)", "hsl(200,6%,58%)", "hsl(195,6%,78%)", "hsl(195,8%,95%)"] },
+      "primary-steel-blue": { "role": "primary", "displayName": "Steel Blue", "canonical": "hsl(205, 45%, 48%)", "tonalRamp": ["hsl(205,55%,20%)", "hsl(205,55%,28%)", "hsl(205,55%,34%)", "hsl(205,45%,48%)", "hsl(205,45%,58%)", "hsl(205,40%,68%)", "hsl(205,35%,80%)", "hsl(205,30%,92%)"] },
+      "accent-rust-amber": { "role": "secondary", "displayName": "Rust Amber", "canonical": "hsl(28, 60%, 48%)", "tonalRamp": ["hsl(28,75%,18%)", "hsl(28,75%,28%)", "hsl(28,70%,38%)", "hsl(28,60%,48%)", "hsl(28,60%,58%)", "hsl(28,55%,68%)", "hsl(28,50%,80%)", "hsl(28,45%,92%)"] },
+      "priority-critical": { "role": "signal", "displayName": "Oxide Red (Priority: Critical)", "canonical": "hsl(9, 75%, 50%)", "tonalRamp": ["hsl(9,75%,20%)", "hsl(9,75%,30%)", "hsl(9,75%,36%)", "hsl(9,75%,50%)", "hsl(9,75%,60%)", "hsl(9,70%,70%)", "hsl(9,65%,82%)", "hsl(9,60%,93%)"] },
+      "priority-high": { "role": "signal", "displayName": "Rust Amber (Priority: High)", "canonical": "hsl(28, 75%, 50%)", "tonalRamp": ["hsl(28,75%,20%)", "hsl(28,75%,28%)", "hsl(28,75%,32%)", "hsl(28,75%,50%)", "hsl(28,75%,60%)", "hsl(28,70%,70%)", "hsl(28,65%,82%)", "hsl(28,60%,93%)"] },
+      "priority-medium": { "role": "signal", "displayName": "Steel Blue (Priority: Medium)", "canonical": "hsl(205, 30%, 52%)", "tonalRamp": ["hsl(205,35%,20%)", "hsl(205,35%,28%)", "hsl(205,35%,34%)", "hsl(205,30%,52%)", "hsl(205,30%,62%)", "hsl(205,28%,72%)", "hsl(205,25%,84%)", "hsl(205,20%,94%)"] },
+      "priority-low": { "role": "signal", "displayName": "Concrete Green (Priority: Low)", "canonical": "hsl(150, 20%, 42%)", "tonalRamp": ["hsl(150,25%,16%)", "hsl(150,25%,22%)", "hsl(150,25%,28%)", "hsl(150,20%,42%)", "hsl(150,20%,52%)", "hsl(150,18%,64%)", "hsl(150,15%,78%)", "hsl(150,12%,92%)"] },
+      "status-open": { "role": "signal", "displayName": "Stamp Ink: Open", "canonical": "hsl(205, 55%, 52%)" },
+      "status-in-progress": { "role": "signal", "displayName": "Stamp Ink: In Progress", "canonical": "hsl(32, 70%, 50%)" },
+      "status-waiting": { "role": "signal", "displayName": "Stamp Ink: Waiting", "canonical": "hsl(195, 15%, 55%)" },
+      "status-resolved": { "role": "signal", "displayName": "Stamp Ink: Resolved", "canonical": "hsl(150, 35%, 45%)" },
+      "status-closed": { "role": "signal", "displayName": "Stamp Ink: Closed", "canonical": "hsl(200, 8%, 50%)" }
+    },
+    "typographyMeta": {
+      "body": { "displayName": "Body (Inter)", "purpose": "Default UI text, table cells, descriptions." },
+      "label": { "displayName": "Label (Inter, semibold)", "purpose": "Field labels, badge text; uppercase+tracked only on the status stamp." },
+      "numeral-mono": { "displayName": "Numeral (JetBrains Mono)", "purpose": "Ticket IDs and KPI card figures only — never ordinary labels." }
+    },
+    "shadows": [
+      { "name": "shadow-sm", "value": "0 1px 3px -1px hsl(200 10% 3% / 0.35), 0 1px 1px 0px hsl(200 10% 3% / 0.2)", "purpose": "Floating UI only: dialogs, dropdowns, popovers. Never resting panels/cards." },
+      { "name": "shadow-2xl-drag", "value": "Tailwind default shadow-2xl, gated behind isDragging", "purpose": "KanbanCard active-drag lift affordance. Not a resting-state treatment." }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Priority Badge",
+      "kind": "chip",
+      "refersTo": "priority-badge",
+      "description": "Material-grade swatch tag with a solid left grade-bar; color read before label. Uses a literal per-priority class lookup, never string interpolation.",
+      "html": "<span class=\"ds-priority-badge ds-priority-critical\">Kritisk</span>",
+      "css": ".ds-priority-badge { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 6px; border-radius: 2px; border-left-width: 2px; border-left-style: solid; font-size: 12px; font-weight: 500; } .ds-priority-critical { background-color: hsla(9, 75%, 50%, 0.1); color: hsl(9, 75%, 50%); border-left-color: hsl(9, 75%, 50%); }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "status-badge",
+      "description": "Approval-stamp rectangle: outlined, uppercase, tracked. Distinct ink family from priority so the two never collide.",
+      "html": "<span class=\"ds-status-badge ds-status-open\">Öppen</span>",
+      "css": ".ds-status-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 2px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.025em; border-width: 1px; border-style: solid; } .ds-status-open { background-color: hsla(205, 55%, 52%, 0.1); color: hsl(205, 55%, 52%); border-color: hsla(205, 55%, 52%, 0.3); }"
+    },
+    {
+      "name": "KPI Card",
+      "kind": "card",
+      "refersTo": "kpi-card",
+      "description": "Flat bordered panel with opposite-corner print-registration-mark ticks; font-mono reserved for the numeral only, plain-case label.",
+      "html": "<div class=\"ds-kpi-card\"><span class=\"ds-kpi-mark ds-kpi-mark-tl\"></span><span class=\"ds-kpi-mark ds-kpi-mark-br\"></span><div class=\"ds-kpi-label\">Öppna ärenden</div><div class=\"ds-kpi-value\">128</div></div>",
+      "css": ".ds-kpi-card { position: relative; background: hsl(200, 9%, 11%); border: 1px solid hsl(200, 8%, 22%); border-radius: 4px; padding: 16px; color: hsl(60, 5%, 93%); transition: border-color 150ms; } .ds-kpi-card:hover { border-color: hsla(205, 45%, 48%, 0.5); } .ds-kpi-mark { position: absolute; width: 10px; height: 10px; border-color: hsl(200, 8%, 22%); } .ds-kpi-mark-tl { left: 0; top: 0; border-left: 1px solid; border-top: 1px solid; } .ds-kpi-mark-br { right: 0; bottom: 0; border-right: 1px solid; border-bottom: 1px solid; } .ds-kpi-label { font-size: 12px; font-weight: 500; color: hsl(195, 6%, 58%); margin-bottom: 4px; } .ds-kpi-value { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 700; font-size: 24px; }"
+    },
+    {
+      "name": "Card (base primitive)",
+      "kind": "card",
+      "refersTo": "card-base",
+      "description": "Flat panel: border carries structure, no gradient/blur/shadow at rest.",
+      "html": "<div class=\"ds-card\">Panel content</div>",
+      "css": ".ds-card { background: hsl(200, 9%, 11%); color: hsl(60, 5%, 93%); border: 1px solid hsl(200, 8%, 22%); border-radius: 4px; box-shadow: none; position: relative; overflow: hidden; transition: color 150ms, background-color 150ms, border-color 150ms; }"
+    },
+    {
+      "name": "Critical Alert Banner",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Full four-sided border in priority-critical color; deliberately distinct from the priority-badge left-bar device. Leads Dashboard above the KPI row.",
+      "html": "<div class=\"ds-critical-alert\"><span class=\"ds-critical-alert-text\">3 kritiska ärenden kräver uppmärksamhet</span></div>",
+      "css": ".ds-critical-alert { display: flex; align-items: center; gap: 12px; border: 1px solid hsl(9, 75%, 50%); background-color: hsla(9, 75%, 50%, 0.08); border-radius: 2px; padding: 16px; } .ds-critical-alert-text { color: hsl(9, 75%, 50%); font-weight: 500; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Materials-Specification Board",
+    "overview": "Forge treats the ticket queue as a specification sheet for structural materials, not a card-based SaaS dashboard. It categorically rejects the genre the critique flagged as generic (glassmorphism, hover-glow KPI cards, decorative corner blobs, soft rounded-pill badges): panels are flat, cornered close to square, and read their state through material-grade color and stamp typography rather than gradient or blur. This is the shipped state after three finish-review rounds — round 1 removed an inherited gradient/blur/hover-glow from the shared Card primitive, round 2 removed its residual shadow and brought TicketTable.tsx into the same flat pattern, and round 3 removed the critical-alert banner's borrowed left-bar device (it now uses its own four-sided frame) and deleted dormant glassmorphic CSS (body::before mesh-gradient, an unused .ticket-card utility, unused --background-gradient vars) from src/index.css entirely. Priority reads as a material grade: a flat swatch tag with a left-edge color bar, warm hues (oxide-red, rust-amber) for urgent grades and cool hues (steel-blue, concrete-green) for calm ones, so urgency is legible by color before any label is parsed. Status reads as an approval stamp: an outlined, uppercase, tracked rectangle — a procedurally cooler, distinct color family from priority so the two never visually collide. Forge ships as the app's defaultTheme, selectable in Settings → Appearance as \"Forge,\" alongside six untouched pre-existing themes. Its color tokens apply app-wide because the theme system is global, but component-level migration to Forge's patterns is surface-by-surface: today that's Dashboard and Ärendelista.",
+    "keyCharacteristics": [
+      "Flat panels at rest: no gradient fill, no blur, no baked-in hover-lift or glow on the base Card primitive.",
+      "Priority = material-grade swatch (left-bar tag); Status = approval stamp (outlined uppercase rectangle). Two distinct devices, never merged.",
+      "Mono type is numerals-only (ticket IDs, KPI figures); labels stay in Inter, plain case.",
+      "Shadows exist only for genuinely floating UI (dialogs, menus, active-drag) — never resting panels or cards."
+    ],
+    "rules": [
+      { "name": "The Warm-Urgent / Cool-Calm Rule", "body": "Priority hue families are load-bearing: oxide-red (critical) and rust-amber (high) are warm; steel-blue (medium) and concrete-green (low) are cool. Urgency must be spottable by hue alone.", "section": "colors" },
+      { "name": "The Two-Ink Rule", "body": "Priority and status never share a color family at the same lightness/hue band — status runs its own procedurally-generated ink set distinct from priority.", "section": "colors" },
+      { "name": "The Numerals-Only Mono Rule", "body": "font-mono (JetBrains Mono) appears only on the KPI card's numeral and ticket-ID text — never on a plain-case or uppercase label, and never as decorative type on prose.", "section": "typography" },
+      { "name": "The Drag-Not-Hover Rule", "body": "Shadow-as-lift is earned by an active interaction state (drag), never by hover. Card and KPICard hover is a border-color shift, not a shadow or glow.", "section": "elevation" },
+      { "name": "The Border-Carries-Structure Rule", "body": "Panels and cards separate from their background via border border-border, never via shadow. Shadow tokens exist for floating UI only.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep priority as a left-bar swatch tag (border-l-2, literal per-priority class) and status as a full-border uppercase stamp (border, uppercase tracking-wide) — two distinct devices, never merged into one badge style.",
+      "Do reserve font-mono for numerals only (ticket IDs, KPI figures).",
+      "Do use border border-border as the default depth cue for panels; reach for shadow only on floating UI (dialogs, menus) or an active-drag state.",
+      "Do reuse the shared PriorityBadge/StatusBadge components for any new surface that renders priority or status — do not reinvent a third badge implementation."
+    ],
+    "donts": [
+      "Don't add gradient fill, blur, or a baked-in hover-glow to the base Card primitive — this was inherited from a generic-SaaS template and removed across two review rounds; it must not return.",
+      "Don't apply the priority swatch's border-l-2 left-bar device to page-level alert banners — the critical-alert banner intentionally uses a full four-sided border so it doesn't read as a reused badge.",
+      "Don't build priority/status class names via string interpolation (`priority-badge-${priority}`) — Tailwind's scanner cannot see interpolated classes; use the literal per-value lookup map, as PriorityBadge/StatusBadge already do.",
+      "Don't treat Forge's global token application as full component migration — AgingTicketsPanel.tsx and TicketList.tsx's mobile card list still print raw English priority enum values (a pre-existing, separately-tracked bug) and other untouched pages may still carry old chrome; this DESIGN.md documents Dashboard + Ärendelista, not an app-wide migration."
+    ]
+  }
+}
