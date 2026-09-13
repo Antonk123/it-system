@@ -42,7 +42,6 @@ it-system/                          # Project root
 ├── package.json                    # Frontend dependencies + root scripts
 ├── docker-compose.yml              # Production compose file
 ├── docker-compose.local.yml        # Local dev compose
-├── docker-compose.dev.portainer.yml# Dev server compose (Portainer-managed)
 ├── Dockerfile.client               # Frontend production image
 ├── Dockerfile.server               # Backend production image
 ├── Dockerfile.dev.client           # Frontend dev image (Vite hot-reload)

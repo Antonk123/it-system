@@ -40,17 +40,22 @@ Lokal helhet: `docker-compose.local.yml`.
 | Miljö | URL | Syfte |
 |-------|-----|-------|
 | **Prod** | `https://ticket.prefabmastarna.se` | Live-system |
-| **Dev** | `http://<SERVER_IP>:5174/` (se `CLAUDE.local.md`) | Hot-reload-miljö på servern (bara `git pull` behövs) |
-| **Lokal** | `localhost` via `docker-compose.local.yml` | Lokal dev för att testa innan push |
+| **Lokal (hot-reload)** | `npm run dev` (Vite :5173) + `cd server && npm run dev` (tsx :3001) | **Test-ytan före push.** Här granskas UI och körs debug-loopar. |
+| **Lokal (byggd)** | `docker-compose.local.yml` (:8082 / :3002) | Kör prod-imagerna lokalt när själva bygget ska testas, inte källkoden. |
+
+> Det fanns tidigare en dev-stack på servern (Portainer id 40, portar 5174/3003).
+> Den avvecklades 2026-09-13 — den användes sällan, dess backend hade legat död i
+> ~9 dagar obemärkt, och localhost täcker samma behov. Återuppliva den inte utan
+> att först läsa beslutet i Obsidian (`Projekt/IT-System/decisions.md`).
 
 ### Portar
 
 | Tjänst | Intern port | Extern port |
 |--------|-------------|-------------|
 | Backend (Express API, prod) | 3001 | 3002 |
-| Backend (dev, tsx watch) | 3001 | 3003 |
 | Frontend (nginx/prod) | 80 | 8082 |
-| Frontend (Vite/dev) | 5173 | 5174 |
+| Backend lokalt (tsx watch) | 3001 | — |
+| Frontend lokalt (Vite) | 5173 | — |
 
 `Dockerfile.client` bakar in `VITE_API_URL` som build-time `ARG` — den kan alltså **inte** sättas vid container-runtime, bara vid image-bygget. För runtime-flexibilitet krävs en JS-config som injiceras i `index.html`.
 
@@ -73,7 +78,18 @@ Standardflöde: lokal utveckling → `git push` → SSH till servern, `git pull`
    - Frontend: `docker build -t it-ticketing-frontend:latest -f Dockerfile.client .`
 6. Anton redeployar via Portainer
 
-**Dev-miljön** är Portainer-stack `it-system-dev` (id 40), definierad i `docker-compose.dev.portainer.yml` (versionsspårad källa — Portainer-GUI:t måste spegla den). Den har **egen DB-volym** (`it-ticketing-dev-data`) → delar INTE prod-DB:n, men **delar prod-byggets checkout** `/opt/it-system/itticket-main` (på `main`; worktreet `itticket-dev` togs bort 2026-06-17 när vi gick över till merga-rakt-till-main). Synka dev till senaste main: `git -C /opt/it-system/itticket-main pull --ff-only` (eller `reset --hard origin/main`); tsx watch + Vite hot-reloadar, ingen rebuild. **UNDANTAG: om package.json/lock ändrats räcker inte pull** — containrarnas node_modules ligger i anon-volymer och `npm ci` körs bara vid containerstart → Anton måste starta om dev-stacken i Portainer, annars kraschar tsx på saknade/fel paketversioner (hände 2026-06-29→07-02: archiver 7 kvar i volymen efter v8-bump, dev nere i 3 dagar obemärkt). Prod ser inget förrän ny image byggs + deployas. Se dev-DB-isolerings-runbooken i Obsidian (`Projekt/IT-System/dev-db-isolation-runbook.md`).
+> [!warning] Portainer-stacken är en SEPARAT kopia av compose-filen
+> Stack 39:s definition lever i Portainers GUI, inte i repot. `git pull` på servern
+> uppdaterar den **aldrig** — och det gäller *hela* filen, inte bara env-rader:
+> `command:`, `volumes:`, `ports:` och `image:` kan alla divergera tyst.
+> Ändrar du `docker-compose.yml` i repot måste Anton klistra in den nya versionen
+> i Portainer-GUI:t och redeploya, annars körs den gamla definitionen vidare.
+>
+> Verifiera vad som faktiskt körs innan du felsöker:
+> `ssh <server> "docker inspect <container> --format '{{json .Config.Cmd}}'"`
+>
+> Precedens: dev-stacken crash-loopade 13 117 gånger i ~9 dagar för att `--ignore-scripts`
+> fanns i repots compose-fil men aldrig klistrades in i Portainer (2026-09-13).
 
 ## Projektspecifika regler
 
@@ -150,9 +166,9 @@ förfining inuti det systemet — inte att ta fram en ny visuell identitet. Väl
 
 Textbeskrivningar av UI är otillförlitliga. Titta på resultatet.
 
-1. **Välj yta.** Dev-servern (URL i `CLAUDE.local.md`) kräver jobbnätet — pinga först.
-   Utanför nätet: kör `npx vite --port 5199` lokalt. Frontend räcker för ren layout/tema-granskning;
-   backend behövs bara för inloggade vyer.
+1. **Starta lokalt.** `npm run dev` (Vite :5173). För inloggade vyer behövs även
+   backenden: `cd server && npm run dev` (:3001). Enbart frontend räcker för
+   layout-, tema- och responsivitetsgranskning.
 2. Öppna vyn via Claude Browser eller Playwright-MCP. Logga in en gång — sessionen persisterar
    över iterationer.
 3. Skärmdump **före** och **efter** varje ändring — även `mobile`-viewport (375×812), inte bara desktop.

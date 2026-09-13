@@ -12,8 +12,8 @@ disable-model-invocation: false
 
 ## Hard rules
 - NEVER run `docker-compose up`, `docker run`, or any container lifecycle command.
-  That spins up a SEPARATE stack that collides with the Portainer stacks
-  (prod id 39 `it-ticket-system`, dev id 40 `it-system-dev`).
+  That spins up a SEPARATE stack that collides with the Portainer stack
+  (prod id 39 `it-ticket-system`).
 - Building images is allowed; STARTING/redeploying is Anton's manual step in
   Portainer GUI.
 
@@ -36,14 +36,24 @@ disable-model-invocation: false
    at runtime.)
 6. Tell Anton to redeploy the stack in Portainer. Claude stops here.
 
-## Dev environment (faster path, no image rebuild)
-Dev stack (id 40) shares the prod checkout `/opt/it-system/itticket-main` on main
-but has its own DB volume. To refresh dev to latest main:
-`git -C /opt/it-system/itticket-main pull --ff-only` — tsx watch + Vite hot-reload,
-no rebuild. Prod sees nothing until a new image is built and redeployed.
+## No server-side dev environment
+The dev stack (id 40) was retired 2026-09-13 — rarely used, and its backend had
+been dead ~9 days unnoticed. Verify changes locally BEFORE pushing: `npm run dev`
+(Vite) plus `cd server && npm run dev` (tsx watch). Prod is the only stack now.
 
-## Portainer env gotcha
-The Portainer stack file is SEPARATE from the repo compose files. New env vars
-(e.g. CSRF_SECRET — backend does an UNCONDITIONAL process.exit(1) without it,
-even in dev) must be added MANUALLY in the Portainer GUI before redeploy, or the
-container crash-loops. See Obsidian Projekt/IT-System/lessons.md.
+## Portainer divergence gotcha
+The Portainer stack definition is a SEPARATE copy of the compose file, and
+`git pull` on the server never updates it. This applies to the WHOLE file, not
+just env vars: `command:`, `volumes:`, `ports:` and `image:` can all drift silently.
+Anton must paste the repo version into the Portainer GUI and redeploy.
+
+Two ways this has bitten:
+- Missing env var — backend does an UNCONDITIONAL `process.exit(1)` without
+  CSRF_SECRET/JWT_SECRET, so the container crash-loops.
+- Stale `command:` — `--ignore-scripts` was committed to the dev compose file but
+  never pasted into Portainer; that stack crash-looped 13 117 times over ~9 days.
+
+Check what is ACTUALLY running before debugging:
+`docker inspect <container> --format '{{json .Config.Cmd}}'`
+
+See Obsidian Projekt/IT-System/lessons.md.

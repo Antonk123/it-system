@@ -148,7 +148,7 @@
 **Hosting:**
 - Proxmox server via Docker / Portainer
 - Production stack: `it-ticket-system` (Portainer id 39), definition in `docker-compose.yml`
-- Dev stack: `it-system-dev` (Portainer id 40), definition in `docker-compose.dev.portainer.yml`
+- Dev stack: retired 2026-09-13; local `npm run dev` is the pre-push surface
 
 **CI Pipeline:**
 - None (manual deploy: `git pull` on server + Docker image rebuild + Portainer redeploy)

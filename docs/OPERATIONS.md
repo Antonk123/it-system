@@ -11,7 +11,6 @@ shutdown och en kort incident-checklista.
 >   **applikationsinterna** rutinerna (inbyggd scheduler, endpoints, env-styrning).
 > - `docs/AI_FEATURES.md` — AI-funktioner, modellval, token-budget och
 >   circuit breaker (refereras från avsnittet om AI-tokenövervakning nedan).
-> - dev-db-isolation-runbooken (Obsidian `Projekt/IT-System/`) — dev/prod-DB-isolation.
 
 Alla env-varianter nedan är verifierade mot källkoden. Se `.env.example` för
 fullständig lista och defaultvärden.
@@ -37,8 +36,8 @@ dirigera trafik till instansen vid 503.
 ```bash
 # Snabbkoll mot prod (byt ut mot din egen instans URL)
 curl -s https://helpdesk.example.com/api/health
-# Mot dev
-curl -s http://<server-ip>:5174/api/health
+# Lokalt (tsx watch)
+curl -s http://localhost:3001/api/health
 ```
 
 CORS tillåter requests utan `Origin`-header (curl, container-healthchecks) —
@@ -354,8 +353,11 @@ Snabb triage vid driftstörning:
    `Uncaught exception`, `Unhandled promise rejection (CRITICAL)`,
    `Schema integrity check failed`.
 3. **Startade servern?** Saknad `CSRF_SECRET` (eller < 32 tecken) ger ovillkorligt
-   `process.exit(1)` — även i dev. Kontrollera env i Portainer (stack-filen är
-   separat från repo-versionen — nya rader måste in manuellt).
+   `process.exit(1)` i alla miljöer. Kontrollera env i Portainer — stackdefinitionen
+   där är en separat kopia av compose-filen och uppdateras aldrig av `git pull`.
+   Det gäller hela filen, inte bara env: en inaktuell `command:`-rad ger samma
+   crash-loop. Se vad som faktiskt körs med
+   `docker inspect <container> --format '{{json .Config.Cmd}}'`.
 4. **DB:** vid `database is locked`/`SQLITE_BUSY`, verifiera att `busy_timeout`
    är aktivt och att ingen restore/backup hänger. Vid korruptionsmisstanke:
    återställ från senaste verifierade backup (§4).
