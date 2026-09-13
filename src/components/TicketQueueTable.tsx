@@ -61,7 +61,43 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
             <p className="text-sm font-medium text-muted-foreground">Inga aktiva ärenden</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          {/* Mobile: card list — table columns collapse illegibly below md,
+              and status/priority are the two things this widget exists to surface. */}
+          <div className="md:hidden divide-y divide-border/35">
+            {activeTickets.map(ticket => {
+              const requesterName = ticket.requesterName || getUserName?.(ticket.requesterId) || 'Okänd beställare';
+              const categoryLabel = ticket.categoryLabel || categories.find(category => category.id === ticket.category)?.label;
+
+              return (
+                <button
+                  key={ticket.id}
+                  type="button"
+                  onClick={() => navigate(`/tickets/${ticket.id}`)}
+                  className="w-full text-left px-4 py-3 active:bg-muted/35 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="font-semibold text-foreground text-[13.5px] tracking-tight line-clamp-1 flex-1">
+                      {ticket.title}
+                    </span>
+                    <span className="font-mono text-[11px] text-muted-foreground shrink-0">#{ticket.id.slice(0, 6)}</span>
+                  </div>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">Beställare: {requesterName}</p>
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <StatusBadge status={ticket.status} />
+                    <PriorityBadge priority={ticket.priority} />
+                    {categoryLabel && (
+                      <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded-sm bg-muted/60 text-foreground/75 border border-border">
+                        {categoryLabel}
+                      </span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/10">
@@ -140,6 +176,7 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
               </tbody>
             </table>
           </div>
+          </>
         )}
       </CardContent>
     </Card>

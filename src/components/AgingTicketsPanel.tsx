@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router';
 import { Clock } from 'lucide-react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
+import { PriorityBadge } from '@/components/PriorityBadge';
 import { cn } from '@/lib/utils';
 import type { AgingTicket } from '@/hooks/useDashboardOverview';
 
@@ -96,18 +96,7 @@ export const AgingTicketsPanel = ({ tickets, isLoading, isError, onRetry }: Agin
                 <span className="text-xs font-semibold tabular-nums text-muted-foreground w-16 text-right shrink-0">
                   {ticket.age_days} {ticket.age_days === 1 ? 'dag' : 'dagar'}
                 </span>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    'text-xs font-semibold uppercase tracking-wider shrink-0',
-                    ticket.priority === 'critical' && 'border-[hsl(var(--priority-critical))] text-[hsl(var(--priority-critical))]',
-                    ticket.priority === 'high' && 'border-[hsl(var(--priority-high))] text-[hsl(var(--priority-high))]',
-                    ticket.priority === 'medium' && 'border-[hsl(var(--priority-medium))] text-[hsl(var(--priority-medium))]',
-                    ticket.priority === 'low' && 'border-[hsl(var(--priority-low))] text-[hsl(var(--priority-low))]'
-                  )}
-                >
-                  {ticket.priority}
-                </Badge>
+                <PriorityBadge priority={ticket.priority} className="shrink-0" />
               </div>
             ))}
           </div>

@@ -16,10 +16,11 @@ import { ImportDialog } from '@/components/ImportDialog';
 import { UnifiedFilterBar } from '@/components/UnifiedFilterBar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { PriorityBadge } from '@/components/PriorityBadge';
+import { StatusBadge } from '@/components/StatusBadge';
 import { TicketStatus, TicketPriority } from '@/types/ticket';
 import { cn } from '@/lib/utils';
-import { STATUS_LABELS } from '@/lib/constants';
+import { STATUS_LABELS, PRIORITY_LABELS } from '@/lib/constants';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 import { EmptyState } from '@/components/EmptyState';
@@ -30,15 +31,6 @@ const KanbanView = lazy(() => import('@/components/KanbanView').then(m => ({ def
 const listContainer = {
   hidden: {},
   visible: { transition: { staggerChildren: 0.05 } },
-};
-
-const priorityVariant = (priority: string): 'default' | 'destructive' | 'secondary' | 'outline' => {
-  switch (priority) {
-    case 'critical': return 'destructive';
-    case 'high': return 'destructive';
-    case 'medium': return 'default';
-    default: return 'secondary';
-  }
 };
 
 const TicketList = () => {
@@ -222,7 +214,10 @@ const TicketList = () => {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex items-center gap-2">
+            {/* Kanban has no mobile-optimized layout yet — the card list below
+                is the only view on narrow screens, so the toggle that switches
+                between two desktop-only views has nothing to do there. */}
+            <div className="hidden md:flex items-center gap-2">
               <Button
                 variant={viewMode === 'table' ? 'default' : 'outline'}
                 size="sm"
@@ -393,16 +388,14 @@ const TicketList = () => {
                       type="button"
                       onClick={() => handleTicketClick(ticket.id)}
                       className="w-full text-left p-3 rounded-lg border bg-card active:bg-muted/50 transition-colors focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                      aria-label={`Öppna ärende ${ticket.title}, prioritet ${ticket.priority}, status ${STATUS_LABELS[ticket.status] ?? ticket.status}`}
+                      aria-label={`Öppna ärende ${ticket.title}, prioritet ${PRIORITY_LABELS[ticket.priority] ?? ticket.priority}, status ${STATUS_LABELS[ticket.status] ?? ticket.status}`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <span className="text-sm font-medium line-clamp-1 flex-1">{ticket.title}</span>
-                        <Badge variant={priorityVariant(ticket.priority)} className="shrink-0 text-xs">
-                          {ticket.priority}
-                        </Badge>
+                        <PriorityBadge priority={ticket.priority} className="shrink-0" />
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        <Badge variant="outline" className="text-xs">{STATUS_LABELS[ticket.status] ?? ticket.status}</Badge>
+                        <StatusBadge status={ticket.status} />
                         {ticket.companyName && (
                           <span className="text-xs text-muted-foreground">{ticket.companyName}</span>
                         )}
