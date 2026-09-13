@@ -24,17 +24,6 @@ interface Template {
   fields?: TemplateFieldRow[];
 }
 
-// Chip-vy istället för dropdown: hela listan syns direkt, ett klick väljer —
-// inget "öppna först, välj sen" för en så kort, ofta använd lista.
-// Struktur lånad från 21st.dev:s återkommande "category chips"-mönster i
-// supportformulär, omsatt i Forge egna flata taggar (rounded-sm, inte pill).
-const PRIORITY_OPTIONS: { value: string; label: string; token: string }[] = [
-  { value: 'low', label: 'Låg', token: '--priority-low' },
-  { value: 'medium', label: 'Medium', token: '--priority-medium' },
-  { value: 'high', label: 'Hög', token: '--priority-high' },
-  { value: 'urgent', label: 'Brådskande', token: '--priority-critical' },
-];
-
 const PublicTicketForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -438,7 +427,14 @@ const PublicTicketForm = () => {
               </div>
             )}
 
-            {/* Category — chip row: whole list visible, one tap to pick */}
+            {/* Category — chip row: whole list visible, one tap to pick, no
+                open-then-choose dropdown. Structure borrowed from 21st.dev's
+                recurring "category chips" pattern in support forms, redrawn
+                in Forge's own flat tags (rounded-sm, not the source's pill).
+                Priority is deliberately not asked here — a first-time
+                reporter rarely judges urgency well, and IT sets it at
+                triage in the internal tool instead; new tickets default
+                to medium (or whatever a chosen template specifies). */}
             {categories.length > 0 && (
               <div className="space-y-1.5">
                 <Label className="text-foreground text-sm font-medium">Kategori</Label>
@@ -465,32 +461,6 @@ const PublicTicketForm = () => {
                 </div>
               </div>
             )}
-
-            {/* Priority — chip row using the same material-grade colors as the internal app */}
-            <div className="space-y-1.5">
-              <Label className="text-foreground text-sm font-medium">Prioritet</Label>
-              <div className="flex flex-wrap gap-1.5">
-                {PRIORITY_OPTIONS.map((opt) => {
-                  const selected = formData.priority === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, priority: opt.value })}
-                      aria-pressed={selected}
-                      className={cn(
-                        'rounded-sm border px-3 py-1.5 text-xs font-medium transition-colors',
-                        selected
-                          ? `border-[hsl(var(${opt.token}))] bg-[hsl(var(${opt.token})/0.12)] text-[hsl(var(${opt.token}))]`
-                          : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground'
-                      )}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
 
             {/* Attachment hint — public form does not support direct upload */}
             <p className="text-xs text-muted-foreground text-center">

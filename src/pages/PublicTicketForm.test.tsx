@@ -43,25 +43,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('PublicTicketForm — en sida, inga steg', () => {
-  it('visar alla fält (namn, e-post, titel, beskrivning, prioritet) på en och samma vy', () => {
+  it('visar alla fält (namn, e-post, titel, beskrivning) på en och samma vy, utan prioritetsval', () => {
     renderForm();
     expect(screen.getByLabelText('Ditt namn *')).toBeTruthy();
     expect(screen.getByLabelText('Din e-post *')).toBeTruthy();
     expect(screen.getByLabelText('Ärendets titel *')).toBeTruthy();
     expect(screen.getByPlaceholderText('Beskriv ditt problem i detalj...')).toBeTruthy();
-    expect(screen.getByText('Prioritet')).toBeTruthy();
+    // Prioritet sätts av IT vid triage, inte av den som rapporterar — inget
+    // prioritetsval ska finnas i det publika formuläret.
+    expect(screen.queryByText('Prioritet')).toBeNull();
     // Inget "Nästa"/steg-navigering ska finnas.
     expect(screen.queryByRole('button', { name: /Nästa/ })).toBeNull();
-  });
-
-  it('prioritet väljs som klickbara chips, inte en dropdown', () => {
-    renderForm();
-    const high = screen.getByRole('button', { name: 'Hög' });
-    expect(high.getAttribute('aria-pressed')).toBe('false');
-    fireEvent.click(high);
-    expect(high.getAttribute('aria-pressed')).toBe('true');
-    // Medium var förvalt (default 'medium') — ska nu vara avmarkerat.
-    expect(screen.getByRole('button', { name: 'Medium' }).getAttribute('aria-pressed')).toBe('false');
   });
 
   it('kategori visas som chips när kategorier finns, och kan togglas av', async () => {
@@ -80,7 +72,6 @@ describe('PublicTicketForm — en sida, inga steg', () => {
     fireEvent.change(screen.getByLabelText('Din e-post *'), { target: { value: 'anna@example.com' } });
     fireEvent.change(screen.getByLabelText('Ärendets titel *'), { target: { value: 'Skrivaren fungerar inte' } });
     fireEvent.change(screen.getByPlaceholderText('Beskriv ditt problem i detalj...'), { target: { value: 'Felkod E-04.' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Hög' }));
     fireEvent.click(screen.getByRole('button', { name: /Skicka ärende/ }));
 
     await waitFor(() => expect(screen.getByText('Ärendet skickat!')).toBeTruthy());
@@ -89,7 +80,7 @@ describe('PublicTicketForm — en sida, inga steg', () => {
       email: 'anna@example.com',
       title: 'Skrivaren fungerar inte',
       description: 'Felkod E-04.',
-      priority: 'high',
+      priority: 'medium',
     }));
   });
 });
