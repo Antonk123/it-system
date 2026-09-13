@@ -4,7 +4,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { Category, Ticket } from '@/types/ticket';
 import { getInitials, hashColor } from '@/lib/avatar';
-import { PRIORITY_LABELS, STATUS_LABELS } from '@/lib/constants';
+import { StatusBadge } from '@/components/StatusBadge';
+import { PriorityBadge } from '@/components/PriorityBadge';
 
 interface TicketQueueTableProps {
   tickets: Ticket[];
@@ -14,29 +15,6 @@ interface TicketQueueTableProps {
   isError?: boolean;
   onRetry?: () => void;
 }
-
-const STATUS_STYLES: Record<string, string> = {
-  open: 'bg-[hsl(var(--status-open))]/12 text-[hsl(var(--status-open))] border-[hsl(var(--status-open))]/30',
-  'in-progress': 'bg-[hsl(var(--status-in-progress))]/12 text-[hsl(var(--status-in-progress))] border-[hsl(var(--status-in-progress))]/30',
-  waiting: 'bg-[hsl(var(--status-waiting))]/12 text-[hsl(var(--status-waiting))] border-[hsl(var(--status-waiting))]/30',
-  resolved: 'bg-[hsl(var(--status-resolved))]/12 text-[hsl(var(--status-resolved))] border-[hsl(var(--status-resolved))]/30',
-  closed: 'bg-[hsl(var(--status-closed))]/12 text-[hsl(var(--status-closed))] border-[hsl(var(--status-closed))]/30',
-};
-
-const STATUS_DOT: Record<string, string> = {
-  open: 'bg-[hsl(var(--status-open))] shadow-[0_0_8px_hsl(var(--status-open))]',
-  'in-progress': 'bg-[hsl(var(--status-in-progress))] shadow-[0_0_8px_hsl(var(--status-in-progress))] animate-pulse',
-  waiting: 'bg-[hsl(var(--status-waiting))]',
-  resolved: 'bg-[hsl(var(--status-resolved))]',
-  closed: 'bg-[hsl(var(--status-closed))]',
-};
-
-const PRIORITY_STYLES: Record<string, string> = {
-  critical: 'bg-[hsl(var(--priority-critical))]/14 text-[hsl(var(--priority-critical))] border-[hsl(var(--priority-critical))]/35',
-  high: 'bg-[hsl(var(--priority-high))]/14 text-[hsl(var(--priority-high))] border-[hsl(var(--priority-high))]/35',
-  medium: 'bg-[hsl(var(--priority-medium))]/14 text-[hsl(var(--priority-medium))] border-[hsl(var(--priority-medium))]/35',
-  low: 'bg-[hsl(var(--priority-low))]/14 text-[hsl(var(--priority-low))] border-[hsl(var(--priority-low))]/35',
-};
 
 export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories = [], isError, onRetry }: TicketQueueTableProps) => {
   const navigate = useNavigate();
@@ -55,8 +33,8 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="flex items-center gap-2">
           <p className="text-sm font-semibold text-foreground">Aktiv kö</p>
-          <span className="font-mono text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
-            {activeTickets.length} visas
+          <span className="text-[11px] font-medium px-2 py-0.5 rounded-sm bg-muted text-muted-foreground border border-border">
+            <span className="font-mono">{activeTickets.length}</span> visas
           </span>
         </div>
       </CardHeader>
@@ -126,7 +104,7 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
                         <p className="text-[12px] text-muted-foreground mt-0.5 break-words">Beställare: {requesterName}</p>
                         <div className="flex flex-wrap items-center gap-2 mt-0.5">
                           {categoryLabel && (
-                            <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded-full bg-muted/60 text-foreground/75 border border-border">
+                            <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded-sm bg-muted/60 text-foreground/75 border border-border">
                               {categoryLabel}
                             </span>
                           )}
@@ -136,21 +114,10 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
                         </div>
                       </td>
                       <td className="px-4 py-3.5">
-                        <span className={cn(
-                          'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-semibold border whitespace-nowrap',
-                          STATUS_STYLES[ticket.status]
-                        )}>
-                          <span className={cn('w-1.5 h-1.5 rounded-full', STATUS_DOT[ticket.status])} />
-                          {STATUS_LABELS[ticket.status]}
-                        </span>
+                        <StatusBadge status={ticket.status} className="whitespace-nowrap" />
                       </td>
                       <td className="px-4 py-3.5">
-                        <span className={cn(
-                          'inline-flex items-center px-2.5 py-1 rounded-full text-[11.5px] font-semibold border whitespace-nowrap',
-                          PRIORITY_STYLES[ticket.priority]
-                        )}>
-                          {PRIORITY_LABELS[ticket.priority]}
-                        </span>
+                        <PriorityBadge priority={ticket.priority} className="whitespace-nowrap" />
                       </td>
                       <td className="px-4 py-3.5 hidden lg:table-cell">
                         {assigneeName ? (

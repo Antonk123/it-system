@@ -186,93 +186,19 @@ layer(base);
 }
 
 @utility priority-badge-low {
-  @apply bg-[hsl(var(--priority-low)/0.1)] text-[hsl(var(--priority-low))] transition-all duration-200;
+  @apply bg-[hsl(var(--priority-low)/0.1)] text-[hsl(var(--priority-low))] border-[hsl(var(--priority-low))] transition-all duration-200;
 }
 
 @utility priority-badge-medium {
-  @apply bg-[hsl(var(--priority-medium)/0.1)] text-[hsl(var(--priority-medium))] transition-all duration-200;
+  @apply bg-[hsl(var(--priority-medium)/0.1)] text-[hsl(var(--priority-medium))] border-[hsl(var(--priority-medium))] transition-all duration-200;
 }
 
 @utility priority-badge-high {
-  @apply bg-[hsl(var(--priority-high)/0.1)] text-[hsl(var(--priority-high))] transition-all duration-200;
+  @apply bg-[hsl(var(--priority-high)/0.1)] text-[hsl(var(--priority-high))] border-[hsl(var(--priority-high))] transition-all duration-200;
 }
 
 @utility priority-badge-critical {
-  @apply bg-[hsl(var(--priority-critical)/0.1)] text-[hsl(var(--priority-critical))] transition-all duration-200;
-}
-
-@utility ticket-card {
-  /* Glassmorphic ticket card */
-  position: relative;
-  background: linear-gradient(
-    135deg,
-    hsla(var(--card), 0.4) 0%,
-    hsla(var(--card), 0.2) 100%
-  );
-  backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid hsla(var(--border), 0.5);
-  border-radius: 16px;
-  overflow: visible;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 16px;
-    padding: 2px;
-    background: linear-gradient(
-      135deg,
-      hsla(var(--primary), 0.5) 0%,
-      hsla(var(--accent), 0.3) 50%,
-      transparent 100%
-    );
-    -webkit-mask:
-      linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask:
-      linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
-    mask-composite: exclude;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
-  &:hover::before {
-    opacity: 1;
-  }
-
-  &:hover {
-    transform: translateY(-4px) scale(1.01);
-    box-shadow:
-      0 20px 40px -12px hsla(var(--primary), 0.25),
-      0 8px 16px -8px hsla(var(--accent), 0.3),
-      inset 0 1px 0 hsla(var(--primary), 0.1);
-  }
-
-  /* Decorative corner accent */
-  &::after {
-    content: '';
-    position: absolute;
-    top: -1px;
-    right: -1px;
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(
-      135deg,
-      hsla(var(--primary), 0.3) 0%,
-      transparent 70%
-    );
-    clip-path: polygon(100% 0, 0 0, 100% 100%);
-    border-radius: 0 16px 0 0;
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
-  &:hover::after {
-    opacity: 1;
-  }
+  @apply bg-[hsl(var(--priority-critical)/0.1)] text-[hsl(var(--priority-critical))] border-[hsl(var(--priority-critical))] transition-all duration-200;
 }
 
 @utility ticket-row {
@@ -444,7 +370,6 @@ layer(base);
   .theme-default {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
     --background: 222 47% 6%;
-    --background-gradient: linear-gradient(135deg, hsl(222, 47%, 5%) 0%, hsl(218, 42%, 7%) 50%, hsl(225, 45%, 6%) 100%);
     --foreground: 210 20% 95%;
 
     --card: 220 40% 9%;
@@ -542,7 +467,6 @@ layer(base);
   .theme-midnight {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
     --background: 234 50% 5%;
-    --background-gradient: linear-gradient(135deg, hsl(234, 50%, 4%) 0%, hsl(230, 45%, 6%) 50%, hsl(238, 48%, 5%) 100%);
     --foreground: 220 15% 94%;
 
     --card: 233 42% 9%;
@@ -620,7 +544,6 @@ layer(base);
   .theme-graphite {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
     --background: 220 14% 7%;
-    --background-gradient: linear-gradient(135deg, hsl(220, 15%, 6%) 0%, hsl(215, 12%, 8%) 50%, hsl(222, 14%, 7%) 100%);
     --foreground: 220 8% 94%;
 
     --card: 218 12% 11%;
@@ -698,7 +621,6 @@ layer(base);
   .theme-stone {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
     --background: 200 8% 7%;
-    --background-gradient: linear-gradient(135deg, hsl(200, 8%, 6%) 0%, hsl(195, 7%, 8%) 50%, hsl(205, 8%, 7%) 100%);
     --foreground: 180 5% 94%;
 
     --card: 198 7% 11%;
@@ -776,7 +698,6 @@ layer(base);
   .theme-linear {
     --app-font-family: 'Inter', -apple-system, system-ui, sans-serif;
     --background: 210 11% 4%;
-    --background-gradient: linear-gradient(135deg, hsl(210, 11%, 3%) 0%, hsl(210, 8%, 5%) 50%, hsl(215, 10%, 4%) 100%);
     --foreground: 180 7% 97%;
 
     --card: 210 4% 10%;
@@ -854,7 +775,6 @@ layer(base);
   .theme-spotify {
     --app-font-family: 'Inter', -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
     --background: 0 0% 7%;
-    --background-gradient: linear-gradient(180deg, hsl(0, 0%, 7%) 0%, hsl(0, 0%, 9%) 100%);
     --foreground: 0 0% 100%;
 
     --card: 0 0% 9%;
@@ -928,6 +848,97 @@ layer(base);
     --search-input-bg: 0 0% 12%;
   }
 
+  /* Forge — materials-specification board: steel/concrete grades, stamped
+     approval states, no glass/blur/glow. Direction contract:
+     .impeccable/surfaces/dashboard-ticketlist.md (seed key 31bea677). */
+  .theme-forge {
+    --app-font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    --background: 200 10% 8%;
+    --foreground: 60 5% 93%;
+
+    --card: 200 9% 11%;
+    --card-foreground: 60 5% 93%;
+
+    --popover: 200 9% 12%;
+    --popover-foreground: 60 5% 93%;
+
+    --primary: 205 45% 48%;
+    --primary-foreground: 200 10% 8%;
+
+    --secondary: 200 8% 15%;
+    --secondary-foreground: 60 5% 88%;
+
+    --muted: 200 7% 16%;
+    --muted-foreground: 195 6% 58%;
+
+    --accent: 28 60% 48%;
+    --accent-foreground: 200 10% 8%;
+
+    --destructive: 9 70% 48%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 200 8% 22%;
+    --input: 200 8% 13%;
+    --ring: 205 45% 48%;
+
+    --radius: 0.25rem;
+
+    /* Status = approval stamp ink (procedural, cooler family than priority) */
+    --status-open: 205 55% 52%;
+    --status-in-progress: 32 70% 50%;
+    --status-waiting: 195 15% 55%;
+    --status-resolved: 150 35% 45%;
+    --status-closed: 200 8% 50%;
+
+    /* Priority = material grade. Warm (critical/high) vs cool (medium/low)
+       hue families so urgency reads before the label is even parsed. */
+    --priority-critical: 9 75% 50%;
+    --priority-high: 28 75% 50%;
+    --priority-medium: 205 30% 52%;
+    --priority-low: 150 20% 42%;
+
+    /* Sidebar */
+    --sidebar-background: 200 12% 6%;
+    --sidebar-foreground: 60 5% 90%;
+    --sidebar-primary: 205 45% 48%;
+    --sidebar-primary-foreground: 200 10% 8%;
+    --sidebar-accent: 200 9% 10%;
+    --sidebar-accent-foreground: 60 5% 93%;
+    --sidebar-border: 200 8% 18%;
+    --sidebar-ring: 205 45% 48%;
+
+    /* Chart colors - steel-blue spectrum matching primary family */
+    --chart-1: 205 45% 48%;
+    --chart-2: 28 60% 48%;
+    --chart-3: 150 35% 45%;
+    --chart-4: 9 70% 48%;
+    --chart-5: 195 15% 55%;
+
+    /* Flat surfaces: borders carry structure, shadows stay tight and only
+       for genuinely floating UI (dialogs/menus), never panels/cards. */
+    --shadow-2xs: 0 1px 1px 0px hsl(200 10% 3% / 0.25);
+    --shadow-xs: 0 1px 2px 0px hsl(200 10% 3% / 0.3);
+    --shadow-sm: 0 1px 3px -1px hsl(200 10% 3% / 0.35), 0 1px 1px 0px hsl(200 10% 3% / 0.2);
+    --shadow: 0 2px 4px -1px hsl(200 10% 3% / 0.4), 0 1px 2px -1px hsl(200 10% 3% / 0.25);
+    --shadow-md: 0 4px 8px -2px hsl(200 10% 3% / 0.42), 0 2px 4px -1px hsl(200 10% 3% / 0.28);
+    --shadow-lg: 0 8px 16px -3px hsl(200 10% 3% / 0.45), 0 3px 6px -2px hsl(200 10% 3% / 0.3);
+    --shadow-xl: 0 14px 24px -4px hsl(200 10% 3% / 0.48), 0 6px 10px -3px hsl(200 10% 3% / 0.32);
+    --shadow-2xl: 0 22px 36px -6px hsl(200 10% 3% / 0.5), 0 10px 16px -4px hsl(200 10% 3% / 0.35);
+    --tracking-normal: 0em;
+    --spacing: 0.25rem;
+
+    --search-input-bg: 200 8% 12%;
+
+    --ai: 255 25% 55%;
+    --ai-foreground: 200 10% 8%;
+
+    --warning: 32 70% 50%;
+    --warning-foreground: 200 10% 6%;
+
+    --success: 150 35% 45%;
+    --success-foreground: 200 10% 6%;
+  }
+
   /* Per-theme light variants — D-01/D-03 */
 
   /* Gemensamma semantiska tokens för light-mode. Per-tema light-block
@@ -951,7 +962,6 @@ layer(base);
   .light.theme-default {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
     --background: 210 18% 98%;
-    --background-gradient: linear-gradient(135deg, hsl(210, 18%, 98%) 0%, hsl(215, 16%, 96%) 100%);
     --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
@@ -1034,7 +1044,6 @@ layer(base);
   .light.theme-midnight {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
     --background: 230 25% 97%;
-    --background-gradient: linear-gradient(135deg, hsl(230, 25%, 97%) 0%, hsl(235, 20%, 95%) 100%);
     --foreground: 234 40% 13%;
 
     --card: 0 0% 100%;
@@ -1117,7 +1126,6 @@ layer(base);
   .light.theme-graphite {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
     --background: 220 12% 97%;
-    --background-gradient: linear-gradient(135deg, hsl(220, 12%, 97%) 0%, hsl(215, 10%, 95%) 100%);
     --foreground: 220 14% 12%;
 
     --card: 0 0% 100%;
@@ -1200,7 +1208,6 @@ layer(base);
   .light.theme-stone {
     --app-font-family: 'Plus Jakarta Sans', sans-serif;
     --background: 200 8% 97%;
-    --background-gradient: linear-gradient(135deg, hsl(200, 8%, 97%) 0%, hsl(195, 6%, 95%) 100%);
     --foreground: 200 10% 12%;
 
     --card: 0 0% 100%;
@@ -1283,7 +1290,6 @@ layer(base);
   .light.theme-linear {
     --app-font-family: 'Inter', -apple-system, system-ui, sans-serif;
     --background: 180 7% 97%;
-    --background-gradient: linear-gradient(135deg, hsl(180, 7%, 97%) 0%, hsl(210, 7%, 96%) 100%);
     --foreground: 210 11% 10%;
 
     --card: 0 0% 100%;
@@ -1366,7 +1372,6 @@ layer(base);
   .light.theme-spotify {
     --app-font-family: 'Inter', -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
     --background: 0 0% 97%;
-    --background-gradient: linear-gradient(180deg, hsl(0, 0%, 97%) 0%, hsl(0, 0%, 95%) 100%);
     --foreground: 0 0% 7%;
 
     --card: 0 0% 100%;
@@ -1443,6 +1448,93 @@ layer(base);
 
     /* Search glow - green */
     --search-input-bg: 0 0% 91%;
+  }
+
+  /* Forge Light — cold concrete ground, deep steel/rust ink for AA contrast */
+  .light.theme-forge {
+    --app-font-family: 'Inter', -apple-system, system-ui, sans-serif;
+    --background: 195 8% 95%;
+    --foreground: 200 12% 12%;
+
+    --card: 195 6% 98%;
+    --card-foreground: 200 12% 12%;
+
+    --popover: 195 6% 99%;
+    --popover-foreground: 200 12% 12%;
+
+    --primary: 205 55% 34%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 195 6% 90%;
+    --secondary-foreground: 200 10% 20%;
+
+    --muted: 195 6% 90%;
+    --muted-foreground: 195 6% 40%;
+
+    --accent: 28 70% 38%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 9 70% 40%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 195 8% 78%;
+    --input: 195 6% 92%;
+    --ring: 205 55% 34%;
+
+    --radius: 0.25rem;
+
+    /* Status = approval stamp ink */
+    --status-open: 205 65% 32%;
+    --status-in-progress: 32 80% 28%;
+    --status-waiting: 195 12% 38%;
+    --status-resolved: 150 45% 26%;
+    --status-closed: 200 8% 40%;
+
+    /* Priority = material grade, WCAG AA-deep (≥4.5:1 vs. 14% badge tint) */
+    --priority-critical: 9 75% 36%;
+    --priority-high: 28 75% 32%;
+    --priority-medium: 205 35% 34%;
+    --priority-low: 150 25% 28%;
+
+    /* Sidebar */
+    --sidebar-background: 195 8% 92%;
+    --sidebar-foreground: 200 12% 12%;
+    --sidebar-primary: 205 55% 34%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 195 6% 88%;
+    --sidebar-accent-foreground: 200 12% 12%;
+    --sidebar-border: 195 8% 82%;
+    --sidebar-ring: 205 55% 34%;
+
+    /* Chart colors */
+    --chart-1: 205 55% 34%;
+    --chart-2: 28 70% 38%;
+    --chart-3: 150 45% 30%;
+    --chart-4: 9 70% 40%;
+    --chart-5: 195 12% 42%;
+
+    /* Light subtle shadows — tight, no blur-heavy elevation */
+    --shadow-2xs: 0 1px 1px 0px hsl(195 8% 50% / 0.08);
+    --shadow-xs: 0 1px 2px 0px hsl(195 8% 50% / 0.1);
+    --shadow-sm: 0 1px 3px -1px hsl(195 8% 50% / 0.12), 0 1px 1px 0px hsl(195 8% 50% / 0.08);
+    --shadow: 0 2px 4px -1px hsl(195 8% 50% / 0.12), 0 1px 2px -1px hsl(195 8% 50% / 0.08);
+    --shadow-md: 0 4px 8px -2px hsl(195 8% 50% / 0.14), 0 2px 4px -1px hsl(195 8% 50% / 0.1);
+    --shadow-lg: 0 8px 16px -3px hsl(195 8% 50% / 0.16), 0 3px 6px -2px hsl(195 8% 50% / 0.1);
+    --shadow-xl: 0 14px 24px -4px hsl(195 8% 50% / 0.18), 0 6px 10px -3px hsl(195 8% 50% / 0.12);
+    --shadow-2xl: 0 22px 36px -6px hsl(195 8% 50% / 0.2), 0 10px 16px -4px hsl(195 8% 50% / 0.14);
+    --tracking-normal: 0em;
+    --spacing: 0.25rem;
+
+    --search-input-bg: 195 6% 90%;
+
+    --ai: 255 25% 40%;
+    --ai-foreground: 0 0% 100%;
+
+    --warning: 32 80% 30%;
+    --warning-foreground: 0 0% 100%;
+
+    --success: 150 45% 26%;
+    --success-foreground: 0 0% 100%;
   }
 
   .font-jakarta {
@@ -1524,30 +1616,7 @@ layer(base);
   body {
     @apply text-foreground font-sans antialiased;
     font-family: var(--app-font-family);
-    background: var(--background-gradient, hsl(var(--background)));
-    background-attachment: fixed;
-  }
-
-  /* Mesh gradient background pattern - creates depth and atmosphere */
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background-image:
-      radial-gradient(circle at 15% 20%, hsla(var(--primary), 0.12) 0%, transparent 50%),
-      radial-gradient(circle at 85% 75%, hsla(var(--accent), 0.10) 0%, transparent 55%),
-      radial-gradient(circle at 45% 85%, hsla(var(--primary), 0.08) 0%, transparent 60%),
-      radial-gradient(circle at 70% 15%, hsla(var(--accent), 0.07) 0%, transparent 50%);
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0.8;
-    animation: mesh-shift 20s ease-in-out infinite alternate;
-  }
-
-  @keyframes mesh-shift {
-    0% { background-position: 15% 20%, 85% 75%, 45% 85%, 70% 15%; opacity: 0.8; }
-    50% { background-position: 17% 21%, 83% 76%, 46% 84%, 68% 16%; opacity: 0.85; }
-    100% { background-position: 14% 18%, 86% 73%, 44% 86%, 71% 14%; opacity: 0.75; }
+    background: hsl(var(--background));
   }
 
   /* KPI Card animations */
@@ -1618,7 +1687,6 @@ layer(base);
   /* Force light theme variables for print */
   :root, .dark, .light, [class*="theme-"] {
     --background: 0 0% 100% !important;
-    --background-gradient: none !important;
     --foreground: 222 47% 11% !important;
     --card: 0 0% 100% !important;
     --card-foreground: 222 47% 11% !important;

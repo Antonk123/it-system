@@ -29,6 +29,15 @@ coverage/
 .superpowers/
 docs/superpowers/
 
+# Impeccable-skillens transienta arbetsstate — versionshanteras inte.
+# .impeccable/design.json och .impeccable/surfaces/ spåras DÄREMOT medvetet
+# (permanent designsystem-dokumentation + ytkontrakt skillen läser tillbaka).
+.impeccable/critique/
+.impeccable/review/
+.impeccable/mocks/
+.impeccable/build/
+.impeccable/.DS_Store
+
 # GSD-sketcher (throwaway UI-mockups) — versionshanteras inte
 .planning/sketches/
 

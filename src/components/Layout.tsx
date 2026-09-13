@@ -223,7 +223,7 @@ export const Layout = ({
           type="button"
           aria-label="Stäng meny"
           tabIndex={0}
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden animate-fade-in cursor-default"
+          className="fixed inset-0 bg-black/60 z-40 lg:hidden animate-fade-in cursor-default"
           onClick={() => setSidebarOpen(false)}
         />
       )}
@@ -279,7 +279,7 @@ export const Layout = ({
       {/* Main content */}
       <main id="main-content" className="flex-1 min-w-0 relative">
         {/* Mobile header */}
-        <div data-print-hide className="lg:hidden sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] flex items-center gap-4 shadow-sm">
+        <div data-print-hide className="lg:hidden sticky top-0 z-30 bg-background border-b border-border px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] flex items-center gap-4">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-3 -m-1 rounded-lg hover:bg-primary/10 active:bg-primary/20 transition-colors"
@@ -299,7 +299,7 @@ export const Layout = ({
         </div>
 
         {/* Desktop header with search */}
-        <div data-print-hide className="hidden lg:block sticky top-0 z-30 bg-background/80 backdrop-blur-xl border-b border-border/50 p-4 shadow-sm">
+        <div data-print-hide className="hidden lg:block sticky top-0 z-30 bg-background border-b border-border p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 flex-1">
               <div className="relative w-80 shrink-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">

@@ -135,7 +135,7 @@ const Dashboard = () => {
 
         {/* Fel-banner — visas diskret om en eller flera queries failar */}
         {hasError && (
-          <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-destructive/10 border border-destructive/25 text-sm text-destructive">
+          <div className="flex items-center gap-3 px-4 py-2.5 rounded-sm bg-destructive/10 border border-destructive/25 text-sm text-destructive">
             <AlertTriangle className="w-4 h-4 shrink-0" />
             <span className="flex-1">Kunde inte hämta all data — siffror kan vara ofullständiga.</span>
             <button
@@ -147,6 +147,29 @@ const Dashboard = () => {
               Försök igen
             </button>
           </div>
+        )}
+
+        {/* Critical Tickets Alert — leads the page: the highest-stakes signal
+            reads before the routine queue, not after it. */}
+        {stats.critical > 0 && (
+          <motion.div
+            className="flex items-center gap-3 rounded-sm border border-[hsl(var(--priority-critical))] bg-[hsl(var(--priority-critical)/0.08)] p-4"
+            initial={prefersReducedMotion ? false : { opacity: 0, y: -8 }}
+            animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+          >
+            <AlertTriangle className="w-5 h-5 text-[hsl(var(--priority-critical))] shrink-0" />
+            <div className="flex-1">
+              <p className="font-medium text-[hsl(var(--priority-critical))]">
+                {stats.critical} kritisk{stats.critical > 1 ? 'a' : 't'} ärende{stats.critical > 1 ? 'n' : ''} kräver uppmärksamhet
+              </p>
+            </div>
+            <Link to="/tickets?priority=critical">
+              <Button variant="outline" size="sm" className="gap-1">
+                Visa alla <ArrowRight className="w-4 h-4" />
+              </Button>
+            </Link>
+          </motion.div>
         )}
 
         {/* KPI Grid */}
@@ -240,30 +263,6 @@ const Dashboard = () => {
           </motion.div>
 
         </div>
-
-        {/* Critical Tickets Alert */}
-        {stats.critical > 0 && (
-          <motion.div
-            className="bg-destructive/10 border border-destructive/30 rounded-lg p-4"
-            initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.98 }}
-            animate={prefersReducedMotion ? false : { opacity: 1, scale: 1 }}
-            transition={{ delay: 0.3 }}
-          >
-            <div className="flex items-center gap-3">
-              <AlertTriangle className="w-5 h-5 text-destructive" />
-              <div className="flex-1">
-                <p className="font-medium text-destructive">
-                  {stats.critical} kritisk{stats.critical > 1 ? 'a' : 't'} ärende{stats.critical > 1 ? 'n' : ''} kräver uppmärksamhet
-                </p>
-              </div>
-              <Link to="/tickets?priority=critical">
-                <Button variant="outline" size="sm" className="gap-1">
-                  Visa alla <ArrowRight className="w-4 h-4" />
-                </Button>
-              </Link>
-            </div>
-          </motion.div>
-        )}
       </div>
     </Layout>
   );

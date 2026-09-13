@@ -64,8 +64,8 @@ export const KPICard = ({
   return (
     <Card
         className={cn(
-          'relative overflow-hidden transition-all duration-300 hover:-translate-y-1',
-          'hover:shadow-2xl hover:shadow-primary/20',
+          'relative overflow-hidden shadow-none transition-colors duration-150',
+          'hover:border-primary/50',
           onClick && 'cursor-pointer',
           animationDelay != null && 'animate-fade-in',
           className
@@ -80,13 +80,17 @@ export const KPICard = ({
           ? { role: 'button', tabIndex: 0, onKeyDown: handleKeyDown }
           : {})}
       >
+        {/* Register marks — the plaque's own corner ticks, not a decorative blob */}
+        <span aria-hidden className="absolute left-0 top-0 w-2.5 h-2.5 border-l border-t border-border" />
+        <span aria-hidden className="absolute right-0 bottom-0 w-2.5 h-2.5 border-r border-b border-border" />
+
         <CardContent className="p-4">
           <div className="flex items-start justify-between mb-3">
-            <div className="p-2 rounded-lg bg-linear-to-br from-primary/20 to-accent/10 backdrop-blur-xs">
+            <div className="p-2 rounded-sm border border-border bg-muted/40">
               <div className="text-primary w-5 h-5">{icon}</div>
             </div>
             {trend && (
-              <div className={cn('flex items-center gap-1 text-xs font-medium', trendColor)}>
+              <div className={cn('flex items-center gap-1 text-xs font-medium font-mono', trendColor)}>
                 <TrendIcon className="w-3 h-3" />
                 <span>{trend.value.toFixed(0)}%</span>
               </div>
@@ -94,16 +98,15 @@ export const KPICard = ({
           </div>
 
           <div className="space-y-1 mb-3">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <p className="text-xs font-medium text-muted-foreground">
               {label}
             </p>
-            <div className="text-2xl font-bold">
+            <div className="text-2xl font-bold font-mono text-foreground">
               <AnimatedNumber
                 value={value}
                 decimals={valueDecimals}
                 suffix={valueSuffix}
                 prefix={valuePrefix}
-                className="bg-linear-to-r from-primary to-accent bg-clip-text text-transparent"
               />
             </div>
             {subLabel != null && (
@@ -124,9 +127,6 @@ export const KPICard = ({
             </div>
           )}
         </CardContent>
-
-        {/* Decorative gradient overlay */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50 pointer-events-none" />
       </Card>
   );
 };

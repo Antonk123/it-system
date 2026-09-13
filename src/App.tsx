@@ -206,9 +206,9 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider
         attribute="class"
-        defaultTheme="theme-stone"
+        defaultTheme="theme-forge"
         enableSystem={false}
-        themes={["theme-default", "theme-midnight", "theme-graphite", "theme-stone", "theme-linear", "theme-spotify"]}
+        themes={["theme-default", "theme-midnight", "theme-graphite", "theme-stone", "theme-linear", "theme-spotify", "theme-forge"]}
       >
         <AppearanceInitializer />
         <TooltipProvider>

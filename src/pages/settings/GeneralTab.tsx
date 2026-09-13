@@ -24,6 +24,7 @@ const themeOptions = [
   { value: 'theme-stone', label: 'Stone' },
   { value: 'theme-linear', label: 'Linear' },
   { value: 'theme-spotify', label: 'Spotify' },
+  { value: 'theme-forge', label: 'Forge' },
 ] as const;
 
 const GeneralTab = () => {

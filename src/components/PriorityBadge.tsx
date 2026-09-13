@@ -22,10 +22,12 @@ const priorityClasses: Record<TicketPriority, string> = {
   'critical': 'priority-badge-critical',
 };
 
+// Material-grade swatch: a flat tag with a solid grade bar, not a soft pill —
+// priority reads as a specification grade, not a status-of-the-week color.
 export const PriorityBadge = ({ priority, className }: PriorityBadgeProps) => {
   return (
     <span className={cn(
-      "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium",
+      "inline-flex items-center gap-1.5 pl-1.5 pr-2 py-0.5 rounded-sm border-l-2 text-xs font-medium",
       priorityClasses[priority],
       className
     )}>
