@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import type { TicketPriority } from '@/types/ticket';
 
 export interface AgingTicket {
   id: string;
   title: string;
-  priority: string;
+  priority: TicketPriority;
   status: string;
   requester_name: string | null;
   age_days: number;

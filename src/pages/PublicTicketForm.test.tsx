@@ -4,7 +4,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
-import type { ReactElement } from 'react';
 
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: null, isLoading: false }) }));
 vi.mock('@/components/ui/rich-text-editor', () => ({
@@ -27,7 +26,7 @@ vi.mock('@/lib/api', () => ({
 
 import PublicTicketForm from './PublicTicketForm';
 
-function renderForm(): ReactElement {
+function renderForm() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
