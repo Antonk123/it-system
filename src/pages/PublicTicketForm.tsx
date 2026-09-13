@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, Send, AlertCircle, Loader2, ArrowLeft, Sparkles, ThumbsUp, ArrowRight, FileText, Check } from 'lucide-react';
+import { CheckCircle, Send, AlertCircle, Loader2, ArrowLeft, Sparkles, ThumbsUp, ArrowRight, FileText } from 'lucide-react';
 import { Link, Navigate } from 'react-router';
 import { api, CustomFieldInput, TemplateFieldRow } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -24,13 +24,18 @@ interface Template {
   fields?: TemplateFieldRow[];
 }
 
-const STEPS = [
-  { id: 1, label: 'Beskriv problemet' },
-  { id: 2, label: 'Dina uppgifter' },
-] as const;
+// Chip-vy istället för dropdown: hela listan syns direkt, ett klick väljer —
+// inget "öppna först, välj sen" för en så kort, ofta använd lista.
+// Struktur lånad från 21st.dev:s återkommande "category chips"-mönster i
+// supportformulär, omsatt i Forge egna flata taggar (rounded-sm, inte pill).
+const PRIORITY_OPTIONS: { value: string; label: string; token: string }[] = [
+  { value: 'low', label: 'Låg', token: '--priority-low' },
+  { value: 'medium', label: 'Medium', token: '--priority-medium' },
+  { value: 'high', label: 'Hög', token: '--priority-high' },
+  { value: 'urgent', label: 'Brådskande', token: '--priority-critical' },
+];
 
 const PublicTicketForm = () => {
-  const [step, setStep] = useState<1 | 2>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +44,6 @@ const PublicTicketForm = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [customFieldValues, setCustomFieldValues] = useState<CustomFieldInput[]>([]);
   const [formData, setFormData] = useState({ name: '', email: '', title: '', description: '', category: '', priority: 'medium' });
-  const [step1Error, setStep1Error] = useState<string | null>(null);
   const [aiSuggestion, setAiSuggestion] = useState<{
     deflectionId: string;
     hasSolution: boolean;
@@ -104,19 +108,6 @@ const PublicTicketForm = () => {
   const descriptionText = formData.description.replace(/<[^>]*>/g, '').trim();
   const usesDynamicFields = !!(selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0);
 
-  const handleContinue = () => {
-    if (!formData.title.trim()) {
-      setStep1Error('Ärenderubrik krävs.');
-      return;
-    }
-    if (!usesDynamicFields && descriptionText.length === 0) {
-      setStep1Error('Beskrivning krävs.');
-      return;
-    }
-    setStep1Error(null);
-    setStep(2);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -180,8 +171,6 @@ const PublicTicketForm = () => {
     setIsSuccess(false);
     setError(null);
     setAiSuggestion(null);
-    setStep1Error(null);
-    setStep(1);
   };
 
   const inputClass = "h-11 rounded-md bg-input border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring";
@@ -263,30 +252,6 @@ const PublicTicketForm = () => {
           <p className="text-sm text-muted-foreground mt-1.5">Fyll i formuläret så återkommer vi så snart som möjligt.</p>
         </div>
 
-        {/* Step indicator */}
-        <div className="flex items-center gap-2 mb-6" aria-label={`Steg ${step} av ${STEPS.length}`}>
-          {STEPS.map((s, i) => {
-            const isDone = s.id < step;
-            const isActive = s.id === step;
-            return (
-              <div key={s.id} className="flex items-center gap-2 flex-1 last:flex-none">
-                <div
-                  className={cn(
-                    'flex items-center gap-1.5 px-2.5 py-1 rounded-sm border text-xs font-medium whitespace-nowrap',
-                    isActive && 'border-primary text-primary bg-primary/5',
-                    isDone && 'border-success text-success bg-success/5',
-                    !isActive && !isDone && 'border-border text-muted-foreground'
-                  )}
-                >
-                  {isDone ? <Check className="w-3 h-3" /> : <span className="font-mono">{s.id}</span>}
-                  {s.label}
-                </div>
-                {i < STEPS.length - 1 && <div className={cn('h-px flex-1', isDone ? 'bg-success/50' : 'bg-border')} />}
-              </div>
-            );
-          })}
-        </div>
-
         {/* Card */}
         <div className="bg-card border border-border rounded-lg p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -299,266 +264,257 @@ const PublicTicketForm = () => {
               </div>
             )}
 
-            {step === 1 && (
-              <>
-                {/* Template */}
-                {templates.length > 0 && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="template" className="text-foreground text-sm font-medium flex items-center gap-1.5">
-                      <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                      Använd mall (valfritt)
-                    </Label>
-                    <Select value={selectedTemplate?.id || ''} onValueChange={handleTemplateSelect}>
-                      <SelectTrigger id="template" className={selectTriggerClass}>
-                        <SelectValue placeholder="Välj en mall för att förfylla formuläret" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Ingen mall</SelectItem>
-                        {templates.map((template) => (
-                          <SelectItem key={template.id} value={template.id}>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{template.name}</span>
-                              {template.description && (
-                                <span className="text-xs text-muted-foreground">{template.description}</span>
-                              )}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
+            {/* Name + Email */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label htmlFor="name" className="text-foreground text-sm font-medium">Ditt namn *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Johan Andersson"
+                  className={inputClass}
+                  autoComplete="name"
+                  required
+                  maxLength={100}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="email" className="text-foreground text-sm font-medium">Din e-post *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  placeholder="namn@example.com"
+                  className={inputClass}
+                  autoComplete="email"
+                  required
+                  maxLength={255}
+                />
+                <p className="text-xs text-muted-foreground">Vi svarar till den här adressen.</p>
+              </div>
+            </div>
 
-                {/* Dynamic fields */}
-                {usesDynamicFields && (
-                  <DynamicFieldsForm
-                    fields={selectedTemplate!.fields!}
-                    onValuesChange={setCustomFieldValues}
-                  />
-                )}
+            {/* Template */}
+            {templates.length > 0 && (
+              <div className="space-y-1.5">
+                <Label htmlFor="template" className="text-foreground text-sm font-medium flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                  Använd mall (valfritt)
+                </Label>
+                <Select value={selectedTemplate?.id || ''} onValueChange={handleTemplateSelect}>
+                  <SelectTrigger id="template" className={selectTriggerClass}>
+                    <SelectValue placeholder="Välj en mall för att förfylla formuläret" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Ingen mall</SelectItem>
+                    {templates.map((template) => (
+                      <SelectItem key={template.id} value={template.id}>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{template.name}</span>
+                          {template.description && (
+                            <span className="text-xs text-muted-foreground">{template.description}</span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
 
-                {/* Title */}
-                <div className="space-y-1.5">
-                  <Label htmlFor="title" className="text-foreground text-sm font-medium">Ärendets titel *</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    placeholder="Kort sammanfattning av problemet"
-                    className={inputClass}
-                    maxLength={200}
-                  />
+            {/* Dynamic fields */}
+            {usesDynamicFields && (
+              <DynamicFieldsForm
+                fields={selectedTemplate!.fields!}
+                onValuesChange={setCustomFieldValues}
+              />
+            )}
+
+            {/* Title */}
+            <div className="space-y-1.5">
+              <Label htmlFor="title" className="text-foreground text-sm font-medium">Ärendets titel *</Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Kort sammanfattning av problemet"
+                className={inputClass}
+                required
+                maxLength={200}
+              />
+            </div>
+
+            {/* Description */}
+            {!usesDynamicFields && (
+              <div className="space-y-1.5">
+                <Label htmlFor="description" className="text-foreground text-sm font-medium">Beskrivning *</Label>
+                <RichTextEditor
+                  value={formData.description}
+                  onChange={(html) => setFormData({ ...formData, description: html })}
+                  placeholder="Beskriv ditt problem i detalj..."
+                  minHeight="160px"
+                  required
+                />
+                <p className="text-xs text-muted-foreground">Ta gärna med eventuella felmeddelanden eller vad du redan provat.</p>
+              </div>
+            )}
+
+            {/* AI Deflection — suggest solution before submitting */}
+            {!aiSuggestion && descriptionText.length >= 20 && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleAiSuggest}
+                disabled={isAiLoading}
+                className="w-full h-11 rounded-md gap-2 border-[hsl(var(--ai))]/40 text-[hsl(var(--ai))] hover:bg-[hsl(var(--ai))]/5"
+              >
+                {isAiLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4" />
+                )}
+                {isAiLoading ? 'Söker efter lösning...' : 'Få hjälp direkt'}
+              </Button>
+            )}
+
+            {/* AI Suggestion result */}
+            {aiSuggestion && (
+              <div className="rounded-md border border-[hsl(var(--ai))]/40 bg-[hsl(var(--ai))]/5 p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[hsl(var(--ai))]" />
+                  <span className="text-sm font-medium text-[hsl(var(--ai))]">
+                    {aiSuggestion.hasSolution ? 'Vi hittade en möjlig lösning' : 'Ingen lösning hittades'}
+                  </span>
                 </div>
 
-                {/* Description */}
-                {!usesDynamicFields && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="description" className="text-foreground text-sm font-medium">Beskrivning *</Label>
-                    <RichTextEditor
-                      value={formData.description}
-                      onChange={(html) => setFormData({ ...formData, description: html })}
-                      placeholder="Beskriv ditt problem i detalj..."
-                      minHeight="200px"
-                    />
-                  </div>
-                )}
-
-                {/* AI Deflection — suggest solution before submitting */}
-                {!aiSuggestion && descriptionText.length >= 20 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleAiSuggest}
-                    disabled={isAiLoading}
-                    className="w-full h-11 rounded-md gap-2 border-[hsl(var(--ai))]/40 text-[hsl(var(--ai))] hover:bg-[hsl(var(--ai))]/5"
-                  >
-                    {isAiLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-4 w-4" />
-                    )}
-                    {isAiLoading ? 'Söker efter lösning...' : 'Få hjälp direkt'}
-                  </Button>
-                )}
-
-                {/* AI Suggestion result */}
-                {aiSuggestion && (
-                  <div className="rounded-md border border-[hsl(var(--ai))]/40 bg-[hsl(var(--ai))]/5 p-5 space-y-4">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-[hsl(var(--ai))]" />
-                      <span className="text-sm font-medium text-[hsl(var(--ai))]">
-                        {aiSuggestion.hasSolution ? 'Vi hittade en möjlig lösning' : 'Ingen lösning hittades'}
-                      </span>
+                {aiSuggestion.hasSolution && aiSuggestion.solution ? (
+                  <>
+                    <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed bg-background rounded-md p-4 border border-border">
+                      {aiSuggestion.solution}
                     </div>
+                    {aiSuggestion.kbReferences.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        Baserat på: {aiSuggestion.kbReferences.map(r => r.title).join(', ')}
+                      </p>
+                    )}
+                    <div className="flex gap-3">
+                      <Button
+                        type="button"
+                        onClick={handleAiSolved}
+                        className="flex-1 h-10 rounded-md gap-2 bg-success hover:bg-success/90 text-success-foreground"
+                      >
+                        <ThumbsUp className="h-4 w-4" />
+                        Det löste problemet
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleAiRejected}
+                        className="flex-1 h-10 rounded-md gap-2"
+                      >
+                        <ArrowRight className="h-4 w-4" />
+                        Behöver fortfarande hjälp
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-muted-foreground">
+                      Vi hittade tyvärr inget i kunskapsbasen som matchar ditt problem. Beskriv det i formuläret så hjälper vi dig personligen.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setAiSuggestion(null)}
+                      className="h-10 rounded-md gap-2"
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                      Fortsätt till ärende
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
 
-                    {aiSuggestion.hasSolution && aiSuggestion.solution ? (
-                      <>
-                        <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed bg-background rounded-md p-4 border border-border">
-                          {aiSuggestion.solution}
-                        </div>
-                        {aiSuggestion.kbReferences.length > 0 && (
-                          <p className="text-xs text-muted-foreground">
-                            Baserat på: {aiSuggestion.kbReferences.map(r => r.title).join(', ')}
-                          </p>
+            {/* Category — chip row: whole list visible, one tap to pick */}
+            {categories.length > 0 && (
+              <div className="space-y-1.5">
+                <Label className="text-foreground text-sm font-medium">Kategori</Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {categories.map((cat) => {
+                    const selected = formData.category === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, category: selected ? '' : cat.id })}
+                        aria-pressed={selected}
+                        className={cn(
+                          'rounded-sm border px-3 py-1.5 text-xs font-medium transition-colors',
+                          selected
+                            ? 'border-primary bg-primary text-primary-foreground'
+                            : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground'
                         )}
-                        <div className="flex gap-3">
-                          <Button
-                            type="button"
-                            onClick={handleAiSolved}
-                            className="flex-1 h-10 rounded-md gap-2 bg-success hover:bg-success/90 text-success-foreground"
-                          >
-                            <ThumbsUp className="h-4 w-4" />
-                            Det löste problemet
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={handleAiRejected}
-                            className="flex-1 h-10 rounded-md gap-2"
-                          >
-                            <ArrowRight className="h-4 w-4" />
-                            Behöver fortfarande hjälp
-                          </Button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-sm text-muted-foreground">
-                          Vi hittade tyvärr inget i kunskapsbasen som matchar ditt problem. Beskriv det i formuläret så hjälper vi dig personligen.
-                        </p>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setAiSuggestion(null)}
-                          className="h-10 rounded-md gap-2"
-                        >
-                          <ArrowRight className="h-4 w-4" />
-                          Fortsätt till ärende
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {step1Error && (
-                  <div className="flex items-start gap-3 rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
-                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                    <span>{step1Error}</span>
-                  </div>
-                )}
-
-                <Button
-                  type="button"
-                  onClick={handleContinue}
-                  className="w-full h-11 rounded-md font-semibold gap-2"
-                >
-                  Nästa: Dina uppgifter
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </>
+                      >
+                        {cat.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             )}
 
-            {step === 2 && (
-              <>
-                {/* Name + Email */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="name" className="text-foreground text-sm font-medium">Ditt namn *</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      placeholder="Johan Andersson"
-                      className={inputClass}
-                      autoComplete="name"
-                      required
-                      maxLength={100}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="email" className="text-foreground text-sm font-medium">Din e-post *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="namn@example.com"
-                      className={inputClass}
-                      autoComplete="email"
-                      required
-                      maxLength={255}
-                    />
-                  </div>
-                </div>
+            {/* Priority — chip row using the same material-grade colors as the internal app */}
+            <div className="space-y-1.5">
+              <Label className="text-foreground text-sm font-medium">Prioritet</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {PRIORITY_OPTIONS.map((opt) => {
+                  const selected = formData.priority === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, priority: opt.value })}
+                      aria-pressed={selected}
+                      className={cn(
+                        'rounded-sm border px-3 py-1.5 text-xs font-medium transition-colors',
+                        selected
+                          ? `border-[hsl(var(${opt.token}))] bg-[hsl(var(${opt.token})/0.12)] text-[hsl(var(${opt.token}))]`
+                          : 'border-border bg-background text-muted-foreground hover:border-primary/40 hover:text-foreground'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-                {/* Category + Priority */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {categories.length > 0 && (
-                    <div className="space-y-1.5">
-                      <Label className="text-foreground text-sm font-medium">Kategori</Label>
-                      <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
-                        <SelectTrigger className={selectTriggerClass}>
-                          <SelectValue placeholder="Välj kategori" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories.map((cat) => (
-                            <SelectItem key={cat.id} value={cat.id}>{cat.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  <div className="space-y-1.5">
-                    <Label className="text-foreground text-sm font-medium">Prioritet</Label>
-                    <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
-                      <SelectTrigger className={selectTriggerClass}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="low">Låg</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="high">Hög</SelectItem>
-                        <SelectItem value="urgent">Brådskande</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+            {/* Attachment hint — public form does not support direct upload */}
+            <p className="text-xs text-muted-foreground text-center">
+              Behöver du bifoga filer? Svara på bekräftelsemailet du får efter att ärendet skickats — bilagor läggs då till automatiskt.
+            </p>
 
-                {/* Attachment hint — public form does not support direct upload */}
-                <p className="text-xs text-muted-foreground text-center">
-                  Behöver du bifoga filer? Svara på bekräftelsemailet du får efter att ärendet skickats — bilagor läggs då till automatiskt.
-                </p>
-
-                <div className="flex gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setStep(1)}
-                    className="h-11 rounded-md gap-2"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    Tillbaka
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="flex-1 h-11 rounded-md font-semibold"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Skickar...
-                      </>
-                    ) : (
-                      <>
-                        <Send className="h-4 w-4 mr-2" />
-                        Skicka ärende
-                      </>
-                    )}
-                  </Button>
-                </div>
-              </>
-            )}
+            {/* Submit */}
+            <Button
+              type="submit"
+              className="w-full h-11 rounded-md font-semibold"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Skickar...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Skicka ärende
+                </>
+              )}
+            </Button>
           </form>
         </div>
 
