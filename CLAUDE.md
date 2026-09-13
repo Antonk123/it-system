@@ -132,29 +132,56 @@ Körs automatiskt av Claude Code — du behöver inte göra något. Kräver `jq`
 |--------|-----|-------|
 | `sqlite-itticket-ro` | Read-only-frågor mot lokala dev-DB:n (`tools/sqlite-mcp/`, better-sqlite3 `readonly`) — använd istället för engångs-`tsx`-scripts för att inspektera schema/migrationer/FTS5. Verktyg: `list_tables`, `describe_table`, `read_query`. | lokal (per maskin; `.mcp.json` gitignorad). Registrera: se `tools/sqlite-mcp/README.md`. |
 
-Redan anslutna på harness-/plugin-nivå (dubblera inte): context7, playwright, supabase, magic, claude_ai (Gmail/Calendar/Drive/M365). GitHub nås via `gh` CLI — ingen MCP.
+Redan anslutna på harness-/plugin-nivå (dubblera inte): context7, playwright, supabase, claude_ai (Gmail/Calendar/Drive/M365). GitHub nås via `gh` CLI — ingen MCP.
 
-## Frontend Aesthetics
+## UI-arbete
 
-<frontend_aesthetics>
-You tend to converge toward generic, "on distribution" outputs. In frontend design, this creates what users call the "AI slop" aesthetic. Avoid this: make creative, distinctive frontends that surprise and delight. Focus on:
+IT-Ticket har **redan** ett designsystem (Tailwind + shadcn/ui + CSS-var-teman). Standardjobbet är
+förfining inuti det systemet — inte att ta fram en ny visuell identitet. Välj lager efter det:
 
-Typography: Choose fonts that are beautiful, unique, and interesting. Avoid generic fonts like Arial and Inter; opt instead for distinctive choices that elevate the frontend's aesthetics.
+| Situation | Arbetssätt |
+|---|---|
+| **Ändra befintlig vy** (default) | Skärmdumpsloop, se nedan. Ingen ny palett, inga nya typsnitt — återanvänd befintliga tokens och shadcn-komponenter. |
+| **Ny yta utan förebild i appen** | `frontend-design`-skillen först: tokenplan + ASCII-wireframe → självkritik mot anti-slop-listan → sedan kod. |
+| **Vill jämföra riktningar** | `/design` (canvas-artboards Anton kan dra i) eller `gsd-sketch` (2–3 slit-och-släng-HTML). Före kod, inte istället för. |
+| **Före merge** | `a11y-ui-reviewer`-agenten — obligatorisk vid diff mot `src/components/**` eller `src/pages/**`. |
 
-Color & Theme: Commit to a cohesive aesthetic. Use CSS variables for consistency. Dominant colors with sharp accents outperform timid, evenly-distributed palettes. Draw from IDE themes and cultural aesthetics for inspiration.
+### Skärmdumpsloop (default för all UI-ändring)
 
-Motion: Use animations for effects and micro-interactions. Prioritize CSS-only solutions for HTML. Use Motion library for React when available. Focus on high-impact moments: one well-orchestrated page load with staggered reveals (animation-delay) creates more delight than scattered micro-interactions.
+Textbeskrivningar av UI är otillförlitliga. Titta på resultatet.
 
-Backgrounds: Create atmosphere and depth rather than defaulting to solid colors. Layer CSS gradients, use geometric patterns, or add contextual effects that match the overall aesthetic.
+1. **Välj yta.** Dev-servern (URL i `CLAUDE.local.md`) kräver jobbnätet — pinga först.
+   Utanför nätet: kör `npx vite --port 5199` lokalt. Frontend räcker för ren layout/tema-granskning;
+   backend behövs bara för inloggade vyer.
+2. Öppna vyn via Claude Browser eller Playwright-MCP. Logga in en gång — sessionen persisterar
+   över iterationer.
+3. Skärmdump **före** och **efter** varje ändring — även `mobile`-viewport (375×812), inte bara desktop.
+4. **Tema byts via localStorage, inte `colorScheme`.** Appen kör `enableSystem={false}`, så
+   `prefers-color-scheme`-emulering gör *ingenting* — en "mörkt läge verifierat"-slutsats från den
+   spaken är alltid falsk. Tre oberoende klasser på `<html>`, nycklar i `src/lib/appearance.ts`:
 
-Avoid generic AI-generated aesthetics:
-- Overused font families (Inter, Roboto, Arial, system fonts)
-- Clichéd color schemes (particularly purple gradients on white backgrounds)
-- Predictable layouts and component patterns
-- Cookie-cutter design that lacks context-specific character
+   | localStorage-nyckel | Värden | Default |
+   |---|---|---|
+   | `app-mode-theme` | `light`, `dark` | `light` |
+   | `theme` | `theme-default`, `theme-midnight`, `theme-graphite`, `theme-stone`, `theme-linear`, `theme-spotify` | `theme-default` |
+   | `app-font-theme` | `font-jakarta`, `font-crimson`, `font-libre`, `font-jetbrains`, `font-inter` | `font-inter` |
 
-Interpret creatively and make unexpected choices that feel genuinely designed for the context. Vary between light and dark themes, different fonts, different aesthetics. You still tend to converge on common choices (Space Grotesk, for example) across generations. Avoid this: it is critical that you think outside the box!
-</frontend_aesthetics>
+   Sätt nyckeln, **ladda om**, och bekräfta med `document.documentElement.className`
+   (ska bli t.ex. `font-inter dark theme-stone`).
+5. Vid tveksamhet: skicka **bara skärmdumpen** till en subagent utan kontext och fråga "vad är fel
+   här?". En informerad läsare läser in avsikten och missar det en användare faktiskt ser.
+
+### Estetik-skills — vilken, när
+
+- **`frontend-design`** (plugin, Anthropic) — förstahandsval när en ny visuell riktning verkligen
+  behövs. Tvingar plan → självkritik → kod och jagar konkreta AI-slop-tells (cream #F4F1EA + serif +
+  terracotta #D97757, SaaS-kortkittet, ALL-CAPS-eyebrows, `→` i knapptext, `01/02/03`-markörer på
+  innehåll som inte är en sekvens).
+- **`ui-ux-pro-max`** — använd **bara** pre-delivery-checklistan och mätvärdena: kontrast 4.5:1,
+  touch 44×44pt, animation 150–300 ms, breakpoints 375/768/1024/1440, 4/8dp-spacing.
+  Kör **inte** `search.py --design-system` i det här repot — den föreslår en ny palett och typografi
+  ur en fast databas och krockar med appens befintliga system.
+- **`anthropic-skills:frontend-aesthetics`** — delmängd av `frontend-design`. Hoppa över.
 
 ## Obsidian-skills — auto-trigg (gäller allt vault-arbete)
 
