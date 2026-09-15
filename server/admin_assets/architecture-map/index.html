@@ -846,6 +846,12 @@ body.compact .n-label { font-size: 13.5px; }
   .viewport { max-height: 66vh; }
   .side { flex: none; width: auto; border-left: 0; border-top: 1px solid var(--line-strong); }
 }
+.depth-control { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.depth-control select { background: var(--panel); color: var(--ink); }
+.d-chain { padding: 8px 12px; font-size: 12px; }
+.d-chain summary { cursor: pointer; }
+.d-chain summary:focus-visible { outline: 2px solid var(--up); outline-offset: 3px; }
+.d-chain p { overflow-wrap: anywhere; line-height: 1.6; }
 /* Shared viewer: sizing follows its toolbar, including narrow embedded hosts. */
 body { display: flex; flex-direction: column; }
 .bar { height: auto; min-height: 64px; flex-wrap: wrap; padding: 12px 18px; gap: 8px; flex: none; }
@@ -893,6 +899,13 @@ dialog::backdrop { background: #0008; }
     <span class="hits" id="hits"></span>
   </div>
   <button class="btn" id="deadBtn" type="button" aria-pressed="false">Dödkod</button>
+  <label class="depth-control" for="depth">Kopplingsdjup
+    <select class="btn" id="depth">
+      <option value="1">Direkta</option>
+      <option value="2">2 steg</option>
+      <option value="all">Alla indirekta</option>
+    </select>
+  </label>
   <button class="btn" id="compactBtn" type="button" aria-pressed="false">Kompakt</button>
   <button class="btn" id="bugBtn" type="button">⚠ Buggar</button>
   <button class="btn" id="foldBtn" type="button">Fäll ihop alla</button>
@@ -939,6 +952,7 @@ dialog::backdrop { background: #0008; }
           Kolumnerna följer flödet vy → frontend-JS → API-route → service → data.
           Kartan är en ögonblicksbild som checkats in i git och uppdateras inte
           automatiskt när koden ändras.
+          Markering visar beroenden i kartan, inte ett verifierat körflöde.
         </p>
       </div>
     </section>
@@ -1108,11 +1122,11 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
 
   /* Transitiv stängning med nivådjup, nivåsynkroniserad BFS.
      Startnoden ingår inte i resultatet (även om den ligger i en cykel). */
-  function walk(start, adj) {
+  function walk(start, adj, maxDepth) {
     var found = new Map();
     var frontier = [start];
     var depth = 0;
-    while (frontier.length) {
+    while (frontier.length && depth < maxDepth) {
       depth += 1;
       var nextFrontier = [];
       for (var i = 0; i < frontier.length; i++) {
@@ -1120,7 +1134,8 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
         for (var j = 0; j < links.length; j++) {
           var id = links[j].id;
           if (id === start || found.has(id)) { continue; }
-          found.set(id, depth);
+          // First discovery is a shortest path; edge order breaks ties.
+          found.set(id, { depth: depth, previous: frontier[i], kind: links[j].kind });
           nextFrontier.push(id);
         }
       }
@@ -1307,6 +1322,7 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
   var selected = null;
   var query = '';
   var deadMode = false;
+  var maxDepth = 1;
   var upSet = new Map();
   var downSet = new Map();
 
@@ -1349,8 +1365,10 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
 
       var badge = element.querySelector('.n-depth');
       if (badge) {
-        var d = upSet.get(id) || downSet.get(id);
-        badge.textContent = d ? String(d) : '';
+        var up = upSet.get(id);
+        var down = downSet.get(id);
+        var d = Math.min(up ? up.depth : Infinity, down ? down.depth : Infinity);
+        badge.textContent = Number.isFinite(d) ? String(d) : '';
       }
     });
 
@@ -1363,8 +1381,8 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
       if (deadMode) {
         base += deadIds.has(e.source) && deadIds.has(e.target) ? ' e-dead' : ' dim';
       } else if (selected) {
-        var upEdge = (e.source === selected || upSet.has(e.source)) && upSet.has(e.target);
-        var downEdge = (e.target === selected || downSet.has(e.target)) && downSet.has(e.source);
+        var upEdge = reachableEdge(e.source, e.target, upSet);
+        var downEdge = reachableEdge(e.target, e.source, downSet);
         if (upEdge) { base += ' e-up'; }
         else if (downEdge) { base += ' e-down'; }
         else { base += ' dim'; }
@@ -1378,10 +1396,15 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
       matches ? matches.size + ' träff' + (matches.size === 1 ? '' : 'ar') : '';
   }
 
+  function reachableEdge(from, to, reached) {
+    var step = from === selected ? 0 : (reached.has(from) ? reached.get(from).depth : Infinity);
+    return reached.has(to) && step < maxDepth;
+  }
+
   function select(id) {
     selected = id && BY_ID.has(id) ? id : null;
-    upSet = selected ? walk(selected, OUT) : new Map();
-    downSet = selected ? walk(selected, INC) : new Map();
+    upSet = selected ? walk(selected, OUT, maxDepth) : new Map();
+    downSet = selected ? walk(selected, INC, maxDepth) : new Map();
     renderDetail();
     apply();
   }
@@ -1391,7 +1414,7 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
   function emptyDetail() {
     detailEl.textContent = '';
     var p = el('p', 'd-empty');
-    p.appendChild(document.createTextNode('Välj en nod i kartan för att se vad den beror på och vad som påverkas när den ändras. '));
+    p.appendChild(document.createTextNode('Välj en nod i kartan för att se dess beroenden och beroende noder. '));
     var k = el('kbd', null, '/');
     p.appendChild(k);
     p.appendChild(document.createTextNode(' fokuserar sökfältet, '));
@@ -1400,7 +1423,27 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
     detailEl.appendChild(p);
   }
 
-  function relationList(container, ids, direct) {
+  function chainDetails(id, reached, incoming) {
+    var steps = [];
+    var current = id;
+    while (current !== selected) {
+      var step = reached.get(current);
+      steps.push({ from: step.previous, to: current, kind: step.kind });
+      current = step.previous;
+    }
+    if (!incoming) { steps.reverse(); }
+    var text = BY_ID.get(incoming ? id : selected).label;
+    steps.forEach(function (step) {
+      var kind = (KIND_TEXT[step.kind] && KIND_TEXT[step.kind][0]) || step.kind;
+      text += ' — ' + kind + ' → ' + BY_ID.get(incoming ? step.from : step.to).label;
+    });
+    var details = el('details', 'd-chain');
+    details.appendChild(el('summary', null, 'Visa kopplingskedja'));
+    details.appendChild(el('p', null, 'En kortaste kopplingskedja: ' + text));
+    return details;
+  }
+
+  function relationList(container, ids, direct, incoming) {
     var kindById = new Map();
     direct.forEach(function (d) {
       if (!kindById.has(d.id)) { kindById.set(d.id, d.kind); }
@@ -1412,7 +1455,7 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
     }
 
     var rows = [];
-    ids.forEach(function (depth, id) { rows.push({ id: id, depth: depth }); });
+    ids.forEach(function (step, id) { rows.push({ id: id, depth: step.depth }); });
     rows.sort(function (a, b) {
       if (a.depth !== b.depth) { return a.depth - b.depth; }
       return BY_ID.get(a.id).label.localeCompare(BY_ID.get(b.id).label, 'sv');
@@ -1433,6 +1476,7 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
       b.appendChild(el('span', 'kind', tag));
       b.addEventListener('click', function () { focusNode(row.id); });
       li.appendChild(b);
+      if (row.depth > 1) { li.appendChild(chainDetails(row.id, ids, incoming)); }
       list.appendChild(li);
     });
     container.appendChild(list);
@@ -1469,10 +1513,10 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
     relationList(detailEl, upSet, OUT.get(selected) || []);
 
     var downHead = el('div', 'd-listhead down');
-    downHead.appendChild(el('span', null, 'Påverkar vid ändring'));
+    downHead.appendChild(el('span', null, 'Beroende noder'));
     downHead.appendChild(el('em', null, downSet.size + ' noder uppström'));
     detailEl.appendChild(downHead);
-    relationList(detailEl, downSet, INC.get(selected) || []);
+    relationList(detailEl, downSet, INC.get(selected) || [], true);
 
     var nIssues = ALL_ISSUES.filter(function (i) { return i.node_id === selected; });
     if (nIssues && nIssues.length) {
@@ -1572,6 +1616,11 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
   var compactBtn = document.getElementById('compactBtn');
   var foldBtn = document.getElementById('foldBtn');
   var resetBtn = document.getElementById('resetBtn');
+  var depthInput = document.getElementById('depth');
+  depthInput.addEventListener('change', function () {
+    maxDepth = depthInput.value === 'all' ? Infinity : Number(depthInput.value);
+    select(selected);
+  });
 
   bugBtn.textContent = '⚠ Buggar (' + ALL_ISSUES.length + ')';
   if (!ALL_ISSUES.length) { bugBtn.disabled = true; }
@@ -1625,6 +1674,8 @@ const GRAPH = {"nodes": [{"id": "page:Archive", "label": "Arkiv", "layer": "fron
   });
 
   resetBtn.addEventListener('click', function () {
+    maxDepth = 1;
+    depthInput.value = '1';
     query = '';
     qInput.value = '';
     deadMode = false;
