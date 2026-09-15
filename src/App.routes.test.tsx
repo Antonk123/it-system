@@ -36,7 +36,7 @@ vi.mock('@/contexts/AuthContext', () => ({
   AuthProvider: ({ children }: { children: ReactNode }) => children,
 }));
 
-// 22 sidmoduler, en vi.mock per modul (App.tsx:12-33). Varje default-export
+// Sidmoduler, en vi.mock per modul. Varje default-export
 // slår upp sin stub i `registry` VID ANROPSTILLFÄLLET (inte vid
 // hissningstillfället) — registret fylls i längre ned i filen, efter de
 // riktiga imports av react/react-router som stubkomponenten behöver.
@@ -47,6 +47,7 @@ vi.mock('@/pages/TicketDetail', () => ({ default: (p: unknown) => registry.Ticke
 vi.mock('@/pages/Archive', () => ({ default: (p: unknown) => registry.Archive(p) }));
 vi.mock('@/pages/UserList', () => ({ default: (p: unknown) => registry.UserList(p) }));
 vi.mock('@/pages/Settings', () => ({ default: (p: unknown) => registry.Settings(p) }));
+vi.mock('@/pages/ArchitectureMap', () => ({ default: (p: unknown) => registry.ArchitectureMap(p) }));
 vi.mock('@/pages/Reports', () => ({ default: (p: unknown) => registry.Reports(p) }));
 vi.mock('@/pages/Login', () => ({ default: (p: unknown) => registry.Login(p) }));
 vi.mock('@/pages/ForgotPassword', () => ({ default: (p: unknown) => registry.ForgotPassword(p) }));
@@ -109,7 +110,7 @@ function makeStub(name: string) {
 }
 
 const STUB_NAMES = [
-  'Index', 'TicketList', 'TicketForm', 'TicketDetail', 'Archive', 'UserList', 'Settings',
+  'Index', 'TicketList', 'TicketForm', 'TicketDetail', 'Archive', 'UserList', 'Settings', 'ArchitectureMap',
   'Reports', 'Login', 'ForgotPassword', 'ResetPassword', 'PublicTicketForm', 'SharedTicket',
   'NotFound', 'KnowledgeBase', 'KBArticleDetail', 'KBArticleForm', 'SharedKBArticle', 'PublicKnowledgeBase', 'PublicKBArticle',
   'CompanyList', 'CompanyDetail',
@@ -247,6 +248,7 @@ const ROUTES: RouteCase[] = [
   { path: '/users', concretePath: '/users', stub: 'UserList', guard: 'protected' },
   { path: '/reports', concretePath: '/reports', stub: 'Reports', guard: 'protected' },
   { path: '/settings', concretePath: '/settings', stub: 'Settings', guard: 'protected' },
+  { path: '/architecture-map', concretePath: '/architecture-map', stub: 'ArchitectureMap', guard: 'protected' },
   { path: '/kb', concretePath: '/kb', stub: 'KnowledgeBase', guard: 'protected' },
   { path: '/kb/new', concretePath: '/kb/new', stub: 'KBArticleForm', guard: 'protected' },
   { path: '/kb/:id', concretePath: '/kb/9', stub: 'KBArticleDetail', guard: 'protected' },
