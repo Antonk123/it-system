@@ -150,6 +150,14 @@ Körs automatiskt av Claude Code — du behöver inte göra något. Kräver `jq`
 
 Redan anslutna på harness-/plugin-nivå (dubblera inte): context7, playwright, supabase, claude_ai (Gmail/Calendar/Drive/M365). GitHub nås via `gh` CLI — ingen MCP.
 
+## Arkitekturkarta
+
+- Admin når kartan via Inställningar → Allmänt → Arkitekturkarta (`/architecture-map`).
+- Grafen är en snapshot i `server/admin_assets/architecture-map/graph.json`; fynd ligger i `known-issues.json`. HTML får aldrig läggas i `public/`: `/api/architecture-map` kräver admin.
+- Vyn delas med Document Hub. Ändra den gemensamma CSS/JS-vyn där och återbygg BÅDA artefakterna; skapa inte en separat IT-design. Grafikdata och fynd är projektspecifika.
+- Synka med Document Hubs `scripts/build_architecture_map.py --target-dir <it-system>/server/admin_assets/architecture-map --viewer-source <document-hub>/app/admin_assets/architecture-map/index.html`. Kör först byggaren utan argument i Document Hub efter dess dataändringar.
+- `?embed=1` förbereder visning i Navet. Kartregister och nya Navet-flikar är inte implementerade. Lokala fynd är webbläsardata; HTML-export bevarar dem i fil, inte i serverns JSON.
+
 ## UI-arbete
 
 IT-Ticket har **redan** ett designsystem (Tailwind + shadcn/ui + CSS-var-teman). Standardjobbet är

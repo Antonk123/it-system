@@ -17,6 +17,7 @@ const TicketDetail = lazy(() => import("./pages/TicketDetail"));
 const Archive = lazy(() => import("./pages/Archive"));
 const UserList = lazy(() => import("./pages/UserList"));
 const Settings = lazy(() => import("./pages/Settings"));
+const ArchitectureMap = lazy(() => import("./pages/ArchitectureMap"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Login = lazy(() => import("./pages/Login"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
@@ -189,6 +190,7 @@ export const AppRoutes = () => {
           <Route path="/archive" element={withBoundary(<ProtectedRoute><Archive /></ProtectedRoute>)} />
           <Route path="/users" element={withBoundary(<ProtectedRoute><UserList /></ProtectedRoute>)} />
           <Route path="/reports" element={withBoundary(<ProtectedRoute><Reports /></ProtectedRoute>)} />
+          <Route path="/architecture-map" element={withBoundary(<ProtectedRoute><ArchitectureMap /></ProtectedRoute>)} />
           <Route path="/settings" element={withBoundary(<ProtectedRoute><Settings /></ProtectedRoute>)} />
           <Route path="/kb" element={withBoundary(<ProtectedRoute><KnowledgeBase /></ProtectedRoute>)} />
           <Route path="/kb/new" element={withBoundary(<ProtectedRoute><KBArticleForm /></ProtectedRoute>)} />

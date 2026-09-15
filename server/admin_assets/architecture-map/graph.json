@@ -1,0 +1,6650 @@
+{
+  "nodes": [
+    {
+      "id": "page:Archive",
+      "label": "Arkiv",
+      "layer": "frontend-page",
+      "domain": "Ärenden",
+      "loc": "src/pages/Archive.tsx:24",
+      "desc": "Källmodul src/pages/Archive.tsx. Route: /archive.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:Dashboard",
+      "label": "Dashboard",
+      "layer": "frontend-page",
+      "domain": "Ärenden",
+      "loc": "src/pages/Dashboard.tsx:64",
+      "desc": "Källmodul src/pages/Dashboard.tsx.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "page:Index",
+      "label": "Översikt /",
+      "layer": "frontend-page",
+      "domain": "Ärenden",
+      "loc": "src/pages/Index.tsx:3",
+      "desc": "Källmodul src/pages/Index.tsx. Route: /.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:TicketDetail",
+      "label": "Ärendedetalj",
+      "layer": "frontend-page",
+      "domain": "Ärenden",
+      "loc": "src/pages/TicketDetail.tsx:115",
+      "desc": "Källmodul src/pages/TicketDetail.tsx. Route: /tickets/:id.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:TicketForm",
+      "label": "Skapa / redigera ärende",
+      "layer": "frontend-page",
+      "domain": "Ärenden",
+      "loc": "src/pages/TicketForm.tsx:51",
+      "desc": "Formulär på /tickets/new och /tickets/:id/edit. Mallar, fält, kontakt och företag.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:TicketList",
+      "label": "Ärendelista /tickets · /my-tickets",
+      "layer": "frontend-page",
+      "domain": "Ärenden",
+      "loc": "src/pages/TicketList.tsx:36",
+      "desc": "Ärendelista på /tickets och /my-tickets; filtrering, bulkåtgärder, checklistprogress och export.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:TicketsTab",
+      "label": "Ärendekonfiguration",
+      "layer": "frontend-page",
+      "domain": "Ärenden",
+      "loc": "src/pages/settings/TicketsTab.tsx:166",
+      "desc": "Källmodul src/pages/settings/TicketsTab.tsx.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useActiveQueue",
+      "label": "useActiveQueue",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useActiveQueue.ts:14",
+      "desc": "React-hook för ActiveQueue. Anropar /tickets.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useActivityFeed",
+      "label": "useActivityFeed",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useActivityFeed.ts:19",
+      "desc": "React-hook för ActivityFeed. Anropar /tickets.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useCategories",
+      "label": "useCategories",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useCategories.ts:15",
+      "desc": "React-hook för Categories. Anropar /categories.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useChecklistTemplates",
+      "label": "useChecklistTemplates",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useChecklistTemplates.ts:8",
+      "desc": "React-hook för ChecklistTemplates. Anropar /checklist-templates.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useDashboardOverview",
+      "label": "useDashboardOverview",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useDashboardOverview.ts:30",
+      "desc": "React-hook för DashboardOverview. Anropar /tickets.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useStatusCounts",
+      "label": "useStatusCounts",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useStatusCounts.ts:10",
+      "desc": "React-hook för StatusCounts. Anropar /tickets.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useTemplates",
+      "label": "useTemplates",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useTemplates.ts:16",
+      "desc": "React-hook för Templates. Anropar /templates.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useTicketAttachments",
+      "label": "useTicketAttachments",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useTicketAttachments.ts:28",
+      "desc": "React-hook för TicketAttachments. Anropar /attachments.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useTicketChecklists",
+      "label": "useTicketChecklists",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useTicketChecklists.ts:26",
+      "desc": "React-hook för TicketChecklists. Anropar /checklists.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useTicketComments",
+      "label": "useTicketComments",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useTicketComments.ts:29",
+      "desc": "React-hook för TicketComments. Anropar /comments.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useTicketHistory",
+      "label": "useTicketHistory",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useTicketHistory.ts:4",
+      "desc": "React-hook för TicketHistory. Anropar /tickets.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useTicketLinks",
+      "label": "useTicketLinks",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useTicketLinks.ts:30",
+      "desc": "React-hook för TicketLinks. Anropar /links.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useTicketReminders",
+      "label": "useTicketReminders",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useTicketReminders.ts:19",
+      "desc": "React-hook för TicketReminders. Anropar /tickets.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useTicketSharing",
+      "label": "useTicketSharing",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useTicketSharing.ts:5",
+      "desc": "React-hook för TicketSharing. Anropar /shares.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useTickets",
+      "label": "useTickets",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useTickets.ts:269",
+      "desc": "React-hook för Tickets. Anropar /tickets.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useUpcomingReminders",
+      "label": "useUpcomingReminders",
+      "layer": "frontend-hook",
+      "domain": "Ärenden",
+      "loc": "src/hooks/useUpcomingReminders.ts:18",
+      "desc": "React-hook för UpcomingReminders. Anropar /tickets.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "api:attachments",
+      "label": "API /attachments",
+      "layer": "api-client",
+      "domain": "Ärenden",
+      "loc": "src/lib/api.ts:898",
+      "desc": "API-klientens route-grupp /attachments. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:categories",
+      "label": "API /categories",
+      "layer": "api-client",
+      "domain": "Ärenden",
+      "loc": "src/lib/api.ts:661",
+      "desc": "API-klientens route-grupp /categories. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:checklist-templates",
+      "label": "API /checklist-templates",
+      "layer": "api-client",
+      "domain": "Ärenden",
+      "loc": "src/lib/api.ts:959",
+      "desc": "API-klientens route-grupp /checklist-templates. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:checklists",
+      "label": "API /checklists",
+      "layer": "api-client",
+      "domain": "Ärenden",
+      "loc": "src/lib/api.ts:919",
+      "desc": "API-klientens route-grupp /checklists. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:comments",
+      "label": "API /comments",
+      "layer": "api-client",
+      "domain": "Ärenden",
+      "loc": "src/lib/api.ts:594",
+      "desc": "API-klientens route-grupp /comments. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:links",
+      "label": "API /links",
+      "layer": "api-client",
+      "domain": "Ärenden",
+      "loc": "src/lib/api.ts:619",
+      "desc": "API-klientens route-grupp /links. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:shares",
+      "label": "API /shares",
+      "layer": "api-client",
+      "domain": "Ärenden",
+      "loc": "src/lib/api.ts:991",
+      "desc": "API-klientens route-grupp /shares. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:templates",
+      "label": "API /templates",
+      "layer": "api-client",
+      "domain": "Ärenden",
+      "loc": "src/lib/api.ts:528",
+      "desc": "API-klientens route-grupp /templates. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:tickets",
+      "label": "API /tickets",
+      "layer": "api-client",
+      "domain": "Ärenden",
+      "loc": "src/lib/api.ts:432",
+      "desc": "API-klientens route-grupp /tickets. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "route:tickets",
+      "label": "/api/tickets",
+      "layer": "api-route",
+      "domain": "Ärenden",
+      "loc": "server/src/routes/tickets.ts:85",
+      "path": "server/src/routes/tickets.ts",
+      "desc": "Ärende-CRUD, bulk, import/export, dashboard, påminnelser och AI-utkast/sammanfattning.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/tickets/",
+        "POST /api/tickets/import/preview",
+        "POST /api/tickets/import/confirm",
+        "GET /api/tickets/export",
+        "GET /api/tickets/export-archive",
+        "GET /api/tickets/dashboard-overview",
+        "GET /api/tickets/activity-feed",
+        "GET /api/tickets/status-counts",
+        "GET /api/tickets/requester-open-counts",
+        "GET /api/tickets/upcoming-reminders",
+        "GET /api/tickets/:id",
+        "POST /api/tickets/",
+        "POST /api/tickets/:id/ai-draft",
+        "GET /api/tickets/:id/ai-summary",
+        "GET /api/tickets/:id/history",
+        "PUT /api/tickets/bulk",
+        "POST /api/tickets/bulk-delete",
+        "PUT /api/tickets/:id",
+        "DELETE /api/tickets/:id",
+        "POST /api/tickets/:id/reminders",
+        "GET /api/tickets/:id/reminders",
+        "DELETE /api/tickets/:id/reminders/sent",
+        "DELETE /api/tickets/:id/reminders/:reminderId"
+      ],
+      "line": 85
+    },
+    {
+      "id": "route:categories",
+      "label": "/api/categories",
+      "layer": "api-route",
+      "domain": "Ärenden",
+      "loc": "server/src/routes/categories.ts:7",
+      "path": "server/src/routes/categories.ts",
+      "desc": "Kategorier och ordning; administratör hanterar ändringar.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/categories/",
+        "POST /api/categories/",
+        "PUT /api/categories/reorder",
+        "PUT /api/categories/:id",
+        "DELETE /api/categories/:id"
+      ],
+      "line": 7
+    },
+    {
+      "id": "route:attachments",
+      "label": "/api/attachments",
+      "layer": "api-route",
+      "domain": "Ärenden",
+      "loc": "server/src/routes/attachments.ts:107",
+      "path": "server/src/routes/attachments.ts",
+      "desc": "Validering, uppladdning, hämtning och radering av ärendebilagor.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/attachments/ticket/:ticketId",
+        "POST /api/attachments/ticket/:ticketId",
+        "GET /api/attachments/file/:id",
+        "DELETE /api/attachments/:id"
+      ],
+      "line": 107
+    },
+    {
+      "id": "route:comments",
+      "label": "/api/comments",
+      "layer": "api-route",
+      "domain": "Ärenden",
+      "loc": "server/src/routes/comments.ts:10",
+      "path": "server/src/routes/comments.ts",
+      "desc": "Ärendekommentarer, synlighet och svarsnotifieringar.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/comments/ticket/:ticketId",
+        "POST /api/comments/ticket/:ticketId",
+        "PUT /api/comments/:id",
+        "DELETE /api/comments/:id"
+      ],
+      "line": 10
+    },
+    {
+      "id": "route:links",
+      "label": "/api/links",
+      "layer": "api-route",
+      "domain": "Ärenden",
+      "loc": "server/src/routes/links.ts:8",
+      "path": "server/src/routes/links.ts",
+      "desc": "Relationer mellan ärenden och kunskapsartiklar.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/links/ticket/:ticketId",
+        "POST /api/links/ticket/:ticketId",
+        "DELETE /api/links/:id"
+      ],
+      "line": 8
+    },
+    {
+      "id": "route:tags",
+      "label": "/api/tags",
+      "layer": "api-route",
+      "domain": "Ärenden",
+      "loc": "server/src/routes/tags.ts:7",
+      "path": "server/src/routes/tags.ts",
+      "desc": "Etiketter för ärenden och kunskapsartiklar.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/tags/",
+        "POST /api/tags/",
+        "PUT /api/tags/:id",
+        "DELETE /api/tags/:id"
+      ],
+      "line": 7
+    },
+    {
+      "id": "service:autoCloseScheduler",
+      "label": "autoCloseScheduler",
+      "layer": "scheduler",
+      "domain": "Ärenden",
+      "loc": "server/src/lib/autoCloseScheduler.ts:63",
+      "path": "server/src/lib/autoCloseScheduler.ts",
+      "desc": "Dagligen 02:30: stänger lösta ärenden äldre än konfigurerad gräns.",
+      "entry": true,
+      "line": 63
+    },
+    {
+      "id": "service:automationHelper",
+      "label": "automationHelper",
+      "layer": "service",
+      "domain": "Ärenden",
+      "loc": "server/src/lib/automationHelper.ts:22",
+      "path": "server/src/lib/automationHelper.ts",
+      "desc": "Härleder prioritet från regler och ärendeinnehåll.",
+      "line": 22
+    },
+    {
+      "id": "service:ticketImportExport",
+      "label": "ticketImportExport",
+      "layer": "service",
+      "domain": "Ärenden",
+      "loc": "server/src/lib/ticketImportExport.ts:45",
+      "path": "server/src/lib/ticketImportExport.ts",
+      "desc": "XLSX-export, CSV-parser och importvalidering.",
+      "line": 45
+    },
+    {
+      "id": "service:ticketQuery",
+      "label": "ticketQuery",
+      "layer": "service",
+      "domain": "Ärenden",
+      "loc": "server/src/lib/ticketQuery.ts:7",
+      "path": "server/src/lib/ticketQuery.ts",
+      "desc": "SQL-filter, sortering och paginering för ärendesökning.",
+      "line": 7
+    },
+    {
+      "id": "service:automationConfig",
+      "label": "automationConfig",
+      "layer": "service",
+      "domain": "Ärenden",
+      "loc": "server/src/config/automation.ts:7",
+      "path": "server/src/config/automation.ts",
+      "desc": "Prioritetsregler och gräns för automatisk stängning.",
+      "line": 7
+    },
+    {
+      "id": "table:categories",
+      "label": "categories",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/schema.sql:48",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: categories.",
+      "line": 48
+    },
+    {
+      "id": "table:tickets",
+      "label": "tickets",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/schema.sql:57",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: tickets.",
+      "line": 57
+    },
+    {
+      "id": "table:ticket_attachments",
+      "label": "ticket_attachments",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/schema.sql:93",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: ticket_attachments.",
+      "line": 93
+    },
+    {
+      "id": "table:ticket_checklists",
+      "label": "ticket_checklists",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/schema.sql:104",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: ticket_checklists.",
+      "line": 104
+    },
+    {
+      "id": "table:ticket_comments",
+      "label": "ticket_comments",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/schema.sql:115",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: ticket_comments.",
+      "line": 115
+    },
+    {
+      "id": "table:ticket_shares",
+      "label": "ticket_shares",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/schema.sql:134",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: ticket_shares.",
+      "line": 134
+    },
+    {
+      "id": "table:ticket_links",
+      "label": "ticket_links",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/schema.sql:144",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: ticket_links.",
+      "line": 144
+    },
+    {
+      "id": "table:tags",
+      "label": "tags",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/schema.sql:154",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: tags.",
+      "line": 154
+    },
+    {
+      "id": "table:ticket_tags",
+      "label": "ticket_tags",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/schema.sql:162",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: ticket_tags.",
+      "line": 162
+    },
+    {
+      "id": "table:ticket_kb_links",
+      "label": "ticket_kb_links",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/schema.sql:227",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: ticket_kb_links.",
+      "line": 227
+    },
+    {
+      "id": "table:ticket_history",
+      "label": "ticket_history",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/migrations.ts:200",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: ticket_history.",
+      "line": 200
+    },
+    {
+      "id": "table:recurring_ticket_history",
+      "label": "recurring_ticket_history",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/migrations.ts:360",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: recurring_ticket_history. Historiskt schema för borttagen produktfunktion; bevarad data, inte verifierad som död kod.",
+      "line": 360
+    },
+    {
+      "id": "table:time_entries",
+      "label": "time_entries",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/migrations.ts:390",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: time_entries. Historiskt schema för borttagen produktfunktion; bevarad data, inte verifierad som död kod.",
+      "line": 390
+    },
+    {
+      "id": "table:tickets_fts",
+      "label": "tickets_fts",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/migrations.ts:427",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite FTS5-index för fulltextsökning: tickets_fts.",
+      "line": 427
+    },
+    {
+      "id": "table:sla_policies",
+      "label": "sla_policies",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/migrations.ts:576",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: sla_policies. Historiskt schema för borttagen produktfunktion; bevarad data, inte verifierad som död kod.",
+      "line": 576
+    },
+    {
+      "id": "table:billing_rates",
+      "label": "billing_rates",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/migrations.ts:610",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: billing_rates. Historiskt schema för borttagen produktfunktion; bevarad data, inte verifierad som död kod.",
+      "line": 610
+    },
+    {
+      "id": "table:invoices",
+      "label": "invoices",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/migrations.ts:627",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: invoices. Historiskt schema för borttagen produktfunktion; bevarad data, inte verifierad som död kod.",
+      "line": 627
+    },
+    {
+      "id": "table:invoice_lines",
+      "label": "invoice_lines",
+      "layer": "db-table",
+      "domain": "Ärenden",
+      "loc": "server/src/db/migrations.ts:644",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: invoice_lines. Historiskt schema för borttagen produktfunktion; bevarad data, inte verifierad som död kod.",
+      "line": 644
+    },
+    {
+      "id": "route:checklists",
+      "label": "/api/checklists",
+      "layer": "api-route",
+      "domain": "Mallar",
+      "loc": "server/src/routes/checklists.ts:8",
+      "path": "server/src/routes/checklists.ts",
+      "desc": "Checklistepunkter per ärende, bulk och progress.",
+      "entry": true,
+      "endpoints": [
+        "POST /api/checklists/progress",
+        "GET /api/checklists/ticket/:ticketId",
+        "POST /api/checklists/ticket/:ticketId",
+        "POST /api/checklists/ticket/:ticketId/bulk",
+        "PUT /api/checklists/:id",
+        "DELETE /api/checklists/:id"
+      ],
+      "line": 8
+    },
+    {
+      "id": "route:checklist-templates",
+      "label": "/api/checklist-templates",
+      "layer": "api-route",
+      "domain": "Mallar",
+      "loc": "server/src/routes/checklistTemplates.ts:8",
+      "path": "server/src/routes/checklistTemplates.ts",
+      "desc": "Återanvändbara checklistor och applicering på ärenden.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/checklist-templates/",
+        "POST /api/checklist-templates/",
+        "PUT /api/checklist-templates/:id",
+        "DELETE /api/checklist-templates/:id",
+        "POST /api/checklist-templates/:id/apply"
+      ],
+      "line": 8
+    },
+    {
+      "id": "route:templates",
+      "label": "/api/templates",
+      "layer": "api-route",
+      "domain": "Mallar",
+      "loc": "server/src/routes/templates.ts:8",
+      "path": "server/src/routes/templates.ts",
+      "desc": "Ärendemallar med checklistor och underliggande fältrouter.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/templates/",
+        "GET /api/templates/:id",
+        "POST /api/templates/",
+        "PUT /api/templates/reorder",
+        "PUT /api/templates/:id",
+        "DELETE /api/templates/:id"
+      ],
+      "line": 8
+    },
+    {
+      "id": "route:templates/:templateId/fields",
+      "label": "/api/templates/:templateId/fields",
+      "layer": "api-route",
+      "domain": "Mallar",
+      "loc": "server/src/routes/template-fields.ts:7",
+      "path": "server/src/routes/template-fields.ts",
+      "desc": "Undermonterad router för mallarnas egna fält och ordning.",
+      "entry": true,
+      "line": 7
+    },
+    {
+      "id": "service:templateValidation",
+      "label": "templateValidation",
+      "layer": "service",
+      "domain": "Mallar",
+      "loc": "server/src/lib/templateValidation.ts:10",
+      "path": "server/src/lib/templateValidation.ts",
+      "desc": "Normaliserar mallvärden och kontrollerar obligatoriska fält.",
+      "line": 10
+    },
+    {
+      "id": "table:ticket_templates",
+      "label": "ticket_templates",
+      "layer": "db-table",
+      "domain": "Mallar",
+      "loc": "server/src/db/migrations.ts:103",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: ticket_templates.",
+      "line": 103
+    },
+    {
+      "id": "table:template_checklists",
+      "label": "template_checklists",
+      "layer": "db-table",
+      "domain": "Mallar",
+      "loc": "server/src/db/migrations.ts:130",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: template_checklists.",
+      "line": 130
+    },
+    {
+      "id": "table:template_fields",
+      "label": "template_fields",
+      "layer": "db-table",
+      "domain": "Mallar",
+      "loc": "server/src/db/migrations.ts:144",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: template_fields.",
+      "line": 144
+    },
+    {
+      "id": "table:ticket_field_values",
+      "label": "ticket_field_values",
+      "layer": "db-table",
+      "domain": "Mallar",
+      "loc": "server/src/db/migrations.ts:184",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: ticket_field_values.",
+      "line": 184
+    },
+    {
+      "id": "table:checklist_templates",
+      "label": "checklist_templates",
+      "layer": "db-table",
+      "domain": "Mallar",
+      "loc": "server/src/db/migrations.ts:244",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: checklist_templates.",
+      "line": 244
+    },
+    {
+      "id": "table:checklist_template_items",
+      "label": "checklist_template_items",
+      "layer": "db-table",
+      "domain": "Mallar",
+      "loc": "server/src/db/migrations.ts:248",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: checklist_template_items.",
+      "line": 248
+    },
+    {
+      "id": "table:recurring_templates",
+      "label": "recurring_templates",
+      "layer": "db-table",
+      "domain": "Mallar",
+      "loc": "server/src/db/migrations.ts:348",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: recurring_templates. Historiskt schema för borttagen produktfunktion; bevarad data, inte verifierad som död kod.",
+      "line": 348
+    },
+    {
+      "id": "page:KBArticleDetail",
+      "label": "Artikeldetalj",
+      "layer": "frontend-page",
+      "domain": "Kunskapsbas",
+      "loc": "src/pages/KBArticleDetail.tsx:39",
+      "desc": "Källmodul src/pages/KBArticleDetail.tsx. Route: /kb/:id.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:KBArticleForm",
+      "label": "Skapa / redigera artikel",
+      "layer": "frontend-page",
+      "domain": "Kunskapsbas",
+      "loc": "src/pages/KBArticleForm.tsx:52",
+      "desc": "Skapa/redigera artikel på /kb/new och /kb/:id/edit.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:KnowledgeBase",
+      "label": "Kunskapsbas",
+      "layer": "frontend-page",
+      "domain": "Kunskapsbas",
+      "loc": "src/pages/KnowledgeBase.tsx:64",
+      "desc": "Källmodul src/pages/KnowledgeBase.tsx. Route: /kb.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "hook:useKbArticle",
+      "label": "useKbArticle",
+      "layer": "frontend-hook",
+      "domain": "Kunskapsbas",
+      "loc": "src/hooks/useKbArticle.ts:23",
+      "desc": "React-hook för KbArticle. Anropar /kb.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useKbArticles",
+      "label": "useKbArticles",
+      "layer": "frontend-hook",
+      "domain": "Kunskapsbas",
+      "loc": "src/hooks/useKbArticles.ts:24",
+      "desc": "React-hook för KbArticles. Anropar /kb.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useKbCategories",
+      "label": "useKbCategories",
+      "layer": "frontend-hook",
+      "domain": "Kunskapsbas",
+      "loc": "src/hooks/useKbCategories.ts:16",
+      "desc": "React-hook för KbCategories. Anropar /kb.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useTags",
+      "label": "useTags",
+      "layer": "frontend-hook",
+      "domain": "Kunskapsbas",
+      "loc": "src/hooks/useTags.ts:13",
+      "desc": "React-hook för Tags. Anropar /tags.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "api:kb",
+      "label": "API /kb",
+      "layer": "api-client",
+      "domain": "Kunskapsbas",
+      "loc": "src/lib/api.ts:1075",
+      "desc": "API-klientens route-grupp /kb. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:tags",
+      "label": "API /tags",
+      "layer": "api-client",
+      "domain": "Kunskapsbas",
+      "loc": "src/lib/api.ts:1050",
+      "desc": "API-klientens route-grupp /tags. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "route:kb",
+      "label": "/api/kb",
+      "layer": "api-route",
+      "domain": "Kunskapsbas",
+      "loc": "server/src/routes/kb.ts:57",
+      "path": "server/src/routes/kb.ts",
+      "desc": "Artiklar, FTS-sökning, kategorier, länkar, granskning, bilder och publik portal/delning.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/kb/categories",
+        "POST /api/kb/categories",
+        "PUT /api/kb/categories/:id",
+        "DELETE /api/kb/categories/:id",
+        "GET /api/kb/articles",
+        "GET /api/kb/articles/:id",
+        "GET /api/kb/articles/:id/tickets",
+        "POST /api/kb/articles",
+        "PUT /api/kb/articles/:id",
+        "PATCH /api/kb/articles/:id/review",
+        "DELETE /api/kb/articles/:id",
+        "GET /api/kb/ticket/:ticketId",
+        "POST /api/kb/ticket/:ticketId",
+        "DELETE /api/kb/ticket/:ticketId/:articleId",
+        "GET /api/kb/articles/:id/links",
+        "POST /api/kb/articles/:id/links",
+        "DELETE /api/kb/articles/:id/links/:targetId",
+        "GET /api/kb/portal-share",
+        "POST /api/kb/portal-share",
+        "DELETE /api/kb/portal-share",
+        "GET /api/kb/portal/:token/categories",
+        "GET /api/kb/portal/:token/articles",
+        "GET /api/kb/portal/:token/articles/:articleId",
+        "GET /api/kb/articles/:id/share",
+        "POST /api/kb/articles/:id/share",
+        "DELETE /api/kb/articles/:id/share",
+        "GET /api/kb/public/:token",
+        "POST /api/kb/upload-image",
+        "GET /api/kb/images/:filename"
+      ],
+      "line": 57
+    },
+    {
+      "id": "table:kb_categories",
+      "label": "kb_categories",
+      "layer": "db-table",
+      "domain": "Kunskapsbas",
+      "loc": "server/src/db/schema.sql:183",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: kb_categories.",
+      "line": 183
+    },
+    {
+      "id": "table:kb_articles",
+      "label": "kb_articles",
+      "layer": "db-table",
+      "domain": "Kunskapsbas",
+      "loc": "server/src/db/schema.sql:192",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: kb_articles.",
+      "line": 192
+    },
+    {
+      "id": "table:kb_article_shares",
+      "label": "kb_article_shares",
+      "layer": "db-table",
+      "domain": "Kunskapsbas",
+      "loc": "server/src/db/schema.sql:202",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: kb_article_shares.",
+      "line": 202
+    },
+    {
+      "id": "table:kb_articles_fts",
+      "label": "kb_articles_fts",
+      "layer": "db-table",
+      "domain": "Kunskapsbas",
+      "loc": "server/src/db/migrations.ts:264",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite FTS5-index för fulltextsökning: kb_articles_fts.",
+      "line": 264
+    },
+    {
+      "id": "table:kb_article_tags",
+      "label": "kb_article_tags",
+      "layer": "db-table",
+      "domain": "Kunskapsbas",
+      "loc": "server/src/db/migrations.ts:294",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: kb_article_tags.",
+      "line": 294
+    },
+    {
+      "id": "table:kb_article_links",
+      "label": "kb_article_links",
+      "layer": "db-table",
+      "domain": "Kunskapsbas",
+      "loc": "server/src/db/migrations.ts:374",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: kb_article_links.",
+      "line": 374
+    },
+    {
+      "id": "page:CompanyDetail",
+      "label": "Företagsdetalj",
+      "layer": "frontend-page",
+      "domain": "Kontakter",
+      "loc": "src/pages/CompanyDetail.tsx:15",
+      "desc": "Källmodul src/pages/CompanyDetail.tsx. Route: /companies/:id.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:CompanyList",
+      "label": "Företagslista",
+      "layer": "frontend-page",
+      "domain": "Kontakter",
+      "loc": "src/pages/CompanyList.tsx:22",
+      "desc": "Källmodul src/pages/CompanyList.tsx. Route: /companies.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:UserList",
+      "label": "Kontakter /users",
+      "layer": "frontend-page",
+      "domain": "Kontakter",
+      "loc": "src/pages/UserList.tsx:46",
+      "desc": "Källmodul src/pages/UserList.tsx. Route: /users.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "hook:useCommandPaletteSearch",
+      "label": "useCommandPaletteSearch",
+      "layer": "frontend-hook",
+      "domain": "Kontakter",
+      "loc": "src/hooks/useCommandPaletteSearch.ts:27",
+      "desc": "React-hook för CommandPaletteSearch. Anropar /contacts, /kb, /tickets.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useCompanies",
+      "label": "useCompanies",
+      "layer": "frontend-hook",
+      "domain": "Kontakter",
+      "loc": "src/hooks/useCompanies.ts:15",
+      "desc": "React-hook för Companies. Anropar /companies.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useUsers",
+      "label": "useUsers (kontakter)",
+      "layer": "frontend-hook",
+      "domain": "Kontakter",
+      "loc": "src/hooks/useUsers.ts:16",
+      "desc": "React-hook för Users. Anropar /contacts.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "api:companies",
+      "label": "API /companies",
+      "layer": "api-client",
+      "domain": "Kontakter",
+      "loc": "src/lib/api.ts:869",
+      "desc": "API-klientens route-grupp /companies. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:contacts",
+      "label": "API /contacts",
+      "layer": "api-client",
+      "domain": "Kontakter",
+      "loc": "src/lib/api.ts:793",
+      "desc": "API-klientens route-grupp /contacts. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "route:contacts",
+      "label": "/api/contacts",
+      "layer": "api-route",
+      "domain": "Kontakter",
+      "loc": "server/src/routes/contacts.ts:9",
+      "path": "server/src/routes/contacts.ts",
+      "desc": "Kontaktregister med import, förhandsgranskning och export.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/contacts/",
+        "GET /api/contacts/export",
+        "POST /api/contacts/import/preview",
+        "POST /api/contacts/import/confirm",
+        "GET /api/contacts/:id",
+        "POST /api/contacts/",
+        "PUT /api/contacts/:id",
+        "DELETE /api/contacts/:id"
+      ],
+      "line": 9
+    },
+    {
+      "id": "route:companies",
+      "label": "/api/companies",
+      "layer": "api-route",
+      "domain": "Kontakter",
+      "loc": "server/src/routes/companies.ts:7",
+      "path": "server/src/routes/companies.ts",
+      "desc": "Företagsregister med kopplade kontakter och ärenden.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/companies/",
+        "GET /api/companies/:id",
+        "POST /api/companies/",
+        "PUT /api/companies/:id",
+        "DELETE /api/companies/:id"
+      ],
+      "line": 7
+    },
+    {
+      "id": "table:companies",
+      "label": "companies",
+      "layer": "db-table",
+      "domain": "Kontakter",
+      "loc": "server/src/db/schema.sql:21",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: companies.",
+      "line": 21
+    },
+    {
+      "id": "table:contacts",
+      "label": "contacts",
+      "layer": "db-table",
+      "domain": "Kontakter",
+      "loc": "server/src/db/schema.sql:35",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: contacts.",
+      "line": 35
+    },
+    {
+      "id": "page:App",
+      "label": "App · routes och providers",
+      "layer": "frontend-page",
+      "domain": "Konto",
+      "loc": "src/App.tsx:159",
+      "desc": "Routes, felgränser, querycache, tema och autentisering.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:ForgotPassword",
+      "label": "Glömt lösenord",
+      "layer": "frontend-page",
+      "domain": "Konto",
+      "loc": "src/pages/ForgotPassword.tsx:10",
+      "desc": "Källmodul src/pages/ForgotPassword.tsx. Route: /forgot-password.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:Login",
+      "label": "Inloggning",
+      "layer": "frontend-page",
+      "domain": "Konto",
+      "loc": "src/pages/Login.tsx:58",
+      "desc": "Källmodul src/pages/Login.tsx. Route: /login.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:NotFound",
+      "label": "Sidan saknas",
+      "layer": "frontend-page",
+      "domain": "Konto",
+      "loc": "src/pages/NotFound.tsx:4",
+      "desc": "Källmodul src/pages/NotFound.tsx. Route: *.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:ResetPassword",
+      "label": "Återställ lösenord",
+      "layer": "frontend-page",
+      "domain": "Konto",
+      "loc": "src/pages/ResetPassword.tsx:13",
+      "desc": "Källmodul src/pages/ResetPassword.tsx. Route: /reset-password/:token.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "hook:AuthContext",
+      "label": "AuthProvider / useAuth",
+      "layer": "frontend-hook",
+      "domain": "Konto",
+      "loc": "src/contexts/AuthContext.tsx:17",
+      "desc": "Session, inloggning, utloggning och refresh; tömmer querycache vid kontobyte.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "api:auth",
+      "label": "API /auth",
+      "layer": "api-client",
+      "domain": "Konto",
+      "loc": "src/lib/api.ts:88",
+      "desc": "API-klientens route-grupp /auth. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:csrf-token",
+      "label": "API /csrf-token",
+      "layer": "api-client",
+      "domain": "Konto",
+      "loc": "src/lib/api.ts:51",
+      "desc": "API-klientens route-grupp /csrf-token. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:client",
+      "label": "ApiClient · HTTP / CSRF / session",
+      "layer": "api-client",
+      "domain": "Konto",
+      "loc": "src/lib/api.ts:26",
+      "desc": "Gemensam request-, binär- och uppladdningsklient. Hanterar access token, refresh-cookie, CSRF och 401-försök. Publik branding och OIDC-status har egna fetch-vägar."
+    },
+    {
+      "id": "route:auth",
+      "label": "/api/auth",
+      "layer": "api-route",
+      "domain": "Konto",
+      "loc": "server/src/routes/auth.ts:43",
+      "path": "server/src/routes/auth.ts",
+      "desc": "Inloggning, JWT-förnyelse, lösenord, audit-logg och valfri OIDC/SSO.",
+      "entry": true,
+      "endpoints": [
+        "POST /api/auth/login",
+        "POST /api/auth/refresh",
+        "POST /api/auth/logout",
+        "GET /api/auth/me",
+        "POST /api/auth/change-password",
+        "POST /api/auth/forgot-password",
+        "POST /api/auth/reset-password",
+        "GET /api/auth/audit-log",
+        "GET /api/auth/oidc/enabled",
+        "GET /api/auth/oidc/login",
+        "GET /api/auth/oidc/callback"
+      ],
+      "line": 43
+    },
+    {
+      "id": "route:users",
+      "label": "/api/users",
+      "layer": "api-route",
+      "domain": "Konto",
+      "loc": "server/src/routes/users.ts:15",
+      "path": "server/src/routes/users.ts",
+      "desc": "Användaradministration och behörighetskontroller.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/users/",
+        "POST /api/users/",
+        "PATCH /api/users/:id",
+        "DELETE /api/users/:id"
+      ],
+      "line": 15
+    },
+    {
+      "id": "route:api-keys",
+      "label": "/api/api-keys",
+      "layer": "api-route",
+      "domain": "Konto",
+      "loc": "server/src/routes/apiKeys.ts:8",
+      "path": "server/src/routes/apiKeys.ts",
+      "desc": "Skapa, lista och återkalla API-nycklar med scopes.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/api-keys/",
+        "POST /api/api-keys/",
+        "DELETE /api/api-keys/:id"
+      ],
+      "line": 8
+    },
+    {
+      "id": "service:auditLog",
+      "label": "auditLog",
+      "layer": "service",
+      "domain": "Konto",
+      "loc": "server/src/lib/auditLog.ts:17",
+      "path": "server/src/lib/auditLog.ts",
+      "desc": "Skriver granskningshändelser utan att bryta huvudanropet.",
+      "line": 17
+    },
+    {
+      "id": "service:oidc",
+      "label": "oidc",
+      "layer": "service",
+      "domain": "Konto",
+      "loc": "server/src/lib/oidc.ts:78",
+      "path": "server/src/lib/oidc.ts",
+      "desc": "Valfri OIDC-discovery, claimkontroll och länkar befintliga användare.",
+      "line": 78
+    },
+    {
+      "id": "service:passwordPolicy",
+      "label": "passwordPolicy",
+      "layer": "service",
+      "domain": "Konto",
+      "loc": "server/src/lib/passwordPolicy.ts:15",
+      "path": "server/src/lib/passwordPolicy.ts",
+      "desc": "Gemensam validering av lösenordspolicy.",
+      "line": 15
+    },
+    {
+      "id": "service:ticketAccess",
+      "label": "ticketAccess",
+      "layer": "service",
+      "domain": "Konto",
+      "loc": "server/src/lib/ticketAccess.ts:45",
+      "path": "server/src/lib/ticketAccess.ts",
+      "desc": "Avgör åtkomst till ärenden för användare och API-nycklar.",
+      "line": 45
+    },
+    {
+      "id": "service:authMiddleware",
+      "label": "authMiddleware",
+      "layer": "service",
+      "domain": "Konto",
+      "loc": "server/src/middleware/auth.ts:56",
+      "path": "server/src/middleware/auth.ts",
+      "desc": "Autentiserar JWT/API-nycklar, scopes och administratörsroll.",
+      "line": 56
+    },
+    {
+      "id": "service:passport",
+      "label": "passport",
+      "layer": "service",
+      "domain": "Konto",
+      "loc": "server/src/config/passport.ts:1",
+      "path": "server/src/config/passport.ts",
+      "desc": "Passport-strategier för lokal inloggning och JWT.",
+      "line": 1
+    },
+    {
+      "id": "service:cookies",
+      "label": "cookies",
+      "layer": "service",
+      "domain": "Konto",
+      "loc": "server/src/config/cookies.ts:21",
+      "path": "server/src/config/cookies.ts",
+      "desc": "Cookieinställningar anpassade efter miljö.",
+      "line": 21
+    },
+    {
+      "id": "service:secretValidation",
+      "label": "secretValidation",
+      "layer": "service",
+      "domain": "Konto",
+      "loc": "server/src/config/secretValidation.ts:14",
+      "path": "server/src/config/secretValidation.ts",
+      "desc": "Kontrollerar konfiguration av hemligheter.",
+      "line": 14
+    },
+    {
+      "id": "service:cleanupRefreshTokens",
+      "label": "cleanupRefreshTokens",
+      "layer": "service",
+      "domain": "Konto",
+      "loc": "server/src/db/cleanup-refresh-tokens.ts:11",
+      "path": "server/src/db/cleanup-refresh-tokens.ts",
+      "desc": "Rensar utgångna och återkallade refresh-tokens.",
+      "line": 11
+    },
+    {
+      "id": "table:users",
+      "label": "users",
+      "layer": "db-table",
+      "domain": "Konto",
+      "loc": "server/src/db/schema.sql:2",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: users.",
+      "line": 2
+    },
+    {
+      "id": "table:refresh_tokens",
+      "label": "refresh_tokens",
+      "layer": "db-table",
+      "domain": "Konto",
+      "loc": "server/src/db/schema.sql:213",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: refresh_tokens.",
+      "line": 213
+    },
+    {
+      "id": "table:api_keys",
+      "label": "api_keys",
+      "layer": "db-table",
+      "domain": "Konto",
+      "loc": "server/src/db/migrations.ts:665",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: api_keys.",
+      "line": 665
+    },
+    {
+      "id": "table:password_reset_tokens",
+      "label": "password_reset_tokens",
+      "layer": "db-table",
+      "domain": "Konto",
+      "loc": "server/src/db/migrations.ts:823",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: password_reset_tokens.",
+      "line": 823
+    },
+    {
+      "id": "table:audit_log",
+      "label": "audit_log",
+      "layer": "db-table",
+      "domain": "Konto",
+      "loc": "server/src/db/migrations.ts:1032",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: audit_log.",
+      "line": 1032
+    },
+    {
+      "id": "page:PublicKBArticle",
+      "label": "Publik portalartikel",
+      "layer": "frontend-page",
+      "domain": "Delning",
+      "loc": "src/pages/PublicKBArticle.tsx:11",
+      "desc": "Källmodul src/pages/PublicKBArticle.tsx. Route: /kb/public/:token/article/:articleId.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:PublicKnowledgeBase",
+      "label": "Publik kunskapsportal",
+      "layer": "frontend-page",
+      "domain": "Delning",
+      "loc": "src/pages/PublicKnowledgeBase.tsx:17",
+      "desc": "Källmodul src/pages/PublicKnowledgeBase.tsx. Route: /kb/public/:token.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:PublicTicketForm",
+      "label": "Publik ärendeanmälan",
+      "layer": "frontend-page",
+      "domain": "Delning",
+      "loc": "src/pages/PublicTicketForm.tsx:27",
+      "desc": "Källmodul src/pages/PublicTicketForm.tsx. Route: /submit-ticket.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:SharedKBArticle",
+      "label": "Delad artikel",
+      "layer": "frontend-page",
+      "domain": "Delning",
+      "loc": "src/pages/SharedKBArticle.tsx:9",
+      "desc": "Källmodul src/pages/SharedKBArticle.tsx. Route: /kb/shared/:token.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:SharedTicket",
+      "label": "Delat ärende",
+      "layer": "frontend-page",
+      "domain": "Delning",
+      "loc": "src/pages/SharedTicket.tsx:23",
+      "desc": "Källmodul src/pages/SharedTicket.tsx. Route: /shared/:token.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "hook:useBranding",
+      "label": "useBranding",
+      "layer": "frontend-hook",
+      "domain": "Delning",
+      "loc": "src/hooks/useBranding.ts:16",
+      "desc": "React-hook för Branding. Anropar /api, /public.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useDeflectionStats",
+      "label": "useDeflectionStats",
+      "layer": "frontend-hook",
+      "domain": "Delning",
+      "loc": "src/hooks/useDeflectionStats.ts:17",
+      "desc": "React-hook för DeflectionStats. Anropar /public.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "api:public",
+      "label": "API /public",
+      "layer": "api-client",
+      "domain": "Delning",
+      "loc": "src/lib/api.ts:347",
+      "desc": "API-klientens route-grupp /public. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "route:shares",
+      "label": "/api/shares",
+      "layer": "api-route",
+      "domain": "Delning",
+      "loc": "server/src/routes/shares.ts:17",
+      "path": "server/src/routes/shares.ts",
+      "desc": "Skapar delningstoken samt publika ärenden och bilagor via token.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/shares/ticket/:ticketId",
+        "POST /api/shares/ticket/:ticketId",
+        "DELETE /api/shares/ticket/:ticketId",
+        "GET /api/shares/public/:token",
+        "GET /api/shares/public/file/:token/:attachmentId"
+      ],
+      "line": 17
+    },
+    {
+      "id": "route:public",
+      "label": "/api/public",
+      "layer": "api-route",
+      "domain": "Delning",
+      "loc": "server/src/routes/public.ts:13",
+      "path": "server/src/routes/public.ts",
+      "desc": "Publikt ärendeformulär, mallar, kategorier, branding och AI-förslag.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/public/templates",
+        "GET /api/public/categories",
+        "GET /api/public/branding",
+        "GET /api/public/branding/logo",
+        "POST /api/public/tickets",
+        "POST /api/public/ai-suggest",
+        "PATCH /api/public/ai-suggest/:id",
+        "GET /api/public/ai-suggest/stats"
+      ],
+      "line": 13
+    },
+    {
+      "id": "service:shares",
+      "label": "shares",
+      "layer": "service",
+      "domain": "Delning",
+      "loc": "server/src/lib/shares.ts:13",
+      "path": "server/src/lib/shares.ts",
+      "desc": "Mintar delningstoken och verifierar aktiva delningar.",
+      "line": 13
+    },
+    {
+      "id": "page:Reports",
+      "label": "Rapporter",
+      "layer": "frontend-page",
+      "domain": "Rapporter",
+      "loc": "src/pages/Reports.tsx:147",
+      "desc": "Källmodul src/pages/Reports.tsx. Route: /reports.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "hook:useReportsSummary",
+      "label": "useReportsSummary",
+      "layer": "frontend-hook",
+      "domain": "Rapporter",
+      "loc": "src/hooks/useReportsSummary.ts:26",
+      "desc": "React-hook för ReportsSummary. Anropar /reports.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useStatusFlow",
+      "label": "useStatusFlow",
+      "layer": "frontend-hook",
+      "domain": "Rapporter",
+      "loc": "src/hooks/useStatusFlow.ts:10",
+      "desc": "React-hook för StatusFlow. Anropar /reports.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "api:reports",
+      "label": "API /reports",
+      "layer": "api-client",
+      "domain": "Rapporter",
+      "loc": "src/lib/api.ts:1301",
+      "desc": "API-klientens route-grupp /reports. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "route:reports",
+      "label": "/api/reports",
+      "layer": "api-route",
+      "domain": "Rapporter",
+      "loc": "server/src/routes/reports.ts:6",
+      "path": "server/src/routes/reports.ts",
+      "desc": "Summering, beställaranalys, statusflöde och KPI-ärenden.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/reports/summary",
+        "GET /api/reports/requester-analytics",
+        "GET /api/reports/status-flow",
+        "GET /api/reports/kpi-tickets"
+      ],
+      "line": 6
+    },
+    {
+      "id": "page:Settings",
+      "label": "Inställningar",
+      "layer": "frontend-page",
+      "domain": "Administration",
+      "loc": "src/pages/Settings.tsx:11",
+      "desc": "Källmodul src/pages/Settings.tsx. Route: /settings.",
+      "entry": true,
+      "dead": false
+    },
+    {
+      "id": "page:AdminTab",
+      "label": "Administration",
+      "layer": "frontend-page",
+      "domain": "Administration",
+      "loc": "src/pages/settings/AdminTab.tsx:35",
+      "desc": "Källmodul src/pages/settings/AdminTab.tsx.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "page:GeneralTab",
+      "label": "Allmänna inställningar",
+      "layer": "frontend-page",
+      "domain": "Administration",
+      "loc": "src/pages/settings/GeneralTab.tsx:30",
+      "desc": "Källmodul src/pages/settings/GeneralTab.tsx.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:use-mobile",
+      "label": "use-mobile",
+      "layer": "frontend-hook",
+      "domain": "Administration",
+      "loc": "src/hooks/use-mobile.tsx:1",
+      "desc": "React-hook för -mobile.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useBackupConfig",
+      "label": "useBackupConfig",
+      "layer": "frontend-hook",
+      "domain": "Administration",
+      "loc": "src/hooks/useBackupConfig.ts:10",
+      "desc": "React-hook för BackupConfig. Anropar /backup.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useDebounce",
+      "label": "useDebounce",
+      "layer": "frontend-hook",
+      "domain": "Administration",
+      "loc": "src/hooks/useDebounce.ts:3",
+      "desc": "React-hook för Debounce.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useMode",
+      "label": "useMode",
+      "layer": "frontend-hook",
+      "domain": "Administration",
+      "loc": "src/hooks/useMode.ts:16",
+      "desc": "React-hook för Mode.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useSettings",
+      "label": "useSettings",
+      "layer": "frontend-hook",
+      "domain": "Administration",
+      "loc": "src/hooks/useSettings.ts:9",
+      "desc": "React-hook för Settings. Anropar /settings.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useSystemUsers",
+      "label": "useSystemUsers",
+      "layer": "frontend-hook",
+      "domain": "Administration",
+      "loc": "src/hooks/useSystemUsers.ts:21",
+      "desc": "React-hook för SystemUsers. Anropar /users.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useTicketMutations",
+      "label": "useTicketMutations",
+      "layer": "frontend-hook",
+      "domain": "Administration",
+      "loc": "src/hooks/useTicketMutations.ts:18",
+      "desc": "React-hook för TicketMutations.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "api:backup",
+      "label": "API /backup",
+      "layer": "api-client",
+      "domain": "Administration",
+      "loc": "src/lib/api.ts:1387",
+      "desc": "API-klientens route-grupp /backup. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:push",
+      "label": "API /push",
+      "layer": "api-client",
+      "domain": "Administration",
+      "loc": "src/lib/api.ts:1327",
+      "desc": "API-klientens route-grupp /push. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:settings",
+      "label": "API /settings",
+      "layer": "api-client",
+      "domain": "Administration",
+      "loc": "src/lib/api.ts:375",
+      "desc": "API-klientens route-grupp /settings. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:users",
+      "label": "API /users",
+      "layer": "api-client",
+      "domain": "Administration",
+      "loc": "src/lib/api.ts:1013",
+      "desc": "API-klientens route-grupp /users. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "route:push",
+      "label": "/api/push",
+      "layer": "api-route",
+      "domain": "Notifieringar",
+      "loc": "server/src/routes/push.ts:7",
+      "path": "server/src/routes/push.ts",
+      "desc": "VAPID-publik nyckel och användarens push-prenumerationer.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/push/vapid-public-key",
+        "POST /api/push/subscribe",
+        "DELETE /api/push/unsubscribe"
+      ],
+      "line": 7
+    },
+    {
+      "id": "service:email",
+      "label": "email",
+      "layer": "service",
+      "domain": "Notifieringar",
+      "loc": "server/src/lib/email.ts:415",
+      "path": "server/src/lib/email.ts",
+      "desc": "Skickar SMTP-meddelanden för ärenden, svar och lösenord.",
+      "line": 415
+    },
+    {
+      "id": "service:emailQuote",
+      "label": "emailQuote",
+      "layer": "service",
+      "domain": "Notifieringar",
+      "loc": "server/src/lib/emailQuote.ts:79",
+      "path": "server/src/lib/emailQuote.ts",
+      "desc": "Tar bort citerad historik från inkommande e-post.",
+      "line": 79
+    },
+    {
+      "id": "service:emailThreading",
+      "label": "emailThreading",
+      "layer": "service",
+      "domain": "Notifieringar",
+      "loc": "server/src/lib/emailThreading.ts:17",
+      "path": "server/src/lib/emailThreading.ts",
+      "desc": "Genererar Message-ID och svarshuvuden för e-posttrådar.",
+      "line": 17
+    },
+    {
+      "id": "service:push",
+      "label": "push",
+      "layer": "service",
+      "domain": "Notifieringar",
+      "loc": "server/src/lib/push.ts:7",
+      "path": "server/src/lib/push.ts",
+      "desc": "Initierar Web Push med valfria VAPID-nycklar och skickar till prenumeranter.",
+      "line": 7
+    },
+    {
+      "id": "service:pushScheduler",
+      "label": "pushScheduler",
+      "layer": "scheduler",
+      "domain": "Notifieringar",
+      "loc": "server/src/lib/pushScheduler.ts:54",
+      "path": "server/src/lib/pushScheduler.ts",
+      "desc": "Dagligen 09:00: push för inaktiva ärenden; aktiveras endast med VAPID. Boot-anropet är villkorat av initWebPush(); faktisk aktivering ej verifierad.",
+      "line": 54
+    },
+    {
+      "id": "service:reminderScheduler",
+      "label": "reminderScheduler",
+      "layer": "scheduler",
+      "domain": "Notifieringar",
+      "loc": "server/src/lib/reminderScheduler.ts:24",
+      "path": "server/src/lib/reminderScheduler.ts",
+      "desc": "Varje minut: förfallna ärendepåminnelser via e-post och push.",
+      "entry": true,
+      "line": 24
+    },
+    {
+      "id": "service:ticketNotifications",
+      "label": "ticketNotifications",
+      "layer": "service",
+      "domain": "Notifieringar",
+      "loc": "server/src/lib/ticketNotifications.ts:19",
+      "path": "server/src/lib/ticketNotifications.ts",
+      "desc": "Samordnar meddelanden till personal/kund via mejl, push och webhook.",
+      "line": 19
+    },
+    {
+      "id": "table:ticket_reminders",
+      "label": "ticket_reminders",
+      "layer": "db-table",
+      "domain": "Notifieringar",
+      "loc": "server/src/db/schema.sql:171",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: ticket_reminders.",
+      "line": 171
+    },
+    {
+      "id": "table:push_subscriptions",
+      "label": "push_subscriptions",
+      "layer": "db-table",
+      "domain": "Notifieringar",
+      "loc": "server/src/db/migrations.ts:406",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: push_subscriptions.",
+      "line": 406
+    },
+    {
+      "id": "service:aiHelper",
+      "label": "aiHelper",
+      "layer": "service",
+      "domain": "AI",
+      "loc": "server/src/lib/aiHelper.ts:130",
+      "path": "server/src/lib/aiHelper.ts",
+      "desc": "AI-kategorisering, KB-förslag, svarsutkast, sammanfattning och användningslogg.",
+      "line": 130
+    },
+    {
+      "id": "table:ai_usage_log",
+      "label": "ai_usage_log",
+      "layer": "db-table",
+      "domain": "AI",
+      "loc": "server/src/db/migrations.ts:743",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: ai_usage_log.",
+      "line": 743
+    },
+    {
+      "id": "table:ai_deflections",
+      "label": "ai_deflections",
+      "layer": "db-table",
+      "domain": "AI",
+      "loc": "server/src/db/migrations.ts:768",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: ai_deflections.",
+      "line": 768
+    },
+    {
+      "id": "page:IntegrationsTab",
+      "label": "Integrationer",
+      "layer": "frontend-page",
+      "domain": "Integrationer",
+      "loc": "src/pages/settings/IntegrationsTab.tsx:54",
+      "desc": "Källmodul src/pages/settings/IntegrationsTab.tsx.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useApiKeys",
+      "label": "useApiKeys",
+      "layer": "frontend-hook",
+      "domain": "Integrationer",
+      "loc": "src/hooks/useApiKeys.ts:9",
+      "desc": "React-hook för ApiKeys. Anropar /api-keys.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "hook:useWebhooks",
+      "label": "useWebhooks",
+      "layer": "frontend-hook",
+      "domain": "Integrationer",
+      "loc": "src/hooks/useWebhooks.ts:11",
+      "desc": "React-hook för Webhooks. Anropar /webhooks.",
+      "entry": false,
+      "dead": false
+    },
+    {
+      "id": "api:api-keys",
+      "label": "API /api-keys",
+      "layer": "api-client",
+      "domain": "Integrationer",
+      "loc": "src/lib/api.ts:1340",
+      "desc": "API-klientens route-grupp /api-keys. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:email-inbound",
+      "label": "API /email-inbound",
+      "layer": "api-client",
+      "domain": "Integrationer",
+      "loc": "src/pages/settings/IntegrationsTab.tsx:122",
+      "desc": "API-klientens route-grupp /email-inbound. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "api:webhooks",
+      "label": "API /webhooks",
+      "layer": "api-client",
+      "domain": "Integrationer",
+      "loc": "src/lib/api.ts:1358",
+      "desc": "API-klientens route-grupp /webhooks. HTTP-anrop, autentisering och CSRF går genom den gemensamma ApiClient där tillämpligt."
+    },
+    {
+      "id": "route:webhooks",
+      "label": "/api/webhooks",
+      "layer": "api-route",
+      "domain": "Integrationer",
+      "loc": "server/src/routes/webhooks.ts:8",
+      "path": "server/src/routes/webhooks.ts",
+      "desc": "Administrera webhookmål och inspektera leveranshistorik.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/webhooks/",
+        "POST /api/webhooks/",
+        "PUT /api/webhooks/:id",
+        "DELETE /api/webhooks/:id",
+        "GET /api/webhooks/:id/deliveries"
+      ],
+      "line": 8
+    },
+    {
+      "id": "route:email-inbound",
+      "label": "/api/email-inbound",
+      "layer": "api-route",
+      "domain": "Integrationer",
+      "loc": "server/src/routes/emailInbound.ts:6",
+      "path": "server/src/routes/emailInbound.ts",
+      "desc": "Visar status för inkommande e-postpollning.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/email-inbound/status"
+      ],
+      "line": 6
+    },
+    {
+      "id": "service:emailInbound",
+      "label": "emailInbound",
+      "layer": "service",
+      "domain": "Integrationer",
+      "loc": "server/src/lib/emailInbound.ts:492",
+      "path": "server/src/lib/emailInbound.ts",
+      "desc": "Villkorad IMAP-pollning, OAuth via MSAL, konverterar e-post till ärenden/svar och bilagor.",
+      "line": 492
+    },
+    {
+      "id": "service:webhookDispatcher",
+      "label": "webhookDispatcher",
+      "layer": "service",
+      "domain": "Integrationer",
+      "loc": "server/src/lib/webhookDispatcher.ts:33",
+      "path": "server/src/lib/webhookDispatcher.ts",
+      "desc": "Signerade webhookleveranser och återförsök med backoff.",
+      "line": 33
+    },
+    {
+      "id": "service:webhookRetryScheduler",
+      "label": "webhookRetryScheduler",
+      "layer": "scheduler",
+      "domain": "Integrationer",
+      "loc": "server/src/lib/webhookRetryScheduler.ts:8",
+      "path": "server/src/lib/webhookRetryScheduler.ts",
+      "desc": "Varje minut: återförsök för misslyckade webhookleveranser.",
+      "entry": true,
+      "line": 8
+    },
+    {
+      "id": "service:webhookValidator",
+      "label": "webhookValidator",
+      "layer": "service",
+      "domain": "Integrationer",
+      "loc": "server/src/lib/webhookValidator.ts:53",
+      "path": "server/src/lib/webhookValidator.ts",
+      "desc": "Validerar webhook-URL och DNS för att begränsa SSRF.",
+      "line": 53
+    },
+    {
+      "id": "table:webhooks",
+      "label": "webhooks",
+      "layer": "db-table",
+      "domain": "Integrationer",
+      "loc": "server/src/db/migrations.ts:685",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: webhooks.",
+      "line": 685
+    },
+    {
+      "id": "table:webhook_deliveries",
+      "label": "webhook_deliveries",
+      "layer": "db-table",
+      "domain": "Integrationer",
+      "loc": "server/src/db/migrations.ts:695",
+      "path": "server/src/db/migrations.ts",
+      "desc": "SQLite-tabell: webhook_deliveries.",
+      "line": 695
+    },
+    {
+      "id": "integration:smtp",
+      "label": "SMTP",
+      "layer": "integration",
+      "domain": "Integrationer",
+      "loc": "server/src/lib/email.ts:1",
+      "path": "server/src/lib/email.ts",
+      "desc": "Utgående e-post via nodemailer och SMTP-konfiguration.",
+      "line": 1
+    },
+    {
+      "id": "integration:imap",
+      "label": "IMAP / Microsoft OAuth",
+      "layer": "integration",
+      "domain": "Integrationer",
+      "loc": "server/src/lib/emailInbound.ts:1",
+      "path": "server/src/lib/emailInbound.ts",
+      "desc": "Inkommande e-post via ImapFlow och valfri Microsoft MSAL-autentisering.",
+      "line": 1
+    },
+    {
+      "id": "integration:anthropic",
+      "label": "Anthropic API",
+      "layer": "integration",
+      "domain": "Integrationer",
+      "loc": "server/src/lib/aiHelper.ts:1",
+      "path": "server/src/lib/aiHelper.ts",
+      "desc": "Valfritt AI-stöd via @anthropic-ai/sdk.",
+      "line": 1
+    },
+    {
+      "id": "integration:webpush",
+      "label": "Web Push",
+      "layer": "integration",
+      "domain": "Integrationer",
+      "loc": "server/src/lib/push.ts:1",
+      "path": "server/src/lib/push.ts",
+      "desc": "Pushleveranser med VAPID via web-push.",
+      "line": 1
+    },
+    {
+      "id": "integration:oidc-provider",
+      "label": "OIDC-leverantör",
+      "layer": "integration",
+      "domain": "Integrationer",
+      "loc": "server/src/lib/oidc.ts:1",
+      "path": "server/src/lib/oidc.ts",
+      "desc": "Valfri identitetsleverantör enligt OIDC-konfiguration.",
+      "line": 1
+    },
+    {
+      "id": "integration:webhook-target",
+      "label": "Webhookmottagare",
+      "layer": "integration",
+      "domain": "Integrationer",
+      "loc": "server/src/lib/webhookDispatcher.ts:138",
+      "path": "server/src/lib/webhookDispatcher.ts",
+      "desc": "Konfigurerade externa HTTP-mottagare med URL-validering och signering.",
+      "line": 138
+    },
+    {
+      "id": "integration:rclone",
+      "label": "Offsite-lagring",
+      "layer": "integration",
+      "domain": "Integrationer",
+      "loc": "server/src/lib/offsiteBackup.ts:37",
+      "path": "server/src/lib/offsiteBackup.ts",
+      "desc": "Valfritt rclone-fjärrmål för backup.",
+      "line": 37
+    },
+    {
+      "id": "route:backup",
+      "label": "/api/backup",
+      "layer": "api-route",
+      "domain": "Drift",
+      "loc": "server/src/routes/backup.ts:154",
+      "path": "server/src/routes/backup.ts",
+      "desc": "Ladda ned/återställ backup, styr schema och starta backup manuellt.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/backup/",
+        "POST /api/backup/restore",
+        "GET /api/backup/config",
+        "PUT /api/backup/config",
+        "POST /api/backup/run-now"
+      ],
+      "line": 154
+    },
+    {
+      "id": "route:settings",
+      "label": "/api/settings",
+      "layer": "api-route",
+      "domain": "Drift",
+      "loc": "server/src/routes/settings.ts:16",
+      "path": "server/src/routes/settings.ts",
+      "desc": "Applikationsinställningar, tvåvägs-e-post och logotyp.",
+      "entry": true,
+      "endpoints": [
+        "GET /api/settings/",
+        "PUT /api/settings/two-way-email",
+        "POST /api/settings/branding/logo",
+        "DELETE /api/settings/branding/logo"
+      ],
+      "line": 16
+    },
+    {
+      "id": "route:health",
+      "label": "/api/health",
+      "layer": "api-route",
+      "domain": "Drift",
+      "loc": "server/src/app.ts:204",
+      "path": "server/src/app.ts",
+      "desc": "Kontrollerar process och DB-anslutning med SELECT 1.",
+      "entry": true,
+      "line": 204
+    },
+    {
+      "id": "route:csrf-token",
+      "label": "/api/csrf-token",
+      "layer": "api-route",
+      "domain": "Drift",
+      "loc": "server/src/app.ts:215",
+      "path": "server/src/app.ts",
+      "desc": "Genererar CSRF-token åt klienten.",
+      "entry": true,
+      "line": 215
+    },
+    {
+      "id": "service:backupScheduler",
+      "label": "backupScheduler",
+      "layer": "scheduler",
+      "domain": "Drift",
+      "loc": "server/src/lib/backupScheduler.ts:263",
+      "path": "server/src/lib/backupScheduler.ts",
+      "desc": "Databasstyrd backuptid/retention, catch-up, ZIP och offsite-kopia. Startfunktionen returnerar när backup_config.enabled är avstängd; faktisk aktivering ej verifierad.",
+      "line": 263
+    },
+    {
+      "id": "service:branding",
+      "label": "branding",
+      "layer": "service",
+      "domain": "Drift",
+      "loc": "server/src/lib/branding.ts:33",
+      "path": "server/src/lib/branding.ts",
+      "desc": "Läser branding och validerar/hanterar logotypfiler.",
+      "line": 33
+    },
+    {
+      "id": "service:htmlSanitizer",
+      "label": "htmlSanitizer",
+      "layer": "service",
+      "domain": "Drift",
+      "loc": "server/src/lib/htmlSanitizer.ts:42",
+      "path": "server/src/lib/htmlSanitizer.ts",
+      "desc": "Sanerar HTML och klartext före lagring/visning.",
+      "line": 42
+    },
+    {
+      "id": "service:htmlUtils",
+      "label": "htmlUtils",
+      "layer": "service",
+      "domain": "Drift",
+      "loc": "server/src/lib/htmlUtils.ts:1",
+      "path": "server/src/lib/htmlUtils.ts",
+      "desc": "Konverterar HTML till text.",
+      "line": 1
+    },
+    {
+      "id": "service:logger",
+      "label": "logger",
+      "layer": "service",
+      "domain": "Drift",
+      "loc": "server/src/lib/logger.ts:19",
+      "path": "server/src/lib/logger.ts",
+      "desc": "Gemensam strukturerad loggning.",
+      "line": 19
+    },
+    {
+      "id": "service:offsiteBackup",
+      "label": "offsiteBackup",
+      "layer": "service",
+      "domain": "Drift",
+      "loc": "server/src/lib/offsiteBackup.ts:33",
+      "path": "server/src/lib/offsiteBackup.ts",
+      "desc": "Skickar backup till konfigurerat fjärrmål via rclone.",
+      "line": 33
+    },
+    {
+      "id": "service:settings",
+      "label": "settings",
+      "layer": "service",
+      "domain": "Drift",
+      "loc": "server/src/lib/settings.ts:8",
+      "path": "server/src/lib/settings.ts",
+      "desc": "Nyckel/värde-inställningar och styrning av kundmejl.",
+      "line": 8
+    },
+    {
+      "id": "service:rateLimit",
+      "label": "rateLimit",
+      "layer": "service",
+      "domain": "Drift",
+      "loc": "server/src/middleware/rateLimit.ts:29",
+      "path": "server/src/middleware/rateLimit.ts",
+      "desc": "Hastighetsgränser för inloggning och skrivning.",
+      "line": 29
+    },
+    {
+      "id": "service:database",
+      "label": "database",
+      "layer": "service",
+      "domain": "Drift",
+      "loc": "server/src/db/connection.ts:13",
+      "path": "server/src/db/connection.ts",
+      "desc": "SQLite-anslutning, WAL, migrationer, integritetskontroll och avslut.",
+      "line": 13
+    },
+    {
+      "id": "service:migrations",
+      "label": "migrations",
+      "layer": "service",
+      "domain": "Drift",
+      "loc": "server/src/db/migrations.ts:31",
+      "path": "server/src/db/migrations.ts",
+      "desc": "Versionsstyrda schemaändringar för nya och uppgraderade installationer.",
+      "line": 31
+    },
+    {
+      "id": "service:boot",
+      "label": "boot",
+      "layer": "service",
+      "domain": "Drift",
+      "loc": "server/src/index.ts:81",
+      "path": "server/src/index.ts",
+      "desc": "Processstart, schemaläggare, IMAP-pollning och kontrollerad nedstängning.",
+      "entry": true,
+      "line": 81
+    },
+    {
+      "id": "service:httpApp",
+      "label": "httpApp",
+      "layer": "service",
+      "domain": "Drift",
+      "loc": "server/src/app.ts:47",
+      "path": "server/src/app.ts",
+      "desc": "Express, CORS, Helmet, CSRF, API-montering och felhantering.",
+      "line": 47
+    },
+    {
+      "id": "scheduler:refresh-token-cleanup",
+      "label": "refresh-token-cleanup",
+      "layer": "scheduler",
+      "domain": "Drift",
+      "loc": "server/src/index.ts:122",
+      "path": "server/src/index.ts",
+      "desc": "Dagligen 03:00: rensar utgångna och återkallade refresh-tokens.",
+      "entry": true,
+      "line": 122
+    },
+    {
+      "id": "scheduler:ai-usage-cleanup",
+      "label": "ai-usage-cleanup",
+      "layer": "scheduler",
+      "domain": "Drift",
+      "loc": "server/src/index.ts:132",
+      "path": "server/src/index.ts",
+      "desc": "Dagligen 03:15: rensar AI-logg äldre än 90 dagar.",
+      "entry": true,
+      "line": 132
+    },
+    {
+      "id": "scheduler:email-polling",
+      "label": "email-polling",
+      "layer": "scheduler",
+      "domain": "Drift",
+      "loc": "server/src/index.ts:163",
+      "path": "server/src/index.ts",
+      "desc": "Startas efter HTTP-listen; kör bara när inkommande e-post är konfigurerad. Faktisk IMAP-aktivering ej verifierad.",
+      "line": 163
+    },
+    {
+      "id": "scheduler:rejection-counter-reset",
+      "label": "rejection-counter-reset",
+      "layer": "scheduler",
+      "domain": "Drift",
+      "loc": "server/src/index.ts:43",
+      "path": "server/src/index.ts",
+      "desc": "Timvis timer återställer räknare efter en timme utan nya unhandled rejections.",
+      "entry": true,
+      "line": 43
+    },
+    {
+      "id": "table:backup_config",
+      "label": "backup_config",
+      "layer": "db-table",
+      "domain": "Drift",
+      "loc": "server/src/db/schema.sql:304",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: backup_config.",
+      "line": 304
+    },
+    {
+      "id": "table:app_settings",
+      "label": "app_settings",
+      "layer": "db-table",
+      "domain": "Drift",
+      "loc": "server/src/db/schema.sql:316",
+      "path": "server/src/db/schema.sql",
+      "desc": "SQLite-tabell: app_settings.",
+      "line": 316
+    },
+    {
+      "id": "table:schema_migrations",
+      "label": "schema_migrations",
+      "layer": "db-table",
+      "domain": "Drift",
+      "loc": "server/src/db/connection.ts:56",
+      "path": "server/src/db/connection.ts",
+      "desc": "SQLite-tabell: schema_migrations.",
+      "line": 56
+    }
+  ],
+  "edges": [
+    {
+      "source": "page:App",
+      "target": "page:KnowledgeBase",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:PublicKBArticle",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:CompanyList",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:SharedTicket",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:KBArticleDetail",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:CompanyDetail",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:Reports",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:PublicKnowledgeBase",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:SharedKBArticle",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:Login",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:UserList",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:ForgotPassword",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:TicketForm",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:Index",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:NotFound",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:KBArticleForm",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:TicketDetail",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:Settings",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:PublicTicketForm",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:TicketList",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:Archive",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:App",
+      "target": "page:ResetPassword",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Archive",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "page:Archive",
+      "target": "hook:useTickets",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Archive",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Archive",
+      "target": "hook:useUsers",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Archive",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Archive",
+      "target": "hook:useCategories",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Archive",
+      "target": "hook:use-mobile",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Archive",
+      "target": "hook:useDebounce",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Archive",
+      "target": "api:checklists",
+      "kind": "calls"
+    },
+    {
+      "source": "page:Archive",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Archive",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Archive",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Archive",
+      "target": "hook:useSystemUsers",
+      "kind": "imports"
+    },
+    {
+      "source": "page:CompanyDetail",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:CompanyDetail",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:CompanyDetail",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:CompanyDetail",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:CompanyDetail",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:CompanyList",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:CompanyList",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:CompanyList",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:CompanyList",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:CompanyList",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Dashboard",
+      "target": "hook:useUpcomingReminders",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Dashboard",
+      "target": "hook:useStatusCounts",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Dashboard",
+      "target": "hook:useActiveQueue",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Dashboard",
+      "target": "hook:useDashboardOverview",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Dashboard",
+      "target": "hook:useActivityFeed",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Dashboard",
+      "target": "hook:useUsers",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Dashboard",
+      "target": "hook:useCategories",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Dashboard",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Dashboard",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Dashboard",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Dashboard",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Dashboard",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:ForgotPassword",
+      "target": "api:auth",
+      "kind": "calls"
+    },
+    {
+      "source": "page:Index",
+      "target": "page:Dashboard",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleDetail",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "page:KBArticleDetail",
+      "target": "hook:useKbArticle",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleDetail",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleDetail",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleDetail",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleDetail",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleDetail",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleForm",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "page:KBArticleForm",
+      "target": "hook:useKbArticles",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleForm",
+      "target": "hook:useTags",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleForm",
+      "target": "hook:useKbArticle",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleForm",
+      "target": "hook:useKbCategories",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleForm",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleForm",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleForm",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleForm",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KBArticleForm",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KnowledgeBase",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "page:KnowledgeBase",
+      "target": "hook:useDebounce",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KnowledgeBase",
+      "target": "hook:useKbArticles",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KnowledgeBase",
+      "target": "hook:useKbCategories",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KnowledgeBase",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KnowledgeBase",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KnowledgeBase",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KnowledgeBase",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KnowledgeBase",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:KnowledgeBase",
+      "target": "hook:useTags",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Login",
+      "target": "api:auth",
+      "kind": "calls"
+    },
+    {
+      "source": "page:Login",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Login",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:PublicKBArticle",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "page:PublicKnowledgeBase",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "page:PublicKnowledgeBase",
+      "target": "hook:useDebounce",
+      "kind": "imports"
+    },
+    {
+      "source": "page:PublicTicketForm",
+      "target": "api:public",
+      "kind": "calls"
+    },
+    {
+      "source": "page:PublicTicketForm",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:PublicTicketForm",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "page:PublicTicketForm",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Reports",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "page:Reports",
+      "target": "api:reports",
+      "kind": "calls"
+    },
+    {
+      "source": "page:Reports",
+      "target": "hook:useReportsSummary",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Reports",
+      "target": "hook:useUsers",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Reports",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Reports",
+      "target": "hook:use-mobile",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Reports",
+      "target": "hook:useStatusFlow",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Reports",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Reports",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Reports",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Reports",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Reports",
+      "target": "hook:useDeflectionStats",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Reports",
+      "target": "api:checklists",
+      "kind": "calls"
+    },
+    {
+      "source": "page:Reports",
+      "target": "hook:useCategories",
+      "kind": "imports"
+    },
+    {
+      "source": "page:ResetPassword",
+      "target": "api:auth",
+      "kind": "calls"
+    },
+    {
+      "source": "page:Settings",
+      "target": "page:AdminTab",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Settings",
+      "target": "page:GeneralTab",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Settings",
+      "target": "page:IntegrationsTab",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Settings",
+      "target": "page:TicketsTab",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Settings",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Settings",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Settings",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Settings",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:Settings",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:SharedKBArticle",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "page:SharedTicket",
+      "target": "api:shares",
+      "kind": "calls"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "api:attachments",
+      "kind": "calls"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useTicketComments",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useChecklistTemplates",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useUsers",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useTickets",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useTicketReminders",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useTicketSharing",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useTicketMutations",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useTicketLinks",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useTicketAttachments",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useTicketHistory",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useSettings",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useTicketChecklists",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useCategories",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketDetail",
+      "target": "hook:useDebounce",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "api:templates",
+      "kind": "calls"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useChecklistTemplates",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useTemplates",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useUsers",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useTickets",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useTicketMutations",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useTicketAttachments",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useTicketChecklists",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useSystemUsers",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useCategories",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "api:attachments",
+      "kind": "calls"
+    },
+    {
+      "source": "page:TicketForm",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "page:TicketList",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "page:TicketList",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketList",
+      "target": "hook:useUsers",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketList",
+      "target": "hook:useTickets",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketList",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketList",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketList",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketList",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketList",
+      "target": "hook:useCategories",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketList",
+      "target": "hook:use-mobile",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketList",
+      "target": "hook:useDebounce",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketList",
+      "target": "api:checklists",
+      "kind": "calls"
+    },
+    {
+      "source": "page:UserList",
+      "target": "api:contacts",
+      "kind": "calls"
+    },
+    {
+      "source": "page:UserList",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "page:UserList",
+      "target": "hook:useCompanies",
+      "kind": "imports"
+    },
+    {
+      "source": "page:UserList",
+      "target": "hook:useUsers",
+      "kind": "imports"
+    },
+    {
+      "source": "page:UserList",
+      "target": "hook:useTickets",
+      "kind": "imports"
+    },
+    {
+      "source": "page:UserList",
+      "target": "hook:useMode",
+      "kind": "imports"
+    },
+    {
+      "source": "page:UserList",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:UserList",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:UserList",
+      "target": "hook:useCommandPaletteSearch",
+      "kind": "imports"
+    },
+    {
+      "source": "page:UserList",
+      "target": "hook:useDebounce",
+      "kind": "imports"
+    },
+    {
+      "source": "page:AdminTab",
+      "target": "api:backup",
+      "kind": "calls"
+    },
+    {
+      "source": "page:AdminTab",
+      "target": "hook:useSystemUsers",
+      "kind": "imports"
+    },
+    {
+      "source": "page:AdminTab",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:AdminTab",
+      "target": "hook:useBackupConfig",
+      "kind": "imports"
+    },
+    {
+      "source": "page:AdminTab",
+      "target": "api:auth",
+      "kind": "calls"
+    },
+    {
+      "source": "page:AdminTab",
+      "target": "hook:useDebounce",
+      "kind": "imports"
+    },
+    {
+      "source": "page:GeneralTab",
+      "target": "api:push",
+      "kind": "calls"
+    },
+    {
+      "source": "page:GeneralTab",
+      "target": "api:settings",
+      "kind": "calls"
+    },
+    {
+      "source": "page:GeneralTab",
+      "target": "api:auth",
+      "kind": "calls"
+    },
+    {
+      "source": "page:GeneralTab",
+      "target": "hook:useBranding",
+      "kind": "imports"
+    },
+    {
+      "source": "page:GeneralTab",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:IntegrationsTab",
+      "target": "api:email-inbound",
+      "kind": "calls"
+    },
+    {
+      "source": "page:IntegrationsTab",
+      "target": "hook:useWebhooks",
+      "kind": "imports"
+    },
+    {
+      "source": "page:IntegrationsTab",
+      "target": "hook:useApiKeys",
+      "kind": "imports"
+    },
+    {
+      "source": "page:IntegrationsTab",
+      "target": "hook:AuthContext",
+      "kind": "imports"
+    },
+    {
+      "source": "page:IntegrationsTab",
+      "target": "hook:useSettings",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketsTab",
+      "target": "hook:useChecklistTemplates",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketsTab",
+      "target": "hook:useTemplates",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketsTab",
+      "target": "hook:useCategories",
+      "kind": "imports"
+    },
+    {
+      "source": "page:TicketsTab",
+      "target": "api:templates",
+      "kind": "calls"
+    },
+    {
+      "source": "page:TicketsTab",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useActiveQueue",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useActivityFeed",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useApiKeys",
+      "target": "api:api-keys",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useBackupConfig",
+      "target": "api:backup",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useBranding",
+      "target": "api:public",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useCategories",
+      "target": "api:categories",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useChecklistTemplates",
+      "target": "api:checklist-templates",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useCommandPaletteSearch",
+      "target": "api:contacts",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useCommandPaletteSearch",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useCommandPaletteSearch",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useCommandPaletteSearch",
+      "target": "hook:useDebounce",
+      "kind": "imports"
+    },
+    {
+      "source": "hook:useCompanies",
+      "target": "api:companies",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useDashboardOverview",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useDeflectionStats",
+      "target": "api:public",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useKbArticle",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useKbArticles",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useKbArticles",
+      "target": "hook:useKbArticle",
+      "kind": "imports"
+    },
+    {
+      "source": "hook:useKbCategories",
+      "target": "api:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useKbCategories",
+      "target": "hook:useKbArticles",
+      "kind": "imports"
+    },
+    {
+      "source": "hook:useKbCategories",
+      "target": "hook:useKbArticle",
+      "kind": "imports"
+    },
+    {
+      "source": "hook:useReportsSummary",
+      "target": "api:reports",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useSettings",
+      "target": "api:settings",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useStatusCounts",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useStatusFlow",
+      "target": "api:reports",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useSystemUsers",
+      "target": "api:users",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useTags",
+      "target": "api:tags",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useTags",
+      "target": "hook:useKbArticles",
+      "kind": "imports"
+    },
+    {
+      "source": "hook:useTags",
+      "target": "hook:useKbArticle",
+      "kind": "imports"
+    },
+    {
+      "source": "hook:useTemplates",
+      "target": "api:templates",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useTicketAttachments",
+      "target": "api:attachments",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useTicketChecklists",
+      "target": "api:checklists",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useTicketComments",
+      "target": "api:comments",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useTicketHistory",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useTicketLinks",
+      "target": "api:links",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useTicketMutations",
+      "target": "hook:useTickets",
+      "kind": "imports"
+    },
+    {
+      "source": "hook:useTicketReminders",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useTicketReminders",
+      "target": "hook:useUpcomingReminders",
+      "kind": "imports"
+    },
+    {
+      "source": "hook:useTicketSharing",
+      "target": "api:shares",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useTickets",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useUpcomingReminders",
+      "target": "api:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useUsers",
+      "target": "api:contacts",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:useWebhooks",
+      "target": "api:webhooks",
+      "kind": "calls"
+    },
+    {
+      "source": "hook:AuthContext",
+      "target": "api:auth",
+      "kind": "calls"
+    },
+    {
+      "source": "api:api-keys",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:attachments",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:auth",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:backup",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:categories",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:checklist-templates",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:checklists",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:comments",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:companies",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:contacts",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:email-inbound",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:kb",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:links",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:public",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:push",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:reports",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:settings",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:shares",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:tags",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:templates",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:tickets",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:users",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:webhooks",
+      "target": "api:client",
+      "kind": "uses"
+    },
+    {
+      "source": "api:client",
+      "target": "api:csrf-token",
+      "kind": "calls"
+    },
+    {
+      "source": "service:boot",
+      "target": "scheduler:refresh-token-cleanup",
+      "kind": "triggers"
+    },
+    {
+      "source": "scheduler:refresh-token-cleanup",
+      "target": "service:cleanupRefreshTokens",
+      "kind": "calls"
+    },
+    {
+      "source": "service:boot",
+      "target": "scheduler:ai-usage-cleanup",
+      "kind": "triggers"
+    },
+    {
+      "source": "scheduler:ai-usage-cleanup",
+      "target": "service:aiHelper",
+      "kind": "calls"
+    },
+    {
+      "source": "service:boot",
+      "target": "scheduler:email-polling",
+      "kind": "triggers"
+    },
+    {
+      "source": "scheduler:email-polling",
+      "target": "service:emailInbound",
+      "kind": "calls"
+    },
+    {
+      "source": "service:boot",
+      "target": "scheduler:rejection-counter-reset",
+      "kind": "triggers"
+    },
+    {
+      "source": "scheduler:rejection-counter-reset",
+      "target": "service:logger",
+      "kind": "calls"
+    },
+    {
+      "source": "route:auth",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:auth",
+      "target": "service:passport",
+      "kind": "imports"
+    },
+    {
+      "source": "route:auth",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:auth",
+      "target": "service:rateLimit",
+      "kind": "imports"
+    },
+    {
+      "source": "route:auth",
+      "target": "service:email",
+      "kind": "imports"
+    },
+    {
+      "source": "route:auth",
+      "target": "service:passwordPolicy",
+      "kind": "imports"
+    },
+    {
+      "source": "route:auth",
+      "target": "service:auditLog",
+      "kind": "imports"
+    },
+    {
+      "source": "route:auth",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:auth",
+      "target": "service:cookies",
+      "kind": "imports"
+    },
+    {
+      "source": "route:auth",
+      "target": "service:oidc",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:templateValidation",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:email",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:ticketAccess",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:automationHelper",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:rateLimit",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:webhookDispatcher",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:ticketNotifications",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:aiHelper",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:htmlUtils",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:htmlSanitizer",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:ticketQuery",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tickets",
+      "target": "service:ticketImportExport",
+      "kind": "imports"
+    },
+    {
+      "source": "route:categories",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:categories",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:categories",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:contacts",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:contacts",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:contacts",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:attachments",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:attachments",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:attachments",
+      "target": "service:rateLimit",
+      "kind": "imports"
+    },
+    {
+      "source": "route:attachments",
+      "target": "service:ticketAccess",
+      "kind": "imports"
+    },
+    {
+      "source": "route:attachments",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:checklists",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:checklists",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:checklists",
+      "target": "service:ticketAccess",
+      "kind": "imports"
+    },
+    {
+      "source": "route:checklists",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:checklist-templates",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:checklist-templates",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:checklist-templates",
+      "target": "service:ticketAccess",
+      "kind": "imports"
+    },
+    {
+      "source": "route:checklist-templates",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:comments",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:comments",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:comments",
+      "target": "service:htmlSanitizer",
+      "kind": "imports"
+    },
+    {
+      "source": "route:comments",
+      "target": "service:ticketNotifications",
+      "kind": "imports"
+    },
+    {
+      "source": "route:comments",
+      "target": "service:ticketAccess",
+      "kind": "imports"
+    },
+    {
+      "source": "route:comments",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:links",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:links",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:links",
+      "target": "service:ticketAccess",
+      "kind": "imports"
+    },
+    {
+      "source": "route:links",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:shares",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:shares",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:shares",
+      "target": "service:ticketAccess",
+      "kind": "imports"
+    },
+    {
+      "source": "route:shares",
+      "target": "service:rateLimit",
+      "kind": "imports"
+    },
+    {
+      "source": "route:shares",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:shares",
+      "target": "service:auditLog",
+      "kind": "imports"
+    },
+    {
+      "source": "route:shares",
+      "target": "service:shares",
+      "kind": "imports"
+    },
+    {
+      "source": "route:users",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:users",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:users",
+      "target": "service:passwordPolicy",
+      "kind": "imports"
+    },
+    {
+      "source": "route:users",
+      "target": "service:auditLog",
+      "kind": "imports"
+    },
+    {
+      "source": "route:users",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:users",
+      "target": "service:oidc",
+      "kind": "imports"
+    },
+    {
+      "source": "route:public",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:public",
+      "target": "service:email",
+      "kind": "imports"
+    },
+    {
+      "source": "route:public",
+      "target": "service:aiHelper",
+      "kind": "imports"
+    },
+    {
+      "source": "route:public",
+      "target": "service:htmlUtils",
+      "kind": "imports"
+    },
+    {
+      "source": "route:public",
+      "target": "service:htmlSanitizer",
+      "kind": "imports"
+    },
+    {
+      "source": "route:public",
+      "target": "service:rateLimit",
+      "kind": "imports"
+    },
+    {
+      "source": "route:public",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:public",
+      "target": "service:branding",
+      "kind": "imports"
+    },
+    {
+      "source": "route:public",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:templates",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:templates",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:templates",
+      "target": "route:templates/:templateId/fields",
+      "kind": "imports"
+    },
+    {
+      "source": "route:templates",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tags",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tags",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:tags",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:kb",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:kb",
+      "target": "service:htmlUtils",
+      "kind": "imports"
+    },
+    {
+      "source": "route:kb",
+      "target": "service:htmlSanitizer",
+      "kind": "imports"
+    },
+    {
+      "source": "route:kb",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:kb",
+      "target": "service:ticketAccess",
+      "kind": "imports"
+    },
+    {
+      "source": "route:kb",
+      "target": "route:attachments",
+      "kind": "imports"
+    },
+    {
+      "source": "route:kb",
+      "target": "service:rateLimit",
+      "kind": "imports"
+    },
+    {
+      "source": "route:kb",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:kb",
+      "target": "service:settings",
+      "kind": "imports"
+    },
+    {
+      "source": "route:kb",
+      "target": "service:auditLog",
+      "kind": "imports"
+    },
+    {
+      "source": "route:reports",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:reports",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:reports",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:backup",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:backup",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:backup",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:backup",
+      "target": "service:rateLimit",
+      "kind": "imports"
+    },
+    {
+      "source": "route:backup",
+      "target": "service:backupScheduler",
+      "kind": "imports"
+    },
+    {
+      "source": "route:backup",
+      "target": "service:offsiteBackup",
+      "kind": "imports"
+    },
+    {
+      "source": "route:backup",
+      "target": "service:auditLog",
+      "kind": "imports"
+    },
+    {
+      "source": "route:push",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:push",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:push",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:companies",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:companies",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:companies",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:api-keys",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:api-keys",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:api-keys",
+      "target": "service:auditLog",
+      "kind": "imports"
+    },
+    {
+      "source": "route:api-keys",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:webhooks",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:webhooks",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:webhooks",
+      "target": "service:webhookValidator",
+      "kind": "imports"
+    },
+    {
+      "source": "route:webhooks",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:email-inbound",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:email-inbound",
+      "target": "service:emailInbound",
+      "kind": "imports"
+    },
+    {
+      "source": "route:email-inbound",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:settings",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:settings",
+      "target": "service:settings",
+      "kind": "imports"
+    },
+    {
+      "source": "route:settings",
+      "target": "service:branding",
+      "kind": "imports"
+    },
+    {
+      "source": "route:settings",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "route:templates/:templateId/fields",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "route:templates/:templateId/fields",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "route:templates/:templateId/fields",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "service:passport",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "service:cookies",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "service:secretValidation",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:auth",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:tickets",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:categories",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:contacts",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:attachments",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:checklists",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:checklist-templates",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:comments",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:links",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:shares",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:users",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:public",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:templates",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:tags",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:kb",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:reports",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:backup",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:push",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:companies",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:api-keys",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:webhooks",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:email-inbound",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:settings",
+      "kind": "imports"
+    },
+    {
+      "source": "service:aiHelper",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:aiHelper",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:auditLog",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:auditLog",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:autoCloseScheduler",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:autoCloseScheduler",
+      "target": "service:automationConfig",
+      "kind": "imports"
+    },
+    {
+      "source": "service:autoCloseScheduler",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:automationHelper",
+      "target": "service:automationConfig",
+      "kind": "imports"
+    },
+    {
+      "source": "service:automationHelper",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:backupScheduler",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:backupScheduler",
+      "target": "service:offsiteBackup",
+      "kind": "imports"
+    },
+    {
+      "source": "service:backupScheduler",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:branding",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:branding",
+      "target": "service:settings",
+      "kind": "imports"
+    },
+    {
+      "source": "service:branding",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:email",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:email",
+      "target": "service:htmlUtils",
+      "kind": "imports"
+    },
+    {
+      "source": "service:email",
+      "target": "service:emailThreading",
+      "kind": "imports"
+    },
+    {
+      "source": "service:email",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:email",
+      "target": "service:settings",
+      "kind": "imports"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "service:webhookDispatcher",
+      "kind": "imports"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "service:email",
+      "kind": "imports"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "service:ticketNotifications",
+      "kind": "imports"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "service:emailQuote",
+      "kind": "imports"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "service:auditLog",
+      "kind": "imports"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "service:shares",
+      "kind": "imports"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "route:attachments",
+      "kind": "imports"
+    },
+    {
+      "source": "service:offsiteBackup",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:oidc",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:oidc",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:push",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:push",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:pushScheduler",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:pushScheduler",
+      "target": "service:push",
+      "kind": "imports"
+    },
+    {
+      "source": "service:pushScheduler",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:reminderScheduler",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:reminderScheduler",
+      "target": "service:email",
+      "kind": "imports"
+    },
+    {
+      "source": "service:reminderScheduler",
+      "target": "service:push",
+      "kind": "imports"
+    },
+    {
+      "source": "service:reminderScheduler",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:settings",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:templateValidation",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:ticketAccess",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:ticketAccess",
+      "target": "service:authMiddleware",
+      "kind": "imports"
+    },
+    {
+      "source": "service:ticketImportExport",
+      "target": "service:ticketQuery",
+      "kind": "imports"
+    },
+    {
+      "source": "service:ticketNotifications",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:ticketNotifications",
+      "target": "service:webhookDispatcher",
+      "kind": "imports"
+    },
+    {
+      "source": "service:ticketNotifications",
+      "target": "service:push",
+      "kind": "imports"
+    },
+    {
+      "source": "service:ticketNotifications",
+      "target": "service:email",
+      "kind": "imports"
+    },
+    {
+      "source": "service:ticketNotifications",
+      "target": "service:htmlUtils",
+      "kind": "imports"
+    },
+    {
+      "source": "service:ticketNotifications",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:webhookDispatcher",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:webhookDispatcher",
+      "target": "service:webhookValidator",
+      "kind": "imports"
+    },
+    {
+      "source": "service:webhookDispatcher",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:webhookRetryScheduler",
+      "target": "service:webhookDispatcher",
+      "kind": "imports"
+    },
+    {
+      "source": "service:webhookRetryScheduler",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:authMiddleware",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:authMiddleware",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:passport",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:passport",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:passport",
+      "target": "service:secretValidation",
+      "kind": "imports"
+    },
+    {
+      "source": "service:database",
+      "target": "service:migrations",
+      "kind": "imports"
+    },
+    {
+      "source": "service:database",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:migrations",
+      "target": "service:htmlUtils",
+      "kind": "imports"
+    },
+    {
+      "source": "service:migrations",
+      "target": "service:emailQuote",
+      "kind": "imports"
+    },
+    {
+      "source": "service:cleanupRefreshTokens",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:httpApp",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:database",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:reminderScheduler",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:cleanupRefreshTokens",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:aiHelper",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:autoCloseScheduler",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:webhookRetryScheduler",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:push",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:pushScheduler",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:backupScheduler",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:emailInbound",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:oidc",
+      "kind": "imports"
+    },
+    {
+      "source": "service:boot",
+      "target": "service:logger",
+      "kind": "imports"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:auth",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:categories",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:contacts",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:attachments",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:checklists",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:checklist-templates",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:comments",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:links",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:shares",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:users",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:public",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:templates",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:tags",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:reports",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:backup",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:push",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:companies",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:api-keys",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:webhooks",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:email-inbound",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:settings",
+      "kind": "calls"
+    },
+    {
+      "source": "route:templates",
+      "target": "route:templates/:templateId/fields",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:health",
+      "kind": "calls"
+    },
+    {
+      "source": "service:httpApp",
+      "target": "route:csrf-token",
+      "kind": "calls"
+    },
+    {
+      "source": "route:health",
+      "target": "service:database",
+      "kind": "reads"
+    },
+    {
+      "source": "service:database",
+      "target": "table:users",
+      "kind": "creates"
+    },
+    {
+      "source": "service:database",
+      "target": "table:companies",
+      "kind": "creates"
+    },
+    {
+      "source": "service:database",
+      "target": "table:contacts",
+      "kind": "creates"
+    },
+    {
+      "source": "table:contacts",
+      "target": "table:companies",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:categories",
+      "kind": "creates"
+    },
+    {
+      "source": "service:database",
+      "target": "table:tickets",
+      "kind": "creates"
+    },
+    {
+      "source": "table:tickets",
+      "target": "table:categories",
+      "kind": "uses"
+    },
+    {
+      "source": "table:tickets",
+      "target": "table:contacts",
+      "kind": "uses"
+    },
+    {
+      "source": "table:tickets",
+      "target": "table:companies",
+      "kind": "uses"
+    },
+    {
+      "source": "table:tickets",
+      "target": "table:users",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:ticket_attachments",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ticket_attachments",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:ticket_checklists",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ticket_checklists",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:ticket_comments",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ticket_comments",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "table:ticket_comments",
+      "target": "table:users",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:ticket_shares",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ticket_shares",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "table:ticket_shares",
+      "target": "table:users",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:ticket_links",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ticket_links",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "table:ticket_links",
+      "target": "table:users",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:tags",
+      "kind": "creates"
+    },
+    {
+      "source": "service:database",
+      "target": "table:ticket_tags",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ticket_tags",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "table:ticket_tags",
+      "target": "table:tags",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:ticket_reminders",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ticket_reminders",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "table:ticket_reminders",
+      "target": "table:users",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:kb_categories",
+      "kind": "creates"
+    },
+    {
+      "source": "service:database",
+      "target": "table:kb_articles",
+      "kind": "creates"
+    },
+    {
+      "source": "table:kb_articles",
+      "target": "table:kb_categories",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:kb_article_shares",
+      "kind": "creates"
+    },
+    {
+      "source": "table:kb_article_shares",
+      "target": "table:kb_articles",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:refresh_tokens",
+      "kind": "creates"
+    },
+    {
+      "source": "table:refresh_tokens",
+      "target": "table:users",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:ticket_kb_links",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ticket_kb_links",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "table:ticket_kb_links",
+      "target": "table:kb_articles",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:backup_config",
+      "kind": "creates"
+    },
+    {
+      "source": "service:database",
+      "target": "table:app_settings",
+      "kind": "creates"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:ticket_templates",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ticket_templates",
+      "target": "table:categories",
+      "kind": "uses"
+    },
+    {
+      "source": "table:ticket_templates",
+      "target": "table:users",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:template_checklists",
+      "kind": "creates"
+    },
+    {
+      "source": "table:template_checklists",
+      "target": "table:ticket_templates",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:template_fields",
+      "kind": "creates"
+    },
+    {
+      "source": "table:template_fields",
+      "target": "table:ticket_templates",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:ticket_field_values",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ticket_field_values",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:ticket_history",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ticket_history",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:checklist_templates",
+      "kind": "creates"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:checklist_template_items",
+      "kind": "creates"
+    },
+    {
+      "source": "table:checklist_template_items",
+      "target": "table:checklist_templates",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:kb_articles_fts",
+      "kind": "creates"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:kb_article_tags",
+      "kind": "creates"
+    },
+    {
+      "source": "table:kb_article_tags",
+      "target": "table:kb_articles",
+      "kind": "uses"
+    },
+    {
+      "source": "table:kb_article_tags",
+      "target": "table:tags",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:recurring_templates",
+      "kind": "creates"
+    },
+    {
+      "source": "table:recurring_templates",
+      "target": "table:categories",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:recurring_ticket_history",
+      "kind": "creates"
+    },
+    {
+      "source": "table:recurring_ticket_history",
+      "target": "table:recurring_templates",
+      "kind": "uses"
+    },
+    {
+      "source": "table:recurring_ticket_history",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:kb_article_links",
+      "kind": "creates"
+    },
+    {
+      "source": "table:kb_article_links",
+      "target": "table:kb_articles",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:time_entries",
+      "kind": "creates"
+    },
+    {
+      "source": "table:time_entries",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:push_subscriptions",
+      "kind": "creates"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:tickets_fts",
+      "kind": "creates"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:sla_policies",
+      "kind": "creates"
+    },
+    {
+      "source": "table:sla_policies",
+      "target": "table:companies",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:billing_rates",
+      "kind": "creates"
+    },
+    {
+      "source": "table:billing_rates",
+      "target": "table:companies",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:invoices",
+      "kind": "creates"
+    },
+    {
+      "source": "table:invoices",
+      "target": "table:companies",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:invoice_lines",
+      "kind": "creates"
+    },
+    {
+      "source": "table:invoice_lines",
+      "target": "table:invoices",
+      "kind": "uses"
+    },
+    {
+      "source": "table:invoice_lines",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "table:invoice_lines",
+      "target": "table:time_entries",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:api_keys",
+      "kind": "creates"
+    },
+    {
+      "source": "table:api_keys",
+      "target": "table:users",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:webhooks",
+      "kind": "creates"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:webhook_deliveries",
+      "kind": "creates"
+    },
+    {
+      "source": "table:webhook_deliveries",
+      "target": "table:webhooks",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:ai_usage_log",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ai_usage_log",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:ai_deflections",
+      "kind": "creates"
+    },
+    {
+      "source": "table:ai_deflections",
+      "target": "table:tickets",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:password_reset_tokens",
+      "kind": "creates"
+    },
+    {
+      "source": "table:password_reset_tokens",
+      "target": "table:users",
+      "kind": "uses"
+    },
+    {
+      "source": "service:migrations",
+      "target": "table:audit_log",
+      "kind": "creates"
+    },
+    {
+      "source": "table:audit_log",
+      "target": "table:users",
+      "kind": "uses"
+    },
+    {
+      "source": "service:database",
+      "target": "table:schema_migrations",
+      "kind": "creates"
+    },
+    {
+      "source": "route:auth",
+      "target": "table:refresh_tokens",
+      "kind": "writes"
+    },
+    {
+      "source": "route:auth",
+      "target": "table:refresh_tokens",
+      "kind": "reads"
+    },
+    {
+      "source": "route:auth",
+      "target": "table:users",
+      "kind": "reads"
+    },
+    {
+      "source": "route:auth",
+      "target": "table:users",
+      "kind": "writes"
+    },
+    {
+      "source": "route:auth",
+      "target": "table:password_reset_tokens",
+      "kind": "writes"
+    },
+    {
+      "source": "route:auth",
+      "target": "table:password_reset_tokens",
+      "kind": "reads"
+    },
+    {
+      "source": "route:auth",
+      "target": "table:audit_log",
+      "kind": "reads"
+    },
+    {
+      "source": "route:auth",
+      "target": "table:api_keys",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:users",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:contacts",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:categories",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:tickets",
+      "kind": "writes"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:contacts",
+      "kind": "writes"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:tags",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:ticket_tags",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:ticket_comments",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:companies",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:ticket_history",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:ticket_reminders",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:ticket_field_values",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:ticket_field_values",
+      "kind": "writes"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:ticket_history",
+      "kind": "writes"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:kb_articles_fts",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:kb_articles",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:ticket_attachments",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tickets",
+      "target": "table:ticket_reminders",
+      "kind": "writes"
+    },
+    {
+      "source": "route:categories",
+      "target": "table:categories",
+      "kind": "reads"
+    },
+    {
+      "source": "route:categories",
+      "target": "table:categories",
+      "kind": "writes"
+    },
+    {
+      "source": "route:contacts",
+      "target": "table:contacts",
+      "kind": "reads"
+    },
+    {
+      "source": "route:contacts",
+      "target": "table:companies",
+      "kind": "reads"
+    },
+    {
+      "source": "route:contacts",
+      "target": "table:companies",
+      "kind": "writes"
+    },
+    {
+      "source": "route:contacts",
+      "target": "table:contacts",
+      "kind": "writes"
+    },
+    {
+      "source": "route:attachments",
+      "target": "table:ticket_attachments",
+      "kind": "reads"
+    },
+    {
+      "source": "route:attachments",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "route:attachments",
+      "target": "table:ticket_attachments",
+      "kind": "writes"
+    },
+    {
+      "source": "route:checklists",
+      "target": "table:ticket_checklists",
+      "kind": "reads"
+    },
+    {
+      "source": "route:checklists",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "route:checklists",
+      "target": "table:ticket_checklists",
+      "kind": "writes"
+    },
+    {
+      "source": "route:checklist-templates",
+      "target": "table:checklist_templates",
+      "kind": "reads"
+    },
+    {
+      "source": "route:checklist-templates",
+      "target": "table:checklist_template_items",
+      "kind": "reads"
+    },
+    {
+      "source": "route:checklist-templates",
+      "target": "table:checklist_templates",
+      "kind": "writes"
+    },
+    {
+      "source": "route:checklist-templates",
+      "target": "table:checklist_template_items",
+      "kind": "writes"
+    },
+    {
+      "source": "route:checklist-templates",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "route:checklist-templates",
+      "target": "table:ticket_checklists",
+      "kind": "reads"
+    },
+    {
+      "source": "route:checklist-templates",
+      "target": "table:ticket_checklists",
+      "kind": "writes"
+    },
+    {
+      "source": "route:comments",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "route:comments",
+      "target": "table:ticket_comments",
+      "kind": "reads"
+    },
+    {
+      "source": "route:comments",
+      "target": "table:users",
+      "kind": "reads"
+    },
+    {
+      "source": "route:comments",
+      "target": "table:contacts",
+      "kind": "reads"
+    },
+    {
+      "source": "route:comments",
+      "target": "table:ticket_comments",
+      "kind": "writes"
+    },
+    {
+      "source": "route:comments",
+      "target": "table:tickets",
+      "kind": "writes"
+    },
+    {
+      "source": "route:links",
+      "target": "table:ticket_links",
+      "kind": "reads"
+    },
+    {
+      "source": "route:links",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "route:links",
+      "target": "table:ticket_links",
+      "kind": "writes"
+    },
+    {
+      "source": "route:shares",
+      "target": "table:ticket_shares",
+      "kind": "reads"
+    },
+    {
+      "source": "route:shares",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "route:shares",
+      "target": "table:categories",
+      "kind": "reads"
+    },
+    {
+      "source": "route:shares",
+      "target": "table:contacts",
+      "kind": "reads"
+    },
+    {
+      "source": "route:shares",
+      "target": "table:ticket_attachments",
+      "kind": "reads"
+    },
+    {
+      "source": "route:shares",
+      "target": "table:ticket_checklists",
+      "kind": "reads"
+    },
+    {
+      "source": "route:users",
+      "target": "table:users",
+      "kind": "reads"
+    },
+    {
+      "source": "route:users",
+      "target": "table:contacts",
+      "kind": "reads"
+    },
+    {
+      "source": "route:users",
+      "target": "table:users",
+      "kind": "writes"
+    },
+    {
+      "source": "route:users",
+      "target": "table:refresh_tokens",
+      "kind": "writes"
+    },
+    {
+      "source": "route:public",
+      "target": "table:ticket_templates",
+      "kind": "reads"
+    },
+    {
+      "source": "route:public",
+      "target": "table:template_fields",
+      "kind": "reads"
+    },
+    {
+      "source": "route:public",
+      "target": "table:categories",
+      "kind": "reads"
+    },
+    {
+      "source": "route:public",
+      "target": "table:contacts",
+      "kind": "reads"
+    },
+    {
+      "source": "route:public",
+      "target": "table:contacts",
+      "kind": "writes"
+    },
+    {
+      "source": "route:public",
+      "target": "table:tickets",
+      "kind": "writes"
+    },
+    {
+      "source": "route:public",
+      "target": "table:ticket_field_values",
+      "kind": "writes"
+    },
+    {
+      "source": "route:public",
+      "target": "table:kb_articles",
+      "kind": "reads"
+    },
+    {
+      "source": "route:public",
+      "target": "table:ai_deflections",
+      "kind": "writes"
+    },
+    {
+      "source": "route:public",
+      "target": "table:ai_deflections",
+      "kind": "reads"
+    },
+    {
+      "source": "route:templates",
+      "target": "table:ticket_templates",
+      "kind": "reads"
+    },
+    {
+      "source": "route:templates",
+      "target": "table:template_fields",
+      "kind": "reads"
+    },
+    {
+      "source": "route:templates",
+      "target": "table:ticket_templates",
+      "kind": "writes"
+    },
+    {
+      "source": "route:templates",
+      "target": "table:template_fields",
+      "kind": "writes"
+    },
+    {
+      "source": "route:tags",
+      "target": "table:tags",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tags",
+      "target": "table:tags",
+      "kind": "writes"
+    },
+    {
+      "source": "route:tags",
+      "target": "table:ticket_tags",
+      "kind": "reads"
+    },
+    {
+      "source": "route:tags",
+      "target": "table:recurring_templates",
+      "kind": "reads"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:kb_article_tags",
+      "kind": "reads"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:tags",
+      "kind": "reads"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:kb_articles",
+      "kind": "reads"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:kb_categories",
+      "kind": "reads"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:kb_categories",
+      "kind": "writes"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:kb_articles_fts",
+      "kind": "reads"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:ticket_kb_links",
+      "kind": "reads"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:kb_articles",
+      "kind": "writes"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:kb_articles_fts",
+      "kind": "writes"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:kb_article_tags",
+      "kind": "writes"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:ticket_kb_links",
+      "kind": "writes"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:kb_article_links",
+      "kind": "reads"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:kb_article_links",
+      "kind": "writes"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:kb_article_shares",
+      "kind": "reads"
+    },
+    {
+      "source": "route:kb",
+      "target": "table:kb_article_shares",
+      "kind": "writes"
+    },
+    {
+      "source": "route:reports",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "route:reports",
+      "target": "table:categories",
+      "kind": "reads"
+    },
+    {
+      "source": "route:reports",
+      "target": "table:contacts",
+      "kind": "reads"
+    },
+    {
+      "source": "route:reports",
+      "target": "table:users",
+      "kind": "reads"
+    },
+    {
+      "source": "route:backup",
+      "target": "table:audit_log",
+      "kind": "writes"
+    },
+    {
+      "source": "route:backup",
+      "target": "table:backup_config",
+      "kind": "writes"
+    },
+    {
+      "source": "route:push",
+      "target": "table:push_subscriptions",
+      "kind": "writes"
+    },
+    {
+      "source": "route:push",
+      "target": "table:push_subscriptions",
+      "kind": "reads"
+    },
+    {
+      "source": "route:companies",
+      "target": "table:contacts",
+      "kind": "reads"
+    },
+    {
+      "source": "route:companies",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "route:companies",
+      "target": "table:companies",
+      "kind": "reads"
+    },
+    {
+      "source": "route:companies",
+      "target": "table:companies",
+      "kind": "writes"
+    },
+    {
+      "source": "route:api-keys",
+      "target": "table:api_keys",
+      "kind": "reads"
+    },
+    {
+      "source": "route:api-keys",
+      "target": "table:api_keys",
+      "kind": "writes"
+    },
+    {
+      "source": "route:webhooks",
+      "target": "table:webhooks",
+      "kind": "reads"
+    },
+    {
+      "source": "route:webhooks",
+      "target": "table:webhooks",
+      "kind": "writes"
+    },
+    {
+      "source": "route:webhooks",
+      "target": "table:webhook_deliveries",
+      "kind": "reads"
+    },
+    {
+      "source": "route:templates/:templateId/fields",
+      "target": "table:template_fields",
+      "kind": "reads"
+    },
+    {
+      "source": "route:templates/:templateId/fields",
+      "target": "table:template_fields",
+      "kind": "writes"
+    },
+    {
+      "source": "service:aiHelper",
+      "target": "table:ai_usage_log",
+      "kind": "reads"
+    },
+    {
+      "source": "service:aiHelper",
+      "target": "table:ai_usage_log",
+      "kind": "writes"
+    },
+    {
+      "source": "service:aiHelper",
+      "target": "table:categories",
+      "kind": "reads"
+    },
+    {
+      "source": "service:auditLog",
+      "target": "table:audit_log",
+      "kind": "writes"
+    },
+    {
+      "source": "service:autoCloseScheduler",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "service:autoCloseScheduler",
+      "target": "table:tickets",
+      "kind": "writes"
+    },
+    {
+      "source": "service:autoCloseScheduler",
+      "target": "table:ticket_history",
+      "kind": "writes"
+    },
+    {
+      "source": "service:backupScheduler",
+      "target": "table:backup_config",
+      "kind": "reads"
+    },
+    {
+      "source": "service:backupScheduler",
+      "target": "table:backup_config",
+      "kind": "writes"
+    },
+    {
+      "source": "service:branding",
+      "target": "table:app_settings",
+      "kind": "reads"
+    },
+    {
+      "source": "service:email",
+      "target": "table:categories",
+      "kind": "reads"
+    },
+    {
+      "source": "service:email",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "service:email",
+      "target": "table:tickets",
+      "kind": "writes"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "table:contacts",
+      "kind": "reads"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "table:contacts",
+      "kind": "writes"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "table:users",
+      "kind": "reads"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "table:ticket_comments",
+      "kind": "writes"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "table:tickets",
+      "kind": "writes"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "table:ticket_history",
+      "kind": "writes"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "table:ticket_attachments",
+      "kind": "writes"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "table:ticket_attachments",
+      "kind": "reads"
+    },
+    {
+      "source": "service:oidc",
+      "target": "table:users",
+      "kind": "reads"
+    },
+    {
+      "source": "service:oidc",
+      "target": "table:users",
+      "kind": "writes"
+    },
+    {
+      "source": "service:push",
+      "target": "table:push_subscriptions",
+      "kind": "reads"
+    },
+    {
+      "source": "service:pushScheduler",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "service:pushScheduler",
+      "target": "table:tickets",
+      "kind": "writes"
+    },
+    {
+      "source": "service:reminderScheduler",
+      "target": "table:ticket_reminders",
+      "kind": "reads"
+    },
+    {
+      "source": "service:reminderScheduler",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "service:reminderScheduler",
+      "target": "table:users",
+      "kind": "reads"
+    },
+    {
+      "source": "service:reminderScheduler",
+      "target": "table:ticket_reminders",
+      "kind": "writes"
+    },
+    {
+      "source": "service:settings",
+      "target": "table:app_settings",
+      "kind": "reads"
+    },
+    {
+      "source": "service:settings",
+      "target": "table:app_settings",
+      "kind": "writes"
+    },
+    {
+      "source": "service:shares",
+      "target": "table:ticket_shares",
+      "kind": "writes"
+    },
+    {
+      "source": "service:shares",
+      "target": "table:ticket_shares",
+      "kind": "reads"
+    },
+    {
+      "source": "service:templateValidation",
+      "target": "table:template_fields",
+      "kind": "reads"
+    },
+    {
+      "source": "service:ticketAccess",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "service:ticketNotifications",
+      "target": "table:tickets",
+      "kind": "reads"
+    },
+    {
+      "source": "service:ticketNotifications",
+      "target": "table:contacts",
+      "kind": "reads"
+    },
+    {
+      "source": "service:ticketNotifications",
+      "target": "table:users",
+      "kind": "reads"
+    },
+    {
+      "source": "service:ticketQuery",
+      "target": "table:ticket_checklists",
+      "kind": "reads"
+    },
+    {
+      "source": "service:ticketQuery",
+      "target": "table:tickets_fts",
+      "kind": "reads"
+    },
+    {
+      "source": "service:ticketQuery",
+      "target": "table:contacts",
+      "kind": "reads"
+    },
+    {
+      "source": "service:ticketQuery",
+      "target": "table:categories",
+      "kind": "reads"
+    },
+    {
+      "source": "service:ticketQuery",
+      "target": "table:ticket_comments",
+      "kind": "reads"
+    },
+    {
+      "source": "service:ticketQuery",
+      "target": "table:ticket_field_values",
+      "kind": "reads"
+    },
+    {
+      "source": "service:webhookDispatcher",
+      "target": "table:webhook_deliveries",
+      "kind": "writes"
+    },
+    {
+      "source": "service:webhookDispatcher",
+      "target": "table:webhooks",
+      "kind": "writes"
+    },
+    {
+      "source": "service:webhookDispatcher",
+      "target": "table:webhooks",
+      "kind": "reads"
+    },
+    {
+      "source": "service:webhookDispatcher",
+      "target": "table:webhook_deliveries",
+      "kind": "reads"
+    },
+    {
+      "source": "service:authMiddleware",
+      "target": "table:api_keys",
+      "kind": "reads"
+    },
+    {
+      "source": "service:authMiddleware",
+      "target": "table:users",
+      "kind": "reads"
+    },
+    {
+      "source": "service:authMiddleware",
+      "target": "table:api_keys",
+      "kind": "writes"
+    },
+    {
+      "source": "service:passport",
+      "target": "table:users",
+      "kind": "reads"
+    },
+    {
+      "source": "service:passport",
+      "target": "table:users",
+      "kind": "writes"
+    },
+    {
+      "source": "service:cleanupRefreshTokens",
+      "target": "table:refresh_tokens",
+      "kind": "reads"
+    },
+    {
+      "source": "table:users",
+      "target": "table:tickets",
+      "kind": "writes"
+    },
+    {
+      "source": "table:users",
+      "target": "table:ticket_checklists",
+      "kind": "writes"
+    },
+    {
+      "source": "table:users",
+      "target": "table:ticket_comments",
+      "kind": "writes"
+    },
+    {
+      "source": "service:email",
+      "target": "integration:smtp",
+      "kind": "calls"
+    },
+    {
+      "source": "service:emailInbound",
+      "target": "integration:imap",
+      "kind": "calls"
+    },
+    {
+      "source": "service:aiHelper",
+      "target": "integration:anthropic",
+      "kind": "calls"
+    },
+    {
+      "source": "service:push",
+      "target": "integration:webpush",
+      "kind": "calls"
+    },
+    {
+      "source": "service:oidc",
+      "target": "integration:oidc-provider",
+      "kind": "calls"
+    },
+    {
+      "source": "service:webhookDispatcher",
+      "target": "integration:webhook-target",
+      "kind": "calls"
+    },
+    {
+      "source": "service:offsiteBackup",
+      "target": "integration:rclone",
+      "kind": "calls"
+    },
+    {
+      "source": "api:api-keys",
+      "target": "route:api-keys",
+      "kind": "calls"
+    },
+    {
+      "source": "api:attachments",
+      "target": "route:attachments",
+      "kind": "calls"
+    },
+    {
+      "source": "api:auth",
+      "target": "route:auth",
+      "kind": "calls"
+    },
+    {
+      "source": "api:backup",
+      "target": "route:backup",
+      "kind": "calls"
+    },
+    {
+      "source": "api:categories",
+      "target": "route:categories",
+      "kind": "calls"
+    },
+    {
+      "source": "api:checklist-templates",
+      "target": "route:checklist-templates",
+      "kind": "calls"
+    },
+    {
+      "source": "api:checklists",
+      "target": "route:checklists",
+      "kind": "calls"
+    },
+    {
+      "source": "api:comments",
+      "target": "route:comments",
+      "kind": "calls"
+    },
+    {
+      "source": "api:companies",
+      "target": "route:companies",
+      "kind": "calls"
+    },
+    {
+      "source": "api:contacts",
+      "target": "route:contacts",
+      "kind": "calls"
+    },
+    {
+      "source": "api:csrf-token",
+      "target": "route:csrf-token",
+      "kind": "calls"
+    },
+    {
+      "source": "api:email-inbound",
+      "target": "route:email-inbound",
+      "kind": "calls"
+    },
+    {
+      "source": "api:kb",
+      "target": "route:kb",
+      "kind": "calls"
+    },
+    {
+      "source": "api:links",
+      "target": "route:links",
+      "kind": "calls"
+    },
+    {
+      "source": "api:public",
+      "target": "route:public",
+      "kind": "calls"
+    },
+    {
+      "source": "api:push",
+      "target": "route:push",
+      "kind": "calls"
+    },
+    {
+      "source": "api:reports",
+      "target": "route:reports",
+      "kind": "calls"
+    },
+    {
+      "source": "api:settings",
+      "target": "route:settings",
+      "kind": "calls"
+    },
+    {
+      "source": "api:shares",
+      "target": "route:shares",
+      "kind": "calls"
+    },
+    {
+      "source": "api:tags",
+      "target": "route:tags",
+      "kind": "calls"
+    },
+    {
+      "source": "api:templates",
+      "target": "route:templates",
+      "kind": "calls"
+    },
+    {
+      "source": "api:tickets",
+      "target": "route:tickets",
+      "kind": "calls"
+    },
+    {
+      "source": "api:users",
+      "target": "route:users",
+      "kind": "calls"
+    },
+    {
+      "source": "api:webhooks",
+      "target": "route:webhooks",
+      "kind": "calls"
+    },
+    {
+      "source": "api:client",
+      "target": "route:auth",
+      "kind": "calls"
+    },
+    {
+      "source": "api:client",
+      "target": "route:csrf-token",
+      "kind": "calls"
+    }
+  ],
+  "meta": {
+    "projectId": "it-system",
+    "title": "IT-Ticket",
+    "revision": "3e44a3b · graf 2026-09-15",
+    "domains": [
+      "Ärenden",
+      "Mallar",
+      "Kunskapsbas",
+      "Kontakter",
+      "Konto",
+      "Delning",
+      "Rapporter",
+      "Administration",
+      "Notifieringar",
+      "AI",
+      "Integrationer",
+      "Drift"
+    ],
+    "layers": [
+      {
+        "id": "frontend-page",
+        "label": "Vyer",
+        "hint": ""
+      },
+      {
+        "id": "frontend-hook",
+        "label": "Hooks & state",
+        "hint": ""
+      },
+      {
+        "id": "api-client",
+        "label": "API-klient",
+        "hint": ""
+      },
+      {
+        "id": "api-route",
+        "label": "Server-routes",
+        "hint": ""
+      },
+      {
+        "id": "scheduler",
+        "label": "Bakgrundsjobb",
+        "hint": ""
+      },
+      {
+        "id": "service",
+        "label": "Tjänster",
+        "hint": ""
+      },
+      {
+        "id": "integration",
+        "label": "Integrationer",
+        "hint": ""
+      },
+      {
+        "id": "db-table",
+        "label": "Databas",
+        "hint": ""
+      }
+    ],
+    "scope": [
+      "Källbaserad statisk importgraf, inklusive underkomponenter som komprimerats till närmaste sida/hook. Importberoenden innebär inte att alla hooks körs vid varje rendering.",
+      "Entrypoint App plus aktiva deklarerade routes. Inställningsflikar och Dashboard ingår genom imports.",
+      "Hook-lager innehåller en nod per hookfil, även filer med flera exporter.",
+      "API-klient grupperad efter första endpoint-segment. Samma src/lib/api.ts återkommer avsiktligt.",
+      "Typberoenden kan förekomma bland imports; nåbarhet ska inte ensam användas för att radera kod.",
+      "Statisk karta från aktuell källkod: HTTP-montering, importer, explicit SQL och schema/migrationer. Ingen produktionskonfiguration eller körstatus kontrollerad.",
+      "loc avser verifierad källfil och definitions-/registreringsrad. För integrationer pekar loc på SDK-import eller integrationsfunktion.",
+      "entry anger registrerat HTTP-inträde eller ovillkorligt startanrop i boot-kod, inte verifierad pågående drift. Backup, push och IMAP har villkorad aktivering och saknar entry.",
+      "Historiska tabeller för bland annat SLA, fakturor, tid och återkommande ärenden bevaras i migrationer. Inga dead-påståenden görs.",
+      "SQL-kopplingar identifierar explicita FROM/JOIN/UPDATE/INTO; dynamisk SQL kan ha ytterligare beroenden.",
+      "Granularitet: sida / hookfil / API-grupp / tjänstemodul / tabell. Enskilda UI-komponenter är sammanfattade genom sina sidor. Byggverktyg, testsystem och enskilda migrationssteg är inte egna noder.",
+      "Schemaskapande räknas som en aktiv användning. Bevarade historiska tabeller kan därför vara nåbara trots att den gamla produktfunktionen har avvecklats. Kartan är inte en uttömmande dödkodsanalys av varje symbol."
+    ]
+  }
+}

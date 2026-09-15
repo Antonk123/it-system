@@ -1,5 +1,5 @@
 import { Link } from 'react-router';
-import { Building2, ArrowRight } from 'lucide-react';
+import { Building2, ArrowRight, Network, ExternalLink } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
@@ -41,6 +41,11 @@ const Settings = () => {
               <span className="flex-1"><span className="block font-medium">Företag</span><span className="text-sm text-muted-foreground">Hantera företag och kopplingar till beställare.</span></span>
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </Link>
+            {isAdmin && <a href="/architecture-map" target="_blank" rel="noopener noreferrer" className="flex min-h-14 items-center gap-3 rounded-lg border p-4 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Network className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <span className="flex-1"><span className="block font-medium">Arkitekturkarta</span><span className="text-sm text-muted-foreground">Utforska systemets delar, beroenden och analyser. Öppnas i en ny flik.</span></span>
+              <ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" />
+            </a>}
           </TabsContent>
           <TabsContent value="tickets" className="space-y-5">
             <TicketsTab />

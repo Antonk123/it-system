@@ -35,6 +35,7 @@ import apiKeyRoutes from './routes/apiKeys.js';
 import webhookRoutes from './routes/webhooks.js';
 import emailInboundRoutes from './routes/emailInbound.js';
 import settingsRoutes from './routes/settings.js';
+import architectureMapRoutes from './routes/architectureMap.js';
 
 /**
  * Bygger Express-appen med all middleware och alla routes — men UTAN sidoeffekter
@@ -240,6 +241,7 @@ export function createApp() {
   app.use('/api/webhooks', webhookRoutes);
   app.use('/api/email-inbound', emailInboundRoutes);
   app.use('/api/settings', settingsRoutes);
+  app.use('/api/architecture-map', architectureMapRoutes);
 
   // Catch-all for unknown /api/* routes — without this, Express falls back to
   // its built-in HTML 404 page ("Cannot GET /api/xyz") instead of the API's
