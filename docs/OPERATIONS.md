@@ -1,16 +1,14 @@
 # IT-Ticket — Operations Guide
 
 Operativa rutiner för IT-Ticket-backenden: hälsokontroller, loggar, DB-underhåll,
-backup/restore, webhook-retry, IMAP-felsökning, AI-tokenövervakning, graceful
-shutdown och en kort incident-checklista.
+backup/restore, webhook-retry, IMAP-felsökning, graceful shutdown och en kort
+incident-checklista.
 
 > Närliggande dokument:
 > - `docs/RUNBOOK.md` — drifthandbok för per-kund-installationer via `setup.sh`
 >   (uppgradering; backup/restore utgår från det inbyggda systemet med manuell
 >   volym-kopiering som reserv). Den här filen täcker de
 >   **applikationsinterna** rutinerna (inbyggd scheduler, endpoints, env-styrning).
-> - `docs/AI_FEATURES.md` — AI-funktioner, modellval, token-budget och
->   circuit breaker (refereras från avsnittet om AI-tokenövervakning nedan).
 
 Alla env-varianter nedan är verifierade mot källkoden. Se `.env.example` för
 fullständig lista och defaultvärden.
@@ -78,7 +76,6 @@ Notabla larm-loggrader att vakta på:
 - `Uncaught exception` → processen avslutas med `process.exit(1)` (Docker
   `restart`-policy startar om).
 - `CORS blocked request` → en origin saknas i `CORS_ORIGIN`.
-- `AI circuit breaker: opened` / `AI API: consecutive failures` (se §7).
 
 ---
 
@@ -294,46 +291,13 @@ faller den tillbaka på första `CORS_ORIGIN` med en varning.
 
 ---
 
-## 7. AI-tokenövervakning
-
-Se `docs/AI_FEATURES.md` för fullständig dokumentation av AI-funktioner, modellval,
-månadsbudget och circuit breaker. Operativt sammandrag:
-
-- All användning loggas i tabellen `ai_usage_log` (token in/ut, modell, feature,
-  duration, ok-flagga). Rader > 90 dagar städas dagligen 03:15 (`cleanupOldAiUsage`).
-- Månadsbudget styrs av `AI_MONTHLY_TOKEN_LIMIT` (default `5000000`). När månadens
-  summa överskrids returnerar AI-funktionerna `null` (kärnflöden opåverkade) och
-  loggen visar `AI monthly token budget exceeded`.
-- Circuit breaker öppnas efter 5 konsekutiva fel (5 min cooldown) → loggen visar
-  `AI circuit breaker: opened`.
-
-```sql
--- Tokenförbrukning denna kalendermånad (samma fråga som budgetkollen kör)
-SELECT COALESCE(SUM(input_tokens + output_tokens), 0) AS total_tokens
-FROM ai_usage_log
-WHERE created_at >= strftime('%Y-%m-01T00:00:00', 'now');
-
--- Förbrukning + felandel per feature, senaste 30 dagar
-SELECT feature,
-       COUNT(*)                 AS calls,
-       SUM(ok)                  AS ok_calls,
-       SUM(input_tokens)        AS in_tokens,
-       SUM(output_tokens)       AS out_tokens,
-       ROUND(AVG(duration_ms))  AS avg_ms
-FROM ai_usage_log
-WHERE created_at >= datetime('now', '-30 days')
-GROUP BY feature;
-```
-
----
-
-## 8. Graceful shutdown
+## 7. Graceful shutdown
 
 Hanteras i `server/src/index.ts` för **både** `SIGTERM` (container stop /
 orchestrator) och `SIGINT` (Ctrl-C) via en idempotent handler:
 
 1. Stoppar e-postpolling och alla schedulers (webhook-retry, reminder, recurring,
-   auto-close, push, backup) samt inline-cron (refresh-token- och AI-usage-cleanup).
+   auto-close, push, backup) samt inline-cron (refresh-token-cleanup).
 2. `server.close()` slutar ta emot nya requests och låter pågående avslutas.
 3. `closeDatabase()` stänger SQLite rent (WAL checkpointas) i `server.close`-callbacken.
 4. **Hard exit-vakt:** om cleanup hänger tvångsavslutas processen efter
@@ -344,7 +308,7 @@ orchestrator) och `SIGINT` (Ctrl-C) via en idempotent handler:
 
 ---
 
-## 9. Incident-checklista
+## 8. Incident-checklista
 
 Snabb triage vid driftstörning:
 
@@ -363,10 +327,8 @@ Snabb triage vid driftstörning:
    återställ från senaste verifierade backup (§4).
 5. **Webhooks tysta:** kör SQL i §5 mot `webhook_deliveries`.
 6. **Mail kommer inte in:** `GET /api/email-inbound/status` + IMAP-loggar (§6).
-7. **AI tyst:** kontrollera circuit breaker/budget-loggar och `ai_usage_log` (§7);
-   AI-fel är **alltid** non-fatala (returnerar `null`) och blockerar aldrig ärendeflödet.
-8. **Behöver omstart?** Container har `restart`-policy; `SIGTERM` ger graceful
-   shutdown (§8). Vid hängande restore tvingar appen själv en omstart.
+7. **Behöver omstart?** Container har `restart`-policy; `SIGTERM` ger graceful
+   shutdown (§7). Vid hängande restore tvingar appen själv en omstart.
 9. **Återställ:** vid behov restore via `POST /api/backup/restore` (admin) —
    servern startar om automatiskt efteråt. Verifiera `/api/health` = 200.
 

@@ -33,7 +33,5 @@ export function mapTicketRow(t: TicketRow): Ticket {
     assigned_to_name: (t as any).assigned_to_name ?? null,
     company_id: (t as any).company_id ?? null,
     company_name: (t as any).company_name ?? null,
-    ai_suggested_category_id: t.ai_suggested_category_id ?? null,
-    ai_suggested_confidence: t.ai_suggested_confidence ?? null,
   } as Ticket;
 }

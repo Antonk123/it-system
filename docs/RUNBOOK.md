@@ -225,7 +225,6 @@ docker compose -f docker-compose.local.yml logs -f
 |---------|-------|---------|
 | "502 Bad Gateway" | Backend har kraschat | `docker logs it-ticketing-backend --tail 30` → `docker restart it-ticketing-backend` |
 | "CORS error" i konsolen | URL matchar inte `CORS_ORIGIN` | Uppdatera `CORS_ORIGIN` i `.env`, starta om |
-| AI-funktioner ger 503 | `ANTHROPIC_API_KEY` saknas eller ogiltig | Kontrollera `.env`, starta om backend |
 | Inloggning misslyckas | JWT_SECRET har ändrats | Användare måste logga in igen (tokens invaliderade) |
 | Databasen är korrupt | Strömbortfall under skrivning | Restore senaste backup |
 

@@ -14,17 +14,12 @@ import ExcelJS from 'exceljs';
  *  1. POST /import/preview + POST /import/confirm — admin-only (requireAdmin),
  *     multer CSV upload (preview), JSON body (confirm), DB verification.
  *  2. GET /export + GET /export-archive — XLSX download, headers, content.
- *  3. POST /:id/ai-draft + GET /:id/ai-summary — auth, the canAccessTicket()
- *     403 boundary (checked BEFORE aiEnabled(), so it's reachable without a
- *     real ANTHROPIC_API_KEY), 404 for a missing ticket, and the
- *     aiEnabled()=false gating branch for an authorized caller (no
- *     ANTHROPIC_API_KEY in test env → 503, NOT mocked).
- *  4. Reminder CRUD (POST/GET/DELETE /:id/reminders[/sent|/:reminderId]) incl.
+ *  3. Reminder CRUD (POST/GET/DELETE /:id/reminders[/sent|/:reminderId]) incl.
  *     the canAccessTicket() 403 boundary on POST/GET/DELETE .../sent for an
  *     unrelated user on an assigned ticket (unassigned tickets stay open for
  *     self-service pickup), and the ownership 403 boundary on
  *     DELETE /:id/reminders/:reminderId.
- *  5. Dashboard/aggregate smoke endpoints: dashboard-overview, activity-feed,
+ *  4. Dashboard/aggregate smoke endpoints: dashboard-overview, activity-feed,
  *     status-counts, requester-open-counts, upcoming-reminders — 401 without
  *     auth, 200 + plausible shape with auth.
  *
@@ -32,14 +27,6 @@ import ExcelJS from 'exceljs';
  * set in vi.hoisted() BEFORE any import that pulls in db/connection.ts. Login
  * is rate-limited (5/15min per IP) so each user logs in exactly ONCE and the
  * persistent agent + CSRF token is reused for every mutating request.
- *
- * IMPORTANT rate-limit note: aiRateLimiter (5 req/min per IP) is a SINGLE
- * shared bucket for BOTH /:id/ai-draft and /:id/ai-summary (one middleware
- * instance reused across both routes in tickets.ts). With `trust proxy = 1`
- * (app.ts) req.ip is taken from X-Forwarded-For, so the AI describe block
- * below gives every request a fresh IP (freshIp(), same pattern as
- * auth.test.ts/public.test.ts) instead of trying to stay under the shared
- * 5-req/min budget.
  *
  * CSRF note: the global doubleCsrfProtection middleware (app.ts) runs BEFORE
  * any route-specific auth middleware, and only guards non-GET methods. So an
@@ -59,9 +46,6 @@ const { DB_PATH } = vi.hoisted(() => {
   process.env.NODE_ENV = 'test';
   process.env.CSRF_SECRET = 'test-csrf-secret-tickets-endpoints-0123456789abcdef0123456789abcdef';
   process.env.JWT_SECRET = 'test-jwt-secret-tickets-endpoints-0123456789abcdef0123456789abcdef';
-  // Deliberately NOT setting ANTHROPIC_API_KEY — the AI-gating tests below
-  // exercise the real aiEnabled()===false branch (no client mocking).
-  delete process.env.ANTHROPIC_API_KEY;
   return { DB_PATH: dbPath };
 });
 
@@ -81,16 +65,6 @@ let bob: Session;   // non-admin "user" — used as unrelated stranger
 let adminId: string;
 let aliceId: string;
 let bobId: string;
-
-// A fresh, unique source IP per call. With `trust proxy = 1` (app.ts), req.ip
-// is taken from X-Forwarded-For, so this isolates a request from any shared
-// rate-limit bucket (used below for the aiRateLimiter-guarded AI endpoints).
-// Same pattern as auth.test.ts / public.test.ts.
-let ipCounter = 0;
-function freshIp(): string {
-  ipCounter += 1;
-  return `192.0.2.${(ipCounter % 250) + 1}`; // TEST-NET-1
-}
 
 async function login(email: string, password: string): Promise<Session> {
   const agent = request.agent(app);
@@ -516,99 +490,6 @@ describe('Dashboard / aggregate smoke endpoints — 401 without auth, 200 + shap
     const found = (res.body as { id: string; ticket_id: string }[]).find((r) => r.id === reminderId);
     expect(found).toBeDefined();
     expect(found!.ticket_id).toBe(ticketId);
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// AI endpoints — no ANTHROPIC_API_KEY is set in this test process, so
-// aiEnabled() is false for the entire suite. canAccessTicket() is now checked
-// BEFORE aiEnabled() in both handlers (server/src/routes/tickets.ts), so the
-// 403 branch is reachable without a real/fake ANTHROPIC_API_KEY or mocking
-// the Anthropic client — previously an unauthorized caller got a misleading
-// 503 (AI disabled) instead of 403 (not allowed), because aiEnabled() ran
-// first. Covers: 401 auth gate, 403 access gate (unrelated user on an
-// assigned ticket), 404 for a missing ticket, and 503 AI-disabled gate for an
-// authorized caller.
-//
-// Every request below gets its own IP via freshIp() (trust proxy = 1 in
-// app.ts honors X-Forwarded-For) so none of these assertions share — or
-// exhaust — the single 5-req/min aiRateLimiter bucket that both
-// /:id/ai-draft and /:id/ai-summary route through.
-describe('AI endpoints — auth, canAccessTicket() 403 boundary, aiEnabled()=false gate', () => {
-  let ticketId: string;
-  let assignedTicketId: string;
-
-  beforeAll(() => {
-    ticketId = seedTicket({ createdBy: adminId, title: `AI endpoint ticket ${randomUUID()}` });
-    // Assigned to admin so bob (unrelated, non-admin) hits the 403
-    // access-control branch rather than the self-service-pickup exemption
-    // that applies to unassigned tickets.
-    assignedTicketId = seedTicket({ createdBy: adminId, assignedTo: adminId, title: `AI endpoint assigned ticket ${randomUUID()}` });
-  });
-
-  it('POST /:id/ai-draft — unauthenticated → 401 or 403 (CSRF may fire first)', async () => {
-    const res = await request(app).post(`/api/tickets/${ticketId}/ai-draft`).set('X-Forwarded-For', freshIp());
-    expect([401, 403]).toContain(res.status);
-  });
-
-  it('POST /:id/ai-draft — orelaterad användare (bob) på tilldelat ärende → 403 (access-check nu FÖRE aiEnabled)', async () => {
-    const res = await bob.agent
-      .post(`/api/tickets/${assignedTicketId}/ai-draft`)
-      .set('X-Forwarded-For', freshIp())
-      .set('Authorization', `Bearer ${bob.token}`)
-      .set('x-csrf-token', bob.csrf);
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/behörighet/i);
-  });
-
-  it('POST /:id/ai-draft — okänt ärende-id → 404', async () => {
-    const res = await admin.agent
-      .post(`/api/tickets/${randomUUID()}/ai-draft`)
-      .set('X-Forwarded-For', freshIp())
-      .set('Authorization', `Bearer ${admin.token}`)
-      .set('x-csrf-token', admin.csrf);
-    expect(res.status).toBe(404);
-  });
-
-  it('POST /:id/ai-draft — authenticated + access OK, AI disabled → 503', async () => {
-    const res = await admin.agent
-      .post(`/api/tickets/${ticketId}/ai-draft`)
-      .set('X-Forwarded-For', freshIp())
-      .set('Authorization', `Bearer ${admin.token}`)
-      .set('x-csrf-token', admin.csrf);
-    expect(res.status).toBe(503);
-    expect(res.body.error).toMatch(/inte konfigurerat/i);
-  });
-
-  it('GET /:id/ai-summary — unauthenticated → 401', async () => {
-    const res = await request(app).get(`/api/tickets/${ticketId}/ai-summary`).set('X-Forwarded-For', freshIp());
-    expect(res.status).toBe(401);
-  });
-
-  it('GET /:id/ai-summary — orelaterad användare (bob) på tilldelat ärende → 403 (access-check nu FÖRE aiEnabled)', async () => {
-    const res = await bob.agent
-      .get(`/api/tickets/${assignedTicketId}/ai-summary`)
-      .set('X-Forwarded-For', freshIp())
-      .set('Authorization', `Bearer ${bob.token}`);
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/behörighet/i);
-  });
-
-  it('GET /:id/ai-summary — okänt ärende-id → 404', async () => {
-    const res = await admin.agent
-      .get(`/api/tickets/${randomUUID()}/ai-summary`)
-      .set('X-Forwarded-For', freshIp())
-      .set('Authorization', `Bearer ${admin.token}`);
-    expect(res.status).toBe(404);
-  });
-
-  it('GET /:id/ai-summary — authenticated + access OK, AI disabled → 503', async () => {
-    const res = await admin.agent
-      .get(`/api/tickets/${ticketId}/ai-summary`)
-      .set('X-Forwarded-For', freshIp())
-      .set('Authorization', `Bearer ${admin.token}`);
-    expect(res.status).toBe(503);
-    expect(res.body.error).toMatch(/inte konfigurerat/i);
   });
 });
 

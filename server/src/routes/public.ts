@@ -1,12 +1,9 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { db } from '../db/connection.js';
 import { sendTicketCreatedEmail } from '../lib/email.js';
-import { aiEnabled, suggestSolutionFromKB, findRelevantKbArticles } from '../lib/aiHelper.js';
-import { stripHtml } from '../lib/htmlUtils.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
-import { publicWriteRateLimiter, publicAiRateLimiter, createRateLimiter } from '../middleware/rateLimit.js';
-import { authenticate } from '../middleware/auth.js';
+import { publicWriteRateLimiter, createRateLimiter } from '../middleware/rateLimit.js';
 import { getBrandingInfo, getStoredLogoPath } from '../lib/branding.js';
 import { logger } from '../lib/logger.js';
 
@@ -381,148 +378,6 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
   } catch (error) {
     logger.error('Error creating public ticket:', { error: String(error) });
     res.status(500).json({ error: 'Failed to submit ticket' });
-  }
-});
-
-// ─── AI deflection — flaggskeppsfunktionen ───────────────────────────────────
-
-/**
- * POST /api/public/ai-suggest
- *
- * Kallas från publika ärendeformuläret INNAN användaren skapar ärende.
- * Söker KB via FTS, anropar AI för att försöka lösa problemet, returnerar
- * förslag + ett deflection-id som senare uppdateras med utfallet.
- *
- * Body: { problemText: string, userEmail?: string }
- * Svar: { deflectionId, hasSolution, solution, confidence, kbReferences }
- */
-router.post('/ai-suggest', publicAiRateLimiter, async (req: Request, res: Response, next: NextFunction) => {
-  const { problemText, userEmail } = req.body as { problemText?: string; userEmail?: string };
-
-  if (!problemText || typeof problemText !== 'string' || problemText.trim().length < 10) {
-    return res.status(400).json({ error: 'Beskriv problemet med minst 10 tecken.' });
-  }
-  if (problemText.length > 5000) {
-    return res.status(400).json({ error: 'Beskrivningen får vara max 5000 tecken.' });
-  }
-
-  if (!aiEnabled()) {
-    return res.status(503).json({ error: 'AI är inte konfigurerat på denna installation' });
-  }
-
-  const handle = async () => {
-    // Steg 1: Hämta alla publicerade KB-titlar, låt AI välja relevanta
-    const allArticles = db.prepare(
-      `SELECT id, title FROM kb_articles WHERE status = 'published'`
-    ).all() as { id: string; title: string }[];
-
-    const relevantIds = await findRelevantKbArticles(problemText, allArticles);
-
-    // Steg 2: Hämta fullständigt innehåll för de valda artiklarna
-    let kbHits: { id: string; title: string; content: string }[] = [];
-    if (relevantIds.length > 0) {
-      const placeholders = relevantIds.map(() => '?').join(',');
-      kbHits = db.prepare(
-        `SELECT id, title, content FROM kb_articles WHERE id IN (${placeholders}) AND status = 'published'`
-      ).all(...relevantIds) as { id: string; title: string; content: string }[];
-    }
-
-    const articlesForAI = kbHits.map(a => ({
-      title: a.title,
-      content: stripHtml(a.content),
-    }));
-
-    const suggestion = await suggestSolutionFromKB(problemText, articlesForAI);
-
-    // Logga deflection oavsett utfall — det är data värd att ha
-    const deflectionId = uuidv4();
-    db.prepare(`
-      INSERT INTO ai_deflections (id, problem_text, suggestion_text, kb_article_ids, confidence, outcome, user_email)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      deflectionId,
-      problemText.slice(0, 5000),
-      suggestion?.solution ?? null,
-      JSON.stringify(kbHits.map(a => a.id)),
-      suggestion?.confidence ?? 0,
-      suggestion?.hasSolution ? 'shown' : 'no_solution',
-      userEmail || null
-    );
-
-    res.json({
-      deflectionId,
-      hasSolution: suggestion?.hasSolution ?? false,
-      solution: suggestion?.solution ?? null,
-      confidence: suggestion?.confidence ?? 0,
-      kbReferences: kbHits.map(a => ({ id: a.id, title: a.title })),
-    });
-  };
-
-  try {
-    await handle();
-  } catch (err) {
-    logger.error('Error in ai-suggest:', { error: String(err) });
-    next(err);
-  }
-});
-
-/**
- * PATCH /api/public/ai-suggest/:id
- *
- * Uppdaterar utfallet för ett deflection-tillfälle.
- * Body: { outcome: 'solved' | 'rejected', ticketId?: string }
- *
- * 'solved'   = användaren markerade att förslaget löste problemet (DEFLECTION!)
- * 'rejected' = användaren gick vidare och skapade ärende ändå
- */
-router.patch('/ai-suggest/:id', publicWriteRateLimiter, (req: Request, res: Response) => {
-  const { outcome, ticketId } = req.body as { outcome?: string; ticketId?: string };
-  if (!outcome || !['solved', 'rejected'].includes(outcome)) {
-    return res.status(400).json({ error: 'outcome måste vara "solved" eller "rejected"' });
-  }
-  try {
-    const result = db.prepare(`
-      UPDATE ai_deflections
-      SET outcome = ?, ticket_id = ?, resolved_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(outcome, ticketId || null, req.params.id);
-
-    if (result.changes === 0) {
-      return res.status(404).json({ error: 'Deflection-id hittades inte' });
-    }
-    res.json({ ok: true });
-  } catch (err) {
-    logger.error('Error patching deflection:', { error: String(err) });
-    res.status(500).json({ error: 'Kunde inte uppdatera utfall' });
-  }
-});
-
-/**
- * GET /api/public/ai-suggest/stats
- * Returnerar deflection-stats senaste 30 dagarna. Konsumeras av Dashboard för
- * alla inloggade användare → kräver authenticate (inte publik längre, trots
- * att den ligger på public-routern). requireAdmin är fel: Dashboard är ej
- * admin-only. Ej publik widget — bara dashboard-statistik.
- */
-router.get('/ai-suggest/stats', authenticate, (_req: Request, res: Response) => {
-  try {
-    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const rows = db.prepare(`
-      SELECT outcome, COUNT(*) as n
-      FROM ai_deflections
-      WHERE created_at >= ?
-      GROUP BY outcome
-    `).all(since) as { outcome: string; n: number }[];
-
-    const stats = { shown: 0, solved: 0, rejected: 0, no_solution: 0 };
-    for (const r of rows) (stats as any)[r.outcome] = r.n;
-    const total = stats.shown + stats.solved + stats.rejected;
-    const deflectionRate = total > 0 ? Math.round((stats.solved / total) * 100) : 0;
-
-    res.json({ ...stats, total, deflectionRate });
-  } catch (err) {
-    logger.error('Error fetching deflection stats:', { error: String(err) });
-    res.status(500).json({ error: 'Kunde inte hämta stats' });
   }
 });
 

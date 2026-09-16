@@ -1,4 +1,3 @@
-import { DeflectionReportCard } from '@/components/DeflectionReportCard';
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useMode } from '@/hooks/useMode';
@@ -622,8 +621,6 @@ const Reports = () => {
                 />
               </div>
             )}
-
-            <DeflectionReportCard />
 
             {/* Status Distribution */}
             <Card className="animate-fade-in" style={{ animationDelay: '350ms' }}>

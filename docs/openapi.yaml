@@ -74,7 +74,7 @@ tags:
   - name: Knowledge base
     description: Kunskapsbas-artiklar
   - name: Public
-    description: Oautentiserad portal (deflection, publika ärenden)
+    description: Oautentiserad portal (publika ärenden)
   - name: Comments
     description: Comments on tickets
   - name: Attachments
@@ -1004,71 +1004,6 @@ paths:
                   message: { type: string }
                   ticketId: { type: string }
         "400": { $ref: "#/components/responses/Error" }
-
-  /public/ai-suggest:
-    post:
-      tags: [Public]
-      summary: Deflection — AI-svar från kunskapsbasen
-      description: Söker KB via FTS och genererar ett AI-svar. Oautentiserad.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [problemText]
-              properties:
-                problemText: { type: string }
-                userEmail: { type: string, format: email }
-      responses:
-        "200":
-          description: AI-förslag
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  deflectionId: { type: string }
-                  hasSolution: { type: boolean }
-                  solution: { type: string }
-                  confidence: { type: number }
-                  kbReferences:
-                    type: array
-                    items: { type: object }
-        "400": { $ref: "#/components/responses/Error" }
-        "503":
-          description: AI ej konfigurerad/otillgänglig
-          $ref: "#/components/responses/Error"
-
-  /public/ai-suggest/{id}:
-    parameters:
-      - { name: id, in: path, required: true, schema: { type: string } }
-    patch:
-      tags: [Public]
-      summary: Rapportera utfall av AI-förslag
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [outcome]
-              properties:
-                outcome: { type: string, enum: [solved, rejected] }
-                ticketId: { type: string }
-      responses:
-        "200":
-          description: Registrerat
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok: { type: boolean }
-        "400": { $ref: "#/components/responses/Error" }
-        "404": { $ref: "#/components/responses/NotFound" }
 
   /users:
     get:

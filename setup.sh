@@ -137,17 +137,6 @@ else
   CORS_ORIGINS="${APP_URL}"
 fi
 
-header "AI-konfiguration"
-echo -e "  AI-funktioner kräver en Anthropic API-nyckel."
-echo -e "  Hämta din nyckel på ${BOLD}https://console.anthropic.com/keys${NC}\n"
-
-read -rp "  Anthropic API-nyckel (tryck Enter för att hoppa över): " ANTHROPIC_API_KEY </dev/tty
-if [ -n "$ANTHROPIC_API_KEY" ]; then
-  ok "API-nyckel sparad — AI-funktioner aktiverade"
-else
-  warn "Ingen API-nyckel — AI-funktioner inaktiverade (kan läggas till i .env senare)"
-fi
-
 header "SMTP-konfiguration (valfritt)"
 echo -e "  Krävs för e-postnotifieringar. Tryck ${BOLD}Enter${NC} för att hoppa över.\n"
 
@@ -210,11 +199,6 @@ CSRF_SECRET=${CSRF_SECRET}
 VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=mailto:${ADMIN_EMAIL}
-
-# --- AI (Anthropic) ---
-ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-AI_MODEL=claude-haiku-4-5-20251001
-AI_MODEL_SMART=
 
 # --- E-post ---
 SMTP_HOST=${SMTP_HOST}
@@ -320,11 +304,6 @@ echo ""
 echo -e "    URL:      ${GREEN}${APP_URL}${NC}"
 echo -e "    E-post:   ${GREEN}${ADMIN_EMAIL}${NC}"
 echo -e "    Lösenord: ${GREEN}(det du angav vid installation)${NC}"
-if [ -n "$ANTHROPIC_API_KEY" ]; then
-  echo -e "    AI:       ${GREEN}Aktiverad${NC}"
-else
-  echo -e "    AI:       ${YELLOW}Inaktiverad (lägg till ANTHROPIC_API_KEY i .env)${NC}"
-fi
 echo ""
 echo -e "  ${BOLD}Hantera systemet:${NC}"
 echo "    cd ${INSTALL_DIR}"

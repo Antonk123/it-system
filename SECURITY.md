@@ -31,8 +31,7 @@ We're happy to credit reporters in the release notes if desired.
 
 **In scope:** authentication/sessions (JWT, refresh tokens), CSRF, API key
 handling, webhook signing, authorization checks (IDOR), SQL injection, XSS,
-SSRF, exposure of secrets or customer data, and the public deflection portal
-and email-to-ticket flow.
+SSRF, exposure of secrets or customer data, and the email-to-ticket flow.
 
 **Out of scope:** vulnerabilities requiring physical access to the server,
 social engineering, or issues in third-party dependencies without a

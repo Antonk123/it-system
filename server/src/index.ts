@@ -2,7 +2,6 @@ import { createApp } from './app.js';
 import { initializeDatabase, closeDatabase } from './db/connection.js';
 import { startReminderScheduler, stopReminderScheduler } from './lib/reminderScheduler.js';
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
-import { cleanupOldAiUsage } from './lib/aiHelper.js';
 import { startAutoCloseScheduler, stopAutoCloseScheduler } from './lib/autoCloseScheduler.js';
 import { startWebhookRetryScheduler, stopWebhookRetryScheduler } from './lib/webhookRetryScheduler.js';
 import { initWebPush } from './lib/push.js';
@@ -128,16 +127,6 @@ const refreshTokenCleanupTask = cron.schedule('0 3 * * *', () => {
 });
 logger.info('Refresh token cleanup scheduled (daily at 03:00)');
 
-// Daily cleanup of old AI usage logs (older than 90 days) at 03:15
-const aiUsageCleanupTask = cron.schedule('15 3 * * *', () => {
-  try {
-    cleanupOldAiUsage();
-  } catch (error) {
-    logger.error('Error during scheduled AI usage cleanup', { error: String(error) });
-  }
-});
-logger.info('AI usage log cleanup scheduled (daily at 03:15)');
-
 // Automatisk backup — schema (paus/tid/retention) styrs av backup_config-raden
 // (migration 061) och kan redigeras i admin-UI:t. Logik i lib/backupScheduler.ts.
 startBackupScheduler();
@@ -182,7 +171,6 @@ const gracefulShutdown = (signal: string) => {
 
   // Stoppa inline cron-jobb och timers definierade i denna fil
   refreshTokenCleanupTask.stop();
-  aiUsageCleanupTask.stop();
   stopBackupScheduler();
   clearInterval(unhandledRejectionResetTimer);
 

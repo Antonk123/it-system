@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, Send, AlertCircle, Loader2, ArrowLeft, Sparkles, ThumbsUp, ArrowRight, FileText } from 'lucide-react';
+import { CheckCircle, Send, AlertCircle, Loader2, ArrowLeft, FileText } from 'lucide-react';
 import { Link, Navigate } from 'react-router';
 import { api, CustomFieldInput, TemplateFieldRow } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -33,14 +33,6 @@ const PublicTicketForm = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [customFieldValues, setCustomFieldValues] = useState<CustomFieldInput[]>([]);
   const [formData, setFormData] = useState({ name: '', email: '', title: '', description: '', category: '', priority: 'medium' });
-  const [aiSuggestion, setAiSuggestion] = useState<{
-    deflectionId: string;
-    hasSolution: boolean;
-    solution: string | null;
-    kbReferences: { id: string; title: string }[];
-  } | null>(null);
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [aiSolved, setAiSolved] = useState(false);
 
   const { user, isLoading: isAuthLoading } = useAuth();
 
@@ -94,7 +86,6 @@ const PublicTicketForm = () => {
     }
   };
 
-  const descriptionText = formData.description.replace(/<[^>]*>/g, '').trim();
   const usesDynamicFields = !!(selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -126,74 +117,16 @@ const PublicTicketForm = () => {
     }
   };
 
-  const handleAiSuggest = async () => {
-    if (descriptionText.length < 20) return;
-    setIsAiLoading(true);
-    try {
-      const result = await api.requestAiSuggestion(descriptionText, formData.email || undefined);
-      setAiSuggestion(result);
-    } catch {
-      setAiSuggestion(null);
-    } finally {
-      setIsAiLoading(false);
-    }
-  };
-
-  const handleAiSolved = async () => {
-    if (aiSuggestion) {
-      await api.reportDeflectionOutcome(aiSuggestion.deflectionId, 'solved').catch(() => {});
-    }
-    setAiSolved(true);
-  };
-
-  const handleAiRejected = async () => {
-    if (aiSuggestion) {
-      await api.reportDeflectionOutcome(aiSuggestion.deflectionId, 'rejected').catch(() => {});
-    }
-    setAiSuggestion(null);
-  };
-
   const handleReset = () => {
     setFormData({ name: '', email: '', title: '', description: '', category: '', priority: 'medium' });
     setSelectedTemplate(null);
     setCustomFieldValues([]);
     setIsSuccess(false);
     setError(null);
-    setAiSuggestion(null);
   };
 
   const inputClass = "h-11 rounded-md bg-input border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring";
   const selectTriggerClass = "h-11 rounded-md bg-input border-border text-foreground focus:ring-2 focus:ring-ring";
-
-  // ── AI solved — deflection success ────────────────────────────
-  if (aiSolved) {
-    return (
-      <div className="min-h-dvh flex items-center justify-center bg-background p-4">
-        <div className="w-full max-w-md text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-md bg-success/10 border border-success/30 mb-6">
-            <ThumbsUp className="w-8 h-8 text-success" />
-          </div>
-          <h2 className="text-2xl font-semibold text-foreground mb-2">Glad att det löste sig!</h2>
-          <p className="text-muted-foreground mb-8">Inget ärende behövde skapas. Kontakta oss gärna igen om du behöver mer hjälp.</p>
-          <div className="bg-card border border-border rounded-lg p-6 flex flex-col gap-3">
-            <Button
-              onClick={() => { handleReset(); setAiSolved(false); setAiSuggestion(null); }}
-              className="w-full h-11 rounded-md font-semibold"
-            >
-              Tillbaka till formuläret
-            </Button>
-            <Link
-              to="/login"
-              className="inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Tillbaka till inloggning
-            </Link>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // ── Success state ─────────────────────────────────────────────
   if (isSuccess) {
@@ -347,83 +280,6 @@ const PublicTicketForm = () => {
                   required
                 />
                 <p className="text-xs text-muted-foreground">Ta gärna med eventuella felmeddelanden eller vad du redan provat.</p>
-              </div>
-            )}
-
-            {/* AI Deflection — suggest solution before submitting */}
-            {!aiSuggestion && descriptionText.length >= 20 && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleAiSuggest}
-                disabled={isAiLoading}
-                className="w-full h-11 rounded-md gap-2 border-[hsl(var(--ai))]/40 text-[hsl(var(--ai))] hover:bg-[hsl(var(--ai))]/5"
-              >
-                {isAiLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                {isAiLoading ? 'Söker efter lösning...' : 'Få hjälp direkt'}
-              </Button>
-            )}
-
-            {/* AI Suggestion result */}
-            {aiSuggestion && (
-              <div className="rounded-md border border-[hsl(var(--ai))]/40 bg-[hsl(var(--ai))]/5 p-5 space-y-4">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-[hsl(var(--ai))]" />
-                  <span className="text-sm font-medium text-[hsl(var(--ai))]">
-                    {aiSuggestion.hasSolution ? 'Vi hittade en möjlig lösning' : 'Ingen lösning hittades'}
-                  </span>
-                </div>
-
-                {aiSuggestion.hasSolution && aiSuggestion.solution ? (
-                  <>
-                    <div className="text-sm text-foreground whitespace-pre-wrap leading-relaxed bg-background rounded-md p-4 border border-border">
-                      {aiSuggestion.solution}
-                    </div>
-                    {aiSuggestion.kbReferences.length > 0 && (
-                      <p className="text-xs text-muted-foreground">
-                        Baserat på: {aiSuggestion.kbReferences.map(r => r.title).join(', ')}
-                      </p>
-                    )}
-                    <div className="flex gap-3">
-                      <Button
-                        type="button"
-                        onClick={handleAiSolved}
-                        className="flex-1 h-10 rounded-md gap-2 bg-success hover:bg-success/90 text-success-foreground"
-                      >
-                        <ThumbsUp className="h-4 w-4" />
-                        Det löste problemet
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleAiRejected}
-                        className="flex-1 h-10 rounded-md gap-2"
-                      >
-                        <ArrowRight className="h-4 w-4" />
-                        Behöver fortfarande hjälp
-                      </Button>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm text-muted-foreground">
-                      Vi hittade tyvärr inget i kunskapsbasen som matchar ditt problem. Beskriv det i formuläret så hjälper vi dig personligen.
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setAiSuggestion(null)}
-                      className="h-10 rounded-md gap-2"
-                    >
-                      <ArrowRight className="h-4 w-4" />
-                      Fortsätt till ärende
-                    </Button>
-                  </>
-                )}
               </div>
             )}
 

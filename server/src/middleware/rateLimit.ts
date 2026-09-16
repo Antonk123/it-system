@@ -103,12 +103,3 @@ export const publicWriteRateLimiter = createRateLimiter(
   60 * 1000,
   30
 );
-
-/**
- * Rate limiter for public AI endpoints. Each call costs a real Anthropic API
- * request, so we throttle hard: 10 per minute per IP.
- */
-export const publicAiRateLimiter = createRateLimiter(
-  60 * 1000,
-  10
-);

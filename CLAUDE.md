@@ -13,7 +13,6 @@ Inriktning: intern användning. Ingen multi-tenancy — en instans per deploymen
 | Frontend | React 19, TypeScript, Vite, react-router, Tailwind CSS, shadcn/ui, Framer Motion, TipTap, @tanstack/react-query |
 | Backend | Node.js, Express 5, TypeScript |
 | Databas | SQLite via better-sqlite3, FTS5 contentless för fulltext |
-| AI | Anthropic Claude SDK (deflection, draft, summary, kategorisering) |
 | Mail | ImapFlow + @azure/msal-node (M365 OAuth2 client credentials) |
 | Auth | JWT access tokens (15 min) + rolling refresh tokens, API-nycklar (SHA-256), CSRF (csrf-csrf), webhooks HMAC-signerade |
 | PWA | vite-plugin-pwa med Workbox |
@@ -61,7 +60,7 @@ Lokal helhet: `docker-compose.local.yml`.
 
 ### Kritiska env-vars (prod)
 
-`JWT_SECRET`, `CSRF_SECRET`, `ADMIN_PASSWORD`, `ANTHROPIC_API_KEY`, `VAPID_*`, `SMTP_*`, `IMAP_*` (host/port/user/secure/poll, samt OAuth: `IMAP_TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`).
+`JWT_SECRET`, `CSRF_SECRET`, `ADMIN_PASSWORD`, `VAPID_*`, `SMTP_*`, `IMAP_*` (host/port/user/secure/poll, samt OAuth: `IMAP_TENANT_ID`/`CLIENT_ID`/`CLIENT_SECRET`).
 
 Backend `process.exit(1)` om `CSRF_SECRET` eller `JWT_SECRET` **saknas** — ovillkorligt i alla miljöer (CSRF: `server/src/app.ts`, JWT: `server/src/config/passport.ts`; **inte** `index.ts`). Är secret satt men **kortare än 32 tecken** failar den också closed (`process.exit(1)`) — utom när `ALLOW_WEAK_SECRETS=1` **och** `NODE_ENV` ∈ `development`/`test` (dubbel-gate), då bara en varning loggas. Portainer-stack-filen är **separat** från repo-versionen — nya env-rader måste läggas till manuellt i Portainer GUI (se `Projekt/IT-System/lessons.md`).
 
@@ -118,7 +117,6 @@ Detta register laddas varje session så Claude vet vad som finns och *när* det 
 | `security-reviewer` | Diff rör auth/secrets/CSRF/JWT/API-nycklar/webhooks/HMAC, ny Express-route, raw SQL med template-literals (`SET ${...}`), `dangerouslySetInnerHTML`, eller före merge av säkerhetskänsligt arbete. |
 | `a11y-ui-reviewer` | Frontend-ändring i `src/components/**` / `src/pages/**`, dialoger/forms/tabeller/Kanban (dnd-kit), nya interaktiva element, eller före merge av en frontend-feature. |
 | `db-migration-reviewer` | Diff rör `server/src/db/migrations.ts` eller `schema.sql`, ny CREATE/ALTER/DROP-DDL, FTS5-ändring, eller "varför kördes inte min migrering". |
-| `ai-integration-reviewer` | Diff rör `server/src/lib/aiHelper.ts`, `/ai-suggest` eller andra AI-routes, `client.messages.create`, modell-fallback/`max_tokens`/prompt-bygge från ärende-/mejltext, eller AI-kostnad/modell-id. |
 | `bug-detective` | Buggrapport, oväntat beteende, UX-/prestanda-regression (befintlig). |
 | `code-reviewer` | Efter avslutat större steg, före merge mot main (befintlig). |
 

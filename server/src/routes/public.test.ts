@@ -4,26 +4,15 @@ import { existsSync, rmSync } from 'fs';
 
 /**
  * Integration tests for server/src/routes/public.ts — the ONLY unauthenticated
- * API surface in IT-Ticket (public ticket-submission form + AI deflection
- * widget). Audit finding M25: this route had 7.4% coverage and no test file.
+ * API surface in IT-Ticket (public ticket-submission form). Audit finding
+ * M25: this route had 7.4% coverage and no test file.
  *
  * Coverage:
- *  1. POST /tickets       — happy path (ticket + contact), validation, and the
+ *  1. POST /tickets — happy path (ticket + contact), validation, and the
  *     in-memory Idempotency-Key store (same key → same ticket, no duplicate row;
  *     different keys → two tickets; TTL expiry → a fresh ticket after 5 min).
- *  2. Rate limiting        — publicWriteRateLimiter (30/min) guards POST
- *     /tickets AND PATCH /ai-suggest/:id (SAME limiter instance/store — keyed
- *     only by IP, not by route); publicAiRateLimiter (10/min) guards POST
- *     /ai-suggest. Each dedicated 429 test uses its own fixed source IP so it
- *     doesn't share a bucket with any other test in this file.
- *  3. POST /ai-suggest     — validation, and the REAL no-API-key branch: this
- *     test suite never sets ANTHROPIC_API_KEY, so aiHelper's module-level
- *     `client` is null and aiEnabled() is false for the whole file (that flag
- *     is computed once at import time, not per request) → the route's
- *     `if (!aiEnabled())` branch always fires here, exactly like a real
- *     installation that hasn't configured AI.
- *  4. PATCH /ai-suggest/:id — valid/invalid outcome, unknown id → 404.
- *  5. CSRF exemption       — /api/public/* is listed in app.ts's
+ *  2. Rate limiting — publicWriteRateLimiter (30/min) guards POST /tickets.
+ *  3. CSRF exemption — /api/public/* is listed in app.ts's
  *     csrfExemptPrefixes; mutating calls with NO x-csrf-token header must
  *     still succeed (this is asserted implicitly by every test above, which
  *     never sets that header, and explicitly in its own describe block below).
@@ -41,10 +30,6 @@ const { DB_PATH } = vi.hoisted(() => {
   process.env.NODE_ENV = 'test';
   process.env.CSRF_SECRET = 'test-csrf-secret-public-0123456789abcdef0123456789abcdef';
   process.env.JWT_SECRET = 'test-jwt-secret-public-0123456789abcdef0123456789abcdef';
-  // Explicitly unset — the AI-disabled branch (aiEnabled() === false) is the
-  // real behaviour of an installation without this key configured, and is
-  // what this suite exercises for POST /ai-suggest.
-  delete process.env.ANTHROPIC_API_KEY;
   return { DB_PATH: dbPath };
 });
 
@@ -409,7 +394,7 @@ describe('POST /api/public/tickets', () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-// 5. CSRF exemption — /api/public/* invariant (app.ts csrfExemptPrefixes)
+// 3. CSRF exemption — /api/public/* invariant (app.ts csrfExemptPrefixes)
 // ───────────────────────────────────────────────────────────────────────────
 describe('CSRF exemption for /api/public/*', () => {
   it('POST /tickets succeeds with no x-csrf-token header and no CSRF cookie', async () => {
@@ -421,172 +406,5 @@ describe('CSRF exemption for /api/public/*', () => {
       .send(validTicketBody());
 
     expect(res.status).toBe(201);
-  });
-
-  it('PATCH /ai-suggest/:id succeeds with no x-csrf-token header (still 404 for an unknown id, not 403)', async () => {
-    const res = await request(app)
-      .patch(`/api/public/ai-suggest/${randomUUID()}`)
-      .set('X-Forwarded-For', freshIp())
-      .send({ outcome: 'rejected' });
-
-    // The important assertion is the ABSENCE of a CSRF rejection (403 /
-    // EBADCSRFTOKEN). 404 proves the request reached the route handler.
-    expect(res.status).toBe(404);
-  });
-});
-
-// ───────────────────────────────────────────────────────────────────────────
-// 3. POST /api/public/ai-suggest
-// ───────────────────────────────────────────────────────────────────────────
-describe('POST /api/public/ai-suggest', () => {
-  it('400 when problemText is missing', async () => {
-    const res = await request(app)
-      .post('/api/public/ai-suggest')
-      .set('X-Forwarded-For', freshIp())
-      .send({});
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/minst 10 tecken/i);
-  });
-
-  it('400 when problemText is shorter than 10 characters', async () => {
-    const res = await request(app)
-      .post('/api/public/ai-suggest')
-      .set('X-Forwarded-For', freshIp())
-      .send({ problemText: 'för kort' });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/minst 10 tecken/i);
-  });
-
-  it('400 when problemText exceeds 5000 characters', async () => {
-    const res = await request(app)
-      .post('/api/public/ai-suggest')
-      .set('X-Forwarded-For', freshIp())
-      .send({ problemText: 'x'.repeat(5001) });
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/max 5000 tecken/i);
-  });
-
-  it('503 when AI is not configured on this installation (no ANTHROPIC_API_KEY) — real aiEnabled()=false branch', async () => {
-    const before = (db.prepare('SELECT COUNT(*) as n FROM ai_deflections').get() as { n: number }).n;
-
-    const res = await request(app)
-      .post('/api/public/ai-suggest')
-      .set('X-Forwarded-For', freshIp())
-      .send({ problemText: 'Min skrivare på kontoret skriver bara ut tomma sidor sedan i morse.' });
-
-    expect(res.status).toBe(503);
-    expect(res.body.error).toMatch(/inte konfigurerat/i);
-
-    // The 503 fires before any KB lookup / DB write — confirm no deflection
-    // row was logged for this call.
-    const after = (db.prepare('SELECT COUNT(*) as n FROM ai_deflections').get() as { n: number }).n;
-    expect(after).toBe(before);
-  });
-
-  // ─── Rate limiting: publicAiRateLimiter (10/min per IP) ──────────────────
-  describe('rate limiting', () => {
-    it('allows 10 requests per IP, then 429s on the 11th', async () => {
-      const RATE_LIMIT_IP = '192.0.2.202'; // TEST-NET-1, dedicated to this test only
-      const statuses: number[] = [];
-
-      for (let i = 0; i < 11; i++) {
-        const res = await request(app)
-          .post('/api/public/ai-suggest')
-          .set('X-Forwarded-For', RATE_LIMIT_IP)
-          .send({}); // cheap 400, still consumes the budget
-        statuses.push(res.status);
-      }
-
-      expect(statuses.slice(0, 10).every((s) => s === 400)).toBe(true);
-      expect(statuses[10]).toBe(429);
-    });
-  });
-});
-
-// ───────────────────────────────────────────────────────────────────────────
-// 4. PATCH /api/public/ai-suggest/:id
-// ───────────────────────────────────────────────────────────────────────────
-describe('PATCH /api/public/ai-suggest/:id', () => {
-  it('400 when outcome is missing', async () => {
-    const res = await request(app)
-      .patch(`/api/public/ai-suggest/${randomUUID()}`)
-      .set('X-Forwarded-For', freshIp())
-      .send({});
-
-    expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/solved.*rejected|outcome/i);
-  });
-
-  it('400 when outcome has an invalid value', async () => {
-    const res = await request(app)
-      .patch(`/api/public/ai-suggest/${randomUUID()}`)
-      .set('X-Forwarded-For', freshIp())
-      .send({ outcome: 'maybe-later' });
-
-    expect(res.status).toBe(400);
-  });
-
-  it('404 when the deflection id does not exist', async () => {
-    const res = await request(app)
-      .patch(`/api/public/ai-suggest/${randomUUID()}`)
-      .set('X-Forwarded-For', freshIp())
-      .send({ outcome: 'rejected' });
-
-    expect(res.status).toBe(404);
-    expect(res.body.error).toMatch(/hittades inte/i);
-  });
-
-  it('200 updates outcome, ticket_id and resolved_at for an existing deflection row', async () => {
-    // AI is disabled in this suite, so POST /ai-suggest never inserts a row —
-    // seed one directly, mirroring what a real deflection log entry looks like.
-    const deflectionId = randomUUID();
-    db.prepare(`
-      INSERT INTO ai_deflections (id, problem_text, suggestion_text, kb_article_ids, confidence, outcome, user_email)
-      VALUES (?, ?, ?, ?, ?, 'shown', ?)
-    `).run(deflectionId, 'Skrivaren skriver ut tomma sidor.', null, null, null, 'user@publictest.local');
-
-    // Use a real ticket id — ai_deflections.ticket_id has an FK to tickets(id)
-    // and this DB runs with foreign_keys=ON.
-    const ticketRes = await request(app)
-      .post('/api/public/tickets')
-      .set('X-Forwarded-For', freshIp())
-      .send(validTicketBody());
-    expect(ticketRes.status).toBe(201);
-    const ticketId = ticketRes.body.ticketId as string;
-
-    const res = await request(app)
-      .patch(`/api/public/ai-suggest/${deflectionId}`)
-      .set('X-Forwarded-For', freshIp())
-      .send({ outcome: 'rejected', ticketId });
-
-    expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
-
-    const row = db.prepare('SELECT outcome, ticket_id, resolved_at FROM ai_deflections WHERE id = ?').get(deflectionId) as { outcome: string; ticket_id: string; resolved_at: string | null };
-    expect(row.outcome).toBe('rejected');
-    expect(row.ticket_id).toBe(ticketId);
-    expect(row.resolved_at).not.toBeNull();
-  });
-
-  // ─── Rate limiting: shares publicWriteRateLimiter with POST /tickets ─────
-  describe('rate limiting', () => {
-    it('allows 30 requests per IP, then 429s on the 31st (same limiter instance as POST /tickets)', async () => {
-      const RATE_LIMIT_IP = '192.0.2.203'; // TEST-NET-1, dedicated to this test only
-      const statuses: number[] = [];
-
-      for (let i = 0; i < 31; i++) {
-        const res = await request(app)
-          .patch(`/api/public/ai-suggest/${randomUUID()}`)
-          .set('X-Forwarded-For', RATE_LIMIT_IP)
-          .send({}); // cheap 400, still consumes the budget
-        statuses.push(res.status);
-      }
-
-      expect(statuses.slice(0, 30).every((s) => s === 400)).toBe(true);
-      expect(statuses[30]).toBe(429);
-    });
   });
 });

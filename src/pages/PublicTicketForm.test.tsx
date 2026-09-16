@@ -19,8 +19,6 @@ vi.mock('@/lib/api', () => ({
     getPublicTemplates: vi.fn().mockResolvedValue([]),
     getBranding: vi.fn().mockResolvedValue({ logoUrl: null }),
     submitPublicTicket: (...args: unknown[]) => submitPublicTicket(...args),
-    requestAiSuggestion: vi.fn(),
-    reportDeflectionOutcome: vi.fn(),
   },
 }));
 

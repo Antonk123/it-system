@@ -39,8 +39,6 @@ Authentication is resolved per-request in `server/src/middleware/auth.ts` and
 | `oidcCallbackRateLimiter` | 20 requests / 15 min / IP (429 svaras som redirect till `/login?sso_error=failed` eftersom callbacken är en browser-navigation). |
 | `writeRateLimiter` | 60 requests / min / IP. |
 | `publicWriteRateLimiter` | 30 requests / min / IP. |
-| `publicAiRateLimiter` | 10 requests / min / IP (each call hits Anthropic). |
-| `aiRateLimiter` (tickets) | 5 requests / min / IP. |
 | `sharePublicRateLimiter` | 30 requests / min / IP. |
 | `backupDownloadLimiter` | 10 requests / 15 min / IP. |
 | `restoreLimiter` | 5 requests / 15 min / IP. |
@@ -56,7 +54,7 @@ These are the only endpoints reachable without credentials:
 
 - `GET /api/health`, `GET /api/csrf-token`
 - `GET /api/public/templates`, `GET /api/public/categories`
-- `POST /api/public/tickets` (rate-limited), `POST /api/public/ai-suggest` (rate-limited), `PATCH /api/public/ai-suggest/:id` (rate-limited)
+- `POST /api/public/tickets` (rate-limited)
 - `GET /api/kb/public/:token`, `GET /api/kb/images/:filename`
 - `GET /api/kb/portal/:token/categories`, `GET /api/kb/portal/:token/articles`, `GET /api/kb/portal/:token/articles/:articleId` (rate-limited, olistad portal)
 - `GET /api/shares/public/:token`, `GET /api/shares/public/file/:token/:attachmentId` (rate-limited)
@@ -198,13 +196,11 @@ These are the only endpoints reachable without credentials:
 | GET | `/api/tickets/requester-open-counts` | `authenticate` | Non-closed ticket count per requester | — | `Record<requesterId, count>` |
 | GET | `/api/tickets/upcoming-reminders` | `authenticate` | Unsent future reminders (top 6) | — | reminder array |
 | GET | `/api/tickets/:id` | `authenticate` | Get one ticket + custom fields | params: `id` | `{ ...ticket, field_values[] }`; 404 |
-| POST | `/api/tickets` | `writeRateLimiter` → `authenticate` | Create ticket (+ custom fields, auto-priority, async AI category, email, webhook) | body: `title`(req), `description`/`customFields`(one req), + optional fields | 201 `{ ...ticket, warnings? }`; 400 |
-| POST | `/api/tickets/:id/ai-draft` | `aiRateLimiter` → `authenticate` (+ `canAccessTicket`) | AI reply draft from KB + text attachments; persists draft | params: `id` | `{ draft, kbArticlesUsed, kbTitles[], attachmentsUsed[] }`; 403/404/502/503 |
-| GET | `/api/tickets/:id/ai-summary` | `aiRateLimiter` → `authenticate` | Cached (<1h) or fresh AI ticket summary | params: `id`; query: `force=1` | `{ summary, cached, ageMinutes }` or `{ summary:null, reason }`; 404/502/503 |
+| POST | `/api/tickets` | `writeRateLimiter` → `authenticate` | Create ticket (+ custom fields, auto-priority, email, webhook) | body: `title`(req), `description`/`customFields`(one req), + optional fields | 201 `{ ...ticket, warnings? }`; 400 |
 | GET | `/api/tickets/:id/history` | `authenticate` (+ `canAccessTicket`) | Ticket change history (cap 500) | params: `id` | history-row array; 403/404 |
 | PUT | `/api/tickets/bulk` | `writeRateLimiter` → `authenticate` (+ per-ticket `canAccessTicket`) | Bulk-update status/priority/category/assignee (≤500) | body: `ids[]`, `updates{}` | `{ updated, skipped[] }`; 400 |
 | POST | `/api/tickets/bulk-delete` | `writeRateLimiter` → `authenticate` → `requireAdmin` | Permanently delete many tickets + attachment files | body: `ids[]` | `{ deleted, alreadyGone? }`; 400 |
-| PUT | `/api/tickets/:id` | `writeRateLimiter` → `authenticate` (+ `canAccessTicket`) | Update ticket fields/custom fields; logs history, email, webhooks | params: `id`; body: optional ticket fields + `customFields`, `ai_suggested_category_id` | `{ ...ticket, warnings? }`; 400/403/404 |
+| PUT | `/api/tickets/:id` | `writeRateLimiter` → `authenticate` (+ `canAccessTicket`) | Update ticket fields/custom fields; logs history, email, webhooks | params: `id`; body: optional ticket fields + `customFields` | `{ ...ticket, warnings? }`; 400/403/404 |
 | DELETE | `/api/tickets/:id` | `writeRateLimiter` → `authenticate` → `requireAdmin` | Permanently delete one ticket + attachment files | params: `id` | `{ message }`; 404 |
 | POST | `/api/tickets/:id/reminders` | `authenticate` | Create reminder | params: `id`; body: `reminder_time`(future, req), `message` | 201 reminder; 400/404 |
 | GET | `/api/tickets/:id/reminders` | `authenticate` | List reminders for a ticket | params: `id` | reminder array |
@@ -213,7 +209,7 @@ These are the only endpoints reachable without credentials:
 
 > **Design note:** Most ticket *read* endpoints (`GET /:id`, dashboard/list reads,
 > reminders) use `authenticate` only — no per-ticket `canAccessTicket`. Per-ticket
-> access is enforced on `ai-draft`, `ai-summary`, `history`, `PUT /:id`, and `PUT /bulk`.
+> access is enforced on `history`, `PUT /:id`, and `PUT /bulk`.
 > This is the intended open self-service queue model.
 
 ---
@@ -490,9 +486,6 @@ public-reply toggle); write is admin-only.
 | GET | `/api/public/templates` | public/none | Public ticket templates + fields | — | template array |
 | GET | `/api/public/categories` | public/none | Public categories for the form | — | `[{ id, label }]` |
 | POST | `/api/public/tickets` | `publicWriteRateLimiter` | Submit a public ticket (idempotency-aware) | header `idempotency-key`; body: `name`, `email`, `title`, `description?`, `category?`, `priority?`, `customFields?`, `template_id?` | 201 `{ message, ticketId }`; 400 |
-| POST | `/api/public/ai-suggest` | `publicAiRateLimiter` | AI deflection: KB search + AI solution before ticket creation | body: `problemText`(10–5000 chars), `userEmail?` | `{ deflectionId, hasSolution, solution, confidence, kbReferences }`; 400/503 |
-| PATCH | `/api/public/ai-suggest/:id` | `publicWriteRateLimiter` | Update deflection outcome | params: `id`; body: `outcome`(`solved`\|`rejected`), `ticketId?` | `{ ok }`; 400/404 |
-| GET | `/api/public/ai-suggest/stats` | `authenticate` | Deflection stats (last 30 days) — **requires auth despite path** | — | `{ shown, solved, rejected, no_solution, total, deflectionRate }` |
 
 ---
 

@@ -567,29 +567,6 @@ class ApiClient {
     return this.request<TicketHistoryItem[]>(`/tickets/${id}/history`);
   }
 
-  async generateAiDraft(ticketId: string) {
-    return this.request<{ draft: string; kbArticlesUsed: number; kbTitles: string[]; attachmentsUsed?: string[] }>(
-      `/tickets/${ticketId}/ai-draft`,
-      { method: 'POST' }
-    );
-  }
-
-  async getAiSummary(ticketId: string, force = false) {
-    return this.request<{
-      summary: { status: string; blockers: string; lastAction: string } | null;
-      cached?: boolean;
-      ageMinutes?: number;
-      reason?: string;
-    }>(`/tickets/${ticketId}/ai-summary${force ? '?force=1' : ''}`);
-  }
-
-  async dismissAiCategorySuggestion(ticketId: string) {
-    return this.request<TicketRow>(`/tickets/${ticketId}`, {
-      method: 'PUT',
-      body: { ai_suggested_category_id: null },
-    });
-  }
-
   // Ticket Comments
   async getComments(ticketId: string) {
     return this.request(`/comments/ticket/${ticketId}`);
@@ -1278,26 +1255,6 @@ class ApiClient {
     });
   }
 
-  async requestAiSuggestion(problemText: string, userEmail?: string) {
-    return this.request<{
-      deflectionId: string;
-      hasSolution: boolean;
-      solution: string | null;
-      confidence: number;
-      kbReferences: { id: string; title: string }[];
-    }>('/public/ai-suggest', {
-      method: 'POST',
-      body: { problemText, userEmail },
-    });
-  }
-
-  async reportDeflectionOutcome(deflectionId: string, outcome: 'solved' | 'rejected', ticketId?: string) {
-    return this.request<{ ok: boolean }>(`/public/ai-suggest/${deflectionId}`, {
-      method: 'PATCH',
-      body: { outcome, ticketId },
-    });
-  }
-
   async getRequesterAnalytics(year: string, month: string) {
     const params = new URLSearchParams();
     if (year && year !== 'all') params.append('year', year);
@@ -1487,8 +1444,6 @@ export interface TicketRow {
   closed_at: string | null;
   template_id?: string | null;
   field_values?: { field_name: string; field_label: string; field_value: string }[];
-  ai_suggested_category_id?: string | null;
-  ai_suggested_confidence?: number | null;
   // Sätts på create/update-svaret när bakgrundsåtgärder (t.ex. mailutskick) gav icke-fatala varningar
   warnings?: string[];
 }

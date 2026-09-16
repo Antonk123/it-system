@@ -11,13 +11,9 @@ import { sendTicketClosedEmail, sendTicketCreatedEmail, sendTicketAssignedEmail 
 import { authenticate, requireAdmin, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { detectAutoPriority } from '../lib/automationHelper.js';
-import { writeRateLimiter, createRateLimiter } from '../middleware/rateLimit.js';
-
-const aiRateLimiter = createRateLimiter(60 * 1000, 5);
+import { writeRateLimiter } from '../middleware/rateLimit.js';
 import { dispatchWebhook } from '../lib/webhookDispatcher.js';
 import { notifyStaffOfNewTicket } from '../lib/ticketNotifications.js';
-import { aiEnabled, suggestCategory, draftReply, summarizeTicket, buildKbSearchQuery } from '../lib/aiHelper.js';
-import { stripHtml } from '../lib/htmlUtils.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
 import { logger } from '../lib/logger.js';
 import {
@@ -63,7 +59,6 @@ const TICKET_COLUMNS = [
   '(SELECT label FROM categories WHERE id = tickets.category_id) AS category_label',
   'tickets.notes', 'tickets.solution', 'tickets.template_id',
   'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at',
-  'tickets.ai_suggested_category_id', 'tickets.ai_suggested_confidence',
   'tickets.sla_response_deadline', 'tickets.sla_resolution_deadline',
   'tickets.sla_response_met', 'tickets.sla_resolution_met',
   'tickets.sla_paused_at', 'tickets.sla_paused_duration',
@@ -789,25 +784,6 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
 
     createTransaction();
 
-    // AI-kategorisering: kör non-blocking så ärendet returneras direkt.
-    // Sparas på ärendet om confidence > 0.6. Användare ser förslaget i UI:t
-    // och kan acceptera eller ignorera.
-    if (aiEnabled() && !category_id) {
-      const allCategories = db.prepare('SELECT id, label FROM categories').all() as { id: string; label: string }[];
-      suggestCategory(title, finalDescription, allCategories, id)
-        .then((suggestion) => {
-          if (suggestion && suggestion.confidence > 0.6) {
-            db.prepare(`
-              UPDATE tickets
-              SET ai_suggested_category_id = ?, ai_suggested_confidence = ?
-              WHERE id = ?
-            `).run(suggestion.categoryId, suggestion.confidence, id);
-            logger.info(`🤖 AI-kategori föreslagen för ${id}: ${suggestion.categoryId} (conf ${suggestion.confidence})`);
-          }
-        })
-        .catch((err) => logger.error('AI categorize error (non-fatal):', { error: String(err) }));
-    }
-
     const ticket = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(id) as TicketRow;
 
     const requester = ticket.requester_id
@@ -841,188 +817,6 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
   } catch (error) {
     logger.error('Error creating ticket:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create ticket' });
-  }
-});
-
-// ─── AI-endpoints ─────────────────────────────────────────────────────────────
-
-/**
- * POST /api/tickets/:id/ai-draft
- * Genererar ett utkast på svar baserat på ärendets innehåll + relevanta KB-artiklar.
- * KB-artiklar väljs via FTS-sökning på titel + beskrivning.
- * Sparar utkastet i ai_draft_response så det kan visas i UI:t.
- */
-router.post('/:id/ai-draft', aiRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const ticket = db.prepare(`
-      SELECT id, title, description FROM tickets WHERE id = ?
-    `).get(req.params.id) as { id: string; title: string; description: string } | undefined;
-    if (!ticket) return res.status(404).json({ error: 'Ärendet hittades inte' });
-
-    // Behörighetskontroll: bara ägare/admin/tilldeln får generera utkast. Måste
-    // köras FÖRE aiEnabled() — annars får en obehörig användare 503 istället
-    // för 403, och 403-grenen blir otestbar utan en riktig API-nyckel.
-    if (!canAccessTicket(req, req.params.id)) {
-      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
-    }
-
-    if (!aiEnabled()) {
-      return res.status(503).json({ error: 'AI är inte konfigurerat på denna installation (ANTHROPIC_API_KEY saknas)' });
-    }
-
-    const queryText = buildKbSearchQuery(`${ticket.title} ${ticket.description.slice(0, 200)}`);
-
-    let kbArticles: { title: string; content: string }[] = [];
-    if (queryText) {
-      try {
-        kbArticles = db.prepare(`
-          SELECT a.title, a.content
-          FROM kb_articles_fts fts
-          JOIN kb_articles a ON a.rowid = fts.rowid
-          WHERE kb_articles_fts MATCH ? AND a.status = 'published'
-          ORDER BY rank
-          LIMIT 5
-        `).all(queryText) as { title: string; content: string }[];
-        // Strippa HTML från innehåll innan vi skickar till LLM
-        kbArticles = kbArticles.map(a => ({ title: a.title, content: stripHtml(a.content) }));
-      } catch (err) {
-        // FTS-sökning kan kasta om tokenizering misslyckas — gå vidare utan KB
-        logger.warn('KB FTS search failed, continuing without KB context:', { error: String(err) });
-      }
-    }
-
-    const TEXT_MIME_TYPES = ['text/plain', 'text/csv', 'message/rfc822', 'application/json'];
-    const MAX_ATTACHMENT_CHARS = 5000;
-    const MAX_ATTACHMENTS = 3;
-
-    const attachmentRows = db.prepare(`
-      SELECT file_name, file_path, file_type FROM ticket_attachments
-      WHERE ticket_id = ? AND file_type IN (${TEXT_MIME_TYPES.map(() => '?').join(',')})
-      ORDER BY created_at DESC LIMIT ?
-    `).all(ticket.id, ...TEXT_MIME_TYPES, MAX_ATTACHMENTS) as { file_name: string; file_path: string; file_type: string }[];
-
-    const attachmentContents: { file_name: string; content: string }[] = [];
-    for (const att of attachmentRows) {
-      const filePath = join(UPLOAD_DIR, att.file_path);
-      if (existsSync(filePath)) {
-        try {
-          const raw = readFileSync(filePath, 'utf-8');
-          attachmentContents.push({
-            file_name: att.file_name,
-            content: raw.slice(0, MAX_ATTACHMENT_CHARS),
-          });
-        } catch {
-          // Skippa filer som inte kan läsas
-        }
-      }
-    }
-
-    const draft = await draftReply(
-      { title: ticket.title, description: ticket.description },
-      kbArticles,
-      ticket.id,
-      attachmentContents
-    );
-
-    if (!draft) {
-      return res.status(502).json({ error: 'AI kunde inte generera ett utkast just nu. Försök igen.' });
-    }
-
-    db.prepare(`
-      UPDATE tickets SET ai_draft_response = ?, ai_draft_updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(draft, ticket.id);
-
-    res.json({
-      draft,
-      kbArticlesUsed: kbArticles.length,
-      kbTitles: kbArticles.map(a => a.title),
-      attachmentsUsed: attachmentContents.map(a => a.file_name),
-    });
-  } catch (error) {
-    logger.error('Error generating AI draft:', { error: String(error) });
-    res.status(500).json({ error: 'Kunde inte generera AI-utkast' });
-  }
-});
-
-/**
- * GET /api/tickets/:id/ai-summary
- * Returnerar en cachad sammanfattning av ärendet om < 1h gammal, annars genererar ny.
- * Använd query-param ?force=1 för att tvinga ny sammanfattning.
- */
-router.get('/:id/ai-summary', aiRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
-  try {
-    const force = req.query.force === '1';
-    const ticket = db.prepare(`
-      SELECT id, title, description, ai_summary_json, ai_summary_updated_at
-      FROM tickets WHERE id = ?
-    `).get(req.params.id) as {
-      id: string; title: string; description: string;
-      ai_summary_json: string | null; ai_summary_updated_at: string | null;
-    } | undefined;
-    if (!ticket) return res.status(404).json({ error: 'Ärendet hittades inte' });
-
-    // Behörighetskontroll: bara ägare/admin/tilldeln får se AI-sammanfattningen.
-    // Måste köras FÖRE aiEnabled() — annars får en obehörig användare 503
-    // istället för 403, och 403-grenen blir otestbar utan en riktig API-nyckel.
-    if (!canAccessTicket(req, req.params.id)) {
-      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
-    }
-
-    if (!aiEnabled()) {
-      return res.status(503).json({ error: 'AI är inte konfigurerat på denna installation' });
-    }
-
-    // Cache-check: max 1 timme gammal.
-    // ai_summary_updated_at är SQLite CURRENT_TIMESTAMP = UTC "YYYY-MM-DD HH:MM:SS"
-    // (mellanslag, ingen Z). V8 tolkar det mellanslags-formatet som LOKAL tid, så i
-    // prod-TZ (Europe/Stockholm) blev en färsk cache direkt 1-2h "gammal" → cachen
-    // träffades aldrig och varje vy rebillade ett Claude-anrop. Tolka som UTC.
-    if (!force && ticket.ai_summary_json && ticket.ai_summary_updated_at) {
-      const updatedAtMs = new Date(ticket.ai_summary_updated_at.replace(' ', 'T') + 'Z').getTime();
-      const ageMs = Date.now() - updatedAtMs;
-      if (ageMs < 60 * 60 * 1000) {
-        try {
-          return res.json({ summary: JSON.parse(ticket.ai_summary_json), cached: true, ageMinutes: Math.round(ageMs / 60000) });
-        } catch {
-          // Trasig cache — fall genom till regenerering
-        }
-      }
-    }
-
-    // Hämta senaste 20 kommentarerna med författarnamn
-    const comments = db.prepare(`
-      SELECT COALESCE(c.email_from_name, u.display_name, u.email, 'System') as author, c.content, c.created_at
-      FROM ticket_comments c
-      LEFT JOIN users u ON c.user_id = u.id
-      WHERE c.ticket_id = ? AND c.deleted_at IS NULL
-      ORDER BY c.created_at ASC
-      LIMIT 50
-    `).all(ticket.id) as { author: string; content: string; created_at: string }[];
-
-    if (comments.length < 3) {
-      return res.json({ summary: null, reason: 'Ärendet har för få kommentarer för att sammanfatta (< 3).' });
-    }
-
-    const summary = await summarizeTicket(
-      { title: ticket.title, description: ticket.description },
-      comments,
-      ticket.id
-    );
-
-    if (!summary) {
-      return res.status(502).json({ error: 'AI kunde inte generera sammanfattning' });
-    }
-
-    db.prepare(`
-      UPDATE tickets SET ai_summary_json = ?, ai_summary_updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(JSON.stringify(summary), ticket.id);
-
-    res.json({ summary, cached: false, ageMinutes: 0 });
-  } catch (error) {
-    logger.error('Error generating AI summary:', { error: String(error) });
-    res.status(500).json({ error: 'Kunde inte generera AI-sammanfattning' });
   }
 });
 
@@ -1287,7 +1081,7 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: 
 
 // Update ticket
 router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
-  let { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id, ai_suggested_category_id } = req.body;
+  let { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id } = req.body;
 
   if (status !== undefined && !VALID_STATUSES.includes(status)) {
     return res.status(400).json({ error: 'Invalid status value' });
@@ -1371,7 +1165,6 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
     if (notes !== undefined) updates.notes = notes || null;
     if (solution !== undefined) updates.solution = solution || null;
     if (template_id !== undefined) updates.template_id = template_id || null;
-    if (ai_suggested_category_id !== undefined) updates.ai_suggested_category_id = ai_suggested_category_id || null;
 
     // Always set updated_at when any field changes
     if (Object.keys(updates).length > 0) {
@@ -1391,7 +1184,6 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
       'title', 'description', 'status', 'priority', 'category_id',
       'requester_id', 'company_id', 'assigned_to',
       'notes', 'solution', 'resolved_at', 'closed_at', 'updated_at', 'template_id',
-      'ai_suggested_category_id',
     ];
 
     // Filter updates to only include whitelisted fields

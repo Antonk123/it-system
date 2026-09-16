@@ -2,10 +2,9 @@ import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams, Link, useLocation } from 'react-router';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Loader2, ListChecks, Plus, Camera, Sparkles, RefreshCw, Check, X, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Loader2, ListChecks, Plus, Camera, MoreVertical } from 'lucide-react';
 import { ticketKeys } from '@/hooks/useTickets';
 import { useTicketMutations } from '@/hooks/useTicketMutations';
-import { useCategories } from '@/hooks/useCategories';
 import { useUsers } from '@/hooks/useUsers';
 import { useTicketAttachments } from '@/hooks/useTicketAttachments';
 import { useTicketChecklists, ChecklistItem } from '@/hooks/useTicketChecklists';
@@ -128,7 +127,6 @@ const TicketDetail = () => {
     enabled: Boolean(id),
     staleTime: 1000 * 60 * 2,
   });
-  const { getCategoryLabel } = useCategories();
   const { getUserById } = useUsers();
   const { attachments, fetchAttachments } = useTicketAttachments();
   const { items: checklistItems, fetchChecklists, addChecklistItem, updateChecklistItem, deleteChecklistItem, setItems: setChecklistItems } = useTicketChecklists();
@@ -169,14 +167,6 @@ const TicketDetail = () => {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [pendingTemplateItems, setPendingTemplateItems] = useState<ChecklistItem[]>([]);
-  const [aiCategoryDismissed, setAiCategoryDismissed] = useState(false);
-  const [aiSummary, setAiSummary] = useState<{ status: string; blockers: string; lastAction: string } | null>(null);
-  const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
-  const [aiDraft, setAiDraft] = useState<string | null>(null);
-  const [aiDraftKbTitles, setAiDraftKbTitles] = useState<string[]>([]);
-  const [aiDraftAttachments, setAiDraftAttachments] = useState<string[]>([]);
-  const [isGeneratingDraft, setIsGeneratingDraft] = useState(false);
-
   const hasVisibleContent = (html: string | null | undefined): boolean => {
     if (!html) return false;
     return html.replace(/<[^>]*>/g, '').trim().length > 0;
@@ -233,69 +223,6 @@ const TicketDetail = () => {
       fetchChecklistTemplates();
     }
   }, [checklistVisible, fetchChecklistTemplates]);
-
-  // Fetch AI summary for tickets with enough comments
-  useEffect(() => {
-    if (!id || comments.length < 5) return;
-    let mounted = true;
-    setAiSummaryLoading(true);
-    api.getAiSummary(id).then((result) => {
-      if (!mounted) return;
-      if (result.summary) setAiSummary(result.summary);
-    }).catch(() => {}).finally(() => { if (mounted) setAiSummaryLoading(false); });
-    return () => { mounted = false; };
-  }, [id, comments.length]);
-
-  const handleRefreshAiSummary = () => {
-    if (!id) return;
-    setAiSummaryLoading(true);
-    api.getAiSummary(id, true).then((result) => {
-      if (result.summary) setAiSummary(result.summary);
-    }).catch(() => {
-      toast.error('Kunde inte uppdatera AI-sammanfattning');
-    }).finally(() => setAiSummaryLoading(false));
-  };
-
-  const handleAcceptAiCategory = async () => {
-    if (!ticket?.ai_suggested_category_id) return;
-    try {
-      await updateTicket(ticket.id, { category: ticket.ai_suggested_category_id });
-      toast.success('Kategori accepterad');
-    } catch { /* useTickets onError already shows an error toast + rolls back */ }
-  };
-
-  const handleDismissAiCategory = () => {
-    if (!ticket) return;
-    setAiCategoryDismissed(true);
-    api.dismissAiCategorySuggestion(ticket.id).catch(() => {});
-  };
-
-  const handleGenerateAiDraft = async () => {
-    if (!id) return;
-    setIsGeneratingDraft(true);
-    try {
-      const result = await api.generateAiDraft(id);
-      setAiDraft(result.draft);
-      setAiDraftKbTitles(result.kbTitles || []);
-      setAiDraftAttachments(result.attachmentsUsed || []);
-    } catch {
-      toast.error('Kunde inte generera AI-utkast');
-    } finally {
-      setIsGeneratingDraft(false);
-    }
-  };
-
-  const handleUseDraftAsSolution = async () => {
-    if (!ticket || !aiDraft) return;
-    try {
-      await updateTicket(ticket.id, { solution: aiDraft });
-      // Only clear the draft + confirm once the save actually succeeded.
-      setAiDraft(null);
-      setAiDraftKbTitles([]);
-      setAiDraftAttachments([]);
-      toast.success('Lösning sparad');
-    } catch { /* useTickets onError already shows an error toast + rolls back */ }
-  };
 
   // Track recently viewed tickets
   useEffect(() => {
@@ -678,52 +605,6 @@ const TicketDetail = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* AI Category Suggestion Banner */}
-            {ticket.ai_suggested_category_id && !ticket.category && !aiCategoryDismissed && (
-              <div className="flex items-center gap-3 p-3 rounded-lg border border-[hsl(var(--ai))]/30 bg-[hsl(var(--ai))]/5">
-                <Sparkles className="w-4 h-4 text-[hsl(var(--ai))] shrink-0" />
-                <p className="text-sm flex-1">
-                  AI föreslår: <span className="font-medium">{getCategoryLabel(ticket.ai_suggested_category_id)}</span>
-                  {ticket.ai_suggested_confidence && (
-                    <span className="text-muted-foreground ml-1">
-                      ({Math.round(ticket.ai_suggested_confidence * 100)}% säker)
-                    </span>
-                  )}
-                </p>
-                <Button variant="ghost" size="sm" className="gap-1 text-xs min-h-[44px]" onClick={handleAcceptAiCategory}>
-                  <Check className="w-3 h-3" /> Acceptera
-                </Button>
-                <Button variant="ghost" size="sm" className="gap-1 text-xs min-h-[44px] text-muted-foreground" onClick={handleDismissAiCategory}>
-                  <X className="w-3 h-3" /> Ignorera
-                </Button>
-              </div>
-            )}
-
-            {/* AI Summary Box */}
-            {aiSummary && (
-              <div className="rounded-lg border border-[hsl(var(--ai))]/20 bg-[hsl(var(--ai))]/5 p-4 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-[hsl(var(--ai))] flex items-center gap-1.5">
-                    <Sparkles className="w-3 h-3" />
-                    AI-sammanfattning
-                  </span>
-                  <button
-                    onClick={handleRefreshAiSummary}
-                    disabled={aiSummaryLoading}
-                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${aiSummaryLoading ? 'animate-spin' : ''}`} />
-                    Uppdatera
-                  </button>
-                </div>
-                <div className="grid gap-1.5 text-sm">
-                  <p><span className="text-muted-foreground">Status:</span> {aiSummary.status}</p>
-                  <p><span className="text-muted-foreground">Blockerare:</span> {aiSummary.blockers}</p>
-                  <p><span className="text-muted-foreground">Senaste:</span> {aiSummary.lastAction}</p>
-                </div>
-              </div>
-            )}
-
             {/* Quick Status Change */}
             <div className="space-y-4 p-4 bg-card border border-border rounded-lg">
               <div className="flex items-center gap-4">
@@ -915,7 +796,7 @@ const TicketDetail = () => {
               )}
             </div>
 
-            {/* Solution + AI Draft */}
+            {/* Solution */}
             <div className="pt-4 border-t">
               {hasVisibleContent(ticket.solution) ? (
                 <div>
@@ -929,68 +810,11 @@ const TicketDetail = () => {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Lightbulb className="w-4 h-4 text-muted-foreground" />
-                      <h2 className="font-medium text-foreground">Lösning</h2>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleGenerateAiDraft}
-                      disabled={isGeneratingDraft}
-                      className="gap-1.5 text-xs"
-                      aria-label="Föreslå svar med AI"
-                    >
-                      {isGeneratingDraft ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Sparkles className="w-3.5 h-3.5" />
-                      )}
-                      Föreslå svar (AI)
-                    </Button>
+                  <div className="flex items-center gap-2">
+                    <Lightbulb className="w-4 h-4 text-muted-foreground" />
+                    <h2 className="font-medium text-foreground">Lösning</h2>
                   </div>
-                  {aiDraft && (
-                    <div className="rounded-lg border border-[hsl(var(--ai))]/30 bg-[hsl(var(--ai))]/5 p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-medium text-[hsl(var(--ai))] flex items-center gap-1.5">
-                          <Sparkles className="w-3 h-3" />
-                          AI-utkast — granska innan du sparar
-                        </span>
-                        <button onClick={() => { setAiDraft(null); setAiDraftKbTitles([]); }} className="text-muted-foreground hover:text-foreground">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                      <textarea
-                        value={aiDraft}
-                        onChange={(e) => setAiDraft(e.target.value)}
-                        aria-label="AI-genererat förslag på svar"
-                        className="w-full min-h-[120px] bg-background/50 border border-border rounded-md p-3 text-sm resize-y focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-                      />
-                      {(aiDraftKbTitles.length > 0 || aiDraftAttachments.length > 0) && (
-                        <p className="flex flex-wrap items-center gap-x-1 text-xs text-muted-foreground">
-                          Baserat på:{' '}
-                          {aiDraftKbTitles.join(', ')}
-                          {aiDraftKbTitles.length > 0 && aiDraftAttachments.length > 0 && ', '}
-                          {aiDraftAttachments.map((a, i) => (
-                            <span key={a} className="inline-flex items-center gap-0.5">
-                              {i > 0 && ', '}
-                              <Paperclip className="w-3 h-3" aria-hidden="true" />
-                              {a}
-                            </span>
-                          ))}
-                        </p>
-                      )}
-                      <div className="flex justify-end">
-                        <Button size="sm" onClick={handleUseDraftAsSolution} className="gap-1.5">
-                          Spara som lösning
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-                  {!aiDraft && (
-                    <p className="text-xs text-muted-foreground">Ingen lösning registrerad ännu.</p>
-                  )}
+                  <p className="text-xs text-muted-foreground">Ingen lösning registrerad ännu.</p>
                 </div>
               )}
             </div>
