@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An internal IT ticket system for single-user use. Tickets are submitted, tracked, and resolved through a web interface. A knowledge base stores how-to guides and ticket solutions, with full-text search, article type classification, and two-way ticket links — searchable and linkable directly from ticket detail. Reports provide focused analytics over the full ticket dataset including time spent per category. An archive gives period-based visibility into closed work with full filter parity. Recurring tickets auto-create on schedule. Time tracking logs duration per ticket with Reports analytics. The dashboard surfaces aging tickets, today's activity, upcoming reminders, and user-defined queue cards. A Cmd+K command palette provides instant search across tickets and KB articles with navigation and quick actions. PWA push notifications alert on due reminders and aging tickets. Database backup is downloadable as a ZIP from Settings. The UI supports light/dark mode across multiple themes, is fully responsive on mobile with bottom tab navigation, and uses skeleton loading states and Framer Motion animations throughout.
+An internal IT support ticketing system for Prefabmästarna, used by a single support team (no multi-tenancy, one instance per deployment). Tickets are submitted (via authenticated UI or an unauthenticated public form, now also created automatically from inbound email over IMAP/M365 OAuth2), tracked through Kanban/list views, and resolved with the help of a knowledge base (full-text search, article type classification, cross-references) and Claude-powered AI assists (KB-based deflection before a ticket is even created, category suggestion, draft replies, ticket summaries). Reports provide analytics over the full ticket dataset; an archive gives period-based visibility into closed work. The dashboard surfaces aging tickets, today's activity, upcoming reminders, and user-defined queue cards, with a Cmd+K command palette for instant search. Auth supports both local JWT+refresh-token login and Microsoft 365 single sign-on (OIDC, single-tenant locked), plus API keys and HMAC-signed webhooks for integrations. An admin-only architecture map gives a visual, searchable view of the system's own routes and data flow, shared with the sibling Document Hub project; the app can also be embedded inside Prefabnavet (Document Hub) via a postMessage bridge. SLA tracking, per-customer billing, and time tracking were built for a planned multi-customer model, then deliberately removed (2026-09-08) when the product direction was confirmed as single-team internal support — those features, plus recurring ticket templates and the quick-capture FAB, no longer exist in the codebase. The UI supports light/dark mode across multiple themes, is fully responsive on mobile with bottom tab navigation, and uses skeleton loading states and Framer Motion animations throughout.
 
 ## Core Value
 
@@ -75,43 +75,72 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 - ✓ PWA push notifications for reminders and aging tickets via VAPID — v1.5
 - ✓ Push notification Settings UI toggle with permission-on-action — v1.5
 
+— post-v1.5 (2026-04 to 2026-09, no milestone tags tracked)
+
+- ✓ AI integration via Anthropic SDK: KB-based deflection on the public portal before ticket creation, category suggestion, draft replies, ticket summarization — circuit breaker + consecutive-failure tracking, per-installation `ai_usage_log` cost tracking, configurable default/smart model via env
+- ✓ Email-to-ticket: IMAP polling with OAuth2 (XOAUTH2) against Microsoft 365, auto-ticket creation, attachment handling, dead-letter for poison messages
+- ✓ Two-way email threading: customer replies become ticket comments instead of new tickets; confirmation email with auto-generated public share link on ticket creation from email
+- ✓ Two-way email toggle in Settings (`app_settings` table) to gate customer-facing sends per-installation
+- ✓ Public ticket submission form redesigned and iterated (two-step flow tried and reverted back to single page with chips); priority selection removed from the public form (staff triages priority internally)
+- ✓ OIDC-SSO for Microsoft 365: PKCE + state + nonce, single-tenant lock, account linking/unlinking by admin, Microsoft-branded login button, `returnTo` preserved through logout→login
+- ✓ API keys with selectable scope (including opt-in admin scope) and audit trail of which key performed an admin action
+- ✓ Webhooks: CRUD + event dispatcher, HMAC-signed payloads, retry scheduler
+- ✓ Companies as a first-class entity (grouping for contacts/tickets, with stats) — kept after SLA/billing removal, now used purely for org context, not billing
+- ✓ Forgot/reset password flow with anti-enumeration
+- ✓ Ticket sharing links with configurable expiry and admin revoke
+- ✓ Audit log with admin UI
+- ✓ Downloadable backup made schedulable/editable from admin UI (pause, time, retention, run-now) plus offsite backup support
+- ✓ PWA push notification for new tickets to all staff devices (iOS-safe deep link via postMessage)
+- ✓ Configurable branding: logo, sidebar icon, `BRAND_NAME` env for white-label mode
+- ✓ KB: public article links, bulk import of `.md`/`.txt`, image lightbox, ticket-to-KB creation flow
+- ✓ Admin architecture map (`/architecture-map`): interactive graph + known-issues viewer, shared implementation with Document Hub, supports `?embed=1` for hosting inside Document Hub's Navet
+- ✓ Embeddable inside Prefabnavet (Document Hub) via a dedicated postMessage bridge (`prefabnavetBridge`) and relaxed-but-scoped nginx framing
+- ✓ Exports switched from CSV to XLSX
+- ✓ Dependency modernization: React 18→19, Express 4→5, TypeScript 5→6, react-router-dom→react-router 8, zod 3→4, ESLint 9→10, Node 20→22 LTS
+- ✓ **Removed** (2026-09-08 simplification pass, after being fully built and shipped): SLA policy engine (per-company policies, breach detection, escalation), billing (rates, real invoices with sequential numbering/VAT), time tracking (`time_entries`, Reports "Tid" tab), recurring ticket templates + scheduler, quick-capture FAB, ticket tag analytics/tag cloud UI (the underlying `tags`/`ticket_tags` tables and basic tag filtering remain, but the dedicated analytics view is gone)
+- ✓ Retired the server-side dev Portainer stack (id 40) — localhost hot-reload covers the same need without an unmonitored duplicate environment
+
 ### Active
 
 (No active milestone — use `/gsd-new-milestone` to start next)
 
 ### Out of Scope
 
-- Multi-user support — single user system, no team features needed
-- OAuth / SSO — email + password is sufficient
+- Multi-user support — single-team system, no team/role permission features needed (Companies exists only as a contact-grouping entity, not a path back to multi-tenancy)
 - Mobile native app — web (PWA) is sufficient
-- Real-time collaboration — single user, not needed
+- Real-time collaboration — single-team, not needed
 - PDF download button — print dialog via `window.print()` is sufficient; avoids `@react-pdf/renderer` dependency
-- Aktivitetstidslinje — hög komplexitet, lågt värde för single-user
+- Aktivitetstidslinje — hög komplexitet, lågt värde för intern support
 - Swipe-gester — over-engineering för intern tool
-- Smart priority-förslag — AI/heuristik inte motiverat vid nuvarande volym
-- E-postintegration — kräver separat mailbox, vill inte att alla mail blir ärenden
-- SLA/deadline-hantering — inte motiverat för single-user system
+- Smart priority-förslag — AI/heuristik inte motiverat vid nuvarande volym (AI *kategori*-förslag är dock skeppat — detta gäller specifikt prioritet)
+- **SLA/deadline-hantering per kund** — byggt i sin helhet (policyer, brottsdetektion, eskalering) och sedan explicit borttaget 2026-09-08; falsklarm för ett internt-only-verktyg, inte motiverat utan riktiga multi-kund-avtal
+- **Fakturering/billing** — byggt i sin helhet (prissatser, riktiga löpnummer-fakturor med moms) och sedan explicit borttaget 2026-09-08 tillsammans med SLA, samma motivering
+- **Tidsregistrering (time tracking)** — byggt, skeppat i v1.5, sedan borttaget 2026-09-08 som del av samma avvecklingssvep
+- **Återkommande ärenden (recurring tickets)** — byggt, skeppat i v1.1, sedan borttaget 2026-09-08
+- **Snabbinmatning (Quick Capture FAB)** — byggt, skeppat i v1.3, sedan borttaget 2026-09-08 tillsammans med en KB-designjustering
+
+Borttaget från Out of Scope eftersom det sedan skeppats:
+- ~~E-postintegration~~ — skeppat: IMAP-polling + M365 OAuth2, två-vägs-trådning, auto-ärendeskapande
+- ~~OAuth / SSO~~ — skeppat: OIDC-SSO mot Microsoft 365 (single-tenant-låst), vid sidan av lokal JWT-inloggning
 
 ## Context
 
-- **Stack**: React 18 + Vite (frontend), Express 4 + SQLite via better-sqlite3 (backend), Docker deployment
-- **UI**: shadcn/Radix UI, Tailwind CSS, Framer Motion, recharts
-- **Auth**: JWT + Passport local strategy, single admin user, silent token refresh with rolling refresh tokens
-- **Deployment**: Two Docker containers (nginx frontend, Node backend) with persistent volume for DB and uploads
-- **Reports**: Focused analytics via SQL GROUP BY endpoint (`/api/reports/summary`). 4-tab layout: Overview, Trend, People, Tags.
-- **Knowledge Base**: FTS5 virtual table (`kb_articles_fts`) in contentless mode with HTML stripping. Article type field (`how-to` / `solution`). Linked Tickets reverse-lookup panel. Tags, draft/published status, staleness detection. Table of contents, article templates, "Se även" cross-references, `/` search shortcut, ticket-to-KB creation.
-- **Archive**: Closed-only view with full filter parity (UnifiedFilterBar, bulk operations, CSV export). Composite index on `(status, closed_at DESC)`.
-- **Recurring Tickets**: `recurring_templates` + `recurring_ticket_history` tables, CRUD API at `/api/recurring`, node-cron scheduler running every minute.
-- **Dashboard**: Aging tickets panel, today summary KPIs with sub-labels, upcoming reminders panel, user-defined queue cards from saved filter views with `countOnly` API.
-- **Command Palette**: Cmd+K modal with debounced search across tickets and KB articles, navigation shortcuts, quick actions (create ticket, toggle theme), recently-viewed history via localStorage.
-- **Filtering**: UnifiedFilterBar shared across tickets and archive. Collapsible on mobile. Saved filter views (`useFilterViews`). Active filter chips.
-- **Responsive**: Bottom tab bar on mobile (md:hidden), card reflow for ticket lists, single-column KB grid, Kanban hidden on mobile.
-- **Animations**: Framer Motion AnimatePresence for page transitions, staggered list reveals, skeleton-to-content crossfade, prefers-reduced-motion guard.
-- **Theming**: 4 color themes (Slate, Midnight, Graphite, Stone) with light/dark mode. FOUC-blocking script in index.html. Recharts remount on mode toggle.
-- **Time Tracking**: `time_entries` table with CRUD API at `/api/time-entries`, `parseDuration` supporting Swedish 't' notation, `TimeSummaryTab` in Reports.
-- **Backup**: `GET /api/backup` creates WAL-safe SQLite snapshot + uploads ZIP via `archiver` and `better-sqlite3 .backup()`.
-- **Push Notifications**: VAPID web push via `web-push` npm. `push_subscriptions` table, custom service worker (`src/sw.ts`) with `injectManifest` strategy. Reminder push on trigger, aging push daily at 09:00 via `pushScheduler.ts`.
-- **Shipped**: v1.0 → v1.5, 20 phases, 43 plans across 6 milestones.
+- **Stack**: React 19 + Vite + TypeScript (frontend), Express 5 + TypeScript (backend, Node 22), SQLite via better-sqlite3 with FTS5 contentless full-text search, Docker deployment (two containers: nginx frontend, Node backend)
+- **Two package.json**: root (frontend) and `server/` (backend), separate vitest suites
+- **UI**: shadcn/ui + Radix, Tailwind CSS, Framer Motion, TipTap (KB editor), @tanstack/react-query
+- **AI**: Anthropic Claude SDK — deflection (public portal pre-ticket-creation), category suggestion, draft reply, ticket summary; circuit breaker + failure tracking; per-installation cost logging in `ai_usage_log`
+- **Mail**: ImapFlow (inbound polling, XOAUTH2 against M365) + @azure/msal-node (OAuth2 client credentials), two-way threading (replies→comments), SMTP outbound gated by `app_settings.two_way_email_enabled`
+- **Auth**: JWT access tokens (15 min) + rolling refresh tokens; OIDC-SSO (Microsoft 365, single-tenant lock, PKCE+state+nonce, admin link/unlink); API keys (SHA-256, scoped incl. optional admin scope) with per-key audit attribution; CSRF via csrf-csrf; webhooks HMAC-signed with retry scheduler
+- **Deployment**: Portainer stack on a Proxmox Docker host; Portainer's stack definition is a separate copy of `docker-compose.yml` and must be updated manually in the GUI — `git pull` on the server does not sync it. The formerly-parallel dev stack (Portainer id 40) was retired 2026-09-13
+- **Reports**: SQL GROUP BY endpoints; XLSX export (replaced CSV)
+- **Knowledge Base**: FTS5 contentless, article type (`how-to`/`solution`), tags, draft/published status, staleness detection, TOC, templates, "Se även" cross-refs, bulk `.md`/`.txt` import, image lightbox, public article links, ticket-to-KB creation
+- **Companies**: entity for grouping contacts/tickets with stats (contact/open/total ticket counts) — survives the SLA/billing removal as a plain organizational grouping, `sla_disabled` column is now vestigial
+- **Removed subsystems** (built, shipped, then deliberately deleted 2026-09-08): SLA engine, billing/invoicing, time tracking, recurring ticket templates, quick-capture FAB — routes, tables (`time_entries` dropped from `schema.sql`), and frontend components no longer exist; do not assume PROJECT.md history describing them still reflects the running app
+- **Architecture Map**: admin-only viewer at `/architecture-map`, snapshot graph + known-issues JSON in `server/admin_assets/architecture-map/`, shared HTML/CSS/JS viewer with Document Hub (kept in sync via a build script in that repo), `?embed=1` for hosting inside Document Hub's Navet
+- **Prefabnavet embedding**: `src/lib/prefabnavetBridge.ts` postMessage bridge + relaxed nginx framing to allow the app to run inside an iframe in the sibling Document Hub app
+- **Branding**: configurable logo, sidebar icon, `BRAND_NAME` env for white-label deployments
+- **Two schema install paths**: prod is upgraded via ALTER migrations since Feb 2026; CI/dev/fresh installs use current `schema.sql` directly — `schema-path-parity.test.ts` enforces both stay equivalent
+- **Shipped**: v1.0 → v1.5 (20 phases, 43 plans, 6 milestones, tracked through 2026-04-06), plus ~498 untracked commits since (AI, email, OIDC-SSO, API keys/webhooks, companies, architecture map, Prefabnavet embedding, branding, and a major SLA/billing/time-tracking/recurring/quick-capture removal) — no GSD milestone tags exist for this later work
 
 ## Constraints
 
@@ -155,6 +184,18 @@ Every ticket gets tracked, resolved, and documented — nothing falls through th
 | Permission-on-action for push | Notification.requestPermission() only on explicit Settings toggle — never on page load | ✓ Good |
 | SMTP conditional guard in reminder scheduler | Push-only path works when SMTP not configured — no hard dependency | ✓ Good |
 | Expired subscription cleanup on 410/404 | Push service returns 410 for expired subs — auto-delete prevents waste | ✓ Good |
+| Build companies/SLA/billing as a multi-customer model | Explored expanding beyond single-team internal support | Reverted |
+| Remove SLA and billing entirely | Internal-only tool generated false SLA alarms; billing not needed without real customer contracts | ✓ Good |
+| Remove time tracking, recurring tickets, quick-capture FAB, tag analytics UI | Broader simplification pass once direction was confirmed as single-team internal support, not a general MSP tool | ✓ Good |
+| Keep `companies` table after removing SLA/billing | Still useful as a plain contact/ticket grouping; not worth a migration to drop it | ✓ Good |
+| OIDC-SSO for Microsoft 365, single-tenant locked | Staff already have M365 accounts; avoids managing local passwords for most logins while keeping local JWT login as fallback | ✓ Good |
+| AI via Anthropic SDK, conservative deflection | Differentiator: solve the user's problem from the KB before a ticket is even created; must say "don't know" rather than hallucinate | ✓ Good |
+| Circuit breaker + consecutive-failure tracking on AI calls | Prevents silent AI outages and cost leaks from cascading into every ticket action | ✓ Good |
+| XLSX over CSV for exports | Better fidelity for spreadsheet consumers | ✓ Good |
+| Architecture map viewer shared with Document Hub | Single implementation instead of maintaining two divergent viewers for the same concept | ✓ Good |
+| Prefabnavet embedding via postMessage bridge | Lets the ticket system live inside the internal portal (Document Hub) without merging codebases | ✓ Good |
+| Retire the server-side dev stack (Portainer id 40) | Rarely used, its backend had silently crash-looped for ~9 days, and localhost dev already covers the same need | ✓ Good |
+| Portainer stack definition kept separate from repo `docker-compose.yml` | Existing Portainer operational model — not something this milestone should try to fix | Known friction, documented |
 
 ## Evolution
 
@@ -174,4 +215,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-06 after v1.5 milestone*
+*Last updated: 2026-09-16 — reconciled against actual codebase/CLAUDE.md after ~498 untracked commits since the v1.5 milestone (2026-04-06)*
