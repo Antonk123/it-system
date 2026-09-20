@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, Send, AlertCircle, Loader2, ArrowLeft, FileText } from 'lucide-react';
-import { Link, Navigate } from 'react-router';
+import { Link, Navigate, useSearchParams } from 'react-router';
 import { api, CustomFieldInput, TemplateFieldRow } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -35,6 +35,11 @@ const PublicTicketForm = () => {
   const [formData, setFormData] = useState({ name: '', email: '', title: '', description: '', category: '', priority: 'medium' });
 
   const { user, isLoading: isAuthLoading } = useAuth();
+  // Embedded in Prefabnavet's Felanmälan view, the host already supplies the
+  // page heading and a way back, so this page drops its own chrome and viewport
+  // height. Same flag as ArchitectureMap (?embed=1).
+  const [searchParams] = useSearchParams();
+  const embedded = searchParams.get('embed') === '1';
 
   useEffect(() => {
     // Skip data fetch if we'll redirect a logged-in user — saves a wasted call.
@@ -131,7 +136,7 @@ const PublicTicketForm = () => {
   // ── Success state ─────────────────────────────────────────────
   if (isSuccess) {
     return (
-      <div className="min-h-dvh flex items-center justify-center bg-background p-4">
+      <div className={cn("flex items-center justify-center bg-background p-4", embedded ? "py-8" : "min-h-dvh")}>
         <div className="w-full max-w-md text-center">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-md bg-primary/10 border border-primary/30 mb-6">
             <CheckCircle className="w-8 h-8 text-primary" />
@@ -145,13 +150,15 @@ const PublicTicketForm = () => {
             >
               Skicka ett nytt ärende
             </Button>
-            <Link
-              to="/login"
-              className="inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Tillbaka till inloggning
-            </Link>
+            {!embedded && (
+              <Link
+                to="/login"
+                className="inline-flex items-center justify-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                Tillbaka till inloggning
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -160,19 +167,21 @@ const PublicTicketForm = () => {
 
   // ── Form ──────────────────────────────────────────────────────
   return (
-    <div className="min-h-dvh bg-background flex items-start justify-center p-4 py-10">
+    <div className={cn("bg-background flex items-start justify-center p-4", embedded ? "py-6" : "min-h-dvh py-10")}>
       <div className="w-full max-w-lg">
-        {/* Brand header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex w-14 h-14 rounded-md overflow-hidden mb-5 border border-border">
-            {/* Icke-tom alt: rubriken här är formulärets syfte ("Skicka en
-                supportförfrågan"), inte appnamnet — logotypen är enda varumärkesbäraren
-                på den här oinloggade sidan. */}
-            <BrandLogo alt="IT-Ticket" className="w-full h-full object-cover" />
+        {/* Brand header — the host page carries it when embedded */}
+        {!embedded && (
+          <div className="text-center mb-8">
+            <div className="inline-flex w-14 h-14 rounded-md overflow-hidden mb-5 border border-border">
+              {/* Icke-tom alt: rubriken här är formulärets syfte ("Skicka en
+                  supportförfrågan"), inte appnamnet — logotypen är enda varumärkesbäraren
+                  på den här oinloggade sidan. */}
+              <BrandLogo alt="IT-Ticket" className="w-full h-full object-cover" />
+            </div>
+            <h1 className="text-2xl font-semibold text-foreground tracking-tight">Skicka en supportförfrågan</h1>
+            <p className="text-sm text-muted-foreground mt-1.5">Fyll i formuläret så återkommer vi så snart som möjligt.</p>
           </div>
-          <h1 className="text-2xl font-semibold text-foreground tracking-tight">Skicka en supportförfrågan</h1>
-          <p className="text-sm text-muted-foreground mt-1.5">Fyll i formuläret så återkommer vi så snart som möjligt.</p>
-        </div>
+        )}
 
         {/* Card */}
         <div className="bg-card border border-border rounded-lg p-6 sm:p-8">
@@ -345,15 +354,17 @@ const PublicTicketForm = () => {
         </div>
 
         {/* Back link */}
-        <div className="text-center mt-6">
-          <Link
-            to="/login"
-            className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Tillbaka till inloggning
-          </Link>
-        </div>
+        {!embedded && (
+          <div className="text-center mt-6">
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Tillbaka till inloggning
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

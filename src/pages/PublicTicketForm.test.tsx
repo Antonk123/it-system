@@ -24,11 +24,11 @@ vi.mock('@/lib/api', () => ({
 
 import PublicTicketForm from './PublicTicketForm';
 
-function renderForm() {
+function renderForm(path = '/submit-ticket') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter><PublicTicketForm /></MemoryRouter>
+      <MemoryRouter initialEntries={[path]}><PublicTicketForm /></MemoryRouter>
     </QueryClientProvider>
   );
 }
@@ -80,5 +80,39 @@ describe('PublicTicketForm — en sida, inga steg', () => {
       description: 'Felkod E-04.',
       priority: 'medium',
     }));
+  });
+});
+
+
+describe('PublicTicketForm — inbäddad i Prefabnavet', () => {
+  it('behåller logotyp, rubrik och tillbaka-länk i fristående läge', () => {
+    renderForm();
+    expect(screen.getByRole('heading', { name: 'Skicka en supportförfrågan' })).toBeTruthy();
+    expect(screen.getByAltText('IT-Ticket')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Tillbaka till inloggning/ })).toBeTruthy();
+  });
+
+  it('döljer egen sidchrome med ?embed=1 men behåller hela formuläret', () => {
+    renderForm('/submit-ticket?embed=1');
+    // Värden (Navets Felanmälan-vy) har redan rubrik och navigation.
+    expect(screen.queryByRole('heading', { name: 'Skicka en supportförfrågan' })).toBeNull();
+    expect(screen.queryByAltText('IT-Ticket')).toBeNull();
+    expect(screen.queryByRole('link', { name: /Tillbaka till inloggning/ })).toBeNull();
+    expect(screen.getByLabelText('Ditt namn *')).toBeTruthy();
+    expect(screen.getByLabelText('Din e-post *')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Skicka ärende/ })).toBeTruthy();
+  });
+
+  it('visar bekräftelsen utan tillbaka-länk i inbäddat läge', async () => {
+    renderForm('/submit-ticket?embed=1');
+    fireEvent.change(screen.getByLabelText('Ditt namn *'), { target: { value: 'Anna Andersson' } });
+    fireEvent.change(screen.getByLabelText('Din e-post *'), { target: { value: 'anna@example.com' } });
+    fireEvent.change(screen.getByLabelText('Ärendets titel *'), { target: { value: 'Skrivaren fungerar inte' } });
+    fireEvent.change(screen.getByPlaceholderText('Beskriv ditt problem i detalj...'), { target: { value: 'Felkod E-04.' } });
+    fireEvent.click(screen.getByRole('button', { name: /Skicka ärende/ }));
+
+    await waitFor(() => expect(screen.getByText('Ärendet skickat!')).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Skicka ett nytt ärende' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Tillbaka till inloggning/ })).toBeNull();
   });
 });

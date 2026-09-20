@@ -5,7 +5,10 @@
 (function () {
     'use strict';
 
-    var NAVET_ORIGIN = 'https://navet.prefabmastarna.se';
+    var NAVET_ORIGINS = [
+        'https://navet.prefabmastarna.se',
+        'https://navet-dev.prefabmastarna.se'
+    ];
     var READY_MESSAGE = 'prefabnavet.appearance-ready';
     var APPEARANCE_MESSAGE = 'prefabnavet.appearance';
     var PROTOCOL_VERSION = 1;
@@ -27,6 +30,13 @@
         }
     }
 
+    // The host is whichever known Navet shell embedded this document. A missing
+    // or unknown referrer falls back to production, so the handshake is never
+    // aimed at an origin outside the fixed list.
+    var hostOrigin = NAVET_ORIGINS.indexOf(referrerOrigin()) === -1
+        ? NAVET_ORIGINS[0]
+        : referrerOrigin();
+
     function clearPending() {
         root.removeAttribute('data-prefabnavet-theme-pending');
         if (pendingTimer !== null) {
@@ -46,7 +56,7 @@
     }
 
     function handleMessage(event) {
-        if (event.origin !== NAVET_ORIGIN || event.source !== window.parent) return;
+        if (NAVET_ORIGINS.indexOf(event.origin) === -1 || event.source !== window.parent) return;
         var data = event.data;
         if (!isPlainObject(data) || !hasExactAppearanceKeys(data) ||
                 data.type !== APPEARANCE_MESSAGE ||
@@ -59,7 +69,7 @@
         clearPending();
     }
 
-    if (referrerOrigin() === NAVET_ORIGIN) {
+    if (referrerOrigin() === hostOrigin) {
         root.setAttribute('data-prefabnavet-theme-pending', 'true');
         pendingTimer = window.setTimeout(clearPending, PENDING_TIMEOUT_MS);
     }
@@ -68,5 +78,5 @@
     window.parent.postMessage({
         type: READY_MESSAGE,
         version: PROTOCOL_VERSION
-    }, NAVET_ORIGIN);
+    }, hostOrigin);
 }());
