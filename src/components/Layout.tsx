@@ -230,7 +230,7 @@ export const Layout = ({
 
       {/* Sidebar with collapsible design */}
       <aside className={cn(
-        "fixed lg:static inset-y-0 left-0 z-50 flex flex-col transition-[width,transform,background-color] duration-300 ease-in-out",
+        "prefabnavet-standalone-only fixed lg:static inset-y-0 left-0 z-50 flex flex-col transition-[width,transform,background-color] duration-300 ease-in-out",
         "bg-sidebar border-r border-sidebar-border",
         // Keep the off-canvas drawer's top/bottom content clear of the iOS
         // notch and home indicator (0 on desktop / non-notched devices).
@@ -279,7 +279,7 @@ export const Layout = ({
       {/* Main content */}
       <main id="main-content" className="flex-1 min-w-0 relative">
         {/* Mobile header */}
-        <div data-print-hide className="lg:hidden sticky top-0 z-30 bg-background border-b border-border px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] flex items-center gap-4">
+        <div data-print-hide className="prefabnavet-standalone-only lg:hidden sticky top-0 z-30 bg-background border-b border-border px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] flex items-center gap-4">
           <button
             onClick={() => setSidebarOpen(true)}
             className="p-3 -m-1 rounded-lg hover:bg-primary/10 active:bg-primary/20 transition-colors"
@@ -302,7 +302,7 @@ export const Layout = ({
         <div data-print-hide className="hidden lg:block sticky top-0 z-30 bg-background border-b border-border p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 flex-1">
-              <div className="relative w-80 shrink-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
+              <div className="prefabnavet-standalone-only relative w-80 shrink-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
                 <div className="relative flex items-center gap-2 px-4 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-primary/30 text-muted-foreground text-sm transition-colors">
                   <Search className="w-4 h-4" />
                   <span>Sök överallt...</span>
@@ -333,7 +333,7 @@ export const Layout = ({
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
 
-      <div data-print-hide>
+      <div data-print-hide className="prefabnavet-standalone-only">
         <BottomTabBar />
       </div>
 
