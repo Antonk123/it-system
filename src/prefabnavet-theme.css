@@ -633,10 +633,22 @@ html[data-prefabnavet-embedded="true"] {
   --shadow-lg: var(--pn-shadow-large);
 }
 html[data-prefabnavet-embedded="true"] .prefabnavet-standalone-only { display: none !important; }
+/* The embedded header only carries breadcrumbs; drop the empty bar on pages without any. */
+html[data-prefabnavet-embedded="true"] .prefabnavet-embed-header:not(:has(nav[aria-label="Brödsmulor"])) { display: none !important; }
 
 html[data-prefabnavet-embedded="true"] input:not([type="checkbox"]):not([type="radio"]),
 html[data-prefabnavet-embedded="true"] textarea,
 html[data-prefabnavet-embedded="true"] [role="combobox"],
 html[data-prefabnavet-embedded="true"] .border-input {
   border-color: var(--pn-control-border);
+}
+
+/* Typography and shape follow Prefabnavet when embedded (theme kit 1.2.0). The
+   fonts ship inside the package, so they load same-origin under font-src 'self'. */
+html[data-prefabnavet-embedded="true"] {
+  --font-sans: var(--pn-font-ui);
+  --font-serif: var(--pn-font-display);
+  --font-mono: var(--pn-font-mono);
+  --app-font-family: var(--pn-font-ui);
+  --radius: var(--pn-radius);
 }

@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
 const read = (file: string) => readFileSync(resolve(root, file), 'utf8');
-const packagePath = 'public/theme-kit/1.1.0';
+const packagePath = 'public/theme-kit/1.2.0';
 const bridge = read(`${packagePath}/prefabnavet-theme-bridge.js`);
 const navetOrigin = 'https://navet.prefabmastarna.se';
 const navetDevOrigin = 'https://navet-dev.prefabmastarna.se';
@@ -49,13 +49,13 @@ describe('Prefabnavet theme integration', () => {
     const manifest = JSON.parse(read(`${packagePath}/manifest.json`)) as {
       packageVersion: string; files: Record<string, { sha256: string }>;
     };
-    expect(manifest.packageVersion).toBe('1.1.0');
+    expect(manifest.packageVersion).toBe('1.2.0');
     for (const [name, { sha256 }] of Object.entries(manifest.files)) {
       expect(createHash('sha256').update(readFileSync(resolve(root, packagePath, name))).digest('hex')).toBe(sha256);
     }
     const html = read('index.html');
-    const cssIndex = html.indexOf('/theme-kit/1.1.0/prefabnavet-theme.css');
-    const bridgeIndex = html.indexOf('/theme-kit/1.1.0/prefabnavet-theme-bridge.js');
+    const cssIndex = html.indexOf('/theme-kit/1.2.0/prefabnavet-theme.css');
+    const bridgeIndex = html.indexOf('/theme-kit/1.2.0/prefabnavet-theme-bridge.js');
     expect(cssIndex).toBeGreaterThan(-1);
     expect(bridgeIndex).toBeGreaterThan(cssIndex);
     expect(html.indexOf('/src/main.tsx')).toBeGreaterThan(bridgeIndex);
@@ -83,7 +83,7 @@ describe('Prefabnavet theme integration', () => {
   });
 
   it('follows the Navet dev shell that embedded it', () => {
-    // Package 1.1.0 knows two Navet shells. The readiness message follows the
+    // Package 1.2.0 knows two Navet shells. The readiness message follows the
     // referrer, while authorization stays with the fixed list.
     const app = setup(true, `${navetDevOrigin}/chat`);
     expect(app.parent.postMessage).toHaveBeenCalledWith(

@@ -1,0 +1,37 @@
+{
+  "files": {
+    "fonts/geist-latin.woff2": {
+      "sha256": "9b6f5ff45b278c744b5f379a2c4ecbaf858a842b8eaf82ac8d21b699ca16c608"
+    },
+    "fonts/geist-mono-latin.woff2": {
+      "sha256": "5f3d6ad60f29d6cb708414ec6887163d63bf197377ef5417d2483ff31ace6c3b"
+    },
+    "fonts/newsreader-latin-italic.woff2": {
+      "sha256": "a99fb127682b9af538780d21420037452197b0d37dfd273eb108f8a3665d5501"
+    },
+    "fonts/newsreader-latin.woff2": {
+      "sha256": "01817351be3edfc1714fe6d60ddea6a22a169a5ebd033b50c7f9495e5d9c386a"
+    },
+    "prefabnavet-theme-bridge.js": {
+      "sha256": "0d0f3fb8ea5a392f2f2dd4cd6e1eb1ce6cc0b974bc3c162b6b01de758bdbf05d"
+    },
+    "prefabnavet-theme.css": {
+      "sha256": "12d386d5c5559cf181dbb292303fc58b5dfbae24e11936daf8441ca418208f04"
+    }
+  },
+  "packageVersion": "1.2.0",
+  "palettes": [
+    "bibliotek",
+    "violett",
+    "odysseus",
+    "terminal",
+    "gpt",
+    "claude"
+  ],
+  "protocolVersion": 1,
+  "sourceFingerprint": "0a67270307c7abb1655e89d1e2ac001e16bfd570b3914dae2d0ff4c0c18ae215",
+  "themes": [
+    "light",
+    "dark"
+  ]
+}

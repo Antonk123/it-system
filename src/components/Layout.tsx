@@ -299,7 +299,7 @@ export const Layout = ({
         </div>
 
         {/* Desktop header with search */}
-        <div data-print-hide className="hidden lg:block sticky top-0 z-30 bg-background border-b border-border p-4">
+        <div data-print-hide className="prefabnavet-embed-header hidden lg:block sticky top-0 z-30 bg-background border-b border-border p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 flex-1">
               <div className="prefabnavet-standalone-only relative w-80 shrink-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">

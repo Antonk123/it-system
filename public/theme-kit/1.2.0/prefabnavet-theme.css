@@ -1,5 +1,20 @@
-/* Prefabnavet Theme Kit 1.1.0 — generated; do not edit. */
+/* Prefabnavet Theme Kit 1.2.0 — generated; do not edit. */
 /* Source of truth: app/static/css/style.css */
+
+@font-face { font-family: 'Newsreader'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('fonts/newsreader-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Newsreader'; font-style: italic; font-weight: 400 700; font-display: swap; src: url('fonts/newsreader-latin-italic.woff2') format('woff2'); }
+@font-face { font-family: 'Geist'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('fonts/geist-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Geist Mono'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('fonts/geist-mono-latin.woff2') format('woff2'); }
+
+html[data-prefabnavet-embedded="true"] {
+    --pn-font-ui: 'Geist', -apple-system, BlinkMacSystemFont, sans-serif;
+    --pn-font-display: 'Newsreader', Georgia, serif;
+    --pn-font-mono: 'Geist Mono', ui-monospace, monospace;
+    --pn-radius-sm: 6px;
+    --pn-radius: 8px;
+    --pn-radius-md: 10px;
+    --pn-radius-lg: 12px;
+}
 
 html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="light"][data-prefabnavet-palette="bibliotek"] {
     --pn-bg: #f6f1e7;
