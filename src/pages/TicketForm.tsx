@@ -29,7 +29,7 @@ import { Input } from '@/components/ui/input';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Label } from '@/components/ui/label';
 import { migrateContent } from '@/lib/contentMigration';
-import { readTicketPrefill } from '@/lib/prefillFromQuery';
+import { hasDraftContent, readTicketPrefill } from '@/lib/prefillFromQuery';
 import { cn } from '@/lib/utils';
 import {
   Select,
@@ -338,8 +338,7 @@ const TicketForm = () => {
     try {
       const raw = localStorage.getItem(NEW_TICKET_DRAFT_KEY);
       if (raw) {
-        const draft = JSON.parse(raw);
-        if (draft && typeof draft === 'object' && (draft.title || draft.description || draft.requesterId || draft.notes || draft.solution)) return;
+        if (hasDraftContent(JSON.parse(raw))) return;
       }
     } catch { /* corrupt draft — treat as none */ }
     setFormData((prev) => (prev.title || prev.description ? prev : { ...prev, ...prefill }));
@@ -409,7 +408,7 @@ const TicketForm = () => {
       const raw = localStorage.getItem(NEW_TICKET_DRAFT_KEY);
       if (!raw) return;
       const draft = JSON.parse(raw);
-      if (draft && typeof draft === 'object' && (draft.title || draft.description || draft.requesterId || draft.notes || draft.solution)) {
+      if (hasDraftContent(draft)) {
         setFormData((prev) => ({ ...prev, ...draft }));
         toast.info('Återställde ditt osparade utkast');
       }
@@ -419,7 +418,7 @@ const TicketForm = () => {
   // Autosave the new-ticket draft (debounced). Edit forms have server state → skip.
   useEffect(() => {
     if (isEditing) return;
-    const hasData = formData.title || formData.description || formData.requesterId || formData.notes || formData.solution;
+    const hasData = hasDraftContent(formData);
     const t = window.setTimeout(() => {
       try {
         if (hasData) localStorage.setItem(NEW_TICKET_DRAFT_KEY, JSON.stringify(formData));

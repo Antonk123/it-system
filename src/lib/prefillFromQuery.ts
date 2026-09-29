@@ -24,3 +24,18 @@ export function readTicketPrefill(search: string): { title: string; description:
   if (!title && !description) return null;
   return { title, description };
 }
+
+const hasText = (value: unknown): boolean =>
+  typeof value === 'string' &&
+  value.replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim().length > 0;
+
+/**
+ * True when a new-ticket draft holds anything a person typed. An empty editor
+ * serializes to markup such as `<p></p>`, which is truthy but not content — it
+ * must not count, or an untouched form would restore/protect an empty "draft".
+ */
+export function hasDraftContent(draft: unknown): boolean {
+  if (!draft || typeof draft !== 'object') return false;
+  const d = draft as Record<string, unknown>;
+  return hasText(d.title) || hasText(d.description) || Boolean(d.requesterId) || hasText(d.notes) || hasText(d.solution);
+}

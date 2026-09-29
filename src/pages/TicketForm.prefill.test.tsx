@@ -51,6 +51,13 @@ describe('Förifyllning från query', () => {
     expect(screen.getByLabelText(/Titel/)).toHaveValue('Mitt utkast');
   });
 
+  it('ett tomt editor-utkast (<p></p>) blockerar inte förifyllningen', () => {
+    store.set('it-ticket:new-ticket-draft', JSON.stringify({ title: '', description: '<p></p>', priority: 'medium' }));
+    renderAt('/tickets/new?title=Fr%C3%A5n%20query&description=Hej');
+    expect(screen.getByLabelText(/Titel/)).toHaveValue('Från query');
+    expect(screen.getByTestId('editor')).toHaveAttribute('data-html', '<p>Hej</p>');
+  });
+
   it('injicerar inte HTML från query', () => {
     renderAt('/tickets/new?description=' + encodeURIComponent('<img src=x onerror=alert(1)><b>hej</b>'));
     const html = screen.getByTestId('editor').getAttribute('data-html')!;
