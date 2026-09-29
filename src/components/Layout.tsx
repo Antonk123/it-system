@@ -1,8 +1,9 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router';
-import { LayoutDashboard, Ticket, Users, Plus, Menu, X, LogOut, Settings, BarChart3, ChevronsRight, BookOpen, Sun, Moon, Search } from 'lucide-react';
+import { Plus, Menu, X, LogOut, ChevronsRight, Sun, Moon, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { isTicketSection } from '@/lib/ticketNavigation';
+import { navItems, isNavItemActive } from '@/components/navItems';
+import { EmbeddedTabs } from '@/components/EmbeddedTabs';
 import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,32 +18,6 @@ import { forwardSearchToPrefabnavet } from '@/lib/prefabnavetBridge';
 interface LayoutProps {
   children: ReactNode;
 }
-const navItems = [{
-  path: '/',
-  icon: LayoutDashboard,
-  label: 'Översikt'
-}, {
-  path: '/tickets',
-  icon: Ticket,
-  label: 'Ärenden'
-}, {
-  path: '/reports',
-  icon: BarChart3,
-  label: 'Rapporter'
-}, {
-  path: '/users',
-  icon: Users,
-  label: 'Kontakter'
-}, {
-  path: '/kb',
-  icon: BookOpen,
-  label: 'Kunskapsbas'
-}, {
-  path: '/settings',
-  icon: Settings,
-  label: 'Inställningar'
-}];
-
 // Sidebar components
 interface NavOptionProps {
   item: typeof navItems[0];
@@ -259,7 +234,7 @@ export const Layout = ({
             <NavOption
               key={item.path}
               item={item}
-              isActive={item.path === '/tickets' ? isTicketSection(location.pathname) : item.path === '/settings' ? location.pathname.startsWith('/settings') || location.pathname.startsWith('/companies') : item.path === '/' ? location.pathname === '/' : location.pathname.startsWith(item.path)}
+              isActive={isNavItemActive(item.path, location.pathname)}
               open={!sidebarCollapsed}
               onClick={() => setSidebarOpen(false)}
             />
@@ -278,6 +253,8 @@ export const Layout = ({
 
       {/* Main content */}
       <main id="main-content" className="flex-1 min-w-0 relative">
+        <EmbeddedTabs />
+
         {/* Mobile header */}
         <div data-print-hide className="prefabnavet-standalone-only lg:hidden sticky top-0 z-30 bg-background border-b border-border px-4 pb-4 pt-[calc(env(safe-area-inset-top)+1rem)] flex items-center gap-4">
           <button

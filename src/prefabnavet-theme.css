@@ -633,6 +633,9 @@ html[data-prefabnavet-embedded="true"] {
   --shadow-lg: var(--pn-shadow-large);
 }
 html[data-prefabnavet-embedded="true"] .prefabnavet-standalone-only { display: none !important; }
+/* Tab bar replaces the hidden sidebar; invisible when standalone. */
+.prefabnavet-embedded-tabs { display: none; }
+html[data-prefabnavet-embedded="true"] .prefabnavet-embedded-tabs { display: flex; }
 /* The embedded header only carries breadcrumbs; drop the empty bar on pages without any. */
 html[data-prefabnavet-embedded="true"] .prefabnavet-embed-header:not(:has(nav[aria-label="Brödsmulor"])) { display: none !important; }
 

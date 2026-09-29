@@ -19,6 +19,9 @@ vi.mock('@/components/BottomTabBar', () => ({
 vi.mock('@/components/OnboardingWizard', () => ({
   OnboardingWizard: () => null,
 }));
+vi.mock('@/components/EmbeddedTabs', () => ({
+  EmbeddedTabs: () => <div data-testid="embedded-tabs-stub" />,
+}));
 vi.mock('@/components/RouteBreadcrumbs', () => ({
   RouteBreadcrumbs: () => null,
 }));
@@ -63,6 +66,11 @@ describe('"Nytt ärende" — a11y-struktur (audit v5 MEDIUM-4/5)', () => {
     expect(screen.getByTestId('command-palette-state')).toHaveAttribute('data-open', 'false');
     fireEvent.keyDown(document, { key: 'k', ctrlKey: true });
     expect(screen.getByTestId('command-palette-state')).toHaveAttribute('data-open', 'true');
+  });
+
+  it('renderar den inbäddade flikraden', () => {
+    renderLayout();
+    expect(screen.getByTestId('embedded-tabs-stub')).toBeInTheDocument();
   });
 
   it('renderas som en enda länk med accessible name "Nytt ärende"', () => {

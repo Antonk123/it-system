@@ -29,6 +29,7 @@ import { Input } from '@/components/ui/input';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Label } from '@/components/ui/label';
 import { migrateContent } from '@/lib/contentMigration';
+import { readTicketPrefill } from '@/lib/prefillFromQuery';
 import { cn } from '@/lib/utils';
 import {
   Select,
@@ -327,6 +328,23 @@ const TicketForm = () => {
         });
     }
   }, [isEditing, location.state?.cloneData]);
+
+  // Prefill from ?title=&description= (deep link, e.g. from Navet). Only when
+  // creating, not cloning, and no saved draft exists — the draft always wins.
+  useEffect(() => {
+    if (isEditing || location.state?.cloneData) return;
+    const prefill = readTicketPrefill(location.search);
+    if (!prefill) return;
+    try {
+      const raw = localStorage.getItem(NEW_TICKET_DRAFT_KEY);
+      if (raw) {
+        const draft = JSON.parse(raw);
+        if (draft && typeof draft === 'object' && (draft.title || draft.description || draft.requesterId || draft.notes || draft.solution)) return;
+      }
+    } catch { /* corrupt draft — treat as none */ }
+    setFormData((prev) => (prev.title || prev.description ? prev : { ...prev, ...prefill }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing]);
 
   // Track unsaved changes
   useEffect(() => {
