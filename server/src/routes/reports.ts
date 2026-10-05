@@ -447,7 +447,7 @@ router.get('/status-flow', authenticate, (_req: AuthRequest, res) => {
 // Server-aggregated drill-down rows for the KPI detail modals on the Reports
 // page. Replaces a client-side ?limit=1000 fetch + in-memory filtering. Returns
 // raw TicketRow shape (snake_case) — exactly what mapTicketRow() consumes — so
-// the modal keeps every column/badge (assigned_to_name and historical SLA fields).
+// the modal keeps every column/badge (assignee, requester and category display names).
 //   scope=total → created_at filtered by year/month (same range-filter as
 //                 /summary so idx_tickets_created_at applies, strftime for month).
 //   scope=aging → open tickets older than 7 days, ALWAYS unfiltered by year/month
@@ -467,9 +467,6 @@ const KPI_TICKET_COLUMNS = [
   'tickets.notes', 'tickets.solution', 'tickets.template_id',
   'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at',
   'tickets.ai_suggested_category_id', 'tickets.ai_suggested_confidence',
-  'tickets.sla_response_deadline', 'tickets.sla_resolution_deadline',
-  'tickets.sla_response_met', 'tickets.sla_resolution_met',
-  'tickets.sla_paused_at', 'tickets.sla_paused_duration',
 ].join(', ');
 
 const KPI_TICKET_LIMIT = 200;

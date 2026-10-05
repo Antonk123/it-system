@@ -1,0 +1,182 @@
+{
+  "server/src/app.ts": {
+    "mtime": 1791237231.6681259,
+    "seen": 1791239494.0626402,
+    "ast_hash": "dee320945c370866b5088e0151e8514a",
+    "semantic_hash": "dee320945c370866b5088e0151e8514a"
+  },
+  "server/src/lib/email.ts": {
+    "mtime": 1791237231.6735227,
+    "seen": 1791239494.062646,
+    "ast_hash": "ec6ba0238204f38ad7c6881e2821c3f7",
+    "semantic_hash": "ec6ba0238204f38ad7c6881e2821c3f7"
+  },
+  "server/src/lib/emailInbound.ts": {
+    "mtime": 1791237231.6740596,
+    "seen": 1791239494.062648,
+    "ast_hash": "fcaad99832e2983e96e991e040b75949",
+    "semantic_hash": "fcaad99832e2983e96e991e040b75949"
+  },
+  "server/src/lib/emailQuote.ts": {
+    "mtime": 1791237231.6742945,
+    "seen": 1791239494.062649,
+    "ast_hash": "0862d1372015ec903d54bd6021c019fe",
+    "semantic_hash": "0862d1372015ec903d54bd6021c019fe"
+  },
+  "server/src/lib/emailThreading.ts": {
+    "mtime": 1791237231.6744936,
+    "seen": 1791239494.0626502,
+    "ast_hash": "13162212541c985564d822d85e4ee843",
+    "semantic_hash": "13162212541c985564d822d85e4ee843"
+  },
+  "server/src/lib/ticketAccess.ts": {
+    "mtime": 1791237231.6769145,
+    "seen": 1791239494.0626502,
+    "ast_hash": "da337869f17526cc08235bfb4ae7a03a",
+    "semantic_hash": "da337869f17526cc08235bfb4ae7a03a"
+  },
+  "server/src/lib/ticketImportExport.ts": {
+    "mtime": 1791237231.6771882,
+    "seen": 1791239494.062651,
+    "ast_hash": "dd8df24a9947cc94ecfc5a6981a93536",
+    "semantic_hash": "dd8df24a9947cc94ecfc5a6981a93536"
+  },
+  "server/src/lib/ticketNotifications.ts": {
+    "mtime": 1791237231.6774313,
+    "seen": 1791239494.0626519,
+    "ast_hash": "b249ccbe8b8fd5587f8351b2ba78eafa",
+    "semantic_hash": "b249ccbe8b8fd5587f8351b2ba78eafa"
+  },
+  "server/src/lib/ticketQuery.ts": {
+    "mtime": 1791237231.6777117,
+    "seen": 1791239494.0626519,
+    "ast_hash": "cb042245dae65c663bf8a22434ff0402",
+    "semantic_hash": "cb042245dae65c663bf8a22434ff0402"
+  },
+  "server/src/middleware/auth.ts": {
+    "mtime": 1791237231.6784673,
+    "seen": 1791239494.0626528,
+    "ast_hash": "d2aa358f2316e93e653e14896afd65e9",
+    "semantic_hash": "d2aa358f2316e93e653e14896afd65e9"
+  },
+  "server/src/routes/categories.ts": {
+    "mtime": 1791237231.6807814,
+    "seen": 1791239494.062654,
+    "ast_hash": "fd69a10ea07b23d20c2f35ca4e0cef0f",
+    "semantic_hash": "fd69a10ea07b23d20c2f35ca4e0cef0f"
+  },
+  "server/src/routes/comments.ts": {
+    "mtime": 1791237231.6816592,
+    "seen": 1791239494.062654,
+    "ast_hash": "e26b5bb2e0f5a53caacf101894c4900f",
+    "semantic_hash": "e26b5bb2e0f5a53caacf101894c4900f"
+  },
+  "server/src/routes/contacts.ts": {
+    "mtime": 1791237231.6822379,
+    "seen": 1791239494.062655,
+    "ast_hash": "8b15585bfda690723ec56b07fec86bb1",
+    "semantic_hash": "8b15585bfda690723ec56b07fec86bb1"
+  },
+  "server/src/routes/public.ts": {
+    "mtime": 1791237231.683493,
+    "seen": 1791239494.062656,
+    "ast_hash": "936b898aabc1e6ae6fdf5b376618e1ac",
+    "semantic_hash": "936b898aabc1e6ae6fdf5b376618e1ac"
+  },
+  "server/src/routes/shares.ts": {
+    "mtime": 1791237231.6845825,
+    "seen": 1791239494.062656,
+    "ast_hash": "067661140cf3b51cc6628cbeee5c1a3e",
+    "semantic_hash": "067661140cf3b51cc6628cbeee5c1a3e"
+  },
+  "server/src/routes/tickets.ts": {
+    "mtime": 1791237231.6862652,
+    "seen": 1791239494.062657,
+    "ast_hash": "b85e4c407534660d6911306af1dfc515",
+    "semantic_hash": "b85e4c407534660d6911306af1dfc515"
+  },
+  "server/src/routes/users.ts": {
+    "mtime": 1791237231.6865706,
+    "seen": 1791239494.062658,
+    "ast_hash": "96d01c1c770b4d9d0fc1c8f6d1990ab2",
+    "semantic_hash": "96d01c1c770b4d9d0fc1c8f6d1990ab2"
+  },
+  "src/components/PriorityBadge.tsx": {
+    "mtime": 1791237231.693739,
+    "seen": 1791239494.062658,
+    "ast_hash": "1116e4ba46e5de301a3e318a7ed203bf",
+    "semantic_hash": "1116e4ba46e5de301a3e318a7ed203bf"
+  },
+  "src/components/StatusBadge.tsx": {
+    "mtime": 1791237231.6950111,
+    "seen": 1791239494.062659,
+    "ast_hash": "30af55b3eb0000ddff3a559354669631",
+    "semantic_hash": "30af55b3eb0000ddff3a559354669631"
+  },
+  "src/components/TicketComments.tsx": {
+    "mtime": 1791237231.6966972,
+    "seen": 1791239494.06266,
+    "ast_hash": "a58c43344d7113cdab02c75097afe143",
+    "semantic_hash": "a58c43344d7113cdab02c75097afe143"
+  },
+  "src/components/TicketQueueTable.tsx": {
+    "mtime": 1791237231.6972036,
+    "seen": 1791239494.06266,
+    "ast_hash": "2e00ccdd703312dced3e207f0ca694e7",
+    "semantic_hash": "2e00ccdd703312dced3e207f0ca694e7"
+  },
+  "src/hooks/useActiveQueue.ts": {
+    "mtime": 1791237231.7043445,
+    "seen": 1791239494.0626612,
+    "ast_hash": "133f0b853cb4289f29d7fa9978f9aa8c",
+    "semantic_hash": "133f0b853cb4289f29d7fa9978f9aa8c"
+  },
+  "src/hooks/useTickets.ts": {
+    "mtime": 1791237231.707943,
+    "seen": 1791239494.062662,
+    "ast_hash": "0d9a6768e18a0e5e287fd959fc79c0fe",
+    "semantic_hash": "0d9a6768e18a0e5e287fd959fc79c0fe"
+  },
+  "src/lib/api.ts": {
+    "mtime": 1791237231.7097247,
+    "seen": 1791239494.062662,
+    "ast_hash": "9fa963f2e3aae53252a4c6029785e112",
+    "semantic_hash": "9fa963f2e3aae53252a4c6029785e112"
+  },
+  "src/lib/ticketNavigation.ts": {
+    "mtime": 1791237231.7132251,
+    "seen": 1791239494.0626628,
+    "ast_hash": "7e233c50d65a6b6fa66184a357deeb26",
+    "semantic_hash": "7e233c50d65a6b6fa66184a357deeb26"
+  },
+  "src/pages/Archive.tsx": {
+    "mtime": 1791237231.7142293,
+    "seen": 1791239494.062664,
+    "ast_hash": "07adc95928cbdc24c6dd62ef0ee2a1bb",
+    "semantic_hash": "07adc95928cbdc24c6dd62ef0ee2a1bb"
+  },
+  "src/pages/TicketDetail.tsx": {
+    "mtime": 1791237231.7181165,
+    "seen": 1791239494.062664,
+    "ast_hash": "54f37029b28945aa37d4aa7bdf542950",
+    "semantic_hash": "54f37029b28945aa37d4aa7bdf542950"
+  },
+  "src/types/ticket.ts": {
+    "mtime": 1791237231.7208064,
+    "seen": 1791239494.062665,
+    "ast_hash": "070a0bc30024d55c24325eecc159fed8",
+    "semantic_hash": "070a0bc30024d55c24325eecc159fed8"
+  },
+  "GLOSSARY.md": {
+    "mtime": 1791239134.6049433,
+    "seen": 1791239494.062666,
+    "ast_hash": "92f06008b91e8d7dbf36f40299190c3b",
+    "semantic_hash": "92f06008b91e8d7dbf36f40299190c3b"
+  },
+  "server/src/db/schema.sql": {
+    "mtime": 1791237231.671818,
+    "seen": 1791239494.062666,
+    "ast_hash": "aff894b9b833d1e8648aa2440e9a60ee",
+    "semantic_hash": "aff894b9b833d1e8648aa2440e9a60ee"
+  }
+}

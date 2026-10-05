@@ -771,10 +771,6 @@ class ApiClient {
     return this.request<ContactRow[]>('/contacts');
   }
 
-  async getContact(id: string) {
-    return this.request<ContactRow>(`/contacts/${id}`);
-  }
-
   async createContact(contact: Partial<ContactRow>) {
     return this.request<ContactRow>('/contacts', {
       method: 'POST',
@@ -884,12 +880,6 @@ class ApiClient {
     return this.request<{ message: string }>(`/attachments/${id}`, {
       method: 'DELETE',
     });
-  }
-
-  getAttachmentUrl(id: string): string {
-    // NOTE: This URL requires authentication via Authorization header
-    // Frontend must fetch with Authorization header, not use URL directly in <img> or <a>
-    return `${this.baseUrl}/attachments/file/${id}`;
   }
 
   // Checklists

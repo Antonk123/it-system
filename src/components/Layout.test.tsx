@@ -5,8 +5,8 @@ import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-// Layout pulls in several heavy children (command palette, FAB, tab bar,
-// onboarding wizard) with their own data/auth dependencies that are
+// Layout pulls in several heavy children (command palette, FAB,
+// tab bar) with their own data/auth dependencies that are
 // irrelevant to this a11y-structure test — stub them out.
 vi.mock('@/components/CommandPalette', () => ({
   CommandPalette: ({ open }: { open: boolean }) => (
@@ -15,9 +15,6 @@ vi.mock('@/components/CommandPalette', () => ({
 }));
 vi.mock('@/components/BottomTabBar', () => ({
   BottomTabBar: () => null,
-}));
-vi.mock('@/components/OnboardingWizard', () => ({
-  OnboardingWizard: () => null,
 }));
 vi.mock('@/components/EmbeddedTabs', () => ({
   EmbeddedTabs: () => <div data-testid="embedded-tabs-stub" />,

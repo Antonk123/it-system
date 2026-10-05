@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useSearchParams, useNavigate, useLocation } from 'react-router';
+import { Link } from 'react-router';
 import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Loader2, Inbox } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
@@ -8,7 +8,7 @@ import { useCompanies } from '@/hooks/useCompanies';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Layout } from '@/components/Layout';
-import { getTicketScope } from '@/lib/ticketNavigation';
+import { useTicketListNavigation } from '@/hooks/useTicketListNavigation';
 import { TicketViewNavigation } from '@/components/TicketViewNavigation';
 import { TicketTable } from '@/components/TicketTable';
 import { PaginationControls } from '@/components/PaginationControls';
@@ -35,25 +35,13 @@ const listContainer = {
 
 const TicketList = () => {
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const location = useLocation();
   const { user } = useAuth();
-  const { statuses: selectedStatuses, mine } = getTicketScope(location.pathname, searchParams);
-
-  // Read state from URL
-  const page = Number(searchParams.get('page')) || 1;
-  const pageSize = Number(searchParams.get('limit')) || 50;
-  const search = searchParams.get('search') || '';
-  const priorityFilter = (searchParams.get('priority') || 'all') as TicketPriority | 'all';
-  const categoryFilter = searchParams.get('category') || 'all';
-  const dateFrom = searchParams.get('dateFrom') || '';
-  const dateTo = searchParams.get('dateTo') || '';
-  const dateField = (selectedStatuses.every(status => status === 'resolved' || status === 'closed') ? 'updated_at' : searchParams.get('dateField') || 'created_at') as 'created_at' | 'updated_at' | 'closed_at';
-  const checklistFilter = searchParams.get('checklist') || '';
-  const companyFilter = searchParams.get('company_id') || 'all';
-  const sortKey = (searchParams.get('sortBy') === 'tags' ? 'createdAt' : searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'status' | 'priority' | 'category';
-  const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
+  const {
+    statuses: selectedStatuses, mine, page, pageSize, search, priorityFilter, categoryFilter,
+    dateFrom, dateTo, dateField, checklistFilter, companyFilter, sortKey, sortDirection,
+    selectedIds, setSelectedIds, updateFilters, handlePageChange, handlePageSizeChange,
+    handleSortChange, handleTicketClick,
+  } = useTicketListNavigation(50);
   const [compactView, setCompactView] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>(() => {
@@ -68,9 +56,6 @@ const TicketList = () => {
   }, [viewMode]);
 
   // Fetch with pagination
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  useEffect(() => { setSelectedIds([]); }, [location.pathname, location.search]);
-
   const { tickets, pagination, isLoading, isError, updateTicket, bulkUpdateTickets, refetch } = useTickets({
     page,
     limit: pageSize,
@@ -91,61 +76,6 @@ const TicketList = () => {
   const { users } = useUsers();
   const { companies } = useCompanies();
 
-  // Update URL params
-  const updateFilters = useCallback((updates: Record<string, any>) => {
-    const newParams = new URLSearchParams(searchParams);
-    newParams.delete('tags');
-    newParams.delete('tagMode');
-
-    Object.entries(updates).forEach(([key, value]) => {
-      if (Array.isArray(value)) {
-        // Handle array-valued filters
-        if (value.length > 0) {
-          newParams.set(key, value.join(','));
-        } else {
-          newParams.delete(key);
-        }
-      } else if (value && value !== 'all') {
-        newParams.set(key, String(value));
-      } else {
-        newParams.delete(key);
-      }
-    });
-
-    // Reset to page 1 on filter/sort changes
-    if (Object.keys(updates).some(k => k !== 'page' && k !== 'limit')) {
-      newParams.set('page', '1');
-      // Clear bulk selection — selected IDs from a previous filter
-      // set could refer to tickets no longer visible
-      setSelectedIds([]);
-    }
-
-    if (location.pathname === '/my-tickets' && updates.mine === '') {
-      navigate(`/tickets?${newParams.toString()}`);
-    } else {
-      setSearchParams(newParams);
-    }
-  }, [searchParams, setSearchParams, location.pathname, navigate]);
-
-  // Event handlers
-  const handlePageChange = useCallback((newPage: number) => {
-    updateFilters({ page: newPage });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [updateFilters]);
-
-  const handlePageSizeChange = useCallback((newSize: number) => {
-    updateFilters({ limit: newSize, page: 1 });
-  }, [updateFilters]);
-
-  const handleSortChange = useCallback((key: 'status' | 'priority' | 'category') => {
-    if (sortKey === key) {
-      const newDir = sortDirection === 'asc' ? 'desc' : 'asc';
-      updateFilters({ sortDir: newDir });
-    } else {
-      updateFilters({ sortBy: key, sortDir: 'asc' });
-    }
-  }, [sortKey, sortDirection, updateFilters]);
-
   const handleStatusChange = useCallback(async (ticketId: string, status: TicketStatus) => {
     try {
       await updateTicket(ticketId, { status });
@@ -154,13 +84,6 @@ const TicketList = () => {
       toast.error('Kunde inte uppdatera status');
     }
   }, [updateTicket]);
-
-  const handleTicketClick = useCallback((ticketId: string) => {
-    const currentPath = location.pathname + location.search;
-    navigate(`/tickets/${ticketId}`, {
-      state: { from: currentPath }
-    });
-  }, [location.pathname, location.search, navigate]);
 
   const handleBulkAction = useCallback(async (ids: string[], updates: { status?: TicketStatus; priority?: string; category_id?: string | null }) => {
     try {
@@ -274,14 +197,7 @@ const TicketList = () => {
 
         {/* Company filter */}
         <div className="flex items-center gap-2">
-          <Select value={companyFilter} onValueChange={v => {
-            const newParams = new URLSearchParams(searchParams);
-            if (v === 'all') newParams.delete('company_id');
-            else newParams.set('company_id', v);
-            newParams.set('page', '1');
-            setSelectedIds([]);
-            setSearchParams(newParams);
-          }}>
+          <Select value={companyFilter} onValueChange={value => updateFilters({ company_id: value })}>
             <SelectTrigger className="w-[180px]">
               <Building2 className="mr-2 h-4 w-4 shrink-0" />
               <SelectValue placeholder="Alla företag" />

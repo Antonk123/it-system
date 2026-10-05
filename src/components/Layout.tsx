@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/button';
 import { CommandPalette } from '@/components/CommandPalette';
 import { useAuth } from '@/contexts/AuthContext';
 import { BottomTabBar } from '@/components/BottomTabBar';
-import { OnboardingWizard } from '@/components/OnboardingWizard';
 import { applyMode, getStoredMode, saveModeTheme, ModeTheme } from '@/lib/appearance';
 import { dispatchModeChange } from '@/hooks/useMode';
 import { RouteBreadcrumbs } from '@/components/RouteBreadcrumbs';
@@ -313,7 +312,5 @@ export const Layout = ({
       <div data-print-hide className="prefabnavet-standalone-only">
         <BottomTabBar />
       </div>
-
-      <OnboardingWizard />
     </div></>;
 };

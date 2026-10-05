@@ -1,12 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useSearchParams, useNavigate, useLocation } from 'react-router';
 import { useTickets } from '@/hooks/useTickets';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompanies } from '@/hooks/useCompanies';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUsers } from '@/hooks/useUsers';
 import { Layout } from '@/components/Layout';
-import { getTicketScope } from '@/lib/ticketNavigation';
+import { useTicketListNavigation } from '@/hooks/useTicketListNavigation';
 import { TicketViewNavigation } from '@/components/TicketViewNavigation';
 import { TicketTable } from '@/components/TicketTable';
 import { EmptyState } from '@/components/EmptyState';
@@ -22,30 +21,17 @@ import { UnifiedFilterBar } from '@/components/UnifiedFilterBar';
 import { BulkActionBar } from '@/components/BulkActionBar';
 
 const Archive = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const location = useLocation();
   const { user } = useAuth();
   const { companies } = useCompanies();
-  const { statuses, mine } = getTicketScope(location.pathname, searchParams);
-  const companyFilter = searchParams.get('company_id') || 'all';
-
-  // Read state from URL
-  const page = Number(searchParams.get('page')) || 1;
-  const pageSize = Number(searchParams.get('limit')) || 10;
-  const search = searchParams.get('search') || '';
-  const categoryFilter = searchParams.get('category') || 'all';
-  const priorityFilter = (searchParams.get('priority') || 'all') as TicketPriority | 'all';
-  const checklistFilter = searchParams.get('checklist') || '';
-  const dateField = 'updated_at' as const; // Includes resolved tickets without closed_at.
-  const sortKey = (searchParams.get('sortBy') || 'createdAt') as 'createdAt' | 'priority' | 'category';
-  const sortDirection = (searchParams.get('sortDir') || 'desc') as 'asc' | 'desc';
-  const dateFrom = searchParams.get('dateFrom') || '';
-  const dateTo = searchParams.get('dateTo') || '';
+  const {
+    searchParams, setSearchParams, statuses, mine, page, pageSize, search, priorityFilter,
+    categoryFilter, checklistFilter, dateField, sortKey, sortDirection, dateFrom, dateTo,
+    companyFilter, selectedIds, setSelectedIds, updateFilters, handlePageChange,
+    handlePageSizeChange, handleSortChange, handleTicketClick,
+  } = useTicketListNavigation(10);
 
   const [compactView, setCompactView] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Both resolved and closed tickets belong to Avslutade.
   const { tickets, pagination, isLoading, refetch } = useTickets({
@@ -87,66 +73,6 @@ const Archive = () => {
     }
   }, [searchParams, setSearchParams]);
 
-  // Clear selection when filters or page changes
-  useEffect(() => {
-    setSelectedIds([]);
-  }, [location.pathname, location.search]);
-
-  // Update URL params
-  const updateFilters = useCallback((updates: Record<string, any>) => {
-    const newParams = new URLSearchParams(searchParams);
-    newParams.delete('tags');
-    newParams.delete('tagMode');
-
-    Object.entries(updates).forEach(([key, value]) => {
-      if (Array.isArray(value)) {
-        // Handle array-valued filters
-        if (value.length > 0) {
-          newParams.set(key, value.join(','));
-        } else {
-          newParams.delete(key);
-        }
-      } else if (value && value !== 'all') {
-        newParams.set(key, String(value));
-      } else {
-        newParams.delete(key);
-      }
-    });
-
-    // Reset to page 1 on filter/sort changes
-    if (Object.keys(updates).some(k => k !== 'page' && k !== 'limit')) {
-      newParams.set('page', '1');
-    }
-
-    setSearchParams(newParams);
-  }, [searchParams, setSearchParams ]);
-
-  // Event handlers
-  const handlePageChange = (newPage: number) => {
-    updateFilters({ page: newPage });
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handlePageSizeChange = (newSize: number) => {
-    updateFilters({ limit: newSize, page: 1 });
-  };
-
-  const handleSortChange = (key: 'priority' | 'category') => {
-    if (sortKey === key) {
-      const newDir = sortDirection === 'asc' ? 'desc' : 'asc';
-      updateFilters({ sortDir: newDir });
-    } else {
-      updateFilters({ sortBy: key, sortDir: 'asc' });
-    }
-  };
-
-  const handleTicketClick = useCallback((ticketId: string) => {
-    const currentPath = location.pathname + location.search;
-    navigate(`/tickets/${ticketId}`, {
-      state: { from: currentPath }
-    });
-  }, [location.pathname, location.search, navigate]);
-
   // Bulk action handlers
   const handleBulkReopen = useCallback(async () => {
     try {
@@ -157,7 +83,7 @@ const Archive = () => {
     } catch {
       toast.error('Kunde inte öppna ärenden igen');
     }
-  }, [selectedIds, refetch]);
+  }, [selectedIds, refetch, setSelectedIds]);
 
   const handleBulkChangePriority = useCallback(async (priority: TicketPriority) => {
     try {
@@ -168,7 +94,7 @@ const Archive = () => {
     } catch {
       toast.error('Kunde inte ändra prioritet');
     }
-  }, [selectedIds, refetch]);
+  }, [selectedIds, refetch, setSelectedIds]);
 
   const handleBulkExportXlsx = useCallback(async () => {
     if (selectedIds.length === 0) return;
@@ -213,7 +139,7 @@ const Archive = () => {
     } catch {
       toast.error('Kunde inte tilldela ärenden');
     }
-  }, [selectedIds, refetch]);
+  }, [selectedIds, refetch, setSelectedIds]);
 
   const handleBulkDelete = useCallback(async () => {
     try {
@@ -224,7 +150,7 @@ const Archive = () => {
     } catch {
       toast.error('Kunde inte radera ärenden');
     }
-  }, [selectedIds, refetch]);
+  }, [selectedIds, refetch, setSelectedIds]);
 
   return (
     <Layout>

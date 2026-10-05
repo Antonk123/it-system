@@ -514,6 +514,17 @@ describe('Retired SLA history', () => {
       .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).send(updates);
     expect(result.status).toBe(200);
     expect(result.body).toMatchObject(updates);
+    const detail = await admin.agent.get(`/api/tickets/${id}`)
+      .set('Authorization', `Bearer ${admin.token}`);
+    const list = await admin.agent.get('/api/tickets?limit=100')
+      .set('Authorization', `Bearer ${admin.token}`);
+    expect(detail.status).toBe(200);
+    expect(list.status).toBe(200);
+    const listed = list.body.data.find((ticket: { id: string }) => ticket.id === id);
+    expect(listed).toBeDefined();
+    for (const response of [create.body, result.body, detail.body, listed]) {
+      expect(Object.keys(response).filter(key => key.startsWith('sla_'))).toEqual([]);
+    }
     expect(readHistory()).toEqual(before);
   });
 

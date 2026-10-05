@@ -220,3 +220,23 @@ Claude konsulterar det själv — Anton ska aldrig behöva be om en skill. Kort:
 
 Dokumentation för det här projektet skrivs till `~/Obsidian/Projekt/IT-System/`
 (`decisions.md`, `bugs.md`, `notes.md`, `SUMMARY.md`) — inte i repot.
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live in GitHub Issues for `Antonk123/it-system`.
+See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the five standard triage labels.
+See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: root `GLOSSARY.md` and `docs/adr/`.
+See `docs/agents/domain.md`.
+
+These skill configuration files, the glossary, and ADRs live in this
+repo. Other project documentation continues to live in Obsidian.

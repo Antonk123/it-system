@@ -59,9 +59,6 @@ const TICKET_COLUMNS = [
   '(SELECT label FROM categories WHERE id = tickets.category_id) AS category_label',
   'tickets.notes', 'tickets.solution', 'tickets.template_id',
   'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at',
-  'tickets.sla_response_deadline', 'tickets.sla_resolution_deadline',
-  'tickets.sla_response_met', 'tickets.sla_resolution_met',
-  'tickets.sla_paused_at', 'tickets.sla_paused_duration',
 ].join(', ');
 
 // Multer config for CSV upload

@@ -3411,8 +3411,6 @@ components:
         updated_at: { type: string, format: date-time }
         resolved_at: { type: string, format: date-time, nullable: true }
         closed_at: { type: string, format: date-time, nullable: true }
-        sla_response_deadline: { type: string, format: date-time, nullable: true }
-        sla_resolution_deadline: { type: string, format: date-time, nullable: true }
 
     TicketInput:
       type: object

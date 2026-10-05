@@ -1,0 +1,1 @@
+2026-10-06: source cleanup changed types, api, Archive and ticket selectors; new shared useTicketListNavigation hook. Snapshot predates these changes.

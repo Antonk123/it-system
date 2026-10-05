@@ -9,7 +9,7 @@
  *     utelämnade parametrar, 'all'-värden och specialtecken som ska/inte ska URL-kodas.
  *  2. request()s svarsgrenar (rad 160–178): 204 → null, content-type-grenar, JSON.parse-fallback.
  *  3. API_BASE_URL (rad 3) — läses en gång vid modulladdning, båda grenarna (env satt/ej satt).
- *  4. Rena URL-byggare: getAttachmentUrl, oidcLoginUrl.
+ *  4. Ren URL-byggare: oidcLoginUrl.
  *
  * OBS: error.error/error.message/'Request failed'-prioritet och "response.json() kastar →
  * fallback 'Request failed (STATUS)'" testas REDAN i api.test.ts (rad 277–303) — duplicerar
@@ -281,7 +281,6 @@ describe('API_BASE_URL', () => {
     const api = await freshApi();
 
     expect(api.oidcLoginUrl()).toBe('https://example.test/api/auth/oidc/login');
-    expect(api.getAttachmentUrl('att-1')).toBe('https://example.test/api/attachments/file/att-1');
 
     fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve([]) }));
     await api.getTickets();
@@ -340,11 +339,6 @@ describe('getBranding — logoUrl-prefix mot korrekt bas', () => {
 // ---------------------------------------------------------------------------
 
 describe('rena strängbyggare', () => {
-  it('getAttachmentUrl(id) → "<baseUrl>/attachments/file/<id>"', async () => {
-    const api = await freshApi();
-    expect(api.getAttachmentUrl('att-42')).toBe(`${BASE}/attachments/file/att-42`);
-  });
-
   it('oidcLoginUrl() → "<baseUrl>/auth/oidc/login"', async () => {
     const api = await freshApi();
     expect(api.oidcLoginUrl()).toBe(`${BASE}/auth/oidc/login`);

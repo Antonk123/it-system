@@ -264,6 +264,10 @@ describe('computeKpiTickets', () => {
     expect(result[0].id).toBe('b');
     expect(result[1].id).toBe('a');
 
+    for (const row of result) {
+      expect(Object.keys(row).filter(key => key.startsWith('sla_'))).toEqual([]);
+    }
+
     const a = result.find(r => r.id === 'a')!;
     expect(a.assigned_to_name).toBe('Anna Andersson'); // correlated subquery resolved
     expect(a.tags).toBeUndefined();

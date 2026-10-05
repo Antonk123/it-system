@@ -17,41 +17,6 @@ export interface User {
   createdAt: Date;
 }
 
-export interface RequesterAnalytics {
-  userId: string;
-  name: string;
-  totalTickets: number;
-
-  // Status breakdown (for stacked bars)
-  statusBreakdown: {
-    open: number;
-    'in-progress': number;
-    waiting: number;
-    resolved: number;
-    closed: number;
-  };
-
-  // Priority breakdown
-  priorityBreakdown: {
-    low: number;
-    medium: number;
-    high: number;
-    critical: number;
-  };
-
-  // Performance metrics
-  completionRate: number;        // (resolved + closed) / total * 100
-  avgResolutionTime: number;     // days (for resolved/closed tickets)
-  agingTickets: number;          // open tickets > 7 days
-
-  // Activity metrics
-  lastTicketDate: Date;
-  ticketVelocity: number;        // tickets per month
-
-  // Top categories (for tooltips)
-  topCategories: Array<{ category: string; count: number }>;
-}
-
 export interface Ticket {
   id: string;
   title: string;
@@ -126,22 +91,6 @@ export interface TicketLink {
   };
 }
 
-export interface TicketLinkRow {
-  id: string;
-  sourceTicketId: string;
-  targetTicketId: string;
-  linkType: string;
-  createdBy: string | null;
-  createdAt: string;
-  linkedTicket: {
-    id: string;
-    title: string;
-    status: string;
-    priority: string;
-    created_at: string;
-  };
-}
-
 export interface Template {
   id: string;
   name: string;
@@ -159,24 +108,6 @@ export interface Template {
   createdBy: string | null;
   createdAt: Date;
   updatedAt: Date;
-  fields?: TemplateFieldRow[];
-}
-
-export interface TemplateRow {
-  id: string;
-  name: string;
-  description: string | null;
-  template_type: string;
-  title_template: string;
-  description_template: string;
-  priority: string;
-  category_id: string | null;
-  notes_template: string | null;
-  solution_template: string | null;
-  position: number;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
   fields?: TemplateFieldRow[];
 }
 

@@ -10,6 +10,11 @@ IT-Ticket levereras rullande från `main` (en instans per deployment). Sektionen
 
 ## [Orutinerat]
 
+### Förenklat (2026-10-06)
+- Borttagen onboarding-dialog för första kundföretaget; företag hanteras fortsatt via inställningarna.
+- Borttagna oanvända klienttyper och API-hjälpar. Aktiva och avslutade ärenden delar URL-filter, sortering, sidbyte och bulkmarkering.
+- **API-kontraktsändring:** ärendesvar och rapporternas KPI-detaljer innehåller inte längre `sla_response_deadline`, `sla_resolution_deadline`, `sla_response_met`, `sla_resolution_met`, `sla_paused_at` eller `sla_paused_duration`. Historiska värden i databasen bevaras. Externa konsumenter behöver sluta läsa dessa avvecklade fält.
+
 Omfattande vidareutveckling sedan v1.5 (april 2026). Sammanfattat per tema —
 för commit-nivå, se git-historiken.
 

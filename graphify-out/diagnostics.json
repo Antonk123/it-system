@@ -1,0 +1,206 @@
+{
+  "node_count": 450,
+  "unverified_node_count": 0,
+  "raw_edge_count": 1300,
+  "non_object_edges": 0,
+  "missing_endpoint_edges": 0,
+  "dangling_endpoint_edges": 304,
+  "external_reference_edges": 63,
+  "self_loop_edges": 4,
+  "valid_candidate_edges": 933,
+  "exact_duplicate_edges": 0,
+  "directed_unique_endpoint_pairs": 911,
+  "directed_same_endpoint_collapsed_edges": 22,
+  "undirected_unique_endpoint_pairs": 911,
+  "undirected_same_endpoint_collapsed_edges": 22,
+  "same_endpoint_group_count": 22,
+  "relation_variant_groups": 21,
+  "source_file_variant_groups": 0,
+  "source_location_variant_groups": 1,
+  "context_variant_groups": 0,
+  "post_build_graph_type": "Graph",
+  "post_build_node_count": 678,
+  "post_build_edge_count": 1277,
+  "post_build_error": "",
+  "producer_suppression": {
+    "path": "/Users/anton/.local/share/uv/tools/graphifyy/lib/python3.12/site-packages/graphify/extract.py",
+    "total_sites": 12,
+    "sites": [
+      {
+        "line": 1685,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 2218,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 2220,
+        "name": "seen_doc_refs",
+        "tuple_arity": 0,
+        "sample": "seen_doc_refs: set[str] = set()"
+      },
+      {
+        "line": 2698,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = {n[\"id\"] for n in nodes}"
+      },
+      {
+        "line": 2845,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids = {n.get(\"id\") for n in nodes}"
+      },
+      {
+        "line": 3588,
+        "name": "seen_keys",
+        "tuple_arity": 0,
+        "sample": "seen_keys: set[tuple] = set()"
+      },
+      {
+        "line": 3761,
+        "name": "seen_keys",
+        "tuple_arity": 0,
+        "sample": "seen_keys: set[tuple] = set()"
+      },
+      {
+        "line": 5912,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 6020,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 6099,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 6614,
+        "name": "seen_ids",
+        "tuple_arity": 0,
+        "sample": "seen_ids: set[str] = set()"
+      },
+      {
+        "line": 6615,
+        "name": "seen_edges",
+        "tuple_arity": 4,
+        "sample": "seen_edges: set[tuple[str, str, str, str | None]] = set()"
+      }
+    ],
+    "error": ""
+  },
+  "examples": [
+    {
+      "source": "server_src_lib_emailinbound",
+      "target": "server_src_lib_emailinbound_findticketbymessageid",
+      "edge_count": 2,
+      "relations": [
+        "contains",
+        "indirect_call"
+      ],
+      "source_files": [
+        "server/src/lib/emailInbound.ts"
+      ],
+      "source_locations": [
+        "L704",
+        "L96"
+      ],
+      "contexts": [
+        "",
+        "collection"
+      ]
+    },
+    {
+      "source": "server_src_lib_emailinbound",
+      "target": "server_src_lib_emailinbound_stripreplyprefix",
+      "edge_count": 2,
+      "relations": [
+        "contains",
+        "indirect_call"
+      ],
+      "source_files": [
+        "server/src/lib/emailInbound.ts"
+      ],
+      "source_locations": [
+        "L104",
+        "L709"
+      ],
+      "contexts": [
+        "",
+        "collection"
+      ]
+    },
+    {
+      "source": "server_src_lib_emailinbound",
+      "target": "server_src_lib_emailinbound_findticketbyshortid",
+      "edge_count": 2,
+      "relations": [
+        "contains",
+        "indirect_call"
+      ],
+      "source_files": [
+        "server/src/lib/emailInbound.ts"
+      ],
+      "source_locations": [
+        "L108",
+        "L705"
+      ],
+      "contexts": [
+        "",
+        "collection"
+      ]
+    },
+    {
+      "source": "server_src_lib_emailinbound",
+      "target": "server_src_lib_emailinbound_findticketbysubject",
+      "edge_count": 2,
+      "relations": [
+        "contains",
+        "indirect_call"
+      ],
+      "source_files": [
+        "server/src/lib/emailInbound.ts"
+      ],
+      "source_locations": [
+        "L123",
+        "L706"
+      ],
+      "contexts": [
+        "",
+        "collection"
+      ]
+    },
+    {
+      "source": "server_src_lib_emailinbound",
+      "target": "server_src_lib_emailinbound_resolveorcreatecontact",
+      "edge_count": 2,
+      "relations": [
+        "contains",
+        "indirect_call"
+      ],
+      "source_files": [
+        "server/src/lib/emailInbound.ts"
+      ],
+      "source_locations": [
+        "L141",
+        "L707"
+      ],
+      "contexts": [
+        "",
+        "collection"
+      ]
+    }
+  ]
+}

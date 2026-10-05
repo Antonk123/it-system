@@ -1,0 +1,14 @@
+{
+  "runs": [
+    {
+      "date": "2026-10-05T22:31:34.064991+00:00",
+      "files": 30,
+      "input_tokens": null,
+      "output_tokens": null,
+      "structural_tokens": 0,
+      "semantic_usage": "unavailable: host agent usage not exposed"
+    }
+  ],
+  "total_input_tokens": null,
+  "total_output_tokens": null
+}

@@ -1,0 +1,91 @@
+{
+  "generated_at": "2026-10-05T22:37:23.155666+00:00",
+  "nodes": {
+    "glossary_best_llare": {
+      "code_fingerprint": "7419c1004e141d8e4613de401770a14577f4dde178bfce7e029491ec890c93fe",
+      "label": "Beställare",
+      "last": "2026-10-05T22:33:41.967204+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-05T22:33:41.967204+00:00",
+          "outcome": "useful",
+          "q": "Validate ticket domain relationships and inbound email status behavior"
+        }
+      ],
+      "score": 0.999940852,
+      "source_file": "GLOSSARY.md",
+      "status": "tentative",
+      "uses": 1
+    },
+    "server_src_lib_emailinbound_addcommenttoticket": {
+      "code_fingerprint": "6f87a5349f6133463a5a764ba393de3823f0f5194604a246191bcfa14b2e6b7d",
+      "label": "addCommentToTicket()",
+      "last": "2026-10-05T22:37:22.991863+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-05T22:37:22.991863+00:00",
+          "outcome": "useful",
+          "q": "Varför kan ett nytt e-postsvar på ett avslutat ärende bli kvar bland avslutade ärenden?"
+        }
+      ],
+      "score": 0.999999956,
+      "source_file": "server/src/lib/emailInbound.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "server_src_lib_emailinbound_processemail": {
+      "code_fingerprint": "6f87a5349f6133463a5a764ba393de3823f0f5194604a246191bcfa14b2e6b7d",
+      "label": "processEmail()",
+      "last": "2026-10-05T22:37:22.991863+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-05T22:37:22.991863+00:00",
+          "outcome": "useful",
+          "q": "Varför kan ett nytt e-postsvar på ett avslutat ärende bli kvar bland avslutade ärenden?"
+        },
+        {
+          "date": "2026-10-05T22:33:41.967204+00:00",
+          "outcome": "useful",
+          "q": "Validate ticket domain relationships and inbound email status behavior"
+        }
+      ],
+      "score": 1.999940808,
+      "source_file": "server/src/lib/emailInbound.ts",
+      "status": "preferred",
+      "uses": 2
+    },
+    "server_src_lib_ticketaccess_rowisaccessible": {
+      "code_fingerprint": "b3eaad96f6e335b3ad5d113ca6120a48fa0948a78d733f1f4385a500fc254f41",
+      "label": "rowIsAccessible()",
+      "last": "2026-10-05T22:33:41.967204+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-05T22:33:41.967204+00:00",
+          "outcome": "useful",
+          "q": "Validate ticket domain relationships and inbound email status behavior"
+        }
+      ],
+      "score": 0.999940852,
+      "source_file": "server/src/lib/ticketAccess.ts",
+      "status": "tentative",
+      "uses": 1
+    },
+    "src_lib_ticketnavigation_ticketviews": {
+      "code_fingerprint": "831ed5761b90781f2fba607662b362f7bb17c3a62b6156a4c25e24915b877522",
+      "label": "ticketViews",
+      "last": "2026-10-05T22:37:22.991863+00:00",
+      "provenance": [
+        {
+          "date": "2026-10-05T22:37:22.991863+00:00",
+          "outcome": "useful",
+          "q": "Varför kan ett nytt e-postsvar på ett avslutat ärende bli kvar bland avslutade ärenden?"
+        }
+      ],
+      "score": 0.999999956,
+      "source_file": "src/lib/ticketNavigation.ts",
+      "status": "tentative",
+      "uses": 1
+    }
+  },
+  "version": 1
+}

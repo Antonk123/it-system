@@ -78,3 +78,8 @@ dist-ssr
 # Playwright MCP artifacts
 .playwright-mcp/
 .foreman/
+
+# Graphify machine-local interpreter, root and caches
+graphify-out/.graphify_python
+graphify-out/.graphify_root
+graphify-out/cache/

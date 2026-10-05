@@ -1,0 +1,20 @@
+{
+  "corpus_tokens": 59720,
+  "corpus_words": 44790,
+  "nodes": 678,
+  "edges": 1277,
+  "avg_query_tokens": 10204,
+  "reduction_ratio": 5.9,
+  "per_question": [
+    {
+      "question": "how does authentication work",
+      "query_tokens": 10204,
+      "reduction": 5.9
+    },
+    {
+      "question": "what connects the data layer to the api",
+      "query_tokens": 10204,
+      "reduction": 5.9
+    }
+  ]
+}
