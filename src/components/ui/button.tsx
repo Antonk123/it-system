@@ -5,21 +5,21 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold ring-offset-background transition-all duration-300 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 active:scale-95 relative overflow-hidden group",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-medium ring-offset-background transition-colors duration-150 motion-reduce:transition-none focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 relative overflow-hidden group",
   {
     variants: {
       variant: {
-        default: "bg-linear-to-r from-primary to-primary/90 text-primary-foreground hover:from-primary/90 hover:to-primary/80 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5",
+        default: "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80",
         // dark:text overrides --destructive-foreground specifically in dark mode: five
         // of the six dark themes pair a pale destructive background (60% lightness)
         // with white text (~3.78:1, below WCAG AA's 4.5:1) — near-black text against
         // the same background clears AA (~4.96:1) without needing a per-theme CSS edit,
         // since @custom-variant dark (&:is(.dark *)) only fires when applyMode() has
         // already added .dark (src/lib/appearance.ts), never in light mode.
-        destructive: "bg-linear-to-r from-destructive to-destructive/90 text-destructive-foreground dark:text-[hsl(0_0%_7%)] hover:from-destructive/90 hover:to-destructive/80 shadow-lg shadow-destructive/25 hover:shadow-xl hover:shadow-destructive/30 hover:-translate-y-0.5",
-        outline: "border-2 border-primary/30 bg-background/50 backdrop-blur-xs hover:bg-primary/10 hover:text-primary hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10",
-        secondary: "bg-linear-to-r from-secondary to-secondary/80 text-secondary-foreground hover:from-secondary/90 hover:to-secondary/70 shadow-md hover:shadow-lg",
-        ghost: "hover:bg-accent/80 hover:text-accent-foreground backdrop-blur-xs",
+        destructive: "bg-destructive text-destructive-foreground dark:text-[hsl(0_0%_7%)] hover:bg-destructive/90 active:bg-destructive/80",
+        outline: "border border-border bg-background hover:bg-muted active:bg-muted/80",
+        secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80 active:bg-secondary/70",
+        ghost: "hover:bg-muted hover:text-foreground active:bg-muted/80",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

@@ -114,7 +114,7 @@ const Dashboard = () => {
           <h1 className="text-2xl md:text-[30px] font-bold tracking-tight text-foreground">
             {getGreeting()}
             {greetingName && (
-              <>, <span className="font-serif italic font-medium text-[hsl(var(--accent))]">{greetingName}</span></>
+              <>, {greetingName}</>
             )}
             .
           </h1>

@@ -64,9 +64,8 @@ export const KPICard = ({
   return (
     <Card
         className={cn(
-          'relative overflow-hidden shadow-none transition-colors duration-150',
-          'hover:border-primary/50',
-          onClick && 'cursor-pointer',
+          'relative h-full overflow-hidden shadow-none transition-colors duration-150',
+          onClick && 'cursor-pointer hover:border-primary/50',
           animationDelay != null && 'animate-fade-in',
           className
         )}
@@ -80,13 +79,9 @@ export const KPICard = ({
           ? { role: 'button', tabIndex: 0, onKeyDown: handleKeyDown }
           : {})}
       >
-        {/* Register marks — the plaque's own corner ticks, not a decorative blob */}
-        <span aria-hidden className="absolute left-0 top-0 w-2.5 h-2.5 border-l border-t border-border" />
-        <span aria-hidden className="absolute right-0 bottom-0 w-2.5 h-2.5 border-r border-b border-border" />
-
         <CardContent className="p-4">
           <div className="flex items-start justify-between mb-3">
-            <div className="p-2 rounded-sm border border-border bg-muted/40">
+            <div className="p-2 rounded-lg bg-muted">
               <div className="text-primary w-5 h-5">{icon}</div>
             </div>
             {trend && (
@@ -101,8 +96,9 @@ export const KPICard = ({
             <p className="text-xs font-medium text-muted-foreground">
               {label}
             </p>
-            <div className="text-2xl font-bold font-mono text-foreground">
+            <div className="text-2xl font-semibold tabular-nums text-foreground">
               <AnimatedNumber
+                className="font-sans font-semibold"
                 value={value}
                 decimals={valueDecimals}
                 suffix={valueSuffix}

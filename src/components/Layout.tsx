@@ -35,10 +35,10 @@ const NavOption = ({ item, isActive, open, onClick }: NavOptionProps) => {
       aria-label={item.label}
       aria-current={isActive ? 'page' : undefined}
       className={cn(
-        "relative flex h-11 w-full items-center rounded-md transition-all duration-200",
+        "relative flex h-11 w-full items-center rounded-lg transition-colors duration-150",
         "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
         isActive
-          ? "bg-primary/10 text-primary shadow-sm border-l-2 border-primary"
+          ? "bg-primary/10 text-primary"
           : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary"
       )}
     >
@@ -66,7 +66,7 @@ const TitleSection = ({ open }: TitleSectionProps) => {
   return (
     <div className="p-4 border-b border-sidebar-border">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl overflow-hidden shadow-lg">
+        <div className="w-10 h-10 rounded-xl overflow-hidden">
           {/* Icke-tom alt: "IT-ärenden"-texten intill visas bara när sidofältet är
               expanderat (open) — i kollapsat läge är logotypen ensam varumärkesbärare. */}
           <BrandLogo alt="IT-Ticket" className="w-full h-full object-cover" />
@@ -101,9 +101,9 @@ const BottomSection = ({ open, user, onLogout, onToggle, onNavigate }: BottomSec
         aria-label="Nytt ärende"
         onClick={onNavigate}
         className={cn(
-          "w-full flex items-center gap-2 rounded-md transition-all duration-200",
-          "bg-linear-to-r from-primary to-accent text-white",
-          "hover:from-primary/90 hover:to-accent/90",
+          "w-full flex items-center gap-2 rounded-lg transition-colors duration-150",
+          "bg-primary text-primary-foreground",
+          "hover:bg-primary/90",
           "focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
           open ? "h-11 px-4" : "h-11 justify-center"
         )}>
@@ -126,7 +126,7 @@ const BottomSection = ({ open, user, onLogout, onToggle, onNavigate }: BottomSec
         onClick={onLogout}
         aria-label="Logga ut"
         className={cn(
-          "w-full flex items-center gap-2 rounded-md transition-all duration-200",
+          "w-full flex items-center gap-2 rounded-lg transition-colors duration-150",
           "text-muted-foreground hover:text-foreground hover:bg-destructive/10",
           open ? "h-10 px-3" : "h-10 justify-center"
         )}
@@ -264,7 +264,7 @@ export const Layout = ({
             <Menu className="w-6 h-6" />
           </button>
           <div className="flex-1 relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
-            <div className="relative flex w-full items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-primary/30 text-muted-foreground text-sm cursor-pointer transition-colors">
+            <div className="relative flex w-full items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-border text-muted-foreground text-sm cursor-pointer transition-colors">
               <Search className="w-4 h-4" />
               <span>Sök överallt...</span>
             </div>
@@ -279,7 +279,7 @@ export const Layout = ({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 flex-1">
               <div className="prefabnavet-standalone-only relative w-80 shrink-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
-                <div className="relative flex items-center gap-2 px-4 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-primary/30 text-muted-foreground text-sm transition-colors">
+                <div className="relative flex items-center gap-2 px-4 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-border text-muted-foreground text-sm transition-colors">
                   <Search className="w-4 h-4" />
                   <span>Sök överallt...</span>
                   <kbd className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono">

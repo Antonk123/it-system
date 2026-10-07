@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router';
-import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Loader2, Inbox } from 'lucide-react';
+import { Plus, Download, Upload, LayoutGrid, Columns, Building2, Loader2, Inbox, Ellipsis } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { useUsers } from '@/hooks/useUsers';
 import { useCompanies } from '@/hooks/useCompanies';
@@ -138,7 +138,9 @@ const TicketList = () => {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <details className="relative">
-              <summary className="min-h-11 rounded-md border px-4 py-2 cursor-pointer">Mer</summary>
+              <Button asChild variant="outline" className="min-h-11 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                <summary><Ellipsis aria-hidden="true" />Mer</summary>
+              </Button>
               <div className="absolute right-0 z-20 mt-2 flex w-64 flex-col gap-2 rounded-md border bg-popover p-3 shadow-md">
             {/* Kanban has no mobile-optimized layout yet — the card list below
                 is the only view on narrow screens, so the toggle that switches
@@ -198,11 +200,6 @@ const TicketList = () => {
               </Button>
             </Link>
           </div>
-        </div>
-
-        {/* Company filter */}
-        <div className="flex items-center gap-2">
-
         </div>
 
         {/* Unified Filter Bar */}

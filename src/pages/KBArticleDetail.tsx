@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
-import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X, Printer, CheckCircle, Link2 } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X, Printer, CheckCircle, Link2, Ellipsis } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -243,7 +243,11 @@ const KBArticleDetail = () => {
                 <Edit className="w-4 h-4 mr-2" />
                 Redigera
               </Button>
-              <details className="relative"><summary className="min-h-11 rounded-md border px-4 py-2 cursor-pointer">Mer</summary><div className="absolute right-0 z-20 mt-2 flex w-48 flex-col gap-2 rounded-md border bg-popover p-3 shadow-md">
+              <details className="relative">
+                <Button asChild variant="outline" className="min-h-11 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                  <summary><Ellipsis aria-hidden="true" />Mer</summary>
+                </Button>
+                <div className="absolute right-0 z-20 mt-2 flex w-48 flex-col gap-2 rounded-md border bg-popover p-3 shadow-md">
               <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 print:hidden" data-print-hide>
                 <Printer className="w-4 h-4" />
                 <span>Skriv ut</span>

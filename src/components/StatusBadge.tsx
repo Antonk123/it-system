@@ -24,12 +24,10 @@ const statusClasses: Record<TicketStatus, string> = {
   'closed': 'status-badge-closed',
 };
 
-// Approval stamp: an outlined rectangle in stamp ink, not a soft status pill —
-// the ticket's stage reads as something that was stamped, not just tinted.
 export const StatusBadge = ({ status, className }: StatusBadgeProps) => {
   return (
     <span className={cn(
-      "inline-flex items-center px-2 py-0.5 rounded-sm text-[11px] font-semibold uppercase tracking-wide border",
+      "inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium border",
       statusClasses[status],
       className
     )}>
