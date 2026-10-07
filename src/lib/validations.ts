@@ -8,7 +8,7 @@ export const ticketInsertSchema = z.object({
   priority: z.enum(['low', 'medium', 'high', 'critical']),
   notes: z.string().max(5000, 'Notes must be less than 5000 characters').optional().nullable(),
   solution: z.string().max(5000, 'Solution must be less than 5000 characters').optional().nullable(),
-  category: z.string().uuid().optional(),
+  category: z.union([z.string().uuid(), z.literal('none')]).optional(),
   requesterId: z.string().optional(),
 });
 

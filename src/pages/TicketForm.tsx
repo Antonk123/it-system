@@ -30,6 +30,7 @@ import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Label } from '@/components/ui/label';
 import { migrateContent } from '@/lib/contentMigration';
 import { hasDraftContent, readTicketPrefill } from '@/lib/prefillFromQuery';
+import { saveTicketExtras } from '@/lib/ticketSaveExtras';
 import { cn } from '@/lib/utils';
 import {
   Select,
@@ -486,8 +487,23 @@ const TicketForm = () => {
     }
   };
 
+  const saveExtras = useCallback((ticketId: string, files: File[], checklistLabels: string[] = []) =>
+    saveTicketExtras({
+      ticketId,
+      files,
+      checklistLabels,
+      uploadAttachment,
+      addChecklistItems: bulkAddChecklistItems,
+      onUploadProgress: (current, total) => setUploadProgress(current ? `Laddar upp fil ${current} av ${total}...` : null),
+    }), [uploadAttachment, bulkAddChecklistItems]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (failedUploads) {
+      toast.error('Hantera de misslyckade bilagorna innan du sparar igen');
+      return;
+    }
 
     if (!formData.requesterId) {
       toast.error('Välj en beställare');
@@ -561,25 +577,7 @@ const TicketForm = () => {
       if (isEditing && id) {
         await updateTicket(id, { ...submitFormData, assigned_to: formData.assigned_to || undefined, company_id: formData.company_id || undefined } as any, customFieldValues.length > 0 ? customFieldValues : undefined);
 
-        // Upload pending files. uploadAttachment() returns null on failure
-        // (client-side validation OR backend rejection) — collect those so we
-        // surface them via the retry banner instead of silently reporting
-        // success and navigating away, which would drop the file. (The create
-        // branch below already does this; the edit branch used to swallow it.)
-        const failedFiles: File[] = [];
-        if (pendingFiles.length > 0) {
-          for (let i = 0; i < pendingFiles.length; i++) {
-            setUploadProgress(`Laddar upp fil ${i + 1} av ${pendingFiles.length}...`);
-            const uploaded = await uploadAttachment(id, pendingFiles[i]);
-            if (!uploaded) failedFiles.push(pendingFiles[i]);
-          }
-          setUploadProgress(null);
-        }
-
-        // Add pending checklist items
-        if (pendingChecklistItems.length > 0) {
-          await bulkAddChecklistItems(id, pendingChecklistItems.map(i => i.label));
-        }
+        const { failedFiles, checklistFailed } = await saveExtras(id, pendingFiles, pendingChecklistItems.map(i => i.label));
 
         setHasUnsavedChanges(false);
 
@@ -588,10 +586,12 @@ const TicketForm = () => {
           // (same UX as create mode) rather than navigating away and losing them.
           setFailedUploads({ files: failedFiles, ticketId: id });
           toast.warning(`Ärendet uppdaterades, men ${failedFiles.length} fil(er) kunde inte laddas upp`);
+          if (checklistFailed) toast.warning('Checklistan kunde inte läggas till');
           return;
         }
 
-        toast.success('Ärendet uppdaterades');
+        if (checklistFailed) toast.warning('Ärendet uppdaterades, men checklistan kunde inte läggas till');
+        else toast.success('Ärendet uppdaterades');
         // Navigate back to source instead of detail page
         if (location.state?.from) {
           navigate(location.state.from);
@@ -606,28 +606,7 @@ const TicketForm = () => {
         const newTicket = await addTicket(ticketWithTemplate, customFieldValues.length > 0 ? customFieldValues : undefined);
 
         if (newTicket) {
-          // Upload pending files to the new ticket
-          const failedFiles: File[] = [];
-          for (let i = 0; i < pendingFiles.length; i++) {
-            try {
-              setUploadProgress(`Laddar upp fil ${i + 1} av ${pendingFiles.length}...`);
-              await uploadAttachment(newTicket.id, pendingFiles[i]);
-            } catch (error) {
-              if (import.meta.env.DEV) console.error('Error uploading file:', pendingFiles[i].name, error);
-              failedFiles.push(pendingFiles[i]);
-            }
-          }
-          setUploadProgress(null);
-
-          // Add pending checklist items to the new ticket
-          if (pendingChecklistItems.length > 0) {
-            try {
-              await bulkAddChecklistItems(newTicket.id, pendingChecklistItems.map(i => i.label));
-            } catch (error) {
-              if (import.meta.env.DEV) console.error('Error adding checklist items:', error);
-              toast.error('Kunde inte lägga till checklistor');
-            }
-          }
+          const { failedFiles, checklistFailed } = await saveExtras(newTicket.id, pendingFiles, pendingChecklistItems.map(i => i.label));
 
           setHasUnsavedChanges(false);
           try { localStorage.removeItem(NEW_TICKET_DRAFT_KEY); } catch { /* draft cleared */ }
@@ -635,11 +614,13 @@ const TicketForm = () => {
           if (failedFiles.length > 0) {
             setFailedUploads({ files: failedFiles, ticketId: newTicket.id });
             toast.warning(`Ärendet skapades, men ${failedFiles.length} fil(er) kunde inte laddas upp`);
+            if (checklistFailed) toast.warning('Checklistan kunde inte läggas till');
             // Don't navigate — show retry UI instead
             return;
           }
 
-          toast.success('Ärendet skapades');
+          if (checklistFailed) toast.warning('Ärendet skapades, men checklistan kunde inte läggas till');
+          else toast.success('Ärendet skapades');
           navigate(`/tickets/${newTicket.id}`);
           return;
         }
@@ -656,15 +637,7 @@ const TicketForm = () => {
   const handleRetryUploads = useCallback(async () => {
     if (!failedUploads) return;
     setIsRetrying(true);
-    const stillFailed: File[] = [];
-    for (const file of failedUploads.files) {
-      try {
-        await uploadAttachment(failedUploads.ticketId, file);
-      } catch (error) {
-        if (import.meta.env.DEV) console.error('Retry failed for:', file.name, error);
-        stillFailed.push(file);
-      }
-    }
+    const { failedFiles: stillFailed } = await saveExtras(failedUploads.ticketId, failedUploads.files);
     setIsRetrying(false);
     if (stillFailed.length > 0) {
       setFailedUploads({ ...failedUploads, files: stillFailed });
@@ -675,7 +648,7 @@ const TicketForm = () => {
       setFailedUploads(null);
       navigate(`/tickets/${ticketId}`);
     }
-  }, [failedUploads, uploadAttachment, navigate]);
+  }, [failedUploads, saveExtras, navigate]);
 
   const handleSkipFailedUploads = useCallback(() => {
     // Guard against skipping mid-retry: a retry in flight may still resolve and
@@ -1287,7 +1260,7 @@ const TicketForm = () => {
                 <Button type="button" variant="outline" onClick={handleNavigateBack} disabled={isSaving}>
                   Avbryt
                 </Button>
-                <Button type="submit" disabled={isSubmitting || isUploading || isSaving} className="gap-2">
+                <Button type="submit" disabled={isSubmitting || isUploading || isSaving || !!failedUploads} className="gap-2">
                   {isSubmitting ? (
                     <><Loader2 className="w-4 h-4 animate-spin" />Sparar...</>
                   ) : isEditing ? 'Spara ändringar' : 'Skapa ärende'}

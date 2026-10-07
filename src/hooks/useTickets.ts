@@ -266,7 +266,7 @@ export function buildDeleteTicketMutationOptions(queryClient: QueryClient) {
   };
 }
 
-export const useTickets = (options?: UseTicketsOptions) => {
+export const useTickets = (options?: UseTicketsOptions, enabled = true) => {
   const queryClient = useQueryClient();
 
   // Build query string
@@ -294,6 +294,7 @@ export const useTickets = (options?: UseTicketsOptions) => {
   // Fetch tickets with React Query (with caching for performance)
   const { data: queryData, isLoading, isError } = useQuery({
     queryKey: ticketKeys.list(options || {}),
+    enabled,
     staleTime: 1000 * 60 * 2, // Consider data fresh for 2 minutes
     gcTime: 1000 * 60 * 5, // Keep in cache for 5 minutes (formerly cacheTime)
     queryFn: async () => {

@@ -43,11 +43,12 @@ export const TicketLinks = ({
   const [isAdding, setIsAdding] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearch = useDebounce(searchQuery, 250);
+  const searchTerm = debouncedSearch.trim();
+  const canSearch = open && searchTerm.length >= 2;
 
   const { tickets, isLoading: isSearching } = useTickets(
-    debouncedSearch.length >= 2
-      ? { page: 1, limit: 50, status: 'all', search: debouncedSearch }
-      : undefined
+    { page: 1, limit: 50, status: 'all', search: searchTerm },
+    canSearch,
   );
 
   const linkedIds = useMemo(
@@ -123,7 +124,7 @@ export const TicketLinks = ({
               onValueChange={setSearchQuery}
             />
             <CommandList>
-              {debouncedSearch.length < 2 ? (
+              {!canSearch ? (
                 <CommandEmpty>Skriv minst 2 tecken för att söka.</CommandEmpty>
               ) : isSearching ? (
                 <CommandEmpty>

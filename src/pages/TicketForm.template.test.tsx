@@ -12,7 +12,8 @@ const data = vi.hoisted(() => ({
     { id: 'a', name: 'Anna', email: 'anna@example.com', company_id: 'company-a', company_name: 'Bolag A', createdAt: new Date() },
     { id: 'b', name: 'Bertil', email: 'bertil@example.com', createdAt: new Date() },
   ],
-  empty: [], noop: vi.fn(), addTicket: vi.fn(async () => null),
+  empty: [], noop: vi.fn(), addTicket: vi.fn(async (): Promise<{ id: string } | null> => null),
+  uploadAttachment: vi.fn(async (): Promise<{ id: string } | null> => null),
   template: { id: 'tmpl', name: 'Testmall', titleTemplate: 'Beställning', priority: 'medium', category: 'aaf71e4e-c3bf-4000-b000-123456789012', fields: [
     { id: 'count', field_name: 'count', field_label: 'Antal', field_type: 'number', required: 1 },
     { id: 'reason', field_name: 'reason', field_label: 'Motivering', field_type: 'textarea', required: 1 },
@@ -24,7 +25,9 @@ vi.mock('@/hooks/useSystemUsers', () => ({ useSystemUsers: () => ({ users: data.
 vi.mock('@/hooks/useCompanies', () => ({ useCompanies: () => ({ companies: [{ id: 'company-a', name: 'Bolag A' }] }) }));
 vi.mock('@/hooks/useCategories', () => ({ useCategories: () => ({ categories: data.empty, addCategory: data.noop }) }));
 vi.mock('@/hooks/useTemplates', () => ({ useTemplates: () => ({ templates: data.empty }) }));
-vi.mock('@/hooks/useTicketAttachments', () => ({ useTicketAttachments: () => ({ attachments: data.empty, fetchAttachments: data.noop }) }));
+vi.mock('@/hooks/useTicketAttachments', () => ({ useTicketAttachments: () => ({
+  attachments: data.empty, fetchAttachments: data.noop, uploadAttachment: data.uploadAttachment,
+}) }));
 vi.mock('@/hooks/useTicketChecklists', () => ({ useTicketChecklists: () => ({ items: data.empty, fetchChecklists: data.noop }) }));
 vi.mock('@/hooks/useChecklistTemplates', () => ({ useChecklistTemplates: () => ({ templates: data.empty, fetchTemplates: data.noop }) }));
 vi.mock('@/components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
@@ -69,5 +72,39 @@ describe('Mall till ärende', () => {
       expect.objectContaining({ templateId: 'tmpl', category: data.template.category, title: 'Beställning' }),
       expect.arrayContaining([{ fieldName: 'count', fieldLabel: 'Antal', fieldValue: '0' }, { fieldName: 'reason', fieldLabel: 'Motivering', fieldValue: '<p>Behövs för arbetet</p>' }]),
     );
+  });
+});
+
+describe('Spara ärende med bilagor', () => {
+  it('behåller en misslyckad bilaga vid skapande och återförsök tills den faktiskt laddats upp', async () => {
+    data.addTicket.mockResolvedValue({ id: 'new-ticket' });
+    data.uploadAttachment
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: 'uploaded' });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(<QueryClientProvider client={client}><MemoryRouter><TicketForm /></MemoryRouter></QueryClientProvider>);
+
+    fireEvent.change(screen.getByLabelText('Beställare'), { target: { value: 'a' } });
+    fireEvent.change(container.querySelector('#title')!, { target: { value: 'Skrivaren fungerar inte' } });
+    fireEvent.change(container.querySelector('textarea')!, { target: { value: '<p>Kan inte skriva ut</p>' } });
+    fireEvent.click(screen.getByRole('button', { name: /Bilagor & Checklista/ }));
+    const file = new File(['data'], 'felbild.pdf', { type: 'application/pdf' });
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    fireEvent.submit(container.querySelector('form')!);
+
+    await waitFor(() => expect(data.addTicket).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(data.uploadAttachment).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/Ärendet sparades, men 1 fil/)).toBeInTheDocument();
+    fireEvent.submit(container.querySelector('form')!);
+    expect(data.addTicket).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Försök igen' }));
+    await waitFor(() => expect(data.uploadAttachment).toHaveBeenCalledTimes(2));
+    expect(screen.getByText(/Ärendet sparades, men 1 fil/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Försök igen' }));
+    await waitFor(() => expect(screen.queryByText(/Ärendet sparades, men 1 fil/)).toBeNull());
+    expect(data.addTicket).toHaveBeenCalledTimes(1);
+    expect(data.uploadAttachment).toHaveBeenCalledTimes(3);
   });
 });
