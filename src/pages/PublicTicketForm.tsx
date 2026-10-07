@@ -285,7 +285,10 @@ const PublicTicketForm = () => {
                   value={formData.description}
                   onChange={(html) => setFormData({ ...formData, description: html })}
                   placeholder="Beskriv ditt problem i detalj..."
-                  minHeight="160px"
+                  minHeight="100px"
+                  compact
+                  id="description"
+                  ariaLabel="Beskrivning"
                   required
                 />
                 <p className="text-xs text-muted-foreground">Ta gärna med eventuella felmeddelanden eller vad du redan provat.</p>
@@ -302,7 +305,7 @@ const PublicTicketForm = () => {
                 to medium (or whatever a chosen template specifies). */}
             {categories.length > 0 && (
               <div className="space-y-1.5">
-                <Label className="text-foreground text-sm font-medium">Kategori</Label>
+                <details><summary className="min-h-11 py-2 cursor-pointer">Kategori (valfritt)</summary>
                 <div className="flex flex-wrap gap-1.5">
                   {categories.map((cat) => {
                     const selected = formData.category === cat.id;
@@ -324,6 +327,7 @@ const PublicTicketForm = () => {
                     );
                   })}
                 </div>
+                </details>
               </div>
             )}
 

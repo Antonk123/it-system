@@ -19,3 +19,12 @@ export function requiredTemplateFieldErrors(
   }
   return errors;
 }
+
+/** Generate a stable, unique key only when creating a new template field. */
+export function templateFieldName(label: string, fields: Pick<TemplateFieldRow, 'field_name'>[]): string {
+  const base = label.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'falt';
+  const existing = new Set(fields.map(field => field.field_name));
+  let name = base;
+  for (let suffix = 2; existing.has(name); suffix++) name = `${base}_${suffix}`;
+  return name;
+}

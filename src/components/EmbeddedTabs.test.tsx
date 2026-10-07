@@ -25,7 +25,7 @@ describe('EmbeddedTabs', () => {
   it('markerar endast aktiv flik med aria-current', () => {
     renderTabs('/companies/abc');
     const current = screen.getAllByRole('link').filter(l => l.getAttribute('aria-current') === 'page');
-    expect(current.map(l => l.textContent)).toEqual(['Inställningar']);
+    expect(current.map(l => l.textContent)).toEqual(['Kontakter']);
   });
 
   it('Översikt är bara aktiv på exakt /', () => {

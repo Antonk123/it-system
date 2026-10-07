@@ -23,6 +23,7 @@ interface FileUploadProps {
   onRemoveAttachment: (attachment: TicketAttachment) => void;
   isUploading?: boolean;
   disabled?: boolean;
+  compact?: boolean;
 }
 
 const formatFileSize = (bytes: number | null) => {
@@ -46,6 +47,7 @@ export const FileUpload = ({
   onRemoveAttachment,
   isUploading,
   disabled,
+  compact = false,
 }: FileUploadProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -106,7 +108,7 @@ export const FileUpload = ({
       {/* Upload Area */}
       <div
         className={cn(
-          "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
+          compact ? "flex flex-wrap items-center gap-3 rounded-lg border border-dashed p-3" : "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
           isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/25",
           disabled && "opacity-50 cursor-not-allowed"
         )}
@@ -123,10 +125,8 @@ export const FileUpload = ({
           disabled={disabled}
           accept={FILE_INPUT_ACCEPT}
         />
-        <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />
-        <p className="text-sm text-muted-foreground mb-2">
-          Dra och släpp filer här, eller
-        </p>
+        {!compact && <Upload className="w-8 h-8 mx-auto mb-2 text-muted-foreground" />}
+        {!compact && <p className="text-sm text-muted-foreground mb-2">Dra och släpp filer här, eller</p>}
         <Button
           type="button"
           variant="outline"
@@ -140,7 +140,7 @@ export const FileUpload = ({
               Laddar upp...
             </>
           ) : (
-            'Bläddra filer'
+            compact ? 'Bifoga filer' : 'Bläddra filer'
           )}
         </Button>
         <p className="text-xs text-muted-foreground mt-2">

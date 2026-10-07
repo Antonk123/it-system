@@ -51,7 +51,7 @@ const WebhookDeliveriesPanel = memo(({ webhookId }: { webhookId: string }) => {
 });
 WebhookDeliveriesPanel.displayName = 'WebhookDeliveriesPanel';
 
-const IntegrationsTab = () => {
+const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'technical' }) => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const { apiKeys, createApiKey, deleteApiKey, isCreating: isCreatingApiKey } = useApiKeys();
@@ -131,6 +131,7 @@ const IntegrationsTab = () => {
 
   return (
     <>
+        {section !== 'technical' && <>
         <EmailBehaviorSection />
         <Collapsible open={sectionsOpen.emailInbound} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, emailInbound: open }))}>
           <Card>
@@ -212,11 +213,12 @@ const IntegrationsTab = () => {
           </Card>
         </Collapsible>
 
-        <Collapsible className="space-y-4">
-          <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between rounded-lg border px-4 py-3 text-left font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        </>}
+        {section !== 'email' && <Collapsible className="space-y-4" defaultOpen={section === 'technical'}>
+          {section !== 'technical' && <CollapsibleTrigger className="flex min-h-11 w-full items-center justify-between rounded-lg border px-4 py-3 text-left font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <span>Avancerat</span>
             <span className="text-sm font-normal text-muted-foreground">API-nycklar och webhooks</span>
-          </CollapsibleTrigger>
+          </CollapsibleTrigger>}
           <CollapsibleContent className="space-y-4">
         <Collapsible open={sectionsOpen.apiKeys} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, apiKeys: open }))}>
           <Card>
@@ -442,7 +444,7 @@ const IntegrationsTab = () => {
         </Collapsible>
 
           </CollapsibleContent>
-        </Collapsible>
+        </Collapsible>}
 
       <AlertDialog open={!!deleteApiKeyId} onOpenChange={() => setDeleteApiKeyId(null)}>
         <AlertDialogContent>

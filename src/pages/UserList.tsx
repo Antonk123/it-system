@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { Plus, Pencil, Trash2, Users as UsersIcon, Download, Upload, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useUsers } from '@/hooks/useUsers';
@@ -62,6 +62,17 @@ const UserList = () => {
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
+  useEffect(() => {
+    const companyId = searchParams.get('newContact');
+    if (!companyId || !companies.some(company => company.id === companyId)) return;
+    setEditingUser(null);
+    setFormData({ name: '', email: '', department: '', company_id: companyId });
+    setIsDialogOpen(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('newContact');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams, companies]);
+
   const ITEMS_PER_PAGE = 10;
 
   // Import state
@@ -123,20 +134,20 @@ const UserList = () => {
       if (editingUser) {
         // updateUser throws via mutateAsync on failure
         await updateUser(editingUser.id, formData);
-        toast.success('Användare uppdaterad');
+        toast.success('Kontakt uppdaterad');
       } else {
         // addUser swallows errors and returns null; hook shows toast.error
         const created = await addUser(formData);
         if (!created) {
           return;
         }
-        toast.success('Användare tillagd');
+        toast.success('Kontakt tillagd');
       }
       setFormData({ name: '', email: '', department: '', company_id: '' });
       setEditingUser(null);
       setIsDialogOpen(false);
     } catch (error: any) {
-      toast.error(error?.message || 'Kunde inte spara användare');
+      toast.error(error?.message || 'Kunde inte spara kontakt');
     } finally {
       setIsSavingUser(false);
     }
@@ -157,10 +168,10 @@ const UserList = () => {
   const handleExport = async () => {
     try {
       await api.exportContacts();
-      toast.success('Användare exporterade till Excel');
+      toast.success('Kontakter exporterade till Excel');
     } catch (error) {
       if (import.meta.env.DEV) console.error('Export failed:', error);
-      toast.error('Misslyckades att exportera användare');
+      toast.error('Misslyckades att exportera kontakter');
     }
   };
 
@@ -203,23 +214,23 @@ const UserList = () => {
       .map((r: any) => r.contact);
 
     if (validContacts.length === 0) {
-      toast.error('Inga giltiga användare att importera');
+      toast.error('Inga giltiga kontakter att importera');
       return;
     }
 
     setIsImporting(true);
     try {
       const result = await api.importContactsConfirm(validContacts);
-      toast.success(`${result.created} användare importerade!`);
+      toast.success(`${result.created} kontakter importerade!`);
       if (result.failed > 0) {
-        toast.warning(`${result.failed} användare misslyckades`);
+        toast.warning(`${result.failed} kontakter misslyckades`);
       }
       setIsImportDialogOpen(false);
       setImportPreview(null);
       refetch();
     } catch (error: any) {
       if (import.meta.env.DEV) console.error('Import failed:', error);
-      toast.error(error.message || 'Misslyckades att importera användare');
+      toast.error(error.message || 'Misslyckades att importera kontakter');
     } finally {
       setIsImporting(false);
     }
@@ -233,11 +244,12 @@ const UserList = () => {
   return (
     <Layout>
       <div className="space-y-6">
+<nav aria-label="Kontakter och företag" className="flex gap-4 border-b pb-3"><Link className="inline-flex min-h-11 items-center hover:underline" to="/users" aria-current="page">Kontakter</Link><Link className="inline-flex min-h-11 items-center hover:underline" to="/companies">Företag</Link></nav>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-xl font-bold text-foreground">Användare</h1>
+            <h1 className="text-xl font-bold text-foreground">Kontakter</h1>
             <p className="text-muted-foreground mt-1">
-              {users.length} användare i systemet
+              {users.length} {users.length === 1 ? 'kontakt' : 'kontakter'} i systemet
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -284,13 +296,13 @@ const UserList = () => {
               <DialogTrigger asChild>
                 <Button className="gap-2" onClick={() => setIsDialogOpen(true)}>
                   <Plus className="w-4 h-4" />
-                  Lägg till användare
+                  Lägg till kontakt
                 </Button>
               </DialogTrigger>
             <DialogContent className="max-h-[85vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>{editingUser ? 'Redigera användare' : 'Lägg till ny användare'}</DialogTitle>
-                <DialogDescription>Skapa eller uppdatera en användare i systemet.</DialogDescription>
+                <DialogTitle>{editingUser ? 'Redigera kontakt' : 'Lägg till ny kontakt'}</DialogTitle>
+                <DialogDescription>Skapa eller uppdatera en kontakt i systemet.</DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
@@ -346,7 +358,7 @@ const UserList = () => {
                   </Button>
                   <Button type="submit" disabled={isSavingUser}>
                     {isSavingUser && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                    {editingUser ? 'Spara ändringar' : 'Lägg till användare'}
+                    {editingUser ? 'Spara ändringar' : 'Lägg till kontakt'}
                   </Button>
                 </div>
               </form>
@@ -360,7 +372,7 @@ const UserList = () => {
             <SearchBar
               value={search}
               onChange={setSearch}
-              placeholder="Sök användare..."
+              placeholder="Sök kontakter..."
             />
           </div>
           <Select value={companyFilter} onValueChange={setCompanyFilter}>
@@ -406,20 +418,20 @@ const UserList = () => {
           </div>
         ) : isError ? (
           <div className="text-center py-12 space-y-2">
-            <p className="text-destructive text-sm">Kunde inte hämta användare</p>
+            <p className="text-destructive text-sm">Kunde inte hämta kontakter</p>
             <Button variant="outline" size="sm" onClick={refetch}>Försök igen</Button>
           </div>
         ) : filteredUsers.length === 0 ? (
           search === '' && companyFilter === 'all' ? (
             <EmptyState
               icon={<UsersIcon />}
-              title="Inga användare ännu"
-              description="Lägg till användare för att tilldela dem ärenden"
+              title="Inga kontakter ännu"
+              description="Lägg till kontakter som beställare av ärenden"
             />
           ) : (
             <EmptyState
               icon={<UsersIcon />}
-              title="Inga användare matchar filtret"
+              title="Inga kontakter matchar filtret"
               hasFilters
               onClearFilters={() => {
                 setSearch('');
@@ -483,19 +495,19 @@ const UserList = () => {
                           size="icon"
                           className="h-8 w-8"
                           onClick={() => handleEdit(user)}
-                          aria-label="Redigera användare"
+                          aria-label="Redigera kontakt"
                         >
                           <Pencil className="w-4 h-4" />
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" aria-label="Ta bort användare">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" aria-label="Ta bort kontakt">
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Ta bort användare</AlertDialogTitle>
+                              <AlertDialogTitle>Ta bort kontakt</AlertDialogTitle>
                               <AlertDialogDescription>
                                 Är du säker på att du vill ta bort {user.name}? Denna åtgärd kan inte ångras.
                               </AlertDialogDescription>
@@ -520,7 +532,7 @@ const UserList = () => {
           {totalPages > 1 && (
             <div className="flex items-center justify-between border-t pt-4">
               <div className="text-sm text-muted-foreground">
-                Visar {startIndex + 1}-{Math.min(endIndex, filteredUsers.length)} av {filteredUsers.length} användare
+                Visar {startIndex + 1}-{Math.min(endIndex, filteredUsers.length)} av {filteredUsers.length} kontakter
               </div>
 
               <div className="flex items-center gap-2">
@@ -599,7 +611,7 @@ const UserList = () => {
         <Dialog open={isImportDialogOpen} onOpenChange={handleCloseImportDialog}>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Importera användare från CSV</DialogTitle>
+              <DialogTitle>Importera kontakter från CSV</DialogTitle>
               <DialogDescription>
                 Granska förhandsvisningen innan du bekräftar importen
               </DialogDescription>
@@ -669,7 +681,7 @@ const UserList = () => {
                 {importPreview.results.filter((r: any) => r.valid).length > 0 && (
                   <div className="border rounded-lg p-4 bg-success/10">
                     <h4 className="font-semibold mb-2 text-success">
-                      Giltiga användare ({importPreview.results.filter((r: any) => r.valid).length} st)
+                      Giltiga kontakter ({importPreview.results.filter((r: any) => r.valid).length} st)
                     </h4>
                     <div className="space-y-2 max-h-40 overflow-y-auto">
                       {importPreview.results
@@ -704,7 +716,7 @@ const UserList = () => {
                         Importerar...
                       </>
                     ) : (
-                      `Importera ${importPreview.valid} användare`
+                      `Importera ${importPreview.valid} kontakter`
                     )}
                   </Button>
                 </div>

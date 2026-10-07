@@ -1,4 +1,4 @@
-import { Link } from 'react-router';
+import { Link, useLocation } from 'react-router';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -79,6 +79,7 @@ export const TicketTable = memo(function TicketTable({
   onBulkAction,
   checklistVisible = true,
 }: TicketTableProps) {
+  const location = useLocation();
   const { categories } = useCategories();
   const [checklistProgress, setChecklistProgress] = useState<ChecklistProgress[]>([]);
   const [bulkSaving, setBulkSaving] = useState(false);
@@ -157,18 +158,8 @@ export const TicketTable = memo(function TicketTable({
   const someSelected = selectedIds.length > 0 && !allSelected;
 
   const toggleAll = () => {
-    if (selectionMode && allSelected) {
-      // Deselect all and exit selection mode
-      onSelectionChange?.([]);
-      setSelectionMode(false);
-    } else if (selectionMode) {
-      // Already in selection mode, select all
-      onSelectionChange?.(tickets.map(t => t.id));
-    } else {
-      // Enter selection mode and select all
-      setSelectionMode(true);
-      onSelectionChange?.(tickets.map(t => t.id));
-    }
+    onSelectionChange?.(allSelected ? [] : tickets.map(ticket => ticket.id));
+    setSelectionMode(!allSelected);
   };
 
   const toggleOne = (id: string) => {
@@ -203,53 +194,15 @@ export const TicketTable = memo(function TicketTable({
     );
   }
 
-  // Mobile: Card layout
-  if (isMobile) {
-    return (
-      <div className="space-y-2">
-        {tickets.map((ticket) => {
-          const daysAgo = Math.floor((Date.now() - new Date(ticket.createdAt).getTime()) / 86400000);
-          const ageLabel = daysAgo === 0 ? 'Idag' : daysAgo === 1 ? '1 dag sedan' : `${daysAgo} dagar sedan`;
-          return (
-            <Link
-              key={ticket.id}
-              to={`/tickets/${ticket.id}`}
-              className="block"
-            >
-              <div className="bg-card rounded-lg border border-border p-3 cursor-pointer hover:bg-accent/5 active:bg-accent/10 transition-colors">
-                {/* Row 1: Title + Status badge */}
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <h3 className="text-sm font-bold text-foreground truncate flex-1">
-                    {ticket.title}
-                  </h3>
-                  <StatusBadge status={ticket.status} className="shrink-0" />
-                </div>
-                {/* Row 2: Priority + Age */}
-                <div className="flex items-center justify-between gap-2">
-                  <PriorityBadge priority={ticket.priority} />
-                  <span className="text-xs text-muted-foreground">{ageLabel}</span>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
-      </div>
-    );
-  }
-
-  // Desktop: Table layout
-  return (
-    <div className="space-y-2">
-      {/* Bulk Action Bar */}
-      {selectedIds.length > 0 && onBulkAction && (
+  const bulkActions = (selectedIds.length > 0 && onBulkAction && (
         <div className="flex flex-wrap items-center gap-2 px-4 py-2 rounded-lg border border-primary/30 bg-primary/5">
           <span className="text-sm font-medium text-foreground/80">{selectedIds.length} valda</span>
-          <div className="flex items-center gap-2 ml-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Select
               disabled={bulkSaving}
               onValueChange={(v) => handleBulkAction({ status: v as TicketStatus })}
             >
-              <SelectTrigger className="h-7 w-[130px] text-xs">
+              <SelectTrigger className="min-h-11 w-[140px]">
                 <SelectValue placeholder="Ändra status" />
               </SelectTrigger>
               <SelectContent>
@@ -264,7 +217,7 @@ export const TicketTable = memo(function TicketTable({
               disabled={bulkSaving}
               onValueChange={(v) => handleBulkAction({ priority: v as TicketPriority })}
             >
-              <SelectTrigger className="h-7 w-[130px] text-xs">
+              <SelectTrigger className="min-h-11 w-[140px]">
                 <SelectValue placeholder="Ändra prioritet" />
               </SelectTrigger>
               <SelectContent>
@@ -278,7 +231,7 @@ export const TicketTable = memo(function TicketTable({
               disabled={bulkSaving}
               onValueChange={(v) => handleBulkAction({ category_id: v === '__none__' ? null : v })}
             >
-              <SelectTrigger className="h-7 w-[150px] text-xs">
+              <SelectTrigger className="min-h-11 w-[150px]">
                 <SelectValue placeholder="Ändra kategori" />
               </SelectTrigger>
               <SelectContent>
@@ -293,20 +246,36 @@ export const TicketTable = memo(function TicketTable({
           <Button
             variant="ghost"
             size="sm"
-            className="ml-auto h-7 text-xs gap-1"
+            className="ml-auto min-h-11 gap-1"
             onClick={() => { onSelectionChange?.([]); setSelectionMode(false); }}
           >
             <X className="h-3 w-3" />
             Avmarkera
           </Button>
         </div>
-      )}
+      ));
+  if (isMobile) {
+    return <div className="space-y-2">
+      {onSelectionChange && <Button variant="outline" aria-pressed={selectionMode} onClick={() => { setSelectionMode(!selectionMode); onSelectionChange([]); }}>{selectionMode ? 'Avsluta val' : 'Välj'}</Button>}
+      {bulkActions}
+      {tickets.map(ticket => <div key={ticket.id} className="flex items-center gap-3 rounded-lg border bg-card p-3">
+        {onSelectionChange && selectionMode && <Checkbox disabled={bulkSaving} checked={selectedIds.includes(ticket.id)} onCheckedChange={() => toggleOne(ticket.id)} aria-label={`Markera ${ticket.title}`} />}
+        <Link className="min-w-0 flex-1 space-y-2" to={`/tickets/${ticket.id}`} state={{ from: location.pathname + location.search }}>
+          <span className="block font-medium break-words">{ticket.title}</span>
+          <span className="flex flex-wrap gap-2"><StatusBadge status={ticket.status} /><PriorityBadge priority={ticket.priority} /></span>
+        </Link>
+      </div>)}
+    </div>;
+  }
+  return (
+    <div className="space-y-2">
+      {bulkActions}
 
     <div className="rounded-lg overflow-hidden border border-border bg-card">
       <Table className={cn(compact && "text-xs")} containerClassName="max-h-[calc(100dvh-16rem)] overflow-auto">
         <TableHeader className="sticky top-0 z-10">
           <TableRow className="border-b border-border/50 bg-card hover:bg-card">
-            {onSelectionChange && selectionMode && (
+            {onSelectionChange && (
               <TableHead className="w-10 pl-4">
                 <Checkbox
                   checked={allSelected}
@@ -318,14 +287,6 @@ export const TicketTable = memo(function TicketTable({
             )}
             <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
               <div className="flex items-center gap-2">
-                {onSelectionChange && !selectionMode && (
-                  <Checkbox
-                    checked={false}
-                    onCheckedChange={toggleAll}
-                    aria-label="Välj flera"
-                    className="opacity-40 hover:opacity-100 transition-opacity"
-                  />
-                )}
                 Ärende
               </div>
             </TableHead>
@@ -372,7 +333,7 @@ export const TicketTable = memo(function TicketTable({
                 }
               }}
             >
-              {onSelectionChange && selectionMode && (
+              {onSelectionChange && (
                 <TableCell className="w-10 py-2.5 pl-4" onClick={(e) => e.stopPropagation()}>
                   <Checkbox
                     checked={selectedIds.includes(ticket.id)}

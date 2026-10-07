@@ -197,6 +197,7 @@ const CompanyDetail = () => {
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <Button variant="outline" className="mb-4" onClick={() => navigate(`/users?newContact=${company.id}`)}>Ny kontakt</Button>
             {!company.contacts || company.contacts.length === 0 ? (
               <p className="text-sm text-muted-foreground">Inga kontakter kopplade till detta företag.</p>
             ) : (

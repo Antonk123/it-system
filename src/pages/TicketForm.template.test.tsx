@@ -88,7 +88,6 @@ describe('Spara ärende med bilagor', () => {
     fireEvent.change(screen.getByLabelText('Beställare'), { target: { value: 'a' } });
     fireEvent.change(container.querySelector('#title')!, { target: { value: 'Skrivaren fungerar inte' } });
     fireEvent.change(container.querySelector('textarea')!, { target: { value: '<p>Kan inte skriva ut</p>' } });
-    fireEvent.click(screen.getByRole('button', { name: /Bilagor & Checklista/ }));
     const file = new File(['data'], 'felbild.pdf', { type: 'application/pdf' });
     fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
     fireEvent.submit(container.querySelector('form')!);

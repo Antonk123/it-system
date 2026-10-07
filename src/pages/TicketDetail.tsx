@@ -1,3 +1,5 @@
+import { useAuth } from '@/contexts/AuthContext';
+import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams, Link, useLocation } from 'react-router';
 import { format } from 'date-fns';
@@ -113,12 +115,25 @@ const formatFileSize = (bytes: number | null) => {
 
 const TicketDetail = () => {
   const { id } = useParams();
+  const { user: currentUser } = useAuth();
+  const solutionDraftKey = `ticket-solution:${currentUser?.id}:${id}`;
+  const [solutionDraft, setSolutionDraft] = useState<string | null>(() => {
+    try { return sessionStorage.getItem(solutionDraftKey); } catch { return null; }
+  });
+  useEffect(() => {
+    try {
+      if (solutionDraft === null) sessionStorage.removeItem(solutionDraftKey);
+      else sessionStorage.setItem(solutionDraftKey, solutionDraft);
+    } catch { /* Storage may be unavailable; the editor still retains its draft. */ }
+  }, [solutionDraft, solutionDraftKey]);
+  const [solutionEditing, setSolutionEditing] = useState(solutionDraft !== null);
+
   const navigate = useNavigate();
   const location = useLocation();
   // M9: detail-only mutations — does NOT mount useTickets()'s unfiltered list
   // query (which previously hit the backend's legacy LIMIT-1000 branch on
   // every ticket open just to reach update/delete).
-  const { updateTicket, deleteTicket } = useTicketMutations();
+  const { updateTicket, deleteTicket, isUpdating } = useTicketMutations();
 
   // Authoritative single-ticket query — the sole data source for this page.
   const { data: ticketDetail, isLoading: ticketDetailLoading, isError: ticketDetailError } = useQuery({
@@ -169,7 +184,7 @@ const TicketDetail = () => {
   const [pendingTemplateItems, setPendingTemplateItems] = useState<ChecklistItem[]>([]);
   const hasVisibleContent = (html: string | null | undefined): boolean => {
     if (!html) return false;
-    return html.replace(/<[^>]*>/g, '').trim().length > 0;
+    return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
   };
   const [ticketFieldValues, setTicketFieldValues] = useState<
     { field_name: string; field_label: string; field_value: string }[]
@@ -287,6 +302,17 @@ const TicketDetail = () => {
     updateTicket(ticket.id, { status })
       .then(() => toast.success(`Status uppdaterad till ${STATUS_LABELS[status]}`))
       .catch(() => toast.error('Kunde inte uppdatera status'));
+  };
+
+  const saveSolution = async (resolve: boolean) => {
+    const solution = solutionDraft ?? ticket.solution ?? '';
+    if (!hasVisibleContent(solution)) { toast.error('Beskriv lösningen först'); return; }
+    try {
+      await updateTicket(ticket.id, { solution, ...(resolve ? { status: 'resolved' as const } : {}) });
+      setSolutionDraft(null);
+      setSolutionEditing(false);
+      toast.success(resolve ? 'Lösningen sparad och ärendet markerat löst' : 'Lösningen sparad');
+    } catch { /* Mutation displays the error; keep the draft for retry. */ }
   };
 
   const handleDelete = async () => {
@@ -607,9 +633,11 @@ const TicketDetail = () => {
           <CardContent className="space-y-6">
             {/* Quick Status Change */}
             <div className="space-y-4 p-4 bg-card border border-border rounded-lg">
-              <div className="flex items-center gap-4">
+              <div className="flex flex-wrap items-center gap-4">
+                {currentUser && ticket.assignedTo !== currentUser.id && <Button variant="outline" disabled={isUpdating} onClick={async () => { try { await updateTicket(ticket.id, { assignedTo: currentUser.id }); toast.success('Ärendet är tilldelat dig'); } catch { /* Mutation reports error. */ } }}>Tilldela mig</Button>}
+                {currentUser && ticket.assignedTo === currentUser.id && <span className="text-sm text-muted-foreground">Tilldelat mig</span>}
                 <span className="text-sm font-medium">Status:</span>
-                <Select value={ticket.status} onValueChange={handleStatusChange}>
+                <Select disabled={isUpdating} value={ticket.status} onValueChange={handleStatusChange}>
                   <SelectTrigger className="w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
@@ -644,6 +672,21 @@ const TicketDetail = () => {
                 </div>
               )}
             </div>
+
+            <section className="border-t pt-4 space-y-3" aria-labelledby="solution-heading">
+              <h2 id="solution-heading" className="font-medium">Lösning</h2>
+              {hasVisibleContent(ticket.solution) && !solutionEditing ? <>
+                <HtmlRenderer content={migrateContent(ticket.solution)} />
+                <Button variant="outline" onClick={() => setSolutionEditing(true)}>Redigera lösning</Button>
+              </> : <>
+                <Label htmlFor="inline-solution">Hur löstes problemet?</Label>
+                <RichTextEditor id="inline-solution" ariaLabel="Hur löstes problemet?" compact minHeight="100px" value={solutionDraft ?? migrateContent(ticket.solution || '')} onChange={setSolutionDraft} disabled={isUpdating} />
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" disabled={isUpdating} onClick={() => saveSolution(false)}>Spara lösning</Button>
+                  <Button className="h-auto min-h-11 whitespace-normal text-left" disabled={isUpdating} onClick={() => saveSolution(true)}>{isUpdating ? 'Sparar…' : 'Spara lösning och markera löst'}</Button>
+                </div>
+              </>}
+            </section>
 
             {/* Checklist — only expand when there are items or user opens it */}
             {checklistItems.length > 0 || checklistOpen ? (
@@ -792,29 +835,6 @@ const TicketDetail = () => {
                     <p className="text-sm text-muted-foreground">Löst</p>
                     <p className="font-medium">{format(ticket.resolvedAt, 'PPP', { locale: sv })}</p>
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* Solution */}
-            <div className="pt-4 border-t">
-              {hasVisibleContent(ticket.solution) ? (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Lightbulb className="w-4 h-4 text-success" />
-                    <h2 className="font-medium text-foreground">Lösning</h2>
-                  </div>
-                  <div className="bg-success/20 border border-success/40 p-4 rounded-lg">
-                    <HtmlRenderer content={migrateContent(ticket.solution)} />
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Lightbulb className="w-4 h-4 text-muted-foreground" />
-                    <h2 className="font-medium text-foreground">Lösning</h2>
-                  </div>
-                  <p className="text-xs text-muted-foreground">Ingen lösning registrerad ännu.</p>
                 </div>
               )}
             </div>

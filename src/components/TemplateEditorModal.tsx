@@ -1,3 +1,4 @@
+import { templateFieldName } from '@/lib/templateValidation';
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -716,24 +717,29 @@ export const TemplateEditorModal = ({
                       </Button>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
+                      <details className="space-y-2"><summary className="min-h-11 py-2 cursor-pointer">Tekniskt fältnamn</summary>
                         <Label htmlFor="field-name">Fältnamn * <span className="text-xs text-muted-foreground">(tekniskt namn, t.ex. "antal_enheter")</span></Label>
                         <Input
                           id="field-name"
                           value={fieldFormData.field_name}
                           onChange={(e) => setFieldFormData({ ...fieldFormData, field_name: e.target.value })}
                           placeholder="antal_enheter"
-                          required
+                          readOnly
                         />
-                      </div>
+                      </details>
+                    <div className="grid grid-cols-2 gap-4">
+
 
                       <div className="space-y-2">
                         <Label htmlFor="field-label">Fältetikett * <span className="text-xs text-muted-foreground">(visas för användaren)</span></Label>
                         <Input
                           id="field-label"
                           value={fieldFormData.field_label}
-                          onChange={(e) => setFieldFormData({ ...fieldFormData, field_label: e.target.value })}
+                          onChange={(e) => {
+                            const field_label = e.target.value;
+                            const name = templateFieldName(field_label, fields);
+                            setFieldFormData(prev => ({ ...prev, field_label, ...(!editingFieldId ? { field_name: name } : {}) }));
+                          }}
                           placeholder="Antal enheter"
                           required
                         />

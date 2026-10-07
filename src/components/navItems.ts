@@ -30,7 +30,8 @@ export const navItems = [{
 /** Delad aktiv-logik för sidomenyn och den inbäddade flikraden. */
 export function isNavItemActive(path: string, pathname: string): boolean {
   if (path === '/tickets') return isTicketSection(pathname);
-  if (path === '/settings') return pathname.startsWith('/settings') || pathname.startsWith('/companies');
+  if (path === '/settings') return pathname.startsWith('/settings');
+  if (path === '/users') return pathname.startsWith('/users') || pathname.startsWith('/companies');
   if (path === '/') return pathname === '/';
   return pathname.startsWith(path);
 }

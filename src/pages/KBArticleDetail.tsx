@@ -229,10 +229,6 @@ const KBArticleDetail = () => {
               </Link>
             </Button>
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 print:hidden" data-print-hide>
-                <Printer className="w-4 h-4" />
-                <span>Skriv ut</span>
-              </Button>
               <Button
                 variant="outline"
                 size="sm"
@@ -246,6 +242,11 @@ const KBArticleDetail = () => {
               <Button variant="outline" size="sm" onClick={() => navigate(`/kb/${id}/edit`)}>
                 <Edit className="w-4 h-4 mr-2" />
                 Redigera
+              </Button>
+              <details className="relative"><summary className="min-h-11 rounded-md border px-4 py-2 cursor-pointer">Mer</summary><div className="absolute right-0 z-20 mt-2 flex w-48 flex-col gap-2 rounded-md border bg-popover p-3 shadow-md">
+              <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 print:hidden" data-print-hide>
+                <Printer className="w-4 h-4" />
+                <span>Skriv ut</span>
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -268,7 +269,7 @@ const KBArticleDetail = () => {
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
-              </AlertDialog>
+              </AlertDialog>              </div></details>
             </div>
           </div>
         </div>

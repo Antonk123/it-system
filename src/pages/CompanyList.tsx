@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { Building2, Plus, Search, Trash2, Loader2, MoreHorizontal } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Layout } from '@/components/Layout';
@@ -61,6 +61,7 @@ const CompanyList = () => {
   return (
     <Layout>
       <div className="space-y-6">
+<nav aria-label="Kontakter och företag" className="flex gap-4 border-b pb-3"><Link className="inline-flex min-h-11 items-center hover:underline" to="/users">Kontakter</Link><Link className="inline-flex min-h-11 items-center hover:underline" to="/companies" aria-current="page">Företag</Link></nav>
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -84,7 +85,7 @@ const CompanyList = () => {
               <DialogHeader>
                 <DialogTitle>Skapa nytt företag</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleCreate} className="space-y-4">
+              <form onInvalidCapture={event => { const details = (event.target as HTMLElement).closest('details'); if (details) details.open = true; }} onSubmit={handleCreate} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Namn *</Label>
                   <Input
@@ -95,6 +96,7 @@ const CompanyList = () => {
                     required
                   />
                 </div>
+                <details><summary className="min-h-11 py-2 cursor-pointer">Kontaktuppgifter och organisationsnummer</summary><div className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="org_number">Org.nummer</Label>
                   <Input
@@ -132,6 +134,7 @@ const CompanyList = () => {
                     placeholder="Storgatan 1, 111 22 Stockholm"
                   />
                 </div>
+                </div></details>
                 <div className="flex justify-end gap-2 pt-2">
                   <Button type="button" variant="outline" onClick={() => setCreateOpen(false)} disabled={isCreating}>
                     Avbryt

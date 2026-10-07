@@ -100,6 +100,7 @@ export const TicketComments = memo(function TicketComments({
           placeholder={isInternal ? 'Lägg till en intern kommentar...' : 'Skriv ett svar till kunden...'}
           minHeight="80px"
           disabled={isSubmitting}
+          compact
           showToolbar={true}
         />
         <div className="flex items-center justify-between gap-2">

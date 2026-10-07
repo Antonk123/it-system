@@ -380,7 +380,7 @@ const TicketForm = () => {
       setHasUnsavedChanges(hasChanges);
     } else if (!isEditing) {
       // For new tickets, mark as unsaved if any data is entered
-      const hasData = formData.title || formData.description || formData.requesterId;
+      const hasData = formData.title || formData.description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() || /<img\b/i.test(formData.description) || formData.requesterId || pendingFiles.length || pendingChecklistItems.length;
       setHasUnsavedChanges(!!hasData);
     }
   }, [formData, existingTicket, isEditing, pendingFiles, pendingChecklistItems, customFieldValues, editInitialFieldValues]);
@@ -441,14 +441,15 @@ const TicketForm = () => {
     let count = 0;
     if (formData.priority !== 'medium') count++;
     if (formData.company_id) count++;
+    if (formData.assigned_to) count++;
+    if (formData.category !== 'none') count++;
     return count;
-  }, [formData.priority, formData.company_id]);
+  }, [formData.priority, formData.company_id, formData.assigned_to, formData.category]);
 
   const attachmentsBadgeCount = useMemo(() => {
-    const fileCount = (attachments?.length || 0) + pendingFiles.length;
     const checkCount = checklistItems.length + pendingChecklistItems.length;
-    return fileCount + checkCount;
-  }, [attachments, pendingFiles, checklistItems, pendingChecklistItems]);
+    return checkCount;
+  }, [checklistItems, pendingChecklistItems]);
 
   const handleFilesSelect = (files: File[]) => {
     setPendingFiles((prev) => [...prev, ...files]);
@@ -699,6 +700,46 @@ const TicketForm = () => {
     </div>
   );
 
+  const routingFields = (
+    <>
+        <div className="space-y-2">
+          <Label id="label-category">Kategori</Label>
+          <div aria-labelledby="label-category">
+          <CategoryCombobox
+            categories={categories}
+            value={formData.category}
+            onValueChange={(v) => {
+              setFormData({ ...formData, category: v });
+              setErrors(prev => { const p = { ...prev }; delete p['category']; return p; });
+            }}
+            onAddCategory={handleAddCategory}
+            disabled={isSubmitting}
+          />
+          </div>
+          {errors.category && <p className="text-sm text-destructive mt-1">{errors.category}</p>}
+        </div>
+
+      {/* Tilldelad */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="ticket-assigned">Tilldelad</Label>
+          <Select value={formData.assigned_to || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, assigned_to: v === 'none' ? '' : v }))} disabled={isSubmitting}>
+            <SelectTrigger id="ticket-assigned">
+              <SelectValue placeholder="Ingen tilldelad" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Ingen tilldelad</SelectItem>
+              {systemUsers.map(u => (
+                <SelectItem key={u.id} value={u.id}>{u.displayName || u.email}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+      </div>
+    </>
+  );
+
   return (
     <Layout>
       <div className="max-w-2xl mx-auto space-y-6">
@@ -786,7 +827,7 @@ const TicketForm = () => {
             </h1>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-4">
 
               {/* Titel + Mall row */}
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-end">
@@ -810,7 +851,8 @@ const TicketForm = () => {
                   {errors.title && <p id="title-error" className="text-sm text-destructive mt-1">{errors.title}</p>}
                 </div>
                 {!isEditing && (
-                  <div className="space-y-2 sm:w-[240px]">
+                  <details className="space-y-2 sm:w-[240px]" open={selectedTemplate ? true : undefined}>
+                    <summary className="min-h-11 py-2 cursor-pointer">Använd mall</summary>
                     <Label id="label-template">Mall</Label>
                     <div aria-labelledby="label-template">
                     <TemplateCombobox
@@ -840,10 +882,35 @@ const TicketForm = () => {
                       }}
                     />
                     </div>
-                  </div>
+                  </details>
                 )}
               </div>
 
+                <div className="space-y-2">
+                  <Label id="label-requester">Beställare *</Label>
+                  <div aria-labelledby="label-requester">
+                  <UserCombobox
+                    users={users}
+                    value={formData.requesterId}
+                    onValueChange={(v) => {
+                      const contact = users.find(u => u.id === v);
+                      const autoCompany = contact?.company_id || '';
+                      setFormData(prev => ({ ...prev, requesterId: v, company_id: autoCompany }));
+                      setErrors(prev => { const p = { ...prev }; delete p['requesterId']; return p; });
+                    }}
+                    placeholder="Sök kontakt"
+                  />
+                  </div>
+                  {users.length === 0 && (
+                    <p className="text-sm text-muted-foreground">
+                      <a href="/users" className="text-primary hover:underline">Lägg till kontakt</a> för att tilldela ärenden
+                    </p>
+                  )}
+                  {formData.company_id && (
+                    <p className="text-sm text-muted-foreground">Företag: {companyName} — kan ändras under Fler uppgifter.</p>
+                  )}
+                  {errors.requesterId && <p className="text-sm text-destructive mt-1">{errors.requesterId}</p>}
+                </div>
               {/* Beskrivning / DynamicFieldsForm */}
               {isLoadingTemplate ? (
                 <div className="border border-dashed border-muted p-4 rounded text-center text-sm text-muted-foreground">
@@ -909,7 +976,7 @@ const TicketForm = () => {
               ) : (
                 <div className="space-y-2">
                   <Label htmlFor="description">
-                    Beskrivning *
+                    Beskrivning (valfritt)
                   </Label>
                   <div className={errors.description ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
                     <ErrorBoundary
@@ -923,8 +990,10 @@ const TicketForm = () => {
                         value={formData.description}
                         onChange={(html) => { setFormData({ ...formData, description: html }); setErrors(prev => { const p = { ...prev }; delete p['description']; return p; }); }}
                         placeholder="Detaljerad beskrivning av problemet..."
-                        minHeight="150px"
-                        required
+                        minHeight="90px"
+                        compact
+                        id="description"
+                        ariaLabel="Beskrivning (valfritt)"
                       />
                     </ErrorBoundary>
                   </div>
@@ -932,74 +1001,11 @@ const TicketForm = () => {
                 </div>
               )}
 
-              {/* Kategori + Beställare row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label id="label-category">Kategori</Label>
-                  <div aria-labelledby="label-category">
-                  <CategoryCombobox
-                    categories={categories}
-                    value={formData.category}
-                    onValueChange={(v) => {
-                      setFormData({ ...formData, category: v });
-                      setErrors(prev => { const p = { ...prev }; delete p['category']; return p; });
-                    }}
-                    onAddCategory={handleAddCategory}
-                    disabled={isSubmitting}
-                  />
-                  </div>
-                  {errors.category && <p className="text-sm text-destructive mt-1">{errors.category}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label id="label-requester">Beställare *</Label>
-                  <div aria-labelledby="label-requester">
-                  <UserCombobox
-                    users={users}
-                    value={formData.requesterId}
-                    onValueChange={(v) => {
-                      const contact = users.find(u => u.id === v);
-                      const autoCompany = contact?.company_id || '';
-                      setFormData(prev => ({ ...prev, requesterId: v, company_id: autoCompany }));
-                      setErrors(prev => { const p = { ...prev }; delete p['requesterId']; return p; });
-                    }}
-                    placeholder="Välj användare"
-                  />
-                  </div>
-                  {users.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      <a href="/users" className="text-primary hover:underline">Lägg till användare</a> för att tilldela ärenden
-                    </p>
-                  )}
-                  {formData.company_id && (
-                    <p className="text-sm text-muted-foreground">Företag: {companyName} — kan ändras under Detaljer.</p>
-                  )}
-                  {errors.requesterId && <p className="text-sm text-destructive mt-1">{errors.requesterId}</p>}
-                </div>
-              </div>
-
-              {/* Tilldelad */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="ticket-assigned">Tilldelad</Label>
-                  <Select value={formData.assigned_to || 'none'} onValueChange={(v) => setFormData(prev => ({ ...prev, assigned_to: v === 'none' ? '' : v }))} disabled={isSubmitting}>
-                    <SelectTrigger id="ticket-assigned">
-                      <SelectValue placeholder="Ingen tilldelad" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Ingen tilldelad</SelectItem>
-                      {systemUsers.map(u => (
-                        <SelectItem key={u.id} value={u.id}>{u.displayName || u.email}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-              </div>
-
               {/* Detaljer collapsible — collapsed in create mode, always open in edit mode */}
               {isEditing ? (
                 <div className="space-y-4">
                   <h2 className="font-medium">Detaljer</h2>
+                                  {routingFields}
                   {companyField}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -1054,7 +1060,7 @@ const TicketForm = () => {
               ) : (
                 <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
                   <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-card px-4 h-11 text-sm font-semibold hover:bg-accent/10 transition-colors">
-                    <span>Detaljer</span>
+                    <span>Fler uppgifter</span>
                     <div className="flex items-center gap-2">
                       {detailsBadgeCount > 0 && (
                         <span className="text-xs text-muted-foreground">{detailsBadgeCount} valt</span>
@@ -1064,7 +1070,8 @@ const TicketForm = () => {
                   </CollapsibleTrigger>
                   <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
                     <div className="space-y-4 pt-4">
-                      {companyField}
+                                      {routingFields}
+                  {companyField}
                       <div className="space-y-2">
                         <Label htmlFor="ticket-priority-create">Prioritet</Label>
                         <Select
@@ -1093,6 +1100,23 @@ const TicketForm = () => {
                 </Collapsible>
               )}
 
+              {!isEditing && (<>
+                      {/* File Attachments */}
+                      <div className="space-y-2">
+                        <Label>Bilagor</Label>
+                        <FileUpload
+                      compact={!isEditing}
+                          attachments={attachments}
+                          pendingFiles={pendingFiles}
+                          onFilesSelect={handleFilesSelect}
+                          onRemovePending={handleRemovePending}
+                          onRemoveAttachment={handleRemoveAttachment}
+                          isUploading={isUploading}
+                          disabled={isSubmitting}
+                        />
+                      </div>
+
+              </>)}
               {/* Bilagor & Checklista collapsible — collapsed in create mode, always open in edit mode */}
               {isEditing ? (
                 <div className="space-y-4">
@@ -1100,6 +1124,7 @@ const TicketForm = () => {
                   <div className="space-y-2">
                     <Label>Bilagor</Label>
                     <FileUpload
+                      compact={!isEditing}
                       attachments={attachments}
                       pendingFiles={pendingFiles}
                       onFilesSelect={handleFilesSelect}
@@ -1139,7 +1164,7 @@ const TicketForm = () => {
               ) : (
                 <Collapsible open={attachmentsOpen} onOpenChange={setAttachmentsOpen}>
                   <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-card px-4 h-11 text-sm font-semibold hover:bg-accent/10 transition-colors">
-                    <span>Bilagor & Checklista</span>
+                    <span>Checklista</span>
                     <div className="flex items-center gap-2">
                       {attachmentsBadgeCount > 0 && (
                         <span className="text-xs text-muted-foreground">{attachmentsBadgeCount} valt</span>
@@ -1149,20 +1174,6 @@ const TicketForm = () => {
                   </CollapsibleTrigger>
                   <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
                     <div className="space-y-4 pt-4">
-                      {/* File Attachments */}
-                      <div className="space-y-2">
-                        <Label>Bilagor</Label>
-                        <FileUpload
-                          attachments={attachments}
-                          pendingFiles={pendingFiles}
-                          onFilesSelect={handleFilesSelect}
-                          onRemovePending={handleRemovePending}
-                          onRemoveAttachment={handleRemoveAttachment}
-                          isUploading={isUploading}
-                          disabled={isSubmitting}
-                        />
-                      </div>
-
                       {/* Checklist */}
                       <div className="space-y-2">
                         <Label>Checklista / Att göra</Label>

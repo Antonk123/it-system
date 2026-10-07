@@ -278,7 +278,7 @@ const KBArticleForm = () => {
 
         {/* Template picker — only for new articles */}
         {!isEditing && !templateDismissed && (
-          <div className="space-y-3 p-4 rounded-lg border border-border bg-muted/20">
+          <details className="space-y-3"><summary className="min-h-11 py-2 cursor-pointer">Använd mall</summary>
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium">Välj mall (valfritt)</p>
               <button
@@ -302,7 +302,7 @@ const KBArticleForm = () => {
                 </button>
               ))}
             </div>
-          </div>
+          </details>
         )}
 
         {/* Form */}
@@ -329,10 +329,27 @@ const KBArticleForm = () => {
             {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
           </div>
 
-          <section aria-label="Artikelinformation" className="space-y-4 rounded-xl border border-border bg-muted/20 p-4">
-            <h2 className="text-sm font-semibold text-foreground">Artikelinformation</h2>
           <div className="space-y-2">
-            <Label htmlFor="category">Kategori</Label>
+            <Label id="kb-content-label">
+              Innehåll <span className="text-destructive">*</span>
+            </Label>
+            <div role="group" aria-labelledby="kb-content-label" className={errors.content ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
+              <RichTextEditor
+                value={content}
+                onChange={(html) => {
+                  setContent(html);
+                  setErrors(prev => { const p = { ...prev }; delete p.content; return p; });
+                }}
+                placeholder="Skriv artikelns innehåll..."
+                minHeight="420px"
+                error={!!errors.content}
+              />
+            </div>
+            {errors.content && <p className="text-xs text-destructive">{errors.content}</p>}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="category">Kategori *</Label>
             <Select
               value={categoryId}
               onValueChange={(v) => {
@@ -355,6 +372,8 @@ const KBArticleForm = () => {
             {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
           </div>
 
+          <details className="space-y-4 rounded-xl border border-border p-4"><summary className="min-h-11 py-2 cursor-pointer font-medium">Artikelinställningar</summary>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2 min-w-0">
               <Label htmlFor="article-type">Typ</Label>
@@ -369,18 +388,7 @@ const KBArticleForm = () => {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="status-toggle">Status</Label>
-              <Select value={status} onValueChange={(val) => setStatus(val as 'draft' | 'published')}>
-                <SelectTrigger id="status-toggle" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="published">Publicerad</SelectItem>
-                  <SelectItem value="draft">Utkast</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+
           </div>
 
           <div className="space-y-2">
@@ -410,7 +418,7 @@ const KBArticleForm = () => {
             </div>
           </div>
 
-          </section>
+          </details>
 
           {/* Cross-ref link picker — only shown in edit mode */}
           {isEditing && (
@@ -468,26 +476,18 @@ const KBArticleForm = () => {
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label id="kb-content-label">
-              Innehåll <span className="text-destructive">*</span>
-            </Label>
-            <div role="group" aria-labelledby="kb-content-label" className={errors.content ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
-              <RichTextEditor
-                value={content}
-                onChange={(html) => {
-                  setContent(html);
-                  setErrors(prev => { const p = { ...prev }; delete p.content; return p; });
-                }}
-                placeholder="Skriv artikelns innehåll..."
-                minHeight="420px"
-                error={!!errors.content}
-              />
-            </div>
-            {errors.content && <p className="text-xs text-destructive">{errors.content}</p>}
-          </div>
-
-          <div className="flex flex-wrap gap-3 justify-end border-t border-border pt-5">
+            <div className="space-y-2">
+              <Label htmlFor="status-toggle">Status</Label>
+              <Select value={status} onValueChange={(val) => setStatus(val as 'draft' | 'published')}>
+                <SelectTrigger id="status-toggle" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="published">Publicerad</SelectItem>
+                  <SelectItem value="draft">Utkast</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>          <div className="flex flex-wrap gap-3 justify-end border-t border-border pt-5">
             <Button
               type="button"
               variant="outline"

@@ -250,6 +250,8 @@ export interface RichTextEditorProps {
   required?: boolean;
   minHeight?: string;
   showToolbar?: boolean;
+  compact?: boolean;
+  ariaLabel?: string;
   error?: boolean;
   id?: string;
 }
@@ -263,9 +265,13 @@ export const RichTextEditor = ({
   required = false,
   minHeight = '200px',
   showToolbar = true,
+  compact = false,
+  ariaLabel,
   error = false,
   id,
 }: RichTextEditorProps) => {
+  const [formattingOpen, setFormattingOpen] = useState(false);
+  const toolbarVisible = showToolbar && (!compact || formattingOpen);
   const [imageUploading, setImageUploading] = useState(false);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
@@ -325,6 +331,7 @@ export const RichTextEditor = ({
     content: value || '',
     editable: !disabled,
     editorProps: {
+      attributes: { role: 'textbox', 'aria-label': ariaLabel || placeholder, 'aria-multiline': 'true' },
       // Ctrl+Enter (or Cmd+Enter on Mac) submits the surrounding form. TipTap
       // captures all key events when focused, so without this handler the user
       // has no keyboard path to submit from inside the editor. Plain Enter is
@@ -532,7 +539,8 @@ export const RichTextEditor = ({
           previously wrapped to 4-5 rows; horizontal scroll is more ergonomic than
           stuffing everything into a dropdown menu and matches the editing pattern
           users know from mobile word processors. */}
-      {showToolbar && (
+      {compact && showToolbar && <Button type="button" variant="ghost" className="min-h-11" aria-expanded={formattingOpen} onClick={() => setFormattingOpen(!formattingOpen)}>Formatering</Button>}
+      {toolbarVisible && (
         <div className="border border-input rounded-t-lg bg-muted/30 p-2 flex flex-nowrap gap-1 overflow-x-auto rte-toolbar-scroll">
           {/* Text formatting */}
           <Button
@@ -863,7 +871,7 @@ export const RichTextEditor = ({
         id={id}
         className={cn(
           'rich-text-editor-content',
-          showToolbar ? 'rounded-b-lg' : 'rounded-lg',
+          toolbarVisible ? 'rounded-b-lg' : 'rounded-lg',
           'border border-input bg-background/50 backdrop-blur-xs',
           'transition-all duration-200',
           !disabled && 'hover:bg-background/80 hover:border-primary/30 hover:shadow-sm',

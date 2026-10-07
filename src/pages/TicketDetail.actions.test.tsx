@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   deleteTicket: vi.fn(),
   ticket: { id: 't1', title: 'Testärende', description: '', status: 'open', priority: 'medium', created_at: '2026-09-08T10:00:00Z', updated_at: '2026-09-08T10:00:00Z' },
 }));
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'agent', role: 'admin' } }) }));
+vi.mock('@/components/ui/rich-text-editor', () => ({ RichTextEditor: ({ value, onChange, id }: { value: string; onChange: (value: string) => void; id: string }) => <textarea id={id} value={value} onChange={event => onChange(event.target.value)} /> }));
 vi.mock('@/lib/api', () => ({ api: { getTicket: async () => mocks.ticket } }));
 vi.mock('@/hooks/useTicketMutations', () => ({ useTicketMutations: () => ({ updateTicket: mocks.noop, deleteTicket: mocks.deleteTicket }) }));
 vi.mock('@/hooks/useCategories', () => ({ useCategories: () => ({ getCategoryLabel: mocks.noop }) }));
@@ -93,4 +95,25 @@ describe('TicketDetail gemensam åtgärdsmeny', () => {
     await waitFor(() => expect(trigger).toHaveFocus());
     expect(mocks.deleteTicket).not.toHaveBeenCalled();
   });
+});
+
+it('sparar lösning och status tillsammans och behåller texten vid fel', async () => {
+  mocks.noop.mockResolvedValue(undefined);
+  await setup(1024);
+  const solution = screen.getByLabelText('Hur löstes problemet?');
+  fireEvent.change(solution, { target: { value: 'Startade om skrivaren' } });
+  mocks.noop.mockRejectedValueOnce(new Error('Offline'));
+  fireEvent.click(screen.getByRole('button', { name: 'Spara lösning och markera löst' }));
+  await waitFor(() => expect(mocks.noop).toHaveBeenCalledWith('t1', { solution: 'Startade om skrivaren', status: 'resolved' }));
+  expect(solution).toHaveValue('Startade om skrivaren');
+  mocks.noop.mockResolvedValue(undefined);
+  fireEvent.click(screen.getByRole('button', { name: 'Spara lösning och markera löst' }));
+  await waitFor(() => expect(solution).toHaveValue(''));
+});
+
+it('tilldelar den inloggade handläggaren utan att öppna redigeringsformuläret', async () => {
+  mocks.noop.mockResolvedValue(undefined);
+  await setup(1024);
+  fireEvent.click(screen.getByRole('button', { name: 'Tilldela mig' }));
+  await waitFor(() => expect(mocks.noop).toHaveBeenCalledWith('t1', { assignedTo: 'agent' }));
 });

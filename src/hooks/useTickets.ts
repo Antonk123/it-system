@@ -136,6 +136,7 @@ export function buildUpdateTicketMutationOptions(queryClient: QueryClient) {
       if (validated.requesterId !== undefined) updateData.requester_id = validated.requesterId || null;
       if (validated.notes !== undefined) updateData.notes = validated.notes || null;
       if (validated.solution !== undefined) updateData.solution = validated.solution || null;
+      if (updates.assignedTo !== undefined) updateData.assigned_to = updates.assignedTo || null;
       if ((updates as any).assigned_to !== undefined) updateData.assigned_to = (updates as any).assigned_to || null;
       if ((updates as any).company_id !== undefined) updateData.company_id = (updates as any).company_id || null;
 

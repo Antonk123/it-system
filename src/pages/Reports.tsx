@@ -417,7 +417,12 @@ const Reports = () => {
             <p className="text-muted-foreground mt-2 text-lg font-light">Ärendeanalys och insikter</p>
           </div>
           <div className="reports-filter-bar flex flex-wrap items-center gap-2">
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+            <Select value="" onValueChange={(value) => {
+              const date = new Date();
+              if (value === 'previous') date.setMonth(date.getMonth() - 1, 1);
+              setSelectedYear(String(date.getFullYear()));
+              setSelectedMonth(value === 'year' ? 'all' : String(date.getMonth()));
+            }}><SelectTrigger className="w-[170px]" aria-label="Snabbval period"><SelectValue placeholder="Snabbval period" /></SelectTrigger><SelectContent><SelectItem value="month">Denna månad</SelectItem><SelectItem value="previous">Förra månaden</SelectItem><SelectItem value="year">Detta år</SelectItem></SelectContent></Select>
             <Select value={selectedYear} onValueChange={(value) => {
               setSelectedYear(value);
               if (value === 'all') setSelectedMonth('all');

@@ -190,17 +190,19 @@ const Archive = () => {
           </div>
         </div>
 
-        <Select value={companyFilter} onValueChange={(value) => updateFilters({ company_id: value })}>
+
+        <p className="text-xs text-muted-foreground">Datumfilter avser senast uppdaterat, för både lösta och stängda ärenden.</p>
+
+        {/* Unified Filter Bar — date field locked to updated_at */}
+        <UnifiedFilterBar
+          companyActive={companyFilter !== 'all'}
+          companyControl={        <Select value={companyFilter} onValueChange={(value) => updateFilters({ company_id: value })}>
           <SelectTrigger className="w-[180px]" aria-label="Företag"><SelectValue placeholder="Alla företag" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Alla företag</SelectItem>
             {companies.map(company => <SelectItem key={company.id} value={company.id}>{company.name}</SelectItem>)}
           </SelectContent>
-        </Select>
-        <p className="text-xs text-muted-foreground">Datumfilter avser senast uppdaterat, för både lösta och stängda ärenden.</p>
-
-        {/* Unified Filter Bar — date field locked to updated_at */}
-        <UnifiedFilterBar
+        </Select>}
           mine={mine}
           onMineChange={(value) => updateFilters({ mine: value ? '1' : '' })}
           search={search}

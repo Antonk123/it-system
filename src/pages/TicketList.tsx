@@ -137,6 +137,9 @@ const TicketList = () => {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <details className="relative">
+              <summary className="min-h-11 rounded-md border px-4 py-2 cursor-pointer">Mer</summary>
+              <div className="absolute right-0 z-20 mt-2 flex w-64 flex-col gap-2 rounded-md border bg-popover p-3 shadow-md">
             {/* Kanban has no mobile-optimized layout yet — the card list below
                 is the only view on narrow screens, so the toggle that switches
                 between two desktop-only views has nothing to do there. */}
@@ -186,6 +189,8 @@ const TicketList = () => {
               <Upload className="w-4 h-4" />
               Importera
             </Button>
+              </div>
+            </details>
             <Link to="/tickets/new">
               <Button className="gap-2">
                 <Plus className="w-4 h-4" />
@@ -197,7 +202,14 @@ const TicketList = () => {
 
         {/* Company filter */}
         <div className="flex items-center gap-2">
-          <Select value={companyFilter} onValueChange={value => updateFilters({ company_id: value })}>
+
+        </div>
+
+        {/* Unified Filter Bar */}
+        <div>
+        <UnifiedFilterBar
+          companyActive={companyFilter !== 'all'}
+          companyControl={          <Select value={companyFilter} onValueChange={value => updateFilters({ company_id: value })}>
             <SelectTrigger className="w-[180px]">
               <Building2 className="mr-2 h-4 w-4 shrink-0" />
               <SelectValue placeholder="Alla företag" />
@@ -208,12 +220,7 @@ const TicketList = () => {
                 <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
               ))}
             </SelectContent>
-          </Select>
-        </div>
-
-        {/* Unified Filter Bar */}
-        <div>
-        <UnifiedFilterBar
+          </Select>}
           mine={mine}
           onMineChange={(value) => updateFilters({ mine: value ? '1' : '' })}
           search={search}

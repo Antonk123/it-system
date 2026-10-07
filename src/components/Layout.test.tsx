@@ -121,9 +121,9 @@ describe('Samlad ärendemeny', () => {
 
 
 describe('Företag som sekundär inställning', () => {
-  it('tar bort huvudlänken men markerar Inställningar för befintlig företagsroute', () => {
+  it('tar bort huvudlänken men markerar Kontakter för befintlig företagsroute', () => {
     renderLayout('/companies/ett-foretag');
     expect(screen.queryByRole('link', { name: 'Företag' })).toBeNull();
-    expect(screen.getByRole('link', { name: 'Inställningar' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'Kontakter' })).toHaveAttribute('aria-current', 'page');
   });
 });

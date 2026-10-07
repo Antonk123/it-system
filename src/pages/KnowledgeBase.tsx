@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router';
-import { BookOpen, Plus, Search, Folder, Clock, Settings2, X, Check, Pencil, Trash2, AlertTriangle, Upload, Link2, ArrowUpRight } from 'lucide-react';
+import { BookOpen, Plus, Search, Folder, Clock, X, Check, Pencil, Trash2, AlertTriangle, Upload, Link2, ArrowUpRight } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { KBTagSettings } from '@/components/KBTagSettings';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
@@ -219,6 +219,7 @@ const KnowledgeBase = () => {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 sm:justify-end">
+                <details className="relative"><summary className="min-h-11 rounded-md border px-4 py-2 cursor-pointer">Hantera</summary><div className="absolute right-0 z-20 mt-2 w-64 rounded-md border bg-popover p-3 shadow-md flex flex-col gap-2">
                 <Button
                   variant="outline"
                   onClick={() => setShowImportDialog(true)}
@@ -239,6 +240,22 @@ const KnowledgeBase = () => {
                     Publik länk
                   </Button>
                 )}
+          {user?.role === 'admin' && (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" className="mx-2 mb-2 justify-start min-h-11">Hantera KB-taggar</Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-xl max-h-[85dvh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Hantera kunskapsbasens taggar</DialogTitle>
+                  <DialogDescription>Skapa och redigera taggar för artiklar.</DialogDescription>
+                </DialogHeader>
+                <KBTagSettings />
+              </DialogContent>
+            </Dialog>
+          )}
+                <Button variant="outline" onClick={() => setShowCategoryManager(v => !v)}>Kategorier</Button>
+                </div></details>
                 <Button
                   onClick={() => navigate(`/kb/new${selectedCategoryId ? `?category=${selectedCategoryId}` : ''}`)}
                   size="sm"
@@ -296,32 +313,10 @@ const KnowledgeBase = () => {
         <aside className="min-w-0 self-start rounded-xl border border-border bg-card p-2 space-y-2">
           <div className="p-3 flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Kategorier</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="Hantera kategorier"
-              aria-expanded={showCategoryManager}
-              className="h-11 w-11 p-0"
-              onClick={() => setShowCategoryManager((v) => !v)}
-            >
-              <Settings2 className="w-3.5 h-3.5 text-muted-foreground" />
-            </Button>
+
           </div>
 
-          {user?.role === 'admin' && (
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button variant="ghost" className="mx-2 mb-2 justify-start min-h-11">Hantera KB-taggar</Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-xl max-h-[85dvh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Hantera kunskapsbasens taggar</DialogTitle>
-                  <DialogDescription>Skapa och redigera taggar för artiklar.</DialogDescription>
-                </DialogHeader>
-                <KBTagSettings />
-              </DialogContent>
-            </Dialog>
-          )}
+
 
           <div className="px-1 pb-1 lg:hidden">
             <Label htmlFor="kb-category-mobile" className="sr-only">Kategori</Label>

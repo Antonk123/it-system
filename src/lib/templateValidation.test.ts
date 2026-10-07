@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import { requiredTemplateFieldErrors } from './templateValidation';
+import { requiredTemplateFieldErrors, templateFieldName } from './templateValidation';
 const field = (field_type: string, required = 1) => ({ field_name: 'answer', field_label: 'Svar', field_type, required });
 const value = (fieldValue: string) => [{ fieldName: 'answer', fieldLabel: 'Svar', fieldValue }];
 describe('Obligatoriska mallfält', () => {
@@ -16,4 +16,10 @@ describe('Obligatoriska mallfält', () => {
     expect(requiredTemplateFieldErrors([field('text')], [])).toEqual({ answer: 'Svar krävs' });
     expect(requiredTemplateFieldErrors([field('text', 0)], [])).toEqual({});
   });
+});
+
+it('genererar tekniska namn från svenska etiketter utan kollisioner', () => {
+  expect(templateFieldName('Åtgärd för enhet', [])).toBe('atgard_for_enhet');
+  expect(templateFieldName('Antal', [{ field_name: 'antal' }, { field_name: 'antal_2' }])).toBe('antal_3');
+  expect(templateFieldName('???', [])).toBe('falt');
 });

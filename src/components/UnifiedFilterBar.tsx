@@ -11,11 +11,13 @@ import {
   SelectTrigger,
 } from '@/components/ui/select';
 import { useCategories } from '@/hooks/useCategories';
-import { useIsMobile } from '@/hooks/use-mobile';
+import type { ReactNode } from 'react';
 import { SlidersHorizontal } from 'lucide-react';
 
 interface UnifiedFilterBarProps {
   // Current filter values (from URL params in parent)
+  companyControl?: ReactNode;
+  companyActive?: boolean;
   search: string;
   mine: boolean;
   onMineChange: (mine: boolean) => void;
@@ -38,6 +40,8 @@ interface UnifiedFilterBarProps {
 }
 
 export function UnifiedFilterBar({
+  companyControl,
+  companyActive = false,
   search,
   mine,
   onMineChange,
@@ -53,7 +57,6 @@ export function UnifiedFilterBar({
   searchPlaceholder = 'Sök ärenden...',
 }: UnifiedFilterBarProps) {
   const { categories } = useCategories();
-  const isMobile = useIsMobile();
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   // Helper to get priority label
@@ -88,6 +91,7 @@ export function UnifiedFilterBar({
 
   // Count active filters (excluding search) for mobile badge
   const activeFilterCount = [
+    companyActive,
     priorityFilter !== 'all',
     categoryFilter !== 'all',
     checklistFilter !== '' && checklistFilter !== 'all',
@@ -97,6 +101,7 @@ export function UnifiedFilterBar({
 
   const filterControls = (
     <>
+      {companyControl}
       {/* 3. Priority Select */}
       <Select
         value={priorityFilter}
@@ -181,38 +186,24 @@ export function UnifiedFilterBar({
           />
         </div>
         <Button variant={mine ? 'secondary' : 'outline'} aria-pressed={mine} onClick={() => onMineChange(!mine)} className="min-h-11 shrink-0">Bara mina</Button>
-        {isMobile && (
+        {(
           <Button
             variant={filtersOpen ? 'secondary' : 'outline'}
-            size="icon"
-            className="h-10 w-10 shrink-0 relative"
+            size="sm"
+            className="min-h-11 shrink-0 gap-2"
             onClick={() => setFiltersOpen(!filtersOpen)}
             title="Filter"
             aria-label={`Filter${activeFilterCount > 0 ? ` (${activeFilterCount} aktiva)` : ''}`}
             aria-expanded={filtersOpen}
           >
             <SlidersHorizontal className="w-4 h-4" />
-            {activeFilterCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                {activeFilterCount}
-              </span>
-            )}
+            Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
           </Button>
         )}
       </div>
 
-      {/* Filter controls — always visible on desktop, collapsible on mobile */}
-      {isMobile ? (
-        filtersOpen && (
-          <div className="flex flex-col gap-2 animate-in slide-in-from-top-2 duration-200">
-            {filterControls}
-          </div>
-        )
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          {filterControls}
-        </div>
-      )}
+      {filtersOpen && <div className="flex flex-wrap items-center gap-2">{filterControls}</div>}
+      {!filtersOpen && activeFilterCount > 0 && <p className="text-xs text-muted-foreground">{activeFilterCount} filter aktiva <Button variant="link" onClick={onClearAll}>Rensa filter</Button></p>}
 
       {/* Chip row */}
       <ActiveFilterChips

@@ -21,7 +21,7 @@ export const UserCombobox = ({
   users,
   value,
   onValueChange,
-  placeholder = 'Välj användare',
+  placeholder = 'Välj kontakt',
 }: UserComboboxProps) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -45,6 +45,7 @@ export const UserCombobox = ({
         <Button
           variant="outline"
           role="combobox"
+          aria-label="Beställare"
           aria-expanded={open}
           className="w-full justify-between font-normal"
         >
@@ -56,7 +57,7 @@ export const UserCombobox = ({
         <div className="flex items-center border-b px-3 py-2">
           <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
           <Input
-            placeholder="Sök användare..."
+            placeholder="Sök kontakt..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-8 border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
@@ -66,8 +67,8 @@ export const UserCombobox = ({
           {filteredUsers.length === 0 ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
               {users.length === 0
-                ? 'Inga användare tillgängliga'
-                : 'Ingen användare hittades'}
+                ? 'Inga kontakter tillgängliga'
+                : 'Ingen kontakt hittades'}
             </div>
           ) : (
             filteredUsers.map((user) => (

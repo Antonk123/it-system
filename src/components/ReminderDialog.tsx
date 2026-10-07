@@ -64,6 +64,7 @@ export function ReminderDialog({ onCreateReminder, open: controlledOpen, onOpenC
       return;
     }
 
+    if (reminderDateTime.getTime() <= Date.now()) { toast.error('Välj en tid i framtiden'); return; }
     setIsSubmitting(true);
     try {
       await onCreateReminder(reminderDateTime.toISOString(), message || undefined);
@@ -93,6 +94,10 @@ export function ReminderDialog({ onCreateReminder, open: controlledOpen, onOpenC
           <DialogTitle>Skapa påminnelse</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-4">
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" disabled={isSubmitting} onClick={() => { const next = new Date(Date.now() + 60 * 60 * 1000); setDate(next); setTime(format(next, 'HH:mm')); }}>Om en timme</Button>
+            <Button variant="outline" disabled={isSubmitting} onClick={() => { const next = new Date(); next.setDate(next.getDate() + 1); setDate(next); setTime('09:00'); }}>Imorgon 09:00</Button>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="reminder-date">Datum</Label>
             <Popover>

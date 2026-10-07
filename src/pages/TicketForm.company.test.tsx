@@ -47,7 +47,7 @@ describe('Företag härlett från beställare', () => {
     expect(screen.queryByLabelText('Företag')).toBeNull();
     fireEvent.change(screen.getByLabelText('Beställare'), { target: { value: 'a' } });
     expect(screen.getByText(/Företag: Bolag A/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Detaljer/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Fler uppgifter/ }));
     expect(screen.getByLabelText('Företag')).toHaveTextContent('Bolag A');
     fireEvent.change(screen.getByLabelText('Beställare'), { target: { value: 'b' } });
     expect(screen.queryByText(/Företag: Bolag A/)).toBeNull();

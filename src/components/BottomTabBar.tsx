@@ -7,14 +7,14 @@ const tabItems = [
   { path: '/', icon: LayoutDashboard, label: 'Översikt' },
   { path: '/tickets', icon: Ticket, label: 'Ärenden' },
   { path: '/tickets/new', icon: Plus, label: 'Nytt' },
-  { path: '/settings', icon: MoreHorizontal, label: 'Mer' },
+  { path: '/settings', icon: MoreHorizontal, label: 'Inställningar' },
 ];
 
 export const BottomTabBar = () => {
   const location = useLocation();
 
   const isActive = (path: string) => {
-    if (path === '/settings') return location.pathname.startsWith('/settings') || location.pathname.startsWith('/companies');
+    if (path === '/settings') return location.pathname.startsWith('/settings');
     if (path === '/') return location.pathname === '/';
     if (path === '/tickets') return isTicketSection(location.pathname) && location.pathname !== '/tickets/new';
     if (path === '/tickets/new') return location.pathname === '/tickets/new';
