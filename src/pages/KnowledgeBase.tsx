@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router';
-import { BookOpen, Plus, Search, Folder, Clock, X, Check, Pencil, Trash2, AlertTriangle, Upload, Link2, ArrowUpRight } from 'lucide-react';
+import { BookOpen, Plus, Search, Folder, Clock, X, Check, Pencil, Trash2, AlertTriangle, Upload, Link2, ArrowUpRight, Ellipsis } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { KBTagSettings } from '@/components/KBTagSettings';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
@@ -219,7 +219,11 @@ const KnowledgeBase = () => {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 sm:justify-end">
-                <details className="relative"><summary className="min-h-11 rounded-md border px-4 py-2 cursor-pointer">Hantera</summary><div className="absolute right-0 z-20 mt-2 w-64 rounded-md border bg-popover p-3 shadow-md flex flex-col gap-2">
+                <details className="relative">
+                  <Button asChild variant="outline" className="min-h-11 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                    <summary><Ellipsis aria-hidden="true" />Hantera</summary>
+                  </Button>
+                  <div className="absolute right-0 z-20 mt-2 w-64 rounded-md border bg-popover p-3 shadow-md flex flex-col gap-2">
                 <Button
                   variant="outline"
                   onClick={() => setShowImportDialog(true)}
