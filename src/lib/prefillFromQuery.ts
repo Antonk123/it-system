@@ -1,11 +1,11 @@
-export const PREFILL_TITLE_MAX = 200;
-export const PREFILL_DESCRIPTION_MAX = 2000;
+const PREFILL_TITLE_MAX = 200;
+const PREFILL_DESCRIPTION_MAX = 2000;
 
 const escapeHtml = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
 /** Ren text -> säker HTML: allt escapas, radbrytningar blir stycken. */
-export function plainTextToHtml(text: string): string {
+function plainTextToHtml(text: string): string {
   return text
     .replace(/\r\n?/g, '\n')
     .split('\n')

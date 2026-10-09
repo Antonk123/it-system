@@ -17,6 +17,8 @@ interface CategoryComboboxProps {
   onAddCategory: (label: string) => Promise<void>;
   placeholder?: string;
   disabled?: boolean;
+  'aria-describedby'?: string;
+  'aria-invalid'?: boolean;
 }
 
 export const CategoryCombobox = ({
@@ -26,6 +28,8 @@ export const CategoryCombobox = ({
   onAddCategory,
   placeholder = 'Välj kategori',
   disabled = false,
+  'aria-describedby': ariaDescribedBy,
+  'aria-invalid': ariaInvalid,
 }: CategoryComboboxProps) => {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -125,6 +129,8 @@ export const CategoryCombobox = ({
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={open ? listboxId : undefined}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
           disabled={disabled}
           className="w-full justify-between font-normal"
         >
@@ -247,6 +253,7 @@ export const CategoryCombobox = ({
           ) : (
             <div className="flex gap-2 p-2">
               <Input
+                aria-label="Kategorinamn"
                 autoFocus
                 placeholder="Kategorinamn..."
                 value={newCategoryName}

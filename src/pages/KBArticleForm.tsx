@@ -436,6 +436,7 @@ const KBArticleForm = () => {
               <PopoverContent className="w-80 p-0" align="start">
                 <Command shouldFilter={false}>
                   <CommandInput
+                    aria-label="Sök artikel"
                     placeholder="Sök artikel..."
                     value={linkSearch}
                     onValueChange={setLinkSearch}

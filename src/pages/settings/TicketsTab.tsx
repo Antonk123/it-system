@@ -396,7 +396,7 @@ const TicketsTab = () => {
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <Tag className="w-5 h-5" />
                   Kategorier
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.categories ? '−' : '+'}</span>
@@ -410,6 +410,7 @@ const TicketsTab = () => {
               <CardContent className="space-y-4">
             <div className="flex gap-2">
               <Input
+                aria-label="Nytt kategorinamn"
                 placeholder="Nytt kategorinamn..."
                 value={newCategoryName}
                 onChange={(e) => setNewCategoryName(e.target.value)}
@@ -454,7 +455,7 @@ const TicketsTab = () => {
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <Type className="w-5 h-5" />
                   Ärendemallar
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.templates ? '−' : '+'}</span>
@@ -505,7 +506,7 @@ const TicketsTab = () => {
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <ListChecks className="w-5 h-5" />
                   Checklistmallar
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.checklistTemplates ? '−' : '+'}</span>
@@ -547,7 +548,7 @@ const TicketsTab = () => {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7"
+                                className="h-11 w-11 md:h-7 md:w-7"
                                 title="Lägg till deluppgift under denna"
                                 aria-label="Lägg till deluppgift"
                                 onClick={() => {
@@ -558,7 +559,7 @@ const TicketsTab = () => {
                                 <CornerDownRight className="h-3 w-3" />
                               </Button>
                             )}
-                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleClDeleteItem(idx)} aria-label="Ta bort checklistepunkt">
+                            <Button variant="ghost" size="icon" className="h-11 w-11 md:h-7 md:w-7" onClick={() => handleClDeleteItem(idx)} aria-label="Ta bort checklistepunkt">
                               <X className="h-3 w-3" />
                             </Button>
                           </div>
@@ -592,7 +593,7 @@ const TicketsTab = () => {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7"
+                                className="h-11 w-11 md:h-7 md:w-7"
                                 disabled={!clNewSubItemLabel.trim()}
                                 aria-label="Bekräfta deluppgift"
                                 onClick={() => {
@@ -611,7 +612,7 @@ const TicketsTab = () => {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-7 w-7"
+                                className="h-11 w-11 md:h-7 md:w-7"
                                 aria-label="Avbryt deluppgift"
                                 onClick={() => {
                                   setAddingSubItemFor(null);
@@ -627,6 +628,7 @@ const TicketsTab = () => {
                     </div>
                     <div className="flex gap-2">
                       <Input
+                        aria-label="Ny punkt"
                         placeholder="Ny punkt..."
                         value={clNewItemLabel}
                         onChange={(e) => setClNewItemLabel(e.target.value)}

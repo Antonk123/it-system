@@ -36,7 +36,7 @@ describe('TicketQueueTable', () => {
     expect(screen.queryAllByText(ticket.category!)).toHaveLength(0);
   });
 
-  it('läcker inte interna ID:n när uppslagsdata saknas och behåller tangentbordsöppning', () => {
+  it('läcker inte interna ID:n när uppslagsdata saknas och öppnar ärendet via en riktig länk', () => {
     render(<MemoryRouter><Routes>
       <Route path="/" element={<TicketQueueTable tickets={[ticket]} isLoading={false} />} />
       <Route path="/tickets/:id" element={<p>Ärendedetalj</p>} />
@@ -45,7 +45,8 @@ describe('TicketQueueTable', () => {
     expect(table.getByText('Beställare: Okänd beställare')).toBeTruthy();
     expect(screen.queryAllByText(ticket.category!)).toHaveLength(0);
     expect(screen.queryAllByText(ticket.requesterId)).toHaveLength(0);
-    fireEvent.keyDown(table.getByRole('button'), { key: 'Enter' });
+    expect(table.queryByRole('button')).toBeNull();
+    fireEvent.click(table.getByRole('link', { name: ticket.title }));
     expect(screen.getByText('Ärendedetalj')).toBeTruthy();
   });
 

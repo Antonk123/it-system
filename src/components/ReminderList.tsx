@@ -61,7 +61,8 @@ export function ReminderList({ reminders, onDeleteReminder, onClearSent }: Remin
                   variant="ghost"
                   size="sm"
                   onClick={() => onDeleteReminder(reminder.id)}
-                  className="ml-2"
+                  className="ml-2 h-11 w-11 p-0 md:h-8 md:w-8"
+                  aria-label="Ta bort påminnelse"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>

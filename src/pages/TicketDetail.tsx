@@ -603,7 +603,7 @@ const TicketDetail = () => {
                 {currentUser && ticket.assignedTo === currentUser.id && <span className="text-sm text-muted-foreground">Tilldelat mig</span>}
                 <span className="text-sm font-medium">Status:</span>
                 <Select disabled={isUpdating} value={ticket.status} onValueChange={handleStatusChange}>
-                  <SelectTrigger className="w-[160px]">
+                  <SelectTrigger aria-label="Status" className="w-[160px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -928,7 +928,7 @@ const TicketDetail = () => {
       {/* Mobile quick actions — fixed bar above bottom tab bar */}
       <div className="fixed bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] inset-x-0 md:hidden bg-card border-t p-2 flex gap-2 z-40">
         <Select value={ticket.status} onValueChange={(s) => handleStatusChange(s as TicketStatus)}>
-          <SelectTrigger className="flex-1 h-10">
+          <SelectTrigger aria-label="Ändra status" className="flex-1 h-10">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

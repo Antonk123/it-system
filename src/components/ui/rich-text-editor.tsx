@@ -19,6 +19,14 @@ import { useEffect, useState, useMemo, useRef } from 'react';
 import { shouldApplyExternalValue } from './rich-text-sync';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { Button } from './button';
+import { Input } from './input';
+import { Label } from './label';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from './popover';
 
 // Whitelist safe URL protocols. Prevents javascript:, data:, vbscript: etc. from
 // reaching DB or downstream consumers (email replies, AI prompts, exports) where
@@ -232,15 +240,6 @@ const ResizableImage = Image.extend({
     return ReactNodeViewRenderer(ResizableImageView);
   },
 });
-import { Button } from './button';
-import { Input } from './input';
-import { Label } from './label';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from './popover';
-
 export interface RichTextEditorProps {
   value: string;
   onChange: (html: string) => void;
@@ -253,6 +252,7 @@ export interface RichTextEditorProps {
   compact?: boolean;
   ariaLabel?: string;
   error?: boolean;
+  describedBy?: string;
   id?: string;
 }
 
@@ -268,6 +268,7 @@ export const RichTextEditor = ({
   compact = false,
   ariaLabel,
   error = false,
+  describedBy,
   id,
 }: RichTextEditorProps) => {
   const [formattingOpen, setFormattingOpen] = useState(false);
@@ -331,7 +332,12 @@ export const RichTextEditor = ({
     content: value || '',
     editable: !disabled,
     editorProps: {
-      attributes: { role: 'textbox', 'aria-label': ariaLabel || placeholder, 'aria-multiline': 'true' },
+      attributes: {
+        role: 'textbox',
+        'aria-label': ariaLabel || placeholder,
+        'aria-multiline': 'true',
+        ...(describedBy && { 'aria-describedby': describedBy }),
+      },
       // Ctrl+Enter (or Cmd+Enter on Mac) submits the surrounding form. TipTap
       // captures all key events when focused, so without this handler the user
       // has no keyboard path to submit from inside the editor. Plain Enter is
@@ -541,7 +547,7 @@ export const RichTextEditor = ({
           users know from mobile word processors. */}
       {compact && showToolbar && <Button type="button" variant="ghost" className="min-h-11" aria-expanded={formattingOpen} onClick={() => setFormattingOpen(!formattingOpen)}>Formatering</Button>}
       {toolbarVisible && (
-        <div className="border border-input rounded-t-lg bg-muted/30 p-2 flex flex-nowrap gap-1 overflow-x-auto rte-toolbar-scroll">
+        <div role="toolbar" aria-label="Formatering" className="border border-input rounded-t-lg bg-muted/30 p-2 flex flex-nowrap gap-1 overflow-x-auto rte-toolbar-scroll">
           {/* Text formatting */}
           <Button
             type="button"
@@ -549,11 +555,13 @@ export const RichTextEditor = ({
             size="sm"
             onClick={() => editor.chain().focus().toggleBold().run()}
             className={cn(
-              'h-8 w-8 p-0',
+              'h-11 w-11 p-0 md:h-8 md:w-8',
               editor.isActive('bold') && 'bg-primary/20 text-primary'
             )}
             disabled={disabled}
-            title="Bold (Ctrl+B)"
+            aria-label="Fet"
+            title="Fet (Ctrl+B)"
+            aria-pressed={editor.isActive('bold')}
           >
             <Bold className="h-4 w-4" />
           </Button>
@@ -564,11 +572,13 @@ export const RichTextEditor = ({
             size="sm"
             onClick={() => editor.chain().focus().toggleItalic().run()}
             className={cn(
-              'h-8 w-8 p-0',
+              'h-11 w-11 p-0 md:h-8 md:w-8',
               editor.isActive('italic') && 'bg-primary/20 text-primary'
             )}
             disabled={disabled}
-            title="Italic (Ctrl+I)"
+            aria-label="Kursiv"
+            title="Kursiv (Ctrl+I)"
+            aria-pressed={editor.isActive('italic')}
           >
             <Italic className="h-4 w-4" />
           </Button>
@@ -579,11 +589,13 @@ export const RichTextEditor = ({
             size="sm"
             onClick={() => editor.chain().focus().toggleUnderline().run()}
             className={cn(
-              'h-8 w-8 p-0',
+              'h-11 w-11 p-0 md:h-8 md:w-8',
               editor.isActive('underline') && 'bg-primary/20 text-primary'
             )}
             disabled={disabled}
-            title="Underline (Ctrl+U)"
+            aria-label="Understruken"
+            title="Understruken (Ctrl+U)"
+            aria-pressed={editor.isActive('underline')}
           >
             <UnderlineIcon className="h-4 w-4" />
           </Button>
@@ -594,11 +606,13 @@ export const RichTextEditor = ({
             size="sm"
             onClick={() => editor.chain().focus().toggleStrike().run()}
             className={cn(
-              'h-8 w-8 p-0',
+              'h-11 w-11 p-0 md:h-8 md:w-8',
               editor.isActive('strike') && 'bg-primary/20 text-primary'
             )}
             disabled={disabled}
-            title="Strikethrough"
+            aria-label="Genomstruken"
+            title="Genomstruken"
+            aria-pressed={editor.isActive('strike')}
           >
             <Strikethrough className="h-4 w-4" />
           </Button>
@@ -609,16 +623,18 @@ export const RichTextEditor = ({
             size="sm"
             onClick={() => editor.chain().focus().toggleCode().run()}
             className={cn(
-              'h-8 w-8 p-0',
+              'h-11 w-11 p-0 md:h-8 md:w-8',
               editor.isActive('code') && 'bg-primary/20 text-primary'
             )}
             disabled={disabled}
-            title="Inline Code"
+            aria-label="Kod i text"
+            title="Kod i text"
+            aria-pressed={editor.isActive('code')}
           >
             <Code className="h-4 w-4" />
           </Button>
 
-          <div className="w-px h-8 bg-border mx-1" />
+          <div className="w-px h-11 md:h-8 bg-border mx-1" />
 
           {/* Headings */}
           <Button
@@ -627,11 +643,13 @@ export const RichTextEditor = ({
             size="sm"
             onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
             className={cn(
-              'h-8 px-2',
+              'h-11 min-w-11 px-2 md:h-8 md:min-w-0',
               editor.isActive('heading', { level: 2 }) && 'bg-primary/20 text-primary'
             )}
             disabled={disabled}
-            title="Heading 2"
+            aria-label="Rubrik 2"
+            title="Rubrik 2"
+            aria-pressed={editor.isActive('heading', { level: 2 })}
           >
             <Heading2 className="h-4 w-4" />
           </Button>
@@ -642,16 +660,18 @@ export const RichTextEditor = ({
             size="sm"
             onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
             className={cn(
-              'h-8 px-2',
+              'h-11 min-w-11 px-2 md:h-8 md:min-w-0',
               editor.isActive('heading', { level: 3 }) && 'bg-primary/20 text-primary'
             )}
             disabled={disabled}
-            title="Heading 3"
+            aria-label="Rubrik 3"
+            title="Rubrik 3"
+            aria-pressed={editor.isActive('heading', { level: 3 })}
           >
             <Heading3 className="h-4 w-4" />
           </Button>
 
-          <div className="w-px h-8 bg-border mx-1" />
+          <div className="w-px h-11 md:h-8 bg-border mx-1" />
 
           {/* Lists */}
           <Button
@@ -660,11 +680,13 @@ export const RichTextEditor = ({
             size="sm"
             onClick={() => editor.chain().focus().toggleBulletList().run()}
             className={cn(
-              'h-8 w-8 p-0',
+              'h-11 w-11 p-0 md:h-8 md:w-8',
               editor.isActive('bulletList') && 'bg-primary/20 text-primary'
             )}
             disabled={disabled}
-            title="Bullet List"
+            aria-label="Punktlista"
+            title="Punktlista"
+            aria-pressed={editor.isActive('bulletList')}
           >
             <List className="h-4 w-4" />
           </Button>
@@ -675,16 +697,18 @@ export const RichTextEditor = ({
             size="sm"
             onClick={() => editor.chain().focus().toggleOrderedList().run()}
             className={cn(
-              'h-8 w-8 p-0',
+              'h-11 w-11 p-0 md:h-8 md:w-8',
               editor.isActive('orderedList') && 'bg-primary/20 text-primary'
             )}
             disabled={disabled}
-            title="Ordered List"
+            aria-label="Numrerad lista"
+            title="Numrerad lista"
+            aria-pressed={editor.isActive('orderedList')}
           >
             <ListOrdered className="h-4 w-4" />
           </Button>
 
-          <div className="w-px h-8 bg-border mx-1" />
+          <div className="w-px h-11 md:h-8 bg-border mx-1" />
 
           {/* Advanced */}
           <Popover open={linkPopoverOpen} onOpenChange={(open) => {
@@ -706,11 +730,13 @@ export const RichTextEditor = ({
                 variant="ghost"
                 size="sm"
                 className={cn(
-                  'h-8 w-8 p-0',
+                  'h-11 w-11 p-0 md:h-8 md:w-8',
                   editor.isActive('link') && 'bg-primary/20 text-primary'
                 )}
                 disabled={disabled}
-                title="Add Link (Ctrl+K)"
+                aria-label="Infoga länk"
+                title="Infoga länk (Ctrl+K)"
+                aria-pressed={editor.isActive('link')}
               >
                 <LinkIcon className="h-4 w-4" />
               </Button>
@@ -772,8 +798,9 @@ export const RichTextEditor = ({
             variant="ghost"
             size="sm"
             onClick={() => imageInputRef.current?.click()}
-            className="h-8 w-8 p-0"
+            className="h-11 w-11 p-0 md:h-8 md:w-8"
             disabled={disabled || imageUploading}
+            aria-label="Infoga bild"
             title="Infoga bild"
           >
             <ImageIcon className={cn('h-4 w-4', imageUploading && 'animate-pulse')} />
@@ -785,11 +812,13 @@ export const RichTextEditor = ({
             size="sm"
             onClick={() => editor.chain().focus().toggleBlockquote().run()}
             className={cn(
-              'h-8 w-8 p-0',
+              'h-11 w-11 p-0 md:h-8 md:w-8',
               editor.isActive('blockquote') && 'bg-primary/20 text-primary'
             )}
             disabled={disabled}
-            title="Blockquote"
+            aria-label="Citat"
+            title="Citat"
+            aria-pressed={editor.isActive('blockquote')}
           >
             <Quote className="h-4 w-4" />
           </Button>
@@ -800,11 +829,13 @@ export const RichTextEditor = ({
             size="sm"
             onClick={() => editor.chain().focus().toggleCodeBlock().run()}
             className={cn(
-              'h-8 w-8 p-0',
+              'h-11 w-11 p-0 md:h-8 md:w-8',
               editor.isActive('codeBlock') && 'bg-primary/20 text-primary'
             )}
             disabled={disabled}
-            title="Code Block"
+            aria-label="Kodblock"
+            title="Kodblock"
+            aria-pressed={editor.isActive('codeBlock')}
           >
             <CodeSquare className="h-4 w-4" />
           </Button>
@@ -814,9 +845,10 @@ export const RichTextEditor = ({
             variant="ghost"
             size="sm"
             onClick={addTable}
-            className="h-8 w-8 p-0"
+            className="h-11 w-11 p-0 md:h-8 md:w-8"
             disabled={disabled}
-            title="Insert Table"
+            aria-label="Infoga tabell"
+            title="Infoga tabell"
           >
             <TableIcon className="h-4 w-4" />
           </Button>
@@ -828,9 +860,10 @@ export const RichTextEditor = ({
               variant="ghost"
               size="sm"
               onClick={() => editor.chain().focus().deleteTable().run()}
-              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+              className="h-11 w-11 p-0 md:h-8 md:w-8 text-destructive hover:text-destructive"
               disabled={disabled}
-              title="Delete Table"
+              aria-label="Ta bort tabell"
+              title="Ta bort tabell"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -841,14 +874,15 @@ export const RichTextEditor = ({
             variant="ghost"
             size="sm"
             onClick={() => editor.chain().focus().setHorizontalRule().run()}
-            className="h-8 w-8 p-0"
+            className="h-11 w-11 p-0 md:h-8 md:w-8"
             disabled={disabled}
-            title="Horizontal Rule"
+            aria-label="Horisontell linje"
+            title="Horisontell linje"
           >
             <Minus className="h-4 w-4" />
           </Button>
 
-          <div className="w-px h-8 bg-border mx-1" />
+          <div className="w-px h-11 md:h-8 bg-border mx-1" />
 
           {/* Clear formatting */}
           <Button
@@ -856,9 +890,10 @@ export const RichTextEditor = ({
             variant="ghost"
             size="sm"
             onClick={() => editor.chain().focus().clearNodes().unsetAllMarks().run()}
-            className="h-8 w-8 p-0"
+            className="h-11 w-11 p-0 md:h-8 md:w-8"
             disabled={disabled}
-            title="Clear Formatting"
+            aria-label="Rensa formatering"
+            title="Rensa formatering"
           >
             <RemoveFormatting className="h-4 w-4" />
           </Button>

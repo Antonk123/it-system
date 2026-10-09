@@ -98,6 +98,7 @@ export function KBTagSettings() {
             <div className="flex flex-wrap gap-2 items-end">
               <div className="min-w-0 basis-full sm:basis-0 flex-1">
                 <Input
+                  aria-label="Nytt taggnamn"
                   placeholder="Nytt taggnamn..."
                   value={newTagName}
                   onChange={(e) => setNewTagName(e.target.value)}
@@ -122,6 +123,8 @@ export function KBTagSettings() {
                         key={color}
                         type="button"
                         onClick={() => setNewTagColor(color)}
+                        aria-label={`Färg ${color}`}
+                        aria-pressed={newTagColor === color}
                         style={{ backgroundColor: color }}
                         className={`w-7 h-7 rounded-full transition-all ${
                           newTagColor === color ? 'ring-2 ring-offset-2 ring-offset-background ring-primary' : ''
@@ -146,6 +149,7 @@ export function KBTagSettings() {
                         <PopoverTrigger asChild>
                           <button
                             type="button"
+                            aria-label="Välj färg"
                             style={{ backgroundColor: editingTagColor }}
                             className="w-7 h-7 rounded-full shrink-0 hover:opacity-80 transition-opacity"
                           />
@@ -157,6 +161,8 @@ export function KBTagSettings() {
                                 key={color}
                                 type="button"
                                 onClick={() => setEditingTagColor(color)}
+                                aria-label={`Färg ${color}`}
+                                aria-pressed={editingTagColor === color}
                                 style={{ backgroundColor: color }}
                                 className={`w-7 h-7 rounded-full transition-all ${
                                   editingTagColor === color ? 'ring-2 ring-offset-2 ring-offset-background ring-primary' : ''

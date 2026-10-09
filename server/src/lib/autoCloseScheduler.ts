@@ -1,5 +1,5 @@
 import cron, { ScheduledTask } from 'node-cron';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { db } from '../db/connection.js';
 import { AUTO_CLOSE_DAYS } from '../config/automation.js';
 import { logger } from './logger.js';
@@ -41,7 +41,7 @@ function autoCloseResolvedTickets(): void {
     db.prepare(`
       INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value, changed_at)
       VALUES (?, ?, NULL, 'status', 'resolved', 'closed', ?)
-    `).run(uuidv4(), ticket.id, now);
+    `).run(randomUUID(), ticket.id, now);
 
     logger.info(`Auto-close: closed ticket ${ticket.id}: "${ticket.title}" (last updated ${ticket.updated_at})`);
   });

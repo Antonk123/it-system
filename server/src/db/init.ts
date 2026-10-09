@@ -1,6 +1,6 @@
 import { initializeDatabase, db, closeDatabase } from './connection.js';
 import bcrypt from 'bcryptjs';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { logger } from '../lib/logger.js';
 import { BCRYPT_ROUNDS, validatePassword } from '../lib/passwordPolicy.js';
 
@@ -32,7 +32,7 @@ async function main() {
       process.exit(1);
     }
 
-    const adminId = uuidv4();
+    const adminId = randomUUID();
     const passwordHash = await bcrypt.hash(adminPassword, BCRYPT_ROUNDS);
 
     db.prepare(`

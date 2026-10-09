@@ -700,10 +700,12 @@ const TicketForm = () => {
             }}
             onAddCategory={handleAddCategory}
             disabled={isSubmitting}
+            aria-invalid={!!errors.category}
+            aria-describedby={errors.category ? 'category-error' : undefined}
           />
           </div>
           {categoriesError && <LookupError message="Kunde inte hämta kategorier." onRetry={() => void refetchCategories()} />}
-          {errors.category && <p className="text-sm text-destructive mt-1">{errors.category}</p>}
+          {errors.category && <p id="category-error" role="alert" className="text-sm text-destructive mt-1">{errors.category}</p>}
         </div>
 
       {/* Tilldelad */}
@@ -830,11 +832,12 @@ const TicketForm = () => {
                   // shouldn't steal focus on mount (user may be scrolling
                   // to a specific field, and autofocus jumps the viewport).
                   autoFocus={!isEditing}
+                  aria-required="true"
                   aria-invalid={!!errors.title}
                   aria-describedby={errors.title ? 'title-error' : undefined}
                   className={errors.title ? 'border-destructive focus-visible:ring-destructive' : ''}
                 />
-                {errors.title && <p id="title-error" className="text-sm text-destructive mt-1">{errors.title}</p>}
+                {errors.title && <p id="title-error" role="alert" className="text-sm text-destructive mt-1">{errors.title}</p>}
               </div>
               {!isEditing && (
                 <details className="space-y-2 sm:w-[240px]" open={selectedTemplate ? true : undefined}>
@@ -886,6 +889,9 @@ const TicketForm = () => {
                     setErrors(prev => { const p = { ...prev }; delete p['requesterId']; return p; });
                   }}
                   placeholder="Sök kontakt"
+                  aria-required={true}
+                  aria-invalid={!!errors.requesterId}
+                  aria-describedby={errors.requesterId ? 'requester-error' : undefined}
                 />
                 </div>
                 {users.length === 0 && (
@@ -896,7 +902,7 @@ const TicketForm = () => {
                 {formData.company_id && (
                   <p className="text-sm text-muted-foreground">Företag: {companyName} — kan ändras under Fler uppgifter.</p>
                 )}
-                {errors.requesterId && <p className="text-sm text-destructive mt-1">{errors.requesterId}</p>}
+                {errors.requesterId && <p id="requester-error" role="alert" className="text-sm text-destructive mt-1">{errors.requesterId}</p>}
               </div>
             {/* Beskrivning / DynamicFieldsForm */}
             {isLoadingTemplate ? (
@@ -981,10 +987,12 @@ const TicketForm = () => {
                       compact
                       id="description"
                       ariaLabel="Beskrivning (valfritt)"
+                      error={!!errors.description}
+                      describedBy="description-error"
                     />
                   </ErrorBoundary>
                 </div>
-                {errors.description && <p className="text-sm text-destructive mt-1">{errors.description}</p>}
+                {errors.description && <p id="description-error" role="alert" className="text-sm text-destructive mt-1">{errors.description}</p>}
               </div>
             )}
 
@@ -1005,6 +1013,7 @@ const TicketForm = () => {
                       <SelectTrigger
                         id="ticket-priority-edit"
                         aria-invalid={!!errors.priority}
+                        aria-describedby={errors.priority ? 'priority-error-edit' : undefined}
                         className={errors.priority ? 'border-destructive focus:ring-destructive' : ''}
                       >
                         <SelectValue />
@@ -1016,7 +1025,7 @@ const TicketForm = () => {
                         <SelectItem value="critical">Kritisk</SelectItem>
                       </SelectContent>
                     </Select>
-                    {errors.priority && <p className="text-sm text-destructive mt-1">{errors.priority}</p>}
+                    {errors.priority && <p id="priority-error-edit" role="alert" className="text-sm text-destructive mt-1">{errors.priority}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="ticket-status-edit">Status</Label>
@@ -1028,6 +1037,7 @@ const TicketForm = () => {
                       <SelectTrigger
                         id="ticket-status-edit"
                         aria-invalid={!!errors.status}
+                        aria-describedby={errors.status ? 'status-error' : undefined}
                         className={errors.status ? 'border-destructive focus:ring-destructive' : ''}
                       >
                         <SelectValue />
@@ -1040,7 +1050,7 @@ const TicketForm = () => {
                         <SelectItem value="closed">Stängd</SelectItem>
                       </SelectContent>
                     </Select>
-                    {errors.status && <p className="text-sm text-destructive mt-1">{errors.status}</p>}
+                    {errors.status && <p id="status-error" role="alert" className="text-sm text-destructive mt-1">{errors.status}</p>}
                   </div>
                 </div>
               </div>
@@ -1069,6 +1079,7 @@ const TicketForm = () => {
                         <SelectTrigger
                           id="ticket-priority-create"
                           aria-invalid={!!errors.priority}
+                          aria-describedby={errors.priority ? 'priority-error-create' : undefined}
                           className={errors.priority ? 'border-destructive focus:ring-destructive' : ''}
                         >
                           <SelectValue />
@@ -1080,7 +1091,7 @@ const TicketForm = () => {
                           <SelectItem value="critical">Kritisk</SelectItem>
                         </SelectContent>
                       </Select>
-                      {errors.priority && <p className="text-sm text-destructive mt-1">{errors.priority}</p>}
+                      {errors.priority && <p id="priority-error-create" role="alert" className="text-sm text-destructive mt-1">{errors.priority}</p>}
                     </div>
                   </div>
                 </CollapsibleContent>

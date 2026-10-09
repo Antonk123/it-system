@@ -231,10 +231,10 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
 
               <div className="border rounded-lg p-4 bg-card">
                 <div className="flex items-center gap-2 mb-1">
-                  <AlertCircle className="w-4 h-4 text-warning" />
+                  <AlertCircle className="w-4 h-4 text-warning-text" />
                   <span className="text-sm text-muted-foreground">Dubletter</span>
                 </div>
-                <p className="text-2xl font-bold text-warning">{preview.duplicates}</p>
+                <p className="text-2xl font-bold text-warning-text">{preview.duplicates}</p>
               </div>
             </div>
 
@@ -279,7 +279,7 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
             {/* Debug info for valid tickets */}
             {preview.results.filter(r => r.valid).length > 0 && (
               <div className="border rounded-lg p-4 bg-success/10">
-                <h4 className="font-semibold mb-2 text-success">
+                <h4 className="font-semibold mb-2 text-success-text">
                   Giltiga ärenden ({preview.results.filter(r => r.valid).length} st)
                 </h4>
                 <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -288,10 +288,10 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
                     .slice(0, 5)
                     .map((result, idx) => (
                       <div key={idx} className="text-sm">
-                        <p className="font-medium text-success">
+                        <p className="font-medium text-success-text">
                           {result.ticket.title}
                         </p>
-                        <p className="text-xs text-success/80">
+                        <p className="text-xs text-success-text">
                           Kategori: {result.ticket.category || '(ingen)'} |
                           Beställare: {result.ticket.requester_name || '(ingen)'}
                         </p>

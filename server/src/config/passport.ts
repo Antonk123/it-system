@@ -57,7 +57,7 @@ passport.use(new LocalStrategy(
       const isMatch = await bcrypt.compare(password, user?.password_hash ?? DUMMY_PASSWORD_HASH);
 
       if (!user || !isMatch) {
-        return done(null, false, { message: 'Incorrect email or password.' });
+        return done(null, false, { message: 'Fel e-post eller lösenord.' });
       }
 
       // Höj kostnaden för äldre hashar (cost 10) i takt med att användarna loggar in.

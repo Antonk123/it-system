@@ -165,7 +165,7 @@ const TicketList = () => {
                   variant="outline"
                   size="sm"
                   onClick={() => setCompactView((prev) => !prev)}
-                  className="h-8"
+                  className="h-11 md:h-8"
                 >
                   {compactView ? 'Standardvy' : 'Kompakt vy'}
                 </Button>
@@ -203,7 +203,7 @@ const TicketList = () => {
         <UnifiedFilterBar
           companyActive={companyFilter !== 'all'}
           companyControl={          <Select value={companyFilter} onValueChange={value => updateFilters({ company_id: value })}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger aria-label="Filtrera på företag" className="w-[180px]">
               <Building2 className="mr-2 h-4 w-4 shrink-0" />
               <SelectValue placeholder="Alla företag" />
             </SelectTrigger>
@@ -343,7 +343,6 @@ const TicketList = () => {
                     <TicketTable
                       tickets={tickets}
                       users={users}
-                      onTicketClick={handleTicketClick}
                       sortKey={sortKey}
                       sortDirection={sortDirection}
                       onSortChange={handleSortChange}
@@ -375,7 +374,6 @@ const TicketList = () => {
                     <KanbanView
                       tickets={tickets}
                       onStatusChange={handleStatusChange}
-                      onTicketClick={handleTicketClick}
                     />
                   </Suspense>
                 )}

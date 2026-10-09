@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,9 @@ interface UserComboboxProps {
   value: string;
   onValueChange: (value: string) => void;
   placeholder?: string;
+  'aria-describedby'?: string;
+  'aria-invalid'?: boolean;
+  'aria-required'?: boolean;
 }
 
 export const UserCombobox = ({
@@ -22,10 +25,14 @@ export const UserCombobox = ({
   value,
   onValueChange,
   placeholder = 'Välj kontakt',
+  'aria-describedby': ariaDescribedBy,
+  'aria-invalid': ariaInvalid,
+  'aria-required': ariaRequired,
 }: UserComboboxProps) => {
   const listboxId = useId();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
 
   const filteredUsers = useMemo(() => {
     if (!search) return users;
@@ -40,6 +47,37 @@ export const UserCombobox = ({
 
   const selectedUser = users.find((u) => u.id === value);
 
+  // Reset the highlight whenever the option set changes (search typed, popover reopened).
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [open, search]);
+
+  const selectUser = (id: string) => {
+    onValueChange(id);
+    setOpen(false);
+    setSearch('');
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((prev) => (filteredUsers.length === 0 ? 0 : (prev + 1) % filteredUsers.length));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((prev) =>
+        filteredUsers.length === 0 ? 0 : (prev - 1 + filteredUsers.length) % filteredUsers.length
+      );
+    } else if (e.key === 'Enter') {
+      const user = filteredUsers[activeIndex];
+      if (user) {
+        e.preventDefault();
+        selectUser(user.id);
+      }
+    }
+  };
+
+  const activeDescendant = filteredUsers[activeIndex] ? `${listboxId}-opt-${filteredUsers[activeIndex].id}` : undefined;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -50,6 +88,9 @@ export const UserCombobox = ({
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={open ? listboxId : undefined}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid}
+          aria-required={ariaRequired}
           className="w-full justify-between font-normal"
         >
           {selectedUser ? selectedUser.name : placeholder}
@@ -64,6 +105,12 @@ export const UserCombobox = ({
             aria-label="Sök kontakt"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            role="combobox"
+            aria-expanded={open}
+            aria-controls={listboxId}
+            aria-activedescendant={activeDescendant}
+            aria-autocomplete="list"
             className="h-8 border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
@@ -75,27 +122,24 @@ export const UserCombobox = ({
                 : 'Ingen kontakt hittades'}
             </div>
           ) : (
-            filteredUsers.map((user) => (
+            filteredUsers.map((user, i) => (
               <div
                 key={user.id}
+                id={`${listboxId}-opt-${user.id}`}
                 role="option"
                 aria-selected={value === user.id}
-                tabIndex={0}
+                tabIndex={-1}
+                onMouseMove={() => setActiveIndex(i)}
                 className={cn(
                   'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/60',
-                  value === user.id && 'bg-muted/60'
+                  value === user.id && 'bg-muted/60',
+                  activeIndex === i && 'bg-muted/60'
                 )}
-                onClick={() => {
-                  onValueChange(user.id);
-                  setOpen(false);
-                  setSearch('');
-                }}
+                onClick={() => selectUser(user.id)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
-                    onValueChange(user.id);
-                    setOpen(false);
-                    setSearch('');
+                    selectUser(user.id);
                   }
                 }}
               >

@@ -117,6 +117,7 @@ export const TicketLinks = ({
         <PopoverContent className="w-[400px] p-0" align="start">
           <Command shouldFilter={false}>
             <CommandInput
+              aria-label="Sök ärenden"
               placeholder="Sök ärenden..."
               className="h-9"
               value={searchQuery}
@@ -206,7 +207,7 @@ export const TicketLinks = ({
               <Button
                 variant="ghost"
                 size="sm"
-                className="md:opacity-0 md:group-hover:opacity-100 transition-opacity h-9 w-9 md:h-7 md:w-7 p-0 shrink-0"
+                className="md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 md:group-focus-within:opacity-100 transition-opacity h-9 w-9 md:h-7 md:w-7 p-0 shrink-0"
                 onClick={() => handleDeleteLink(link.id)}
                 aria-label="Ta bort länk"
               >

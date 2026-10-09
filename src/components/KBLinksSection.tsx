@@ -163,7 +163,7 @@ export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) =
               <Button
                 variant="ghost"
                 size="sm"
-                className="md:opacity-0 md:group-hover:opacity-100 transition-opacity h-9 w-9 md:h-7 md:w-7 p-0 shrink-0"
+                className="md:opacity-0 md:group-hover:opacity-100 md:focus-visible:opacity-100 md:group-focus-within:opacity-100 transition-opacity h-9 w-9 md:h-7 md:w-7 p-0 shrink-0"
                 onClick={() => unlinkMutation.mutate(article.id)}
                 disabled={unlinkMutation.isPending}
                 aria-label="Ta bort KB-länk"
@@ -180,6 +180,7 @@ export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) =
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
           <Input
+            aria-label="Sök KB-artiklar"
             placeholder="Sök KB-artiklar..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

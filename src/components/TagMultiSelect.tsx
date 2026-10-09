@@ -58,6 +58,7 @@ export function TagMultiSelect({ selectedTagIds, onChange }: TagMultiSelectProps
       <PopoverContent className="w-[200px] p-0">
         <Command>
           <CommandInput
+            aria-label="Sök taggar"
             placeholder="Sök taggar..."
             value={search}
             onValueChange={setSearch}

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+import { Link } from 'react-router';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
@@ -17,7 +17,6 @@ interface TicketQueueTableProps {
 }
 
 export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories = [], isError, onRetry }: TicketQueueTableProps) => {
-  const navigate = useNavigate();
   const activeTickets = tickets
     .filter(t => t.status !== 'closed')
     .sort((a, b) => {
@@ -33,7 +32,7 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="flex items-center gap-2">
           <p className="text-sm font-semibold text-foreground">Aktiv kö</p>
-          <span className="text-[11px] font-medium px-2 py-0.5 rounded-sm bg-muted text-muted-foreground border border-border">
+          <span className="text-xs font-medium px-2 py-0.5 rounded-sm bg-muted text-muted-foreground border border-border">
             <span className="font-mono">{activeTickets.length}</span> visas
           </span>
         </div>
@@ -70,29 +69,28 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
               const categoryLabel = ticket.categoryLabel || categories.find(category => category.id === ticket.category)?.label;
 
               return (
-                <button
+                <Link
                   key={ticket.id}
-                  type="button"
-                  onClick={() => navigate(`/tickets/${ticket.id}`)}
-                  className="w-full text-left px-4 py-3 active:bg-muted/35 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
+                  to={`/tickets/${ticket.id}`}
+                  className="block w-full text-left px-4 py-3 active:bg-muted/35 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="font-semibold text-foreground text-[13.5px] tracking-tight line-clamp-1 flex-1">
                       {ticket.title}
                     </span>
-                    <span className="font-mono text-[11px] text-muted-foreground shrink-0">#{ticket.id.slice(0, 6)}</span>
+                    <span className="font-mono text-xs text-muted-foreground shrink-0">#{ticket.id.slice(0, 6)}</span>
                   </div>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">Beställare: {requesterName}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Beställare: {requesterName}</p>
                   <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
                     <StatusBadge status={ticket.status} />
                     <PriorityBadge priority={ticket.priority} />
                     {categoryLabel && (
-                      <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded-sm bg-muted/60 text-foreground/75 border border-border">
+                      <span className="text-xs font-medium px-1.5 py-0.5 rounded-sm bg-muted/60 text-foreground/75 border border-border">
                         {categoryLabel}
                       </span>
                     )}
                   </div>
-                </button>
+                </Link>
               );
             })}
           </div>
@@ -101,11 +99,11 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="border-b border-border/50 bg-muted/10">
-                  <th scope="col" className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">ID</th>
-                  <th scope="col" className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3">Ärende</th>
-                  <th scope="col" className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">Status</th>
-                  <th scope="col" className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">Prioritet</th>
-                  <th scope="col" className="text-left text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap hidden lg:table-cell">Tilldelad</th>
+                  <th scope="col" className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">ID</th>
+                  <th scope="col" className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3">Ärende</th>
+                  <th scope="col" className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">Status</th>
+                  <th scope="col" className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap">Prioritet</th>
+                  <th scope="col" className="text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground px-4 py-3 whitespace-nowrap hidden lg:table-cell">Tilldelad</th>
                 </tr>
               </thead>
               <tbody>
@@ -117,35 +115,29 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
                   return (
                     <tr
                       key={ticket.id}
-                      className="border-b border-border/35 last:border-b-0 cursor-pointer hover:bg-muted/35 transition-colors focus:ring-2 focus:ring-primary focus:outline-offset-2"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => navigate(`/tickets/${ticket.id}`)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          navigate(`/tickets/${ticket.id}`);
-                        }
-                      }}
+                      className="relative border-b border-border/35 last:border-b-0 hover:bg-muted/35 transition-colors"
                     >
                       <td className="px-4 py-3.5">
-                        <span className="font-mono text-[11.5px] text-muted-foreground font-medium tracking-wide">
+                        <span className="font-mono text-xs text-muted-foreground font-medium tracking-wide">
                           #{ticket.id.slice(0, 6)}
                         </span>
                       </td>
                       <td className="px-4 py-3.5">
-                        <div className="font-semibold text-foreground text-[13.5px] tracking-tight truncate max-w-[280px]">
+                        <Link
+                          to={`/tickets/${ticket.id}`}
+                          className="block font-semibold text-foreground text-[13.5px] tracking-tight truncate max-w-[280px] outline-hidden after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
+                        >
                           {ticket.title}
-                        </div>
-                        <p className="text-[12px] text-muted-foreground mt-0.5 break-words">Beställare: {requesterName}</p>
+                        </Link>
+                        <p className="text-xs text-muted-foreground mt-0.5 break-words">Beställare: {requesterName}</p>
                         <div className="flex flex-wrap items-center gap-2 mt-0.5">
                           {categoryLabel && (
-                            <span className="text-[10.5px] font-medium px-1.5 py-0.5 rounded-sm bg-muted/60 text-foreground/75 border border-border">
+                            <span className="text-xs font-medium px-1.5 py-0.5 rounded-sm bg-muted/60 text-foreground/75 border border-border">
                               {categoryLabel}
                             </span>
                           )}
                           {ticket.companyName && (
-                            <span className="text-[11px] text-muted-foreground">{ticket.companyName}</span>
+                            <span className="text-xs text-muted-foreground">{ticket.companyName}</span>
                           )}
                         </div>
                       </td>

@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -92,6 +93,7 @@ export function ReminderDialog({ onCreateReminder, open: controlledOpen, onOpenC
       <DialogContent className="sm:max-w-[425px] max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Skapa påminnelse</DialogTitle>
+          <DialogDescription>Välj när du vill bli påmind om ärendet.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 pt-4">
           <div className="flex flex-wrap gap-2">

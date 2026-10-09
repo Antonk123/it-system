@@ -40,7 +40,6 @@ interface BulkUpdates {
 interface TicketTableProps {
   tickets: Ticket[];
   users: User[];
-  onTicketClick?: (ticketId: string) => void;
   sortKey?: 'createdAt' | 'status' | 'priority' | 'category';
   sortDirection?: 'asc' | 'desc';
   onSortChange?: (key: 'status' | 'priority' | 'category') => void;
@@ -61,7 +60,6 @@ interface TicketTableProps {
 export const TicketTable = memo(function TicketTable({
   tickets,
   users,
-  onTicketClick,
   sortKey = 'createdAt',
   sortDirection = 'desc',
   onSortChange,
@@ -161,7 +159,7 @@ export const TicketTable = memo(function TicketTable({
               disabled={bulkSaving}
               onValueChange={(v) => handleBulkAction({ status: v as TicketStatus })}
             >
-              <SelectTrigger className="min-h-11 w-[140px]">
+              <SelectTrigger aria-label="Ändra status för valda ärenden" className="min-h-11 w-[140px]">
                 <SelectValue placeholder="Ändra status" />
               </SelectTrigger>
               <SelectContent>
@@ -176,7 +174,7 @@ export const TicketTable = memo(function TicketTable({
               disabled={bulkSaving}
               onValueChange={(v) => handleBulkAction({ priority: v as TicketPriority })}
             >
-              <SelectTrigger className="min-h-11 w-[140px]">
+              <SelectTrigger aria-label="Ändra prioritet för valda ärenden" className="min-h-11 w-[140px]">
                 <SelectValue placeholder="Ändra prioritet" />
               </SelectTrigger>
               <SelectContent>
@@ -190,7 +188,7 @@ export const TicketTable = memo(function TicketTable({
               disabled={bulkSaving}
               onValueChange={(v) => handleBulkAction({ category_id: v === '__none__' ? null : v })}
             >
-              <SelectTrigger className="min-h-11 w-[150px]">
+              <SelectTrigger aria-label="Ändra kategori för valda ärenden" className="min-h-11 w-[150px]">
                 <SelectValue placeholder="Ändra kategori" />
               </SelectTrigger>
               <SelectContent>
@@ -218,7 +216,7 @@ export const TicketTable = memo(function TicketTable({
       {onSelectionChange && <Button variant="outline" aria-pressed={selectionMode} onClick={() => { setSelectionMode(!selectionMode); onSelectionChange([]); }}>{selectionMode ? 'Avsluta val' : 'Välj'}</Button>}
       {bulkActions}
       {tickets.map(ticket => <div key={ticket.id} className="flex items-center gap-3 rounded-lg border bg-card p-3">
-        {onSelectionChange && selectionMode && <Checkbox disabled={bulkSaving} checked={selectedIds.includes(ticket.id)} onCheckedChange={() => toggleOne(ticket.id)} aria-label={`Markera ${ticket.title}`} />}
+        {onSelectionChange && selectionMode && <label className="-m-3.5 flex size-11 shrink-0 cursor-pointer items-center justify-center"><Checkbox disabled={bulkSaving} checked={selectedIds.includes(ticket.id)} onCheckedChange={() => toggleOne(ticket.id)} aria-label={`Markera ${ticket.title}`} /></label>}
         <Link className="min-w-0 flex-1 space-y-2" to={`/tickets/${ticket.id}`} state={{ from: location.pathname + location.search }}>
           <span className="block font-medium break-words">{ticket.title}</span>
           <span className="flex flex-wrap gap-2"><StatusBadge status={ticket.status} /><PriorityBadge priority={ticket.priority} /></span>
@@ -236,24 +234,26 @@ export const TicketTable = memo(function TicketTable({
           <TableRow className="border-b border-border/50 bg-card hover:bg-card">
             {onSelectionChange && (
               <TableHead className="w-10 pl-4">
-                <Checkbox
-                  checked={allSelected}
-                  ref={(el) => { if (el) (el as any).indeterminate = someSelected; }}
-                  onCheckedChange={toggleAll}
-                  aria-label="Markera alla"
-                />
+                <label className="flex size-11 cursor-pointer items-center justify-center">
+                  <Checkbox
+                    checked={allSelected}
+                    ref={(el) => { if (el) (el as any).indeterminate = someSelected; }}
+                    onCheckedChange={toggleAll}
+                    aria-label="Markera alla"
+                  />
+                </label>
               </TableHead>
             )}
-            <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               <div className="flex items-center gap-2">
                 Ärende
               </div>
             </TableHead>
-            <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{renderSortButton('Status', 'status', enableStatusSort)}</TableHead>
-            <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{renderSortButton('Prioritet', 'priority', enablePrioritySort)}</TableHead>
-            <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Förlopp</TableHead>
-            <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Tilldelad</TableHead>
-            <TableHead className="text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">Beställare</TableHead>
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{renderSortButton('Status', 'status', enableStatusSort)}</TableHead>
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{renderSortButton('Prioritet', 'priority', enablePrioritySort)}</TableHead>
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Förlopp</TableHead>
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground hidden lg:table-cell">Tilldelad</TableHead>
+            <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Beställare</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -265,49 +265,35 @@ export const TicketTable = memo(function TicketTable({
               key={ticket.id}
               className={cn(
                 compact && "h-9",
-                "ticket-row cursor-pointer transition-colors duration-150",
+                "ticket-row transition-colors duration-150",
                 "hover:bg-muted/50",
                 "border-b border-border/30 last:border-0",
                 "relative group",
-                "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset",
                 selectedIds.includes(ticket.id) && "bg-primary/5"
               )}
-              role="button"
-              tabIndex={0}
-              onClick={() => {
-                if (onTicketClick) {
-                  onTicketClick(ticket.id);
-                } else {
-                  window.location.href = `/tickets/${ticket.id}`;
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  if (onTicketClick) {
-                    onTicketClick(ticket.id);
-                  } else {
-                    window.location.href = `/tickets/${ticket.id}`;
-                  }
-                }
-              }}
             >
               {onSelectionChange && (
-                <TableCell className="w-10 py-2.5 pl-4" onClick={(e) => e.stopPropagation()}>
-                  <Checkbox
-                    checked={selectedIds.includes(ticket.id)}
-                    onCheckedChange={() => toggleOne(ticket.id)}
-                    aria-label={`Markera ${ticket.title}`}
-                  />
+                <TableCell className="relative z-10 w-10 py-0 pl-4">
+                  <label className="flex size-11 cursor-pointer items-center justify-center">
+                    <Checkbox
+                      checked={selectedIds.includes(ticket.id)}
+                      onCheckedChange={() => toggleOne(ticket.id)}
+                      aria-label={`Markera ${ticket.title}`}
+                    />
+                  </label>
                 </TableCell>
               )}
               {/* Ärende: Title + Category row */}
               <TableCell className={cn("py-2.5 px-4", compact && "py-1.5")}>
                 <div className="flex flex-col gap-1">
-                  <span className="font-semibold text-foreground group-hover:text-primary transition-colors duration-200">
+                  <Link
+                    to={`/tickets/${ticket.id}`}
+                    state={{ from: location.pathname + location.search }}
+                    className="font-semibold text-foreground group-hover:text-primary transition-colors duration-200 outline-hidden after:absolute after:inset-0 focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-inset"
+                  >
                     {ticket.title}
-                  </span>
-                  <div className="flex items-center gap-2 flex-wrap">
+                  </Link>
+                  <div className="relative z-10 flex w-fit items-center gap-2 flex-wrap">
                     <CategoryBadge category={ticket.category} />
                   </div>
                 </div>
@@ -325,7 +311,7 @@ export const TicketTable = memo(function TicketTable({
                 {(() => {
                   const progress = getProgress(ticket.id);
                   if (!progress || progress.total === 0) {
-                    return <span className="text-muted-foreground/50 text-sm">—</span>;
+                    return <span className="text-muted-foreground text-sm">—</span>;
                   }
                   const percentage = Math.round((progress.completed / progress.total) * 100);
                   const isComplete = percentage === 100;
@@ -341,8 +327,7 @@ export const TicketTable = memo(function TicketTable({
                       </div>
                       <span className={cn(
                         "text-xs font-medium whitespace-nowrap transition-colors tabular-nums",
-                        isComplete ? "text-primary" : "text-muted-foreground",
-                        compact && "text-[11px]"
+                        isComplete ? "text-primary" : "text-muted-foreground"
                       )}>
                         {progress.completed}/{progress.total}
                       </span>

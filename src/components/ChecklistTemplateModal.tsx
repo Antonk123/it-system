@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ChecklistTemplate } from '@/lib/api';
 import { ListChecks, ChevronRight } from 'lucide-react';
 
@@ -18,6 +18,7 @@ export const ChecklistTemplateModal = ({ open, onClose, templates, onSelect }: P
             <ListChecks className="h-5 w-5" />
             Välj checklistmall
           </DialogTitle>
+          <DialogDescription>Välj en mall för att lägga till dess punkter i ärendets checklista.</DialogDescription>
         </DialogHeader>
         {templates.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">

@@ -141,7 +141,7 @@ const GeneralTab = () => {
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <Palette className="w-5 h-5" />
                   Utseende
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.appearance ? '−' : '+'}</span>
@@ -178,7 +178,7 @@ const GeneralTab = () => {
             <div className="space-y-2">
               <label className="text-sm font-medium">Tema</label>
               <Select value={theme || 'theme-midnight'} onValueChange={handleThemeChange}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Tema">
                   <SelectValue placeholder="Välj tema" />
                 </SelectTrigger>
                 <SelectContent>
@@ -197,7 +197,7 @@ const GeneralTab = () => {
                 Teckensnitt
               </label>
               <Select value={fontTheme} onValueChange={handleFontThemeChange}>
-                <SelectTrigger>
+                <SelectTrigger aria-label="Teckensnitt">
                   <SelectValue placeholder="Välj teckensnitt" />
                 </SelectTrigger>
                 <SelectContent>
@@ -219,7 +219,7 @@ const GeneralTab = () => {
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <Bell className="w-5 h-5" />
                   Notifikationer
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.notifications ? '−' : '+'}</span>
@@ -271,7 +271,7 @@ const GeneralTab = () => {
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <KeyRound className="w-5 h-5" />
                   Byt lösenord
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.password ? '−' : '+'}</span>

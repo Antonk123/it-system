@@ -36,6 +36,7 @@ import {
 import {
   Sheet,
   SheetContent,
+  SheetDescription,
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
@@ -356,7 +357,7 @@ const UserList = () => {
               <div className="space-y-2">
                 <Label>Företag</Label>
                 <Select value={formData.company_id || 'none'} onValueChange={(v) => setFormData({ ...formData, company_id: v === 'none' ? '' : v })}>
-                  <SelectTrigger>
+                  <SelectTrigger aria-label="Företag">
                     <SelectValue placeholder="Inget företag" />
                   </SelectTrigger>
                   <SelectContent>
@@ -401,7 +402,7 @@ const UserList = () => {
           />
         </div>
         <Select value={companyFilter} onValueChange={handleCompanyFilterChange}>
-          <SelectTrigger className="w-[220px] shrink-0">
+          <SelectTrigger aria-label="Filtrera på företag" className="w-[220px] shrink-0">
             <SelectValue placeholder="Alla företag" />
           </SelectTrigger>
           <SelectContent>
@@ -518,7 +519,7 @@ const UserList = () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-11 w-11 md:h-8 md:w-8"
                         onClick={() => handleEdit(user)}
                         aria-label="Redigera kontakt"
                       >
@@ -526,7 +527,7 @@ const UserList = () => {
                       </Button>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" aria-label="Ta bort kontakt">
+                          <Button variant="ghost" size="icon" className="h-11 w-11 md:h-8 md:w-8 text-destructive" aria-label="Ta bort kontakt">
                             <Trash2 className="w-4 h-4" />
                           </Button>
                         </AlertDialogTrigger>
@@ -625,6 +626,7 @@ const UserList = () => {
         <SheetContent className="sm:max-w-lg overflow-y-auto">
           <SheetHeader>
             <SheetTitle>{selectedUser?.name}s ärenden</SheetTitle>
+            <SheetDescription>Ärenden som kontakten har skapat.</SheetDescription>
           </SheetHeader>
           <div className="mt-6">
             {selectedUser && <UserTicketHistory userId={selectedUser.id} />}
@@ -653,11 +655,11 @@ const UserList = () => {
                   <p className="text-2xl font-bold font-mono tabular-nums">{importPreview.total}</p>
                 </div>
                 <div className="border rounded-lg p-3 bg-success/10">
-                  <div className="flex items-center gap-2 text-success mb-1">
+                  <div className="flex items-center gap-2 text-success-text mb-1">
                     <Plus className="w-4 h-4" />
                     <span className="text-sm">Giltiga</span>
                   </div>
-                  <p className="text-2xl font-bold text-success font-mono tabular-nums">{importPreview.valid}</p>
+                  <p className="text-2xl font-bold text-success-text font-mono tabular-nums">{importPreview.valid}</p>
                 </div>
                 <div className="border rounded-lg p-3 bg-destructive/10">
                   <div className="flex items-center gap-2 text-destructive mb-1">
@@ -705,7 +707,7 @@ const UserList = () => {
 
               {importPreview.results.filter((r: any) => r.valid).length > 0 && (
                 <div className="border rounded-lg p-4 bg-success/10">
-                  <h4 className="font-semibold mb-2 text-success">
+                  <h4 className="font-semibold mb-2 text-success-text">
                     Giltiga kontakter ({importPreview.results.filter((r: any) => r.valid).length} st)
                   </h4>
                   <div className="space-y-2 max-h-40 overflow-y-auto">
@@ -714,10 +716,10 @@ const UserList = () => {
                       .slice(0, 5)
                       .map((result: any, idx: number) => (
                         <div key={idx} className="text-sm">
-                          <p className="font-medium text-success">
+                          <p className="font-medium text-success-text">
                             {result.contact.name}
                           </p>
-                          <p className="text-xs text-success">
+                          <p className="text-xs text-success-text">
                             {result.contact.email}
                             {result.contact.company && ` | ${result.contact.company}`}
                           </p>

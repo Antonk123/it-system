@@ -152,7 +152,7 @@ export function AuditLogSection() {
                   <TableCell className="whitespace-nowrap">
                     {actorLabel(entry)}
                     {apiKeyLabel(entry) && (
-                      <span className="ml-1.5 inline-flex items-center rounded bg-muted px-1.5 py-0.5 align-middle text-[10px] font-medium text-muted-foreground">
+                      <span className="ml-1.5 inline-flex items-center rounded bg-muted px-1.5 py-0.5 align-middle text-xs font-medium text-muted-foreground">
                         {apiKeyLabel(entry)}
                       </span>
                     )}

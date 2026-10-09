@@ -153,7 +153,7 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <Inbox className="w-5 h-5" />
                   E-post-ingång
                   {emailInboundStatus?.configured && (
@@ -240,7 +240,7 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <Key className="w-5 h-5" />
                   API-nycklar
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.apiKeys ? '−' : '+'}</span>
@@ -255,6 +255,7 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
                 <div className="space-y-2">
                   <div className="flex gap-2">
                     <Input
+                      aria-label="Nyckelnamn"
                       placeholder="Nyckelnamn (t.ex. CI/CD)"
                       value={newApiKeyName}
                       onChange={(e) => setNewApiKeyName(e.target.value)}
@@ -266,6 +267,7 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
                     <Button
                       onClick={handleCreateApiKey}
                       disabled={isCreatingApiKey}
+                      aria-label="Skapa API-nyckel"
                     >
                       {isCreatingApiKey ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
                     </Button>
@@ -295,7 +297,7 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
 
                 {createdApiKey && (
                   <div className="rounded-md border border-warning/30 bg-warning/10 p-3 space-y-2">
-                    <p className="text-sm font-medium text-warning">Kopiera nyckeln nu — den visas bara en gång!</p>
+                    <p className="text-sm font-medium text-warning-text">Kopiera nyckeln nu — den visas bara en gång!</p>
                     <div className="flex items-center gap-2">
                       <code className="flex-1 text-xs bg-background/50 p-2 rounded font-mono break-all">{createdApiKey}</code>
                       <Button
@@ -327,11 +329,11 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-sm truncate">{key.name}</p>
-                          <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${keyCanWrite(key.permissions) ? 'bg-warning/15 text-warning' : 'bg-muted text-muted-foreground'}`}>
+                          <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded font-medium ${keyCanWrite(key.permissions) ? 'bg-warning/15 text-warning-text' : 'bg-muted text-muted-foreground'}`}>
                             {keyCanWrite(key.permissions) ? 'Läs + Skriv' : 'Läs'}
                           </span>
                           {keyHasAdmin(key.permissions) && (
-                            <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium bg-destructive/15 text-destructive">
+                            <span className="shrink-0 text-xs px-1.5 py-0.5 rounded font-medium bg-destructive/15 text-destructive">
                               Admin
                             </span>
                           )}
@@ -358,7 +360,7 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <Globe className="w-5 h-5" />
                   Webhooks
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.webhooks ? '−' : '+'}</span>
@@ -372,6 +374,7 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
               <CardContent className="space-y-4">
                 <div className="space-y-3 rounded-md border p-3">
                   <Input
+                    aria-label="Webhook-URL"
                     placeholder="Webhook URL (https://...)"
                     value={newWebhookUrl}
                     onChange={(e) => setNewWebhookUrl(e.target.value)}
@@ -418,7 +421,7 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
 
                 {createdWebhookSecret && (
                   <div className="rounded-md border border-warning/30 bg-warning/10 p-3 space-y-2">
-                    <p className="text-sm font-medium text-warning">Kopiera hemligheten nu – den visas inte igen</p>
+                    <p className="text-sm font-medium text-warning-text">Kopiera hemligheten nu – den visas inte igen</p>
                     <div className="flex items-center gap-2">
                       <code className="flex-1 text-xs bg-background/50 p-2 rounded font-mono break-all">{createdWebhookSecret}</code>
                       <Button

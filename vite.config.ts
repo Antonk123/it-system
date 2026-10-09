@@ -9,7 +9,16 @@ export default defineConfig(() => ({
   // egen vitest-svit — appens svit ska inte plocka upp deras tester.
   // Speglar att tools/ redan är exkluderad från eslint (eslint.config.js).
   test: {
-    exclude: [...configDefaults.exclude, "tools/**", "server/**"],
+    exclude: [...configDefaults.exclude, "tools/**", "server/**", "e2e/**"],
+    // Täckningsratchet (baslinje 2026-10-09: 41/40/33/43). Höj när sviten växer,
+    // sänk aldrig utan beslut. shadcn-primitiverna i components/ui är vendorkod.
+    coverage: {
+      provider: "v8",
+      include: ["src/**"],
+      exclude: ["src/**/*.test.*", "src/components/ui/**", "src/sw.ts"],
+      reporter: ["text-summary"],
+      thresholds: { statements: 38, branches: 37, functions: 30, lines: 39 },
+    },
   },
   server: {
     host: "::",

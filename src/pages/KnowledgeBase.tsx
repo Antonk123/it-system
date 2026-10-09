@@ -359,6 +359,7 @@ const KnowledgeBase = () => {
                       {editingCategoryId === cat.id ? (
                         <>
                           <Input
+                            aria-label="Kategorinamn"
                             value={editingCategoryName}
                             onChange={(e) => setEditingCategoryName(e.target.value)}
                             className="h-11 text-sm flex-1"

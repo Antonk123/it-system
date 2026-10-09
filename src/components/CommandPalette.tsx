@@ -56,7 +56,7 @@ const navItems = [
 function TypeBadge({ type }: { type: 'ticket' | 'kb' | 'contact' }) {
   const label = type === 'ticket' ? 'Ärende' : type === 'kb' ? 'KB' : 'Kontakt';
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground ml-1 shrink-0">
+    <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground ml-1 shrink-0">
       {label}
     </span>
   );
@@ -136,6 +136,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput
+        aria-label="Sök ärenden, artiklar och sidor"
         placeholder="Sök ärenden, artiklar, sidor..."
         value={inputValue}
         onValueChange={handleInputChange}

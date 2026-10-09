@@ -69,7 +69,7 @@ export const ActivityFeedPanel = ({ events, isLoading }: ActivityFeedPanelProps)
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <div className="flex items-center gap-2">
           <p className="text-sm font-semibold text-foreground">Aktivitet</p>
-          <span className="font-mono text-[11px] font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
+          <span className="font-mono text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground border border-border">
             senaste
           </span>
         </div>
@@ -131,13 +131,13 @@ export const ActivityFeedPanel = ({ events, isLoading }: ActivityFeedPanelProps)
                       {event.ticket_title && (
                         <>
                           {' · '}
-                          <span className="font-mono text-[11px] text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                          <span className="font-mono text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded">
                             {event.ticket_title}
                           </span>
                         </>
                       )}
                     </p>
-                    <p className="font-mono text-[10.5px] text-muted-foreground mt-1 tracking-wide">
+                    <p className="font-mono text-xs text-muted-foreground mt-1 tracking-wide">
                       {formatDistanceToNow(parseServerDate(event.changed_at), { addSuffix: true, locale: sv })}
                     </p>
                   </div>

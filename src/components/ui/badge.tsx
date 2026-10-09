@@ -13,7 +13,7 @@ const badgeVariants = cva(
         // dark:text mirrors the same fix in button.tsx's destructive variant — see
         // that component for the WCAG contrast rationale (five dark themes pair a
         // pale destructive background with white text, ~3.78:1, below AA's 4.5:1).
-        destructive: "border-transparent bg-destructive text-destructive-foreground dark:text-[hsl(0_0%_7%)] hover:bg-destructive/80",
+        destructive: "border-transparent bg-destructive text-destructive-foreground hover:bg-destructive/80",
         outline: "text-foreground",
       },
     },

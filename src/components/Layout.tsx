@@ -291,7 +291,7 @@ export const Layout = ({
                 <span className="relative flex items-center gap-2 px-4 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-border text-muted-foreground text-sm transition-colors">
                   <Search className="w-4 h-4" />
                   <span>Sök överallt...</span>
-                  <kbd className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono">
+                  <kbd className="ml-auto text-xs bg-muted px-1.5 py-0.5 rounded font-mono">
                     {navigator.platform?.includes('Mac') ? '⌘K' : 'Ctrl+K'}
                   </kbd>
                 </span>

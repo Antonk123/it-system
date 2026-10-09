@@ -4,7 +4,7 @@ import { Building2, Plus, Search, Trash2, Loader2, MoreHorizontal } from 'lucide
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import {
   DropdownMenu,
@@ -83,6 +83,7 @@ const CompanyList = () => {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Skapa nytt företag</DialogTitle>
+                <DialogDescription>Fyll i företagets uppgifter.</DialogDescription>
               </DialogHeader>
               <form onInvalidCapture={event => { const details = (event.target as HTMLElement).closest('details'); if (details) details.open = true; }} onSubmit={handleCreate} className="space-y-4">
                 <div className="space-y-2">
@@ -152,6 +153,7 @@ const CompanyList = () => {
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
+            aria-label="Sök företag"
             className="pl-9"
             placeholder="Sök företag..."
             value={search}
@@ -269,7 +271,7 @@ const CompanyList = () => {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 text-muted-foreground"
+                            className="h-11 w-11 md:h-8 md:w-8 text-muted-foreground"
                             aria-label={`Åtgärder för ${company.name}`}
                           >
                             <MoreHorizontal className="w-4 h-4" />

@@ -60,6 +60,7 @@ export const TemplateCombobox = ({
         <PopoverContent className="w-[280px] p-0 bg-popover border border-border z-50" align="start">
           <Command shouldFilter={false}>
             <CommandInput
+              aria-label="Sök mall"
               placeholder="Sök mall..."
               value={search}
               onValueChange={setSearch}

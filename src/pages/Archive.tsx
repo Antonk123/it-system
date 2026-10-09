@@ -26,7 +26,7 @@ const Archive = () => {
     searchParams, setSearchParams, statuses, mine, page, pageSize, search, priorityFilter,
     categoryFilter, checklistFilter, dateField, sortKey, sortDirection, dateFrom, dateTo,
     companyFilter, selectedIds, setSelectedIds, updateFilters, handlePageChange,
-    handlePageSizeChange, handleSortChange, handleTicketClick,
+    handlePageSizeChange, handleSortChange,
   } = useTicketListNavigation(10);
 
   const [compactView, setCompactView] = useState(false);
@@ -161,7 +161,7 @@ const Archive = () => {
               variant="outline"
               size="sm"
               onClick={() => setCompactView((prev) => !prev)}
-              className="h-8"
+              className="h-11 md:h-8"
             >
               {compactView ? 'Standardvy' : 'Kompakt vy'}
             </Button>
@@ -169,7 +169,7 @@ const Archive = () => {
               variant="outline"
               size="sm"
               onClick={() => setImportOpen(true)}
-              className="h-8 gap-2"
+              className="h-11 md:h-8 gap-2"
             >
               <Upload className="w-4 h-4" />
               Importera CSV
@@ -244,7 +244,6 @@ const Archive = () => {
               <TicketTable
                 tickets={tickets}
                 users={users}
-                onTicketClick={handleTicketClick}
                 sortKey={sortKey === 'priority' || sortKey === 'category' ? sortKey : undefined}
                 sortDirection={sortDirection}
                 onSortChange={handleSortChange}

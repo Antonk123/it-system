@@ -34,7 +34,7 @@ jobs:
       - run: npx tsc --noEmit -p tsconfig.node.json
       # Oanvända locals/parametrar i frontend (noUnusedLocals/Parameters).
       - run: npm run check:unused
-      - run: npm test
+      - run: npm test -- --coverage
       # OpenAPI-specen måste vara strukturellt giltig (docs/openapi.yaml).
       - run: npm run openapi:lint
       # ...och täcka varje monterad Express-route (server/src/app.ts + routes/*.ts).
@@ -56,6 +56,31 @@ jobs:
       # --coverage verkställer ratchet-trösklarna i vitest.config.ts (fäller
       # bygget om täckningen tappar under dem).
       - run: cd server && npm test -- --coverage
+
+  e2e:
+    runs-on: ubuntu-latest
+    # Rökig E2E mot riktiga dev-stacken (Vite + Express + throwaway SQLite, se
+    # playwright.config.ts). Körs först när lint/typecheck/enhetstester är gröna.
+    needs: [lint-and-typecheck, lint-server]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: cd server && npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
 
   docker-build:
     runs-on: ubuntu-latest

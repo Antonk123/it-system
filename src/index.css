@@ -34,9 +34,11 @@
 
   --color-success: hsl(var(--success));
   --color-success-foreground: hsl(var(--success-foreground));
+  --color-success-text: hsl(var(--success-text));
 
   --color-warning: hsl(var(--warning));
   --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-warning-text: hsl(var(--warning-text));
 
   --color-muted: hsl(var(--muted));
   --color-muted-foreground: hsl(var(--muted-foreground));
@@ -349,6 +351,11 @@
     padding: 0 1px;
   }
 
+  .light mark {
+    background-color: hsl(45 93% 47% / 0.35);
+    color: hsl(var(--foreground));
+  }
+
   /* Slate - Linear/Vercel-inspired clean dark */
   :root,
   .theme-default {
@@ -439,11 +446,13 @@
     /* Warning — amber för "behöver uppmärksamhet, inte kritiskt". */
     --warning: 38 95% 60%;
     --warning-foreground: 0 0% 5%;
+    --warning-text: 38 95% 60%;
 
     /* Success — confirmation green. --success-foreground definieras här,
        --success ärvs/överskrivs av .dark och light-teman. */
     --success: 142 65% 55%;
     --success-foreground: 0 0% 5%;
+    --success-text: 142 65% 55%;
   }
 
   /* Midnight - GitHub dark-inspired deep indigo */
@@ -686,8 +695,8 @@
     --popover: 210 4% 10%;
     --popover-foreground: 180 7% 97%;
 
-    --primary: 234 56% 60%;
-    --primary-foreground: 0 0% 100%;
+    --primary: 234 56% 64%;
+    --primary-foreground: 180 7% 5%;
 
     --secondary: 240 5% 16%;
     --secondary-foreground: 218 20% 85%;
@@ -696,14 +705,14 @@
     --muted-foreground: 219 7% 57%;
 
     --accent: 240 100% 72%;
-    --accent-foreground: 0 0% 100%;
+    --accent-foreground: 180 7% 5%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 223 9% 15%;
     --input: 210 6% 6%;
-    --ring: 234 56% 60%;
+    --ring: 234 56% 64%;
 
 
     /* Ticket status colors */
@@ -722,15 +731,15 @@
     /* Sidebar */
     --sidebar-background: 210 11% 3%;
     --sidebar-foreground: 218 20% 85%;
-    --sidebar-primary: 234 56% 60%;
-    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-primary: 234 56% 64%;
+    --sidebar-primary-foreground: 180 7% 5%;
     --sidebar-accent: 210 4% 10%;
     --sidebar-accent-foreground: 180 7% 97%;
     --sidebar-border: 223 9% 15%;
-    --sidebar-ring: 234 56% 60%;
+    --sidebar-ring: 234 56% 64%;
 
     /* Chart colors - indigo-violet spectrum */
-    --chart-1: 234 56% 60%;
+    --chart-1: 234 56% 64%;
     --chart-2: 240 100% 72%;
     --chart-3: 237 100% 76%;
     --chart-4: 160 84% 39%;
@@ -840,7 +849,7 @@
     --popover: 200 9% 12%;
     --popover-foreground: 60 5% 93%;
 
-    --primary: 205 45% 48%;
+    --primary: 205 45% 49%;
     --primary-foreground: 200 10% 8%;
 
     --secondary: 200 8% 15%;
@@ -857,7 +866,7 @@
 
     --border: 200 8% 22%;
     --input: 200 8% 13%;
-    --ring: 205 45% 48%;
+    --ring: 205 45% 49%;
 
 
     /* Status = approval stamp ink (procedural, cooler family than priority) */
@@ -877,15 +886,15 @@
     /* Sidebar */
     --sidebar-background: 200 12% 6%;
     --sidebar-foreground: 60 5% 90%;
-    --sidebar-primary: 205 45% 48%;
+    --sidebar-primary: 205 45% 49%;
     --sidebar-primary-foreground: 200 10% 8%;
     --sidebar-accent: 200 9% 10%;
     --sidebar-accent-foreground: 60 5% 93%;
     --sidebar-border: 200 8% 18%;
-    --sidebar-ring: 205 45% 48%;
+    --sidebar-ring: 205 45% 49%;
 
     /* Chart colors - steel-blue spectrum matching primary family */
-    --chart-1: 205 45% 48%;
+    --chart-1: 205 45% 49%;
     --chart-2: 28 60% 48%;
     --chart-3: 150 35% 45%;
     --chart-4: 9 70% 48%;
@@ -933,6 +942,11 @@
     /* Success default (override:as redan i flera light-teman). */
     --success: 142 60% 35%;
     --success-foreground: 0 0% 100%;
+
+    /* Text-varianter (≥4.5:1 mot bakgrund/kort) — --success/--warning är
+       fyllnadsfärger och räcker inte som textfärg i light-mode. */
+    --success-text: 142 60% 28%;
+    --warning-text: 32 90% 28%;
   }
 
   /* Slate Light — blue accent */
@@ -947,7 +961,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    --primary: 214 100% 50%;
+    --primary: 214 100% 47%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 220 15% 93%;
@@ -956,7 +970,7 @@
     --muted: 220 14% 93%;
     --muted-foreground: 220 12% 38%; /* WCAG AA: 6.0:1 mot light bg (var 48% = 4.1:1) */
 
-    --accent: 199 85% 48%;
+    --accent: 199 85% 37%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 70% 50%;
@@ -967,7 +981,7 @@
 
     --border: 220 15% 86%;
     --input: 220 15% 91%;
-    --ring: 214 100% 50%;
+    --ring: 214 100% 47%;
 
 
     /* Custom ticket status colors */
@@ -986,12 +1000,12 @@
     /* Sidebar */
     --sidebar-background: 220 20% 96%;
     --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 214 100% 50%;
+    --sidebar-primary: 214 100% 47%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 15% 92%;
     --sidebar-accent-foreground: 222 47% 11%;
     --sidebar-border: 220 15% 88%;
-    --sidebar-ring: 214 100% 50%;
+    --sidebar-ring: 214 100% 47%;
 
     /* Chart colors - blue spectrum */
     --chart-1: 214 100% 50%;
@@ -1037,7 +1051,7 @@
     --muted: 232 18% 93%;
     --muted-foreground: 225 14% 38%; /* WCAG AA */
 
-    --accent: 196 72% 48%;
+    --accent: 196 72% 37%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 70% 50%;
@@ -1109,7 +1123,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 220 14% 12%;
 
-    --primary: 38 92% 45%;
+    --primary: 38 92% 31%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 218 10% 93%;
@@ -1118,7 +1132,7 @@
     --muted: 218 10% 93%;
     --muted-foreground: 218 8% 38%; /* WCAG AA */
 
-    --accent: 32 85% 42%;
+    --accent: 32 85% 36%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 70% 50%;
@@ -1129,7 +1143,7 @@
 
     --border: 218 10% 86%;
     --input: 218 10% 91%;
-    --ring: 38 92% 45%;
+    --ring: 38 92% 31%;
 
 
     /* Custom ticket status colors */
@@ -1148,15 +1162,15 @@
     /* Sidebar */
     --sidebar-background: 218 12% 96%;
     --sidebar-foreground: 220 14% 12%;
-    --sidebar-primary: 38 92% 45%;
+    --sidebar-primary: 38 92% 31%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 218 10% 92%;
     --sidebar-accent-foreground: 220 14% 12%;
     --sidebar-border: 218 10% 88%;
-    --sidebar-ring: 38 92% 45%;
+    --sidebar-ring: 38 92% 31%;
 
     /* Chart colors - amber/warm spectrum */
-    --chart-1: 38 92% 45%;
+    --chart-1: 38 92% 31%;
     --chart-2: 25 80% 45%;
     --chart-3: 48 88% 50%;
     --chart-4: 15 75% 45%;
@@ -1190,7 +1204,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 200 10% 12%;
 
-    --primary: 160 55% 38%;
+    --primary: 160 55% 32%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 196 6% 93%;
@@ -1210,7 +1224,7 @@
 
     --border: 196 6% 86%;
     --input: 196 6% 91%;
-    --ring: 160 55% 38%;
+    --ring: 160 55% 32%;
 
 
     /* Custom ticket status colors */
@@ -1229,15 +1243,15 @@
     /* Sidebar */
     --sidebar-background: 198 8% 96%;
     --sidebar-foreground: 200 10% 12%;
-    --sidebar-primary: 160 55% 38%;
+    --sidebar-primary: 160 55% 32%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 196 6% 92%;
     --sidebar-accent-foreground: 200 10% 12%;
     --sidebar-border: 196 6% 88%;
-    --sidebar-ring: 160 55% 38%;
+    --sidebar-ring: 160 55% 32%;
 
     /* Chart colors - emerald spectrum */
-    --chart-1: 160 55% 38%;
+    --chart-1: 160 55% 32%;
     --chart-2: 152 45% 35%;
     --chart-3: 168 50% 44%;
     --chart-4: 142 40% 38%;
@@ -1352,7 +1366,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 7%;
 
-    --primary: 141 76% 36%;
+    --primary: 141 76% 28%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 0 0% 93%;
@@ -1361,7 +1375,7 @@
     --muted: 0 0% 93%;
     --muted-foreground: 0 0% 40%;
 
-    --accent: 141 73% 40%;
+    --accent: 141 73% 30%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 354 70% 50%;
@@ -1372,7 +1386,7 @@
 
     --border: 0 0% 86%;
     --input: 0 0% 93%;
-    --ring: 141 76% 36%;
+    --ring: 141 76% 28%;
 
 
     /* Ticket status colors */
@@ -1391,15 +1405,15 @@
     /* Sidebar */
     --sidebar-background: 0 0% 96%;
     --sidebar-foreground: 0 0% 10%;
-    --sidebar-primary: 141 76% 36%;
+    --sidebar-primary: 141 76% 28%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 0 0% 92%;
     --sidebar-accent-foreground: 0 0% 7%;
     --sidebar-border: 0 0% 88%;
-    --sidebar-ring: 141 76% 36%;
+    --sidebar-ring: 141 76% 28%;
 
     /* Chart colors - green spectrum */
-    --chart-1: 141 76% 36%;
+    --chart-1: 141 76% 28%;
     --chart-2: 141 73% 40%;
     --chart-3: 215 89% 50%;
     --chart-4: 32 90% 48%;
@@ -1544,10 +1558,11 @@
     --muted-foreground: 0 0% 65%;
 
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 85% 97%;
+    --destructive-foreground: 0 0% 7%; /* 4.96:1 mot --destructive (vitt gav 3.43:1) */
 
     --success: 142 60% 25%;
     --success-foreground: 142 70% 90%;
+    --success-text: 142 60% 50%;
 
     /* Semantic accent (AI) — brighter for dark mode legibility. */
     --ai: 270 85% 72%;
@@ -1556,6 +1571,7 @@
     /* Warning — slightly brighter amber on dark. */
     --warning: 38 95% 62%;
     --warning-foreground: 0 0% 5%;
+    --warning-text: 38 95% 62%;
 
     --sidebar-background: 0 0% 7%;
     --sidebar-foreground: 0 0% 98%;
@@ -1668,7 +1684,7 @@
     --muted: 220 14% 93% !important;
     --muted-foreground: 220 12% 38% !important; /* WCAG AA — print */
     --border: 220 13% 85% !important;
-    --primary: 214 100% 50% !important;
+    --primary: 214 100% 47% !important;
     --primary-foreground: 0 0% 100% !important;
   }
 

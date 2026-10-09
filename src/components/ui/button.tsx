@@ -10,13 +10,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: "bg-primary text-primary-foreground hover:bg-primary/90 active:bg-primary/80",
-        // dark:text overrides --destructive-foreground specifically in dark mode: five
-        // of the six dark themes pair a pale destructive background (60% lightness)
-        // with white text (~3.78:1, below WCAG AA's 4.5:1) — near-black text against
-        // the same background clears AA (~4.96:1) without needing a per-theme CSS edit,
-        // since @custom-variant dark (&:is(.dark *)) only fires when applyMode() has
-        // already added .dark (src/lib/appearance.ts), never in light mode.
-        destructive: "bg-destructive text-destructive-foreground dark:text-[hsl(0_0%_7%)] hover:bg-destructive/90 active:bg-destructive/80",
+        destructive: "bg-destructive text-destructive-foreground hover:bg-destructive/90 active:bg-destructive/80",
         outline: "border border-border bg-background hover:bg-muted active:bg-muted/80",
         secondary: "bg-secondary text-secondary-foreground hover:bg-secondary/80 active:bg-secondary/70",
         ghost: "hover:bg-muted hover:text-foreground active:bg-muted/80",

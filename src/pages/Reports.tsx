@@ -425,7 +425,7 @@ const Reports = () => {
             setSelectedYear(value);
             if (value === 'all') setSelectedMonth('all');
           }}>
-            <SelectTrigger className="w-[140px]">
+            <SelectTrigger aria-label="Välj år" className="w-[140px]">
               <SelectValue placeholder="Välj år" />
             </SelectTrigger>
             <SelectContent>
@@ -439,7 +439,7 @@ const Reports = () => {
           </Select>
           {selectedYear !== 'all' && (
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-[140px]">
+              <SelectTrigger aria-label="Välj månad" className="w-[140px]">
                 <SelectValue placeholder="Välj månad" />
               </SelectTrigger>
               <SelectContent>
@@ -557,7 +557,7 @@ const Reports = () => {
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <BarChart3 className="h-12 w-12 text-muted-foreground/40 mb-4" />
           <p className="text-lg font-medium text-muted-foreground">Inga ärenden att visa statistik för</p>
-          <p className="text-sm text-muted-foreground/70 mt-1">Skapa ärenden för att se rapporter och trender här.</p>
+          <p className="text-sm text-muted-foreground mt-1">Skapa ärenden för att se rapporter och trender här.</p>
         </div>
       )}
 
@@ -629,7 +629,7 @@ const Reports = () => {
           <Card className="animate-fade-in" style={{ animationDelay: '350ms' }}>
             <CardHeader className="flex flex-row items-center gap-2">
               <PieChartIcon className="h-5 w-5 text-primary" />
-              <CardTitle className="text-xl font-semibold font-serif">Ärenden per status</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-serif">Ärenden per status</CardTitle>
             </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -711,7 +711,7 @@ const Reports = () => {
           <Card className="animate-fade-in" style={{ animationDelay: '300ms' }}>
             <CardHeader className="flex flex-row items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              <CardTitle className="text-xl font-semibold font-serif">Ärenden per prioritet</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-serif">Ärenden per prioritet</CardTitle>
             </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -758,7 +758,7 @@ const Reports = () => {
           <Card className="animate-fade-in" style={{ animationDelay: '400ms' }}>
             <CardHeader className="flex flex-row items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              <CardTitle className="text-xl font-semibold font-serif">Kategorier</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-serif">Kategorier</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -802,7 +802,7 @@ const Reports = () => {
           <Card>
             <CardHeader className="flex flex-row items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
-              <CardTitle className="text-xl font-semibold font-serif">Skapade och stängda ärenden</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-serif">Skapade och stängda ärenden</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -835,7 +835,7 @@ const Reports = () => {
           {/* Status Flow */}
           <Card className="animate-fade-in" style={{ animationDelay: '500ms' }}>
             <CardHeader>
-              <CardTitle className="text-xl font-semibold font-serif">Statusflöde över tid</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-serif">Statusflöde över tid</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 Statusfördelning de senaste 12 månaderna
               </p>
@@ -851,7 +851,7 @@ const Reports = () => {
           <Card className="animate-fade-in" style={{ animationDelay: '700ms' }}>
             <CardHeader className="flex flex-row items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              <CardTitle className="text-xl font-semibold font-serif">Per person</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-serif">Per person</CardTitle>
             </CardHeader>
               <CardContent>
                 {/* KPI Summary - enkla divs utan nästlade Card-komponenter */}

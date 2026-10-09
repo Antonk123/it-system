@@ -1,6 +1,6 @@
 import { templateFieldName } from '@/lib/templateValidation';
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -386,6 +386,7 @@ export const TemplateEditorModal = ({
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" key={template?.id || 'new'}>
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Redigera mall' : 'Skapa ny mall'}</DialogTitle>
+          <DialogDescription>Mallar fyller i ärendets rubrik, beskrivning och fält åt dig.</DialogDescription>
         </DialogHeader>
 
         {showTypeChooser ? (
@@ -785,6 +786,7 @@ export const TemplateEditorModal = ({
                             selectOptions.map((option, index) => (
                               <div key={index} className="flex items-center gap-2">
                                 <Input
+                                  aria-label={`Alternativ ${index + 1}`}
                                   value={option}
                                   onChange={(e) => {
                                     const updated = [...selectOptions];
@@ -812,6 +814,7 @@ export const TemplateEditorModal = ({
                           )}
                           <div className="flex gap-2 pt-2">
                             <Input
+                              aria-label="Nytt alternativ"
                               value={newOption}
                               onChange={(e) => setNewOption(e.target.value)}
                               placeholder="Nytt alternativ..."

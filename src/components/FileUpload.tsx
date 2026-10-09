@@ -186,7 +186,7 @@ export const FileUpload = ({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-destructive"
+                  className="h-11 w-11 md:h-8 md:w-8 text-destructive"
                   onClick={() => onRemoveAttachment(attachment)}
                   disabled={disabled}
                   aria-label="Ta bort bilaga"
@@ -223,7 +223,7 @@ export const FileUpload = ({
                   type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
+                  className="h-11 w-11 md:h-8 md:w-8"
                   onClick={() => onRemovePending(index)}
                   disabled={disabled}
                   aria-label="Ta bort bilaga"

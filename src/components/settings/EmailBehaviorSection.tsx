@@ -21,7 +21,7 @@ export function EmailBehaviorSection() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle as="h2" className="flex items-center gap-2">
           <Mail className="w-5 h-5" />
           E-postbeteende
         </CardTitle>

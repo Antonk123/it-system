@@ -2,6 +2,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { MotionConfig } from "framer-motion";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, matchPath, useLocation, useNavigate, useNavigationType } from "react-router";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/api";
@@ -307,14 +308,16 @@ const App = () => (
         themes={["theme-default", "theme-midnight", "theme-graphite", "theme-stone", "theme-linear", "theme-spotify", "theme-forge"]}
       >
         <AppearanceInitializer />
-        <TooltipProvider>
-          <Sonner />
-          <BrowserRouter>
-            <AuthProvider>
-              <AppRoutes />
-            </AuthProvider>
-          </BrowserRouter>
-        </TooltipProvider>
+        <MotionConfig reducedMotion="user">
+          <TooltipProvider>
+            <Sonner />
+            <BrowserRouter>
+              <AuthProvider>
+                <AppRoutes />
+              </AuthProvider>
+            </BrowserRouter>
+          </TooltipProvider>
+        </MotionConfig>
       </ThemeProvider>
     </QueryClientProvider>
   </ErrorBoundary>

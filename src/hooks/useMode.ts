@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { getStoredMode, ModeTheme } from '@/lib/appearance';
 
 /** Custom event name dispatched when mode changes in the same tab */
-export const MODE_CHANGE_EVENT = 'app-mode-change';
+const MODE_CHANGE_EVENT = 'app-mode-change';
 
 /** Dispatch this from any code that calls applyMode + saveModeTheme */
 export function dispatchModeChange(mode: ModeTheme) {

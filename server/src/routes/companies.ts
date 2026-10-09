@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { logger } from '../lib/logger.js';
@@ -91,7 +91,7 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
       return res.status(400).json({ error: 'Company name is required' });
     }
 
-    const id = uuidv4();
+    const id = randomUUID();
     const now = new Date().toISOString();
     db.prepare(
       'INSERT INTO companies (id, name, org_number, email, phone, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'

@@ -81,3 +81,8 @@ dist-ssr
 graphify-out/.graphify_python
 graphify-out/.graphify_root
 graphify-out/cache/
+
+# Playwright (e2e/) — rapporter och throwaway-DB/uploads för e2e-stacken
+playwright-report/
+test-results/
+e2e/tmp/

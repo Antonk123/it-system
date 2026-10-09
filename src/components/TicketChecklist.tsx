@@ -108,7 +108,7 @@ export const TicketChecklist = ({
     return (
       <label
         htmlFor={`date-${item.id}`}
-        className="[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity cursor-pointer"
+        className="[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity cursor-pointer"
         title="Sätt förfallodatum"
         aria-label="Sätt förfallodatum"
       >
@@ -161,7 +161,7 @@ export const TicketChecklist = ({
           {!readOnly && !isChild && onAdd && (
             <button
               onClick={() => setShowSubInputFor(showSubInputFor === item.id ? null : item.id)}
-              className="[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity inline-flex items-center justify-center h-9 w-9 md:h-7 md:w-7 rounded hover:bg-muted"
+              className="[@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity inline-flex items-center justify-center h-9 w-9 md:h-7 md:w-7 rounded hover:bg-muted"
               title="Lägg till deluppgift"
               aria-label="Lägg till deluppgift"
             >
@@ -173,7 +173,7 @@ export const TicketChecklist = ({
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 md:h-7 md:w-7 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity shrink-0"
+              className="h-9 w-9 md:h-7 md:w-7 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity shrink-0"
               onClick={() => onDelete?.(item.id)}
               aria-label="Ta bort uppgift"
             >
@@ -186,6 +186,7 @@ export const TicketChecklist = ({
         {showSubInputFor === item.id && !readOnly && (
           <div className="ml-12 mt-1 flex items-center gap-2">
             <Input
+              aria-label="Lägg till deluppgift"
               placeholder="Lägg till deluppgift..."
               value={subItemInputs[item.id] || ''}
               onChange={(e) => setSubItemInputs(prev => ({ ...prev, [item.id]: e.target.value }))}
@@ -285,7 +286,7 @@ export const TicketChecklist = ({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 md:h-7 md:w-7 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity"
+                className="h-9 w-9 md:h-7 md:w-7 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity"
                 onClick={() => onPendingDelete?.(item.id)}
                 aria-label="Ta bort väntande uppgift"
               >
@@ -300,6 +301,7 @@ export const TicketChecklist = ({
       {!readOnly && (
         <div className="flex items-center gap-2">
           <Input
+            aria-label="Lägg till ny punkt"
             placeholder="Lägg till ny punkt..."
             value={newItemLabel}
             onChange={(e) => setNewItemLabel(e.target.value)}

@@ -305,12 +305,13 @@ const KBArticleDetail = () => {
                 <Share2 className="w-4 h-4 text-primary" />
                 Publik delningslänk
               </p>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowShare(false)}>
+              <Button variant="ghost" size="sm" className="h-11 w-11 p-0 md:h-8 md:w-8" aria-label="Stäng" onClick={() => setShowShare(false)}>
                 <X className="w-3.5 h-3.5" />
               </Button>
             </div>
             <div className="flex gap-2">
               <Input
+                aria-label="Delningslänk"
                 readOnly
                 value={getPublicUrl(shareToken)}
                 className="text-xs font-mono bg-background"

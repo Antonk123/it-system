@@ -195,7 +195,7 @@ const AdminTab = () => {
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <Users className="w-5 h-5" />
                   Systemanvändare
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.users ? '−' : '+'}</span>
@@ -209,6 +209,7 @@ const AdminTab = () => {
               <CardContent className="space-y-4">
             <div className="flex flex-col sm:flex-row gap-2">
               <Input
+                aria-label="Visningsnamn"
                 type="text"
                 placeholder="Visningsnamn (valfritt)"
                 value={inviteName}
@@ -216,6 +217,7 @@ const AdminTab = () => {
                 disabled={isInviting}
               />
               <Input
+                aria-label="E-postadress för ny användare"
                 type="email"
                 placeholder="E-postadress för ny användare..."
                 value={inviteEmail}
@@ -224,7 +226,7 @@ const AdminTab = () => {
                 disabled={isInviting}
               />
               <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as 'admin' | 'user')} disabled={isInviting}>
-                <SelectTrigger className="w-36 shrink-0">
+                <SelectTrigger aria-label="Roll för ny användare" className="w-36 shrink-0">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -382,7 +384,7 @@ const AdminTab = () => {
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <HardDriveDownload className="w-5 h-5" />
                   Backup &amp; Export
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.backup ? '−' : '+'}</span>
@@ -440,7 +442,7 @@ const AdminTab = () => {
           <Card>
             <CollapsibleTrigger className="w-full">
               <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
-                <CardTitle className="flex items-center gap-2">
+                <CardTitle as="h2" className="flex items-center gap-2">
                   <ScrollText className="w-5 h-5" />
                   Granskningslogg
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.auditLog ? '−' : '+'}</span>
