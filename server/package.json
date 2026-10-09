@@ -17,7 +17,7 @@
     "typecheck:tests": "tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
-    "@azure/msal-node": "^5.6.0",
+    "@azure/msal-node": "^7.0.1",
     "archiver": "^8.0.0",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^13.0.3",
