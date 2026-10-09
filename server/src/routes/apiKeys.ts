@@ -120,8 +120,8 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     const permsJson = JSON.stringify(perms);
 
     db.prepare(
-      'INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-    ).run(id, name.trim(), keyPrefix, keyHash, req.user!.id, permsJson, normalizedExpiresAt);
+      'INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, name.trim(), keyPrefix, keyHash, req.user!.id, permsJson, normalizedExpiresAt, new Date().toISOString());
 
     logAudit(req.user!.id, 'api_key_create', 'api_key', id, `name: ${name.trim()}, prefix: ${keyPrefix}`, req.ip);
 

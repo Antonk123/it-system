@@ -79,7 +79,6 @@ export const ALLOWED_ATTACHMENT_MIME_TYPES = [
   'image/png',
   'image/gif',
   'image/webp',
-  'image/svg+xml',
   'application/pdf',
   'text/plain',
   'text/csv',
@@ -99,7 +98,7 @@ export const ALLOWED_ATTACHMENT_MIME_TYPES = [
 
 // Some browsers don't set MIME type for certain files, so this is checked as a fallback.
 export const ALLOWED_ATTACHMENT_EXTENSIONS = [
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg',
+  '.jpg', '.jpeg', '.png', '.gif', '.webp',
   '.pdf',
   '.txt', '.csv', '.md', '.markdown', '.eml',
   '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
@@ -108,14 +107,14 @@ export const ALLOWED_ATTACHMENT_EXTENSIONS = [
 
 export const fileUploadSchema = z.object({
   file: z.instanceof(File)
-    .refine(f => f.size <= 10 * 1024 * 1024, 'File must be 10MB or less')
+    .refine(f => f.size <= 10 * 1024 * 1024, 'Filen får vara högst 10 MB')
     .refine(
       f => {
         const fileName = f.name.toLowerCase();
         const hasAllowedExtension = ALLOWED_ATTACHMENT_EXTENSIONS.some(ext => fileName.endsWith(ext));
         return ALLOWED_ATTACHMENT_MIME_TYPES.includes(f.type) || hasAllowedExtension;
       },
-      'Invalid file type. Allowed: images (incl. SVG), PDF, text, Markdown, Word, Excel, PowerPoint, archives (.zip, .rar, .7z), email files (.eml)'
+      'Ogiltig filtyp. Tillåtna: bilder, PDF, text, Markdown, Word, Excel, PowerPoint, arkiv (.zip, .rar, .7z) och e-postfiler (.eml)'
     ),
 });
 

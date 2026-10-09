@@ -1,7 +1,10 @@
 import { createContext, useContext, useState, useEffect, useMemo, useCallback, ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { api, AuthUser } from '@/lib/api';
+import { toast } from 'sonner';
+import { api, ApiError, AuthUser } from '@/lib/api';
 import { clearRecentlyViewed } from '@/lib/recentlyViewed';
+import { safeStorage } from '@/lib/safeStorage';
+import { clearSecureAttachmentCache } from '@/lib/secureFileAccess';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -10,9 +13,15 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   completeSsoLogin: () => Promise<boolean>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+
+// Servern har avvisat sessionen (till skillnad från nätverks-/serverfel, där
+// token ska behållas så att en tillfällig störning inte loggar ut någon).
+const isAuthRejection = (error: unknown) =>
+  error instanceof ApiError && (error.status === 401 || error.status === 403);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const queryClient = useQueryClient();
@@ -20,22 +29,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Check if we have a stored token and validate it
+    // Återställ sessionen: lagrad access-token, annars refresh-cookien (token kan
+    // saknas fast sessionen lever, t.ex. om localStorage rensats eller är blockerad).
     const checkAuth = async () => {
-      const token = localStorage.getItem('auth_token');
-      
-      if (!token) {
-        setIsLoading(false);
-        return;
-      }
-
       try {
+        if (!safeStorage.getItem('auth_token') && !(await api.refreshSession())) {
+          return;
+        }
         const { user } = await api.getMe();
         setUser(user);
       } catch (error) {
-        // Token is invalid, clear it
-        api.logout();
-        setUser(null);
+        if (isAuthRejection(error)) {
+          api.clearToken();
+        } else {
+          toast.error('Kunde inte kontrollera inloggningen. Ladda om sidan.');
+        }
       } finally {
         setIsLoading(false);
       }
@@ -50,13 +58,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(user);
       return { error: null };
     } catch (error) {
-      return { error: error instanceof Error ? error.message : 'Login failed' };
+      return { error: error instanceof Error ? error.message : 'Inloggningen misslyckades' };
     }
   }, []);
 
   const signOut = useCallback(async () => {
     await api.logout();
     clearRecentlyViewed();
+    clearSecureAttachmentCache();
     // Drop all cached server data so the next signed-in user never sees the
     // previous user's tickets/companies/etc. from a stale react-query cache.
     queryClient.clear();
@@ -66,15 +75,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // Efter OIDC-callbacken finns refresh-cookien men ingen access-token —
   // hämta token + user utan full sidomladdning.
   const completeSsoLogin = useCallback(async (): Promise<boolean> => {
-    const refreshed = await api.refreshSession();
-    if (!refreshed) return false;
     try {
+      if (!(await api.refreshSession())) return false;
       const { user } = await api.getMe();
       setUser(user);
       return true;
     } catch {
       return false;
     }
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const { user } = await api.getMe();
+    setUser(user);
   }, []);
 
   const value = useMemo(() => ({
@@ -84,7 +97,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     signIn,
     signOut,
     completeSsoLogin,
-  }), [user, isLoading, signIn, signOut, completeSsoLogin]);
+    refreshUser,
+  }), [user, isLoading, signIn, signOut, completeSsoLogin, refreshUser]);
 
   return (
     <AuthContext.Provider value={value}>

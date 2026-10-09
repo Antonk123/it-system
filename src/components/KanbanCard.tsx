@@ -5,16 +5,17 @@ import { useNavigate } from 'react-router';
 import { Ticket as TicketType } from '@/types/ticket';
 import { PriorityBadge } from './PriorityBadge';
 import { useCategories } from '@/hooks/useCategories';
+import { useKanban } from './KanbanContext';
 import { cn } from '@/lib/utils';
 import { Tag } from 'lucide-react';
 
 interface KanbanCardProps {
   ticket: TicketType;
-  onTicketClick?: (ticketId: string) => void;
 }
 
-export const KanbanCard = memo(function KanbanCard({ ticket, onTicketClick }: KanbanCardProps) {
+export const KanbanCard = memo(function KanbanCard({ ticket }: KanbanCardProps) {
   const navigate = useNavigate();
+  const { onTicketClick } = useKanban();
   const { getCategoryLabel } = useCategories();
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
 

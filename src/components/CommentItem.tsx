@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Comment } from '@/types/ticket';
 import { hasVisibleText } from '@/lib/textValidation';
 import { format } from 'date-fns';
@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { migrateContent } from '@/lib/contentMigration';
+import { registerUnsavedWork } from '@/registerSW';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,6 +34,13 @@ export const CommentItem = memo(function CommentItem({ comment, onUpdate, onDele
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState(comment.content);
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // En pågående redigering ska inte försvinna när en ny app-version laddas om.
+  const hasUnsavedEdit = isEditing && editContent !== comment.content;
+  useEffect(() => {
+    if (!hasUnsavedEdit) return;
+    return registerUnsavedWork();
+  }, [hasUnsavedEdit]);
 
   const canEdit = user?.id === comment.userId || user?.role === 'admin';
 

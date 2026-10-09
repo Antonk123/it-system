@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { ArrowUpDown, Loader2, X } from 'lucide-react';
 import { Ticket, User, TicketStatus, TicketPriority } from '@/types/ticket';
 import { PriorityBadge } from './PriorityBadge';
@@ -12,7 +12,7 @@ import { getInitials, hashColor } from '@/lib/avatar';
 import { Progress } from '@/components/ui/progress';
 import { useCategories } from '@/hooks/useCategories';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { api } from '@/lib/api';
+import { useChecklistProgress } from '@/hooks/useTicketChecklists';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -30,12 +30,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-
-interface ChecklistProgress {
-  ticketId: string;
-  total: number;
-  completed: number;
-}
 
 interface BulkUpdates {
   status?: TicketStatus;
@@ -81,7 +75,6 @@ export const TicketTable = memo(function TicketTable({
 }: TicketTableProps) {
   const location = useLocation();
   const { categories } = useCategories();
-  const [checklistProgress, setChecklistProgress] = useState<ChecklistProgress[]>([]);
   const [bulkSaving, setBulkSaving] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const isMobile = useIsMobile();
@@ -91,45 +84,11 @@ export const TicketTable = memo(function TicketTable({
     return user?.name || 'Okänd';
   };
 
-  const getProgress = (ticketId: string) => {
-    return checklistProgress.find(p => p.ticketId === ticketId);
-  };
-
-  // Stabilize ticket IDs so the effect only re-runs when actual IDs change
-  const ticketIdsKey = useMemo(() => tickets.map(t => t.id).join(','), [tickets]);
-
-  useEffect(() => {
-    // Skip the fetch entirely when the checklist/progress column is hidden —
-    // no point loading per-ticket progress the user can't see.
-    if (!checklistVisible) return;
-
-    const controller = new AbortController();
-    const { signal } = controller;
-
-    const fetchChecklistProgress = async () => {
-      const ticketIds = ticketIdsKey.split(',').filter(Boolean);
-      if (ticketIds.length === 0) return;
-
-      try {
-        const data = await api.getChecklistProgress(ticketIds, signal);
-        if (!signal.aborted) {
-          setChecklistProgress(
-            Object.entries(data).map(([ticketId, stats]) => ({
-              ticketId,
-              ...stats,
-            }))
-          );
-        }
-      } catch (error) {
-        if ((error as Error).name !== 'AbortError') {
-          console.error('Error fetching checklist progress:', error);
-        }
-      }
-    };
-
-    fetchChecklistProgress();
-    return () => controller.abort();
-  }, [ticketIdsKey, checklistVisible]);
+  // Stabilize ticket IDs so the progress query only re-runs when actual IDs change.
+  // Skipped entirely when the "Förlopp" column is hidden — no point loading it.
+  const ticketIds = useMemo(() => tickets.map(t => t.id), [tickets]);
+  const checklistProgress = useChecklistProgress(ticketIds, checklistVisible);
+  const getProgress = (ticketId: string) => checklistProgress?.[ticketId];
 
   const renderSortButton = (label: string, key: 'status' | 'priority' | 'category', enabled: boolean) => {
     if (!enabled) {

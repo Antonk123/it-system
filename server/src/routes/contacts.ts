@@ -412,14 +412,15 @@ router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, re
     // inte INSERT OR IGNORE för dedup — vi dedupar via companyNameMap istället.
     // Att skapa företag separat förhindrar orphan-företag om ett kontakt-insert
     // senare skulle misslyckas (företaget är då redan giltigt och återanvändbart).
-    const insertCompanyStmt = db.prepare('INSERT INTO companies (id, name) VALUES (?, ?)');
+    const insertCompanyStmt = db.prepare('INSERT INTO companies (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)');
     const ensureCompanies = db.transaction((rows: typeof validated) => {
       for (const contact of rows) {
         if (contact.company) {
           const normalizedName = contact.company.toLowerCase();
           if (!companyNameMap.has(normalizedName)) {
             const companyId = randomUUID();
-            insertCompanyStmt.run(companyId, contact.company);
+            const now = new Date().toISOString();
+            insertCompanyStmt.run(companyId, contact.company, now, now);
             companyNameMap.set(normalizedName, companyId);
           }
         }
@@ -429,12 +430,12 @@ router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, re
 
     // --- Pass 2b: insert kontakter. Alla rader är redan validerade och alla
     // företag finns redan i companyNameMap — varje rad transaktioneras isolerat.
-    const insertStmt = db.prepare('INSERT INTO contacts (id, name, email, phone, company_id) VALUES (?, ?, ?, ?, ?)');
+    const insertStmt = db.prepare('INSERT INTO contacts (id, name, email, phone, company_id, created_at) VALUES (?, ?, ?, ?, ?, ?)');
 
     const insertContact = db.transaction((contact: typeof validated[number]) => {
       const id = randomUUID();
       const companyId = contact.company ? companyNameMap.get(contact.company.toLowerCase()) || null : null;
-      insertStmt.run(id, contact.name, contact.email, contact.phone, companyId);
+      insertStmt.run(id, contact.name, contact.email, contact.phone, companyId, new Date().toISOString());
     });
 
     let created = 0;
@@ -496,8 +497,8 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
 
   try {
     const id = randomUUID();
-    db.prepare('INSERT INTO contacts (id, name, email, phone, company_id, department) VALUES (?, ?, ?, ?, ?, ?)').run(
-      id, value.name, value.email, value.phone ?? null, company_id || null, value.department ?? null
+    db.prepare('INSERT INTO contacts (id, name, email, phone, company_id, department, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
+      id, value.name, value.email, value.phone ?? null, company_id || null, value.department ?? null, new Date().toISOString()
     );
 
     const contact = db.prepare(`

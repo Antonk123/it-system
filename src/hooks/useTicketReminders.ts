@@ -1,6 +1,7 @@
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { upcomingRemindersKeys } from '@/hooks/useUpcomingReminders';
+import { invalidateTicketDerived } from '@/hooks/invalidateTicketDerived';
 import { toast } from 'sonner';
 
 export interface TicketReminder {
@@ -16,6 +17,11 @@ export interface TicketReminder {
   user_email?: string;
 }
 
+export const reminderKeys = {
+  all: ['reminders'] as const,
+  ticket: (ticketId: string) => [...reminderKeys.all, ticketId] as const,
+};
+
 export function useTicketReminders(ticketId: string) {
   const queryClient = useQueryClient();
 
@@ -25,12 +31,12 @@ export function useTicketReminders(ticketId: string) {
     isLoading,
     isError,
   } = useQuery<TicketReminder[]>({
-    queryKey: ['reminders', ticketId],
+    queryKey: reminderKeys.ticket(ticketId),
     queryFn: () => api.getReminders(ticketId) as Promise<TicketReminder[]>,
     enabled: !!ticketId,
   });
 
-  const remindersKey = ['reminders', ticketId];
+  const remindersKey = reminderKeys.ticket(ticketId);
 
   const createMutation = useMutation({
     mutationFn: ({ reminderTime, message }: { reminderTime: string; message?: string }) =>
@@ -41,6 +47,7 @@ export function useTicketReminders(ticketId: string) {
       // M6: keep the Dashboard "upcoming reminders" widget in sync — it reads
       // a separate query key that this mutation never touched before.
       queryClient.invalidateQueries({ queryKey: upcomingRemindersKeys.all });
+      void invalidateTicketDerived(queryClient, ticketId);
     },
     onError: (error: unknown) => {
       if (import.meta.env.DEV) console.error('Error creating reminder:', error);
@@ -54,6 +61,7 @@ export function useTicketReminders(ticketId: string) {
       toast.success('Påminnelse raderad');
       queryClient.invalidateQueries({ queryKey: remindersKey });
       queryClient.invalidateQueries({ queryKey: upcomingRemindersKeys.all });
+      void invalidateTicketDerived(queryClient, ticketId);
     },
     onError: (error: unknown) => {
       if (import.meta.env.DEV) console.error('Error deleting reminder:', error);
@@ -67,6 +75,7 @@ export function useTicketReminders(ticketId: string) {
       toast.success(`${result.deleted} skickade påminnelser rensade`);
       queryClient.invalidateQueries({ queryKey: remindersKey });
       queryClient.invalidateQueries({ queryKey: upcomingRemindersKeys.all });
+      void invalidateTicketDerived(queryClient, ticketId);
     },
     onError: (error: unknown) => {
       if (import.meta.env.DEV) console.error('Error clearing sent reminders:', error);
@@ -74,17 +83,23 @@ export function useTicketReminders(ticketId: string) {
     },
   });
 
-  // Behåll Promise<void>-kontraktet som konsumenterna (ReminderDialog/-List) väntar.
+  // createReminder kastar vidare så att dialogen förblir öppen vid fel. Radera/rensa
+  // saknar sådan konsument — mutationens onError visar toast, så felet sväljs här
+  // i stället för att bli en ohanterad rejection i klickhanteraren.
   const createReminder = async (reminderTime: string, message?: string): Promise<void> => {
     await createMutation.mutateAsync({ reminderTime, message });
   };
 
   const deleteReminder = async (reminderId: string): Promise<void> => {
-    await deleteMutation.mutateAsync(reminderId);
+    try {
+      await deleteMutation.mutateAsync(reminderId);
+    } catch { /* onError visar toast. */ }
   };
 
   const clearSentReminders = async (): Promise<void> => {
-    await clearSentMutation.mutateAsync();
+    try {
+      await clearSentMutation.mutateAsync();
+    } catch { /* onError visar toast. */ }
   };
 
   return {

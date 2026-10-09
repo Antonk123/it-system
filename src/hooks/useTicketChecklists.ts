@@ -1,7 +1,9 @@
-import { useState, useCallback, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { checklistItemSchema, getValidationError } from '@/lib/validations';
+import { ticketKeys } from '@/hooks/useTickets';
+import { invalidateTicketDerived } from '@/hooks/invalidateTicketDerived';
 import { toast } from 'sonner';
 
 export interface ChecklistItem {
@@ -23,36 +25,40 @@ export const checklistKeys = {
   ticket: (id: string) => ['checklists', id] as const,
 };
 
-export const useTicketChecklists = (initialTicketId?: string) => {
+// Förloppskolumnen i ärendetabellen. Ligger under ticketKeys.all så att
+// invalidateTicketDerived() uppdaterar den när en checklista ändras.
+export const checklistProgressKeys = {
+  ids: (ticketIds: string[]) => [...ticketKeys.all, 'checklist-progress', ticketIds] as const,
+};
+
+export const useChecklistProgress = (ticketIds: string[], enabled = true) => {
+  const { data } = useQuery({
+    queryKey: checklistProgressKeys.ids(ticketIds),
+    queryFn: ({ signal }) => api.getChecklistProgress(ticketIds, signal),
+    enabled: enabled && ticketIds.length > 0,
+    staleTime: 30 * 1000,
+    placeholderData: keepPreviousData,
+  });
+  return data;
+};
+
+export const useTicketChecklists = (ticketId?: string) => {
   const queryClient = useQueryClient();
-  // Internal query ID — updated when fetchChecklists(id) is called
-  const [queryTicketId, setQueryTicketId] = useState<string | undefined>(initialTicketId);
-  const queryKey = useMemo(
-    () => (queryTicketId ? checklistKeys.ticket(queryTicketId) : checklistKeys.all),
-    [queryTicketId],
-  );
+  const queryKey = checklistKeys.ticket(ticketId ?? '');
 
   const { data: items = [], isLoading, isError } = useQuery({
     queryKey,
     queryFn: async () => {
-      const data = await api.getChecklists(queryTicketId!);
+      const data = await api.getChecklists(ticketId!);
       return data as ChecklistItem[];
     },
-    enabled: Boolean(queryTicketId),
+    enabled: Boolean(ticketId),
   });
-
-  // fetchChecklists(id?) — sets active ticket ID (triggers query) and invalidates cache
-  const fetchChecklists = useCallback(async (id?: string) => {
-    const targetId = id || queryTicketId;
-    if (!targetId) return;
-    setQueryTicketId(targetId);
-    await queryClient.invalidateQueries({ queryKey: checklistKeys.ticket(targetId) });
-  }, [queryClient, queryTicketId]);
 
   // setItems — direct cache override (used by applyChecklistTemplate consumer)
   const setItems = useCallback((newItems: ChecklistItem[]) => {
-    queryClient.setQueryData(queryKey, newItems);
-  }, [queryClient, queryKey]);
+    queryClient.setQueryData(checklistKeys.ticket(ticketId ?? ''), newItems);
+  }, [queryClient, ticketId]);
 
   const addItemMutation = useMutation({
     mutationFn: async ({
@@ -64,11 +70,11 @@ export const useTicketChecklists = (initialTicketId?: string) => {
     onSuccess: (_data, { targetTicketId }) => {
       queryClient.invalidateQueries({ queryKey: checklistKeys.ticket(targetTicketId) });
       // L23: keep the ticket list's checklist filter (?checklist=none/complete/…)
-      // correct — same invalidation update/delete already do below.
-      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      // and progress column correct.
+      void invalidateTicketDerived(queryClient, targetTicketId);
     },
     onError: () => {
-      toast.error('Failed to add checklist item');
+      toast.error('Kunde inte lägga till checklistpunkt');
     },
   });
 
@@ -82,12 +88,10 @@ export const useTicketChecklists = (initialTicketId?: string) => {
     onSuccess: () => {
       // Scope invalidation to the active ticket's checklist (avoids matching
       // unrelated checklist queries / stale closure keys).
-      queryClient.invalidateQueries({ queryKey: queryKey });
-      // Refresh ticket list so the checklist filter (?checklist=none/complete/…)
-      // stays correct — run on every update for consistent behaviour (not only
-      // on completed-toggle). Note: the Förlopp/progress column in TicketTable
-      // reads its own separate state, not this query.
-      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey });
+      // Refresh ticket list and progress column so the checklist filter
+      // (?checklist=none/complete/…) stays correct on every update.
+      void invalidateTicketDerived(queryClient, ticketId);
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error updating checklist item:', error);
@@ -103,8 +107,8 @@ export const useTicketChecklists = (initialTicketId?: string) => {
     onSuccess: () => {
       // Scope to the active ticket's checklist; also refresh ticket list so the
       // checklist filter (?checklist=none/complete/…) reflects the removed item.
-      queryClient.invalidateQueries({ queryKey: queryKey });
-      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey });
+      void invalidateTicketDerived(queryClient, ticketId);
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error deleting checklist item:', error);
@@ -118,12 +122,11 @@ export const useTicketChecklists = (initialTicketId?: string) => {
     },
     onSuccess: (_data, { targetTicketId }) => {
       queryClient.invalidateQueries({ queryKey: checklistKeys.ticket(targetTicketId) });
-      // L23: keep the ticket list's checklist filter (?checklist=none/complete/…)
-      // correct — same invalidation update/delete already do above.
-      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      // L23: keep the ticket list's checklist filter and progress column correct.
+      void invalidateTicketDerived(queryClient, targetTicketId);
     },
     onError: () => {
-      toast.error('Failed to add checklist items');
+      toast.error('Kunde inte lägga till checklistpunkter');
     },
   });
 
@@ -133,7 +136,7 @@ export const useTicketChecklists = (initialTicketId?: string) => {
     options?: { parent_id?: string | null; due_date?: string | null }
   ) => {
     const validation = checklistItemSchema.safeParse({ label });
-    if (!validation.success) { toast.error(getValidationError(validation.error) || 'Invalid checklist item'); return null; }
+    if (!validation.success) { toast.error(getValidationError(validation.error) || 'Ogiltig checklistpunkt'); return null; }
     try {
       return await addItemMutation.mutateAsync({ targetTicketId, label: validation.data.label, options });
     } catch {
@@ -169,5 +172,5 @@ export const useTicketChecklists = (initialTicketId?: string) => {
     }
   }, [bulkAddMutation]);
 
-  return { items, isLoading, isError, fetchChecklists, addChecklistItem, updateChecklistItem, deleteChecklistItem, bulkAddChecklistItems, setItems };
+  return { items, isLoading, isError, addChecklistItem, updateChecklistItem, deleteChecklistItem, bulkAddChecklistItems, setItems };
 };

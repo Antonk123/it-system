@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import DOMPurify from 'dompurify';
 import { cn } from '@/lib/utils';
 
@@ -6,7 +7,8 @@ import { cn } from '@/lib/utils';
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'IMG') {
     const src = node.getAttribute('src') || '';
-    if (src && !src.startsWith('/') && !src.startsWith(window.location.origin)) {
+    // "//host/…" är protokoll-relativt (extern) trots att det börjar med "/".
+    if (src && (src.startsWith('//') || (!src.startsWith('/') && !src.startsWith(`${window.location.origin}/`)))) {
       node.removeAttribute('src');
     }
   }
@@ -14,6 +16,37 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
     node.setAttribute('rel', 'noopener noreferrer');
   }
 });
+
+const SANITIZE_OPTIONS = {
+  ALLOWED_TAGS: [
+    // Text formatting
+    'p', 'div', 'span', 'br', 'hr',
+    // Headings
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    // Emphasis
+    'strong', 'em', 'u', 's', 'b', 'i',
+    // Code
+    'code', 'pre',
+    // Links
+    'a',
+    // Lists
+    'ul', 'ol', 'li',
+    // Blockquotes
+    'blockquote',
+    // Tables
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    // Images
+    'img',
+  ],
+  ALLOWED_ATTR: [
+    'href', 'target', 'rel',
+    'class',
+    'colspan', 'rowspan', 'align',
+    'src', 'alt', 'title', 'width', 'height',
+  ],
+  ALLOW_DATA_ATTR: false,
+  ADD_ATTR: ['target', 'rel'],
+};
 
 interface HtmlRendererProps {
   content: string;
@@ -25,39 +58,10 @@ interface HtmlRendererProps {
  * Replaces MarkdownRenderer for displaying HTML content from TipTap editor
  */
 export const HtmlRenderer = ({ content, className }: HtmlRendererProps) => {
-  if (!content) return null;
+  // Sanera bara när innehållet ändras — inte vid varje omrendering.
+  const sanitizedHtml = useMemo(() => DOMPurify.sanitize(content, SANITIZE_OPTIONS), [content]);
 
-  // Sanitize HTML to prevent XSS attacks
-  const sanitizedHtml = DOMPurify.sanitize(content, {
-    ALLOWED_TAGS: [
-      // Text formatting
-      'p', 'div', 'span', 'br', 'hr',
-      // Headings
-      'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-      // Emphasis
-      'strong', 'em', 'u', 's', 'b', 'i',
-      // Code
-      'code', 'pre',
-      // Links
-      'a',
-      // Lists
-      'ul', 'ol', 'li',
-      // Blockquotes
-      'blockquote',
-      // Tables
-      'table', 'thead', 'tbody', 'tr', 'th', 'td',
-      // Images
-      'img',
-    ],
-    ALLOWED_ATTR: [
-      'href', 'target', 'rel',
-      'class',
-      'colspan', 'rowspan', 'align',
-      'src', 'alt', 'title', 'width', 'height',
-    ],
-    ALLOW_DATA_ATTR: false,
-    ADD_ATTR: ['target', 'rel'],
-  });
+  if (!content) return null;
 
   return (
     <div

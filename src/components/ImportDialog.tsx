@@ -86,7 +86,7 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
       }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Preview failed:', error);
-      toast.error('Misslyckades att förhandsgranska CSV-filen');
+      toast.error(error instanceof Error ? error.message : 'Misslyckades att förhandsgranska CSV-filen');
       setFile(null);
     } finally {
       setIsLoading(false);
@@ -119,7 +119,8 @@ export const ImportDialog = ({ open, onOpenChange, onSuccess }: ImportDialogProp
       }
     } catch (error) {
       if (import.meta.env.DEV) console.error('Import failed:', error);
-      toast.error('Misslyckades att importera ärenden');
+      // Servern validerar alla rader först och svarar med t.ex. "Rad 3: …".
+      toast.error(error instanceof Error ? error.message : 'Misslyckades att importera ärenden');
     } finally {
       setImporting(false);
     }

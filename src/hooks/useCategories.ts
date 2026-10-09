@@ -44,7 +44,7 @@ export const useCategories = () => {
       });
     },
     onError: () => {
-      toast.error('Failed to create category');
+      toast.error('Kunde inte skapa kategori');
     },
   });
 
@@ -66,7 +66,7 @@ export const useCategories = () => {
       });
     },
     onError: () => {
-      toast.error('Failed to update category');
+      toast.error('Kunde inte uppdatera kategori');
     },
   });
 
@@ -99,7 +99,7 @@ export const useCategories = () => {
       queryClient.setQueryData(categoryKeys.list(), newCategories);
     },
     onError: () => {
-      toast.error('Failed to reorder categories');
+      toast.error('Kunde inte omordna kategorier');
     },
   });
 
@@ -128,9 +128,15 @@ export const useCategories = () => {
     [deleteCategoryMutation]
   );
 
+  // Fel visas redan som toast i mutationens onError — svälj här så att
+  // anrop som inte awaitas (flytta upp/ned) inte ger unhandled rejections.
   const reorderCategories = useCallback(
     async (ids: string[]) => {
-      await reorderCategoriesMutation.mutateAsync(ids);
+      try {
+        await reorderCategoriesMutation.mutateAsync(ids);
+      } catch {
+        // visas via onError
+      }
     },
     [reorderCategoriesMutation]
   );

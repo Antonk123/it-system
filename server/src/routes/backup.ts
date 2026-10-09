@@ -194,16 +194,16 @@ export async function logRestoreAudit(
     const hasApiKeyId = columns.some((c) => c.name === 'api_key_id');
     if (hasApiKeyId) {
       conn.prepare(
-        `INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, details, ip_address, api_key_id)
-         VALUES (?, ?, 'backup_restore', 'backup', NULL, NULL, ?, ?)`
-      ).run(randomUUID(), userId, resolvedIp ?? null, apiKeyId ?? null);
+        `INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, details, ip_address, api_key_id, created_at)
+         VALUES (?, ?, 'backup_restore', 'backup', NULL, NULL, ?, ?, ?)`
+      ).run(randomUUID(), userId, resolvedIp ?? null, apiKeyId ?? null, new Date().toISOString());
     } else {
       // Pre-066-backup: kolumnen finns inte än (kommer efter nästa migrering) —
       // skriv raden utan den i stället för att tappa den helt.
       conn.prepare(
-        `INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, details, ip_address)
-         VALUES (?, ?, 'backup_restore', 'backup', NULL, NULL, ?)`
-      ).run(randomUUID(), userId, resolvedIp ?? null);
+        `INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, details, ip_address, created_at)
+         VALUES (?, ?, 'backup_restore', 'backup', NULL, NULL, ?, ?)`
+      ).run(randomUUID(), userId, resolvedIp ?? null, new Date().toISOString());
     }
   } catch (err) {
     logger.error('Kunde inte skriva backup_restore-audit-raden i den återställda databasen (non-fatal)', { error: String(err) });

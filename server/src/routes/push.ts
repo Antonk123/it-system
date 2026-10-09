@@ -23,11 +23,11 @@ router.post('/subscribe', authenticate, (req: AuthRequest, res) => {
     // Inkludera user_id så att push-notiser kan skickas per användare. En endpoint
     // som tillhör en annan användare får aldrig skrivas över.
     const result = db.prepare(`
-      INSERT INTO push_subscriptions (id, endpoint, p256dh, auth, user_id)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO push_subscriptions (id, endpoint, p256dh, auth, user_id, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth, user_id = excluded.user_id
       WHERE push_subscriptions.user_id IS NULL OR push_subscriptions.user_id = excluded.user_id
-    `).run(randomUUID(), endpoint, keys.p256dh, keys.auth, req.user!.id);
+    `).run(randomUUID(), endpoint, keys.p256dh, keys.auth, req.user!.id, new Date().toISOString());
     if (result.changes === 0)
       return res.status(409).json({ error: 'Endpointen tillhör en annan användare' });
     res.status(201).json({ ok: true });

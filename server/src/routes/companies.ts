@@ -92,9 +92,10 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
     }
 
     const id = uuidv4();
+    const now = new Date().toISOString();
     db.prepare(
-      'INSERT INTO companies (id, name, org_number, email, phone, address) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(id, name.trim(), org_number?.trim() || null, email?.trim() || null, phone?.trim() || null, address?.trim() || null);
+      'INSERT INTO companies (id, name, org_number, email, phone, address, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    ).run(id, name.trim(), org_number?.trim() || null, email?.trim() || null, phone?.trim() || null, address?.trim() || null, now, now);
 
     const company = db.prepare(`SELECT ${COMPANY_COLUMNS} FROM companies WHERE id = ?`).get(id) as CompanyRow;
     res.status(201).json(company);

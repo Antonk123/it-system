@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, type Variants } from 'framer-motion';
 import { useNavigate, useSearchParams } from 'react-router';
 import { BookOpen, Plus, Search, Folder, Clock, X, Check, Pencil, Trash2, AlertTriangle, Upload, Link2, ArrowUpRight, Ellipsis } from 'lucide-react';
-import { Layout } from '@/components/Layout';
 import { KBTagSettings } from '@/components/KBTagSettings';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { KBImportDialog } from '@/components/KBImportDialog';
@@ -11,13 +10,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { api, KbArticleRow } from '@/lib/api';
-import { useKbCategories } from '@/hooks/useKbCategories';
-import { useKbArticles } from '@/hooks/useKbArticles';
+import { KbArticleSummary } from '@/lib/api';
+import { useQueryClient } from '@tanstack/react-query';
+import { useKbCategories, invalidateKbCaches } from '@/hooks/useKbCategories';
+import { useKbArticles, type KbArticlesParams } from '@/hooks/useKbArticles';
 import { useDebounce } from '@/hooks/useDebounce';
 import { formatDate } from '@/lib/date';
 import { escapeHtml } from '@/lib/html';
-import { toast } from 'sonner';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +43,10 @@ const listItem: Variants = {
   hidden: { opacity: 0, y: 12 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.25, ease: 'easeOut' } },
 };
+// Bara de första korten får stagger-animation; resten visas direkt.
+const STAGGERED_ITEMS = 10;
+
+const STATUS_FILTERS = ['published', 'draft', 'all'] as const;
 
 const TYPE_LABELS: Record<string, string> = {
   'how-to': 'Instruktion',
@@ -52,7 +55,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 function highlightTerms(text: string, query: string): string {
   // Escapa ALLTID texten innan vi injicerar via dangerouslySetInnerHTML —
-  // getPreview strippar taggar men escapar inte entiteter, så rå <, > eller &
+  // serverns preview strippar taggar men escapar inte entiteter, så rå <, > eller &
   // i artikelinnehållet skulle annars tolkas som markup (DOM-XSS).
   const safe = escapeHtml(text);
   if (!query.trim()) return safe;
@@ -69,24 +72,30 @@ const KnowledgeBase = () => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const { categories, refetch: refetchCategories } = useKbCategories();
+  const queryClient = useQueryClient();
+  const isAdmin = user?.role === 'admin';
+  const { categories, createCategory, updateCategory, deleteCategory } = useKbCategories();
   const [staleFilter, setStaleFilter] = useState(false);
 
   // Derive state from URL params
   const selectedCategoryId = searchParams.get('category') || '';
   const typeFilter = searchParams.get('type') || 'all';
   const search = searchParams.get('search') || '';
+  const statusParam = searchParams.get('status');
+  const statusFilter: NonNullable<KbArticlesParams['status']> =
+    isAdmin && STATUS_FILTERS.some(value => value === statusParam) ? (statusParam as NonNullable<KbArticlesParams['status']>) : 'published';
 
   const isSearching = search.length > 0;
   // Debounce the query input so typing doesn't fire one fetch per keystroke
   // (the URL/input value updates immediately; only the fetch is delayed).
   const debouncedSearch = useDebounce(search, 200);
 
-  const { articles, isLoading, isError, refetch: refetchArticles } = useKbArticles({
+  const { articles, total, isLoading, isError, refetch: refetchArticles, hasNextPage, fetchNextPage, isFetchingNextPage } = useKbArticles({
     search: debouncedSearch || undefined,
     category_id: !debouncedSearch && selectedCategoryId ? selectedCategoryId : undefined,
     article_type: typeFilter !== 'all' ? typeFilter : undefined,
     stale: staleFilter || undefined,
+    status: statusFilter !== 'published' ? statusFilter : undefined,
   });
 
   const updateParam = (key: string, value: string | null) => {
@@ -113,7 +122,7 @@ const KnowledgeBase = () => {
   const [isSavingCategoryId, setIsSavingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState('');
 
-  const isStale = (article: KbArticleRow): boolean => {
+  const isStale = (article: KbArticleSummary): boolean => {
     const ref = article.last_reviewed_at || article.created_at;
     return (Date.now() - new Date(ref).getTime()) / (86400 * 1000) > 90;
   };
@@ -134,51 +143,20 @@ const KnowledgeBase = () => {
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
     setIsCreatingCategory(true);
-    try {
-      await api.createKbCategory(newCategoryName.trim());
-      refetchCategories();
-      setNewCategoryName('');
-      toast.success('Kategori skapad');
-    } catch {
-      toast.error('Kunde inte skapa kategori');
-    } finally {
-      setIsCreatingCategory(false);
-    }
+    if (await createCategory(newCategoryName.trim())) setNewCategoryName('');
+    setIsCreatingCategory(false);
   };
 
   const handleUpdateCategory = async (id: string) => {
     if (!editingCategoryName.trim()) return;
     if (isSavingCategoryId) return;
     setIsSavingCategoryId(id);
-    try {
-      await api.updateKbCategory(id, editingCategoryName.trim());
-      refetchCategories();
-      setEditingCategoryId(null);
-      toast.success('Kategori uppdaterad');
-    } catch {
-      toast.error('Kunde inte uppdatera kategori');
-    } finally {
-      setIsSavingCategoryId(null);
-    }
+    if (await updateCategory(id, editingCategoryName.trim())) setEditingCategoryId(null);
+    setIsSavingCategoryId(null);
   };
 
   const handleDeleteCategory = async (id: string) => {
-    try {
-      await api.deleteKbCategory(id);
-      refetchCategories();
-      if (selectedCategoryId === id) updateParam('category', null);
-      toast.success('Kategori raderad');
-    } catch {
-      toast.error('Kunde inte radera kategori');
-    }
-  };
-
-  const getPreview = (html: string, maxLen = 120) => {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    doc.querySelectorAll('script, style').forEach(node => node.remove());
-    doc.querySelectorAll('p, div, li, br, h1, h2, h3, h4, h5, h6, tr').forEach(node => node.append(doc.createTextNode(' ')));
-    const text = (doc.body.textContent || '').replace(/\s+/g, ' ').trim();
-    return text.length > maxLen ? text.slice(0, maxLen) + '\u2026' : text;
+    if (await deleteCategory(id) && selectedCategoryId === id) updateParam('category', null);
   };
 
   const selectCategory = (categoryId: string) => {
@@ -195,6 +173,7 @@ const KnowledgeBase = () => {
       const next = new URLSearchParams(prev);
       next.delete('search');
       next.delete('type');
+      next.delete('status');
       return next;
     }, { replace: true });
     setStaleFilter(false);
@@ -204,7 +183,7 @@ const KnowledgeBase = () => {
   const headerTitle = isSearching ? 'Sökresultat' : activeCategory?.name || 'Alla artiklar';
 
   return (
-    <Layout>
+    <>
       <div className="mx-auto max-w-7xl space-y-6">
         <section aria-label="Sök i kunskapsbasen" className="rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-card to-card p-5 md:p-8 space-y-6">
             {/* Header */}
@@ -305,6 +284,18 @@ const KnowledgeBase = () => {
                   <SelectItem value="solution">Lösning</SelectItem>
                 </SelectContent>
               </Select>
+              {isAdmin && (
+                <Select value={statusFilter} onValueChange={(v) => updateParam('status', v === 'published' ? null : v)}>
+                  <SelectTrigger aria-label="Status" className="min-h-12 w-full sm:w-[160px] bg-background">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="published">Publicerade</SelectItem>
+                    <SelectItem value="draft">Utkast</SelectItem>
+                    <SelectItem value="all">Alla</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
               <div className="flex items-center gap-2 shrink-0">
                 <Switch id="stale-filter" checked={staleFilter} onCheckedChange={setStaleFilter} />
                 <Label htmlFor="stale-filter" className="text-sm cursor-pointer whitespace-nowrap">Visa inaktuella</Label>
@@ -470,7 +461,7 @@ const KnowledgeBase = () => {
         <section aria-labelledby="kb-results-heading" className="min-w-0 space-y-4">
           <div className="flex items-baseline justify-between gap-3">
             <h2 id="kb-results-heading" className="text-xl font-semibold tracking-tight">{headerTitle}</h2>
-            <span className="shrink-0 text-sm text-muted-foreground" aria-live="polite">{isLoading ? 'Laddar…' : `${articles.length} ${articles.length === 1 ? 'artikel' : 'artiklar'}`}</span>
+            <span className="shrink-0 text-sm text-muted-foreground" aria-live="polite">{isLoading ? 'Laddar…' : `${total} ${total === 1 ? 'artikel' : 'artiklar'}`}</span>
           </div>
           <div className="space-y-4">
             {/* Articles list */}
@@ -520,18 +511,18 @@ const KnowledgeBase = () => {
                     title={
                       isSearching
                         ? `Inga artiklar hittades för "${search}"`
-                        : typeFilter !== 'all' || staleFilter
+                        : typeFilter !== 'all' || staleFilter || statusFilter !== 'published'
                         ? 'Inga artiklar matchar filtret'
                         : activeCategory ? `Inga artiklar i ${activeCategory.name} ännu` : 'Samla kunskapen här'
                     }
                     description={
-                      !isSearching && typeFilter === 'all' && !staleFilter
+                      !isSearching && typeFilter === 'all' && !staleFilter && statusFilter === 'published'
                         ? 'Kom igång genom att skapa din första artikel.'
                         : undefined
                     }
                     action={isSearching ? (
                       <Button className="min-h-11" variant="outline" onClick={() => updateParam('search', null)}>Rensa sökning</Button>
-                    ) : typeFilter !== 'all' || staleFilter ? (
+                    ) : typeFilter !== 'all' || staleFilter || statusFilter !== 'published' ? (
                       <Button className="min-h-11" variant="outline" onClick={clearFilters}>Rensa filter</Button>
                     ) : (
                       <Button className="min-h-11" onClick={() => navigate(`/kb/new${selectedCategoryId ? `?category=${selectedCategoryId}` : ''}`)}>
@@ -548,8 +539,8 @@ const KnowledgeBase = () => {
                   variants={listContainer}
                   className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4"
                 >
-                  {articles.map((article) => (
-                    <motion.div key={article.id} variants={listItem}>
+                  {articles.map((article, index) => (
+                    <motion.div key={article.id} variants={index < STAGGERED_ITEMS ? listItem : undefined}>
                       <button
                         onClick={() => navigate(`/kb/${article.id}`)}
                         className={cn(
@@ -566,22 +557,25 @@ const KnowledgeBase = () => {
                           </div>
                           <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-lg leading-snug text-foreground line-clamp-2">{article.title}</h3>
-                            {article.content ? (
+                            {article.preview ? (
                               isSearching ? (
                                 <p
                                   className="text-sm leading-relaxed text-muted-foreground mt-2 line-clamp-2"
                                   // Säkert: highlightTerms HTML-escapar texten innan den lägger på <mark>,
                                   // så bara <mark>-taggarna är riktig HTML (söktermen är dessutom regex-escapad).
-                                  dangerouslySetInnerHTML={{ __html: highlightTerms(getPreview(article.content), search) }}
+                                  dangerouslySetInnerHTML={{ __html: highlightTerms(article.preview, search) }}
                                 />
                               ) : (
                                 <p className="text-sm leading-relaxed text-muted-foreground mt-2 line-clamp-2">
-                                  {getPreview(article.content)}
+                                  {article.preview}
                                 </p>
                               )
                             ) : null}
                           </div>
                           <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+                            {article.status === 'draft' && (
+                              <Badge variant="outline" className="text-xs border-[hsl(var(--warning))] text-[hsl(var(--warning))]">Utkast</Badge>
+                            )}
                             {article.article_type && (
                               <Badge variant="outline" className="text-xs">
                                 {TYPE_LABELS[article.article_type]}
@@ -605,6 +599,13 @@ const KnowledgeBase = () => {
                 </motion.div>
               )}
             </AnimatePresence>
+            {hasNextPage && !isLoading && !isError && (
+              <div className="flex justify-center">
+                <Button variant="outline" className="min-h-11" onClick={() => fetchNextPage()} disabled={isFetchingNextPage}>
+                  {isFetchingNextPage ? 'Laddar…' : `Visa fler (${articles.length} av ${total})`}
+                </Button>
+              </div>
+            )}
           </div>
         </section>
         </div>
@@ -613,7 +614,7 @@ const KnowledgeBase = () => {
         open={showImportDialog}
         onOpenChange={setShowImportDialog}
         defaultCategoryId={selectedCategoryId}
-        onImported={refetchArticles}
+        onImported={() => invalidateKbCaches(queryClient)}
       />
       {user?.role === 'admin' && (
         <KBPortalShareDialog
@@ -621,7 +622,7 @@ const KnowledgeBase = () => {
           onOpenChange={setShowPortalShareDialog}
         />
       )}
-    </Layout>
+    </>
   );
 };
 

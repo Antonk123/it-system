@@ -39,9 +39,9 @@ function autoCloseResolvedTickets(): void {
 
     // Record in history (null user_id = system action)
     db.prepare(`
-      INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value)
-      VALUES (?, ?, NULL, 'status', 'resolved', 'closed')
-    `).run(uuidv4(), ticket.id);
+      INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value, changed_at)
+      VALUES (?, ?, NULL, 'status', 'resolved', 'closed', ?)
+    `).run(uuidv4(), ticket.id, now);
 
     logger.info(`Auto-close: closed ticket ${ticket.id}: "${ticket.title}" (last updated ${ticket.updated_at})`);
   });

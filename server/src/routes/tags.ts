@@ -52,7 +52,7 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
   try {
     const id = randomUUID();
 
-    db.prepare('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)').run(id, input.name, input.color);
+    db.prepare('INSERT INTO tags (id, name, color, created_at) VALUES (?, ?, ?, ?)').run(id, input.name, input.color, new Date().toISOString());
 
     const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(id) as TagRow;
     res.status(201).json(tag);

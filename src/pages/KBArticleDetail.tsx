@@ -1,14 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { ArrowLeft, Edit, Trash2, Folder, Calendar, Share2, Link as LinkIcon, X, Printer, CheckCircle, Link2, Ellipsis } from 'lucide-react';
-import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { KBImageLightbox } from '@/components/KBImageLightbox';
-import { api, KbArticleRow } from '@/lib/api';
-import { useKbArticle } from '@/hooks/useKbArticle';
+import { useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { useKbArticle, kbArticleKeys, type KbArticleData } from '@/hooks/useKbArticle';
+import { kbArticlesKeys } from '@/hooks/useKbArticles';
+import { invalidateKbCaches } from '@/hooks/useKbCategories';
 import { formatDate } from '@/lib/date';
 import { addRecentlyViewedKB } from '@/lib/recentlyViewed';
 import { toast } from 'sonner';
@@ -40,11 +43,19 @@ const KBArticleDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { data: kbData, isLoading, isError } = useKbArticle(id);
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
 
-  // Local mutable state derived from the query (mutations update these in-place)
-  const [article, setArticle] = useState<KbArticleRow | null>(null);
-  const [shareToken, setShareToken] = useState<string | null>(null);
+  const { data: kbData, isLoading, isError } = useKbArticle(id);
+  const article = kbData?.article ?? null;
+  const shareToken = kbData?.shareToken ?? null;
+
+  // Skriver ändringar rakt in i query-cachen — sidan härleds alltid från den.
+  const patchCachedArticle = (patch: Partial<KbArticleData>) => {
+    if (!id) return;
+    queryClient.setQueryData<KbArticleData>(kbArticleKeys.detail(id), (old) => (old ? { ...old, ...patch } : old));
+  };
 
   const [isDeleting, setIsDeleting] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
@@ -54,15 +65,11 @@ const KBArticleDetail = () => {
   const [tocItems, setTocItems] = useState<TocItem[]>([]);
   const [activeId, setActiveId] = useState<string>('');
 
-  // Seed local state once data arrives
+  const viewedId = kbData?.article.id;
+  const viewedTitle = kbData?.article.title;
   useEffect(() => {
-    if (!kbData) return;
-    setArticle(kbData.article);
-    setShareToken(kbData.shareToken);
-    if (kbData.article?.id && kbData.article?.title) {
-      addRecentlyViewedKB(String(kbData.article.id), kbData.article.title);
-    }
-  }, [kbData]);
+    if (viewedId && viewedTitle) addRecentlyViewedKB(String(viewedId), viewedTitle);
+  }, [viewedId, viewedTitle]);
 
   // Navigate away if the query fails (same behaviour as before)
   useEffect(() => {
@@ -145,6 +152,8 @@ const KBArticleDetail = () => {
     setIsDeleting(true);
     try {
       await api.deleteKbArticle(id);
+      queryClient.removeQueries({ queryKey: kbArticleKeys.detail(id) });
+      invalidateKbCaches(queryClient);
       toast.success('Artikel raderad');
       navigate('/kb');
     } catch {
@@ -162,12 +171,12 @@ const KBArticleDetail = () => {
     try {
       if (shareToken) {
         await api.revokeKbArticleShare(id);
-        setShareToken(null);
+        patchCachedArticle({ shareToken: null });
         setShowShare(false);
         toast.success('Delningslänk borttagen');
       } else {
         const data = await api.createKbArticleShare(id);
-        setShareToken(data.share_token);
+        patchCachedArticle({ shareToken: data.share_token });
         setShowShare(true);
         toast.success('Delningslänk skapad');
       }
@@ -178,10 +187,14 @@ const KBArticleDetail = () => {
     }
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     if (!shareToken) return;
-    navigator.clipboard.writeText(getPublicUrl(shareToken));
-    toast.success('Länk kopierad!');
+    try {
+      await navigator.clipboard.writeText(getPublicUrl(shareToken));
+      toast.success('Länk kopierad!');
+    } catch {
+      toast.error('Kunde inte kopiera länken');
+    }
   };
 
   const handleMarkReviewed = async () => {
@@ -189,7 +202,8 @@ const KBArticleDetail = () => {
     setIsReviewing(true);
     try {
       const result = await api.reviewKbArticle(id);
-      setArticle(prev => prev ? { ...prev, last_reviewed_at: result.last_reviewed_at } : prev);
+      if (article) patchCachedArticle({ article: { ...article, last_reviewed_at: result.last_reviewed_at } });
+      queryClient.invalidateQueries({ queryKey: kbArticlesKeys.all });
       toast.success('Artikel markerad som granskad');
     } catch {
       toast.error('Kunde inte markera som granskad');
@@ -200,154 +214,159 @@ const KBArticleDetail = () => {
 
   if (isLoading) {
     return (
-      <Layout>
-        <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-6">
-          <Skeleton className="h-8 w-3/4" />
-          <Skeleton className="h-5 w-48" />
-          <div className="space-y-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-4 w-full" />
-            ))}
-          </div>
+      <div className="max-w-3xl mx-auto p-4 md:p-6 space-y-6">
+        <Skeleton className="h-8 w-3/4" />
+        <Skeleton className="h-5 w-48" />
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-4 w-full" />
+          ))}
         </div>
-      </Layout>
+      </div>
     );
   }
 
   if (!article) return null;
 
   return (
-    <Layout>
-      <div className="max-w-6xl mx-auto rounded-2xl border border-border bg-card p-4 sm:p-6 lg:p-8 space-y-8 print:border-0 print:p-0">
-        {/* Back + actions */}
-        <div>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Button variant="ghost" size="sm" asChild>
-              <Link to="/kb">
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Kunskapsbas
-              </Link>
-            </Button>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => shareToken ? setShowShare((v) => !v) : handleToggleShare()}
-                disabled={isTogglingShare}
-                className={shareToken ? 'text-primary border-primary/40' : ''}
-              >
-                <Share2 className="w-4 h-4 mr-2" />
-                {shareToken ? 'Delad' : 'Dela'}
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => navigate(`/kb/${id}/edit`)}>
-                <Edit className="w-4 h-4 mr-2" />
-                Redigera
-              </Button>
-              <details className="relative">
-                <Button asChild variant="outline" className="min-h-11 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                  <summary><Ellipsis aria-hidden="true" />Mer</summary>
+    <div className="max-w-6xl mx-auto rounded-2xl border border-border bg-card p-4 sm:p-6 lg:p-8 space-y-8 print:border-0 print:p-0">
+      {/* Back + actions */}
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/kb">
+              <ArrowLeft className="w-4 h-4 mr-2" />
+              Kunskapsbas
+            </Link>
+          </Button>
+          <div className="flex flex-wrap gap-2">
+            {isAdmin && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => shareToken ? setShowShare((v) => !v) : handleToggleShare()}
+                  disabled={isTogglingShare}
+                  className={shareToken ? 'text-primary border-primary/40' : ''}
+                >
+                  <Share2 className="w-4 h-4 mr-2" />
+                  {shareToken ? 'Delad' : 'Dela'}
                 </Button>
-                <div className="absolute right-0 z-20 mt-2 flex w-48 flex-col gap-2 rounded-md border bg-popover p-3 shadow-md">
-              <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 print:hidden" data-print-hide>
-                <Printer className="w-4 h-4" />
-                <span>Skriv ut</span>
+                <Button variant="outline" size="sm" onClick={() => navigate(`/kb/${id}/edit`)}>
+                  <Edit className="w-4 h-4 mr-2" />
+                  Redigera
+                </Button>
+              </>
+            )}
+            <details className="relative">
+              <Button asChild variant="outline" className="min-h-11 cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                <summary><Ellipsis aria-hidden="true" />Mer</summary>
               </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" disabled={isDeleting}>
-                    <Trash2 className="w-4 h-4 mr-2" />
+              <div className="absolute right-0 z-20 mt-2 flex w-48 flex-col gap-2 rounded-md border bg-popover p-3 shadow-md">
+            <Button variant="outline" size="sm" onClick={() => window.print()} className="gap-2 print:hidden" data-print-hide>
+              <Printer className="w-4 h-4" />
+              <span>Skriv ut</span>
+            </Button>
+            {isAdmin && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" disabled={isDeleting}>
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Radera
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Radera artikel?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Detta går inte att ångra. Artikeln tas bort från alla länkade ärenden.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Avbryt</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
                     Radera
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Radera artikel?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Detta går inte att ångra. Artikeln tas bort från alla länkade ärenden.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Avbryt</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">
-                      Radera
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>              </div></details>
-            </div>
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            )}
+            </div></details>
           </div>
         </div>
+      </div>
 
-        {/* Share panel */}
-        {showShare && shareToken && (
-          <div className="max-w-3xl">
-            <div className="border border-primary/30 rounded-lg p-4 bg-primary/5 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-foreground flex items-center gap-2">
-                  <Share2 className="w-4 h-4 text-primary" />
-                  Publik delningslänk
-                </p>
-                <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowShare(false)}>
-                  <X className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-              <div className="flex gap-2">
-                <Input
-                  readOnly
-                  value={getPublicUrl(shareToken)}
-                  className="text-xs font-mono bg-background"
-                  onClick={(e) => (e.target as HTMLInputElement).select()}
-                />
-                <Button size="sm" variant="outline" onClick={handleCopyLink}>
-                  <LinkIcon className="w-3.5 h-3.5 mr-1.5" />
-                  Kopiera
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Vem som helst med länken kan läsa artikeln utan att logga in.
+      {/* Share panel */}
+      {showShare && shareToken && (
+        <div className="max-w-3xl">
+          <div className="border border-primary/30 rounded-lg p-4 bg-primary/5 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-foreground flex items-center gap-2">
+                <Share2 className="w-4 h-4 text-primary" />
+                Publik delningslänk
               </p>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-destructive hover:text-destructive text-xs px-0"
-                onClick={handleToggleShare}
-                disabled={isTogglingShare}
-              >
-                Ta bort delningslänk
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setShowShare(false)}>
+                <X className="w-3.5 h-3.5" />
               </Button>
             </div>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={getPublicUrl(shareToken)}
+                className="text-xs font-mono bg-background"
+                onClick={(e) => (e.target as HTMLInputElement).select()}
+              />
+              <Button size="sm" variant="outline" onClick={handleCopyLink}>
+                <LinkIcon className="w-3.5 h-3.5 mr-1.5" />
+                Kopiera
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Vem som helst med länken kan läsa artikeln utan att logga in.
+            </p>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:text-destructive text-xs px-0"
+              onClick={handleToggleShare}
+              disabled={isTogglingShare}
+            >
+              Ta bort delningslänk
+            </Button>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Article header */}
-        <div className="max-w-[72ch] text-base space-y-4 border-b border-border pb-6">
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight text-foreground break-words">{article.title}</h1>
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
-            {article.status === 'draft' && (
-              <Badge variant="outline" className="border-[hsl(var(--warning))] text-[hsl(var(--warning))]">Utkast</Badge>
-            )}
-            {article.category_name && (
-              <Badge
-                variant="secondary"
-                style={article.category_color ? { backgroundColor: article.category_color + '22', color: article.category_color } : undefined}
-              >
-                <Folder className="w-3 h-3 mr-1.5" />
-                {article.category_name}
-              </Badge>
-            )}
-            {article.article_type && (
-              <Badge variant="outline" className="font-medium">
-                {article.article_type === 'how-to' ? 'Instruktion' : article.article_type === 'solution' ? 'Lösning' : 'Felsökning'}
-              </Badge>
-            )}
-            <span className="flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5" />
-              Uppdaterad {formatDate(article.updated_at, { year: 'numeric', month: 'long', day: 'numeric' })}
-            </span>
-            <span className="flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5" />
-              Skapad {formatDate(article.created_at, { year: 'numeric', month: 'long', day: 'numeric' })}
-            </span>
+      {/* Article header */}
+      <div className="max-w-[72ch] text-base space-y-4 border-b border-border pb-6">
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight text-foreground break-words">{article.title}</h1>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
+          {article.status === 'draft' && (
+            <Badge variant="outline" className="border-[hsl(var(--warning))] text-[hsl(var(--warning))]">Utkast</Badge>
+          )}
+          {article.category_name && (
+            <Badge
+              variant="secondary"
+              style={article.category_color ? { backgroundColor: article.category_color + '22', color: article.category_color } : undefined}
+            >
+              <Folder className="w-3 h-3 mr-1.5" />
+              {article.category_name}
+            </Badge>
+          )}
+          {article.article_type && (
+            <Badge variant="outline" className="font-medium">
+              {article.article_type === 'how-to' ? 'Instruktion' : article.article_type === 'solution' ? 'Lösning' : 'Felsökning'}
+            </Badge>
+          )}
+          <span className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5" />
+            Uppdaterad {formatDate(article.updated_at, { year: 'numeric', month: 'long', day: 'numeric' })}
+          </span>
+          <span className="flex items-center gap-1.5">
+            <Calendar className="w-3.5 h-3.5" />
+            Skapad {formatDate(article.created_at, { year: 'numeric', month: 'long', day: 'numeric' })}
+          </span>
+          {isAdmin ? (
             <Button
               variant="ghost"
               size="sm"
@@ -360,67 +379,36 @@ const KBArticleDetail = () => {
                 ? `Granskad ${formatDate(article.last_reviewed_at, { year: 'numeric', month: 'long', day: 'numeric' })}`
                 : 'Markera som granskad'}
             </Button>
-          </div>
-          {article.tags && article.tags.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {article.tags.map(tag => (
-                <Badge key={tag.id} variant="secondary" className="gap-1" style={{ backgroundColor: tag.color + '22', color: tag.color, borderColor: tag.color + '44' }}>
-                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
-                  {tag.name}
-                </Badge>
-              ))}
-            </div>
+          ) : article.last_reviewed_at && (
+            <span className="flex items-center gap-1.5">
+              <CheckCircle className="w-3.5 h-3.5" />
+              Granskad {formatDate(article.last_reviewed_at, { year: 'numeric', month: 'long', day: 'numeric' })}
+            </span>
           )}
         </div>
-
-        {/* Content + ToC side-by-side */}
-        <div className="flex gap-8 xl:gap-12 items-start">
-          {/* Main content column */}
-          <div className="flex-1 min-w-0 max-w-[72ch] text-base">
-            {/* Mobile ToC — collapsible */}
-            {tocItems.length >= 2 && (
-              <details className="lg:hidden mb-4 border rounded-lg p-3 bg-card print:hidden">
-                <summary className="text-sm font-medium cursor-pointer select-none">
-                  Innehåll
-                </summary>
-                <nav className="mt-2 space-y-1">
-                  {tocItems.map((item) => (
-                    <a
-                      key={item.id}
-                      href={`#${item.id}`}
-                      className={cn(
-                        'block rounded-sm text-sm py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        item.level >= 3 ? 'pl-4' : item.level === 2 ? 'pl-2' : '',
-                        'text-muted-foreground hover:text-foreground'
-                      )}
-                    >
-                      {item.text}
-                    </a>
-                  ))}
-                </nav>
-              </details>
-            )}
-
-            {/* Article content */}
-            <div ref={attachContentRef} className="prose-wrapper min-h-[200px] break-words">
-              {article.content ? (
-                <>
-                  <HtmlRenderer content={article.content} className="prose-p:leading-7 prose-p:my-5 prose-headings:mt-8 prose-headings:mb-3 prose-li:leading-7 [&>:first-child]:mt-0" />
-                  <KBImageLightbox containerRef={contentRef} contentKey={article.id} />
-                </>
-              ) : (
-                <p className="text-muted-foreground text-sm italic">Inget innehåll ännu.</p>
-              )}
-            </div>
+        {article.tags && article.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {article.tags.map(tag => (
+              <Badge key={tag.id} variant="secondary" className="gap-1" style={{ backgroundColor: tag.color + '22', color: tag.color, borderColor: tag.color + '44' }}>
+                <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                {tag.name}
+              </Badge>
+            ))}
           </div>
+        )}
+      </div>
 
-          {/* Desktop ToC sidebar — sticky right side */}
+      {/* Content + ToC side-by-side */}
+      <div className="flex gap-8 xl:gap-12 items-start">
+        {/* Main content column */}
+        <div className="flex-1 min-w-0 max-w-[72ch] text-base">
+          {/* Mobile ToC — collapsible */}
           {tocItems.length >= 2 && (
-            <aside className="hidden lg:block w-52 shrink-0 print:hidden">
-              <div className="sticky top-24 space-y-1 border-l border-border pl-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                  Innehåll
-                </p>
+            <details className="lg:hidden mb-4 border rounded-lg p-3 bg-card print:hidden">
+              <summary className="text-sm font-medium cursor-pointer select-none">
+                Innehåll
+              </summary>
+              <nav className="mt-2 space-y-1">
                 {tocItems.map((item) => (
                   <a
                     key={item.id}
@@ -428,72 +416,108 @@ const KBArticleDetail = () => {
                     className={cn(
                       'block rounded-sm text-sm py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       item.level >= 3 ? 'pl-4' : item.level === 2 ? 'pl-2' : '',
-                      activeId === item.id
-                        ? 'text-primary font-medium'
-                        : 'text-muted-foreground hover:text-foreground'
+                      'text-muted-foreground hover:text-foreground'
                     )}
                   >
                     {item.text}
                   </a>
                 ))}
-              </div>
-            </aside>
+              </nav>
+            </details>
           )}
+
+          {/* Article content */}
+          <div ref={attachContentRef} className="prose-wrapper min-h-[200px] break-words">
+            {article.content ? (
+              <>
+                <HtmlRenderer content={article.content} className="prose-p:leading-7 prose-p:my-5 prose-headings:mt-8 prose-headings:mb-3 prose-li:leading-7 [&>:first-child]:mt-0" />
+                <KBImageLightbox containerRef={contentRef} contentKey={article.id} />
+              </>
+            ) : (
+              <p className="text-muted-foreground text-sm italic">Inget innehåll ännu.</p>
+            )}
+          </div>
         </div>
 
-        {/* Se aven cross-reference panel */}
-        {crossRefs.length > 0 && (
-          <div className="max-w-3xl pt-2 border-t">
-            <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-muted-foreground" />
-              Se även
-            </h3>
-            <div className="space-y-2">
-              {crossRefs.map((ref) => (
-                <Link
-                  key={ref.id}
-                  to={`/kb/${ref.id}`}
-                  className="flex items-center gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors"
-                >
-                  <span className="text-sm font-medium truncate">{ref.title}</span>
-                  {ref.article_type && (
-                    <Badge variant="secondary" className="shrink-0 text-xs">
-                      {ref.article_type === 'how-to' ? 'Instruktion' : ref.article_type === 'solution' ? 'Lösning' : 'Felsökning'}
-                    </Badge>
+        {/* Desktop ToC sidebar — sticky right side */}
+        {tocItems.length >= 2 && (
+          <aside className="hidden lg:block w-52 shrink-0 print:hidden">
+            <div className="sticky top-24 space-y-1 border-l border-border pl-5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+                Innehåll
+              </p>
+              {tocItems.map((item) => (
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  className={cn(
+                    'block rounded-sm text-sm py-1.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    item.level >= 3 ? 'pl-4' : item.level === 2 ? 'pl-2' : '',
+                    activeId === item.id
+                      ? 'text-primary font-medium'
+                      : 'text-muted-foreground hover:text-foreground'
                   )}
-                </Link>
+                >
+                  {item.text}
+                </a>
               ))}
             </div>
+          </aside>
+        )}
+      </div>
+
+      {/* Se aven cross-reference panel */}
+      {crossRefs.length > 0 && (
+        <div className="max-w-3xl pt-2 border-t">
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
+            <Link2 className="w-4 h-4 text-muted-foreground" />
+            Se även
+          </h3>
+          <div className="space-y-2">
+            {crossRefs.map((ref) => (
+              <Link
+                key={ref.id}
+                to={`/kb/${ref.id}`}
+                className="flex items-center gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors"
+              >
+                <span className="text-sm font-medium truncate">{ref.title}</span>
+                {ref.article_type && (
+                  <Badge variant="secondary" className="shrink-0 text-xs">
+                    {ref.article_type === 'how-to' ? 'Instruktion' : ref.article_type === 'solution' ? 'Lösning' : 'Felsökning'}
+                  </Badge>
+                )}
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Linked Tickets panel */}
+      <div className="max-w-3xl pt-2 border-t">
+        <h3 className="text-sm font-semibold mb-3">Länkade ärenden</h3>
+        {linkedTickets.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Inget ärende är länkat till den här artikeln
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {linkedTickets.map((ticket) => (
+              <Link
+                key={ticket.id}
+                to={`/tickets/${ticket.id}`}
+                className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors"
+              >
+                <span className="text-sm font-medium truncate mr-2">{ticket.title}</span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Badge variant="outline" className="text-xs">{ticket.status}</Badge>
+                  <Badge variant="secondary" className="text-xs">{ticket.priority}</Badge>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
-
-        {/* Linked Tickets panel */}
-        <div className="max-w-3xl pt-2 border-t">
-          <h3 className="text-sm font-semibold mb-3">Länkade ärenden</h3>
-          {linkedTickets.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Inget ärende är länkat till den här artikeln
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {linkedTickets.map((ticket) => (
-                <Link
-                  key={ticket.id}
-                  to={`/tickets/${ticket.id}`}
-                  className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 transition-colors"
-                >
-                  <span className="text-sm font-medium truncate mr-2">{ticket.title}</span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Badge variant="outline" className="text-xs">{ticket.status}</Badge>
-                    <Badge variant="secondary" className="text-xs">{ticket.priority}</Badge>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
       </div>
-    </Layout>
+    </div>
   );
 };
 

@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import TicketForm from './TicketForm';
 
 const noop = vi.hoisted(() => vi.fn());
@@ -18,7 +17,6 @@ vi.mock('@/hooks/useTemplates', () => ({ useTemplates: () => ({ templates: empty
 vi.mock('@/hooks/useTicketAttachments', () => ({ useTicketAttachments: () => ({ attachments: empty, fetchAttachments: noop }) }));
 vi.mock('@/hooks/useTicketChecklists', () => ({ useTicketChecklists: () => ({ items: empty, fetchChecklists: noop }) }));
 vi.mock('@/hooks/useChecklistTemplates', () => ({ useChecklistTemplates: () => ({ templates: empty, fetchTemplates: noop }) }));
-vi.mock('@/components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('@/components/UserCombobox', () => ({ UserCombobox: () => null }));
 vi.mock('@/components/CategoryCombobox', () => ({ CategoryCombobox: () => null }));
 vi.mock('@/components/TemplateCombobox', () => ({ TemplateCombobox: () => null }));

@@ -83,7 +83,7 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
     // Endast aktiva shares räknas — en utgången rad ska visas som "ingen
     // delning" tills en ny myntas (samma fail-closed-villkor som publika vyn).
     const share = db.prepare(
-      "SELECT id, ticket_id, share_token, created_by, created_at, expires_at FROM ticket_shares WHERE ticket_id = ? AND expires_at > datetime('now')"
+      "SELECT id, ticket_id, share_token, created_by, created_at, expires_at FROM ticket_shares WHERE ticket_id = ? AND datetime(expires_at) > datetime('now')"
     ).get(req.params.ticketId) as ShareRow | undefined;
     res.json({ share_token: share?.share_token || null, expires_at: share?.expires_at || null });
   } catch (error) {
@@ -120,7 +120,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     // Finns en AKTIV share redan: returnera den oförändrad (idempotent, som
     // tidigare) — inklusive dess expires_at.
     const active = db.prepare(
-      "SELECT id, ticket_id, share_token, created_by, created_at, expires_at FROM ticket_shares WHERE ticket_id = ? AND expires_at > datetime('now')"
+      "SELECT id, ticket_id, share_token, created_by, created_at, expires_at FROM ticket_shares WHERE ticket_id = ? AND datetime(expires_at) > datetime('now')"
     ).get(req.params.ticketId) as ShareRow | undefined;
 
     if (active) {

@@ -73,8 +73,8 @@ function issueRefreshToken(userId: string): { token: string; id: string } {
   const token = generateRefreshToken();
   const id = randomUUID();
   db.prepare(
-    'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
-  ).run(id, userId, hashRefreshToken(token), getRefreshTokenExpiry());
+    'INSERT INTO refresh_tokens (id, user_id, token, expires_at, created_at) VALUES (?, ?, ?, ?, ?)'
+  ).run(id, userId, hashRefreshToken(token), getRefreshTokenExpiry(), new Date().toISOString());
   return { token, id };
 }
 
@@ -279,8 +279,8 @@ router.post('/refresh', refreshRateLimiter, (req: Request, res: Response) => {
       ).run(newRefreshTokenId, now.toISOString(), tokenRow.id);
       if (claimed.changes !== 1) return false;
       db.prepare(
-        'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
-      ).run(newRefreshTokenId, tokenRow.user_id, hashRefreshToken(newRefreshToken), newExpiresAt);
+        'INSERT INTO refresh_tokens (id, user_id, token, expires_at, created_at) VALUES (?, ?, ?, ?, ?)'
+      ).run(newRefreshTokenId, tokenRow.user_id, hashRefreshToken(newRefreshToken), newExpiresAt, now.toISOString());
       return true;
     });
     if (!rotateToken()) {
@@ -406,10 +406,10 @@ async function issueResetLink(email: string): Promise<void> {
     // Invalidate previously issued unused tokens for this user — only the latest
     // request can complete a reset.
     db.prepare(`UPDATE password_reset_tokens
-                SET used_at = CURRENT_TIMESTAMP
-                WHERE user_id = ? AND used_at IS NULL`).run(user.id);
-    db.prepare(`INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at)
-                VALUES (?, ?, ?, ?)`).run(randomUUID(), user.id, tokenHash, expiresAt);
+                SET used_at = ?
+                WHERE user_id = ? AND used_at IS NULL`).run(new Date().toISOString(), user.id);
+    db.prepare(`INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at, created_at)
+                VALUES (?, ?, ?, ?, ?)`).run(randomUUID(), user.id, tokenHash, expiresAt, new Date().toISOString());
   });
   issueTokens();
 
@@ -476,8 +476,8 @@ router.post('/reset-password', resetPasswordRateLimiter, async (req: Request, re
     // Förbruka länken atomärt INNAN den dyra hashningen: två samtidiga anrop med
     // samma token kan annars båda passera used_at-kontrollen ovan.
     const claimed = db.prepare(
-      'UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL'
-    ).run(row.id);
+      'UPDATE password_reset_tokens SET used_at = ? WHERE id = ? AND used_at IS NULL'
+    ).run(new Date().toISOString(), row.id);
     if (claimed.changes !== 1) {
       return res.status(400).json({ error: 'Länken har redan använts' });
     }
@@ -756,7 +756,7 @@ router.get('/oidc/callback', oidcCallbackRateLimiter, async (req: Request, res: 
       logAudit(user.id, 'oidc_link', 'user', user.id, `oidc-identitet länkad (iss ${identity.issuer})`, req.ip);
     }
 
-    db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
+    db.prepare('UPDATE users SET last_login = ? WHERE id = ?').run(new Date().toISOString(), user.id);
     setRefreshCookie(res, issueRefreshToken(user.id).token);
     logAudit(user.id, 'login_success', 'session', user.id, 'oidc', req.ip);
     // Access-token hämtas av SPA:n via befintliga POST /refresh (cookien ovan).

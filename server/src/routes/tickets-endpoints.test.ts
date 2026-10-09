@@ -344,7 +344,7 @@ describe('GET /api/tickets/export — XLSX download', () => {
     expect(res.headers['content-disposition']).toMatch(/\.xlsx"/);
 
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(res.body as Buffer);
+    await wb.xlsx.load(res.body as ExcelJS.Buffer);
     const ws = wb.worksheets[0];
     let foundId = false;
     ws.eachRow((row) => {
@@ -387,7 +387,7 @@ describe('GET /api/tickets/export-archive — lightweight archive XLSX download'
     expect(res.headers['content-disposition']).toMatch(/arkiv-export-.*\.xlsx"/);
 
     const wb = new ExcelJS.Workbook();
-    await wb.xlsx.load(res.body as Buffer);
+    await wb.xlsx.load(res.body as ExcelJS.Buffer);
     const ws = wb.worksheets[0];
     expect(ws.name).toBe('Arkiv');
     let foundTitle = false;

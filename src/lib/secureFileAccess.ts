@@ -33,3 +33,8 @@ export function revokeBlobUrl(fileId: string): void {
     blobUrlCache.delete(fileId);
   }
 }
+
+/** Frigör alla cachade bilage-blobar — anropas vid utloggning. */
+export function clearSecureAttachmentCache(): void {
+  [...blobUrlCache.keys()].forEach(revokeBlobUrl);
+}

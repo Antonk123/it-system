@@ -31,7 +31,7 @@ describe('Arkitekturkarta – skyddad värdvy', () => {
     resolve!(response());
     const frame = await screen.findByTitle('IT-Ticket – arkitekturkarta');
     expect(frame).toHaveAttribute('srcdoc', html);
-    expect(frame).toHaveAttribute('sandbox', 'allow-scripts allow-same-origin allow-downloads');
+    expect(frame).toHaveAttribute('sandbox', 'allow-scripts allow-downloads');
     expect(screen.getByRole('link', { name: 'Till inställningar' })).toHaveAttribute('href', '/settings');
     const [endpoint, options] = state.requestBlob.mock.calls[0];
     expect(endpoint).toBe('/architecture-map');

@@ -1,3 +1,10 @@
+> **Status (2026-10-09):** inaktuell i detaljerna. Dokumentet skrevs före `theme-forge`
+> (commit `1e8e330`, 2026-09-14 — sjunde temat och numera standardtema i `src/App.tsx`) och
+> före formändringarna 2026-10-08 (`056879c`, mjukare former och förenklad temastilning).
+> **Källan till sanning är `src/index.css`** (token-värden per tema) och `DESIGN.md`
+> (riktning). Temalistan finns i `src/pages/settings/GeneralTab.tsx` och
+> `src/App.tsx`. Texten nedan är oförändrad och bör läsas som historik.
+
 # Design Tokens Reference
 ## IT Ticketing System - Design System Documentation
 

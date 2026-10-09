@@ -551,24 +551,32 @@ describe('Write rate limiter (all mutating /api routes)', () => {
   });
 
   it('allows 300 writes per API key per window regardless of source IP, then 429 — another key is unaffected', async () => {
-    let lastStatus = 0;
-    for (let i = 0; i < 300; i++) {
-      const res = await request(app)
-        .post('/api/tickets')
-        .set('X-Forwarded-For', `203.0.113.${(i % 200) + 1}`)
-        .set('Authorization', `Bearer ${KEY_A}`)
-        .send({});
-      lastStatus = res.status;
-      if (res.status === 429) break;
+    // En delad lyssnande server: request(app) skulle annars öppna en ny ephemeral server per anrop
+    // (300+ st) och ger "socket hang up" när maskinen är belastad.
+    const server = app.listen(0);
+    try {
+      const api = request(server);
+      let lastStatus = 0;
+      for (let i = 0; i < 300; i++) {
+        const res = await api
+          .post('/api/tickets')
+          .set('X-Forwarded-For', `203.0.113.${(i % 200) + 1}`)
+          .set('Authorization', `Bearer ${KEY_A}`)
+          .send({});
+        lastStatus = res.status;
+        if (res.status === 429) break;
+      }
+      expect(lastStatus).toBe(403);
+
+      const blocked = await api.post('/api/tickets').set('Authorization', `Bearer ${KEY_A}`).send({});
+      expect(blocked.status).toBe(429);
+      expect(blocked.headers['retry-after']).toBeDefined();
+
+      const other = await api.post('/api/tickets').set('Authorization', `Bearer ${KEY_B}`).send({});
+      expect(other.status).toBe(403);
+    } finally {
+      server.close();
     }
-    expect(lastStatus).toBe(403);
-
-    const blocked = await request(app).post('/api/tickets').set('Authorization', `Bearer ${KEY_A}`).send({});
-    expect(blocked.status).toBe(429);
-    expect(blocked.headers['retry-after']).toBeDefined();
-
-    const other = await request(app).post('/api/tickets').set('Authorization', `Bearer ${KEY_B}`).send({});
-    expect(other.status).toBe(403);
   });
 
   it('does not count GET requests and keys JWT sessions by user id (writes still pass after 305 GETs)', async () => {

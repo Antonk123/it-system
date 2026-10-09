@@ -27,7 +27,6 @@ vi.mock('@/hooks/useTicketLinks', () => ({ useTicketLinks: () => ({ links: [] })
 vi.mock('@/hooks/useTicketHistory', () => ({ useTicketHistory: () => ({ history: [] }) }));
 vi.mock('@/hooks/useTicketReminders', () => ({ useTicketReminders: () => ({ reminders: [], createReminder: mocks.noop }) }));
 vi.mock('@/hooks/useTicketSharing', () => ({ useTicketSharing: () => ({ getExistingShare: mocks.lookupShare, createShareLink: mocks.createShare, setShareUrl: mocks.noop }) }));
-vi.mock('@/components/Layout', () => ({ Layout: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock('@/components/TicketComments', () => ({ TicketComments: () => null }));
 vi.mock('@/components/TicketLinks', () => ({ TicketLinks: () => null }));
 vi.mock('@/components/TicketActivity', () => ({ TicketActivity: () => null }));

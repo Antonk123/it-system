@@ -11,6 +11,8 @@ import {
   templateSchema,
   templateUpdateSchema,
   fileUploadSchema,
+  ALLOWED_ATTACHMENT_EXTENSIONS,
+  ALLOWED_ATTACHMENT_MIME_TYPES,
   getValidationError,
 } from './validations';
 
@@ -389,8 +391,11 @@ describe('fileUploadSchema', () => {
     expect(() => fileUploadSchema.parse({ file: makeFile('loggar.7z', '') })).not.toThrow();
   });
 
-  it('godkänner SVG som backend tillåter', () => {
-    expect(() => fileUploadSchema.parse({ file: makeFile('ikon.svg', 'image/svg+xml') })).not.toThrow();
+  it('avvisar SVG — backend tar inte längre emot det (skriptbar bilaga)', () => {
+    expect(() => fileUploadSchema.parse({ file: makeFile('ikon.svg', 'image/svg+xml') })).toThrow();
+    expect(() => fileUploadSchema.parse({ file: makeFile('ikon.svg', '') })).toThrow();
+    expect(ALLOWED_ATTACHMENT_MIME_TYPES).not.toContain('image/svg+xml');
+    expect(ALLOWED_ATTACHMENT_EXTENSIONS).not.toContain('.svg');
   });
 
   it('godkänner .csv via filändelse', () => {

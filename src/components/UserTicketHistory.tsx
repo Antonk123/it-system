@@ -1,11 +1,12 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { Ticket } from 'lucide-react';
+import { AlertCircle, Ticket } from 'lucide-react';
 import { useTickets } from '@/hooks/useTickets';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PriorityBadge } from '@/components/PriorityBadge';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -19,12 +20,22 @@ interface UserTicketHistoryProps {
   userId: string;
 }
 
+const PAGE_SIZE = 100;
+
 export const UserTicketHistory = ({ userId }: UserTicketHistoryProps) => {
+  const [limit, setLimit] = useState(PAGE_SIZE);
   // Server-side filter på requester_id → laddar bara denna användares ärenden
-  // (status: 'all' inkluderar stängda; högt limit för korrekt statusräkning).
-  const { tickets, isLoading } = useTickets({ requester_id: userId, status: 'all', limit: 1000 });
+  // (status: 'all' inkluderar stängda). Fler hämtas på begäran via "Visa fler".
+  const { tickets, pagination, isLoading, isError, refetch } = useTickets({
+    requester_id: userId,
+    status: 'all',
+    page: 1,
+    limit,
+  });
 
   const userTickets = tickets;
+  const total = pagination?.total ?? userTickets.length;
+  const hasMore = userTickets.length < total;
 
   const stats = useMemo(() => {
     const open = userTickets.filter((t) => t.status === 'open').length;
@@ -32,13 +43,23 @@ export const UserTicketHistory = ({ userId }: UserTicketHistoryProps) => {
     const waiting = userTickets.filter((t) => t.status === 'waiting').length;
     const resolved = userTickets.filter((t) => t.status === 'resolved').length;
     const closed = userTickets.filter((t) => t.status === 'closed').length;
-    return { total: userTickets.length, open, inProgress, waiting, resolved, closed };
+    return { open, inProgress, waiting, resolved, closed };
   }, [userTickets]);
 
   if (isLoading) {
     return (
       <div className="py-4 text-sm text-muted-foreground text-center">
         Laddar ärenden...
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="py-4 flex flex-col items-center gap-2 text-muted-foreground" role="alert">
+        <AlertCircle className="w-8 h-8" />
+        <p className="text-sm">Kunde inte hämta ärenden</p>
+        <Button variant="outline" size="sm" onClick={refetch}>Försök igen</Button>
       </div>
     );
   }
@@ -54,19 +75,23 @@ export const UserTicketHistory = ({ userId }: UserTicketHistoryProps) => {
 
   return (
     <div className="space-y-4">
-      {/* Stats Summary */}
+      {/* Stats Summary — statusfördelningen visas bara när alla ärenden är laddade */}
       <div className="flex flex-wrap gap-3 text-sm">
-        <span className="font-medium">{stats.total} Totalt</span>
-        <span className="text-muted-foreground">|</span>
-        <span className="text-[hsl(var(--status-open))]">{stats.open} Öppna</span>
-        <span className="text-muted-foreground">|</span>
-        <span className="text-[hsl(var(--status-in-progress))]">{stats.inProgress} Pågående</span>
-        <span className="text-muted-foreground">|</span>
-        <span className="text-[hsl(var(--status-waiting))]">{stats.waiting} Väntar</span>
-        <span className="text-muted-foreground">|</span>
-        <span className="text-[hsl(var(--status-resolved))]">{stats.resolved} Lösta</span>
-        <span className="text-muted-foreground">|</span>
-        <span className="text-[hsl(var(--status-closed))]">{stats.closed} Stängda</span>
+        <span className="font-medium">{total} Totalt</span>
+        {!hasMore && (
+          <>
+            <span className="text-muted-foreground">|</span>
+            <span className="text-[hsl(var(--status-open))]">{stats.open} Öppna</span>
+            <span className="text-muted-foreground">|</span>
+            <span className="text-[hsl(var(--status-in-progress))]">{stats.inProgress} Pågående</span>
+            <span className="text-muted-foreground">|</span>
+            <span className="text-[hsl(var(--status-waiting))]">{stats.waiting} Väntar</span>
+            <span className="text-muted-foreground">|</span>
+            <span className="text-[hsl(var(--status-resolved))]">{stats.resolved} Lösta</span>
+            <span className="text-muted-foreground">|</span>
+            <span className="text-[hsl(var(--status-closed))]">{stats.closed} Stängda</span>
+          </>
+        )}
       </div>
 
       {/* Ticket Table */}
@@ -107,6 +132,15 @@ export const UserTicketHistory = ({ userId }: UserTicketHistoryProps) => {
           </TableBody>
         </Table>
       </div>
+
+      {hasMore && (
+        <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+          <span>Visar {userTickets.length} av {total} ärenden</span>
+          <Button variant="outline" size="sm" onClick={() => setLimit((current) => current + PAGE_SIZE)}>
+            Visa fler
+          </Button>
+        </div>
+      )}
     </div>
   );
 };

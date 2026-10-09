@@ -28,13 +28,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: cd server && npm ci
-      - run: npx eslint . --max-warnings 5
+      - run: npx eslint . --max-warnings 0
       # Root-tsconfig har files:[]+references → 'tsc --noEmit' typecheckar INGET. Kör projekten explicit.
       - run: npx tsc --noEmit -p tsconfig.app.json
       - run: npx tsc --noEmit -p tsconfig.node.json
+      # Oanvända locals/parametrar i frontend (noUnusedLocals/Parameters).
+      - run: npm run check:unused
       - run: npm test
       # OpenAPI-specen måste vara strukturellt giltig (docs/openapi.yaml).
       - run: npm run openapi:lint
+      # ...och täcka varje monterad Express-route (server/src/app.ts + routes/*.ts).
+      - run: node scripts/check-openapi-coverage.mjs
 
   lint-server:
     runs-on: ubuntu-latest
@@ -47,12 +51,16 @@ jobs:
           cache-dependency-path: server/package-lock.json
       - run: cd server && npm ci
       - run: cd server && npx tsc --noEmit
+      - run: cd server && npm run typecheck:tests
+      - run: cd server && npm run check:unused
       # --coverage verkställer ratchet-trösklarna i vitest.config.ts (fäller
       # bygget om täckningen tappar under dem).
       - run: cd server && npm test -- --coverage
 
   docker-build:
     runs-on: ubuntu-latest
+    # Bygg inte images för kod som redan fallerar lint/typecheck/tester.
+    needs: [lint-and-typecheck, lint-server]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - run: docker build -f Dockerfile.server -t test-backend .

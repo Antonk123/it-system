@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { api, KbArticleRow } from '@/lib/api';
+import { ticketKbLinksKeys, kbSearchKeys } from '@/hooks/useKbArticles';
 import { escapeHtml } from '@/lib/html';
 import { toast } from 'sonner';
 
@@ -58,7 +59,7 @@ export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) =
 
   // Query 1: linked articles — shown immediately on mount (KBSB-03)
   const { data: linked = [], isLoading: isLoadingLinked } = useQuery({
-    queryKey: ['ticket-kb-links', ticketId],
+    queryKey: ticketKbLinksKeys.ticket(ticketId),
     queryFn: () => api.getTicketKbLinks(ticketId),
   });
 
@@ -66,7 +67,7 @@ export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) =
 
   // Query 2: FTS5 search results — only when 2+ chars typed (KBSB-01)
   const { data: searchResults = [], isFetching: isSearchFetching } = useQuery({
-    queryKey: ['kb-search', debouncedSearch],
+    queryKey: kbSearchKeys.term(debouncedSearch),
     queryFn: () => api.getKbArticles({ search: debouncedSearch }),
     enabled: debouncedSearch.length >= 2,
   });
@@ -78,7 +79,7 @@ export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) =
   const linkMutation = useMutation({
     mutationFn: (articleId: string) => api.linkKbArticleToTicket(ticketId, articleId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ticket-kb-links', ticketId] });
+      queryClient.invalidateQueries({ queryKey: ticketKbLinksKeys.ticket(ticketId) });
       setSearchQuery('');
       setDebouncedSearch('');
       toast.success('KB-artikel länkad');
@@ -92,7 +93,7 @@ export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) =
   const unlinkMutation = useMutation({
     mutationFn: (articleId: string) => api.unlinkKbArticleFromTicket(ticketId, articleId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ticket-kb-links', ticketId] });
+      queryClient.invalidateQueries({ queryKey: ticketKbLinksKeys.ticket(ticketId) });
       toast.success('Länk borttagen');
     },
     onError: () => {

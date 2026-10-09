@@ -17,9 +17,14 @@ interface UseCommandPaletteSearchReturn {
   setSearch: (value: string) => void;
 }
 
+export const commandPaletteKeys = {
+  contacts: ['command-palette-contacts'] as const,
+  search: (term: string) => ['command-palette-search', term] as const,
+};
+
 // Kontakter laddas en gång och filtreras lokalt — separat fråga med lång staleTime.
 const contactsQuery = {
-  queryKey: ['command-palette-contacts'] as const,
+  queryKey: commandPaletteKeys.contacts,
   queryFn: () => api.getContacts(),
   staleTime: 1000 * 60 * 5, // 5 minuter
 };
@@ -32,7 +37,7 @@ export function useCommandPaletteSearch(): UseCommandPaletteSearchReturn {
   // Hämta tickets + KB-artiklar baserat på debouncat sökterm.
   const searchEnabled = term.length > 0;
   const { data: searchData, isFetching: isSearchFetching } = useQuery({
-    queryKey: ['command-palette-search', term] as const,
+    queryKey: commandPaletteKeys.search(term),
     queryFn: async () => {
       const [ticketResponse, kbArticles] = await Promise.all([
         api.getTickets('?page=1&limit=6&status=all&search=' + encodeURIComponent(term)),

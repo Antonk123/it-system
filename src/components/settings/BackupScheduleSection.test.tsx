@@ -49,7 +49,7 @@ describe('BackupScheduleSection', () => {
     render(<BackupScheduleSection />);
     expect(screen.getByRole('switch')).toBeTruthy();
     expect(screen.getByLabelText('Tid (HH:MM)')).toBeTruthy();
-    expect(screen.getByLabelText('Lagringstid (dagar)')).toBeTruthy();
+    expect(screen.getByLabelText('Behåll backuper (dagar)')).toBeTruthy();
     expect(screen.getByRole('button', { name: /Kör backup nu/i })).toBeTruthy();
   });
 
@@ -60,7 +60,7 @@ describe('BackupScheduleSection', () => {
     };
     render(<BackupScheduleSection />);
     expect(screen.queryByLabelText('Tid (HH:MM)')).toBeNull();
-    expect(screen.queryByLabelText('Lagringstid (dagar)')).toBeNull();
+    expect(screen.queryByLabelText('Behåll backuper (dagar)')).toBeNull();
   });
 
   it('statusraden visar senaste körning när lastRunAt finns', () => {
@@ -78,6 +78,22 @@ describe('BackupScheduleSection', () => {
     expect(screen.getByText(/5\.0 MB/)).toBeTruthy();
   });
 
+  it('varnar med senaste felmeddelandet när backuper misslyckats i rad', () => {
+    configValue = {
+      ...configValue,
+      config: { ...baseConfig, consecutiveFailures: 3, lastError: 'ENOSPC: no space left on device' },
+    };
+    render(<BackupScheduleSection />);
+    const alert = screen.getByRole('alert');
+    expect(alert.textContent).toContain('3 backup-körningar i rad har misslyckats');
+    expect(alert.textContent).toContain('ENOSPC: no space left on device');
+  });
+
+  it('visar ingen varning när inga fel finns', () => {
+    render(<BackupScheduleSection />);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('visar "Ingen körning än" när lastRunAt saknas', () => {
     render(<BackupScheduleSection />);
     expect(screen.getByText(/Ingen körning än/)).toBeTruthy();
@@ -86,7 +102,7 @@ describe('BackupScheduleSection', () => {
   it('"Spara"-klick anropar update-mutationen med rätt värden', () => {
     render(<BackupScheduleSection />);
     fireEvent.change(screen.getByLabelText('Tid (HH:MM)'), { target: { value: '03:30' } });
-    fireEvent.change(screen.getByLabelText('Lagringstid (dagar)'), { target: { value: '14' } });
+    fireEvent.change(screen.getByLabelText('Behåll backuper (dagar)'), { target: { value: '14' } });
     fireEvent.click(screen.getByRole('button', { name: /Spara/i }));
     expect(updateMutate).toHaveBeenCalledTimes(1);
     expect(updateMutate).toHaveBeenCalledWith({

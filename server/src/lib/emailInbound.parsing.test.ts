@@ -87,6 +87,7 @@ function createSchema(db: InstanceType<typeof Database>) {
       id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL, user_id TEXT NOT NULL,
       content TEXT NOT NULL, is_internal INTEGER DEFAULT 1,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       email_from_name TEXT DEFAULT NULL, email_from_address TEXT DEFAULT NULL,
       email_message_id TEXT DEFAULT NULL
     );

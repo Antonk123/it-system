@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
 import TicketForm from './TicketForm';
 
 const data = vi.hoisted(() => ({
@@ -23,7 +22,6 @@ vi.mock('@/hooks/useTemplates', () => ({ useTemplates: () => ({ templates: data.
 vi.mock('@/hooks/useTicketAttachments', () => ({ useTicketAttachments: () => ({ attachments: data.empty, fetchAttachments: data.noop }) }));
 vi.mock('@/hooks/useTicketChecklists', () => ({ useTicketChecklists: () => ({ items: data.empty, fetchChecklists: data.noop }) }));
 vi.mock('@/hooks/useChecklistTemplates', () => ({ useChecklistTemplates: () => ({ templates: data.empty, fetchTemplates: data.noop }) }));
-vi.mock('@/components/Layout', () => ({ Layout: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('@/components/UserCombobox', () => ({ UserCombobox: ({ value, onValueChange }: { value: string; onValueChange: (id: string) => void }) =>
   <select aria-label="Beställare" value={value} onChange={event => onValueChange(event.target.value)}>
     <option value="">Välj</option><option value="a">Anna</option><option value="b">Bertil</option>

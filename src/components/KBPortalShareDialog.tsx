@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, ExternalLink, Link2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
@@ -28,9 +29,24 @@ interface KBPortalShareDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const kbPortalShareKeys = {
+  all: ['kb-portal-share'] as const,
+};
+
 export function KBPortalShareDialog({ open, onOpenChange }: KBPortalShareDialogProps) {
-  const [shareToken, setShareToken] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const queryClient = useQueryClient();
+  const { data: portalShare, isPending, isError } = useQuery({
+    queryKey: kbPortalShareKeys.all,
+    queryFn: () => api.getKbPortalShare(),
+    enabled: open,
+    staleTime: 0,
+  });
+  // isPending (inte isLoading): första renderingen efter att dialogen öppnats har ännu inte
+  // startat hämtningen, och "Skapa"-knappen får inte blinka förbi då.
+  const isLoading = isPending && !isError;
+  const shareToken = portalShare?.share_token ?? null;
+  const setShareToken = (token: string | null) =>
+    queryClient.setQueryData(kbPortalShareKeys.all, { share_token: token });
   const [isCreating, setIsCreating] = useState(false);
   const [isRevoking, setIsRevoking] = useState(false);
   const [isRevokeConfirmOpen, setIsRevokeConfirmOpen] = useState(false);
@@ -41,28 +57,8 @@ export function KBPortalShareDialog({ open, onOpenChange }: KBPortalShareDialogP
   const shouldFocusCreateButtonRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return;
-
-    let cancelled = false;
-    setIsLoading(true);
-    api.getKbPortalShare()
-      .then(({ share_token }) => {
-        if (!cancelled) setShareToken(share_token);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setShareToken(null);
-          toast.error('Kunde inte hämta publik länk');
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
+    if (isError) toast.error('Kunde inte hämta publik länk');
+  }, [isError]);
 
   const publicUrl = useMemo(
     () => shareToken ? `${window.location.origin}/kb/public/${shareToken}` : '',

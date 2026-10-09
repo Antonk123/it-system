@@ -9,7 +9,6 @@ vi.mock('@/hooks/useUsers', () => ({ useUsers: () => ({ users: [] }) }));
 vi.mock('@/hooks/useCompanies', () => ({ useCompanies: () => ({ companies: [] }) }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'me', role: 'admin' } }) }));
 vi.mock('@/lib/api', () => ({ api: { exportTickets: mocks.exportTickets } }));
-vi.mock('@/components/Layout', () => ({ Layout: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock('@/components/ImportDialog', () => ({ ImportDialog: () => null }));
 vi.mock('@/components/TicketTable', () => ({ TicketTable: ({ selectedIds, onSelectionChange }: { selectedIds: string[]; onSelectionChange: (ids: string[]) => void }) => <><button onClick={() => onSelectionChange(['t1'])}>Markera ärende</button><span>Markerade: {selectedIds.length}</span></> }));
 vi.mock('@/components/BulkActionBar', () => ({ BulkActionBar: () => null }));

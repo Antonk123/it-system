@@ -4,7 +4,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCompanies } from '@/hooks/useCompanies';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useUsers } from '@/hooks/useUsers';
-import { Layout } from '@/components/Layout';
 import { useTicketListNavigation } from '@/hooks/useTicketListNavigation';
 import { TicketViewNavigation } from '@/components/TicketViewNavigation';
 import { TicketTable } from '@/components/TicketTable';
@@ -34,7 +33,7 @@ const Archive = () => {
   const [importOpen, setImportOpen] = useState(false);
 
   // Both resolved and closed tickets belong to Avslutade.
-  const { tickets, pagination, isLoading, refetch } = useTickets({
+  const { tickets, pagination, isLoading, isError, bulkUpdateTickets, bulkDeleteTickets, refetch } = useTickets({
     page,
     limit: pageSize,
     status: statuses.join(','),
@@ -76,25 +75,19 @@ const Archive = () => {
   // Bulk action handlers
   const handleBulkReopen = useCallback(async () => {
     try {
-      const result = await api.bulkUpdateTickets(selectedIds, { status: 'open' });
+      const result = await bulkUpdateTickets(selectedIds, { status: 'open' });
       toast.success(`${result?.updated ?? selectedIds.length} ärenden öppnade igen`);
       setSelectedIds([]);
-      refetch();
-    } catch {
-      toast.error('Kunde inte öppna ärenden igen');
-    }
-  }, [selectedIds, refetch, setSelectedIds]);
+    } catch { /* Mutationen visar felet. */ }
+  }, [selectedIds, bulkUpdateTickets, setSelectedIds]);
 
   const handleBulkChangePriority = useCallback(async (priority: TicketPriority) => {
     try {
-      const result = await api.bulkUpdateTickets(selectedIds, { priority });
+      const result = await bulkUpdateTickets(selectedIds, { priority });
       toast.success(`Prioritet ändrad för ${result?.updated ?? selectedIds.length} ärenden`);
       setSelectedIds([]);
-      refetch();
-    } catch {
-      toast.error('Kunde inte ändra prioritet');
-    }
-  }, [selectedIds, refetch, setSelectedIds]);
+    } catch { /* Mutationen visar felet. */ }
+  }, [selectedIds, bulkUpdateTickets, setSelectedIds]);
 
   const handleBulkExportXlsx = useCallback(async () => {
     if (selectedIds.length === 0) return;
@@ -132,28 +125,22 @@ const Archive = () => {
   const handleBulkAssign = useCallback(async (userId: string | null) => {
     if (selectedIds.length === 0) return;
     try {
-      const result = await api.bulkUpdateTickets(selectedIds, { assigned_to: userId });
+      const result = await bulkUpdateTickets(selectedIds, { assigned_to: userId });
       toast.success(`${result?.updated ?? selectedIds.length} ärenden tilldelade`);
       setSelectedIds([]);
-      refetch();
-    } catch {
-      toast.error('Kunde inte tilldela ärenden');
-    }
-  }, [selectedIds, refetch, setSelectedIds]);
+    } catch { /* Mutationen visar felet. */ }
+  }, [selectedIds, bulkUpdateTickets, setSelectedIds]);
 
   const handleBulkDelete = useCallback(async () => {
     try {
-      const result = await api.bulkDeleteTickets(selectedIds);
+      const result = await bulkDeleteTickets(selectedIds);
       toast.success(`${result.deleted} ärenden raderade permanent`);
       setSelectedIds([]);
-      refetch();
-    } catch {
-      toast.error('Kunde inte radera ärenden');
-    }
-  }, [selectedIds, refetch, setSelectedIds]);
+    } catch { /* Mutationen visar felet. */ }
+  }, [selectedIds, bulkDeleteTickets, setSelectedIds]);
 
   return (
-    <Layout>
+    <>
       <div className="space-y-6">
         <TicketViewNavigation />
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -228,6 +215,11 @@ const Archive = () => {
               <Skeleton key={i} className="h-12 w-full" />
             ))}
           </div>
+        ) : isError ? (
+          <div className="text-center py-12 space-y-2" role="alert">
+            <p className="text-destructive text-sm">Kunde inte hämta avslutade ärenden</p>
+            <Button variant="outline" size="sm" onClick={refetch}>Försök igen</Button>
+          </div>
         ) : tickets.length === 0 ? (
           search === '' && categoryFilter === 'all' && priorityFilter === 'all' && !checklistFilter && !dateFrom && !dateTo && !mine && companyFilter === 'all' ? (
             <EmptyState
@@ -298,7 +290,7 @@ const Archive = () => {
           refetch();
         }}
       />
-    </Layout>
+    </>
   );
 };
 

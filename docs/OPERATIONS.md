@@ -403,7 +403,7 @@ faller den tillbaka på första `CORS_ORIGIN` med en varning.
 Hanteras i `server/src/index.ts` för **både** `SIGTERM` (container stop /
 orchestrator) och `SIGINT` (Ctrl-C) via en idempotent handler:
 
-1. Stoppar e-postpolling och alla schedulers (webhook-retry, reminder, recurring,
+1. Stoppar e-postpolling och alla schedulers (webhook-retry, reminder,
    auto-close, push, backup) samt inline-cron (refresh-token-cleanup).
 2. `server.close()` slutar ta emot nya requests och låter pågående avslutas.
 3. En pågående backup väntas in (`waitForBackup`, max `SHUTDOWN_TIMEOUT_MS` − 1 s) så att

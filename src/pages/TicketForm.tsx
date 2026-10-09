@@ -6,6 +6,8 @@ import { useQuery } from '@tanstack/react-query';
 import { ticketKeys } from '@/hooks/useTickets';
 import { useTicketMutations } from '@/hooks/useTicketMutations';
 import { mapTicketRow } from '@/lib/mapTicket';
+import { getErrorStatus } from '@/lib/apiErrorStatus';
+import { TicketLoadError } from '@/components/TicketLoadError';
 import { useUsers } from '@/hooks/useUsers';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
 import { useCompanies } from '@/hooks/useCompanies';
@@ -14,7 +16,6 @@ import { useTemplates } from '@/hooks/useTemplates';
 import { useTicketAttachments, TicketAttachment } from '@/hooks/useTicketAttachments';
 import { useTicketChecklists } from '@/hooks/useTicketChecklists';
 import { useChecklistTemplates } from '@/hooks/useChecklistTemplates';
-import { Layout } from '@/components/Layout';
 import { FileUpload } from '@/components/FileUpload';
 import { TicketChecklist } from '@/components/TicketChecklist';
 import { UserCombobox } from '@/components/UserCombobox';
@@ -44,11 +45,18 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { TicketPriority, TicketStatus, Template } from '@/types/ticket';
 import { toast } from 'sonner';
 import { ticketInsertSchema, ticketUpdateSchema } from '@/lib/validations';
-import { setHasUnsavedWork } from '@/registerSW';
+import { registerUnsavedWork } from '@/registerSW';
 
 // New-ticket draft is persisted here so a SW auto-reload, accidental refresh, or
 // iOS PWA suspend never loses what was typed on a phone. Cleared on successful create.
 const NEW_TICKET_DRAFT_KEY = 'it-ticket:new-ticket-draft';
+
+const LookupError = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
+  <p role="alert" className="text-sm text-destructive">
+    {message}{' '}
+    <button type="button" className="underline" onClick={onRetry}>Försök igen</button>
+  </p>
+);
 
 const TicketForm = () => {
   const { id } = useParams();
@@ -61,23 +69,21 @@ const TicketForm = () => {
   const { users } = useUsers();
   const { users: systemUsers } = useSystemUsers();
   const { companies } = useCompanies();
-  const { categories, addCategory } = useCategories();
-  const { templates } = useTemplates();
+  const { categories, addCategory, isError: categoriesError, refetch: refetchCategories } = useCategories();
+  const { templates, isError: templatesError, refetch: refetchTemplates } = useTemplates();
   const {
     attachments,
     isUploading,
-    fetchAttachments,
     uploadAttachment,
     deleteAttachment
-  } = useTicketAttachments();
+  } = useTicketAttachments(id);
   const {
     items: checklistItems,
-    fetchChecklists,
     addChecklistItem,
     updateChecklistItem,
     deleteChecklistItem,
     bulkAddChecklistItems,
-  } = useTicketChecklists();
+  } = useTicketChecklists(id);
   const {
     templates: checklistTemplates,
     fetchTemplates: fetchChecklistTemplates,
@@ -92,10 +98,12 @@ const TicketForm = () => {
   // fallback read useTickets()'s own unfiltered list cache — a distinct cache
   // key from any filtered list view, so it was never warm once that list query
   // was removed (M9); it only ever existed as a side effect of the extra fetch.
-  const { data: ticketDetailRow } = useQuery({
+  const { data: ticketDetailRow, error: ticketLoadError, refetch: refetchTicket } = useQuery({
     queryKey: ticketKeys.detail(id || ''),
     queryFn: () => api.getTicket(id!),
     enabled: isEditing && !!id,
+    // Ett saknat ärende (404) blir inte bättre av ett nytt försök.
+    retry: (failureCount, error) => getErrorStatus(error) !== 404 && failureCount < 1,
   });
   // Memoisera så referensen bara ändras när underliggande data faktiskt ändras.
   // Tidigare anropades mapTicketRow inline → NY referens varje render → populerings-
@@ -167,8 +175,8 @@ const TicketForm = () => {
         requesterId: existingTicket.requesterId,
         notes: existingTicket.notes ? migrateContent(existingTicket.notes) : '',
         solution: existingTicket.solution ? migrateContent(existingTicket.solution) : '',
-        assigned_to: (existingTicket as any).assigned_to || '',
-        company_id: (existingTicket as any).company_id || '',
+        assigned_to: existingTicket.assignedTo || '',
+        company_id: existingTicket.companyId || '',
       });
       // Show fields that already have content (Pitfall 2: existing content must always be visible)
       setShowSolution(!!existingTicket.solution);
@@ -176,99 +184,71 @@ const TicketForm = () => {
     }
   }, [existingTicket, id]);
 
+  // Load dynamic field values when editing a ticket that was created from a
+  // template. Keyed on the ticket id and template id (not the row object) so a
+  // background refetch of the detail query never overwrites what the user typed.
+  const loadedTicketId = ticketDetailRow?.id;
+  const loadedTemplateId = ticketDetailRow?.template_id;
   useEffect(() => {
-    if (id) {
-      fetchAttachments(id);
-      fetchChecklists(id);
-    }
-  }, [id, fetchAttachments, fetchChecklists]);
-
-  // Load dynamic field values when editing a ticket that was created from a template
-  useEffect(() => {
-    if (!isEditing || !id) {
-      return;
-    }
+    if (!isEditing || !ticketDetailRow || !loadedTemplateId) return;
 
     let isCancelled = false;
+    const savedValues = (ticketDetailRow.field_values ?? []).map((fv) => ({
+      fieldName: fv.field_name,
+      fieldLabel: fv.field_label,
+      fieldValue: fv.field_value || '',
+    }));
 
-    const loadTicketAndTemplate = async () => {
+    const loadTemplate = async (templateId: string) => {
       setIsLoadingTemplate(true);
       try {
-        const ticketDetail = await api.getTicket(id);
-
+        const freshTemplateRow = await api.getTemplate(templateId);
         if (isCancelled) return;
 
-        // If ticket has a template, fetch it with fields
-        if (ticketDetail.template_id) {
-          try {
-            const freshTemplateRow = await api.getTemplate(ticketDetail.template_id);
+        if (freshTemplateRow && freshTemplateRow.fields && freshTemplateRow.fields.length > 0) {
+          // Map TemplateRow to Template format (snake_case to camelCase)
+          const mappedTemplate: Template = {
+            id: freshTemplateRow.id,
+            name: freshTemplateRow.name,
+            description: freshTemplateRow.description,
+            type: (freshTemplateRow.template_type as Template['type']) || 'dynamic',
+            titleTemplate: freshTemplateRow.title_template,
+            descriptionTemplate: freshTemplateRow.description_template,
+            priority: freshTemplateRow.priority as Template['priority'],
+            category: freshTemplateRow.category_id,
+            notesTemplate: freshTemplateRow.notes_template,
+            solutionTemplate: freshTemplateRow.solution_template,
+            position: freshTemplateRow.position,
+            createdBy: freshTemplateRow.created_by,
+            createdAt: parseServerDate(freshTemplateRow.created_at),
+            updatedAt: parseServerDate(freshTemplateRow.updated_at),
+            fields: freshTemplateRow.fields,
+          };
 
-            if (isCancelled) return;
-
-            if (freshTemplateRow && freshTemplateRow.fields && freshTemplateRow.fields.length > 0) {
-              // Map TemplateRow to Template format (snake_case to camelCase)
-              const mappedTemplate: Template = {
-                id: freshTemplateRow.id,
-                name: freshTemplateRow.name,
-                description: freshTemplateRow.description,
-                type: (freshTemplateRow.template_type as Template['type']) || 'dynamic',
-                titleTemplate: freshTemplateRow.title_template,
-                descriptionTemplate: freshTemplateRow.description_template,
-                priority: freshTemplateRow.priority as Template['priority'],
-                category: freshTemplateRow.category_id,
-                notesTemplate: freshTemplateRow.notes_template,
-                solutionTemplate: freshTemplateRow.solution_template,
-                position: freshTemplateRow.position,
-                createdBy: freshTemplateRow.created_by,
-                createdAt: parseServerDate(freshTemplateRow.created_at),
-                updatedAt: parseServerDate(freshTemplateRow.updated_at),
-                fields: freshTemplateRow.fields,
-              };
-
-              setSelectedTemplate(mappedTemplate);
-
-              // Map saved field values to initialValues for DynamicFieldsForm
-              if (ticketDetail.field_values && ticketDetail.field_values.length > 0) {
-                const savedValues = ticketDetail.field_values.map((fv) => ({
-                  fieldName: fv.field_name,
-                  fieldLabel: fv.field_label,
-                  fieldValue: fv.field_value || '',
-                }));
-                setEditInitialFieldValues(savedValues);
-              }
-            }
-          } catch (templateError) {
-            if (import.meta.env.DEV) console.error('Error loading template:', templateError);
-            // Template deleted or not accessible
-            // If we have field_values, show them as read-only legacy fields
-            if (ticketDetail.field_values && ticketDetail.field_values.length > 0) {
-              const savedValues = ticketDetail.field_values.map((fv) => ({
-                fieldName: fv.field_name,
-                fieldLabel: fv.field_label,
-                fieldValue: fv.field_value || '',
-              }));
-              setEditInitialFieldValues(savedValues);
-              // Show warning that template is missing
-              toast.warning('Mall hittades inte - fältvärden visas som lästa från ärendet');
-            }
-          }
+          setSelectedTemplate(mappedTemplate);
+          // Map saved field values to initialValues for DynamicFieldsForm
+          if (savedValues.length > 0) setEditInitialFieldValues(savedValues);
         }
-      } catch (error) {
-        if (import.meta.env.DEV) console.error('Error loading ticket for edit:', error);
-        toast.error('Kunde inte ladda ärende');
+      } catch (templateError) {
+        if (isCancelled) return;
+        if (import.meta.env.DEV) console.error('Error loading template:', templateError);
+        // Template deleted or not accessible — show saved values as read-only legacy fields
+        if (savedValues.length > 0) {
+          setEditInitialFieldValues(savedValues);
+          toast.warning('Mall hittades inte - fältvärden visas som lästa från ärendet');
+        }
       } finally {
-        if (!isCancelled) {
-          setIsLoadingTemplate(false);
-        }
+        if (!isCancelled) setIsLoadingTemplate(false);
       }
     };
 
-    loadTicketAndTemplate();
+    void loadTemplate(loadedTemplateId);
 
     return () => {
       isCancelled = true;
     };
-  }, [isEditing, id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditing, loadedTicketId, loadedTemplateId]);
 
   // Clone pre-fill: populate form from cloneData passed via location.state
   useEffect(() => {
@@ -371,8 +351,8 @@ const TicketForm = () => {
         formData.requesterId !== existingTicket.requesterId ||
         formData.notes !== (existingTicket.notes || '') ||
         formData.solution !== (existingTicket.solution || '') ||
-        formData.assigned_to !== ((existingTicket as any).assigned_to || '') ||
-        formData.company_id !== ((existingTicket as any).company_id || '') ||
+        formData.assigned_to !== (existingTicket.assignedTo || '') ||
+        formData.company_id !== (existingTicket.companyId || '') ||
         (customFieldValues.length > 0 && savedFieldSnapshot !== currentFieldSnapshot) ||
         pendingFiles.length > 0 ||
         pendingChecklistItems.length > 0;
@@ -432,8 +412,8 @@ const TicketForm = () => {
   // Mirror dirty state to the SW registrar so an auto-update defers its reload
   // until the user has saved/left, instead of discarding an in-progress ticket.
   useEffect(() => {
-    setHasUnsavedWork(hasUnsavedChanges);
-    return () => setHasUnsavedWork(false);
+    if (!hasUnsavedChanges) return;
+    return registerUnsavedWork();
   }, [hasUnsavedChanges]);
 
   // Badge counts for collapsible sections
@@ -539,7 +519,7 @@ const TicketForm = () => {
 
     // Validate with Zod and show inline errors
     const schema = isEditing ? ticketUpdateSchema : ticketInsertSchema;
-    const validation = schema.safeParse(submitFormData as any);
+    const validation = schema.safeParse(submitFormData);
     if (!validation.success) {
       const fieldErrors: Record<string, string> = {};
       validation.error.issues.forEach((err) => {
@@ -576,7 +556,7 @@ const TicketForm = () => {
 
     try {
       if (isEditing && id) {
-        await updateTicket(id, { ...submitFormData, assigned_to: formData.assigned_to || undefined, company_id: formData.company_id || undefined } as any, customFieldValues.length > 0 ? customFieldValues : undefined);
+        await updateTicket(id, { ...submitFormData, assigned_to: formData.assigned_to || undefined, company_id: formData.company_id || undefined }, customFieldValues.length > 0 ? customFieldValues : undefined);
 
         const { failedFiles, checklistFailed } = await saveExtras(id, pendingFiles, pendingChecklistItems.map(i => i.label));
 
@@ -627,8 +607,8 @@ const TicketForm = () => {
         }
       }
     } catch (error) {
+      // Mutationen har redan visat felet som toast.
       if (import.meta.env.DEV) console.error('Error submitting ticket:', error);
-      toast.error('Kunde inte spara ärendet');
     } finally {
       setIsSubmitting(false);
       setIsSaving(false);
@@ -679,6 +659,12 @@ const TicketForm = () => {
     }
   };
 
+  if (isEditing && ticketLoadError && !ticketDetailRow) {
+    return (
+      <TicketLoadError error={ticketLoadError} onRetry={() => void refetchTicket()} />
+    );
+  }
+
   const requester = users.find(contact => contact.id === formData.requesterId);
   const companyName = companies.find(company => company.id === formData.company_id)?.name
     || (requester?.company_id === formData.company_id ? requester?.company_name : undefined)
@@ -716,6 +702,7 @@ const TicketForm = () => {
             disabled={isSubmitting}
           />
           </div>
+          {categoriesError && <LookupError message="Kunde inte hämta kategorier." onRetry={() => void refetchCategories()} />}
           {errors.category && <p className="text-sm text-destructive mt-1">{errors.category}</p>}
         </div>
 
@@ -741,227 +728,137 @@ const TicketForm = () => {
   );
 
   return (
-    <Layout>
-      <div className="max-w-2xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <Button
-            variant="ghost"
-            className="gap-2"
-            onClick={handleNavigateBack}
-            disabled={isSaving}
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Tillbaka
-          </Button>
+    <div className="max-w-2xl mx-auto space-y-6">
+      <div className="flex items-center justify-between">
+        <Button
+          variant="ghost"
+          className="gap-2"
+          onClick={handleNavigateBack}
+          disabled={isSaving}
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Tillbaka
+        </Button>
 
-          {/* Save status indicator */}
-          {isSaving && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Sparar...
-            </div>
-          )}
-          {!isSaving && hasUnsavedChanges && (
-            <div className="flex items-center gap-2 text-sm text-[hsl(var(--status-in-progress))]/80">
-              <div className="h-2 w-2 rounded-full bg-[hsl(var(--status-in-progress))]" />
-              Osparade ändringar
-            </div>
-          )}
-        </div>
-
-        {/* Failed upload retry banner */}
-        {failedUploads && (
-          <Card className="border-destructive/50 bg-destructive/5">
-            <CardContent className="pt-4 pb-4 space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center">
-                  <ArrowLeft className="w-4 h-4 text-destructive rotate-135" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-foreground">
-                    Ärendet sparades, men {failedUploads.files.length} fil(er) kunde inte laddas upp
-                  </p>
-                  <ul className="mt-1 space-y-0.5">
-                    {failedUploads.files.map((file, i) => (
-                      <li key={i} className="text-xs text-muted-foreground truncate">
-                        {file.name} ({(file.size / 1024).toFixed(0)} KB)
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 ml-11">
-                <Button
-                  size="sm"
-                  onClick={handleRetryUploads}
-                  disabled={isRetrying}
-                  className="gap-2"
-                >
-                  {isRetrying ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <PlusCircle className="w-3.5 h-3.5" />
-                  )}
-                  {isRetrying ? 'Laddar upp...' : 'Försök igen'}
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={handleSkipFailedUploads}
-                  disabled={isRetrying}
-                >
-                  Hoppa över
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Save status indicator */}
+        {isSaving && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Sparar...
+          </div>
         )}
+        {!isSaving && hasUnsavedChanges && (
+          <div className="flex items-center gap-2 text-sm text-[hsl(var(--status-in-progress))]/80">
+            <div className="h-2 w-2 rounded-full bg-[hsl(var(--status-in-progress))]" />
+            Osparade ändringar
+          </div>
+        )}
+      </div>
 
-        <Card>
-          <CardHeader>
-            <h1 className="flex items-center gap-2 text-lg font-semibold leading-none tracking-tight">
-              {isEditing
-                ? <><Pencil className="w-5 h-5 text-primary" />Redigera ärende</>
-                : <><PlusCircle className="w-5 h-5 text-primary" />Skapa nytt ärende</>
-              }
-            </h1>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-
-              {/* Titel + Mall row */}
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-end">
-                <div className="space-y-2">
-                  <Label htmlFor="title">Titel *</Label>
-                  <Input
-                    id="title"
-                    value={formData.title}
-                    onChange={(e) => { setFormData({ ...formData, title: e.target.value }); setErrors(prev => { const p = { ...prev }; delete p['title']; return p; }); }}
-                    placeholder="Kort beskrivning av problemet"
-                    required
-                    disabled={isSubmitting}
-                    // Autofocus only on create — editing an existing ticket
-                    // shouldn't steal focus on mount (user may be scrolling
-                    // to a specific field, and autofocus jumps the viewport).
-                    autoFocus={!isEditing}
-                    aria-invalid={!!errors.title}
-                    aria-describedby={errors.title ? 'title-error' : undefined}
-                    className={errors.title ? 'border-destructive focus-visible:ring-destructive' : ''}
-                  />
-                  {errors.title && <p id="title-error" className="text-sm text-destructive mt-1">{errors.title}</p>}
-                </div>
-                {!isEditing && (
-                  <details className="space-y-2 sm:w-[240px]" open={selectedTemplate ? true : undefined}>
-                    <summary className="min-h-11 py-2 cursor-pointer">Använd mall</summary>
-                    <Label id="label-template">Mall</Label>
-                    <div aria-labelledby="label-template">
-                    <TemplateCombobox
-                      templates={templates}
-                      selectedTemplate={selectedTemplate}
-                      onSelect={(template) => {
-                        const hasFields = template.fields && template.fields.length > 0;
-                        setSelectedTemplate(template);
-                        setFormData({
-                          ...formData,
-                          title: template.titleTemplate,
-                          description: hasFields ? '' : (template.descriptionTemplate ?? ''),
-                          priority: template.priority,
-                          category: template.category || 'none',
-                          notes: hasFields ? '' : (template.notesTemplate || ''),
-                          solution: hasFields ? '' : (template.solutionTemplate || ''),
-                        });
-                        toast.success(`Mall "${template.name}" laddad`);
-                      }}
-                      onClear={() => {
-                        if (isEditing && existingTicket && !formData.description) {
-                          setFormData(prev => ({ ...prev, description: existingTicket.description }));
-                        }
-                        setSelectedTemplate(null);
-                        setCustomFieldValues([]);
-                        setEditInitialFieldValues([]);
-                      }}
-                    />
-                    </div>
-                  </details>
-                )}
+      {/* Failed upload retry banner */}
+      {failedUploads && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="pt-4 pb-4 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="shrink-0 mt-0.5 w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center">
+                <ArrowLeft className="w-4 h-4 text-destructive rotate-135" />
               </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-foreground">
+                  Ärendet sparades, men {failedUploads.files.length} fil(er) kunde inte laddas upp
+                </p>
+                <ul className="mt-1 space-y-0.5">
+                  {failedUploads.files.map((file, i) => (
+                    <li key={i} className="text-xs text-muted-foreground truncate">
+                      {file.name} ({(file.size / 1024).toFixed(0)} KB)
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 ml-11">
+              <Button
+                size="sm"
+                onClick={handleRetryUploads}
+                disabled={isRetrying}
+                className="gap-2"
+              >
+                {isRetrying ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <PlusCircle className="w-3.5 h-3.5" />
+                )}
+                {isRetrying ? 'Laddar upp...' : 'Försök igen'}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleSkipFailedUploads}
+                disabled={isRetrying}
+              >
+                Hoppa över
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-                <div className="space-y-2">
-                  <Label id="label-requester">Beställare *</Label>
-                  <div aria-labelledby="label-requester">
-                  <UserCombobox
-                    users={users}
-                    value={formData.requesterId}
-                    onValueChange={(v) => {
-                      const contact = users.find(u => u.id === v);
-                      const autoCompany = contact?.company_id || '';
-                      setFormData(prev => ({ ...prev, requesterId: v, company_id: autoCompany }));
-                      setErrors(prev => { const p = { ...prev }; delete p['requesterId']; return p; });
+      <Card>
+        <CardHeader>
+          <h1 className="flex items-center gap-2 text-lg font-semibold leading-none tracking-tight">
+            {isEditing
+              ? <><Pencil className="w-5 h-5 text-primary" />Redigera ärende</>
+              : <><PlusCircle className="w-5 h-5 text-primary" />Skapa nytt ärende</>
+            }
+          </h1>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+
+            {/* Titel + Mall row */}
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-end">
+              <div className="space-y-2">
+                <Label htmlFor="title">Titel *</Label>
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) => { setFormData({ ...formData, title: e.target.value }); setErrors(prev => { const p = { ...prev }; delete p['title']; return p; }); }}
+                  placeholder="Kort beskrivning av problemet"
+                  required
+                  disabled={isSubmitting}
+                  // Autofocus only on create — editing an existing ticket
+                  // shouldn't steal focus on mount (user may be scrolling
+                  // to a specific field, and autofocus jumps the viewport).
+                  autoFocus={!isEditing}
+                  aria-invalid={!!errors.title}
+                  aria-describedby={errors.title ? 'title-error' : undefined}
+                  className={errors.title ? 'border-destructive focus-visible:ring-destructive' : ''}
+                />
+                {errors.title && <p id="title-error" className="text-sm text-destructive mt-1">{errors.title}</p>}
+              </div>
+              {!isEditing && (
+                <details className="space-y-2 sm:w-[240px]" open={selectedTemplate ? true : undefined}>
+                  <summary className="min-h-11 py-2 cursor-pointer">Använd mall</summary>
+                  <Label id="label-template">Mall</Label>
+                  <div aria-labelledby="label-template">
+                  <TemplateCombobox
+                    templates={templates}
+                    selectedTemplate={selectedTemplate}
+                    onSelect={(template) => {
+                      const hasFields = template.fields && template.fields.length > 0;
+                      setSelectedTemplate(template);
+                      setFormData({
+                        ...formData,
+                        title: template.titleTemplate,
+                        description: hasFields ? '' : (template.descriptionTemplate ?? ''),
+                        priority: template.priority,
+                        category: template.category || 'none',
+                        notes: hasFields ? '' : (template.notesTemplate || ''),
+                        solution: hasFields ? '' : (template.solutionTemplate || ''),
+                      });
+                      toast.success(`Mall "${template.name}" laddad`);
                     }}
-                    placeholder="Sök kontakt"
-                  />
-                  </div>
-                  {users.length === 0 && (
-                    <p className="text-sm text-muted-foreground">
-                      <a href="/users" className="text-primary hover:underline">Lägg till kontakt</a> för att tilldela ärenden
-                    </p>
-                  )}
-                  {formData.company_id && (
-                    <p className="text-sm text-muted-foreground">Företag: {companyName} — kan ändras under Fler uppgifter.</p>
-                  )}
-                  {errors.requesterId && <p className="text-sm text-destructive mt-1">{errors.requesterId}</p>}
-                </div>
-              {/* Beskrivning / DynamicFieldsForm */}
-              {isLoadingTemplate ? (
-                <div className="border border-dashed border-muted p-4 rounded text-center text-sm text-muted-foreground">
-                  Laddar mallfält...
-                </div>
-              ) : selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0 ? (
-                <div>
-                  <ErrorBoundary
-                    fallback={
-                      <p className="text-sm text-destructive border border-destructive/30 rounded-md p-3">
-                        Kunde inte visa mallfälten. Rensa mallen och skriv en fri beskrivning istället.
-                      </p>
-                    }
-                  >
-                    <DynamicFieldsForm
-                      fields={selectedTemplate.fields}
-                      onValuesChange={handleCustomFieldsChange}
-                      initialValues={editInitialFieldValues.length > 0 ? editInitialFieldValues : undefined}
-                      errors={dynamicFieldErrors}
-                    />
-                  </ErrorBoundary>
-
-                  {/* Ytterligare information section */}
-                  <div className="mt-6 border-t pt-4">
-                    <Label htmlFor="additional_notes" className="text-sm text-muted-foreground">
-                      Ytterligare information (valfritt)
-                    </Label>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      Lägg till extra detaljer som inte passar i standardfälten ovan
-                    </p>
-                    <ErrorBoundary
-                      fallback={
-                        <p className="text-sm text-destructive">Textredigeraren kunde inte laddas.</p>
-                      }
-                    >
-                      <RichTextEditor
-                        value={formData.notes || ''}
-                        onChange={(html) => {
-                          setFormData({ ...formData, notes: html });
-                        }}
-                        placeholder="Övrig information, kommentarer, specialfall..."
-                        minHeight="100px"
-                      />
-                    </ErrorBoundary>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="mt-2 text-xs text-muted-foreground hover:text-foreground underline"
-                    onClick={() => {
-                      // Restore existing description from ticket when clearing template
+                    onClear={() => {
                       if (isEditing && existingTicket && !formData.description) {
                         setFormData(prev => ({ ...prev, description: existingTicket.description }));
                       }
@@ -969,54 +866,208 @@ const TicketForm = () => {
                       setCustomFieldValues([]);
                       setEditInitialFieldValues([]);
                     }}
-                  >
-                    Rensa mall — skriv fri beskrivning istället
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <Label htmlFor="description">
-                    Beskrivning (valfritt)
-                  </Label>
-                  <div className={errors.description ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
-                    <ErrorBoundary
-                      fallback={
-                        <p className="text-sm text-destructive border border-destructive/30 rounded-md p-3">
-                          Textredigeraren kunde inte laddas. Ladda om sidan och försök igen.
-                        </p>
-                      }
-                    >
-                      <RichTextEditor
-                        value={formData.description}
-                        onChange={(html) => { setFormData({ ...formData, description: html }); setErrors(prev => { const p = { ...prev }; delete p['description']; return p; }); }}
-                        placeholder="Detaljerad beskrivning av problemet..."
-                        minHeight="90px"
-                        compact
-                        id="description"
-                        ariaLabel="Beskrivning (valfritt)"
-                      />
-                    </ErrorBoundary>
+                  />
                   </div>
-                  {errors.description && <p className="text-sm text-destructive mt-1">{errors.description}</p>}
-                </div>
+                  {templatesError && <LookupError message="Kunde inte hämta mallar." onRetry={() => void refetchTemplates()} />}
+                </details>
               )}
+            </div>
 
-              {/* Detaljer collapsible — collapsed in create mode, always open in edit mode */}
-              {isEditing ? (
-                <div className="space-y-4">
-                  <h2 className="font-medium">Detaljer</h2>
-                                  {routingFields}
-                  {companyField}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label id="label-requester">Beställare *</Label>
+                <div aria-labelledby="label-requester">
+                <UserCombobox
+                  users={users}
+                  value={formData.requesterId}
+                  onValueChange={(v) => {
+                    const contact = users.find(u => u.id === v);
+                    const autoCompany = contact?.company_id || '';
+                    setFormData(prev => ({ ...prev, requesterId: v, company_id: autoCompany }));
+                    setErrors(prev => { const p = { ...prev }; delete p['requesterId']; return p; });
+                  }}
+                  placeholder="Sök kontakt"
+                />
+                </div>
+                {users.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    <a href="/users" className="text-primary hover:underline">Lägg till kontakt</a> för att tilldela ärenden
+                  </p>
+                )}
+                {formData.company_id && (
+                  <p className="text-sm text-muted-foreground">Företag: {companyName} — kan ändras under Fler uppgifter.</p>
+                )}
+                {errors.requesterId && <p className="text-sm text-destructive mt-1">{errors.requesterId}</p>}
+              </div>
+            {/* Beskrivning / DynamicFieldsForm */}
+            {isLoadingTemplate ? (
+              <div className="border border-dashed border-muted p-4 rounded text-center text-sm text-muted-foreground">
+                Laddar mallfält...
+              </div>
+            ) : selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0 ? (
+              <div>
+                <ErrorBoundary
+                  fallback={
+                    <p className="text-sm text-destructive border border-destructive/30 rounded-md p-3">
+                      Kunde inte visa mallfälten. Rensa mallen och skriv en fri beskrivning istället.
+                    </p>
+                  }
+                >
+                  <DynamicFieldsForm
+                    fields={selectedTemplate.fields}
+                    onValuesChange={handleCustomFieldsChange}
+                    initialValues={editInitialFieldValues.length > 0 ? editInitialFieldValues : undefined}
+                    errors={dynamicFieldErrors}
+                  />
+                </ErrorBoundary>
+
+                {/* Ytterligare information section */}
+                <div className="mt-6 border-t pt-4">
+                  <Label htmlFor="additional_notes" className="text-sm text-muted-foreground">
+                    Ytterligare information (valfritt)
+                  </Label>
+                  <p className="text-xs text-muted-foreground mb-2">
+                    Lägg till extra detaljer som inte passar i standardfälten ovan
+                  </p>
+                  <ErrorBoundary
+                    fallback={
+                      <p className="text-sm text-destructive">Textredigeraren kunde inte laddas.</p>
+                    }
+                  >
+                    <RichTextEditor
+                      value={formData.notes || ''}
+                      onChange={(html) => {
+                        setFormData({ ...formData, notes: html });
+                      }}
+                      placeholder="Övrig information, kommentarer, specialfall..."
+                      minHeight="100px"
+                    />
+                  </ErrorBoundary>
+                </div>
+
+                <button
+                  type="button"
+                  className="mt-2 text-xs text-muted-foreground hover:text-foreground underline"
+                  onClick={() => {
+                    // Restore existing description from ticket when clearing template
+                    if (isEditing && existingTicket && !formData.description) {
+                      setFormData(prev => ({ ...prev, description: existingTicket.description }));
+                    }
+                    setSelectedTemplate(null);
+                    setCustomFieldValues([]);
+                    setEditInitialFieldValues([]);
+                  }}
+                >
+                  Rensa mall — skriv fri beskrivning istället
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label htmlFor="description">
+                  Beskrivning (valfritt)
+                </Label>
+                <div className={errors.description ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
+                  <ErrorBoundary
+                    fallback={
+                      <p className="text-sm text-destructive border border-destructive/30 rounded-md p-3">
+                        Textredigeraren kunde inte laddas. Ladda om sidan och försök igen.
+                      </p>
+                    }
+                  >
+                    <RichTextEditor
+                      value={formData.description}
+                      onChange={(html) => { setFormData({ ...formData, description: html }); setErrors(prev => { const p = { ...prev }; delete p['description']; return p; }); }}
+                      placeholder="Detaljerad beskrivning av problemet..."
+                      minHeight="90px"
+                      compact
+                      id="description"
+                      ariaLabel="Beskrivning (valfritt)"
+                    />
+                  </ErrorBoundary>
+                </div>
+                {errors.description && <p className="text-sm text-destructive mt-1">{errors.description}</p>}
+              </div>
+            )}
+
+            {/* Detaljer collapsible — collapsed in create mode, always open in edit mode */}
+            {isEditing ? (
+              <div className="space-y-4">
+                <h2 className="font-medium">Detaljer</h2>
+                                {routingFields}
+                {companyField}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="ticket-priority-edit">Prioritet</Label>
+                    <Select
+                      value={formData.priority}
+                      onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
+                      disabled={isSubmitting}
+                    >
+                      <SelectTrigger
+                        id="ticket-priority-edit"
+                        aria-invalid={!!errors.priority}
+                        className={errors.priority ? 'border-destructive focus:ring-destructive' : ''}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Låg</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">Hög</SelectItem>
+                        <SelectItem value="critical">Kritisk</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.priority && <p className="text-sm text-destructive mt-1">{errors.priority}</p>}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="ticket-status-edit">Status</Label>
+                    <Select
+                      value={formData.status}
+                      onValueChange={(v) => { setFormData({ ...formData, status: v as TicketStatus }); setErrors(prev => { const p = { ...prev }; delete p['status']; return p; }); }}
+                      disabled={isSubmitting}
+                    >
+                      <SelectTrigger
+                        id="ticket-status-edit"
+                        aria-invalid={!!errors.status}
+                        className={errors.status ? 'border-destructive focus:ring-destructive' : ''}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">Öppen</SelectItem>
+                        <SelectItem value="in-progress">Pågående</SelectItem>
+                        <SelectItem value="waiting">Väntar</SelectItem>
+                        <SelectItem value="resolved">Löst</SelectItem>
+                        <SelectItem value="closed">Stängd</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.status && <p className="text-sm text-destructive mt-1">{errors.status}</p>}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
+                <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-card px-4 h-11 text-sm font-semibold hover:bg-accent/10 transition-colors">
+                  <span>Fler uppgifter</span>
+                  <div className="flex items-center gap-2">
+                    {detailsBadgeCount > 0 && (
+                      <span className="text-xs text-muted-foreground">{detailsBadgeCount} valt</span>
+                    )}
+                    <ChevronDown className={cn('h-4 w-4 transition-transform duration-200', detailsOpen && 'rotate-180')} />
+                  </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+                  <div className="space-y-4 pt-4">
+                                    {routingFields}
+                {companyField}
                     <div className="space-y-2">
-                      <Label htmlFor="ticket-priority-edit">Prioritet</Label>
+                      <Label htmlFor="ticket-priority-create">Prioritet</Label>
                       <Select
                         value={formData.priority}
                         onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
                         disabled={isSubmitting}
                       >
                         <SelectTrigger
-                          id="ticket-priority-edit"
+                          id="ticket-priority-create"
                           aria-invalid={!!errors.priority}
                           className={errors.priority ? 'border-destructive focus:ring-destructive' : ''}
                         >
@@ -1031,257 +1082,192 @@ const TicketForm = () => {
                       </Select>
                       {errors.priority && <p className="text-sm text-destructive mt-1">{errors.priority}</p>}
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="ticket-status-edit">Status</Label>
-                      <Select
-                        value={formData.status}
-                        onValueChange={(v) => { setFormData({ ...formData, status: v as TicketStatus }); setErrors(prev => { const p = { ...prev }; delete p['status']; return p; }); }}
-                        disabled={isSubmitting}
-                      >
-                        <SelectTrigger
-                          id="ticket-status-edit"
-                          aria-invalid={!!errors.status}
-                          className={errors.status ? 'border-destructive focus:ring-destructive' : ''}
-                        >
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="open">Öppen</SelectItem>
-                          <SelectItem value="in-progress">Pågående</SelectItem>
-                          <SelectItem value="waiting">Väntar</SelectItem>
-                          <SelectItem value="resolved">Löst</SelectItem>
-                          <SelectItem value="closed">Stängd</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {errors.status && <p className="text-sm text-destructive mt-1">{errors.status}</p>}
-                    </div>
                   </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
+
+            {!isEditing && (<>
+                    {/* File Attachments */}
+                    <div className="space-y-2">
+                      <Label>Bilagor</Label>
+                      <FileUpload
+                    compact={!isEditing}
+                        attachments={attachments}
+                        pendingFiles={pendingFiles}
+                        onFilesSelect={handleFilesSelect}
+                        onRemovePending={handleRemovePending}
+                        onRemoveAttachment={handleRemoveAttachment}
+                        isUploading={isUploading}
+                        disabled={isSubmitting}
+                      />
+                    </div>
+
+            </>)}
+            {/* Bilagor & Checklista collapsible — collapsed in create mode, always open in edit mode */}
+            {isEditing ? (
+              <div className="space-y-4">
+                {/* File Attachments */}
+                <div className="space-y-2">
+                  <Label>Bilagor</Label>
+                  <FileUpload
+                    compact={!isEditing}
+                    attachments={attachments}
+                    pendingFiles={pendingFiles}
+                    onFilesSelect={handleFilesSelect}
+                    onRemovePending={handleRemovePending}
+                    onRemoveAttachment={handleRemoveAttachment}
+                    isUploading={isUploading}
+                    disabled={isSubmitting}
+                  />
                 </div>
-              ) : (
-                <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
-                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-card px-4 h-11 text-sm font-semibold hover:bg-accent/10 transition-colors">
-                    <span>Fler uppgifter</span>
-                    <div className="flex items-center gap-2">
-                      {detailsBadgeCount > 0 && (
-                        <span className="text-xs text-muted-foreground">{detailsBadgeCount} valt</span>
-                      )}
-                      <ChevronDown className={cn('h-4 w-4 transition-transform duration-200', detailsOpen && 'rotate-180')} />
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
-                    <div className="space-y-4 pt-4">
-                                      {routingFields}
-                  {companyField}
-                      <div className="space-y-2">
-                        <Label htmlFor="ticket-priority-create">Prioritet</Label>
-                        <Select
-                          value={formData.priority}
-                          onValueChange={(v) => { setFormData({ ...formData, priority: v as TicketPriority }); setErrors(prev => { const p = { ...prev }; delete p['priority']; return p; }); }}
-                          disabled={isSubmitting}
-                        >
-                          <SelectTrigger
-                            id="ticket-priority-create"
-                            aria-invalid={!!errors.priority}
-                            className={errors.priority ? 'border-destructive focus:ring-destructive' : ''}
-                          >
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="low">Låg</SelectItem>
-                            <SelectItem value="medium">Medium</SelectItem>
-                            <SelectItem value="high">Hög</SelectItem>
-                            <SelectItem value="critical">Kritisk</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        {errors.priority && <p className="text-sm text-destructive mt-1">{errors.priority}</p>}
-                      </div>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              )}
 
-              {!isEditing && (<>
-                      {/* File Attachments */}
-                      <div className="space-y-2">
-                        <Label>Bilagor</Label>
-                        <FileUpload
-                      compact={!isEditing}
-                          attachments={attachments}
-                          pendingFiles={pendingFiles}
-                          onFilesSelect={handleFilesSelect}
-                          onRemovePending={handleRemovePending}
-                          onRemoveAttachment={handleRemoveAttachment}
-                          isUploading={isUploading}
-                          disabled={isSubmitting}
-                        />
-                      </div>
-
-              </>)}
-              {/* Bilagor & Checklista collapsible — collapsed in create mode, always open in edit mode */}
-              {isEditing ? (
-                <div className="space-y-4">
-                  {/* File Attachments */}
-                  <div className="space-y-2">
-                    <Label>Bilagor</Label>
-                    <FileUpload
-                      compact={!isEditing}
-                      attachments={attachments}
-                      pendingFiles={pendingFiles}
-                      onFilesSelect={handleFilesSelect}
-                      onRemovePending={handleRemovePending}
-                      onRemoveAttachment={handleRemoveAttachment}
-                      isUploading={isUploading}
-                      disabled={isSubmitting}
+                {/* Checklist */}
+                <div className="space-y-2">
+                  <Label>Checklista / Att göra</Label>
+                  <div className="border rounded-lg p-4">
+                    <TicketChecklist
+                      items={checklistItems}
+                      pendingItems={pendingChecklistItems}
+                      onToggle={(itemId, completed) => updateChecklistItem(itemId, { completed })}
+                      onDelete={deleteChecklistItem}
+                      onAdd={(label, parentId) => id ? addChecklistItem(id, label, { parent_id: parentId }) : undefined}
+                      onUpdate={(itemId, updates) => updateChecklistItem(itemId, updates)}
+                      onPendingAdd={handleAddPendingChecklist}
+                      onPendingDelete={handleDeletePendingChecklist}
+                      templates={checklistTemplates}
+                      onApplyTemplate={(template) => {
+                        // In create mode: add as pending items (flat)
+                        if (!isEditing) {
+                          template.items
+                            .filter(i => !i.parent_label)
+                            .forEach(i => handleAddPendingChecklist(i.label));
+                        }
+                      }}
                     />
                   </div>
-
-                  {/* Checklist */}
-                  <div className="space-y-2">
-                    <Label>Checklista / Att göra</Label>
-                    <div className="border rounded-lg p-4">
-                      <TicketChecklist
-                        items={checklistItems}
-                        pendingItems={pendingChecklistItems}
-                        onToggle={(itemId, completed) => updateChecklistItem(itemId, { completed })}
-                        onDelete={deleteChecklistItem}
-                        onAdd={(label, parentId) => id ? addChecklistItem(id, label, { parent_id: parentId }) : undefined}
-                        onUpdate={(itemId, updates) => updateChecklistItem(itemId, updates)}
-                        onPendingAdd={handleAddPendingChecklist}
-                        onPendingDelete={handleDeletePendingChecklist}
-                        templates={checklistTemplates}
-                        onApplyTemplate={(template) => {
-                          // In create mode: add as pending items (flat)
-                          if (!isEditing) {
-                            template.items
-                              .filter(i => !i.parent_label)
-                              .forEach(i => handleAddPendingChecklist(i.label));
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
                 </div>
-              ) : (
-                <Collapsible open={attachmentsOpen} onOpenChange={setAttachmentsOpen}>
-                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-card px-4 h-11 text-sm font-semibold hover:bg-accent/10 transition-colors">
-                    <span>Checklista</span>
-                    <div className="flex items-center gap-2">
-                      {attachmentsBadgeCount > 0 && (
-                        <span className="text-xs text-muted-foreground">{attachmentsBadgeCount} valt</span>
-                      )}
-                      <ChevronDown className={cn('h-4 w-4 transition-transform duration-200', attachmentsOpen && 'rotate-180')} />
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
-                    <div className="space-y-4 pt-4">
-                      {/* Checklist */}
-                      <div className="space-y-2">
-                        <Label>Checklista / Att göra</Label>
-                        <div className="border rounded-lg p-4">
-                          <TicketChecklist
-                            items={checklistItems}
-                            pendingItems={pendingChecklistItems}
-                            onToggle={(itemId, completed) => updateChecklistItem(itemId, { completed })}
-                            onDelete={deleteChecklistItem}
-                            onAdd={(label, parentId) => id ? addChecklistItem(id, label, { parent_id: parentId }) : undefined}
-                            onUpdate={(itemId, updates) => updateChecklistItem(itemId, updates)}
-                            onPendingAdd={handleAddPendingChecklist}
-                            onPendingDelete={handleDeletePendingChecklist}
-                            templates={checklistTemplates}
-                            onApplyTemplate={(template) => {
-                              // In create mode: add as pending items (flat)
-                              if (!isEditing) {
-                                template.items
-                                  .filter(i => !i.parent_label)
-                                  .forEach(i => handleAddPendingChecklist(i.label));
-                              }
-                            }}
-                          />
-                        </div>
+              </div>
+            ) : (
+              <Collapsible open={attachmentsOpen} onOpenChange={setAttachmentsOpen}>
+                <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-card px-4 h-11 text-sm font-semibold hover:bg-accent/10 transition-colors">
+                  <span>Checklista</span>
+                  <div className="flex items-center gap-2">
+                    {attachmentsBadgeCount > 0 && (
+                      <span className="text-xs text-muted-foreground">{attachmentsBadgeCount} valt</span>
+                    )}
+                    <ChevronDown className={cn('h-4 w-4 transition-transform duration-200', attachmentsOpen && 'rotate-180')} />
+                  </div>
+                </CollapsibleTrigger>
+                <CollapsibleContent className="overflow-hidden data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+                  <div className="space-y-4 pt-4">
+                    {/* Checklist */}
+                    <div className="space-y-2">
+                      <Label>Checklista / Att göra</Label>
+                      <div className="border rounded-lg p-4">
+                        <TicketChecklist
+                          items={checklistItems}
+                          pendingItems={pendingChecklistItems}
+                          onToggle={(itemId, completed) => updateChecklistItem(itemId, { completed })}
+                          onDelete={deleteChecklistItem}
+                          onAdd={(label, parentId) => id ? addChecklistItem(id, label, { parent_id: parentId }) : undefined}
+                          onUpdate={(itemId, updates) => updateChecklistItem(itemId, updates)}
+                          onPendingAdd={handleAddPendingChecklist}
+                          onPendingDelete={handleDeletePendingChecklist}
+                          templates={checklistTemplates}
+                          onApplyTemplate={(template) => {
+                            // In create mode: add as pending items (flat)
+                            if (!isEditing) {
+                              template.items
+                                .filter(i => !i.parent_label)
+                                .forEach(i => handleAddPendingChecklist(i.label));
+                            }
+                          }}
+                        />
                       </div>
                     </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              )}
-
-              {/* Edit form: Handläggning section with hidden-until-clicked fields */}
-              {isEditing && (
-                <>
-                  <div className="border-t border-border/60 pt-5">
-                    <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">Handläggning</p>
                   </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
 
-                  {showSolution ? (
-                    <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                      <Label htmlFor="solution">Lösning</Label>
-                      <RichTextEditor
-                        value={formData.solution}
-                        onChange={(html) => setFormData({ ...formData, solution: html })}
-                        placeholder="Dokumentera hur problemet löstes..."
-                        minHeight="250px"
-                      />
-                    </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      onClick={() => setShowSolution(true)}
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      + Lösning
-                    </Button>
-                  )}
+            {/* Edit form: Handläggning section with hidden-until-clicked fields */}
+            {isEditing && (
+              <>
+                <div className="border-t border-border/60 pt-5">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">Handläggning</p>
+                </div>
 
-                  {showNotes ? (
-                    <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
-                      <Label htmlFor="notes">Interna anteckningar</Label>
-                      <RichTextEditor
-                        value={formData.notes}
-                        onChange={(html) => setFormData({ ...formData, notes: html })}
-                        placeholder="Lägg till interna anteckningar..."
-                        minHeight="100px"
-                      />
-                    </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-muted-foreground hover:text-foreground"
-                      onClick={() => setShowNotes(true)}
-                    >
-                      <PlusCircle className="mr-2 h-4 w-4" />
-                      + Interna anteckningar
-                    </Button>
-                  )}
-                </>
-              )}
+                {showSolution ? (
+                  <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                    <Label htmlFor="solution">Lösning</Label>
+                    <RichTextEditor
+                      value={formData.solution}
+                      onChange={(html) => setFormData({ ...formData, solution: html })}
+                      placeholder="Dokumentera hur problemet löstes..."
+                      minHeight="250px"
+                    />
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowSolution(true)}
+                  >
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    + Lösning
+                  </Button>
+                )}
 
-              <div className="flex items-center justify-end gap-2 pt-4">
-                <span aria-live="polite" aria-atomic="true" className="text-sm text-muted-foreground flex items-center gap-2">
-                  {uploadProgress && (
-                    <>
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      {uploadProgress}
-                    </>
-                  )}
-                </span>
-                <Button type="button" variant="outline" onClick={handleNavigateBack} disabled={isSaving}>
-                  Avbryt
-                </Button>
-                <Button type="submit" disabled={isSubmitting || isUploading || isSaving || !!failedUploads} className="gap-2">
-                  {isSubmitting ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" />Sparar...</>
-                  ) : isEditing ? 'Spara ändringar' : 'Skapa ärende'}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </Layout>
+                {showNotes ? (
+                  <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                    <Label htmlFor="notes">Interna anteckningar</Label>
+                    <RichTextEditor
+                      value={formData.notes}
+                      onChange={(html) => setFormData({ ...formData, notes: html })}
+                      placeholder="Lägg till interna anteckningar..."
+                      minHeight="100px"
+                    />
+                  </div>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowNotes(true)}
+                  >
+                    <PlusCircle className="mr-2 h-4 w-4" />
+                    + Interna anteckningar
+                  </Button>
+                )}
+              </>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-4">
+              <span aria-live="polite" aria-atomic="true" className="text-sm text-muted-foreground flex items-center gap-2">
+                {uploadProgress && (
+                  <>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    {uploadProgress}
+                  </>
+                )}
+              </span>
+              <Button type="button" variant="outline" onClick={handleNavigateBack} disabled={isSaving}>
+                Avbryt
+              </Button>
+              <Button type="submit" disabled={isSubmitting || isUploading || isSaving || !!failedUploads} className="gap-2">
+                {isSubmitting ? (
+                  <><Loader2 className="w-4 h-4 animate-spin" />Sparar...</>
+                ) : isEditing ? 'Spara ändringar' : 'Skapa ärende'}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

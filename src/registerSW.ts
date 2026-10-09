@@ -21,19 +21,39 @@ import { toast } from 'sonner';
 //   3. Deferred reload — if the user has unsaved work (e.g. an open ticket form),
 //      the reload waits until they save/leave so an update never discards input.
 
-// Module-level signal the UI mirrors its dirty state into (see TicketForm).
-let unsavedWork = false;
+// Module-level signals the UI mirrors its dirty state into (see TicketForm).
+let unsavedRegistrations = 0;
 let pendingReload = false;
 let notifiedDeferred = false;
 
-/** Called by forms to defer SW auto-reload while there is unsaved input. */
-export function setHasUnsavedWork(value: boolean): void {
-  unsavedWork = value;
-  // Once work is saved/discarded, perform any reload that was deferred.
-  if (!value && pendingReload) {
+/** True medan något formulär/editor har osparat arbete. */
+export function hasUnsavedWork(): boolean {
+  return unsavedRegistrations > 0;
+}
+
+// Once work is saved/discarded, perform any reload that was deferred.
+function flushDeferredReload(): void {
+  if (!hasUnsavedWork() && pendingReload) {
     pendingReload = false;
     window.location.reload();
   }
+}
+
+/**
+ * Registrerar osparat arbete och returnerar en funktion som avregistrerar det.
+ * Flera editorer kan vara öppna samtidigt utan att den ena nollställer den
+ * andras tillstånd. Anropa i en effekt och
+ * returnera avregistreringen som cleanup medan editorn har osparad text.
+ */
+export function registerUnsavedWork(): () => void {
+  unsavedRegistrations += 1;
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    unsavedRegistrations -= 1;
+    flushDeferredReload();
+  };
 }
 
 export function registerServiceWorker(): void {
@@ -52,7 +72,7 @@ export function registerServiceWorker(): void {
           if (refreshing || !hadController) return;
           // Defer the reload while the user has unsaved work so a mid-edit update
           // never discards their input; it reloads as soon as the work clears.
-          if (unsavedWork) {
+          if (hasUnsavedWork()) {
             pendingReload = true;
             if (!notifiedDeferred) {
               notifiedDeferred = true;

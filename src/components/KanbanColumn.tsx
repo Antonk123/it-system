@@ -12,10 +12,9 @@ interface KanbanColumnProps {
   status: TicketStatus;
   label: string;
   tickets: TicketType[];
-  onTicketClick?: (ticketId: string) => void;
 }
 
-export const KanbanColumn = memo(function KanbanColumn({ status, label, tickets, onTicketClick }: KanbanColumnProps) {
+export const KanbanColumn = memo(function KanbanColumn({ status, label, tickets }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `column-${status}`,
     data: { status },
@@ -45,7 +44,7 @@ export const KanbanColumn = memo(function KanbanColumn({ status, label, tickets,
         <div className="flex flex-col gap-3 flex-1">
           {tickets.length > 0 ? (
             tickets.map(ticket => (
-              <KanbanCard key={ticket.id} ticket={ticket} onTicketClick={onTicketClick} />
+              <KanbanCard key={ticket.id} ticket={ticket} />
             ))
           ) : (
             <div className="flex items-center justify-center flex-1 text-muted-foreground text-sm">

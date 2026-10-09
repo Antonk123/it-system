@@ -2,15 +2,18 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, useNavigationType } from "react-router";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, matchPath, useLocation, useNavigate, useNavigationType } from "react-router";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { ApiError } from "@/lib/api";
 import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
+import { safeStorage } from "@/lib/safeStorage";
 import { parseSwNavigateMessage } from "@/lib/swNavigation";
 import { sanitizeReturnTo } from "@/lib/returnTo";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { lazy, Suspense, useEffect, type ReactNode } from "react";
+import { Layout } from "@/components/Layout";
+import { lazy, Suspense, useEffect, useRef, type ReactNode } from "react";
 
-const Index = lazy(() => import("./pages/Index"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
 const TicketList = lazy(() => import("./pages/TicketList"));
 const TicketForm = lazy(() => import("./pages/TicketForm"));
 const TicketDetail = lazy(() => import("./pages/TicketDetail"));
@@ -20,6 +23,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const ArchitectureMap = lazy(() => import("./pages/ArchitectureMap"));
 const Reports = lazy(() => import("./pages/Reports"));
 const Login = lazy(() => import("./pages/Login"));
+const ChangePassword = lazy(() => import("./pages/ChangePassword"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
 const PublicTicketForm = lazy(() => import("./pages/PublicTicketForm"));
@@ -40,10 +44,15 @@ const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5, // 5 minutes
       gcTime: 1000 * 60 * 10, // 10 minutes (formerly cacheTime)
       refetchOnWindowFocus: false, // Don't refetch on window focus
-      retry: 1, // Retry failed requests once
+      // Försök igen en gång vid nätverks-/serverfel, men aldrig vid klientfel (4xx):
+      // ett 404/403/422 ger samma svar nästa gång.
+      retry: (failureCount, error) =>
+        !(error instanceof ApiError && error.status >= 400 && error.status < 500) && failureCount < 1,
     },
     mutations: {
-      retry: 1, // Retry failed mutations once
+      // Aldrig automatiskt: en POST som nådde servern men förlorade svaret skulle
+      // annars skapas två gånger (dubbla ärenden/kommentarer).
+      retry: 0,
     },
   },
 });
@@ -53,9 +62,9 @@ const AppearanceInitializer = () => {
     applyFontTheme(getStoredFontTheme());
     applyMode(getStoredMode());
     // Migrate users who had daylight selected — fall back to default
-    const storedTheme = localStorage.getItem('theme');
+    const storedTheme = safeStorage.getItem('theme');
     if (storedTheme === 'theme-daylight') {
-      localStorage.setItem('theme', 'theme-default');
+      safeStorage.setItem('theme', 'theme-default');
       document.documentElement.classList.remove('theme-daylight');
       document.documentElement.classList.add('theme-default');
     }
@@ -65,7 +74,7 @@ const AppearanceInitializer = () => {
 };
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -80,6 +89,12 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
     // Bevarar platsen via router-state så Login kan navigera hit tillbaka
     // efter lyckad inloggning (se sanitizeReturnTo för open-redirect-skyddet).
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+  }
+
+  // Tvingat lösenordsbyte (t.ex. efter admin-återställning): inget annat i appen
+  // är nåbart förrän lösenordet är bytt.
+  if (user?.mustChangePassword && location.pathname !== '/change-password') {
+    return <Navigate to="/change-password" replace />;
   }
 
   return <>{children}</>;
@@ -117,11 +132,85 @@ const RouteFallback = () => (
   </div>
 );
 
+const PageSpinner = () => (
+  <div className="flex min-h-[50dvh] items-center justify-center" role="status">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary motion-reduce:animate-none"></div>
+    <span className="sr-only">Laddar…</span>
+  </div>
+);
+
 /** Omsluter ett route-element med en scoped ErrorBoundary så att en krassch
  *  på en enskild route inte dödar hela navigeringen. */
 const withBoundary = (element: ReactNode) => (
   <ErrorBoundary>{element}</ErrorBoundary>
 );
+
+const ROUTE_TITLES: ReadonlyArray<readonly [string, string]> = [
+  ['/', 'Översikt'],
+  ['/login', 'Logga in'],
+  ['/forgot-password', 'Glömt lösenord'],
+  ['/reset-password/:token', 'Återställ lösenord'],
+  ['/change-password', 'Byt lösenord'],
+  ['/submit-ticket', 'Skapa ärende'],
+  ['/shared/:token', 'Delat ärende'],
+  ['/kb/shared/:token', 'Delad artikel'],
+  ['/kb/public/:token', 'Kunskapsbas'],
+  ['/kb/public/:token/article/:articleId', 'Artikel'],
+  ['/tickets', 'Ärenden'],
+  ['/my-tickets', 'Mina ärenden'],
+  ['/tickets/new', 'Nytt ärende'],
+  ['/tickets/:id', 'Ärende'],
+  ['/tickets/:id/edit', 'Redigera ärende'],
+  ['/companies', 'Företag'],
+  ['/companies/:id', 'Företag'],
+  ['/archive', 'Arkiv'],
+  ['/users', 'Kontakter'],
+  ['/reports', 'Rapporter'],
+  ['/architecture-map', 'Arkitekturkarta'],
+  ['/settings', 'Inställningar'],
+  ['/kb', 'Kunskapsbas'],
+  ['/kb/new', 'Ny artikel'],
+  ['/kb/:id', 'Artikel'],
+  ['/kb/:id/edit', 'Redigera artikel'],
+];
+
+/** Sätter fliktiteln per route så att flikar, historik och skärmläsare kan skilja sidorna åt. */
+const DocumentTitle = () => {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    const match = ROUTE_TITLES.find(([path]) => matchPath({ path, end: true }, pathname));
+    document.title = `${match ? match[1] : 'Sidan hittades inte'} – IT-Ticket`;
+  }, [pathname]);
+  return null;
+};
+
+/**
+ * App-skalet (sidofält, header, bottenfält) som layout-route: det monteras en
+ * gång och överlever navigering mellan sidor. Bara sidinnehållet remountas per
+ * pathname (key på boundaryn), så sidornas lokala state nollställs som förut.
+ */
+const AppShell = () => {
+  const { pathname } = useLocation();
+  const previousPathname = useRef(pathname);
+
+  // Flytta fokus till innehållet vid sidbyte så tangentbords- och skärmläsar-
+  // användare inte blir kvar i sidofältet. Inte vid första laddningen.
+  useEffect(() => {
+    if (previousPathname.current === pathname) return;
+    previousPathname.current = pathname;
+    document.getElementById('main-content')?.focus({ preventScroll: true });
+  }, [pathname]);
+
+  return (
+    <Layout>
+      <Suspense fallback={<PageSpinner />}>
+        <ErrorBoundary key={pathname} inShell>
+          <Outlet />
+        </ErrorBoundary>
+      </Suspense>
+    </Layout>
+  );
+};
 
 /** Scrollar till toppen vid framåtnavigering (PUSH/REPLACE).
  *  Vid back/forward (POP) låter vi browsern hantera scroll-position. */
@@ -158,19 +247,19 @@ const SwNavigationBridge = () => {
 };
 
 export const AppRoutes = () => {
-  const location = useLocation();
   return (
     <ErrorBoundary>
     <Suspense fallback={<RouteFallback />}>
       <ScrollToTopOnNavigate />
+      <DocumentTitle />
       <SwNavigationBridge />
       {/* Ingen route-nivå AnimatePresence: route-elementen definierar inga exit-
           varianter, så den animerade inget. Sidornas egna enter-animationer
-          (motion.div initial/animate) fungerar via key={pathname}-remount, och
+          (motion.div initial/animate) fungerar via key={pathname}-remount i AppShell, och
           in-page-exit (TicketList/KnowledgeBase) har lokala AnimatePresence.
           Att slippa den statiska framer-importen lyfter motion-vendor ur den
           eager-preloadade startgrafen (laddas lazy med sidorna som behöver den). */}
-      <Routes location={location} key={location.pathname}>
+      <Routes>
           <Route path="/login" element={withBoundary(<PublicRoute><Login /></PublicRoute>)} />
           <Route path="/forgot-password" element={withBoundary(<PublicRoute><ForgotPassword /></PublicRoute>)} />
           <Route path="/reset-password/:token" element={withBoundary(<PublicRoute><ResetPassword /></PublicRoute>)} />
@@ -179,23 +268,26 @@ export const AppRoutes = () => {
           <Route path="/kb/shared/:token" element={withBoundary(<SharedKBArticle />)} />
           <Route path="/kb/public/:token" element={withBoundary(<PublicKnowledgeBase />)} />
           <Route path="/kb/public/:token/article/:articleId" element={withBoundary(<PublicKBArticle />)} />
-          <Route path="/" element={withBoundary(<ProtectedRoute><Index /></ProtectedRoute>)} />
-          <Route path="/tickets" element={withBoundary(<ProtectedRoute><TicketList /></ProtectedRoute>)} />
-          <Route path="/my-tickets" element={withBoundary(<ProtectedRoute><TicketList /></ProtectedRoute>)} />
-          <Route path="/tickets/new" element={withBoundary(<ProtectedRoute><TicketForm /></ProtectedRoute>)} />
-          <Route path="/tickets/:id" element={withBoundary(<ProtectedRoute><TicketDetail /></ProtectedRoute>)} />
-          <Route path="/tickets/:id/edit" element={withBoundary(<ProtectedRoute><TicketForm /></ProtectedRoute>)} />
-          <Route path="/companies" element={withBoundary(<ProtectedRoute><CompanyList /></ProtectedRoute>)} />
-          <Route path="/companies/:id" element={withBoundary(<ProtectedRoute><CompanyDetail /></ProtectedRoute>)} />
-          <Route path="/archive" element={withBoundary(<ProtectedRoute><Archive /></ProtectedRoute>)} />
-          <Route path="/users" element={withBoundary(<ProtectedRoute><UserList /></ProtectedRoute>)} />
-          <Route path="/reports" element={withBoundary(<ProtectedRoute><Reports /></ProtectedRoute>)} />
+          <Route path="/change-password" element={withBoundary(<ProtectedRoute><ChangePassword /></ProtectedRoute>)} />
           <Route path="/architecture-map" element={withBoundary(<ProtectedRoute><ArchitectureMap /></ProtectedRoute>)} />
-          <Route path="/settings" element={withBoundary(<ProtectedRoute><Settings /></ProtectedRoute>)} />
-          <Route path="/kb" element={withBoundary(<ProtectedRoute><KnowledgeBase /></ProtectedRoute>)} />
-          <Route path="/kb/new" element={withBoundary(<ProtectedRoute><KBArticleForm /></ProtectedRoute>)} />
-          <Route path="/kb/:id" element={withBoundary(<ProtectedRoute><KBArticleDetail /></ProtectedRoute>)} />
-          <Route path="/kb/:id/edit" element={withBoundary(<ProtectedRoute><KBArticleForm /></ProtectedRoute>)} />
+          <Route element={<ProtectedRoute><AppShell /></ProtectedRoute>}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/tickets" element={<TicketList />} />
+            <Route path="/my-tickets" element={<TicketList />} />
+            <Route path="/tickets/new" element={<TicketForm />} />
+            <Route path="/tickets/:id" element={<TicketDetail />} />
+            <Route path="/tickets/:id/edit" element={<TicketForm />} />
+            <Route path="/companies" element={<CompanyList />} />
+            <Route path="/companies/:id" element={<CompanyDetail />} />
+            <Route path="/archive" element={<Archive />} />
+            <Route path="/users" element={<UserList />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/kb" element={<KnowledgeBase />} />
+            <Route path="/kb/new" element={<KBArticleForm />} />
+            <Route path="/kb/:id" element={<KBArticleDetail />} />
+            <Route path="/kb/:id/edit" element={<KBArticleForm />} />
+          </Route>
           <Route path="*" element={withBoundary(<NotFound />)} />
       </Routes>
     </Suspense>
@@ -208,6 +300,8 @@ const App = () => (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider
         attribute="class"
+        // Förvalt tema är Forge (inte theme-default/Slate); de sju valbara temana
+        // listas i `themes` nedan och i Inställningar → Allmänt.
         defaultTheme="theme-forge"
         enableSystem={false}
         themes={["theme-default", "theme-midnight", "theme-graphite", "theme-stone", "theme-linear", "theme-spotify", "theme-forge"]}

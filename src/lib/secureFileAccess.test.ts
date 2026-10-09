@@ -95,6 +95,23 @@ describe('revokeBlobUrl', () => {
   });
 });
 
+describe('clearSecureAttachmentCache', () => {
+  it('frigör alla cachade bilagor en gång', async () => {
+    vi.stubGlobal('fetch', makeFetchMock({ ok: true }));
+    const { getAuthenticatedFileUrl, clearSecureAttachmentCache } = await import('./secureFileAccess');
+    const a = await getAuthenticatedFileUrl('fil-a');
+    const b = await getAuthenticatedFileUrl('fil-b');
+
+    revokeObjectURLMock.mockClear();
+    clearSecureAttachmentCache();
+    expect(revokeObjectURLMock.mock.calls.map(([url]) => url).sort()).toEqual([a, b].sort());
+
+    revokeObjectURLMock.mockClear();
+    clearSecureAttachmentCache();
+    expect(revokeObjectURLMock).not.toHaveBeenCalled();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // getAuthenticatedFileUrl
 // ---------------------------------------------------------------------------

@@ -72,9 +72,8 @@ export const TicketLinks = ({
       await onAddLink(ticketId);
       setOpen(false);
       toast.success('Länk skapad');
-    } catch (error: any) {
-      const message = error.message || 'Kunde inte skapa länk';
-      toast.error(message);
+    } catch (error) {
+      toast.error(error instanceof Error && error.message ? error.message : 'Kunde inte skapa länk');
     } finally {
       setIsAdding(false);
     }

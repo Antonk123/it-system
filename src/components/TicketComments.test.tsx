@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import '@testing-library/jest-dom/vitest';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
 import { TicketComments } from './TicketComments';
@@ -12,6 +13,10 @@ vi.mock('@/components/ui/rich-text-editor', () => ({
 }));
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('./CommentItem', () => ({ CommentItem: () => <p>kommentar</p> }));
+const release = vi.hoisted(() => vi.fn());
+const registerUnsavedWork = vi.hoisted(() => vi.fn());
+vi.mock('@/registerSW', () => ({ registerUnsavedWork }));
 
 const baseProps = {
   comments: [],
@@ -21,7 +26,10 @@ const baseProps = {
   onDeleteComment: vi.fn().mockResolvedValue(undefined),
 };
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  registerUnsavedWork.mockReturnValue(release);
+});
 afterEach(cleanup);
 
 describe('TicketComments visibility mode', () => {
@@ -58,5 +66,34 @@ describe('TicketComments visibility mode', () => {
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'notering' } });
     fireEvent.click(screen.getByRole('button', { name: /lägg till kommentar/i }));
     await waitFor(() => expect(onAddComment).toHaveBeenCalledWith('notering', true));
+  });
+});
+
+describe('TicketComments', () => {
+  it('visar notis när servern har fler kommentarer än de som returnerades', () => {
+    const comment = {
+      id: 'c1', ticketId: 't1', userId: 'u1', content: '<p>hej</p>', isInternal: true,
+      createdAt: new Date('2026-09-08T10:00:00Z'), updatedAt: new Date('2026-09-08T10:00:00Z'),
+    };
+    render(<TicketComments {...baseProps} comments={[comment]} totalCount={1500} onAddComment={vi.fn()} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Visar de 1 senaste kommentarerna');
+  });
+
+  it('visar ingen notis när alla kommentarer är hämtade', () => {
+    render(<TicketComments {...baseProps} totalCount={0} onAddComment={vi.fn()} />);
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
+  it('registrerar ett påbörjat svar som osparat arbete och avregistrerar det när det skickats', async () => {
+    const onAddComment = vi.fn().mockResolvedValue(undefined);
+    render(<TicketComments {...baseProps} onAddComment={onAddComment} />);
+    expect(registerUnsavedWork).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'påbörjat svar' } });
+    expect(registerUnsavedWork).toHaveBeenCalledTimes(1);
+    expect(release).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /lägg till kommentar/i }));
+    await waitFor(() => expect(release).toHaveBeenCalledTimes(1));
   });
 });

@@ -7,7 +7,6 @@ import { useUsers } from '@/hooks/useUsers';
 import { useCompanies } from '@/hooks/useCompanies';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Layout } from '@/components/Layout';
 import { useTicketListNavigation } from '@/hooks/useTicketListNavigation';
 import { TicketViewNavigation } from '@/components/TicketViewNavigation';
 import { TicketTable } from '@/components/TicketTable';
@@ -18,11 +17,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { PriorityBadge } from '@/components/PriorityBadge';
 import { StatusBadge } from '@/components/StatusBadge';
-import { TicketStatus, TicketPriority } from '@/types/ticket';
+import { TicketStatus } from '@/types/ticket';
 import { cn } from '@/lib/utils';
 import { STATUS_LABELS, PRIORITY_LABELS } from '@/lib/constants';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
+import { safeStorage } from '@/lib/safeStorage';
 import { EmptyState } from '@/components/EmptyState';
 
 // KanbanView laddas lazy — drar in dnd-vendor (~48 kB) som inte behövs i tabell-vy
@@ -45,14 +45,14 @@ const TicketList = () => {
   const [compactView, setCompactView] = useState(false);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'table' | 'kanban'>(() => {
-    const saved = localStorage.getItem('ticket_view_mode');
+    const saved = safeStorage.getItem('ticket_view_mode');
     return (saved as 'table' | 'kanban') || 'table';
   });
 
 
   // Save view preference to localStorage
   useEffect(() => {
-    localStorage.setItem('ticket_view_mode', viewMode);
+    safeStorage.setItem('ticket_view_mode', viewMode);
   }, [viewMode]);
 
   // Fetch with pagination
@@ -80,18 +80,14 @@ const TicketList = () => {
     try {
       await updateTicket(ticketId, { status });
       toast.success(`Status uppdaterad till ${STATUS_LABELS[status]}`);
-    } catch {
-      toast.error('Kunde inte uppdatera status');
-    }
+    } catch { /* Mutationen visar felet. */ }
   }, [updateTicket]);
 
   const handleBulkAction = useCallback(async (ids: string[], updates: { status?: TicketStatus; priority?: string; category_id?: string | null }) => {
     try {
       const result = await bulkUpdateTickets(ids, updates);
       toast.success(`${result?.updated ?? ids.length} ärenden uppdaterade`);
-    } catch {
-      toast.error('Kunde inte uppdatera ärenden');
-    }
+    } catch { /* Mutationen visar felet. */ }
   }, [bulkUpdateTickets]);
 
   const handleExport = useCallback(async () => {
@@ -118,7 +114,7 @@ const TicketList = () => {
   }, [selectedStatuses, priorityFilter, categoryFilter, search, dateFrom, dateTo, dateField, checklistFilter, companyFilter, mine, user?.id]);
 
   return (
-    <Layout>
+    <>
       <ImportDialog
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}
@@ -389,7 +385,7 @@ const TicketList = () => {
         )}
         </AnimatePresence>
       </div>
-    </Layout>
+    </>
   );
 };
 

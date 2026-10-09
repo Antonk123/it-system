@@ -24,8 +24,9 @@ import appSource from './App.tsx?raw';
 // authState + registry måste vara tillgängliga INUTI vi.mock-fabrikerna, som
 // hissas ovanför alla imports. vi.hoisted() ger oss den delade, muterbara
 // staten på rätt sida av hissningen.
-const { authState, registry } = vi.hoisted(() => ({
-  authState: { isAuthenticated: false, isLoading: false },
+const { authState, registry, shellMounts } = vi.hoisted(() => ({
+  shellMounts: { count: 0 },
+  authState: { isAuthenticated: false, isLoading: false, user: null as { mustChangePassword?: boolean } | null },
   registry: {} as Record<string, (props: unknown) => unknown>,
 }));
 
@@ -40,7 +41,19 @@ vi.mock('@/contexts/AuthContext', () => ({
 // slår upp sin stub i `registry` VID ANROPSTILLFÄLLET (inte vid
 // hissningstillfället) — registret fylls i längre ned i filen, efter de
 // riktiga imports av react/react-router som stubkomponenten behöver.
-vi.mock('@/pages/Index', () => ({ default: (p: unknown) => registry.Index(p) }));
+// App-skalet (sidofält, header, kommandopalett) har egna beroenden och testas i
+// Layout.test.tsx — här räknas bara hur ofta det monteras.
+vi.mock('@/components/Layout', () => ({
+  Layout: ({ children }: { children: ReactNode }) => {
+    const [mountId] = useState(() => {
+      shellMounts.count += 1;
+      return shellMounts.count;
+    });
+    return <div data-testid="app-shell" data-mount-id={mountId}>{children}</div>;
+  },
+}));
+vi.mock('@/pages/Dashboard', () => ({ default: (p: unknown) => registry.Dashboard(p) }));
+vi.mock('@/pages/ChangePassword', () => ({ default: (p: unknown) => registry.ChangePassword(p) }));
 vi.mock('@/pages/TicketList', () => ({ default: (p: unknown) => registry.TicketList(p) }));
 vi.mock('@/pages/TicketForm', () => ({ default: (p: unknown) => registry.TicketForm(p) }));
 vi.mock('@/pages/TicketDetail', () => ({ default: (p: unknown) => registry.TicketDetail(p) }));
@@ -80,7 +93,7 @@ function makeStub(name: string) {
   return function Stub() {
     // Lazy useState-initializer körs EXAKT en gång per komponent-INSTANS
     // (inte vid varje re-render) — det är vad som gör mount-räknaren till ett
-    // sant remount-bevis för key={location.pathname}-testet.
+    // sant remount-bevis för key={pathname}-testet.
     const [mountId] = useState(() => {
       mountCounts[name] = (mountCounts[name] ?? 0) + 1;
       return mountCounts[name];
@@ -110,7 +123,7 @@ function makeStub(name: string) {
 }
 
 const STUB_NAMES = [
-  'Index', 'TicketList', 'TicketForm', 'TicketDetail', 'Archive', 'UserList', 'Settings', 'ArchitectureMap',
+  'Dashboard', 'ChangePassword', 'TicketList', 'TicketForm', 'TicketDetail', 'Archive', 'UserList', 'Settings', 'ArchitectureMap',
   'Reports', 'Login', 'ForgotPassword', 'ResetPassword', 'PublicTicketForm', 'SharedTicket',
   'NotFound', 'KnowledgeBase', 'KBArticleDetail', 'KBArticleForm', 'SharedKBArticle', 'PublicKnowledgeBase', 'PublicKBArticle',
   'CompanyList', 'CompanyDetail',
@@ -236,7 +249,8 @@ const ROUTES: RouteCase[] = [
   { path: '/kb/shared/:token', concretePath: '/kb/shared/kb-share-tok', stub: 'SharedKBArticle', guard: 'none' },
   { path: '/kb/public/:token', concretePath: '/kb/public/portal-tok', stub: 'PublicKnowledgeBase', guard: 'none' },
   { path: '/kb/public/:token/article/:articleId', concretePath: '/kb/public/portal-tok/article/article-7', stub: 'PublicKBArticle', guard: 'none' },
-  { path: '/', concretePath: '/', stub: 'Index', guard: 'protected' },
+  { path: '/change-password', concretePath: '/change-password', stub: 'ChangePassword', guard: 'protected' },
+  { path: '/', concretePath: '/', stub: 'Dashboard', guard: 'protected' },
   { path: '/tickets', concretePath: '/tickets', stub: 'TicketList', guard: 'protected' },
   { path: '/my-tickets', concretePath: '/my-tickets', stub: 'TicketList', guard: 'protected' },
   { path: '/tickets/new', concretePath: '/tickets/new', stub: 'TicketForm', guard: 'protected' },
@@ -264,6 +278,8 @@ const OPEN_ROUTES = ROUTES.filter((r) => r.guard === 'none' && r.path !== '*');
 beforeEach(() => {
   authState.isAuthenticated = false;
   authState.isLoading = false;
+  authState.user = null;
+  shellMounts.count = 0;
   Object.keys(mountCounts).forEach((k) => delete mountCounts[k]);
   // jsdom saknar en riktig scrollTo-implementation — ScrollToTopOnNavigate
   // anropar den på varje icke-POP-navigering (inkl. guard-redirects), vilket
@@ -288,8 +304,8 @@ describe('hela ruttabellen — inloggad', () => {
       authState.isAuthenticated = true;
       renderRoutes(route.concretePath);
       // Publika auth-rutter (login m.fl.) redirectar till / när man redan är
-      // inloggad — "rätt sida" där är alltså Index, inte rutten själv.
-      const expectedStub = route.guard === 'public' ? 'Index' : route.stub;
+      // inloggad — "rätt sida" där är alltså Dashboard, inte rutten själv.
+      const expectedStub = route.guard === 'public' ? 'Dashboard' : route.stub;
       expect(await screen.findByTestId(`stub:${expectedStub}`)).toBeInTheDocument();
     }
   );
@@ -318,7 +334,7 @@ describe('publika auth-rutter — inloggad', () => {
     async (_label, route) => {
       authState.isAuthenticated = true;
       renderRoutes(route.concretePath);
-      expect(await screen.findByTestId('stub:Index')).toBeInTheDocument();
+      expect(await screen.findByTestId('stub:Dashboard')).toBeInTheDocument();
       expect(screen.queryByTestId(`stub:${route.stub}`)).toBeNull();
     }
   );
@@ -337,7 +353,7 @@ describe('publika auth-rutter — utloggad (renderar egen sida, ingen redirect)'
     async (_label, route) => {
       renderRoutes(route.concretePath);
       expect(await screen.findByTestId(`stub:${route.stub}`)).toBeInTheDocument();
-      expect(screen.queryByTestId('stub:Index')).toBeNull();
+      expect(screen.queryByTestId('stub:Dashboard')).toBeNull();
     }
   );
 });
@@ -448,7 +464,7 @@ describe('returnTo — PublicRoute respekterar state.from/?returnTo= för redan 
   it('inloggad + skadligt ?returnTo=//evil.com på /login → faller tillbaka till /', async () => {
     authState.isAuthenticated = true;
     renderRoutes('/login?returnTo=%2F%2Fevil.com');
-    expect(await screen.findByTestId('stub:Index')).toBeInTheDocument();
+    expect(await screen.findByTestId('stub:Dashboard')).toBeInTheDocument();
   });
 });
 
@@ -559,9 +575,9 @@ describe('/tickets vs /my-tickets', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 12. Remount via key={location.pathname}
+// 12. Remount via key={pathname} på boundaryn i AppShell
 // ---------------------------------------------------------------------------
-describe('remount via key={location.pathname}', () => {
+describe('remount via key={pathname} i AppShell', () => {
   it('navigering mellan /tickets och /my-tickets (samma komponent) monterar om sidan', async () => {
     authState.isAuthenticated = true;
     render(
@@ -710,13 +726,91 @@ describe('per-rutt ErrorBoundary (withBoundary)', () => {
 
       // Navigering till en annan, icke-kraschande rutt fungerar fortfarande
       // — boundaryn är scoped till DEN ruttens element (och remountas bort
-      // helt av key={location.pathname} vid navigering), inte hela appen.
+      // helt av key={pathname} vid navigering), inte hela appen.
       fireEvent.click(screen.getByTestId('nav-tickets'));
       expect(await screen.findByTestId('stub:TicketList')).toBeInTheDocument();
     } finally {
       registry.TicketDetail = originalTicketDetailStub;
       consoleErrorSpy.mockRestore();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16b. App-skalet som layout-route
+// ---------------------------------------------------------------------------
+describe('app-skalet (AppShell)', () => {
+  it('monteras en gång och överlever navigering mellan skyddade sidor', async () => {
+    authState.isAuthenticated = true;
+    renderRoutes('/tickets');
+    await screen.findByTestId('stub:TicketList');
+    fireEvent.click(screen.getByTestId('link-to-kb'));
+    await screen.findByTestId('stub:KnowledgeBase');
+    expect(shellMounts.count).toBe(1);
+  });
+
+  it('publika sidor och /change-password renderas utan app-skal', async () => {
+    authState.isAuthenticated = true;
+    renderRoutes('/change-password');
+    await screen.findByTestId('stub:ChangePassword');
+    expect(screen.queryByTestId('app-shell')).toBeNull();
+  });
+
+  it('flyttar fokus till huvudinnehållet vid sidbyte men inte vid första laddningen', async () => {
+    authState.isAuthenticated = true;
+    const main = document.createElement('main');
+    main.id = 'main-content';
+    main.tabIndex = -1;
+    document.body.appendChild(main);
+    try {
+      renderRoutes('/tickets');
+      await screen.findByTestId('stub:TicketList');
+      expect(document.activeElement).not.toBe(main);
+
+      fireEvent.click(screen.getByTestId('link-to-kb'));
+      await screen.findByTestId('stub:KnowledgeBase');
+      expect(document.activeElement).toBe(main);
+    } finally {
+      main.remove();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16c. Tvingat lösenordsbyte
+// ---------------------------------------------------------------------------
+describe('mustChangePassword', () => {
+  it('skyddade sidor redirectar till /change-password', async () => {
+    authState.isAuthenticated = true;
+    authState.user = { mustChangePassword: true };
+    renderRoutes('/tickets');
+    expect(await screen.findByTestId('stub:ChangePassword')).toBeInTheDocument();
+    expect(screen.queryByTestId('stub:TicketList')).toBeNull();
+  });
+
+  it('utan flaggan är sidorna åtkomliga som vanligt', async () => {
+    authState.isAuthenticated = true;
+    authState.user = { mustChangePassword: false };
+    renderRoutes('/tickets');
+    expect(await screen.findByTestId('stub:TicketList')).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 16d. Fliktitel per route
+// ---------------------------------------------------------------------------
+describe('fliktitel per route', () => {
+  it.each([
+    ['/tickets', 'Ärenden – IT-Ticket'],
+    ['/tickets/new', 'Nytt ärende – IT-Ticket'],
+    ['/tickets/42', 'Ärende – IT-Ticket'],
+    ['/login', 'Logga in – IT-Ticket'],
+    ['/definitely/not/a/route', 'Sidan hittades inte – IT-Ticket'],
+  ])('%s → "%s"', async (path, title) => {
+    authState.isAuthenticated = path !== '/login';
+    renderRoutes(path);
+    await flushPendingLazyImports();
+    expect(document.title).toBe(title);
   });
 });
 

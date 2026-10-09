@@ -51,7 +51,7 @@ Lokal helhet: `docker-compose.local.yml`.
 
 | Tjänst | Intern port | Extern port |
 |--------|-------------|-------------|
-| Backend (Express API, prod) | 3001 | 3002 |
+| Backend (Express API, prod) | 3001 | 3002 (bunden till `127.0.0.1`; nginx i frontend-containern når den via docker-nätverket) |
 | Frontend (nginx/prod) | 80 | 8082 |
 | Backend lokalt (tsx watch) | 3001 | — |
 | Frontend lokalt (Vite) | 5173 | — |
@@ -96,6 +96,8 @@ Standardflöde: lokal utveckling → `git push` → SSH till servern, `git pull`
 - ESLint `no-restricted-syntax` blockerar raw `fetch('/api/...')` — alla mutating-anrop ska gå via `api.request()` i `src/lib/api.ts` (för CSRF-token + auth-header + 401-refresh).
 - DB-migrations måste in i `migrations.ts`-arrayen (`runMigrations()` i `initializeDatabase()`). Standalone `npx tsx`-scripts körs inte vid serverstart.
 - **Två installationsvägar måste landa i samma schema:** prod är *uppgraderad* (ALTER för ALTER sedan feb 2026), CI/dev/nya installationer är *fresh* (dagens `schema.sql`). `server/src/db/schema-path-parity.test.ts` kör båda och fäller på skillnader — se `db-migration`-skillen för fällorna (index inuti `columnExists`-guard, retrofittad kolumn deklarerad inline, rebuild av tabell med CASCADE-barn).
+- App-kod skriver alltid ISO-tidsstämplar (`new Date().toISOString()`), aldrig `CURRENT_TIMESTAMP` (se `docs/adr/0003-iso-timestamps-written-by-app-code.md`).
+- Nya/ändrade routes: lägg operationen i `docs/openapi.yaml` (och `docs/API.md`) — CI kör `scripts/check-openapi-coverage.mjs` och fäller på saknade routes.
 - Dokumentera lärdomar i Obsidian: `Projekt/IT-System/lessons.md`
 - Obsidian-dokumentation i övrigt: se `Projekt/IT-System/` i vaultet
 - Generella arbetsregler (plan mode, verifiering, subagenter, kvalitet) ärvs från `~/.claude/CLAUDE.md`
@@ -185,7 +187,7 @@ Textbeskrivningar av UI är otillförlitliga. Titta på resultatet.
    | localStorage-nyckel | Värden | Default |
    |---|---|---|
    | `app-mode-theme` | `light`, `dark` | `light` |
-   | `theme` | `theme-default`, `theme-midnight`, `theme-graphite`, `theme-stone`, `theme-linear`, `theme-spotify` | `theme-default` |
+   | `theme` | `theme-default`, `theme-midnight`, `theme-graphite`, `theme-stone`, `theme-linear`, `theme-spotify`, `theme-forge` | `theme-forge` (`defaultTheme` i `src/App.tsx`) |
    | `app-font-theme` | `font-jakarta`, `font-crimson`, `font-libre`, `font-jetbrains`, `font-inter` | `font-inter` |
 
    Sätt nyckeln, **ladda om**, och bekräfta med `document.documentElement.className`
@@ -235,7 +237,7 @@ See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Single-context: root `GLOSSARY.md` and `docs/adr/`.
+Single-context: root `GLOSSARY.md` och `docs/adr/` (index i `docs/adr/README.md`: 0001 ärendebehörighet, 0002 hashade refresh-tokens, 0003 ISO-tidsstämplar).
 See `docs/agents/domain.md`.
 
 These skill configuration files, the glossary, and ADRs live in this

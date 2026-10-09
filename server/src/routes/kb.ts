@@ -130,7 +130,7 @@ function shareExpirySupported(): boolean {
   return (db.prepare('PRAGMA table_info(kb_article_shares)').all() as { name: string }[])
     .some((col) => col.name === 'expires_at');
 }
-const SHARE_NOT_EXPIRED_SQL = " AND (expires_at IS NULL OR expires_at > datetime('now'))";
+const SHARE_NOT_EXPIRED_SQL = " AND (expires_at IS NULL OR datetime(expires_at) > datetime('now'))";
 
 /** Validates the global portal token without revealing whether it was revoked. */
 function requirePublicPortalToken(req: Request, res: Response): boolean {
@@ -363,9 +363,9 @@ router.post('/articles', authenticate, requireAdmin, (req: AuthRequest, res: Res
       db.prepare('INSERT INTO kb_articles_fts(rowid, title, content_plain) VALUES (?,?,?)')
         .run(row.rowid, articleTitle, stripHtml(articleContent));
       if (Array.isArray(tag_ids) && tag_ids.length > 0) {
-        const insertTag = db.prepare('INSERT OR IGNORE INTO kb_article_tags (id, article_id, tag_id) VALUES (?, ?, ?)');
+        const insertTag = db.prepare('INSERT OR IGNORE INTO kb_article_tags (id, article_id, tag_id, created_at) VALUES (?, ?, ?, ?)');
         for (const tagId of tag_ids) {
-          if (typeof tagId === 'string' && tagId.trim()) insertTag.run(randomUUID(), articleId, tagId);
+          if (typeof tagId === 'string' && tagId.trim()) insertTag.run(randomUUID(), articleId, tagId, timestamp);
         }
       }
     });
@@ -421,9 +421,9 @@ router.put('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, res: 
         .run(existing!.rowid, articleTitle, stripHtml(articleContent));
       db.prepare('DELETE FROM kb_article_tags WHERE article_id = ?').run(aid);
       if (Array.isArray(tag_ids) && tag_ids.length > 0) {
-        const insertTag = db.prepare('INSERT OR IGNORE INTO kb_article_tags (id, article_id, tag_id) VALUES (?, ?, ?)');
+        const insertTag = db.prepare('INSERT OR IGNORE INTO kb_article_tags (id, article_id, tag_id, created_at) VALUES (?, ?, ?, ?)');
         for (const tagId of tag_ids) {
-          if (typeof tagId === 'string' && tagId.trim()) insertTag.run(randomUUID(), aid, tagId);
+          if (typeof tagId === 'string' && tagId.trim()) insertTag.run(randomUUID(), aid, tagId, timestamp);
         }
       }
     });
@@ -629,9 +629,9 @@ router.post('/articles/:id/links', authenticate, requireAdmin, async (req: AuthR
 
     const linkId = randomUUID();
     db.prepare(`
-      INSERT INTO kb_article_links (id, source_article_id, target_article_id)
-      VALUES (?, ?, ?)
-    `).run(linkId, id, targetArticleId);
+      INSERT INTO kb_article_links (id, source_article_id, target_article_id, created_at)
+      VALUES (?, ?, ?, ?)
+    `).run(linkId, id, targetArticleId, new Date().toISOString());
     res.status(201).json({ id: linkId, source_article_id: id, target_article_id: targetArticleId });
   } catch (error) {
     logger.error('Error creating article link:', { error: String(error) });
@@ -811,7 +811,7 @@ router.post('/articles/:id/share', authenticate, requireAdmin, (req: AuthRequest
 
     // En utgången länk ersätts av en ny; en giltig returneras som den är.
     if (supportsExpiry) {
-      db.prepare("DELETE FROM kb_article_shares WHERE article_id = ? AND expires_at IS NOT NULL AND expires_at <= datetime('now')").run(req.params.id);
+      db.prepare("DELETE FROM kb_article_shares WHERE article_id = ? AND expires_at IS NOT NULL AND datetime(expires_at) <= datetime('now')").run(req.params.id);
     }
     const existing = db.prepare('SELECT share_token FROM kb_article_shares WHERE article_id = ?').get(req.params.id) as { share_token: string } | undefined;
     if (existing) return res.json({ share_token: existing.share_token });
@@ -820,8 +820,8 @@ router.post('/articles/:id/share', authenticate, requireAdmin, (req: AuthRequest
     const shareToken = randomBytes(12).toString('hex');
     const now = new Date().toISOString();
     if (supportsExpiry && expiresInDays !== undefined) {
-      db.prepare("INSERT INTO kb_article_shares (id, article_id, share_token, created_at, expires_at) VALUES (?, ?, ?, ?, datetime('now', ?))")
-        .run(id, req.params.id, shareToken, now, `+${expiresInDays} days`);
+      db.prepare("INSERT INTO kb_article_shares (id, article_id, share_token, created_at, expires_at) VALUES (?, ?, ?, ?, ?)")
+        .run(id, req.params.id, shareToken, now, new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000).toISOString());
     } else {
       db.prepare('INSERT INTO kb_article_shares (id, article_id, share_token, created_at) VALUES (?, ?, ?, ?)')
         .run(id, req.params.id, shareToken, now);

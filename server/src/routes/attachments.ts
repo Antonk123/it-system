@@ -252,15 +252,16 @@ router.post('/ticket/:ticketId', writeRateLimiter, authenticate, (req: AuthReque
 
       const id = randomUUID();
       db.prepare(`
-        INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         req.params.ticketId,
         req.file.originalname,
         req.file.filename,
         req.file.size,
-        req.file.mimetype
+        req.file.mimetype,
+        new Date().toISOString()
       );
 
       const attachment = db.prepare('SELECT id, ticket_id, file_name, file_path, file_size, file_type, created_at FROM ticket_attachments WHERE id = ?').get(id) as AttachmentRow;

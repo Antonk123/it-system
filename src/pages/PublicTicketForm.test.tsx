@@ -84,6 +84,52 @@ describe('PublicTicketForm — en sida, inga steg', () => {
 });
 
 
+describe('PublicTicketForm — skräpskydd', () => {
+  it('har ett dolt, onåbart honeypot-fält som inte annonseras för skärmläsare', () => {
+    const { container } = renderForm();
+    const honeypot = container.querySelector<HTMLInputElement>('input[name="website"]');
+    expect(honeypot).toBeTruthy();
+    expect(honeypot!.tabIndex).toBe(-1);
+    expect(honeypot!.getAttribute('autocomplete')).toBe('off');
+    expect(honeypot!.closest('[aria-hidden="true"]')).toBeTruthy();
+  });
+
+  it('skickar med tomt website-fält och tidpunkten då formuläret öppnades', async () => {
+    const before = Date.now();
+    renderForm();
+    fireEvent.change(screen.getByLabelText('Ditt namn *'), { target: { value: 'Anna Andersson' } });
+    fireEvent.change(screen.getByLabelText('Din e-post *'), { target: { value: 'anna@example.com' } });
+    fireEvent.change(screen.getByLabelText('Ärendets titel *'), { target: { value: 'Skrivaren fungerar inte' } });
+    fireEvent.change(screen.getByPlaceholderText('Beskriv ditt problem i detalj...'), { target: { value: 'Felkod E-04.' } });
+    fireEvent.click(screen.getByRole('button', { name: /Skicka ärende/ }));
+
+    await waitFor(() => expect(submitPublicTicket).toHaveBeenCalled());
+    const payload = submitPublicTicket.mock.calls[0][0] as { website: string; formStartedAt: number };
+    expect(payload.website).toBe('');
+    expect(payload.formStartedAt).toBeGreaterThanOrEqual(before);
+    expect(payload.formStartedAt).toBeLessThanOrEqual(Date.now());
+  });
+
+  it('visar serverns felmeddelande, t.ex. vid för snabb inskickning', async () => {
+    submitPublicTicket.mockRejectedValue(new Error('Formuläret skickades för snabbt. Försök igen.'));
+    renderForm();
+    fireEvent.change(screen.getByLabelText('Ditt namn *'), { target: { value: 'Anna' } });
+    fireEvent.change(screen.getByLabelText('Din e-post *'), { target: { value: 'anna@example.com' } });
+    fireEvent.change(screen.getByLabelText('Ärendets titel *'), { target: { value: 'Titel' } });
+    fireEvent.change(screen.getByPlaceholderText('Beskriv ditt problem i detalj...'), { target: { value: 'Text' } });
+    fireEvent.click(screen.getByRole('button', { name: /Skicka ärende/ }));
+
+    expect(await screen.findByText('Formuläret skickades för snabbt. Försök igen.')).toBeTruthy();
+  });
+
+  it('visar en notis i stället för att tyst ignorera misslyckad laddning av kategorier och mallar', async () => {
+    getPublicCategories.mockRejectedValue(new Error('nät'));
+    renderForm();
+    expect(await screen.findByText(/Kunde inte ladda kategorier och mallar/)).toBeTruthy();
+  });
+});
+
+
 describe('PublicTicketForm — inbäddad i Prefabnavet', () => {
   it('behåller logotyp, rubrik och tillbaka-länk i fristående läge', () => {
     renderForm();

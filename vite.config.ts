@@ -5,11 +5,11 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig(() => ({
-  // tools/sqlite-mcp är ett fristående verktyg med egna beroenden — appens
-  // svit ska inte plocka upp ev. tester därifrån. Speglar att mappen redan är
-  // exkluderad från eslint (eslint.config.js).
+  // tools/sqlite-mcp och server/ är fristående paket med egna beroenden och
+  // egen vitest-svit — appens svit ska inte plocka upp deras tester.
+  // Speglar att tools/ redan är exkluderad från eslint (eslint.config.js).
   test: {
-    exclude: [...configDefaults.exclude, "tools/**"],
+    exclude: [...configDefaults.exclude, "tools/**", "server/**"],
   },
   server: {
     host: "::",
@@ -36,7 +36,7 @@ export default defineConfig(() => ({
       manifest: {
         name: 'IT-Ticket System',
         short_name: 'IT-Ticket',
-        description: 'IT ärendehantering & asset management',
+        description: 'Internt ärendehanteringssystem för IT-support',
         lang: 'sv',
         // Följer standardmärkets grund (src/assets/logo-default.svg). Var tidigare
         // #ff9e4d — en orange som hörde till det gamla märkets bock och blev
@@ -64,17 +64,17 @@ export default defineConfig(() => ({
       },
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,woff2}'],
-        // Lazy-laddade vendor-chunks precachas inte — de hämtas on-demand.
-        // editor-vendor (TipTap) är dock kritisk för svars-/kommentarsflödet
-        // och precachas därför så att det fungerar offline/vid flaky nät i PWA:n.
-        // motion-vendor (framer-motion) precachas OCKSÅ: det importeras STATISKT av
-        // app-skalet (Index/Layout), så att exkludera det gav blank skärm vid första
-        // laddning efter SW-uppdatering på flaky nät.
+        // Lazy-laddade vendor-chunks som bara en enskild vy behöver precachas inte
+        // — de hämtas on-demand. editor-vendor (TipTap) är kritisk för
+        // svars-/kommentarsflödet och precachas därför så att det fungerar
+        // offline/vid flaky nät i PWA:n. motion-vendor och övriga delade
+        // vendor-chunks precachas också: en chunk som app-skalet importerar och
+        // som saknas i cachen ger blank skärm vid första laddning efter en
+        // SW-uppdatering på flaky nät. recharts följer sin sida (AreaChart-chunken)
+        // och precachas för att chunk-namnet inte är stabilt nog att filtrera på.
         globIgnores: [
-          '**/reporting-vendor*.js',
           '**/dnd-vendor*.js',
-          // markdown-vendor (react-markdown, rehype, remark, unified, …) is only
-          // used in the ticket-detail rich-text preview — lazy-loaded on demand.
+          // markdown-it-förhandsvisningen är bara en vy — lazy-laddas on demand.
           '**/markdown-vendor*.js',
         ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
@@ -88,76 +88,25 @@ export default defineConfig(() => ({
   },
   build: {
     sourcemap: false,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
-        manualChunks(id) {
-          if (!id.includes('node_modules')) {
-            return undefined;
-          }
-
-          if (id.includes('recharts')) {
-            return 'reporting-vendor';
-          }
-
-          if (id.includes('@tiptap') || id.includes('prosemirror')) {
-            return 'editor-vendor';
-          }
-
-          if (id.includes('framer-motion') || id.includes('motion-dom') || id.includes('motion-utils')) {
-            return 'motion-vendor';
-          }
-
-          if (id.includes('@radix-ui') || id.includes('node_modules/cmdk/')) {
-            return 'radix-vendor';
-          }
-
-          if (id.includes('@dnd-kit')) {
-            return 'dnd-vendor';
-          }
-
-          // dompurify exkluderas med avsikt — den importeras statiskt av HtmlRenderer
-          // och behöver finnas i det generella vendor-chunken (precachas av SW).
-          if (
-            id.includes('react-markdown') ||
-            id.includes('rehype') ||
-            id.includes('remark') ||
-            id.includes('turndown') ||
-            id.includes('mdast') ||
-            id.includes('hast') ||
-            id.includes('micromark') ||
-            id.includes('unified') ||
-            id.includes('unist') ||
-            // markdown-it och dess beroenden samlas i markdown-vendor-chunken
-            id.includes('node_modules/markdown-it/') ||
-            id.includes('node_modules/linkify-it/') ||
-            id.includes('node_modules/mdurl/') ||
-            id.includes('node_modules/punycode/')
-          ) {
-            return 'markdown-vendor';
-          }
-
-          if (id.includes('lucide-react')) {
-            return 'icons-vendor';
-          }
-
-          if (id.includes('@tanstack/react-query') || id.includes('@tanstack/query-core')) {
-            return 'query-vendor';
-          }
-
-          if (id.includes('node_modules/date-fns/')) {
-            return 'date-vendor';
-          }
-
-          if (
-            id.includes('node_modules/react/') ||
-            id.includes('node_modules/react-dom/') ||
-            id.includes('react-router') ||
-            id.includes('scheduler')
-          ) {
-            return 'react-vendor';
-          }
-
-          return 'vendor';
+        // Bara beroenden som delas av många vyer får egna vendor-chunks. TipTap,
+        // recharts och dnd-kit ska följa sina lazy-laddade sidor: en gemensam
+        // vendor-grupp lyfte in dem (via Rolldowns interop-hjälpare) i den
+        // eager-laddade startgrafen så att varje route hämtade ~1,6 MB.
+        codeSplitting: {
+          groups: [
+            { name: 'react-vendor', test: /node_modules[\\/](react|react-dom|react-router|scheduler)[\\/]/ },
+            { name: 'query-vendor', test: /node_modules[\\/]@tanstack[\\/](react-query|query-core)[\\/]/ },
+            { name: 'radix-vendor', test: /node_modules[\\/](@radix-ui|cmdk)[\\/]/ },
+            { name: 'motion-vendor', test: /node_modules[\\/](framer-motion|motion-dom|motion-utils)[\\/]/ },
+            { name: 'icons-vendor', test: /node_modules[\\/]lucide-react[\\/]/ },
+            { name: 'date-vendor', test: /node_modules[\\/]date-fns[\\/]/ },
+            { name: 'dnd-vendor', test: /node_modules[\\/]@dnd-kit[\\/]/ },
+            { name: 'editor-vendor', test: /node_modules[\\/](@tiptap|prosemirror-[^\\/]+)[\\/]/ },
+            // markdown-it och dess beroenden laddas bara av förhandsvisningen.
+            { name: 'markdown-vendor', test: /node_modules[\\/](markdown-it|linkify-it|mdurl|punycode)[\\/]/ },
+          ],
         },
       },
     },

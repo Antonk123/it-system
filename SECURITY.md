@@ -1,7 +1,7 @@
 # Security Policy
 
-IT-Ticket handles authentication, customer data, billing, and email
-integration. We take security reports seriously and appreciate responsible
+IT-Ticket handles authentication, internal support tickets and their
+attachments, a knowledge base, and email integration. We take security reports seriously and appreciate responsible
 disclosure.
 
 ## Reporting a vulnerability
@@ -40,10 +40,22 @@ track them via Dependabot + a CI audit gate).
 
 ## Security model (summary)
 
-- **Auth:** JWT access tokens (15 min) + rotating refresh tokens.
+- **Auth:** JWT access tokens (15 min) + rotating refresh tokens that are
+  stored hashed, with reuse detection (a replayed token revokes the whole
+  family). Passwords: minimum 12 characters, bcrypt cost 12, per-IP and
+  per-account login throttling; admin-created accounts must change the
+  password on first login.
 - **API keys:** SHA-256 hashed with prefix lookup — the raw key is never
   stored.
-- **Webhooks:** HMAC-signed events.
+- **Webhooks:** HMAC-SHA256 over `timestamp.id.body` with
+  `X-Webhook-Timestamp` / `X-Webhook-Id` headers (replay and duplicate
+  protection); SSRF-validated URLs, re-validated per attempt; redirects are
+  never followed.
+- **Authorization:** every signed-in user reads tickets; writes need admin,
+  assignee, creator, or an unassigned ticket
+  (`docs/adr/0001-unified-ticket-access-policy.md`).
+- **Uploads:** MIME + extension allowlist and magic-byte check; SVG is not
+  accepted; downloads are forced attachments.
 - **CSRF:** double-submit via `csrf-csrf`, `X-CSRF-Token` header on mutating
   requests.
 - **Secrets:** the backend refuses to start (`process.exit(1)`) if
@@ -54,6 +66,8 @@ track them via Dependabot + a CI audit gate).
 - **Dependencies:** a CI gate (`scripts/audit-check.mjs`) blocks the build on
   high/critical `npm audit` advisories, with a narrow, justified allowlist
   for advisories confirmed unreachable in this app; Dependabot runs weekly.
+- **Containers:** non-root user, backend published on loopback only, nginx
+  adds security headers on every location.
 
 ## Supported versions
 

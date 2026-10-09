@@ -1,18 +1,18 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router';
 import { ArrowLeft, Loader2, X, Link2, Tag } from 'lucide-react';
-import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import { api, LinkedArticleRow } from '@/lib/api';
-import { useKbCategories } from '@/hooks/useKbCategories';
+import { api } from '@/lib/api';
+import { useKbCategories, invalidateKbCaches } from '@/hooks/useKbCategories';
 import { useQueryClient } from '@tanstack/react-query';
-import { useKbArticles, kbArticlesKeys } from '@/hooks/useKbArticles';
-import { kbArticleKeys } from '@/hooks/useKbArticle';
+import { useKbArticles, ticketKbLinksKeys } from '@/hooks/useKbArticles';
+import { useKbArticle, kbArticleKeys } from '@/hooks/useKbArticle';
+import { useDebounce } from '@/hooks/useDebounce';
 import { useTags } from '@/hooks/useTags';
 import { TagMultiSelect } from '@/components/TagMultiSelect';
 import {
@@ -66,69 +66,59 @@ const KBArticleForm = () => {
     return param && (VALID_ARTICLE_TYPES as readonly string[]).includes(param) ? param : 'none';
   });
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
-  const { tags: availableTags } = useTags();
+  const { tags: availableTags, error: tagsError } = useTags();
   const [status, setStatus] = useState<'draft' | 'published'>('published');
-  const { categories } = useKbCategories();
-  const [isLoading, setIsLoading] = useState(isEditing);
+  const { categories, isError: categoriesError } = useKbCategories();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; category?: string; content?: string }>({});
   const [templateDismissed, setTemplateDismissed] = useState(
     () => !!(searchParams.get('title') || searchParams.get('article_type'))
   );
 
-  // Cross-ref state (only used in edit mode)
-  const [crossRefs, setCrossRefs] = useState<LinkedArticleRow[]>([]);
-  const { articles: allArticles } = useKbArticles({}, isEditing);
+  // Edit mode: the article, its cross-refs and the link picker all come from react-query.
+  const { data: kbData, isLoading: isArticleLoading, isError: isArticleError } = useKbArticle(isEditing ? id : undefined);
+  const isLoading = isEditing && isArticleLoading;
+  const crossRefs = useMemo(() => kbData?.crossRefs ?? [], [kbData]);
   const [linkPickerOpen, setLinkPickerOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState('');
+  const debouncedLinkSearch = useDebounce(linkSearch, 200);
+  const { articles: allArticles } = useKbArticles(
+    { search: debouncedLinkSearch || undefined },
+    isEditing && linkPickerOpen,
+  );
 
   const sourceTicketId = searchParams.get('ticket_id');
 
+  // Seed the form once per article; later cache updates (e.g. cross-refs) must not overwrite edits.
+  const seededForId = useRef<string | null>(null);
   useEffect(() => {
-    if (!isEditing || !id) return;
-    const fetch = async () => {
-      try {
-        const article = await api.getKbArticle(id);
-        setTitle(article.title);
-        setContent(article.content);
-        setCategoryId(article.category_id ?? 'none');
-        setArticleType(article.article_type || 'none');
-        setSelectedTagIds((article.tags || []).map(t => t.id));
-        setStatus(article.status || 'published');
-        // Fetch cross-refs for the link picker
-        api.getKbArticleLinks(id).then(setCrossRefs).catch(() => {});
-      } catch {
-        toast.error('Kunde inte ladda artikel');
-        navigate('/kb');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetch();
-  }, [id, isEditing, navigate]);
+    if (!kbData || seededForId.current === kbData.article.id) return;
+    seededForId.current = kbData.article.id;
+    const { article } = kbData;
+    setTitle(article.title);
+    setContent(article.content);
+    setCategoryId(article.category_id ?? 'none');
+    setArticleType(article.article_type || 'none');
+    setSelectedTagIds((article.tags || []).map(t => t.id));
+    setStatus(article.status || 'published');
+  }, [kbData]);
+
+  useEffect(() => {
+    if (!isArticleError) return;
+    toast.error('Kunde inte ladda artikel');
+    navigate('/kb');
+  }, [isArticleError, navigate]);
 
   const availableLinkTargets = useMemo(
-    () =>
-      allArticles.filter(
-        a => a.id !== id && a.status === 'published' && !crossRefs.some(r => r.id === a.id)
-      ),
+    () => allArticles.filter(a => a.id !== id && !crossRefs.some(r => r.id === a.id)),
     [allArticles, id, crossRefs]
-  );
-
-  const filteredLinkTargets = useMemo(
-    () =>
-      availableLinkTargets.filter(a =>
-        a.title.toLowerCase().includes(linkSearch.toLowerCase())
-      ),
-    [availableLinkTargets, linkSearch]
   );
 
   const handleAddLink = async (targetId: string) => {
     if (!id) return;
     try {
       await api.addKbArticleLink(id, targetId);
-      const updated = await api.getKbArticleLinks(id);
-      setCrossRefs(updated);
+      await queryClient.invalidateQueries({ queryKey: kbArticleKeys.detail(id) });
       setLinkPickerOpen(false);
       setLinkSearch('');
       toast.success('Se även-koppling tillagd');
@@ -141,7 +131,7 @@ const KBArticleForm = () => {
     if (!id) return;
     try {
       await api.removeKbArticleLink(id, targetId);
-      setCrossRefs(prev => prev.filter(r => r.id !== targetId));
+      await queryClient.invalidateQueries({ queryKey: kbArticleKeys.detail(id) });
       toast.success('Se även-koppling borttagen');
     } catch {
       toast.error('Kunde inte ta bort koppling');
@@ -178,8 +168,7 @@ const KBArticleForm = () => {
       };
       if (isEditing && id) {
         await api.updateKbArticle(id, payload);
-        queryClient.invalidateQueries({ queryKey: kbArticlesKeys.all });
-        queryClient.invalidateQueries({ queryKey: kbArticleKeys.detail(id) });
+        invalidateKbCaches(queryClient);
         toast.success('Artikel uppdaterad');
         navigate(`/kb/${id}`);
       } else {
@@ -192,15 +181,15 @@ const KBArticleForm = () => {
             if (import.meta.env.DEV) console.warn('Could not auto-link article to source ticket');
           }
         }
-        queryClient.invalidateQueries({ queryKey: kbArticlesKeys.all });
+        invalidateKbCaches(queryClient);
         if (sourceTicketId) {
-          queryClient.invalidateQueries({ queryKey: ['ticket-kb-links', sourceTicketId] });
+          queryClient.invalidateQueries({ queryKey: ticketKbLinksKeys.ticket(sourceTicketId) });
         }
         toast.success('Artikel skapad');
         navigate(`/kb/${created.id}`);
       }
-    } catch {
-      toast.error('Kunde inte spara artikel');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Kunde inte spara artikel');
       setIsSubmitting(false);
     }
   };
@@ -210,300 +199,298 @@ const KBArticleForm = () => {
     // type/status row, tags, content editor) so the page doesn't visibly
     // reflow when data arrives.
     return (
-      <Layout>
-        <div className="max-w-4xl mx-auto space-y-6">
-          {/* Header */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="h-9 w-24 bg-muted animate-pulse rounded-md" />
-            <div className="h-6 w-40 bg-muted animate-pulse rounded" />
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="h-9 w-24 bg-muted animate-pulse rounded-md" />
+          <div className="h-6 w-40 bg-muted animate-pulse rounded" />
+        </div>
+
+        <div className="space-y-5">
+          {/* Title */}
+          <div className="space-y-2">
+            <div className="h-4 w-16 bg-muted animate-pulse rounded" />
+            <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
           </div>
 
-          <div className="space-y-5">
-            {/* Title */}
-            <div className="space-y-2">
-              <div className="h-4 w-16 bg-muted animate-pulse rounded" />
+          {/* Category */}
+          <div className="space-y-2">
+            <div className="h-4 w-20 bg-muted animate-pulse rounded" />
+            <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
+          </div>
+
+          {/* Type + Status row */}
+          <div className="flex gap-3">
+            <div className="space-y-2 flex-1">
+              <div className="h-4 w-12 bg-muted animate-pulse rounded" />
               <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
             </div>
-
-            {/* Category */}
             <div className="space-y-2">
-              <div className="h-4 w-20 bg-muted animate-pulse rounded" />
-              <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
+              <div className="h-4 w-14 bg-muted animate-pulse rounded" />
+              <div className="h-10 w-[160px] bg-muted animate-pulse rounded-md" />
             </div>
+          </div>
 
-            {/* Type + Status row */}
-            <div className="flex gap-3">
-              <div className="space-y-2 flex-1">
-                <div className="h-4 w-12 bg-muted animate-pulse rounded" />
-                <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
-              </div>
-              <div className="space-y-2">
-                <div className="h-4 w-14 bg-muted animate-pulse rounded" />
-                <div className="h-10 w-[160px] bg-muted animate-pulse rounded-md" />
-              </div>
-            </div>
+          {/* Tags */}
+          <div className="space-y-2">
+            <div className="h-4 w-16 bg-muted animate-pulse rounded" />
+            <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
+          </div>
 
-            {/* Tags */}
-            <div className="space-y-2">
-              <div className="h-4 w-16 bg-muted animate-pulse rounded" />
-              <div className="h-10 w-full bg-muted animate-pulse rounded-md" />
-            </div>
-
-            {/* Content editor */}
-            <div className="space-y-2">
-              <div className="h-4 w-20 bg-muted animate-pulse rounded" />
-              <div className="h-[300px] w-full bg-muted animate-pulse rounded-md" />
-            </div>
+          {/* Content editor */}
+          <div className="space-y-2">
+            <div className="h-4 w-20 bg-muted animate-pulse rounded" />
+            <div className="h-[300px] w-full bg-muted animate-pulse rounded-md" />
           </div>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button variant="ghost" size="sm" asChild>
-            <Link to={isEditing && id ? `/kb/${id}` : '/kb'}>
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              {isEditing ? 'Avbryt' : 'Kunskapsbas'}
-            </Link>
-          </Button>
-          <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
-            {isEditing ? 'Redigera artikel' : 'Ny artikel'}
-          </h1>
+    <div className="max-w-4xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="ghost" size="sm" asChild>
+          <Link to={isEditing && id ? `/kb/${id}` : '/kb'}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            {isEditing ? 'Avbryt' : 'Kunskapsbas'}
+          </Link>
+        </Button>
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
+          {isEditing ? 'Redigera artikel' : 'Ny artikel'}
+        </h1>
+      </div>
+
+      {/* Template picker — only for new articles */}
+      {!isEditing && !templateDismissed && (
+        <details className="space-y-3"><summary className="min-h-11 py-2 cursor-pointer">Använd mall</summary>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium">Välj mall (valfritt)</p>
+            <button
+              type="button"
+              onClick={() => setTemplateDismissed(true)}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              Hoppa över
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {ARTICLE_TEMPLATES.map((tmpl) => (
+              <button
+                key={tmpl.id}
+                type="button"
+                onClick={() => { setContent(tmpl.body); setTemplateDismissed(true); }}
+                className="text-left p-4 rounded-lg border border-border hover:border-primary/50 hover:bg-accent transition-colors"
+              >
+                <p className="font-medium text-sm">{tmpl.label}</p>
+                <p className="text-xs text-muted-foreground mt-1">{tmpl.description}</p>
+              </button>
+            ))}
+          </div>
+        </details>
+      )}
+
+      {/* Form */}
+      <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-border bg-card p-4 sm:p-6 lg:p-8">
+        <div className="space-y-2">
+          <Label htmlFor="title">
+            Titel <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="title"
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              // Clear only the title error so other unaddressed errors
+              // (category, content) remain visible until the user fixes them.
+              setErrors(prev => { const p = { ...prev }; delete p.title; return p; });
+            }}
+            placeholder="Artikelns titel..."
+            // Autofocus only on create — editing shouldn't yank focus on
+            // mount (user may scroll to a specific section to edit).
+            autoFocus={!isEditing}
+            className={`h-12 text-lg font-medium ${errors.title ? 'border-destructive' : ''}`}
+          />
+          {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
         </div>
 
-        {/* Template picker — only for new articles */}
-        {!isEditing && !templateDismissed && (
-          <details className="space-y-3"><summary className="min-h-11 py-2 cursor-pointer">Använd mall</summary>
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-medium">Välj mall (valfritt)</p>
-              <button
-                type="button"
-                onClick={() => setTemplateDismissed(true)}
-                className="text-xs text-muted-foreground hover:text-foreground"
-              >
-                Hoppa över
-              </button>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {ARTICLE_TEMPLATES.map((tmpl) => (
-                <button
-                  key={tmpl.id}
-                  type="button"
-                  onClick={() => { setContent(tmpl.body); setTemplateDismissed(true); }}
-                  className="text-left p-4 rounded-lg border border-border hover:border-primary/50 hover:bg-accent transition-colors"
-                >
-                  <p className="font-medium text-sm">{tmpl.label}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{tmpl.description}</p>
-                </button>
-              ))}
-            </div>
-          </details>
-        )}
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-6 rounded-2xl border border-border bg-card p-4 sm:p-6 lg:p-8">
-          <div className="space-y-2">
-            <Label htmlFor="title">
-              Titel <span className="text-destructive">*</span>
-            </Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => {
-                setTitle(e.target.value);
-                // Clear only the title error so other unaddressed errors
-                // (category, content) remain visible until the user fixes them.
-                setErrors(prev => { const p = { ...prev }; delete p.title; return p; });
+        <div className="space-y-2">
+          <Label id="kb-content-label">
+            Innehåll <span className="text-destructive">*</span>
+          </Label>
+          <div role="group" aria-labelledby="kb-content-label" className={errors.content ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
+            <RichTextEditor
+              value={content}
+              onChange={(html) => {
+                setContent(html);
+                setErrors(prev => { const p = { ...prev }; delete p.content; return p; });
               }}
-              placeholder="Artikelns titel..."
-              // Autofocus only on create — editing shouldn't yank focus on
-              // mount (user may scroll to a specific section to edit).
-              autoFocus={!isEditing}
-              className={`h-12 text-lg font-medium ${errors.title ? 'border-destructive' : ''}`}
+              placeholder="Skriv artikelns innehåll..."
+              minHeight="420px"
+              error={!!errors.content}
             />
-            {errors.title && <p className="text-xs text-destructive">{errors.title}</p>}
           </div>
+          {errors.content && <p className="text-xs text-destructive">{errors.content}</p>}
+        </div>
 
-          <div className="space-y-2">
-            <Label id="kb-content-label">
-              Innehåll <span className="text-destructive">*</span>
-            </Label>
-            <div role="group" aria-labelledby="kb-content-label" className={errors.content ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
-              <RichTextEditor
-                value={content}
-                onChange={(html) => {
-                  setContent(html);
-                  setErrors(prev => { const p = { ...prev }; delete p.content; return p; });
-                }}
-                placeholder="Skriv artikelns innehåll..."
-                minHeight="420px"
-                error={!!errors.content}
-              />
-            </div>
-            {errors.content && <p className="text-xs text-destructive">{errors.content}</p>}
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor="category">Kategori *</Label>
+          <Select
+            value={categoryId}
+            onValueChange={(v) => {
+              setCategoryId(v);
+              setErrors(prev => { const p = { ...prev }; delete p.category; return p; });
+            }}
+          >
+            <SelectTrigger id="category" className={errors.category ? 'border-destructive' : ''}>
+              <SelectValue placeholder="Välj kategori" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Välj kategori...</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat.id} value={cat.id}>
+                  {cat.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
+          {categoriesError && <p role="alert" className="text-xs text-destructive">Kunde inte ladda kategorier. Ladda om sidan för att försöka igen.</p>}
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="category">Kategori *</Label>
-            <Select
-              value={categoryId}
-              onValueChange={(v) => {
-                setCategoryId(v);
-                setErrors(prev => { const p = { ...prev }; delete p.category; return p; });
-              }}
-            >
-              <SelectTrigger id="category" className={errors.category ? 'border-destructive' : ''}>
-                <SelectValue placeholder="Välj kategori" />
+        <details className="space-y-4 rounded-xl border border-border p-4"><summary className="min-h-11 py-2 cursor-pointer font-medium">Artikelinställningar</summary>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-2 min-w-0">
+            <Label htmlFor="article-type">Typ</Label>
+            <Select value={articleType} onValueChange={setArticleType}>
+              <SelectTrigger id="article-type">
+                <SelectValue placeholder="Välj typ (valfritt)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Välj kategori...</SelectItem>
-                {categories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
+                <SelectItem value="none">Ingen typ</SelectItem>
+                <SelectItem value="how-to">Instruktion</SelectItem>
+                <SelectItem value="solution">Lösning</SelectItem>
               </SelectContent>
             </Select>
-            {errors.category && <p className="text-xs text-destructive">{errors.category}</p>}
           </div>
 
-          <details className="space-y-4 rounded-xl border border-border p-4"><summary className="min-h-11 py-2 cursor-pointer font-medium">Artikelinställningar</summary>
+        </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2 min-w-0">
-              <Label htmlFor="article-type">Typ</Label>
-              <Select value={articleType} onValueChange={setArticleType}>
-                <SelectTrigger id="article-type">
-                  <SelectValue placeholder="Välj typ (valfritt)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Ingen typ</SelectItem>
-                  <SelectItem value="how-to">Instruktion</SelectItem>
-                  <SelectItem value="solution">Lösning</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
+        <div className="space-y-2">
+          <Label id="kb-tags-label" className="flex items-center gap-1.5">
+            <Tag className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+            Taggar
+          </Label>
+          <div
+            className="flex flex-wrap items-center gap-1.5 min-h-10 rounded-md border border-input bg-background px-3 py-2"
+            role="group"
+            aria-labelledby="kb-tags-label"
+          >
+            {selectedTagIds.map(tagId => {
+              const tag = availableTags.find(t => t.id === tagId);
+              if (!tag) return null;
+              return (
+                <Badge key={tagId} variant="secondary" className="gap-1" style={{ backgroundColor: tag.color + '22', color: tag.color, borderColor: tag.color + '44' }}>
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
+                  {tag.name}
+                  <button type="button" onClick={() => setSelectedTagIds(prev => prev.filter(id => id !== tagId))} className="ml-0.5 rounded-sm hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Ta bort taggen ${tag.name}`}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              );
+            })}
+            <TagMultiSelect selectedTagIds={selectedTagIds} onChange={setSelectedTagIds} />
           </div>
+          {tagsError && <p role="alert" className="text-xs text-destructive">Kunde inte ladda taggar. Ladda om sidan för att försöka igen.</p>}
+        </div>
+
+        </details>
+
+        {/* Cross-ref link picker — only shown in edit mode */}
+        {isEditing && (
+          <div className="space-y-2">
+            <Label id="kb-crossrefs-label" className="flex items-center gap-1.5">
+              <Link2 className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
+              Se även-kopplingar
+            </Label>
+            {crossRefs.length > 0 && (
+              <div className="space-y-1 mb-2" role="list" aria-labelledby="kb-crossrefs-label">
+                {crossRefs.map((ref) => (
+                  <div key={ref.id} role="listitem" className="flex items-center justify-between p-2 rounded-md bg-muted/50">
+                    <span className="text-sm truncate">{ref.title}</span>
+                    <Button variant="ghost" size="sm" type="button" onClick={() => handleRemoveLink(ref.id)} aria-label={`Ta bort koppling till ${ref.title}`}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Popover open={linkPickerOpen} onOpenChange={setLinkPickerOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" type="button" aria-labelledby="kb-crossrefs-label">
+                  Lägg till koppling
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder="Sök artikel..."
+                    value={linkSearch}
+                    onValueChange={setLinkSearch}
+                  />
+                  <CommandList>
+                    <CommandEmpty>Inga artiklar hittades</CommandEmpty>
+                    <CommandGroup>
+                      {availableLinkTargets.slice(0, 10).map((article) => (
+                        <CommandItem
+                          key={article.id}
+                          onSelect={() => handleAddLink(article.id)}
+                        >
+                          <span className="truncate">{article.title}</span>
+                          {article.article_type && (
+                            <Badge variant="secondary" className="ml-auto shrink-0 text-xs">
+                              {article.article_type === 'how-to' ? 'Instruktion' : article.article_type === 'solution' ? 'Lösning' : 'Felsökning'}
+                            </Badge>
+                          )}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
 
           <div className="space-y-2">
-            <Label id="kb-tags-label" className="flex items-center gap-1.5">
-              <Tag className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
-              Taggar
-            </Label>
-            <div
-              className="flex flex-wrap items-center gap-1.5 min-h-10 rounded-md border border-input bg-background px-3 py-2"
-              role="group"
-              aria-labelledby="kb-tags-label"
-            >
-              {selectedTagIds.map(tagId => {
-                const tag = availableTags.find(t => t.id === tagId);
-                if (!tag) return null;
-                return (
-                  <Badge key={tagId} variant="secondary" className="gap-1" style={{ backgroundColor: tag.color + '22', color: tag.color, borderColor: tag.color + '44' }}>
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
-                    {tag.name}
-                    <button type="button" onClick={() => setSelectedTagIds(prev => prev.filter(id => id !== tagId))} className="ml-0.5 rounded-sm hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Ta bort taggen ${tag.name}`}>
-                      <X className="h-3 w-3" />
-                    </button>
-                  </Badge>
-                );
-              })}
-              <TagMultiSelect selectedTagIds={selectedTagIds} onChange={setSelectedTagIds} />
-            </div>
-          </div>
-
-          </details>
-
-          {/* Cross-ref link picker — only shown in edit mode */}
-          {isEditing && (
-            <div className="space-y-2">
-              <Label id="kb-crossrefs-label" className="flex items-center gap-1.5">
-                <Link2 className="w-3.5 h-3.5 text-muted-foreground" aria-hidden="true" />
-                Se även-kopplingar
-              </Label>
-              {crossRefs.length > 0 && (
-                <div className="space-y-1 mb-2" role="list" aria-labelledby="kb-crossrefs-label">
-                  {crossRefs.map((ref) => (
-                    <div key={ref.id} role="listitem" className="flex items-center justify-between p-2 rounded-md bg-muted/50">
-                      <span className="text-sm truncate">{ref.title}</span>
-                      <Button variant="ghost" size="sm" type="button" onClick={() => handleRemoveLink(ref.id)} aria-label={`Ta bort koppling till ${ref.title}`}>
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <Popover open={linkPickerOpen} onOpenChange={setLinkPickerOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" type="button" aria-labelledby="kb-crossrefs-label">
-                    Lägg till koppling
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-80 p-0" align="start">
-                  <Command shouldFilter={false}>
-                    <CommandInput
-                      placeholder="Sök artikel..."
-                      value={linkSearch}
-                      onValueChange={setLinkSearch}
-                    />
-                    <CommandList>
-                      <CommandEmpty>Inga artiklar hittades</CommandEmpty>
-                      <CommandGroup>
-                        {filteredLinkTargets.slice(0, 10).map((article) => (
-                          <CommandItem
-                            key={article.id}
-                            onSelect={() => handleAddLink(article.id)}
-                          >
-                            <span className="truncate">{article.title}</span>
-                            {article.article_type && (
-                              <Badge variant="secondary" className="ml-auto shrink-0 text-xs">
-                                {article.article_type === 'how-to' ? 'Instruktion' : article.article_type === 'solution' ? 'Lösning' : 'Felsökning'}
-                              </Badge>
-                            )}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-          )}
-
-            <div className="space-y-2">
-              <Label htmlFor="status-toggle">Status</Label>
-              <Select value={status} onValueChange={(val) => setStatus(val as 'draft' | 'published')}>
-                <SelectTrigger id="status-toggle" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="published">Publicerad</SelectItem>
-                  <SelectItem value="draft">Utkast</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>          <div className="flex flex-wrap gap-3 justify-end border-t border-border pt-5">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => navigate(isEditing && id ? `/kb/${id}` : '/kb')}
-              disabled={isSubmitting}
-            >
-              Avbryt
-            </Button>
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-              {isEditing ? 'Spara ändringar' : 'Skapa artikel'}
-            </Button>
-          </div>
-        </form>
-      </div>
-    </Layout>
+            <Label htmlFor="status-toggle">Status</Label>
+            <Select value={status} onValueChange={(val) => setStatus(val as 'draft' | 'published')}>
+              <SelectTrigger id="status-toggle" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="published">Publicerad</SelectItem>
+                <SelectItem value="draft">Utkast</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>          <div className="flex flex-wrap gap-3 justify-end border-t border-border pt-5">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => navigate(isEditing && id ? `/kb/${id}` : '/kb')}
+            disabled={isSubmitting}
+          >
+            Avbryt
+          </Button>
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            {isEditing ? 'Spara ändringar' : 'Skapa artikel'}
+          </Button>
+        </div>
+      </form>
+    </div>
   );
 };
 

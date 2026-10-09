@@ -36,9 +36,9 @@ async function main() {
     const passwordHash = await bcrypt.hash(adminPassword, BCRYPT_ROUNDS);
 
     db.prepare(`
-      INSERT INTO users (id, email, password_hash, role, display_name)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(adminId, adminEmail, passwordHash, 'admin', adminName || null);
+      INSERT INTO users (id, email, password_hash, role, display_name, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(adminId, adminEmail, passwordHash, 'admin', adminName || null, new Date().toISOString());
 
     logger.info('Admin user created', { email: adminEmail });
   } else {

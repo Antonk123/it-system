@@ -25,29 +25,20 @@ const mapAttachment = (a: {
   fileSize: a.file_size, fileType: a.file_type, createdAt: parseServerDate(a.created_at), url: a.url,
 });
 
-export const useTicketAttachments = (initialTicketId?: string) => {
+export const useTicketAttachments = (ticketId?: string) => {
   const queryClient = useQueryClient();
-  // Internal query ID — updated when fetchAttachments(id) is called
-  const [queryTicketId, setQueryTicketId] = useState<string | undefined>(initialTicketId);
-  const queryKey = queryTicketId ? attachmentKeys.ticket(queryTicketId) : attachmentKeys.all;
 
   const { data: attachments = [], isLoading, isError } = useQuery({
-    queryKey,
+    queryKey: attachmentKeys.ticket(ticketId ?? ''),
     queryFn: async () => {
-      const data = await api.getAttachments(queryTicketId!);
+      const data = await api.getAttachments(ticketId!);
       return (data as Parameters<typeof mapAttachment>[0][]).map(mapAttachment);
     },
-    enabled: Boolean(queryTicketId),
+    enabled: Boolean(ticketId),
   });
 
   // isUploading is tracked separately since upload is not part of the data query
   const [isUploading, setIsUploading] = useState(false);
-
-  // fetchAttachments(id) — sets active ticket ID (triggers query) and refetches if same ID
-  const fetchAttachments = useCallback(async (id: string) => {
-    setQueryTicketId(id);
-    await queryClient.invalidateQueries({ queryKey: attachmentKeys.ticket(id) });
-  }, [queryClient]);
 
   const uploadMutation = useMutation({
     mutationFn: async ({ ticketId, file }: { ticketId: string; file: File }) => {
@@ -78,12 +69,12 @@ export const useTicketAttachments = (initialTicketId?: string) => {
     },
   });
 
-  const uploadAttachment = useCallback(async (ticketId: string, file: File): Promise<TicketAttachment | null> => {
+  const uploadAttachment = useCallback(async (targetTicketId: string, file: File): Promise<TicketAttachment | null> => {
     const validation = fileUploadSchema.safeParse({ file });
-    if (!validation.success) { toast.error(getValidationError(validation.error) || 'Invalid file'); return null; }
+    if (!validation.success) { toast.error(getValidationError(validation.error) || 'Ogiltig fil'); return null; }
     setIsUploading(true);
     try {
-      return await uploadMutation.mutateAsync({ ticketId, file });
+      return await uploadMutation.mutateAsync({ ticketId: targetTicketId, file });
     } catch {
       toast.error(`Kunde inte ladda upp fil: ${file.name}`);
       return null;
@@ -101,5 +92,5 @@ export const useTicketAttachments = (initialTicketId?: string) => {
     }
   }, [deleteMutation]);
 
-  return { attachments, isLoading, isError, isUploading, fetchAttachments, uploadAttachment, deleteAttachment };
+  return { attachments, isLoading, isError, isUploading, uploadAttachment, deleteAttachment };
 };

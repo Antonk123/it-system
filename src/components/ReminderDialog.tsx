@@ -74,7 +74,7 @@ export function ReminderDialog({ onCreateReminder, open: controlledOpen, onOpenC
       setDate(undefined);
       setTime('09:00');
       setMessage('');
-    } finally {
+    } catch { /* Hooken visar felet; dialogen förblir öppen så att inmatningen finns kvar. */ } finally {
       setIsSubmitting(false);
     }
   };

@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render as baseRender, screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import type { ReactElement, ReactNode } from 'react';
 
 const { getKbPortalShare, createKbPortalShare, revokeKbPortalShare } = vi.hoisted(() => ({
   getKbPortalShare: vi.fn(),
@@ -17,8 +19,13 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 import { KBPortalShareDialog } from './KBPortalShareDialog';
 import { toast } from 'sonner';
 
+let client: QueryClient;
+const wrapper = ({ children }: { children: ReactNode }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+const render = (ui: ReactElement) => baseRender(ui, { wrapper });
+
 describe('KBPortalShareDialog', () => {
   beforeEach(() => {
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     getKbPortalShare.mockReset();
     createKbPortalShare.mockReset();
     revokeKbPortalShare.mockReset();
@@ -44,6 +51,8 @@ describe('KBPortalShareDialog', () => {
     expect(await screen.findByText('Skapa publik länk')).toBeTruthy();
     expect(getKbPortalShare).toHaveBeenCalledTimes(1);
 
+    // Knappen är inaktiv tills statusen har hämtats.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Skapa publik länk' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: 'Skapa publik länk' }));
     await waitFor(() => expect(createKbPortalShare).toHaveBeenCalledTimes(1));
     const publicUrl = await screen.findByDisplayValue(`${window.location.origin}/kb/public/new-token`);

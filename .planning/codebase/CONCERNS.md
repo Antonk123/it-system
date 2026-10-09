@@ -164,8 +164,8 @@ No critical dependency risks identified. The stack uses mature, well-maintained 
 ## Test Coverage Gaps
 
 **~~Near-Zero Backend Test Coverage~~ DOWNGRADED 2026-06-18:**
-- Was: zero test files. Now: Vitest suite with supertest HTTP tests in `server/src/app.test.ts` and unit tests: `server/src/lib/emailInbound.test.ts`, `server/src/lib/ticketQuery.test.ts`, `server/src/lib/ticketImportExport.test.ts`, `server/src/lib/automationHelper.test.ts`, `server/src/lib/slaHelper.test.ts`, `server/src/lib/passwordPolicy.test.ts`, `server/src/lib/aiHelper.test.ts`, `server/src/lib/htmlUtils.test.ts`, `server/src/scripts/repair-kb-tables.test.ts`, `server/src/routes/reports.test.ts`.
-- Still untested: most route files (auth, tickets, contacts, billing, kb, attachments, etc.), all schedulers, email config validation, webhook dispatch end-to-end.
+- Was: zero test files. Now: Vitest suite with supertest HTTP tests in `server/src/app.test.ts` and unit tests: `server/src/lib/emailInbound.test.ts`, `server/src/lib/ticketQuery.test.ts`, `server/src/lib/ticketImportExport.test.ts`, `server/src/lib/automationHelper.test.ts`, `server/src/lib/passwordPolicy.test.ts`, `server/src/lib/htmlUtils.test.ts`, `server/src/scripts/repair-kb-tables.test.ts`, `server/src/routes/reports.test.ts`.
+- Still untested: most route files (auth, tickets, contacts, kb, attachments, etc.), all schedulers, email config validation, webhook dispatch end-to-end.
 - Priority: Medium (was High).
 
 **Frontend Tests — Utility-Only:**

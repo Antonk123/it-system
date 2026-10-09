@@ -11,9 +11,10 @@ import { Template, TemplateFieldRow } from '@/types/ticket';
 import { Category } from '@/types/ticket';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, X, Check, Type } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowUp, ArrowDown, X, Check, Type, Loader2 } from 'lucide-react';
 import { DynamicField } from '@/components/DynamicField';
 import { safeJsonParse } from '@/lib/safeJsonParse';
+import { useTemplates } from '@/hooks/useTemplates';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,10 +31,11 @@ interface TemplateEditorModalProps {
   onOpenChange: (open: boolean) => void;
   template: Template | null;
   categories: Category[];
-  // Returnerar den skapade mallen (minst { id }) så nya dynamiska fält kan kopplas direkt efter create.
-  // null returneras vid fel — handleSubmit hoppar då över fält-skapande (truthy-koll på newTemplate).
-  onSave: (templateData: Omit<Template, 'id' | 'position' | 'createdBy' | 'createdAt' | 'updatedAt'>) => Promise<{ id: string } | null | void>;
-  onUpdate: (id: string, updates: Partial<Template>) => void;
+  // Skapar mall och dess fält i ett anrop. null returneras vid fel (felet visas redan som toast)
+  // — dialogen förblir då öppen så att användaren kan försöka igen.
+  onSave: (templateData: Omit<Template, 'id' | 'position' | 'createdBy' | 'createdAt' | 'updatedAt'>) => Promise<{ id: string } | null>;
+  // Kastar vid fel (felet visas redan som toast).
+  onUpdate: (id: string, updates: Partial<Template>) => Promise<void>;
 }
 
 interface FieldFormData {
@@ -56,6 +58,8 @@ export const TemplateEditorModal = ({
   onUpdate,
 }: TemplateEditorModalProps) => {
   const isEditing = !!template;
+  const { createTemplateField, updateTemplateField, deleteTemplateField, reorderTemplateFields } = useTemplates();
+  const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -175,38 +179,19 @@ export const TemplateEditorModal = ({
       solutionTemplate: templateType === 'dynamic' ? null : (formData.solutionTemplate.trim() || null),
     };
 
-    if (isEditing) {
-      await onUpdate(template.id, templateData);
-      onOpenChange(false);
-    } else {
-      // Create new template
-      const newTemplate = await onSave(templateData);
-
-      if (newTemplate && fields.length > 0) {
-        // Save all pending fields
-        toast.info(`Sparar ${fields.length} fält...`);
-
-        try {
-          for (const field of fields) {
-            await api.createTemplateField(newTemplate.id, {
-              field_name: field.field_name,
-              field_label: field.field_label,
-              field_type: field.field_type,
-              placeholder: field.placeholder,
-              default_value: field.default_value,
-              required: field.required,
-              options: safeJsonParse<string[] | undefined>(field.options, undefined),
-              position: field.position,
-            });
-          }
-          toast.success('Mall och fält skapade!');
-        } catch (error) {
-          console.error('Error saving fields:', error);
-          toast.error('Mall skapades men vissa fält kunde inte sparas');
-        }
+    setIsSaving(true);
+    try {
+      if (isEditing) {
+        await onUpdate(template.id, templateData);
+      } else {
+        const created = await onSave({ ...templateData, fields: templateType === 'dynamic' ? fields : [] });
+        if (!created) return;
       }
-
       onOpenChange(false);
+    } catch {
+      // Felet visas som toast av useTemplates; dialogen står kvar för nytt försök.
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -235,24 +220,20 @@ export const TemplateEditorModal = ({
 
     // If template exists (editing), save to API immediately
     if (template?.id) {
-      try {
-        const newField = await api.createTemplateField(template.id, {
-          field_name: fieldFormData.field_name.trim(),
-          field_label: fieldFormData.field_label.trim(),
-          field_type: fieldFormData.field_type,
-          placeholder: fieldFormData.placeholder.trim() || null,
-          default_value: fieldFormData.default_value.trim() || null,
-          required: fieldFormData.required ? 1 : 0,
-          options: safeJsonParse<string[] | undefined>(fieldFormData.options, undefined),
-          position: fields.length,
-        });
-        setFields([...fields, newField]);
-        resetFieldForm();
-        toast.success('Fält tillagt');
-      } catch (error) {
-        console.error('Error adding field:', error);
-        toast.error('Kunde inte lägga till fält');
-      }
+      const newField = await createTemplateField(template.id, {
+        field_name: fieldFormData.field_name.trim(),
+        field_label: fieldFormData.field_label.trim(),
+        field_type: fieldFormData.field_type,
+        placeholder: fieldFormData.placeholder.trim() || null,
+        default_value: fieldFormData.default_value.trim() || null,
+        required: fieldFormData.required ? 1 : 0,
+        options: safeJsonParse<string[] | undefined>(fieldFormData.options, undefined),
+        position: fields.length,
+      });
+      if (!newField) return;
+      setFields([...fields, newField]);
+      resetFieldForm();
+      toast.success('Fält tillagt');
     } else {
       // New template - add to local state only
       const tempField: TemplateFieldRow = {
@@ -308,23 +289,19 @@ export const TemplateEditorModal = ({
     // Otherwise update via API
     if (!template?.id) return;
 
-    try {
-      const updatedField = await api.updateTemplateField(template.id, editingFieldId, {
-        field_name: fieldFormData.field_name.trim(),
-        field_label: fieldFormData.field_label.trim(),
-        field_type: fieldFormData.field_type,
-        placeholder: fieldFormData.placeholder.trim() || null,
-        default_value: fieldFormData.default_value.trim() || null,
-        required: fieldFormData.required ? 1 : 0,
-        options: safeJsonParse<string[] | undefined>(fieldFormData.options, undefined),
-      });
-      setFields(fields.map(f => f.id === editingFieldId ? updatedField : f));
-      resetFieldForm();
-      toast.success('Fält uppdaterat');
-    } catch (error) {
-      console.error('Error updating field:', error);
-      toast.error('Kunde inte uppdatera fält');
-    }
+    const updatedField = await updateTemplateField(template.id, editingFieldId, {
+      field_name: fieldFormData.field_name.trim(),
+      field_label: fieldFormData.field_label.trim(),
+      field_type: fieldFormData.field_type,
+      placeholder: fieldFormData.placeholder.trim() || null,
+      default_value: fieldFormData.default_value.trim() || null,
+      required: fieldFormData.required ? 1 : 0,
+      options: safeJsonParse<string[] | undefined>(fieldFormData.options, undefined),
+    });
+    if (!updatedField) return;
+    setFields(fields.map(f => f.id === editingFieldId ? updatedField : f));
+    resetFieldForm();
+    toast.success('Fält uppdaterat');
   };
 
   const handleDeleteField = (fieldId: string) => {
@@ -346,14 +323,9 @@ export const TemplateEditorModal = ({
     // Otherwise delete from API
     if (!template?.id) return;
 
-    try {
-      await api.deleteTemplateField(template.id, fieldId);
-      setFields(fields.filter(f => f.id !== fieldId));
-      toast.success('Fält borttaget');
-    } catch (error) {
-      console.error('Error deleting field:', error);
-      toast.error('Kunde inte ta bort fält');
-    }
+    if (!(await deleteTemplateField(template.id, fieldId))) return;
+    setFields(fields.filter(f => f.id !== fieldId));
+    toast.success('Fält borttaget');
   };
 
   const handleStartEditField = (field: TemplateFieldRow) => {
@@ -404,14 +376,9 @@ export const TemplateEditorModal = ({
     }
 
     // Otherwise save to API
-    try {
-      await api.reorderTemplateFields(template.id, updatedFields.map(f => f.id));
-      setFields(updatedFields);
-      toast.success('Fält omordnat');
-    } catch (error) {
-      console.error('Error reordering fields:', error);
-      toast.error('Kunde inte omordna fält');
-    }
+    if (!(await reorderTemplateFields(template.id, updatedFields.map(f => f.id)))) return;
+    setFields(updatedFields);
+    toast.success('Fält omordnat');
   };
 
   return (
@@ -613,10 +580,11 @@ export const TemplateEditorModal = ({
               </div>
 
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isSaving}>
                   Avbryt
                 </Button>
-                <Button type="submit">
+                <Button type="submit" disabled={isSaving}>
+                  {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />}
                   {isEditing ? 'Spara ändringar' : 'Skapa mall'}
                 </Button>
               </DialogFooter>

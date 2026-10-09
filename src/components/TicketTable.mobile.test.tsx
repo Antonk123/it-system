@@ -8,6 +8,7 @@ import { TicketTable } from './TicketTable';
 import type { Ticket } from '@/types/ticket';
 vi.mock('@/hooks/useCategories', () => ({ useCategories: () => ({ categories: [] }) }));
 vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: () => true }));
+vi.mock('@/hooks/useTicketChecklists', () => ({ useChecklistProgress: () => undefined }));
 afterEach(cleanup);
 const ticket = { id: 't1', title: 'Utskrift', priority: 'medium', status: 'open', createdAt: new Date(), requesterId: 'c1' } as Ticket;
 function List() { const [ids, setIds] = useState<string[]>([]); return <TicketTable tickets={[ticket]} users={[]} checklistVisible={false} selectedIds={ids} onSelectionChange={setIds} onBulkAction={vi.fn()} />; }

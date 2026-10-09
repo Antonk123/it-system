@@ -107,11 +107,12 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
     const id = randomUUID();
     const maxPosition = db.prepare('SELECT MAX(position) as max FROM template_fields WHERE template_id = ?').get(templateId) as { max: number | null };
     const position = (maxPosition?.max ?? -1) + 1;
+    const now = new Date().toISOString();
 
     db.prepare(`
-      INSERT INTO template_fields (id, template_id, field_name, field_label, field_type, placeholder, default_value, required, options, position)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, templateId, field_name, field_label, field_type, placeholder, default_value, required, options, position);
+      INSERT INTO template_fields (id, template_id, field_name, field_label, field_type, placeholder, default_value, required, options, position, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, templateId, field_name, field_label, field_type, placeholder, default_value, required, options, position, now, now);
 
     const field = db.prepare('SELECT * FROM template_fields WHERE id = ?').get(id) as TemplateFieldRow;
     res.status(201).json(field);
@@ -166,9 +167,9 @@ router.put('/:fieldId', authenticate, requireAdmin, (req: AuthRequest, res: Resp
 
     db.prepare(`
       UPDATE template_fields
-      SET field_name = ?, field_label = ?, field_type = ?, placeholder = ?, default_value = ?, required = ?, options = ?, updated_at = CURRENT_TIMESTAMP
+      SET field_name = ?, field_label = ?, field_type = ?, placeholder = ?, default_value = ?, required = ?, options = ?, updated_at = ?
       WHERE id = ? AND template_id = ?
-    `).run(field_name, field_label, field_type, placeholder, default_value, required, options, fieldId, templateId);
+    `).run(field_name, field_label, field_type, placeholder, default_value, required, options, new Date().toISOString(), fieldId, templateId);
 
     const field = db.prepare('SELECT * FROM template_fields WHERE id = ?').get(fieldId) as TemplateFieldRow;
     res.json(field);

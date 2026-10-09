@@ -122,7 +122,9 @@ export const CategoryCombobox = ({
         <Button
           variant="outline"
           role="combobox"
+          aria-haspopup="listbox"
           aria-expanded={open}
+          aria-controls={open ? listboxId : undefined}
           disabled={disabled}
           className="w-full justify-between font-normal"
         >
@@ -135,6 +137,7 @@ export const CategoryCombobox = ({
           <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
           <Input
             placeholder="Sök kategori..."
+            aria-label="Sök kategori"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleSearchKeyDown}
@@ -152,7 +155,7 @@ export const CategoryCombobox = ({
             id={`${listboxId}-none`}
             role="option"
             aria-selected={value === 'none'}
-            tabIndex={0}
+            tabIndex={-1}
             onMouseMove={() => setActiveIndex(0)}
             className={cn(
               'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/60',
@@ -194,7 +197,7 @@ export const CategoryCombobox = ({
                 id={`${listboxId}-opt-${cat.id}`}
                 role="option"
                 aria-selected={value === cat.id}
-                tabIndex={0}
+                tabIndex={-1}
                 onMouseMove={() => setActiveIndex(navIdx)}
                 className={cn(
                   'flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/60',

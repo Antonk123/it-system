@@ -18,7 +18,7 @@ const unzipState = vi.hoisted(() => ({ emptyListing: false }));
 
 // Låter verifieringssteget (unzipper.Open.file) simulera ett arkiv utan poster.
 vi.mock('unzipper', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('unzipper')>();
+  const actual = await importOriginal<{ default: typeof import('unzipper') }>();
   return {
     default: {
       ...actual.default,

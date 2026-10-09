@@ -9,10 +9,9 @@ import { useBackupConfig, useRunBackupNow } from '@/hooks/useBackupConfig';
 import type { BackupConfig } from '@/lib/api';
 
 // Fynd M13/L14: backend exponerar fler fält än BackupConfig-typen i api.ts —
-// felräknare + statusvärdet 'offsite_failed' (lokal backup OK, offsite-uppladdning ej).
+// offsite-räknaren + statusvärdet 'offsite_failed' (lokal backup OK, offsite-uppladdning ej).
 type BackupConfigExt = Omit<BackupConfig, 'lastStatus'> & {
   lastStatus: 'success' | 'failed' | 'offsite_failed' | null;
-  consecutiveFailures?: number;
   offsiteFailureCount?: number;
 };
 
@@ -70,6 +69,7 @@ export const BackupScheduleSection = memo(function BackupScheduleSection() {
     : null;
   const sizeLabel = formatBytes(cfg?.lastSizeBytes ?? null);
   const consecutiveFailures = cfg?.consecutiveFailures ?? 0;
+  const lastError = cfg?.lastError ?? null;
   const offsiteFailures = cfg?.offsiteFailureCount ?? 0;
 
   return (
@@ -103,7 +103,7 @@ export const BackupScheduleSection = memo(function BackupScheduleSection() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="backup-retention">Lagringstid (dagar)</Label>
+            <Label htmlFor="backup-retention">Behåll backuper (dagar)</Label>
             <Input
               id="backup-retention"
               type="number"
@@ -133,12 +133,15 @@ export const BackupScheduleSection = memo(function BackupScheduleSection() {
       )}
 
       {consecutiveFailures > 0 && (
-        <p className="flex items-center gap-1.5 text-sm text-destructive" role="alert">
-          <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
-          {consecutiveFailures === 1
-            ? 'Senaste backup-körningen misslyckades.'
-            : `${consecutiveFailures} backup-körningar i rad har misslyckats — kontrollera serverloggen.`}
-        </p>
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive" role="alert">
+          <p className="flex items-center gap-1.5 font-medium">
+            <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
+            {consecutiveFailures === 1
+              ? 'Senaste backup-körningen misslyckades.'
+              : `${consecutiveFailures} backup-körningar i rad har misslyckats — kontrollera serverloggen.`}
+          </p>
+          {lastError && <p className="mt-1 break-words font-mono text-xs">{lastError}</p>}
+        </div>
       )}
 
       {offsiteFailures > 0 && (

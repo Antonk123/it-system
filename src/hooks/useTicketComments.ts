@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { Comment, CommentRow } from '@/types/ticket';
 import { parseServerDate } from '@/lib/date';
+import { invalidateTicketDerived } from '@/hooks/invalidateTicketDerived';
 
 // Query-key factory — invalidate the SPECIFIC ticket(id) key (not a generic
 // ['comments'] prefix) so unrelated comment queries are never blown away.
@@ -26,18 +27,22 @@ const mapComment = (c: CommentRow): Comment => ({
   emailFromAddress: c.email_from_address ?? undefined,
 });
 
+const EMPTY_COMMENTS: Comment[] = [];
+
 export const useTicketComments = (ticketId: string) => {
   const queryClient = useQueryClient();
   const queryKey = commentKeys.ticket(ticketId);
 
-  const { data: comments = [], isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey,
     queryFn: async () => {
-      const data = await api.getComments(ticketId) as CommentRow[];
-      return data.map(mapComment);
+      const { comments: rows, total } = await api.getCommentsWithTotal(ticketId);
+      return { comments: (rows as CommentRow[]).map(mapComment), total };
     },
     enabled: Boolean(ticketId),
   });
+  const comments = data?.comments ?? EMPTY_COMMENTS;
+  const total = data?.total ?? 0;
 
   const addCommentMutation = useMutation({
     mutationFn: async ({ content, isInternal }: { content: string; isInternal: boolean }) => {
@@ -46,6 +51,7 @@ export const useTicketComments = (ticketId: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
+      void invalidateTicketDerived(queryClient, ticketId);
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error adding comment:', error);
@@ -59,6 +65,7 @@ export const useTicketComments = (ticketId: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
+      void invalidateTicketDerived(queryClient, ticketId);
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error updating comment:', error);
@@ -72,6 +79,7 @@ export const useTicketComments = (ticketId: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey });
+      void invalidateTicketDerived(queryClient, ticketId);
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error deleting comment:', error);
@@ -92,6 +100,7 @@ export const useTicketComments = (ticketId: string) => {
 
   return {
     comments,
+    total,
     isLoading,
     isError,
     addComment,

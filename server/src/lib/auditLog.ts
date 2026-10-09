@@ -27,9 +27,9 @@ export function logAudit(
   const resolvedIp = Array.isArray(ipAddress) ? ipAddress[0] : ipAddress;
   try {
     db.prepare(
-      `INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, details, ip_address, api_key_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).run(randomUUID(), userId, action, entityType, resolvedEntityId, details, resolvedIp ?? null, apiKeyId ?? null);
+      `INSERT INTO audit_log (id, user_id, action, entity_type, entity_id, details, ip_address, api_key_id, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(randomUUID(), userId, action, entityType, resolvedEntityId, details, resolvedIp ?? null, apiKeyId ?? null, new Date().toISOString());
   } catch (err) {
     logger.error('Audit log insert failed (non-fatal)', { error: String(err) });
   }

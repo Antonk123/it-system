@@ -45,12 +45,15 @@ them before opening a PR:
 
 | Where | Command | What |
 |-------|---------|------|
-| root | `npm run lint` | ESLint across the whole repo (frontend + backend) |
+| root | `npm run lint` | ESLint across the whole repo (frontend + backend); CI uses `--max-warnings 0` |
 | root | `npx tsc --noEmit -p tsconfig.app.json && npx tsc --noEmit -p tsconfig.node.json` | Frontend typecheck |
+| root | `npm run check:unused` | Unused locals/parameters in the frontend |
 | root | `npm test` | Frontend tests (vitest) |
 | root | `npm run build` | Production build |
 | root | `npm run openapi:lint` | Validates `docs/openapi.yaml` |
+| root | `node scripts/check-openapi-coverage.mjs` | Every mounted Express route must exist in `docs/openapi.yaml` (add the operation there, and to `docs/API.md`, when you add a route) |
 | `server/` | `cd server && npx tsc --noEmit` | Backend typecheck |
+| `server/` | `cd server && npm run check:unused` | Unused locals/parameters in the backend |
 | `server/` | `cd server && npm test` | Backend tests (vitest) |
 
 CI additionally builds Docker images for both services and runs
@@ -62,8 +65,11 @@ justification and an expiry date. The backend suite also runs with
 `server/vitest.config.ts` (a regression floor set just under current coverage,
 not a fixed target).
 
-> **Husky:** a pre-commit hook runs `lint-staged` automatically. **Never**
-> bypass it with `git commit --no-verify`.
+> **Husky:** a pre-commit hook runs `lint-staged` automatically: ESLint on staged
+> TypeScript, `tsc --noEmit` for whichever tree you touched, and `vitest related`
+> for frontend files. Backend tests run in CI only (supertest-heavy suites hit
+> ephemeral-port exhaustion when chained behind the frontend suite in a hook).
+> **Never** bypass it with `git commit --no-verify`.
 
 ## Code conventions
 
@@ -84,7 +90,7 @@ not a fixed target).
 ## Commits & PRs
 
 - **Commit messages:** [Conventional Commits](https://www.conventionalcommits.org/)
-  — e.g. `feat(tickets): ...`, `fix(billing): ...`, `test(db): ...`,
+  — e.g. `feat(tickets): ...`, `fix(tickets): ...`, `test(db): ...`,
   `chore(deps): ...`, `ci: ...`, `docs: ...`. Use a trailing `!` (e.g.
   `chore(deps)!: ...`) for breaking changes.
 - **Pull requests:** branch off `main`, keep the PR focused, describe *what*
@@ -97,3 +103,20 @@ not a fixed target).
 - **Bugs / feature requests:** open a GitHub issue with reproduction steps.
 - **Security vulnerabilities:** do **not** open a public issue — follow
   [`SECURITY.md`](SECURITY.md).
+
+## Releases
+
+IT-Ticket ships rolling from `main`, but release notes in
+[`CHANGELOG.md`](CHANGELOG.md) refer to versions (currently `1.5.0`). The repo
+has **no git tags yet**, so the changelog's compare links (`v1.5...HEAD`) do not
+resolve until a tag is pushed. To cut a release: move the `[Orutinerat]` entries
+under a new version heading, bump `version` in the root `package.json`, commit,
+then tag and push the tag explicitly — `git push` alone does not publish tags:
+
+```sh
+git tag v1.5.0
+git push --tags
+```
+
+The existing changelog links use the short form (`v1.5`); point them at whatever
+tag name you actually push.

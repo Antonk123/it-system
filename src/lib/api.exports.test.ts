@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 /**
- * Tester för api.ts:s RÅA fetch()-metoder — de som ligger utanför kärn-pipen
- * request()/requestBlob() och därför dupplicerar delar av dess logik
- * (auth-header, CSRF, 401-hantering) på egen hand:
+ * Tester för api.ts:s fil-metoder (nedladdningar och FormData-uppladdningar):
  *
- *  1. exportTickets/exportArchive/exportContacts — nedladdning via rå fetch:
- *     Content-Disposition-filnamnsparsning + DOM-städning (createObjectURL/
- *     revokeObjectURL, createElement/appendChild/removeChild).
+ *  1. exportTickets/exportArchive/exportContacts — nedladdning via requestBlob()
+ *     (401-refresh-retry ingår): Content-Disposition-filnamnsparsning +
+ *     DOM-städning (createObjectURL/revokeObjectURL, createElement/
+ *     appendChild/removeChild).
  *  2. importTicketsPreview/importContactsPreview/uploadKbImage — FormData +
  *     CSRF, delad implementation via den privata `postFile()`-hjälparen
  *     (samma hjälpare som uploadFile() använder). Tidigare (fixad bugg)
@@ -14,8 +13,7 @@
  *     och kraschade hårt efter ~15 min inaktivitet. Nu delar alla fyra
  *     FormData-metoder samma 401-refresh-retry + 403-CSRF-retry + proaktiv
  *     refresh som uploadFile(); testas explicit nedan per metod.
- *  3. downloadBackup — egen duplicerad proaktiv-refresh + 401-retry, skild
- *     från request()/requestBlob().
+ *  3. downloadBackup — via requestBlob() (proaktiv refresh + 401-retry).
  *
  * Se api.test.ts för kärn-pipens CSRF/401/felpropagering — dupliceras INTE här.
  * Mönster (fakeResponse/stubLocalStorage/stubLocation/freshApi/vi.stubGlobal)
@@ -202,7 +200,7 @@ describe('exportTickets', () => {
     const dom = stubDom();
 
     const api = await freshApi();
-    await expect(api.exportTickets()).rejects.toThrow('Failed to export tickets');
+    await expect(api.exportTickets()).rejects.toThrow('Request failed');
 
     expect(dom.createElementMock).not.toHaveBeenCalled();
     expect(createObjectURLMock).not.toHaveBeenCalled();
@@ -239,12 +237,12 @@ describe('exportArchive', () => {
     expect(dom.linkEl.download).toMatch(/^arkiv-export-\d{4}-\d{2}-\d{2}\.xlsx$/);
   });
 
-  it('kastar "Failed to export archive" vid icke-ok svar', async () => {
+  it('kastar serverns fel vid icke-ok svar', async () => {
     fetchMock.mockResolvedValue(fakeResponse({ ok: false, status: 403 }));
     stubDom();
 
     const api = await freshApi();
-    await expect(api.exportArchive()).rejects.toThrow('Failed to export archive');
+    await expect(api.exportArchive()).rejects.toThrow('Request failed');
   });
 });
 
@@ -279,12 +277,33 @@ describe('exportContacts', () => {
     expect(dom.linkEl.download).toBe('kontakter-export.xlsx');
   });
 
-  it('kastar "Failed to export contacts" vid icke-ok svar', async () => {
-    fetchMock.mockResolvedValue(fakeResponse({ ok: false, status: 401 }));
+  it('kastar felet vid icke-ok svar', async () => {
+    fetchMock.mockResolvedValue(fakeResponse({ ok: false, status: 404 }));
     stubDom();
 
     const api = await freshApi();
-    await expect(api.exportContacts()).rejects.toThrow('Failed to export contacts');
+    await expect(api.exportContacts()).rejects.toThrow('Request failed');
+  });
+
+  it('401 → förnyar sessionen och laddar ner vid omkörningen', async () => {
+    localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 3600));
+    let exportCalls = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${BASE}/auth/refresh`) {
+        return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ accessToken: 'nytt-token' }) }));
+      }
+      exportCalls++;
+      if (exportCalls === 1) return Promise.resolve(fakeResponse({ ok: false, status: 401 }));
+      return Promise.resolve(fakeResponse({}));
+    });
+    const dom = stubDom();
+
+    const api = await freshApi();
+    await api.exportContacts();
+
+    expect(exportCalls).toBe(2);
+    expect(headersOfCall(fetchMock.mock.calls.at(-1))['Authorization']).toBe('Bearer nytt-token');
+    expect(dom.linkEl.download).toBe('kontakter-export.xlsx');
   });
 });
 
@@ -440,7 +459,7 @@ describe('importTicketsPreview', () => {
       targetDispatch(
         `${BASE}/tickets/import/preview`,
         'csrf-1',
-        (call, opts) => {
+        (_call, opts) => {
           firstCallHeaders = (opts.headers ?? {}) as Record<string, string>;
           return fakeResponse({ json: () => Promise.resolve({ preview: [] }) });
         },
@@ -604,7 +623,7 @@ describe('importContactsPreview', () => {
       targetDispatch(
         `${BASE}/contacts/import/preview`,
         'csrf-1',
-        (call, opts) => {
+        (_call, opts) => {
           firstCallHeaders = (opts.headers ?? {}) as Record<string, string>;
           return fakeResponse({ json: () => Promise.resolve({ preview: [] }) });
         },
@@ -715,7 +734,7 @@ describe('uploadKbImage', () => {
       targetDispatch(
         `${BASE}/kb/upload-image`,
         'csrf-1',
-        (call, opts) => {
+        (_call, opts) => {
           firstCallHeaders = (opts.headers ?? {}) as Record<string, string>;
           return fakeResponse({ json: () => Promise.resolve({ url: '/files/proaktiv.png' }) });
         },
@@ -878,7 +897,7 @@ describe('downloadBackup', () => {
     expect(loc.href).toBe('/login');
   });
 
-  it('401 på /backup, refresh lyckas men omkörningen är fortfarande icke-ok → "Backup failed"', async () => {
+  it('401 på /backup, refresh lyckas men omkörningen är fortfarande icke-ok → "Request failed"', async () => {
     localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 3600));
     let backupCalls = 0;
     fetchMock.mockImplementation((url: string) => {
@@ -894,7 +913,7 @@ describe('downloadBackup', () => {
     });
 
     const api = await freshApi();
-    await expect(api.downloadBackup()).rejects.toThrow('Backup failed');
+    await expect(api.downloadBackup()).rejects.toThrow('Request failed');
     expect(backupCalls).toBe(2);
   });
 });

@@ -44,7 +44,7 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
     const maxRow = db.prepare('SELECT COALESCE(MAX(position), -1) as max FROM categories').get() as { max: number };
     const position = (maxRow?.max ?? -1) + 1;
 
-    db.prepare('INSERT INTO categories (id, name, label, position) VALUES (?, ?, ?, ?)').run(id, name, label, position);
+    db.prepare('INSERT INTO categories (id, name, label, position, created_at) VALUES (?, ?, ?, ?, ?)').run(id, name, label, position, new Date().toISOString());
     
     const category = db.prepare('SELECT id, name, label, position, created_at FROM categories WHERE id = ?').get(id) as CategoryRow;
     res.status(201).json(category);

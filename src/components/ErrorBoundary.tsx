@@ -8,6 +8,9 @@ interface Props {
   // route-level boundaries). A small inline fallback keeps a crash in one
   // widget from taking down the surrounding page.
   fallback?: ReactNode;
+  // Boundary inuti app-skalet (sidofält/header utanför): fallbacken fyller då
+  // bara innehållsytan i stället för hela skärmen.
+  inShell?: boolean;
 }
 
 interface State {
@@ -40,7 +43,7 @@ class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
       return (
-        <div className="min-h-dvh flex items-center justify-center bg-background p-4">
+        <div className={`${this.props.inShell ? 'min-h-[60dvh]' : 'min-h-dvh bg-background'} flex items-center justify-center p-4`}>
           <div className="max-w-md w-full text-center space-y-6">
             <div className="mx-auto w-14 h-14 rounded-full bg-destructive/10 flex items-center justify-center">
               <AlertTriangle className="w-7 h-7 text-destructive" />
@@ -58,13 +61,23 @@ class ErrorBoundary extends Component<Props, State> {
                 {this.state.error.message}
               </pre>
             )}
-            <button
-              onClick={this.handleReload}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-            >
-              <RefreshCw className="w-4 h-4" />
-              Ladda om
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button
+                onClick={this.handleReload}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Ladda om
+              </button>
+              {/* Vanlig länk (inte react-router Link): den globala boundaryn ligger
+                  utanför routern, och en full sidladdning släpper ett trasigt tillstånd. */}
+              <a
+                href="/"
+                className="inline-flex items-center px-4 py-2 rounded-md border border-border text-sm font-medium hover:bg-muted transition-colors"
+              >
+                Till översikten
+              </a>
+            </div>
           </div>
         </div>
       );

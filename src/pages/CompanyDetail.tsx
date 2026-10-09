@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router';
 import { Building2, ArrowLeft, Clock, Ticket, Users, Pencil } from 'lucide-react';
-import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -55,47 +54,41 @@ const CompanyDetail = () => {
 
   if (isLoading) {
     return (
-      <Layout>
-        <div className="space-y-6">
-          <Skeleton className="h-8 w-48" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-28 rounded-lg" />
-            ))}
-          </div>
-          <Skeleton className="h-48 rounded-lg" />
+      <div className="space-y-6">
+        <Skeleton className="h-8 w-48" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-28 rounded-lg" />
+          ))}
         </div>
-      </Layout>
+        <Skeleton className="h-48 rounded-lg" />
+      </div>
     );
   }
 
   if (isError) {
     return (
-      <Layout>
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <Building2 className="w-12 h-12 text-destructive" />
-          <p className="text-muted-foreground">Kunde inte ladda företaget</p>
-          <Button variant="outline" onClick={() => navigate('/companies')}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Tillbaka till företag
-          </Button>
-        </div>
-      </Layout>
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <Building2 className="w-12 h-12 text-destructive" />
+        <p className="text-muted-foreground">Kunde inte ladda företaget</p>
+        <Button variant="outline" onClick={() => navigate('/companies')}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Tillbaka till företag
+        </Button>
+      </div>
     );
   }
 
   if (!company) {
     return (
-      <Layout>
-        <div className="flex flex-col items-center justify-center py-24 gap-4">
-          <Building2 className="w-12 h-12 text-muted-foreground" />
-          <p className="text-muted-foreground">Företaget hittades inte</p>
-          <Button variant="outline" onClick={() => navigate('/companies')}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Tillbaka till företag
-          </Button>
-        </div>
-      </Layout>
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <Building2 className="w-12 h-12 text-muted-foreground" />
+        <p className="text-muted-foreground">Företaget hittades inte</p>
+        <Button variant="outline" onClick={() => navigate('/companies')}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Tillbaka till företag
+        </Button>
+      </div>
     );
   }
 
@@ -104,7 +97,7 @@ const CompanyDetail = () => {
     : '—';
 
   return (
-    <Layout>
+    <>
       <div className="space-y-6">
         {/* Back + header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -282,7 +275,7 @@ const CompanyDetail = () => {
           </form>
         </DialogContent>
       </Dialog>
-    </Layout>
+    </>
   );
 };
 

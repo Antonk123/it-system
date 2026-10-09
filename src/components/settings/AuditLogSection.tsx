@@ -57,6 +57,11 @@ function apiKeyLabel(entry: AuditLogEntry): string | null {
   return entry.api_key_name ? `via API-nyckel: ${entry.api_key_name}` : `via API-nyckel #${entry.api_key_id.slice(0, 8)}`;
 }
 
+const auditLogKeys = {
+  all: ['audit-log'] as const,
+  page: (entityType: string, action: string, offset: number) => [...auditLogKeys.all, entityType, action, offset] as const,
+};
+
 export function AuditLogSection() {
   const [entityTypeInput, setEntityTypeInput] = useState('');
   const [actionInput, setActionInput] = useState('');
@@ -70,7 +75,7 @@ export function AuditLogSection() {
   }, [entityType, action]);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['audit-log', entityType, action, offset],
+    queryKey: auditLogKeys.page(entityType, action, offset),
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set('limit', String(PAGE_SIZE));
@@ -95,7 +100,7 @@ export function AuditLogSection() {
           <Label htmlFor="audit-log-entity-type">Entitetstyp</Label>
           <Input
             id="audit-log-entity-type"
-            placeholder="t.ex. user, invoice, session..."
+            placeholder="t.ex. user, ticket, session..."
             value={entityTypeInput}
             onChange={(e) => setEntityTypeInput(e.target.value)}
           />

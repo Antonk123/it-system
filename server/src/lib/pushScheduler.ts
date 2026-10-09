@@ -22,7 +22,7 @@ async function checkAgingTickets(): Promise<void> {
     FROM tickets
     WHERE status NOT IN ('closed', 'resolved')
       AND updated_at <= ?
-      AND (last_aging_notified_at IS NULL OR last_aging_notified_at < datetime('now', '-1 day'))
+      AND (last_aging_notified_at IS NULL OR datetime(last_aging_notified_at) < datetime('now', '-1 day'))
     ORDER BY updated_at ASC
   `).all(cutoffIso) as { id: string; title: string; updated_at: string }[];
 

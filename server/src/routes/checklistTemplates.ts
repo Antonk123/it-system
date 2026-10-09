@@ -59,9 +59,10 @@ function parseTemplateItems(items: unknown): TemplateItemInput[] | null {
 
 const insertTemplateItems = (templateId: string, items: TemplateItemInput[]) => {
   const insertItem = db.prepare(
-    'INSERT INTO checklist_template_items (id, template_id, label, parent_label, position) VALUES (?, ?, ?, ?, ?)'
+    'INSERT INTO checklist_template_items (id, template_id, label, parent_label, position, created_at) VALUES (?, ?, ?, ?, ?, ?)'
   );
-  items.forEach((item, i) => insertItem.run(randomUUID(), templateId, item.label, item.parent_label, i));
+  const now = new Date().toISOString();
+  items.forEach((item, i) => insertItem.run(randomUUID(), templateId, item.label, item.parent_label, i, now));
 };
 
 // GET /api/checklist-templates — list all templates with items
@@ -102,8 +103,9 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
     const id = randomUUID();
     // Mall + rader i en transaktion så en felande rad inte lämnar en tom mall.
     db.transaction(() => {
-      db.prepare('INSERT INTO checklist_templates (id, name, description) VALUES (?, ?, ?)').run(
-        id, name.trim(), description?.trim() || null
+      const now = new Date().toISOString();
+      db.prepare('INSERT INTO checklist_templates (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(
+        id, name.trim(), description?.trim() || null, now, now
       );
       insertTemplateItems(id, parsedItems);
     })();
@@ -152,10 +154,11 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
     db.transaction(() => {
       if (name !== undefined || description !== undefined) {
         db.prepare(
-          'UPDATE checklist_templates SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+          'UPDATE checklist_templates SET name = ?, description = ?, updated_at = ? WHERE id = ?'
         ).run(
           name !== undefined ? name.trim() : existing.name,
           description !== undefined ? (description?.trim() || null) : existing.description,
+          new Date().toISOString(),
           req.params.id
         );
       }
@@ -222,18 +225,19 @@ router.post('/:id/apply', authenticate, (req: AuthRequest, res: Response) => {
     const labelToId: Record<string, string> = {};
     const parentItems = templateItems.filter(i => !i.parent_label);
     const insertItem = db.prepare(
-      'INSERT INTO ticket_checklists (id, ticket_id, label, position, parent_id) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO ticket_checklists (id, ticket_id, label, position, parent_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
     );
+    const now = new Date().toISOString();
 
     const doInsert = db.transaction(() => {
       for (const item of parentItems) {
         const newId = randomUUID();
-        insertItem.run(newId, ticketId, item.label, pos++, null);
+        insertItem.run(newId, ticketId, item.label, pos++, null, now, now);
         labelToId[item.label] = newId;
       }
       for (const item of templateItems.filter(i => i.parent_label)) {
         const parentId = labelToId[item.parent_label!] || null;
-        insertItem.run(randomUUID(), ticketId, item.label, pos++, parentId);
+        insertItem.run(randomUUID(), ticketId, item.label, pos++, parentId, now, now);
       }
     });
     doInsert();

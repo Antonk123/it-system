@@ -26,8 +26,9 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Trash2, Users, Mail, Shield, Loader2, HardDriveDownload, Upload, ScrollText, KeyRound, Unlink } from 'lucide-react';
 import { toast } from 'sonner';
-import { api } from '@/lib/api';
+import { api, downloadBlob } from '@/lib/api';
 import { BackupScheduleSection } from '@/components/settings/BackupScheduleSection';
+import { BackupFilesList } from '@/components/settings/BackupFilesList';
 import { AuditLogSection } from '@/components/settings/AuditLogSection';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
@@ -76,14 +77,7 @@ const AdminTab = () => {
       const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
       const dateStr = new Date().toISOString().slice(0, 10);
       const filename = `it-ticket-backup-${dateStr}.zip`;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      downloadBlob(blob, filename);
       toast.success(`Backup skapad — ${filename} (${sizeMB} MB)`);
     } catch {
       toast.error('Backup misslyckades. Kontrollera servern och försök igen.');
@@ -401,6 +395,7 @@ const AdminTab = () => {
             <CollapsibleContent>
               <CardContent className="space-y-4">
                 <BackupScheduleSection />
+                <BackupFilesList />
                 <p className="text-sm text-muted-foreground">
                   ZIP-filen innehåller en WAL-säker ögonblicksbild av databasen samt alla uppladdade filer. Spara filen på en säker plats.
                 </p>
@@ -451,7 +446,7 @@ const AdminTab = () => {
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.auditLog ? '−' : '+'}</span>
                 </CardTitle>
                 <CardDescription>
-                  Historik över känsliga åtgärder i systemet — inloggningar, användarändringar, fakturor med mera.
+                  Historik över känsliga åtgärder i systemet — inloggningar, användarändringar, backuper med mera.
                 </CardDescription>
               </CardHeader>
             </CollapsibleTrigger>

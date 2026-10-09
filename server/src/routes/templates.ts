@@ -140,10 +140,11 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
     const insertTemplate = db.transaction(() => {
       const maxPosition = db.prepare('SELECT MAX(position) as max FROM ticket_templates').get() as { max: number | null };
       const position = (maxPosition.max ?? -1) + 1;
+      const now = new Date().toISOString();
 
       db.prepare(`
-        INSERT INTO ticket_templates (id, name, description, template_type, title_template, description_template, priority, category_id, notes_template, solution_template, position, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO ticket_templates (id, name, description, template_type, title_template, description_template, priority, category_id, notes_template, solution_template, position, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         name.trim(),
@@ -157,15 +158,17 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
         notes_template || null,
         solution_template || null,
         position,
-        req.user?.id || null
+        req.user?.id || null,
+        now,
+        now
       );
 
       const insertFieldStmt = db.prepare(`
-        INSERT INTO template_fields (id, template_id, field_name, field_label, field_type, placeholder, default_value, required, options, position)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO template_fields (id, template_id, field_name, field_label, field_type, placeholder, default_value, required, options, position, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       parsedFields.forEach((field, index) => {
-        insertFieldStmt.run(randomUUID(), id, field.field_name, field.field_label, field.field_type, field.placeholder, field.default_value, field.required, field.options, index);
+        insertFieldStmt.run(randomUUID(), id, field.field_name, field.field_label, field.field_type, field.placeholder, field.default_value, field.required, field.options, index, now, now);
       });
     });
     insertTemplate();
@@ -225,7 +228,7 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
 
     db.prepare(`
       UPDATE ticket_templates
-      SET name = ?, description = ?, template_type = ?, title_template = ?, description_template = ?, priority = ?, category_id = ?, notes_template = ?, solution_template = ?, updated_at = CURRENT_TIMESTAMP
+      SET name = ?, description = ?, template_type = ?, title_template = ?, description_template = ?, priority = ?, category_id = ?, notes_template = ?, solution_template = ?, updated_at = ?
       WHERE id = ?
     `).run(
       name?.trim() ?? existing.name,
@@ -237,6 +240,7 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
       category_id !== undefined ? category_id || null : existing.category_id,
       notes_template ?? existing.notes_template,
       solution_template ?? existing.solution_template,
+      new Date().toISOString(),
       req.params.id
     );
 

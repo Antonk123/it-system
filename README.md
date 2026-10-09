@@ -3,7 +3,7 @@
 
 # IT-Ticket
 
-**A self-hosted helpdesk for the technician doing the work, not the manager tracking it — ticket to invoice in one system, with no per-agent license fee.**
+**A self-hosted helpdesk for internal IT support at Prefabmästarna — tickets, a searchable knowledge base and mail-to-ticket in one small system, with no per-agent license fee.**
 
 [![CI](https://github.com/Antonk123/it-system/actions/workflows/ci.yml/badge.svg)](https://github.com/Antonk123/it-system/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -20,19 +20,22 @@
 
 ## Why this instead of Jira / Freshdesk / Zendesk
 
-If you are a one-person IT shop or a small MSP, those tools charge per agent per month, forever,
-for a workflow built around software project management or enterprise support tiers you will
-never use. The concrete differences:
+IT-Ticket is built for one thing: an in-house IT team handling support requests from its own
+colleagues. Those tools charge per agent per month, forever, for a workflow built around
+software project management or enterprise support tiers an internal helpdesk does not need.
+The concrete differences:
 
 - **No per-user pricing.** MIT-licensed and self-hosted. Add ten technicians tomorrow and your
   bill does not change, because there is no bill.
 - **Your data stays on your infrastructure.** A SQLite file on your disk, your backups, your
   retention policy. Nothing leaves the server unless you configure it to — SMTP, IMAP, outbound
   webhooks, or web push.
-- **Ticket → invoice in the same system.** Time logged against a ticket rolls up into
-  per-customer invoicing without exporting to a second tool.
 - **Built around the technician's loop**, not a project board: email-to-ticket and a searchable
   knowledge base linked directly from every ticket.
+- **Deliberately small scope.** SLA tracking, invoicing and time registration were retired;
+  historical data is preserved in the database but no longer exposed. The system does tickets,
+  knowledge base, e-mail and the practical workflows around them (reminders, checklists,
+  templates, reports).
 
 **Where it is genuinely weaker.** Read this before you install it:
 
@@ -58,10 +61,12 @@ never use. The concrete differences:
 ## Features
 
 **Ticketing** — full lifecycle with custom fields and templates, checklists, ticket linking,
-public share links, and recurring tickets for maintenance that repeats on a schedule.
+personal reminders, bulk operations, CSV import and XLSX export, and public share links that
+expire (30 days by default, 1–365 configurable).
 
 **Knowledge base** — full-text search (SQLite FTS5) over a knowledge base linked directly from
-ticket detail, with article types, staleness detection, and cross-references.
+ticket detail, with article types, drafts, staleness detection, cross-references, expiring
+share links and an optional public portal.
 
 **Communication** — email-to-ticket over IMAP (basic auth or Microsoft 365 OAuth2 client
 credentials), outbound notification mail, and web push notifications.
@@ -70,8 +75,9 @@ credentials), outbound notification mail, and web push notifications.
 HMAC-signed outbound webhooks, and optional OIDC SSO (e.g. Microsoft Entra ID) alongside password
 login.
 
-**Operations** — automatic closing of idle tickets, scheduled
-backups with retention and an optional off-site copy step, an audit log, and six UI themes.
+**Operations** — automatic closing of idle tickets, scheduled backups with retention, an
+optional off-site copy step and a list/download of stored backups in Settings, an audit log,
+and seven UI themes.
 
 ![Ticket detail](docs/screenshots/ticket-detail.png)
 
@@ -112,7 +118,12 @@ docker exec -e ADMIN_EMAIL="you@example.com" \
             it-ticketing-backend node dist/db/init.js
 ```
 
-Frontend on `:8082`, API on `:3002/api`.
+Frontend on `:8082`; the API is published on `127.0.0.1:3002` only (loopback — the frontend's
+nginx reaches the backend over the Docker network). The backend container runs as a non-root
+user; a data volume created by an older (root) image must be `chown`ed once, see
+[`docs/OPERATIONS.md`](docs/OPERATIONS.md). `ADMIN_EMAIL` and `ADMIN_PASSWORD` are both required
+by `init.js`, and the password must satisfy the 12-character policy. Web push additionally needs
+`VAPID_SUBJECT` (`mailto:` or `https:` contact) next to the VAPID keys.
 
 ## Architecture
 
@@ -130,11 +141,11 @@ layer and no shared database between customers — isolation is "separate deploy
 ┌──────────────────────────────────────────────────────────────┐
 │                   Express 5 API (Node 22)                    │
 │  passport (JWT + local) · csrf-csrf · helmet                 │
-│  27 route modules under /api/*                               │
+│  24 route modules, 160 operations under /api/*               │
 │                                                              │
 │  background schedulers (node-cron):                          │
-│   reminders · backups · auto-close · recurring tickets ·     │
-│   webhook retry · push aging                                │
+│   reminders · backups · auto-close · webhook retry ·         │
+│   push aging · retention and token cleanup                   │
 │                                                              │
 │  IMAP poller (ImapFlow + @azure/msal-node) → mail-to-ticket  │
 └───────────┬──────────────────────────────┬───────────────────┘
@@ -158,18 +169,21 @@ implements it:
 | Mechanism | Implementation | Where |
 |---|---|---|
 | Access tokens | JWT, HS256, 15-minute lifetime, verified by `passport-jwt` | `server/src/config/passport.ts` |
-| Refresh | Rotating refresh tokens in an HttpOnly cookie | `server/src/routes/auth.ts` |
+| Refresh | Rotating refresh tokens in an HttpOnly cookie (cookie only, never the body), stored as SHA-256 hashes; reusing a rotated token revokes the whole token family | `server/src/routes/auth.ts` |
+| Passwords | Minimum 12 characters (3 of 4 character classes, or 16+), bcrypt cost 12 with rehash-on-login, per-IP and per-account login throttling; admin-created accounts must change the password on first login; a password change invalidates every other session | `server/src/lib/passwordPolicy.ts`, `server/src/routes/auth.ts` |
 | API keys | `Bearer itk_live_…`, SHA-256 hashed at rest, constant-time compare; the raw key is never stored | `server/src/middleware/auth.ts` |
 | API key scopes | `read` (default) / `write`. A key without `write` gets **403** on every mutating request — the key's scope is the credential, not the user's role | `server/src/middleware/auth.ts` |
-| CSRF | Double-submit cookie; `x-csrf-token` required on cookie-authenticated mutations. Exempt: `/api/auth/login` (no session yet — authenticates from the body), `/api/public/*` and API-key requests (no cookie involved), and `/api/auth/refresh`, which *does* read an ambient HttpOnly cookie but is protected instead by single-use rotation — a replayed token is already invalid | `server/src/app.ts` |
+| CSRF | Double-submit cookie; `x-csrf-token` required on cookie-authenticated mutations. Exempt: `/api/auth/login` (no session yet — authenticates from the body), `/api/public/*` and API-key requests (no cookie involved), and `/api/auth/refresh` and `/api/auth/logout`, which *do* read an ambient HttpOnly `SameSite=strict` cookie but are protected instead by single-use rotation with reuse detection (refresh) and by the fact that a forced logout only logs out (logout) | `server/src/app.ts` |
 | Secrets fail closed | The backend exits with code 1 at boot if `JWT_SECRET` or `CSRF_SECRET` is missing — unconditionally, in every environment. Same exit if either is shorter than 32 characters, unless **both** `ALLOW_WEAK_SECRETS=1` **and** `NODE_ENV` is `development`/`test`, so a misconfigured production with `NODE_ENV` unset cannot silently fail open | `server/src/config/secretValidation.ts` |
-| Webhooks | Payloads signed HMAC-SHA256 in `X-Webhook-Signature`; the delivery row is persisted *before* the first attempt so retries survive a crash; the target URL is re-resolved immediately before each request, guarding against a registered host that later resolves to an internal address | `server/src/lib/webhookDispatcher.ts` |
+| Webhooks | `X-Webhook-Signature` = hex HMAC-SHA256 over `timestamp.id.body` (with `X-Webhook-Timestamp` and `X-Webhook-Id` headers, so receivers can reject replays and duplicates); the delivery row is persisted *before* the first attempt so retries survive a crash; the target URL is re-resolved immediately before each request and redirects are never followed | `server/src/lib/webhookDispatcher.ts` |
+| Uploads | MIME and extension allowlists plus a magic-byte check; **SVG is not accepted** as a ticket attachment, KB image or logo; downloads are always `Content-Disposition: attachment` | `server/src/routes/attachments.ts` |
+| Public form | Rate limited (5/min/IP), hidden honeypot field and a minimum fill time | `server/src/routes/public.ts` |
 | Headers | `helmet` with an explicit CSP (`default-src 'self'`, no inline scripts), HSTS with preload, `noSniff` | `server/src/app.ts` |
 
 **Not solved:** rate limiting is in-memory and per-process; there is no 2FA on password login;
-there is no encryption at rest for the SQLite file, so confidentiality is delegated to filesystem
-and host security; and public ticket share links do not expire — they stay valid until an
-authenticated user revokes them.
+and there is no encryption at rest for the SQLite file, so confidentiality is delegated to
+filesystem and host security. Public ticket share links always expire (30 days by default) and
+can be revoked earlier by a user with write access to the ticket.
 
 Found a vulnerability? **Do not open a public issue** — use the private
 [security advisory form](https://github.com/Antonk123/it-system/security/advisories/new).
@@ -189,9 +203,10 @@ there is no separate "remember to migrate" deploy step.
 **Backup and restore are both exercised by tests, not merely documented.** Backups take a
 WAL-safe online snapshot, run `PRAGMA integrity_check` before the snapshot enters rotation, zip
 it together with uploads, and `chmod 0600` the archive because it contains the entire database.
-Restore is protected against zip-slip, verifies the SQLite magic header, sanity-checks that the
-expected tables exist before anything is swapped, and keeps a rollback copy until the swap
-succeeds.
+Restore is protected against zip-slip and extraction-size caps, verifies the SQLite magic
+header, runs `PRAGMA quick_check` and sanity-checks that the expected tables exist before
+anything is swapped, and keeps `.pre-restore` copies of the database and uploads so a failed swap
+rolls back. Stored backups can be listed and downloaded by an admin (`GET /api/backup/files`).
 
 **Where data lives.** `data/database.sqlite` plus `data/uploads/` inside the backend container,
 expected to sit on a persistent volume; `DB_PATH` and `UPLOAD_DIR` override the location.
@@ -204,14 +219,15 @@ What CI runs on every push and pull request — four jobs, all required:
 
 | Job | Runs | Fails on |
 |---|---|---|
-| `lint-and-typecheck` | ESLint across the repo, `tsc --noEmit` against both tsconfigs, the full suite (root `npm test` sweeps backend tests too), `redocly lint docs/openapi.yaml` | any lint or type error, any failing test, an invalid OpenAPI spec |
-| `lint-server` | server typecheck, backend suite with coverage enforced | a failing test, or coverage dropping below the ratchet thresholds — which are raised as coverage improves and never lowered to make a build pass |
-| `docker-build` | builds both production images | image build failure, catching Dockerfile drift a green test suite would not |
+| `lint-and-typecheck` | ESLint with `--max-warnings 0`, `tsc --noEmit` against both frontend tsconfigs, the unused-code check, the frontend suite, `redocly lint docs/openapi.yaml`, and `scripts/check-openapi-coverage.mjs` (every mounted Express route must be in the spec) | any lint warning or type error, unused locals/parameters, any failing test, an invalid OpenAPI spec, or a route missing from it |
+| `lint-server` | server typecheck, unused-code check, backend suite with coverage enforced | a failing test, or coverage dropping below the ratchet thresholds — which are raised as coverage improves and never lowered to make a build pass |
+| `docker-build` | builds both production images (only after the two jobs above pass) | image build failure, catching Dockerfile drift a green test suite would not |
 | `security-audit` | `scripts/audit-check.mjs` against both dependency trees | **any high or critical advisory**, unless listed in `audit-allowlist.json` with a written justification *and* an expiry date. That allowlist currently has **zero entries** — nothing is being suppressed |
 
-**1,250+ tests across 89 files**, frontend and backend suites combined. Every GitHub Actions step
-is pinned to a commit SHA rather than a movable tag. Husky and lint-staged run the same ESLint
-rules before a commit is allowed to land.
+**142 test files** (57 frontend, 85 backend; counted 2026-10-09 with
+`find . -name '*.test.*' -not -path '*/node_modules/*'`). Every GitHub Actions step is pinned to a
+commit SHA rather than a movable tag. Husky and lint-staged run the same ESLint rules before a
+commit is allowed to land.
 
 ## Development setup
 
@@ -228,11 +244,14 @@ cd server && npm ci && cd ..  # backend deps
 |---|---|---|
 | root | `npm run dev` | Vite dev server |
 | root | `npm test` | frontend suite |
+| root | `npm run check:unused` | unused locals/parameters in the frontend |
+| root | `npm run openapi:lint` | validate `docs/openapi.yaml` |
 | root | `npm run lint` | ESLint over the whole repo |
 | root | `npm run build` | production frontend build |
 | `server/` | `npm run dev` | `tsx watch`, no build step |
 | `server/` | `npm test` | backend suite |
-| `server/` | `npm run build` | `tsc` plus copying `schema.sql` into `dist/` |
+| `server/` | `npm run check:unused` | unused locals/parameters in the backend |
+| `server/` | `npm run build` | `tsc && cp` of `schema.sql` into `dist/` (fails the build if `tsc` fails) |
 
 ## Configuration
 
@@ -246,7 +265,8 @@ list. What actually gates startup:
 | `CORS_ORIGIN` | in production | no browser origin is allowlisted and the SPA cannot call the API |
 | `APP_BASE_URL` | recommended | not fail-closed: the server logs a warning and falls back to the first origin in `CORS_ORIGIN`. With neither set, links in outgoing email (password reset, ticket links) are unusable |
 | `SMTP_*` / `IMAP_*` | no | outbound mail and mail-to-ticket, independently optional |
-| `VAPID_*` | no | web push; generated by the setup script |
+| `VAPID_*` | no | web push; generated by the setup script. `VAPID_SUBJECT` (`mailto:…` or `https://…`) is required whenever push is enabled, otherwise push stays disabled with a warning |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | when seeding the first admin | `db/init.ts` exits with code 1 if either is missing or the password breaks the 12-character policy |
 | `OIDC_*` | no | SSO stays off until all four values are set. Two rules are enforced in code, not left to configuration: `OIDC_ISSUER_URL` must name exactly one tenant — all three multi-tenant path segments (`/common`, `/organizations`, `/consumers`) are rejected identically on the configured URL's path segment, but for different reasons: `/common` and `/organizations` discover a placeholder issuer (`{tenantid}`) that would make the `iss` check self-referential and let any Entra tenant validate, while `/consumers` discovers a *concrete* issuer for Microsoft's own personal-account tenant, so it's rejected separately, both on that segment name and again on the discovered tenant GUID — and SSO only authenticates accounts that already exist, so an unknown identity is refused instead of provisioned |
 
 ## API
@@ -255,8 +275,32 @@ Machine-readable contract: [`docs/openapi.yaml`](docs/openapi.yaml) (OpenAPI 3.0
 CI). Rendered reference: [`docs/api.html`](docs/api.html). Prose reference with auth chains and
 rate limits per route: [`docs/API.md`](docs/API.md).
 
-Everything is mounted under `/api`. Authentication is a JWT bearer token **or** an API key;
-mutating requests additionally require the `x-csrf-token` header unless authenticated by API key.
+Everything is mounted under `/api` (160 operations). Authentication is a JWT bearer token **or** an
+API key; mutating requests additionally require the `x-csrf-token` header unless authenticated by
+API key. Ticket access is one rule: every signed-in user can read; writing needs admin, the
+assignee or creator, or an unassigned ticket
+([ADR 0001](docs/adr/0001-unified-ticket-access-policy.md)).
+
+**Outgoing webhooks — breaking change.** `X-Webhook-Signature` is now
+`hex(HMAC-SHA256(secret, timestamp + "." + id + "." + rawBody))` with the `X-Webhook-Timestamp`
+and `X-Webhook-Id` headers; the old body-only signature no longer verifies. Receivers must verify
+over the raw bytes, compare in constant time, reject timestamps older than ~5 minutes and dedupe
+on the id. Details in [`docs/API.md`](docs/API.md#webhooks--apiwebhooks).
+
+## Behaviour changes to expect after upgrading
+
+- **Everyone logs in once more.** Refresh tokens are now stored hashed and old ones are wiped,
+  so every session ends at deploy.
+- **Admin-created accounts must change their password** on first login; passwords need at
+  least 12 characters (3 of 4 character classes, or 16+).
+- **Webhook receivers must be updated** (signature above).
+- **SVG is no longer accepted** as a ticket attachment, KB image or logo.
+- **The public ticket form has a honeypot** and a minimum fill time; bots get a fake success.
+- **Stored backup files** can be listed and downloaded by admins in Settings.
+- **Ticket permissions are uniform** — see the API section.
+- Operators: the backend port is bound to loopback, containers run as non-root (existing data
+  volumes need a one-time `chown`), and the Portainer stack is a separate copy of the compose
+  file that must be updated by hand. Full list in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Contributing
 

@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
+import { api, ContactRow } from '@/lib/api';
 import { User } from '@/types/ticket';
 import { contactSchema, contactUpdateSchema, getValidationError } from '@/lib/validations';
 import { parseServerDate } from '@/lib/date';
@@ -11,9 +11,38 @@ export const userKeys = {
   all: ['users'] as const,
   lists: () => [...userKeys.all, 'list'] as const,
   list: () => [...userKeys.lists()] as const,
+  page: (page: number, search: string) => [...userKeys.list(), 'page', page, search] as const,
 };
 
-export const useUsers = () => {
+export const CONTACTS_PAGE_SIZE = 50;
+
+const toUser = (c: ContactRow) => ({
+  id: c.id,
+  name: c.name,
+  email: c.email,
+  department: c.department || undefined,
+  company_id: c.company_id || undefined,
+  company_name: c.company_name || undefined,
+  createdAt: parseServerDate(c.created_at),
+});
+
+/** Server-side paginated + searched contact list (page size 50). */
+export const useContactsPage = (page: number, search: string, enabled = true) => {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: userKeys.page(page, search),
+    queryFn: async () => {
+      const result = await api.getContactsPage({ page, limit: CONTACTS_PAGE_SIZE, search });
+      return { users: result.data.map(toUser) as User[], total: result.pagination.total };
+    },
+    placeholderData: keepPreviousData,
+    enabled,
+    staleTime: 1000 * 60,
+  });
+
+  return { users: data?.users ?? [], total: data?.total ?? 0, isLoading, isError };
+};
+
+export const useUsers = ({ enabled = true }: { enabled?: boolean } = {}) => {
   const queryClient = useQueryClient();
 
   // Fetch users (contacts) with React Query
@@ -21,17 +50,9 @@ export const useUsers = () => {
     queryKey: userKeys.list(),
     queryFn: async () => {
       const data = await api.getContacts();
-      const mapped = data.map((u) => ({
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        department: u.department || undefined,
-        company_id: u.company_id || undefined,
-        company_name: u.company_name || undefined,
-        createdAt: parseServerDate(u.created_at),
-      }));
-      return mapped as User[];
+      return data.map(toUser) as User[];
     },
+    enabled,
     staleTime: 1000 * 60 * 5, // Users don't change very often, cache for 5 minutes
   });
 
@@ -48,15 +69,7 @@ export const useUsers = () => {
         company_id: (user as any).company_id || null,
         department: validation.data.department || null,
       } as any);
-      return {
-        id: data.id,
-        name: data.name,
-        email: data.email,
-        department: data.department || undefined,
-        company_id: data.company_id || undefined,
-        company_name: data.company_name || undefined,
-        createdAt: parseServerDate(data.created_at),
-      };
+      return toUser(data);
     },
     onSuccess: (newUser) => {
       // Optimistically update the cache for instant feedback...
@@ -69,8 +82,8 @@ export const useUsers = () => {
       // suspends the app — without this the new contact "disappears".
       queryClient.invalidateQueries({ queryKey: userKeys.list() });
     },
-    onError: () => {
-      toast.error('Failed to create contact');
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Kunde inte skapa kontakt');
     },
   });
 
@@ -97,8 +110,8 @@ export const useUsers = () => {
       });
       queryClient.invalidateQueries({ queryKey: userKeys.list() });
     },
-    onError: () => {
-      toast.error('Failed to update contact');
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : 'Kunde inte uppdatera kontakt');
     },
   });
 

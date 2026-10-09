@@ -166,10 +166,11 @@ function resolveOrCreateContact(fromAddress: string, fromName: string, autoCreat
 
   if (!contact && autoCreate) {
     const contactId = randomUUID();
-    db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)').run(
+    db.prepare('INSERT INTO contacts (id, name, email, created_at) VALUES (?, ?, ?, ?)').run(
       contactId,
       fromName,
-      fromAddress
+      fromAddress,
+      new Date().toISOString()
     );
     contact = { id: contactId, company_id: null };
     logger.info('Created contact from inbound email', { email: fromAddress });
@@ -186,13 +187,14 @@ function addCommentToTicket(
   opts: { internal?: boolean; messageId?: string | null } = {}
 ): void {
   const commentId = randomUUID();
+  const now = new Date().toISOString();
 
   // user_id måste peka på en riktig användare (FK), men systemanvändaren säger
   // inget om vem som faktiskt skrev — avsändaren bärs av email_from_*-kolumnerna
   // (migration 071) och renderas i kommentarhuvudet, inte i brödtexten.
   db.prepare(
-    `INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal, email_from_name, email_from_address, email_message_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal, email_from_name, email_from_address, email_message_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     commentId,
     ticketId,
@@ -201,10 +203,12 @@ function addCommentToTicket(
     opts.internal ? 1 : 0,
     fromName,
     fromAddress,
-    opts.messageId ?? null
+    opts.messageId ?? null,
+    now,
+    now
   );
 
-  db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(ticketId);
+  db.prepare('UPDATE tickets SET updated_at = ? WHERE id = ?').run(now, ticketId);
 
   logger.info('Added email comment to ticket', { ticketId, from: fromAddress, internal: !!opts.internal });
 }
@@ -259,7 +263,7 @@ function senderTicketsLastDay(fromAddress: string): number {
       `SELECT COUNT(*) AS n FROM tickets t
          JOIN contacts c ON c.id = t.requester_id
          JOIN ticket_history h ON h.ticket_id = t.id AND h.field_name = 'created' AND h.new_value = 'email'
-         WHERE c.email = ? COLLATE NOCASE AND t.created_at >= datetime('now', '-1 day')`
+         WHERE c.email = ? COLLATE NOCASE AND datetime(t.created_at) >= datetime('now', '-1 day')`
     )
     .get(fromAddress) as { n: number };
   return row.n;
@@ -430,7 +434,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<'proce
          JOIN contacts c ON c.id = t.requester_id
          WHERE t.title = ?
            AND c.email = ? COLLATE NOCASE
-           AND t.created_at >= datetime('now', '-60 seconds')
+           AND datetime(t.created_at) >= datetime('now', '-60 seconds')
          LIMIT 1`
       )
       .get(strippedSubject, fromAddress) as { id: string } | undefined;
@@ -454,21 +458,22 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<'proce
   }
 
   const ticketId = randomUUID();
+  const now = new Date().toISOString();
 
   // Kontakt, ärende och historik skapas atomärt — ett fel mitt i får inte lämna
   // en halv rad som nästa poll sedan dedupar bort.
   const createTicket = db.transaction(() => {
     const contact = resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
     db.prepare(
-      `INSERT INTO tickets (id, title, description, status, priority, requester_id, company_id, email_message_id)
-       VALUES (?, ?, ?, 'open', 'medium', ?, ?, ?)`
-    ).run(ticketId, subject, sanitizeRichText(body), contact?.id || null, contact?.company_id || null, messageId);
+      `INSERT INTO tickets (id, title, description, status, priority, requester_id, company_id, email_message_id, created_at, updated_at)
+       VALUES (?, ?, ?, 'open', 'medium', ?, ?, ?, ?, ?)`
+    ).run(ticketId, subject, sanitizeRichText(body), contact?.id || null, contact?.company_id || null, messageId, now, now);
 
     // FTS5 synkas automatiskt via triggers (migration 050)
 
     db.prepare(
-      'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(randomUUID(), ticketId, null, 'created', null, 'email');
+      'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value, changed_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(randomUUID(), ticketId, null, 'created', null, 'email', now);
   });
   createTicket();
 
@@ -575,9 +580,9 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
       // Insert DB row first, then write file. If file write fails, clean up the DB row.
       // This avoids orphaned files on disk when the DB insert would have failed.
       db.prepare(
-        `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type)
-         VALUES (?, ?, ?, ?, ?, ?)`
-      ).run(attachId, ticketId, attachment.filename, storedName, attachment.size, attachment.contentType);
+        `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      ).run(attachId, ticketId, attachment.filename, storedName, attachment.size, attachment.contentType, new Date().toISOString());
 
       try {
         fs.mkdirSync(uploadDir, { recursive: true });

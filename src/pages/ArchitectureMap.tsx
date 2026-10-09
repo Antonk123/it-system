@@ -51,9 +51,11 @@ function MapContent() {
           title="IT-Ticket – arkitekturkarta"
           name={embedded ? 'architecture-map-embed' : 'architecture-map'}
           srcDoc={html}
-          // Trusted, administrator-only artifact from our backend. Same-origin
-          // preserves the viewer's local notes; forms never call the backend.
-          sandbox="allow-scripts allow-same-origin allow-downloads"
+          // Administratörsartefakt med egna inline-skript. Utan allow-same-origin
+          // får skripten en egen opak origin och når varken appens localStorage
+          // (access-token) eller API:t. Kartan faller tillbaka på att lokala
+          // fynd inte sparas i webbläsaren — HTML-export bevarar dem.
+          sandbox="allow-scripts allow-downloads"
           className="min-h-0 w-full flex-1 border-0"
         />
       )}

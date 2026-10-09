@@ -334,11 +334,12 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
     // mitt i inte lämnar en föräldralös kontakt eller ett ärende utan fält.
     const createTicket = db.transaction(() => {
       // Find or create contact (e-post matchas skiftlägesokänsligt)
+      const now = new Date().toISOString();
       let contact = db.prepare('SELECT id, name, email FROM contacts WHERE lower(email) = lower(?)').get(email) as ContactRow | undefined;
 
       if (!contact) {
         const contactId = randomUUID();
-        db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)').run(contactId, name, email);
+        db.prepare('INSERT INTO contacts (id, name, email, created_at) VALUES (?, ?, ?, ?)').run(contactId, name, email, now);
         contact = { id: contactId, name, email };
       }
 
@@ -367,22 +368,22 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
       // description) and length-validated above, before any DB writes.
       const ticketId = randomUUID();
       db.prepare(`
-        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, template_id)
-        VALUES (?, ?, ?, 'open', ?, ?, ?, ?)
-      `).run(ticketId, title, finalDescription, ticketPriority, categoryId, contact.id, templateId);
+        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, template_id, created_at, updated_at)
+        VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)
+      `).run(ticketId, title, finalDescription, ticketPriority, categoryId, contact.id, templateId, now, now);
 
       // FTS5 synkas automatiskt via triggers (migration 050)
 
       // Store custom field values if provided (already sanitized above)
       if (sanitizedCustomFields.length > 0) {
         const insertFieldStmt = db.prepare(`
-          INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)
         `);
 
         sanitizedCustomFields.forEach((field) => {
           if (field.fieldName && field.fieldLabel) {
-            insertFieldStmt.run(randomUUID(), ticketId, field.fieldName, field.fieldLabel, field.fieldValue || '');
+            insertFieldStmt.run(randomUUID(), ticketId, field.fieldName, field.fieldLabel, field.fieldValue || '', now);
           }
         });
       }

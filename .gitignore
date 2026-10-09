@@ -41,10 +41,8 @@ docs/superpowers/
 # GSD-sketcher (throwaway UI-mockups) — versionshanteras inte
 .planning/sketches/
 
-# Dev-miljö specifika filer (hot-reload, dev-setup)
-# OBS: docker-compose.dev.portainer.yml spåras numera medvetet som den
-# versionsspårade källan för dev-Portainer-stacken (it-system-dev / id 40).
-# Portainer-GUI:t måste spegla den filen — se dev-db-isolation-runbooken i Obsidian (Projekt/IT-System).
+# Dev-miljö specifika filer (hot-reload, dev-setup). Dev-stacken på servern är avvecklad
+# (se CLAUDE.md); lokal utveckling körs med npm run dev.
 docker-compose.dev.yml
 
 # Logs

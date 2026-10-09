@@ -1,9 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { api, TicketHistoryItem } from '@/lib/api';
 
+export const ticketHistoryKeys = {
+  all: ['ticket-history'] as const,
+  ticket: (ticketId: string) => [...ticketHistoryKeys.all, ticketId] as const,
+};
+
 export const useTicketHistory = (ticketId: string, enabled = true) => {
   const { data: history = [], isLoading, isError } = useQuery<TicketHistoryItem[]>({
-    queryKey: ['ticket-history', ticketId],
+    queryKey: ticketHistoryKeys.ticket(ticketId),
     queryFn: () => api.getTicketHistory(ticketId),
     // `enabled` lets callers defer this below-the-fold query so it doesn't
     // compete with the critical ticket + comments fetch on a slow link.

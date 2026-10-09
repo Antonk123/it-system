@@ -1,4 +1,4 @@
-import { memo, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Comment } from '@/types/ticket';
 import { Button } from '@/components/ui/button';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
@@ -6,12 +6,15 @@ import { MessageSquare, Loader2, Lock, Send } from 'lucide-react';
 import { CommentItem } from './CommentItem';
 import { hasVisibleText } from '@/lib/textValidation';
 import { cn } from '@/lib/utils';
+import { registerUnsavedWork } from '@/registerSW';
 import { toast } from 'sonner';
 
 interface TicketCommentsProps {
   comments: Comment[];
   isLoading: boolean;
   isError?: boolean;
+  // Verkligt antal kommentarer på servern; servern returnerar högst 1000.
+  totalCount?: number;
   // When false, two-way email is disabled system-wide → hide the public-reply
   // toggle entirely (a "public" comment only triggers the customer email, which
   // is now suppressed, so the choice would be meaningless/misleading).
@@ -25,6 +28,7 @@ export const TicketComments = memo(function TicketComments({
   comments,
   isLoading,
   isError,
+  totalCount,
   allowPublicReply = true,
   onAddComment,
   onUpdateComment,
@@ -35,6 +39,13 @@ export const TicketComments = memo(function TicketComments({
   // Internal note (default, staff-only) vs public reply (emailed to the requester).
   const [isInternal, setIsInternal] = useState(true);
 
+  // Ett påbörjat svar ska inte försvinna när en ny app-version laddas om.
+  const hasDraft = hasVisibleText(newComment);
+  useEffect(() => {
+    if (!hasDraft) return;
+    return registerUnsavedWork();
+  }, [hasDraft]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!hasVisibleText(newComment)) return;
@@ -44,7 +55,7 @@ export const TicketComments = memo(function TicketComments({
       await onAddComment(newComment, isInternal);
       setNewComment('');
       toast.success(isInternal ? 'Intern kommentar tillagd' : 'Svar skickat till kund');
-    } catch (error) {
+    } catch {
       toast.error('Kunde inte lägga till kommentar');
     } finally {
       setIsSubmitting(false);
@@ -131,6 +142,11 @@ export const TicketComments = memo(function TicketComments({
         </p>
       ) : (
         <div className="space-y-2">
+          {totalCount !== undefined && totalCount > comments.length && (
+            <p className="text-muted-foreground text-xs text-center" role="status">
+              Visar de {comments.length} senaste kommentarerna
+            </p>
+          )}
           {comments.map((comment) => (
             <CommentItem
               key={comment.id}

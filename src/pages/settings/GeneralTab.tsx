@@ -9,13 +9,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Palette, Type, Bell, Loader2 } from 'lucide-react';
+import { Palette, Type, Bell, Loader2, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
 import { FONT_OPTIONS, FontTheme, applyFontTheme, getStoredFontTheme, isFontTheme, saveFontTheme, ModeTheme, applyMode, getStoredMode, saveModeTheme } from '@/lib/appearance';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import { BrandingSection } from '@/components/settings/BrandingSection';
+import { ChangePasswordForm } from '@/components/ChangePasswordForm';
 
 const themeOptions = [
   { value: 'theme-default', label: 'Slate' },
@@ -40,6 +41,7 @@ const GeneralTab = () => {
   const [sectionsOpen, setSectionsOpen] = useState({
     appearance: true,
     notifications: false,
+    password: false,
   });
 
   useEffect(() => {
@@ -260,6 +262,28 @@ const GeneralTab = () => {
                     />
                   </div>
                 </div>
+              </CardContent>
+            </CollapsibleContent>
+          </Card>
+        </Collapsible>
+
+        <Collapsible open={sectionsOpen.password} onOpenChange={(open) => setSectionsOpen(prev => ({ ...prev, password: open }))}>
+          <Card>
+            <CollapsibleTrigger className="w-full">
+              <CardHeader className="cursor-pointer hover:bg-primary/10 transition-colors">
+                <CardTitle className="flex items-center gap-2">
+                  <KeyRound className="w-5 h-5" />
+                  Byt lösenord
+                  <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.password ? '−' : '+'}</span>
+                </CardTitle>
+                <CardDescription>
+                  Ange ditt nuvarande lösenord och välj ett nytt.
+                </CardDescription>
+              </CardHeader>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <CardContent>
+                <ChangePasswordForm />
               </CardContent>
             </CollapsibleContent>
           </Card>

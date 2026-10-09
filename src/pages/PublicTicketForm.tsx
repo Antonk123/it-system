@@ -28,6 +28,11 @@ const PublicTicketForm = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  // Skräpfångst: botar fyller i det dolda fältet, och servern avvisar formulär
+  // som skickas in direkt efter att sidan öppnats.
+  const [website, setWebsite] = useState('');
+  const [formStartedAt, setFormStartedAt] = useState(() => Date.now());
   const [categories, setCategories] = useState<Category[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
@@ -52,7 +57,9 @@ const PublicTicketForm = () => {
         ]);
         setCategories(categoriesData);
         setTemplates(templatesData);
-      } catch (e) { /* ignore */ }
+      } catch {
+        setLoadError(true);
+      }
     };
     fetchData();
   }, [isAuthLoading, user]);
@@ -113,6 +120,8 @@ const PublicTicketForm = () => {
         priority: formData.priority,
         customFields: customFieldValues.length > 0 ? customFieldValues : undefined,
         template_id: selectedTemplate?.id,
+        website,
+        formStartedAt,
       });
       setIsSuccess(true);
     } catch (err) {
@@ -128,6 +137,8 @@ const PublicTicketForm = () => {
     setCustomFieldValues([]);
     setIsSuccess(false);
     setError(null);
+    setWebsite('');
+    setFormStartedAt(Date.now());
   };
 
   const inputClass = "h-11 rounded-md bg-input border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring";
@@ -194,6 +205,23 @@ const PublicTicketForm = () => {
                 <span>{error}</span>
               </div>
             )}
+
+            {loadError && (
+              <p role="status" className="text-sm text-muted-foreground">
+                Kunde inte ladda kategorier och mallar. Du kan ändå skicka in ärendet.
+              </p>
+            )}
+
+            <div aria-hidden="true" className="sr-only">
+              <input
+                type="text"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                value={website}
+                onChange={(e) => setWebsite(e.target.value)}
+              />
+            </div>
 
             {/* Name + Email */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

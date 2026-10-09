@@ -10,7 +10,6 @@ import { useDashboardOverview } from '@/hooks/useDashboardOverview';
 import { useUpcomingReminders } from '@/hooks/useUpcomingReminders';
 import { useActivityFeed } from '@/hooks/useActivityFeed';
 import { useStatusCounts } from '@/hooks/useStatusCounts';
-import { Layout } from '@/components/Layout';
 import { KPICard } from '@/components/KPICard';
 import { AgingTicketsPanel } from '@/components/AgingTicketsPanel';
 import { RemindersPanel } from '@/components/RemindersPanel';
@@ -103,168 +102,166 @@ const Dashboard = () => {
   };
 
   return (
-    <Layout>
-      <div className="space-y-6">
-        {/* Page greeting */}
+    <div className="space-y-6">
+      {/* Page greeting */}
+      <motion.div
+        initial={prefersReducedMotion ? false : { opacity: 0, y: -8 }}
+        animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <h1 className="text-2xl md:text-[30px] font-bold tracking-tight text-foreground">
+          {getGreeting()}
+          {greetingName && (
+            <>, {greetingName}</>
+          )}
+          .
+        </h1>
+        <p className="text-sm text-muted-foreground mt-1.5">
+          Du har{' '}
+          <span className="font-mono text-xs bg-muted/50 px-1.5 py-0.5 rounded text-foreground">{stats.open}</span>
+          {' '}öppna ärenden och{' '}
+          <span className="font-mono text-xs bg-muted/50 px-1.5 py-0.5 rounded text-foreground">{stats.inProgress}</span>
+          {' '}pågående.
+          {isOverviewLoading
+            ? ''
+            : dashboardOverview?.todayCounts.created_today
+              ? ` +${dashboardOverview.todayCounts.created_today} nya idag.`
+              : ''
+          }
+        </p>
+      </motion.div>
+
+      {/* Fel-banner — visas diskret om en eller flera queries failar */}
+      {hasError && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-sm bg-destructive/10 border border-destructive/25 text-sm text-destructive">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span className="flex-1">Kunde inte hämta all data — siffror kan vara ofullständiga.</span>
+          <button
+            onClick={handleRetryAll}
+            className="flex items-center gap-1.5 text-xs font-medium hover:opacity-80 transition-opacity"
+            aria-label="Försök igen"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Försök igen
+          </button>
+        </div>
+      )}
+
+      {/* Critical Tickets Alert — leads the page: the highest-stakes signal
+          reads before the routine queue, not after it. */}
+      {stats.critical > 0 && (
         <motion.div
+          className="flex items-center gap-3 rounded-sm border border-[hsl(var(--priority-critical))] bg-[hsl(var(--priority-critical)/0.08)] p-4"
           initial={prefersReducedMotion ? false : { opacity: 0, y: -8 }}
           animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
+          transition={{ duration: 0.25 }}
         >
-          <h1 className="text-2xl md:text-[30px] font-bold tracking-tight text-foreground">
-            {getGreeting()}
-            {greetingName && (
-              <>, {greetingName}</>
-            )}
-            .
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1.5">
-            Du har{' '}
-            <span className="font-mono text-xs bg-muted/50 px-1.5 py-0.5 rounded text-foreground">{stats.open}</span>
-            {' '}öppna ärenden och{' '}
-            <span className="font-mono text-xs bg-muted/50 px-1.5 py-0.5 rounded text-foreground">{stats.inProgress}</span>
-            {' '}pågående.
-            {isOverviewLoading
-              ? ''
-              : dashboardOverview?.todayCounts.created_today
-                ? ` +${dashboardOverview.todayCounts.created_today} nya idag.`
-                : ''
-            }
-          </p>
-        </motion.div>
-
-        {/* Fel-banner — visas diskret om en eller flera queries failar */}
-        {hasError && (
-          <div className="flex items-center gap-3 px-4 py-2.5 rounded-sm bg-destructive/10 border border-destructive/25 text-sm text-destructive">
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-            <span className="flex-1">Kunde inte hämta all data — siffror kan vara ofullständiga.</span>
-            <button
-              onClick={handleRetryAll}
-              className="flex items-center gap-1.5 text-xs font-medium hover:opacity-80 transition-opacity"
-              aria-label="Försök igen"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Försök igen
-            </button>
+          <AlertTriangle className="w-5 h-5 text-[hsl(var(--priority-critical))] shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium text-[hsl(var(--priority-critical))]">
+              {stats.critical} kritisk{stats.critical > 1 ? 'a' : 't'} ärende{stats.critical > 1 ? 'n' : ''} kräver uppmärksamhet
+            </p>
           </div>
-        )}
+          <Link to="/tickets?priority=critical">
+            <Button variant="outline" size="sm" className="gap-1">
+              Visa alla <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        </motion.div>
+      )}
 
-        {/* Critical Tickets Alert — leads the page: the highest-stakes signal
-            reads before the routine queue, not after it. */}
-        {stats.critical > 0 && (
-          <motion.div
-            className="flex items-center gap-3 rounded-sm border border-[hsl(var(--priority-critical))] bg-[hsl(var(--priority-critical)/0.08)] p-4"
-            initial={prefersReducedMotion ? false : { opacity: 0, y: -8 }}
-            animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
-            transition={{ duration: 0.25 }}
-          >
-            <AlertTriangle className="w-5 h-5 text-[hsl(var(--priority-critical))] shrink-0" />
-            <div className="flex-1">
-              <p className="font-medium text-[hsl(var(--priority-critical))]">
-                {stats.critical} kritisk{stats.critical > 1 ? 'a' : 't'} ärende{stats.critical > 1 ? 'n' : ''} kräver uppmärksamhet
-              </p>
-            </div>
-            <Link to="/tickets?priority=critical">
-              <Button variant="outline" size="sm" className="gap-1">
-                Visa alla <ArrowRight className="w-4 h-4" />
-              </Button>
-            </Link>
-          </motion.div>
-        )}
+      {/* KPI Grid */}
+      <motion.div
+        className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"
+        variants={kpiContainer}
+        initial={prefersReducedMotion ? false : 'hidden'}
+        animate={prefersReducedMotion ? false : 'visible'}
+      >
+        <motion.div variants={kpiItem}>
+          <KPICard
+            label="Öppna ärenden"
+            value={stats.open}
+            icon={<Ticket className="w-5 h-5" />}
+            onClick={() => navigate('/tickets?status=open')}
+            subLabel={
+              isOverviewLoading
+                ? <Skeleton className="h-3 w-16 mt-1" />
+                : dashboardOverview?.todayCounts.created_today
+                  ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.created_today} idag</span>
+                  : <span>+0 idag</span>
+            }
+          />
+        </motion.div>
+        <motion.div variants={kpiItem}>
+          <KPICard
+            label="Pågående"
+            value={stats.inProgress}
+            icon={<Clock className="w-5 h-5" />}
+            onClick={() => navigate('/tickets?status=in-progress')}
+          />
+        </motion.div>
+        <motion.div variants={kpiItem}>
+          <KPICard
+            label="Väntar"
+            value={stats.waiting}
+            icon={<PauseCircle className="w-5 h-5" />}
+            onClick={() => navigate('/tickets?status=waiting')}
+          />
+        </motion.div>
+        <motion.div variants={kpiItem}>
+          <KPICard
+            label="Lösta"
+            value={stats.resolved}
+            icon={<CheckCircle className="w-5 h-5" />}
+            onClick={() => navigate('/tickets?status=resolved')}
+            subLabel={
+              isOverviewLoading
+                ? <Skeleton className="h-3 w-16 mt-1" />
+                : dashboardOverview?.todayCounts.resolved_today
+                  ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.resolved_today} idag</span>
+                  : <span>+0 idag</span>
+            }
+          />
+        </motion.div>
+      </motion.div>
 
-        {/* KPI Grid */}
+      {/* Queue first, supporting information below */}
+      <div className="space-y-5">
+        {/* Left: Ticket queue */}
         <motion.div
-          className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"
-          variants={kpiContainer}
+          className="space-y-5"
+          variants={sectionFade}
           initial={prefersReducedMotion ? false : 'hidden'}
           animate={prefersReducedMotion ? false : 'visible'}
+          transition={{ delay: 0.15 }}
         >
-          <motion.div variants={kpiItem}>
-            <KPICard
-              label="Öppna ärenden"
-              value={stats.open}
-              icon={<Ticket className="w-5 h-5" />}
-              onClick={() => navigate('/tickets?status=open')}
-              subLabel={
-                isOverviewLoading
-                  ? <Skeleton className="h-3 w-16 mt-1" />
-                  : dashboardOverview?.todayCounts.created_today
-                    ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.created_today} idag</span>
-                    : <span>+0 idag</span>
-              }
+          <TicketQueueTable
+            tickets={activeQueue ?? []}
+            isLoading={isQueueLoading}
+            getUserName={getUserName}
+            categories={categories}
+            isError={isQueueError}
+            onRetry={refetchQueue}
+          />
+
+          {/* Aging, reminders and activity below the queue */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <AgingTicketsPanel
+              tickets={dashboardOverview?.agingTickets}
+              isLoading={isOverviewLoading}
+              isError={isOverviewError}
+              onRetry={refetchOverview}
             />
-          </motion.div>
-          <motion.div variants={kpiItem}>
-            <KPICard
-              label="Pågående"
-              value={stats.inProgress}
-              icon={<Clock className="w-5 h-5" />}
-              onClick={() => navigate('/tickets?status=in-progress')}
+            <RemindersPanel
+              reminders={upcomingReminders}
+              isLoading={isRemindersLoading}
             />
-          </motion.div>
-          <motion.div variants={kpiItem}>
-            <KPICard
-              label="Väntar"
-              value={stats.waiting}
-              icon={<PauseCircle className="w-5 h-5" />}
-              onClick={() => navigate('/tickets?status=waiting')}
-            />
-          </motion.div>
-          <motion.div variants={kpiItem}>
-            <KPICard
-              label="Lösta"
-              value={stats.resolved}
-              icon={<CheckCircle className="w-5 h-5" />}
-              onClick={() => navigate('/tickets?status=resolved')}
-              subLabel={
-                isOverviewLoading
-                  ? <Skeleton className="h-3 w-16 mt-1" />
-                  : dashboardOverview?.todayCounts.resolved_today
-                    ? <span className="text-primary font-semibold">+{dashboardOverview.todayCounts.resolved_today} idag</span>
-                    : <span>+0 idag</span>
-              }
-            />
-          </motion.div>
+            <ActivityFeedPanel events={activityEvents} isLoading={isActivityLoading} />
+          </div>
         </motion.div>
 
-        {/* Queue first, supporting information below */}
-        <div className="space-y-5">
-          {/* Left: Ticket queue */}
-          <motion.div
-            className="space-y-5"
-            variants={sectionFade}
-            initial={prefersReducedMotion ? false : 'hidden'}
-            animate={prefersReducedMotion ? false : 'visible'}
-            transition={{ delay: 0.15 }}
-          >
-            <TicketQueueTable
-              tickets={activeQueue ?? []}
-              isLoading={isQueueLoading}
-              getUserName={getUserName}
-              categories={categories}
-              isError={isQueueError}
-              onRetry={refetchQueue}
-            />
-
-            {/* Aging, reminders and activity below the queue */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <AgingTicketsPanel
-                tickets={dashboardOverview?.agingTickets}
-                isLoading={isOverviewLoading}
-                isError={isOverviewError}
-                onRetry={refetchOverview}
-              />
-              <RemindersPanel
-                reminders={upcomingReminders}
-                isLoading={isRemindersLoading}
-              />
-              <ActivityFeedPanel events={activityEvents} isLoading={isActivityLoading} />
-            </div>
-          </motion.div>
-
-        </div>
       </div>
-    </Layout>
+    </div>
   );
 };
 

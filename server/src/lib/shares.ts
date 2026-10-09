@@ -46,16 +46,18 @@ export function mintShareToken(
   const id = randomUUID();
   // 16 bytes = 128-bit entropi (32 hex-tecken).
   const shareToken = randomBytes(16).toString('hex');
-  const modifier = `+${expiresInDays} days`;
+  const now = Date.now();
+  const createdAt = new Date(now).toISOString();
+  // ISO-8601 UTC skrivs framåt; jämförelser använder datetime(expires_at) så att
+  // äldre rader i 'YYYY-MM-DD HH:MM:SS'-format fortfarande går att jämföra.
+  const expiresAt = new Date(now + expiresInDays * 24 * 60 * 60 * 1000).toISOString();
 
   db.prepare(
-    `INSERT INTO ticket_shares (id, ticket_id, share_token, created_by, expires_at)
-     VALUES (?, ?, ?, ?, datetime('now', ?))`
-  ).run(id, ticketId, shareToken, createdBy, modifier);
+    `INSERT INTO ticket_shares (id, ticket_id, share_token, created_by, created_at, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(id, ticketId, shareToken, createdBy, createdAt, expiresAt);
 
-  const row = db.prepare('SELECT expires_at FROM ticket_shares WHERE id = ?').get(id) as { expires_at: string };
-
-  return { id, shareToken, expiresAt: row.expires_at };
+  return { id, shareToken, expiresAt };
 }
 
 /**
@@ -68,6 +70,6 @@ export function getActiveShareByToken(db: DatabaseType, token: string): ActiveSh
   return db.prepare(
     `SELECT id, ticket_id, share_token, created_by, created_at, expires_at
      FROM ticket_shares
-     WHERE share_token = ? AND expires_at > datetime('now')`
+     WHERE share_token = ? AND datetime(expires_at) > datetime('now')`
   ).get(token) as ActiveShareRow | undefined;
 }

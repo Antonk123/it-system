@@ -31,11 +31,12 @@ import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
 import { createApp } from '../app.js';
 import { migrations } from '../db/migrations.js';
 
-// Converts a SQLite `datetime('now', ...)` string ("YYYY-MM-DD HH:MM:SS", UTC,
-// no offset marker) to epoch ms. Comparing raw strings works for ordering but
-// not for window-math, so tests need this to compute now±Nd.
+// Converts an expires_at string to epoch ms: ISO-8601 ("...T...Z", what the app
+// writes) or legacy SQLite "YYYY-MM-DD HH:MM:SS" (UTC, no offset marker).
+// Comparing raw strings works for ordering but not for window-math, so tests
+// need this to compute now±Nd.
 function sqliteDateToMs(s: string): number {
-  return new Date(s.replace(' ', 'T') + 'Z').getTime();
+  return new Date(s.includes('T') ? s : s.replace(' ', 'T') + 'Z').getTime();
 }
 
 let app: ReturnType<typeof createApp>;

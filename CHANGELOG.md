@@ -10,6 +10,88 @@ IT-Ticket levereras rullande från `main` (en instans per deployment). Sektionen
 
 ## [Orutinerat]
 
+### Backend-granskning (2026-10-09, branch `audit-fixes`)
+
+#### Brytande ändringar
+- **Webhook-signaturen har ändrats.** `X-Webhook-Signature` är nu
+  `hex(HMAC-SHA256(secret, timestamp + "." + id + "." + rawBody))`. Två nya headers
+  följer med: `X-Webhook-Timestamp` (unix-sekunder, nytt värde per försök) och
+  `X-Webhook-Id` (leverans-UUID, oförändrat över omförsök). Den gamla signaturen över
+  enbart body verifierar inte längre — **uppdatera alla mottagare före deploy**.
+  Mottagaren ska verifiera över råa bytes, jämföra i konstant tid, avvisa timestamps
+  äldre än ~5 min och deduplicera på id. Redirects följs aldrig (3xx = slutgiltigt fel).
+  `ticket.updated` skickas bara vid statusändring och har en minimal payload
+  (`id`, `status`, `priority`, `assigned_to`, `title`, `updated_fields`) — notes och
+  lösningstext lämnar inte längre systemet.
+- **SVG accepteras inte längre** som ärendebilaga, KB-bild eller logotyp. Redan uppladdade
+  SVG-bilagor serveras fortsatt som tvingad nedladdning.
+- **Lösenordspolicy:** minst 12 tecken, högst 72 byte, minst 3 av 4 teckenklasser *eller*
+  minst 16 tecken; alla tecken tillåts (tidigare krävdes alla fyra klasser ur en fast
+  specialteckenmängd). Gäller byte, återställning och admin-skapade konton. bcrypt-kostnad
+  12 med omhashning vid inloggning.
+- **Konton som en admin skapar måste byta lösenord vid första inloggningen**
+  (`mustChangePassword` i login- och `/auth/me`-svaren).
+- **Alla loggas ut vid deploy en gång.** Refresh-tokens lagras nu hashade och tabellen
+  rensas av migrationen. Refresh läser enbart HttpOnly-cookien (inte body). Återanvändning
+  av en redan roterad token återkallar hela token-familjen. Ett lösenordsbyte återkallar
+  alla andra sessioner och utestående access-tokens (`token_version`).
+- **`POST /api/auth/logout` kräver ingen access-token** (och är CSRF-undantagen) och
+  svarar `204`. `POST /api/auth/change-password` svarar nu även med `accessToken` för den
+  pågående sessionen.
+- **Enhetlig ärendebehörighet:** alla inloggade läser alla ärenden och underresurser;
+  skriva får admin, tilldelad, skapare eller vem som helst på ett otilldelat ärende
+  (`docs/adr/0001-unified-ticket-access-policy.md`). Tidigare gav olika routes olika
+  403:or.
+- **Drift:** backend-porten publiceras bara på loopback (`127.0.0.1:3002`); containrarna
+  kör som icke-root (befintliga datavolymer kräver ett engångs-`chown 1000:1000`, se
+  `docs/OPERATIONS.md`); `init.ts` kräver `ADMIN_EMAIL` (exempelvärdet är borttaget från
+  `.env.example`); web push kräver `VAPID_SUBJECT`; produktion bakom TLS ska sätta
+  `COOKIE_SECURE=true` i Portainer-stacken, som är en separat kopia av compose-filen.
+
+#### Tillagt
+- Backuper: lista och ladda ned lagrade backup-filer (`GET /api/backup/files`,
+  `GET /api/backup/files/:name`, även i Inställningar), kvarhållning i dagar, ZIP-verifiering,
+  fri-diskutrymmeskontroll, persisterade felräknare med push till admin, timeout på
+  off-site-kommandot, `rclone` i serverbilden, WAL-säker kopia före restore och
+  `PRAGMA quick_check` innan bytet. Graceful shutdown väntar på en pågående backup.
+- Publika formuläret: honeypot-fält (`website`) och minsta ifyllnadstid (`formStartedAt`).
+- KB: `status` (admin), `fields=list` (förhandsvisning), `page`/`limit` på artikellistan,
+  utgångsdatum på delningslänkar (`expiresInDays`); kontakter: `page`/`limit`/`search`,
+  validering och `409` på dubblett-e-post (skiftlägesokänsligt).
+- Dokumentation: `docs/openapi.yaml` täcker nu alla 160 operationer och CI jämför monterade
+  routes mot specen (`scripts/check-openapi-coverage.mjs`); `docs/API.md` uppdaterad;
+  ADR-katalog `docs/adr/` med de tre besluten från den här granskningen.
+
+#### Förbättrat
+- Databas: 19 framåtmigrationer (072–090) — ISO-tidsstämplar, innehållsbaserad
+  `updated_at`-trigger, saknade FK-index, unik `contacts.email` utan skiftläge,
+  `kb_articles_fts` med svenskanpassad tokenizer, gemensam migrationskörare med
+  pre-migration-snapshots. Appkod skriver alltid ISO-tidsstämplar
+  (`docs/adr/0003-iso-timestamps-written-by-app-code.md`).
+- E-post: pollern överlever token-fel vid uppstart, skydd mot auto-svar och backscatter,
+  avsändarförtroende för `[#id]`-svar, Message-ID-dedupe, transaktionell ärendeskapning,
+  dygnstak per avsändare, escapad HTML i utgående mallar, poolad SMTP-transport,
+  omförsök på påminnelser.
+- Push: endast https mot kända push-tjänster, subscribe/unsubscribe per ägare, timeouts.
+- API: samma validering för PUT/bulk/import, transaktionella mall- och checklistskrivningar,
+  bulk-operationer i bitar med audit-rader, audit-rader för inställningar och branding,
+  webhook-SSRF-intervall, request-id-validering, `LOG_LEVEL` och loggredigering.
+- nginx: `real_ip`, en gemensam header-map så ingen `location` tappar säkerhetsheaders,
+  maskerade token-sökvägar i access-loggen, wget-healthcheck, säkrare setup/uninstall.
+
+#### Beroenden (2026-10-09)
+- Säkerhetsrättningar i båda beroendeträden (multer 2.4, nodemailer 10, mailparser 3.9.37,
+  m.fl.). Kvarstår: två måttliga advisories via `@tailwindcss/typography` vars enda fix är
+  en nedgradering.
+
+### Gränssnitt (2026-10-07 – 2026-10-08)
+- 2026-10-07: förenklade ärendeflöden och formulär (ärendelista, tabell, filterfält,
+  KB-artikelformulär, användarlista); delvisa ärendesparningar fixade och länksökningar
+  skjuts upp tills de behövs.
+- 2026-10-08: mjukare former i delade UI-komponenter och förenklad temastilning
+  (appen har sju teman); KB-knappen "Hantera" följer den delade
+  åtgärdsstilen. `DESIGN.md` omskriven.
+
 ### Förenklat (2026-10-06)
 - Borttagen onboarding-dialog för första kundföretaget; företag hanteras fortsatt via inställningarna.
 - Borttagna oanvända klienttyper och API-hjälpar. Aktiva och avslutade ärenden delar URL-filter, sortering, sidbyte och bulkmarkering.
@@ -131,8 +213,8 @@ kunskapsbas, multi-user med roller, samt de första AI-, tidsrapporterings- och
 faktureringsfunktionerna. Detaljerad changelog infördes från och med
 [Orutinerat] ovan.
 
-[Orutinerat]: https://github.com/Antonk123/it-system/compare/v1.5...HEAD
-[1.5]: https://github.com/Antonk123/it-system/compare/v1.4...v1.5
+[Orutinerat]: https://github.com/Antonk123/it-system/compare/v1.5.0...HEAD
+[1.5]: https://github.com/Antonk123/it-system/compare/v1.4...v1.5.0
 [1.4]: https://github.com/Antonk123/it-system/compare/v1.2...v1.4
 [1.2]: https://github.com/Antonk123/it-system/compare/v1.1...v1.2
 [1.1]: https://github.com/Antonk123/it-system/compare/v1.0...v1.1

@@ -571,3 +571,214 @@ describe('tryRefresh-deduplicering — samtidiga 401:or delar EN förnyelse', ()
     expect(headersOfCall(blobRetryCall)['Authorization']).toBe(`Bearer ${freshToken}`);
   });
 });
+
+// ---------------------------------------------------------------------------
+// 6. skipAuthRefresh — anrop från oinloggade sidor
+// ---------------------------------------------------------------------------
+
+describe('login med fel lösenord (skipAuthRefresh)', () => {
+  it('401 från /auth/login kastar serverns meddelande — ingen refresh, ingen redirect, ingen rensning', async () => {
+    const loc = stubLocation('/login');
+    localStorage.setItem('auth_token', makeToken(FAR_FUTURE_EXP()));
+    fetchMock.mockResolvedValue(
+      fakeResponse({ ok: false, status: 401, json: () => Promise.resolve({ error: 'Fel e-post eller lösenord' }) }),
+    );
+
+    const api = await freshApi();
+    const error = await api.login('a@x.se', 'fel').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(Error);
+    expect((error as Error).message).toBe('Fel e-post eller lösenord');
+    expect(fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`)).toHaveLength(0);
+    expect(loc.href).toBe('');
+    expect(localStorage.getItem('auth_token')).not.toBeNull();
+  });
+
+  it('skickar ingen proaktiv förnyelse av en utgången token före inloggningen', async () => {
+    freezeTime();
+    localStorage.setItem('auth_token', makeToken((NOW - 60_000) / 1000));
+    fetchMock.mockResolvedValue(
+      fakeResponse({ json: () => Promise.resolve({ user: { id: 'u1', email: 'a@x.se', role: 'user' }, token: 'ny-token' }) }),
+    );
+
+    const api = await freshApi();
+    await api.login('a@x.se', 'hemligt-lösenord-123');
+
+    expect(fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`)).toHaveLength(0);
+    expect(localStorage.getItem('auth_token')).toBe('ny-token');
+  });
+
+  it('utloggning görs utan refresh-kedja även när access-token är avvisad', async () => {
+    const loc = stubLocation('/tickets');
+    localStorage.setItem('auth_token', makeToken(FAR_FUTURE_EXP()));
+    fetchMock.mockResolvedValue(fakeResponse({ ok: false, status: 401 }));
+
+    const api = await freshApi();
+    await api.logout();
+
+    expect(fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`)).toHaveLength(0);
+    expect(loc.href).toBe('');
+    expect(localStorage.getItem('auth_token')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. ApiError — status, code och requestId följer med
+// ---------------------------------------------------------------------------
+
+describe('ApiError', () => {
+  it('request() kastar ApiError med status, code och requestId från svaret', async () => {
+    fetchMock.mockResolvedValue(
+      fakeResponse({
+        ok: false,
+        status: 500,
+        json: () => Promise.resolve({ error: 'Internal server error', code: 'E_BOOM', requestId: 'req-1' }),
+      }),
+    );
+
+    const mod = await import('./api');
+    const error = await mod.api.request('/thing').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(mod.ApiError);
+    expect(error).toMatchObject({ message: 'Internal server error', status: 500, code: 'E_BOOM', requestId: 'req-1' });
+  });
+
+  it('requestBlob() och uppladdningar kastar också ApiError med status', async () => {
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        url === `${BASE}/csrf-token`
+          ? fakeResponse({ json: () => Promise.resolve({ csrfToken: 'c' }) })
+          : fakeResponse({ ok: false, status: 404 }),
+      ),
+    );
+
+    const mod = await import('./api');
+    const blobError = await mod.api.requestBlob('/file').catch((e: unknown) => e);
+    const uploadError = await mod.api.uploadFile('/upload', new File(['a'], 'a.txt')).catch((e: unknown) => e);
+
+    expect(blobError).toBeInstanceOf(mod.ApiError);
+    expect((blobError as { status: number }).status).toBe(404);
+    expect(uploadError).toBeInstanceOf(mod.ApiError);
+    expect((uploadError as { status: number }).status).toBe(404);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Refresh-fel: bara 400/401/403 är "utloggad" — övrigt är transient
+// ---------------------------------------------------------------------------
+
+describe('transienta refresh-fel', () => {
+  it('5xx på /auth/refresh → ApiError, INGEN sessionExpired (token kvar, ingen redirect)', async () => {
+    const loc = stubLocation('/tickets');
+    localStorage.setItem('auth_token', makeToken(FAR_FUTURE_EXP()));
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        url === `${BASE}/auth/refresh`
+          ? fakeResponse({ ok: false, status: 503, json: () => Promise.resolve({ error: 'Tjänsten är nere' }) })
+          : fakeResponse({ ok: false, status: 401 }),
+      ),
+    );
+
+    const mod = await import('./api');
+    const error = await mod.api.request('/thing').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(mod.ApiError);
+    expect(error).toMatchObject({ status: 503, message: 'Tjänsten är nere' });
+    expect(loc.href).toBe('');
+    expect(localStorage.getItem('auth_token')).not.toBeNull();
+  });
+
+  it('nätverksfel på /auth/refresh → ApiError med status 0, ingen redirect', async () => {
+    const loc = stubLocation('/tickets');
+    localStorage.setItem('auth_token', makeToken(FAR_FUTURE_EXP()));
+    fetchMock.mockImplementation((url: string) =>
+      url === `${BASE}/auth/refresh`
+        ? Promise.reject(new TypeError('Failed to fetch'))
+        : Promise.resolve(fakeResponse({ ok: false, status: 401 })),
+    );
+
+    const mod = await import('./api');
+    const error = await mod.api.request('/thing').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(mod.ApiError);
+    expect((error as { status: number }).status).toBe(0);
+    expect(loc.href).toBe('');
+  });
+
+  it.each([400, 401, 403])('%i på /auth/refresh → refreshSession() ger false (definitivt utloggad)', async (status) => {
+    fetchMock.mockResolvedValue(fakeResponse({ ok: false, status }));
+
+    const api = await freshApi();
+    await expect(api.refreshSession()).resolves.toBe(false);
+  });
+
+  it('5xx på /auth/refresh → refreshSession() kastar ApiError', async () => {
+    fetchMock.mockResolvedValue(fakeResponse({ ok: false, status: 500 }));
+
+    const mod = await import('./api');
+    await expect(mod.api.refreshSession()).rejects.toBeInstanceOf(mod.ApiError);
+  });
+
+  it('transient refresh-fel vid proaktiv förnyelse skickar ändå anropet med nuvarande token', async () => {
+    freezeTime();
+    const expiring = makeToken((NOW + 5_000) / 1000);
+    localStorage.setItem('auth_token', expiring);
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(
+        url === `${BASE}/auth/refresh`
+          ? fakeResponse({ ok: false, status: 502 })
+          : fakeResponse({ json: () => Promise.resolve({ ok: true }) }),
+      ),
+    );
+
+    const api = await freshApi();
+    await expect(api.request('/thing')).resolves.toEqual({ ok: true });
+
+    const thingCall = fetchMock.mock.calls.find((c) => urlOfCall(c) === `${BASE}/thing`);
+    expect(headersOfCall(thingCall)['Authorization']).toBe(`Bearer ${expiring}`);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. changePassword — den nya access-token lagras
+// ---------------------------------------------------------------------------
+
+describe('changePassword', () => {
+  it('lagrar accessToken från svaret och nollställer CSRF-cachen', async () => {
+    localStorage.setItem('auth_token', makeToken(FAR_FUTURE_EXP()));
+    let csrfCalls = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (url === `${BASE}/csrf-token`) {
+        csrfCalls++;
+        return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ csrfToken: `csrf-${csrfCalls}` }) }));
+      }
+      return Promise.resolve(fakeResponse({ json: () => Promise.resolve({ message: 'ok', accessToken: 'efter-byte' }) }));
+    });
+
+    const api = await freshApi();
+    await api.changePassword('gammalt-lösenord-1', 'nytt-lösenord-längre-än-16');
+
+    expect(localStorage.getItem('auth_token')).toBe('efter-byte');
+    await api.request('/thing', { method: 'POST' });
+    expect(csrfCalls).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Utan fungerande localStorage
+// ---------------------------------------------------------------------------
+
+describe('blockerad localStorage', () => {
+  it('request() kastar inte på token-läsning — anropet går ut utan Authorization', async () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => { throw new DOMException('blocked', 'SecurityError'); },
+      setItem: () => { throw new DOMException('blocked', 'SecurityError'); },
+      removeItem: () => { throw new DOMException('blocked', 'SecurityError'); },
+    });
+    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve({ ok: true }) }));
+
+    const api = await freshApi();
+    await expect(api.request('/thing')).resolves.toEqual({ ok: true });
+    expect(headersOfCall(fetchMock.mock.calls[0])['Authorization']).toBeUndefined();
+  });
+});

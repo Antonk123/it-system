@@ -1,10 +1,10 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { useEffect, useState, useRef } from 'react';
-import { useNavigate, useParams, Link, useLocation } from 'react-router';
+import { useNavigate, useParams, useLocation } from 'react-router';
 import { format } from 'date-fns';
 import { sv } from 'date-fns/locale';
-import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Lightbulb, Paperclip, Download, Share2, Copy, Loader2, ListChecks, Plus, Camera, MoreVertical } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2, Clock, User as UserIcon, Calendar, FileText, Paperclip, Download, Share2, Copy, Loader2, ListChecks, Plus, Camera, MoreVertical } from 'lucide-react';
 import { ticketKeys } from '@/hooks/useTickets';
 import { useTicketMutations } from '@/hooks/useTicketMutations';
 import { useUsers } from '@/hooks/useUsers';
@@ -22,13 +22,13 @@ import { HtmlRenderer } from '@/components/HtmlRenderer';
 import { migrateContent } from '@/lib/contentMigration';
 import { parseServerDate } from '@/lib/date';
 import { TicketChecklist } from '@/components/TicketChecklist';
+import { TicketLoadError } from '@/components/TicketLoadError';
 import { TicketComments } from '@/components/TicketComments';
 import { TicketLinks } from '@/components/TicketLinks';
 import { KBLinksSection } from '@/components/KBLinksSection';
 import { TicketActivity } from '@/components/TicketActivity';
 import { ReminderDialog } from '@/components/ReminderDialog';
 import { ReminderList } from '@/components/ReminderList';
-import { Layout } from '@/components/Layout';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PriorityBadge } from '@/components/PriorityBadge';
 import { CategoryBadge } from '@/components/CategoryBadge';
@@ -84,6 +84,7 @@ import {
 } from '@/components/ui/dialog';
 import { TicketStatus } from '@/types/ticket';
 import { api } from '@/lib/api';
+import { getErrorStatus } from '@/lib/apiErrorStatus';
 import { mapTicketRow } from '@/lib/mapTicket';
 import { STATUS_LABELS } from '@/lib/constants';
 import { toast } from 'sonner';
@@ -136,17 +137,19 @@ const TicketDetail = () => {
   const { updateTicket, deleteTicket, isUpdating } = useTicketMutations();
 
   // Authoritative single-ticket query — the sole data source for this page.
-  const { data: ticketDetail, isLoading: ticketDetailLoading, isError: ticketDetailError } = useQuery({
+  const { data: ticketDetail, isLoading: ticketDetailLoading, error: ticketDetailError, refetch: refetchTicket } = useQuery({
     queryKey: ticketKeys.detail(id || ''),
     queryFn: () => api.getTicket(id!),
     enabled: Boolean(id),
     staleTime: 1000 * 60 * 2,
+    // Ett saknat ärende (404) blir inte bättre av ett nytt försök.
+    retry: (failureCount, error) => getErrorStatus(error) !== 404 && failureCount < 1,
   });
   const { getUserById } = useUsers();
-  const { attachments, fetchAttachments } = useTicketAttachments();
-  const { items: checklistItems, fetchChecklists, addChecklistItem, updateChecklistItem, deleteChecklistItem, setItems: setChecklistItems } = useTicketChecklists();
+  const { attachments, uploadAttachment } = useTicketAttachments(id);
+  const { items: checklistItems, addChecklistItem, updateChecklistItem, deleteChecklistItem, setItems: setChecklistItems } = useTicketChecklists(id);
   const { templates: checklistTemplates, fetchTemplates: fetchChecklistTemplates, createTemplate: createChecklistTemplate, applyTemplate: applyChecklistTemplate } = useChecklistTemplates();
-  const { comments, isLoading: commentsLoading, isError: commentsError, addComment, updateComment, deleteComment } = useTicketComments(id || '');
+  const { comments, total: commentsTotal, isLoading: commentsLoading, isError: commentsError, addComment, updateComment, deleteComment } = useTicketComments(id || '');
   const { twoWayEmailEnabled } = useSettings();
   const { links, isLoading: linksLoading, isError: linksError, addLink, deleteLink } = useTicketLinks(id || '');
   // Defer non-critical, below-the-fold data until the browser is idle after the
@@ -205,13 +208,6 @@ const TicketDetail = () => {
     }
   }, [ticketDetail]);
 
-  useEffect(() => {
-    if (id) {
-      fetchAttachments(id);
-      fetchChecklists(id);
-    }
-  }, [id, fetchAttachments, fetchChecklists]);
-
   // Flip `deferSecondary` on once the browser is idle after first paint.
   useEffect(() => {
     const ric = (window as Window & {
@@ -248,60 +244,35 @@ const TicketDetail = () => {
   // Show skeleton while the single-ticket detail query is in-flight.
   if (ticketDetailLoading) {
     return (
-      <Layout>
-        <div className="max-w-3xl mx-auto space-y-6">
-          <div className="space-y-2">
-            <Skeleton className="h-8 w-2/3" />
-            <div className="flex gap-3">
-              <Skeleton className="h-5 w-20" />
-              <Skeleton className="h-5 w-16" />
-              <Skeleton className="h-5 w-24" />
-            </div>
+      <div className="max-w-3xl mx-auto space-y-6">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-2/3" />
+          <div className="flex gap-3">
+            <Skeleton className="h-5 w-20" />
+            <Skeleton className="h-5 w-16" />
+            <Skeleton className="h-5 w-24" />
           </div>
-          <Skeleton className="h-48 w-full" />
-          <Skeleton className="h-32 w-full" />
         </div>
-      </Layout>
+        <Skeleton className="h-48 w-full" />
+        <Skeleton className="h-32 w-full" />
+      </div>
     );
   }
 
-  // Visa ett tydligt felmeddelande om query misslyckades och inget fallback finns i list-cache.
-  if (ticketDetailError && !ticket) {
-    return (
-      <Layout>
-        <div className="text-center py-16">
-          <p className="text-foreground font-medium">Kunde inte hämta ärendet</p>
-          <p className="text-muted-foreground text-sm mt-1">Kontrollera din anslutning och försök igen.</p>
-          <Link to="/tickets">
-            <Button className="mt-4">Tillbaka till ärenden</Button>
-          </Link>
-        </div>
-      </Layout>
-    );
-  }
-
-  // At this point the loading guard above has handled the in-flight cases
-  // (list cache loading, or detail query in-flight with no list-cache fallback).
-  // Any remaining null ticket means the detail query has settled and returned
-  // nothing (or the list-cache fallback was also absent) — show "not found".
-  // This single guard also narrows `ticket` to non-null for all handlers below.
+  // Loading is handled above, so a missing ticket means the query failed or
+  // settled without data (404, or no id). This guard also narrows `ticket` to
+  // non-null for all handlers below.
   if (!ticket) {
     return (
-      <Layout>
-        <div className="text-center py-16">
-          <p className="text-muted-foreground">Ärendet hittades inte</p>
-          <Link to="/tickets">
-            <Button className="mt-4">Tillbaka till ärenden</Button>
-          </Link>
-        </div>
-      </Layout>
+      <TicketLoadError error={ticketDetailError} onRetry={() => void refetchTicket()} />
     );
   }
 
-  const handleStatusChange = (status: TicketStatus) => {
-    updateTicket(ticket.id, { status })
-      .then(() => toast.success(`Status uppdaterad till ${STATUS_LABELS[status]}`))
-      .catch(() => toast.error('Kunde inte uppdatera status'));
+  const handleStatusChange = async (status: TicketStatus) => {
+    try {
+      await updateTicket(ticket.id, { status });
+      toast.success(`Status uppdaterad till ${STATUS_LABELS[status]}`);
+    } catch { /* Mutationen visar felet. */ }
   };
 
   const saveSolution = async (resolve: boolean) => {
@@ -320,9 +291,7 @@ const TicketDetail = () => {
       await deleteTicket(ticket.id);
       toast.success('Ärendet borttaget');
       navigate('/tickets');
-    } catch {
-      toast.error('Kunde inte ta bort ärendet');
-    }
+    } catch { /* Mutationen visar felet. */ }
   };
 
   const handleShare = async () => {
@@ -500,19 +469,15 @@ const TicketDetail = () => {
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !ticket) return;
-    try {
-      await api.uploadAttachment(ticket.id, file);
-      fetchAttachments(ticket.id);
-      toast.success('Foto uppladdat');
-    } catch {
-      toast.error('Kunde inte ladda upp foto');
-    }
+    const input = e.target;
+    // Hooken validerar filen och visar felet; null betyder att uppladdningen misslyckades.
+    if (await uploadAttachment(ticket.id, file)) toast.success('Foto uppladdat');
     // Reset input so same file can be re-selected
-    e.target.value = '';
+    input.value = '';
   };
 
   return (
-    <Layout>
+    <>
       <div className="max-w-3xl mx-auto space-y-6">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           <Button
@@ -795,21 +760,21 @@ const TicketDetail = () => {
                   )}
                 </div>
               </div>
-              {(ticket as any).company_name && (
+              {ticket.companyName && (
                 <div className="flex items-center gap-3">
                   <UserIcon className="w-5 h-5 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">Företag</p>
-                    <p className="font-medium">{(ticket as any).company_name}</p>
+                    <p className="font-medium">{ticket.companyName}</p>
                   </div>
                 </div>
               )}
-              {(ticket as any).assigned_to_name && (
+              {ticket.assignedToName && (
                 <div className="flex items-center gap-3">
                   <UserIcon className="w-5 h-5 text-muted-foreground" />
                   <div>
                     <p className="text-sm text-muted-foreground">Tilldelad</p>
-                    <p className="font-medium">{(ticket as any).assigned_to_name}</p>
+                    <p className="font-medium">{ticket.assignedToName}</p>
                   </div>
                 </div>
               )}
@@ -859,6 +824,7 @@ const TicketDetail = () => {
               )}
               <TicketComments
                 comments={comments}
+                totalCount={commentsTotal}
                 isLoading={commentsLoading}
                 isError={commentsError}
                 allowPublicReply={twoWayEmailEnabled}
@@ -986,7 +952,7 @@ const TicketDetail = () => {
           />
         </label>
       </div>
-    </Layout>
+    </>
   );
 };
 

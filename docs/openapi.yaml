@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: IT-Ticket API
-  version: 1.0.0
+  version: 1.1.0
   description: >
-    REST-API för IT-Ticket — ett ärendehanteringssystem för IT-konsulter.
+    REST-API för IT-Ticket — ett ärendehanteringssystem för intern IT-support på Prefabmästarna.
 
 
     **Leverans:** rullande från `main` (en instans per deployment).
@@ -12,7 +12,7 @@ info:
 
     ## API coverage
 
-    This spec documents the full API surface: 137 operations
+    This spec documents the full API surface: 160 operations
     across every route file — health/CSRF, auth, tickets, categories,
     contacts, companies, kb, public, users, API keys,
     settings, comments, attachments, shares, links, checklists, checklist
@@ -41,6 +41,28 @@ info:
       själv har `admin`-scope (eller en inloggad admin-session) får skapa en
       nyckel med `admin`. API-nyckel-anrop är **undantagna från CSRF**.
 
+
+    ## Behörighet på ärenden
+
+    Alla inloggade användare får **läsa** alla ärenden och deras underresurser
+    (kommentarer, bilagor, checklistor, länkar, delningar, påminnelser).
+    **Skriva** får admin, ärendets tilldelade eller skapare, samt vem som helst på
+    ett **otilldelat** ärende (self-service-plock). Övriga får `403`. Se
+    `docs/adr/0001-unified-ticket-access-policy.md`.
+
+    ## Lösenordspolicy
+
+    Minst 12 tecken och högst 72 byte; minst 3 av 4 teckenklasser (gemen, versal,
+    siffra, övrigt) eller minst 16 tecken. Gäller `change-password`,
+    `reset-password` och admin-skapade konton. Konton som en admin skapar har
+    `mustChangePassword = true` tills användaren byter lösenord.
+
+    ## Webhooks (utgående)
+
+    Se `POST /webhooks` för leveransformat och signaturverifiering. **Brytande
+    ändring:** `X-Webhook-Signature` är nu `hex(HMAC-SHA256(secret,
+    timestamp + "." + id + "." + rawBody))` med `X-Webhook-Timestamp` och
+    `X-Webhook-Id`; den gamla signaturen över enbart body verifierar inte längre.
 
     ## Fel
 
@@ -181,24 +203,25 @@ paths:
                   token: { type: string, description: Alias för accessToken (bakåtkompat) }
         "401":
           $ref: "#/components/responses/Unauthorized"
+        "429":
+          description: >
+            För många misslyckade försök (per IP och per konto). `Retry-After`
+            anger sekunder kvar; kroppen innehåller `retryAfter`.
+          $ref: "#/components/responses/Error"
 
   /auth/refresh:
     post:
       tags: [Auth]
       summary: Förnya access-token
-      description: Använder refresh-cookien (eller `refreshToken` i body).
+      description: >
+        Läser refresh-token enbart från den HttpOnly-cookie som `login` satte
+        (ingen token i body). Token roteras vid varje anrop (ny cookie). En
+        redan använd token som återanvänds räknas som stöld och återkallar hela
+        token-familjen. Refresh-token lagras hashad i databasen.
       security: []
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                refreshToken: { type: string }
       responses:
         "200":
-          description: Ny access-token
+          description: Ny access-token (ny refresh-cookie sätts)
           content:
             application/json:
               schema:
@@ -206,6 +229,9 @@ paths:
                 properties:
                   accessToken: { type: string }
                   token: { type: string }
+        "400":
+          description: Cookien saknas
+          $ref: "#/components/responses/Error"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -213,12 +239,14 @@ paths:
     post:
       tags: [Auth]
       summary: Logga ut
-      security:
-        - bearerAuth: []
-          csrfToken: []
+      description: >
+        Kräver **ingen** access-token (en utgången token ska inte hindra
+        utloggning); refresh-cookien identifierar sessionen. Cookien rensas
+        alltid och motsvarande refresh-token återkallas.
+      security: []
       responses:
-        "200":
-          $ref: "#/components/responses/Message"
+        "204":
+          description: Utloggad
 
   /auth/me:
     get:
@@ -234,7 +262,12 @@ paths:
               schema:
                 type: object
                 properties:
-                  user: { $ref: "#/components/schemas/User" }
+                  user:
+                    allOf:
+                      - $ref: "#/components/schemas/User"
+                      - type: object
+                        properties:
+                          mustChangePassword: { type: boolean }
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -242,6 +275,11 @@ paths:
     post:
       tags: [Auth]
       summary: Byt lösenord
+      description: >
+        Nytt lösenord måste följa lösenordspolicyn (minst 12 tecken, se
+        API-beskrivningen). Alla andra sessioner och utestående access-tokens
+        återkallas; den anropande sessionen får en ny refresh-cookie och en ny
+        access-token i svaret. Nollställer `mustChangePassword`.
       security:
         - bearerAuth: []
           csrfToken: []
@@ -254,9 +292,18 @@ paths:
               required: [currentPassword, newPassword]
               properties:
                 currentPassword: { type: string, format: password }
-                newPassword: { type: string, format: password }
+                newPassword: { type: string, format: password, minLength: 12 }
       responses:
-        "200": { $ref: "#/components/responses/Message" }
+        "200":
+          description: Lösenordet bytt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  accessToken: { type: string, description: Ny access-token för den aktuella sessionen. }
+                  token: { type: string, description: Alias för accessToken. }
         "400": { $ref: "#/components/responses/Error" }
 
   /auth/forgot-password:
@@ -291,7 +338,7 @@ paths:
               required: [token, newPassword]
               properties:
                 token: { type: string }
-                newPassword: { type: string, format: password }
+                newPassword: { type: string, format: password, minLength: 12 }
       responses:
         "200": { $ref: "#/components/responses/Message" }
         "400": { $ref: "#/components/responses/Error" }
@@ -463,22 +510,51 @@ paths:
     get:
       tags: [Tickets]
       summary: Lista ärenden
+      description: >
+        Utan `page`/`limit` returneras en ren array (max 1000, senaste först,
+        utan `description`/`notes`/`solution`). Med `page` eller `limit`
+        returneras `{ data, pagination }`. `countOnly=true` returnerar bara
+        `{ count }` för de aktuella filtren.
       parameters:
-        - { name: status, in: query, schema: { type: string, enum: [open, in-progress, waiting, resolved, closed] } }
-        - { name: priority, in: query, schema: { type: string, enum: [low, medium, high, critical] } }
-        - { name: search, in: query, schema: { type: string }, description: Fulltextsökning (FTS5) }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: limit, in: query, schema: { type: integer, enum: [10, 20, 25, 30, 50, 100, 1000] }, description: "Andra värden faller tillbaka på 10." }
+        - { name: status, in: query, schema: { type: string }, description: "En eller flera statusar, kommaseparerade (open, in-progress, waiting, resolved, closed)." }
+        - { name: priority, in: query, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string }, description: Kategori-id. }
         - { name: company_id, in: query, schema: { type: string } }
         - { name: assigned_to, in: query, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer, default: 50 } }
-        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+        - { name: requester_id, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string }, description: Fulltextsökning (FTS5) }
+        - { name: tags, in: query, schema: { type: string }, description: Kommaseparerade tagg-id. }
+        - { name: tagMode, in: query, schema: { type: string, enum: [any, all] } }
+        - { name: dateFrom, in: query, schema: { type: string, format: date } }
+        - { name: dateTo, in: query, schema: { type: string, format: date } }
+        - { name: dateField, in: query, schema: { type: string } }
+        - { name: checklist, in: query, schema: { type: string } }
+        - { name: year, in: query, schema: { type: integer } }
+        - { name: month, in: query, schema: { type: integer, minimum: 0, maximum: 11 } }
+        - { name: sortBy, in: query, schema: { type: string, enum: [createdAt, status, priority, category], default: createdAt } }
+        - { name: sortDir, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
+        - { name: countOnly, in: query, schema: { type: boolean } }
       responses:
         "200":
-          description: Lista med ärenden
+          description: Array (utan paginering), sidindelat svar eller `{ count }`
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: "#/components/schemas/Ticket" }
+                oneOf:
+                  - type: array
+                    items: { $ref: "#/components/schemas/TicketListItem" }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/TicketListItem" }
+                      pagination: { $ref: "#/components/schemas/Pagination" }
+                  - type: object
+                    properties:
+                      count: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [Tickets]
       summary: Skapa ärende
@@ -515,6 +591,11 @@ paths:
     put:
       tags: [Tickets]
       summary: Uppdatera ärende
+      description: >
+        Skrivregel: admin, tilldelad, skapare eller otilldelat ärende (annars `403`).
+        `ticket.updated`-webhooken skickas bara när statusen ändras och bär en
+        minimal payload (`id`, `status`, `priority`, `assigned_to`, `title`,
+        `updated_fields`).
       security:
         - bearerAuth: []
           csrfToken: []
@@ -530,10 +611,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Ticket" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [Tickets]
-      summary: Radera ärende
+      summary: Radera ärende (admin)
       security:
         - bearerAuth: []
           csrfToken: []
@@ -616,14 +698,28 @@ paths:
     get:
       tags: [Contacts]
       summary: Lista kontakter
+      description: >
+        Utan `page` returneras en ren array (max 500). Med `page` returneras
+        `{ data, pagination }`. `search` matchar namn, e-post och telefon.
+      parameters:
+        - { name: search, in: query, schema: { type: string } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
       responses:
         "200":
-          description: Kontakter (max 500)
+          description: Kontakter
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: "#/components/schemas/Contact" }
+                oneOf:
+                  - type: array
+                    items: { $ref: "#/components/schemas/Contact" }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Contact" }
+                      pagination: { $ref: "#/components/schemas/Pagination" }
     post:
       tags: [Contacts]
       summary: Skapa kontakt (admin)
@@ -641,6 +737,10 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Contact" }
+        "400": { $ref: "#/components/responses/Error" }
+        "409":
+          description: E-postadressen finns redan (skiftlägesokänslig)
+          $ref: "#/components/responses/Error"
 
   /contacts/{id}:
     parameters:
@@ -764,14 +864,25 @@ paths:
         - { name: article_type, in: query, schema: { type: string, enum: [how-to, solution] } }
         - { name: tag, in: query, schema: { type: string } }
         - { name: stale, in: query, schema: { type: boolean } }
+        - { name: status, in: query, schema: { type: string, enum: [published, draft, all], default: published }, description: "Bara admin: `draft` eller `all`. Andra får alltid publicerade." }
+        - { name: fields, in: query, schema: { type: string, enum: [list] }, description: "`list` ersätter `content` med en 300 tecken lång textförhandsvisning `preview`." }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 }, description: "Slår på sidindelning (`{ data, pagination }`)." }
+        - { name: limit, in: query, schema: { type: integer, default: 20, maximum: 100 } }
       responses:
         "200":
-          description: Artiklar (icke-admin ser bara publicerade)
+          description: Artiklar utan `page` som array; med `page` som `{ data, pagination }`
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: "#/components/schemas/KbArticle" }
+                oneOf:
+                  - type: array
+                    items: { $ref: "#/components/schemas/KbArticle" }
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/KbArticle" }
+                      pagination: { $ref: "#/components/schemas/Pagination" }
     post:
       tags: [Knowledge base]
       summary: Skapa artikel (admin)
@@ -985,6 +1096,16 @@ paths:
                 category: { type: string }
                 priority: { type: string, enum: [low, medium, high, critical] }
                 template_id: { type: string }
+                website:
+                  type: string
+                  description: >
+                    Honeypot - ska vara tomt (dolt fält i formuläret). Ett ifyllt värde ger
+                    ett falskt `200` med slumpat `ticketId` och ingenting sparas.
+                formStartedAt:
+                  description: Epoch-ms eller ISO-tid då formuläret öppnades. Inskick snabbare än en minsta fyllnadstid avvisas med `400`.
+                  oneOf:
+                    - { type: integer }
+                    - { type: string, format: date-time }
                 customFields:
                   type: array
                   items:
@@ -994,6 +1115,15 @@ paths:
                       fieldLabel: { type: string }
                       fieldValue: { type: string }
       responses:
+        "200":
+          description: Honeypot utlöst (inget ärende skapades)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string }
+                  ticketId: { type: string }
         "201":
           description: Skapat ärende
           content:
@@ -1045,7 +1175,9 @@ paths:
         with CSRF token. If `password` is omitted, a random 32-char hex password
         is generated and returned once as `temporaryPassword`; an explicitly
         supplied password must satisfy the same password policy as
-        `/auth/change-password`, while an auto-generated one does not need to.
+        `/auth/change-password` (min 12 characters), while an auto-generated one
+        does not need to. The new account always has `mustChangePassword = true`
+        until its owner changes the password.
         A `role` value other than `"admin"` (including a missing field) is
         silently treated as `"user"` — unlike `PATCH /users/{id}`, invalid role
         strings are not rejected here.
@@ -1334,10 +1466,7 @@ paths:
       summary: List comments for a ticket
       description: >
         Returns up to 500 non-deleted comments for the ticket, oldest first.
-        Authorization mirrors `PUT /tickets/:id` exactly: if the ticket is
-        unassigned, any authenticated agent may read its comments
-        (self-service pickup). If the ticket is assigned, only an admin, the
-        requester, the assignee, or the creator may read them.
+        Any authenticated user may read all comments, including internal ones.
       security:
         - bearerAuth: []
         - apiKeyAuth: []
@@ -1355,11 +1484,6 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/commentsComment" }
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "403":
-          description: Ticket is assigned and caller is not admin/requester/assignee/creator
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
         "404": { $ref: "#/components/responses/NotFound" }
         "500": { $ref: "#/components/responses/Error" }
 
@@ -1370,9 +1494,8 @@ paths:
       description: >
         Creates a comment and bumps the ticket's `updated_at`. Content is
         HTML-sanitized server-side (defense in depth against the TipTap
-        rich-text editor). Same authorization rule as the list endpoint
-        (self-service pickup on unassigned tickets, otherwise
-        admin/requester/assignee/creator only). If `isInternal` is `false`,
+        rich-text editor). Requires write access to the ticket (admin,
+        assignee, creator, or the ticket is unassigned). If `isInternal` is `false`,
         the comment is treated as the agent's public reply and triggers a
         fire-and-forget email notification to the customer.
       security:
@@ -1414,7 +1537,7 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
-          description: Ticket is assigned and caller is not admin/requester/assignee/creator
+          description: Caller has no write access to the ticket (assigned to someone else, not admin/creator)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -1503,8 +1626,7 @@ paths:
       summary: List attachment metadata for a ticket
       description: >
         Returns attachment metadata (not the file bytes) plus a download
-        `url` per attachment. Requires `canAccessTicket`: admin, or the
-        ticket's requester/assignee/creator.
+        `url` per attachment. Any authenticated user may list.
       security:
         - bearerAuth: []
         - apiKeyAuth: []
@@ -1531,7 +1653,7 @@ paths:
       summary: Upload a file attachment to a ticket
       description: >
         Accepts a single multipart file under field name `file`. Requires
-        `canAccessTicket` (admin, or the ticket's requester/assignee/creator);
+        write access to the ticket (admin, assignee, creator, or unassigned);
         the file is deleted from disk again if authorization fails after
         upload. Enforced, in order: max file size 10 MB (multer `limits.fileSize`,
         rejects with 400 before the handler runs), MIME type + extension
@@ -1543,7 +1665,7 @@ paths:
 
 
         **Allowed MIME types:** `image/jpeg`, `image/png`, `image/gif`,
-        `image/webp`, `image/svg+xml`, `application/pdf`, `text/plain`,
+        `image/webp`, `application/pdf`, `text/plain`,
         `text/csv`, `text/markdown`, `message/rfc822`, `application/msword`,
         `application/vnd.openxmlformats-officedocument.wordprocessingml.document`,
         `application/vnd.ms-excel`,
@@ -1554,7 +1676,11 @@ paths:
         `application/x-rar-compressed`, `application/x-7z-compressed`.
 
 
-        **Allowed extensions:** `jpg`, `jpeg`, `png`, `gif`, `webp`, `svg`,
+        **SVG (`image/svg+xml`, `.svg`) is not accepted** - it can carry script and
+        is rejected on both lists.
+
+
+        **Allowed extensions:** `jpg`, `jpeg`, `png`, `gif`, `webp`,
         `pdf`, `txt`, `csv`, `md`, `markdown`, `eml`, `doc`, `docx`, `xls`,
         `xlsx`, `ppt`, `pptx`, `zip`, `rar`, `7z`. Both the declared MIME type
         and the extension must be on their respective allowlist.
@@ -1618,12 +1744,10 @@ paths:
       summary: Download an attachment's file bytes
       description: >
         Streams the stored file. Authorization is checked via the
-        attachment's parent ticket (`canAccessTicket`: admin, or the ticket's
-        requester/assignee/creator). Always served with
-        `Content-Disposition: attachment` (never `inline`) regardless of
-        file type — this is what makes it safe to allow `image/svg+xml` in
-        the upload allowlist, since a downloaded SVG is never rendered
-        inline in the app's origin.
+        attachment's parent ticket (any authenticated user may download). Always
+        served with `Content-Disposition: attachment` (never `inline`)
+        regardless of file type, so uploaded content is never rendered inline in
+        the app's origin.
       security:
         - bearerAuth: []
         - apiKeyAuth: []
@@ -1662,7 +1786,7 @@ paths:
         Deletes the database row first, then the file on disk. A file that
         fails to delete afterward is logged and left orphaned rather than
         failing the request; an orphaned DB row is never left behind.
-        Authorization via the attachment's parent ticket (`canAccessTicket`).
+        Requires write access to the attachment's parent ticket (admin, assignee, creator, or unassigned).
       security:
         - bearerAuth: []
           csrfToken: []
@@ -1686,8 +1810,7 @@ paths:
       summary: Get the existing public share token for a ticket
       description: >
         Returns the ticket's share token and expiry if an **active** (non-expired)
-        share exists, otherwise both fields are `null`. Requires `canAccessTicket`
-        (admin, or the ticket's requester/assignee/creator). This endpoint itself
+        share exists, otherwise both fields are `null`. Any authenticated user. This endpoint itself
         is authenticated; the token it returns grants **unauthenticated** public
         access until its expiry time (see `GET /shares/public/{token}`).
       security:
@@ -1728,7 +1851,7 @@ paths:
         generates a new 128-bit random token (`crypto.randomBytes(16)`,
         hex-encoded), sets an expiry time (default 30 days; configurable via
         `expiresInDays` in request body), and returns `201`.
-        Requires `canAccessTicket`. The resulting token is valid until its
+        Requires write access to the ticket. The resulting token is valid until its
         expiry time or until explicitly deleted via `DELETE /shares/ticket/{ticketId}`.
       security:
         - bearerAuth: []
@@ -1790,7 +1913,7 @@ paths:
       summary: Revoke a ticket's public share link
       description: >
         Deletes the share row, immediately invalidating the token for public
-        access. Requires `canAccessTicket`.
+        access. Requires write access to the ticket.
       security:
         - bearerAuth: []
           csrfToken: []
@@ -1932,7 +2055,7 @@ paths:
       description: >
         Returns links where the ticket is either the source or the target
         (bidirectional), each enriched with the linked ticket's id, title,
-        status, priority, and created_at. Requires `canAccessTicket`.
+        status, priority, and created_at. Any authenticated user.
       security:
         - bearerAuth: []
         - apiKeyAuth: []
@@ -1959,9 +2082,8 @@ paths:
       summary: Link a ticket to another ticket
       description: >
         Creates a bidirectional relationship between `ticketId` (source) and
-        `targetTicketId`. Requires `canAccessTicket` on **both** tickets
-        (closes an IDOR that would otherwise let a caller link a ticket they
-        can access to one they cannot). Rejects self-links and duplicate
+        `targetTicketId`. Requires write access to **both** tickets (admin,
+        assignee, creator, or unassigned). Rejects self-links and duplicate
         links in either direction.
       security:
         - bearerAuth: []
@@ -2004,7 +2126,7 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
-          description: Caller lacks `canAccessTicket` on the source and/or target ticket
+          description: Caller lacks write access to the source and/or target ticket
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2026,12 +2148,8 @@ paths:
       tags: [Links]
       summary: Delete a ticket link
       description: >
-        Admins may delete any link. Non-admins must be the assignee or
-        creator of at least one of the two linked tickets
-        (`assigned_to = caller` OR `created_by = caller` on either
-        `source_ticket_id` or `target_ticket_id`) — note this is a narrower,
-        separate check from `canAccessTicket` (it excludes the requester
-        role and unassigned self-service pickup).
+        Requires write access to at least one of the two linked tickets
+        (admin, assignee, creator, or unassigned).
       security:
         - bearerAuth: []
           csrfToken: []
@@ -2045,7 +2163,7 @@ paths:
         "200": { $ref: "#/components/responses/Message" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403":
-          description: Caller is not admin and not assignee/creator of either linked ticket
+          description: Caller has no write access to either linked ticket
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2063,10 +2181,8 @@ paths:
       summary: Batch checklist progress for multiple tickets
       description: >
         Returns `{ total, completed }` counts per ticket for the given ticket
-        ids. Any caller ids that the caller may not access (see `canAccessTicket`
-        — admin, or the ticket's requester/assignee/creator) are silently
-        dropped rather than causing a 403; this is a batch convenience
-        endpoint, not a per-ticket read.
+        ids. Reading is open to every authenticated user; unknown ids are
+        simply absent from the result.
       security:
         - bearerAuth: []
           csrfToken: []
@@ -2097,7 +2213,7 @@ paths:
       operationId: checklistsListByTicket
       tags: [Checklists]
       summary: List checklist items for a ticket
-      description: Caller must be able to access the ticket (admin, requester, assignee, or creator).
+      description: Any authenticated user may read.
       responses:
         "200":
           description: Checklist items ordered by position
@@ -2865,17 +2981,19 @@ paths:
       summary: Restore the database from an uploaded backup ZIP
       description: >
         **The single most destructive endpoint in this API. Admin only**
-        (`authenticate` + `requireAdmin`). Uploads a backup ZIP (max 500 MB,
+        (`authenticate` + `requireAdmin`). Uploads a backup ZIP (max 500 MB; 413 if larger,
         `multipart/form-data`, field name `file`) produced by `GET /backup`,
         validates every ZIP entry (path-traversal / zip-slip rejection,
         allowlist restricted to exactly `data/database.sqlite` and
         `data/uploads/*`, SQLite magic-header check, and a check that the
         `tickets` and `users` tables exist), then **irrecoverably replaces
         the live database and the entire uploads directory with the
-        uploaded content**. A `.pre-restore` copy of the current database is
-        kept only long enough to roll back if the swap itself fails, then
-        deleted — it is not a way to recover the pre-restore state
-        afterwards. On success the process calls `process.exit(0)` ~1.5s
+        uploaded content**. Before the swap, a WAL-safe snapshot of the current
+        database (`database.sqlite.pre-restore`) is taken and the current uploads
+        directory is renamed to `uploads.pre-restore`; any failure rolls both
+        back. The uploads copy is deleted after the next successful start-up; the
+        database copy is kept as a last safety net until the next restore
+        overwrites it. The uploaded database must also pass `PRAGMA quick_check`. On success the process calls `process.exit(0)` ~1.5s
         after responding so the container restarts and picks up the new
         database (the response body sets `restartRequired: true`); on
         certain failure paths after the DB handle has already been closed,
@@ -3160,16 +3278,28 @@ paths:
 
         **Delivery &amp; signature verification** (not itself an HTTP
         endpoint on this API — this is what the *receiving* server, at
-        `url`, must implement): on each matching event, this server POSTs
-        the JSON event payload to `url` with header `X-Webhook-Signature`
-        set to the hex-encoded HMAC-SHA256 digest of the exact raw request
-        body, computed with `secret` as the HMAC key, and header
-        `X-Webhook-Event` set to the event type string. To verify, the
-        receiver recomputes `HMAC-SHA256(secret, rawBody)` over the raw
-        bytes it received and compares it to `X-Webhook-Signature` (hex).
-        Deliveries retry up to 5 times with exponential backoff
-        (1m/5m/30m/2h/6h) on non-2xx responses or network/DNS-safety
-        failures, then stop.
+        `url`, must implement). On each matching event this server POSTs a JSON
+        body `{ "event": "...", "payload": { ... }, "timestamp": "<ISO>" }` with
+        these headers:
+
+        - `X-Webhook-Id` - delivery UUID, **stable across retries** (dedupe on it).
+        - `X-Webhook-Timestamp` - unix seconds, set **per attempt**.
+        - `X-Webhook-Event` - the event type string.
+        - `X-Webhook-Signature` - `hex(HMAC-SHA256(secret, timestamp + "." + id + "." + rawBody))`.
+
+        To verify: recompute the HMAC over the **raw request bytes** (not a
+        re-serialised JSON object), compare in constant time, reject timestamps
+        older than ~5 minutes, and ignore ids you have already processed.
+        **Breaking change:** the previous scheme signed only the body; that
+        signature no longer verifies.
+
+
+        Redirects are never followed - a 3xx response is a final failure (no
+        retry). Other non-2xx responses and network/DNS-safety failures retry up
+        to 5 attempts in total with back-off of 1m, 5m, 30m and 2h between attempts, then stop.
+        `ticket.updated` is only emitted when the status changes, with the
+        minimal payload `{ id, status, priority, assigned_to, title,
+        updated_fields }` (notes and solution text never leave the system).
       security:
         - bearerAuth: []
           csrfToken: []
@@ -3326,6 +3456,1302 @@ paths:
                   auto_create_contact: { type: boolean }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "500": { $ref: "#/components/responses/Error" }
+  # ───────────────────────── Tickets: aggregates, bulk, import/export ─────────────────────────
+  /tickets/import/preview:
+    post:
+      operationId: ticketsImportPreview
+      tags: [Tickets]
+      summary: Validate a CSV before importing tickets
+      description: >
+        Admin only. Parses an uploaded CSV (`multipart/form-data`, field `file`,
+        max 10 MB, `.csv` only) and validates every row without writing
+        anything. Use `POST /tickets/import/confirm` with the valid rows.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: Per-row validation result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportPreview" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /tickets/import/confirm:
+    post:
+      operationId: ticketsImportConfirm
+      tags: [Tickets]
+      summary: Import validated tickets
+      description: >
+        Admin only. All-or-nothing: every row is validated first (same rules as
+        `POST /tickets`), then inserted in one transaction. New ids are always
+        generated. Requesters are matched by name or e-mail; a missing contact is
+        created when both name and e-mail are given. Writes a `ticket_import`
+        audit row.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tickets]
+              properties:
+                tickets:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [title]
+                    properties:
+                      title: { type: string }
+                      description: { type: string }
+                      status: { type: string, enum: [open, in-progress, waiting, resolved, closed] }
+                      priority: { type: string, enum: [low, medium, high, critical] }
+                      category: { type: string, description: Category label (case-insensitive). }
+                      requester_name: { type: string }
+                      requester_email: { type: string }
+                      notes: { type: string }
+                      solution: { type: string }
+      responses:
+        "200":
+          description: Imported
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportResult" }
+        "400":
+          description: Validation failure or rolled-back transaction (nothing was imported)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /tickets/export:
+    get:
+      operationId: ticketsExport
+      tags: [Tickets]
+      summary: Export tickets as XLSX
+      description: >
+        Any authenticated user. Accepts the same filters as `GET /tickets`
+        (status, priority, category, company_id, assigned_to, requester_id,
+        search, tags, tagMode, dateFrom, dateTo, dateField, checklist, year,
+        month). Default 10 000 rows, max 50 000 (`limit`, `offset`).
+      parameters:
+        - { name: status, in: query, schema: { type: string }, description: "Comma-separated statuses." }
+        - { name: priority, in: query, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string } }
+        - { name: search, in: query, schema: { type: string } }
+        - { name: year, in: query, schema: { type: integer } }
+        - { name: month, in: query, schema: { type: integer, minimum: 0, maximum: 11 } }
+        - { name: source, in: query, schema: { type: string, enum: [rapport] }, description: "`rapport` changes the file name prefix." }
+        - { name: limit, in: query, schema: { type: integer, default: 10000, maximum: 50000 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+      responses:
+        "200":
+          description: XLSX workbook
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /tickets/export-archive:
+    get:
+      operationId: ticketsExportArchive
+      tags: [Tickets]
+      summary: Export closed tickets as a compact XLSX
+      description: >
+        Six columns (ID, title, priority, category, tags, closed). Either pass
+        `ids` (comma-separated) or the usual ticket filters; without `ids` only
+        `closed` tickets are exported (max 5 000).
+      parameters:
+        - { name: ids, in: query, schema: { type: string }, description: Comma-separated ticket ids. }
+      responses:
+        "200":
+          description: XLSX workbook
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /tickets/dashboard-overview:
+    get:
+      operationId: ticketsDashboardOverview
+      tags: [Tickets]
+      summary: Dashboard aggregates
+      description: The six oldest open tickets by days since last activity, today's created/resolved/closed counts, and the number of non-closed critical tickets.
+      responses:
+        "200":
+          description: Overview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agingTickets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        title: { type: string }
+                        priority: { type: string }
+                        status: { type: string }
+                        requester_name: { type: string, nullable: true }
+                        company_name: { type: string, nullable: true }
+                        age_days: { type: integer }
+                  todayCounts:
+                    type: object
+                    properties:
+                      created_today: { type: integer }
+                      resolved_today: { type: integer }
+                      closed_today: { type: integer }
+                  criticalCount: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /tickets/activity-feed:
+    get:
+      operationId: ticketsActivityFeed
+      tags: [Tickets]
+      summary: Recent ticket history events
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 15, maximum: 50 } }
+      responses:
+        "200":
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: "#/components/schemas/TicketHistoryEvent"
+                    - type: object
+                      properties:
+                        ticket_title: { type: string, nullable: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /tickets/status-counts:
+    get:
+      operationId: ticketsStatusCounts
+      tags: [Tickets]
+      summary: Ticket count per status
+      responses:
+        "200":
+          description: Counts keyed by status (all five keys always present)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  open: { type: integer }
+                  in-progress: { type: integer }
+                  waiting: { type: integer }
+                  resolved: { type: integer }
+                  closed: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /tickets/requester-open-counts:
+    get:
+      operationId: ticketsRequesterOpenCounts
+      tags: [Tickets]
+      summary: Non-closed ticket count per requester
+      responses:
+        "200":
+          description: Map of contact id to number of non-closed tickets
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /tickets/upcoming-reminders:
+    get:
+      operationId: ticketsUpcomingReminders
+      tags: [Tickets]
+      summary: Next unsent reminders across all tickets
+      description: Up to six reminders that are still in the future, nearest first.
+      responses:
+        "200":
+          description: Reminders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    ticket_id: { type: string }
+                    reminder_time: { type: string, format: date-time }
+                    message: { type: string, nullable: true }
+                    ticket_title: { type: string }
+                    ticket_status: { type: string }
+                    ticket_priority: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /tickets/bulk:
+    put:
+      operationId: ticketsBulkUpdate
+      tags: [Tickets]
+      summary: Update status, priority, category or assignee on many tickets
+      description: >
+        Max 500 ids. Same validation as `PUT /tickets/{id}`. The write rule is
+        applied per ticket (admin, assignee, creator, or unassigned); tickets
+        the caller may not change are returned in `skipped` instead of failing
+        the batch. History rows are written per changed field and
+        `ticket.status_changed` webhooks are dispatched.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, updates]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items: { type: string }
+                updates:
+                  type: object
+                  minProperties: 1
+                  properties:
+                    status: { type: string, enum: [open, in-progress, waiting, resolved, closed] }
+                    priority: { type: string, enum: [low, medium, high, critical] }
+                    category_id: { type: string, nullable: true }
+                    assigned_to: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: integer }
+                  skipped:
+                    type: array
+                    description: Ids the caller may not change.
+                    items: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /tickets/bulk-delete:
+    post:
+      operationId: ticketsBulkDelete
+      tags: [Tickets]
+      summary: Permanently delete many tickets
+      description: >
+        Admin only. Max 500 ids. Attachment files are removed after commit,
+        `ticket.deleted` webhooks are dispatched and one `ticket_bulk_delete`
+        audit row is written.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items: { type: string }
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: integer }
+                  alreadyGone: { type: integer, description: Present when fewer rows were deleted than requested. }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /tickets/{id}/history:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: ticketsHistory
+      tags: [Tickets]
+      summary: Field-change history of a ticket
+      description: Oldest first, max 500 rows.
+      responses:
+        "200":
+          description: History
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TicketHistoryEvent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /tickets/{id}/reminders:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: ticketsListReminders
+      tags: [Tickets]
+      summary: List reminders on a ticket
+      description: Readable by every authenticated user.
+      responses:
+        "200":
+          description: Reminders, soonest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TicketReminder" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      operationId: ticketsCreateReminder
+      tags: [Tickets]
+      summary: Create a personal reminder on a ticket
+      description: >
+        Requires write access to the ticket (admin, assignee, creator, or the
+        ticket is unassigned). `reminder_time` must be in the future. When due,
+        the reminder goes to its creator by e-mail (if SMTP is configured) and
+        by Web Push to that user's devices only; failed sends are retried up to
+        5 times.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reminder_time]
+              properties:
+                reminder_time: { type: string, format: date-time }
+                message: { type: string, maxLength: 500, nullable: true }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TicketReminder" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /tickets/{id}/reminders/sent:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: ticketsClearSentReminders
+      tags: [Tickets]
+      summary: Delete the caller's already-sent reminders on a ticket
+      description: Requires write access to the ticket. Only reminders owned by the caller are removed.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: Number removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /tickets/{id}/reminders/{reminderId}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: reminderId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: ticketsDeleteReminder
+      tags: [Tickets]
+      summary: Cancel a reminder
+      description: Only the reminder's owner or an admin may delete it.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ───────────────────────── Knowledge base: categories, links, shares, images ─────────────────────────
+  /kb/categories:
+    get:
+      operationId: kbListCategories
+      tags: [Knowledge base]
+      summary: List KB categories
+      description: Any authenticated user. `article_count` counts published articles only.
+      responses:
+        "200":
+          description: Categories ordered by position then name
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/KbCategory" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: kbCreateCategory
+      tags: [Knowledge base]
+      summary: Create a KB category (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KbCategoryInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KbCategory" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /kb/categories/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: kbUpdateCategory
+      tags: [Knowledge base]
+      summary: Update a KB category (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/KbCategoryInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KbCategory" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: kbDeleteCategory
+      tags: [Knowledge base]
+      summary: Delete a KB category (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /kb/articles/{id}/tickets:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: kbArticleTickets
+      tags: [Knowledge base]
+      summary: Tickets that link to an article
+      responses:
+        "200":
+          description: Linked tickets, newest link first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    title: { type: string }
+                    status: { type: string }
+                    priority: { type: string }
+                    created_at: { type: string, format: date-time }
+                    updated_at: { type: string, format: date-time }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /kb/articles/{id}/review:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: kbMarkReviewed
+      tags: [Knowledge base]
+      summary: Mark an article as reviewed (admin)
+      description: Sets `last_reviewed_at` to now (clears the "stale" flag).
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200":
+          description: New review timestamp
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  last_reviewed_at: { type: string, format: date-time }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /kb/articles/{id}/links:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: kbListArticleLinks
+      tags: [Knowledge base]
+      summary: Cross-referenced articles (both directions)
+      description: Only published articles are returned.
+      responses:
+        "200":
+          description: Related articles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    title: { type: string }
+                    article_type: { type: string, nullable: true }
+                    link_id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: kbCreateArticleLink
+      tags: [Knowledge base]
+      summary: Link two articles (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [targetArticleId]
+              properties:
+                targetArticleId: { type: string }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  source_article_id: { type: string }
+                  target_article_id: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409":
+          description: A link between the two articles already exists (either direction)
+          $ref: "#/components/responses/Error"
+
+  /kb/articles/{id}/links/{targetId}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+      - { name: targetId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: kbDeleteArticleLink
+      tags: [Knowledge base]
+      summary: Remove a link between two articles (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /kb/articles/{id}/share:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: kbGetArticleShare
+      tags: [Knowledge base]
+      summary: Get the active share token of an article (admin)
+      description: "`share_token` is `null` when there is no active (non-expired) share."
+      responses:
+        "200":
+          description: Token or null
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  share_token: { type: string, nullable: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: kbCreateArticleShare
+      tags: [Knowledge base]
+      summary: Create a public share link for a published article (admin)
+      description: >
+        Idempotent: an existing active share is returned with `200`. An expired
+        share is replaced. The link is served by `GET /kb/public/{token}`.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expiresInDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 365
+                  description: Omit for a link that does not expire.
+      responses:
+        "200":
+          description: Existing active share
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  share_token: { type: string }
+        "201":
+          description: New share
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  share_token: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Draft articles cannot be shared
+          $ref: "#/components/responses/Error"
+    delete:
+      operationId: kbDeleteArticleShare
+      tags: [Knowledge base]
+      summary: Revoke an article's share link (admin)
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /kb/ticket/{ticketId}:
+    parameters:
+      - { name: ticketId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: kbListTicketArticles
+      tags: [Knowledge base]
+      summary: Articles linked to a ticket
+      description: Draft articles are only returned to admins.
+      responses:
+        "200":
+          description: Linked articles with `link_id`
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    title: { type: string }
+                    content: { type: string }
+                    category_id: { type: string, nullable: true }
+                    category_name: { type: string, nullable: true }
+                    category_color: { type: string, nullable: true }
+                    link_id: { type: string }
+                    created_at: { type: string, format: date-time }
+                    updated_at: { type: string, format: date-time }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: kbLinkArticleToTicket
+      tags: [Knowledge base]
+      summary: Link a KB article to a ticket
+      description: Requires write access to the ticket. Non-admins can only link published articles.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [articleId]
+              properties:
+                articleId: { type: string }
+      responses:
+        "201":
+          description: Linked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  ticket_id: { type: string }
+                  article_id: { type: string }
+                  created_at: { type: string, format: date-time }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Already linked
+          $ref: "#/components/responses/Error"
+
+  /kb/ticket/{ticketId}/{articleId}:
+    parameters:
+      - { name: ticketId, in: path, required: true, schema: { type: string } }
+      - { name: articleId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: kbUnlinkArticleFromTicket
+      tags: [Knowledge base]
+      summary: Remove a ticket-article link
+      description: Requires write access to the ticket.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /kb/upload-image:
+    post:
+      operationId: kbUploadImage
+      tags: [Knowledge base]
+      summary: Upload an image for an article (admin)
+      description: >
+        `multipart/form-data`, field `image`. JPEG, PNG, GIF or WebP only; the
+        file's magic bytes must match the declared type. SVG is rejected.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image: { type: string, format: binary }
+      responses:
+        "201":
+          description: Stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url: { type: string, example: /api/kb/images/kb-1a2b3c.png }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /kb/images/{filename}:
+    parameters:
+      - { name: filename, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: kbGetImage
+      tags: [Knowledge base]
+      summary: Serve an uploaded KB image
+      description: Public (images appear in publicly shared articles). Only files with the `kb-` prefix are served.
+      security: []
+      responses:
+        "200":
+          description: Image bytes
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        "400": { $ref: "#/components/responses/Error" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ───────────────────────── Contacts import/export ─────────────────────────
+  /contacts/export:
+    get:
+      operationId: contactsExport
+      tags: [Contacts]
+      summary: Export all contacts as XLSX
+      description: Any authenticated user. Returns `404` when there are no contacts.
+      responses:
+        "200":
+          description: XLSX workbook
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /contacts/import/preview:
+    post:
+      operationId: contactsImportPreview
+      tags: [Contacts]
+      summary: Validate a contacts CSV (admin)
+      description: >
+        `multipart/form-data`, field `file` (CSV). Validates name, e-mail format
+        and duplicates (case-insensitive) without writing anything.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: Per-row validation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total: { type: integer }
+                  valid: { type: integer }
+                  invalid: { type: integer }
+                  duplicates: { type: integer }
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        contact:
+                          type: object
+                          properties:
+                            name: { type: string }
+                            email: { type: string }
+                            phone: { type: string, nullable: true }
+                            company: { type: string, nullable: true }
+                        valid: { type: boolean }
+                        errors:
+                          type: array
+                          items: { type: string }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /contacts/import/confirm:
+    post:
+      operationId: contactsImportConfirm
+      tags: [Contacts]
+      summary: Import validated contacts (admin)
+      description: >
+        All rows are validated first; any validation error aborts the whole
+        import with `400` and `rowErrors`. Unknown company names are created.
+        Writes a `contact_import` audit row.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contacts]
+              properties:
+                contacts:
+                  type: array
+                  items:
+                    type: object
+                    required: [name, email]
+                    properties:
+                      name: { type: string }
+                      email: { type: string, format: email }
+                      phone: { type: string, nullable: true }
+                      company: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Imported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  created: { type: integer }
+                  failed: { type: integer }
+                  errors:
+                    type: array
+                    items: { type: string }
+        "400":
+          description: Validation failed; nothing was imported
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean, example: false }
+                  created: { type: integer, example: 0 }
+                  failed: { type: integer }
+                  error: { type: string }
+                  rowErrors:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        row: { type: integer }
+                        errors:
+                          type: array
+                          items: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  # ───────────────────────── Categories ─────────────────────────
+  /categories/reorder:
+    put:
+      operationId: categoriesReorder
+      tags: [Categories]
+      summary: Reorder categories (admin)
+      description: The position of each id becomes its index in `ids`.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  items: { type: string }
+      responses:
+        "200":
+          description: Categories in the new order
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Category" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  # ───────────────────────── Auth: audit log ─────────────────────────
+  /auth/audit-log:
+    get:
+      operationId: authAuditLog
+      tags: [Auth]
+      summary: Read the audit log (admin)
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 200 } }
+        - { name: offset, in: query, schema: { type: integer, default: 0 } }
+        - { name: entity_type, in: query, schema: { type: string } }
+        - { name: action, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items:
+                      type: object
+                      description: "`audit_log` row joined with the acting user and, for API-key calls, the key name."
+                      properties:
+                        id: { type: string }
+                        user_id: { type: string, nullable: true }
+                        api_key_id: { type: string, nullable: true }
+                        action: { type: string }
+                        entity_type: { type: string, nullable: true }
+                        entity_id: { type: string, nullable: true }
+                        details: { type: string, nullable: true }
+                        ip_address: { type: string, nullable: true }
+                        created_at: { type: string, format: date-time }
+                        user_email: { type: string, nullable: true }
+                        user_display_name: { type: string, nullable: true }
+                        api_key_name: { type: string, nullable: true }
+                  total: { type: integer }
+                  limit: { type: integer }
+                  offset: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  # ───────────────────────── Backup: stored files ─────────────────────────
+  /backup/files:
+    get:
+      operationId: backupListFiles
+      tags: [Backup]
+      summary: List stored backup ZIPs (admin)
+      description: >
+        Lists `backup-YYYY-MM-DD[-HHMM].zip` files in the server's backup
+        directory (the scheduled/offsite-source backups), newest first, so an
+        admin can fetch an earlier backup without shell access. Returns `[]` when
+        the directory does not exist.
+      responses:
+        "200":
+          description: Files
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BackupFile" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /backup/files/{name}:
+    parameters:
+      - name: name
+        in: path
+        required: true
+        schema: { type: string, pattern: '^backup-\d{4}-\d{2}-\d{2}(-\d{4})?\.zip$' }
+    get:
+      operationId: backupDownloadFile
+      tags: [Backup]
+      summary: Download a stored backup ZIP (admin)
+      description: >
+        Streams one file from `GET /backup/files`. The name is validated against
+        the backup file pattern and resolved inside the backup directory.
+        Rate-limited with the same limiter as `GET /backup`; writes a
+        `backup_download` audit row. The archive contains every secret in the
+        database - treat it as highly sensitive.
+      responses:
+        "200":
+          description: ZIP archive
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        "400":
+          description: Name does not match the backup file pattern
+          $ref: "#/components/responses/Error"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "429":
+          description: Rate limit exceeded
+          $ref: "#/components/responses/Error"
+
+  # ───────────────────────── Architecture map ─────────────────────────
+  /architecture-map:
+    get:
+      operationId: architectureMap
+      tags: [System]
+      summary: Architecture map viewer (admin)
+      description: >
+        Serves the self-contained HTML architecture map from
+        `server/admin_assets/architecture-map/`. Admin only; sent with
+        `Cache-Control: private, no-store` and `X-Robots-Tag: noindex`.
+        Returns `503` if the asset is missing from the image.
+      responses:
+        "200":
+          description: HTML document
+          content:
+            text/html:
+              schema: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "503": { $ref: "#/components/responses/Error" }
+
+  # ───────────────────────── Public: form data and branding ─────────────────────────
+  /public/templates:
+    get:
+      operationId: publicTemplates
+      tags: [Public]
+      summary: Ticket templates for the public form
+      description: Templates with their custom fields (only the columns the form needs).
+      security: []
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  allOf:
+                    - $ref: "#/components/schemas/Template"
+                    - type: object
+                      properties:
+                        fields:
+                          type: array
+                          items: { $ref: "#/components/schemas/TemplateField" }
+
+  /public/categories:
+    get:
+      operationId: publicCategories
+      tags: [Public]
+      summary: Categories for the public form
+      security: []
+      responses:
+        "200":
+          description: Categories ordered by position
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id: { type: string }
+                    label: { type: string }
+
+  /public/branding:
+    get:
+      operationId: publicBranding
+      tags: [Public]
+      summary: Instance branding
+      description: "`logoUrl` is `null` when no custom logo is configured; otherwise a cache-busted path to `GET /public/branding/logo`."
+      security: []
+      responses:
+        "200":
+          description: Branding info
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BrandingInfo" }
+
+  /public/branding/logo:
+    get:
+      operationId: publicBrandingLogo
+      tags: [Public]
+      summary: Instance logo bytes
+      description: >
+        PNG, JPEG or WebP (SVG is not accepted). Served `inline` with
+        `X-Content-Type-Options: nosniff` and `Cross-Origin-Resource-Policy:
+        cross-origin` so it can render on the login page and public form.
+      security: []
+      responses:
+        "200":
+          description: Image
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        "404":
+          description: No logo configured
+          $ref: "#/components/responses/Error"
+
+  # ───────────────────────── Settings: branding logo ─────────────────────────
+  /settings/branding/logo:
+    post:
+      operationId: settingsUploadLogo
+      tags: [Settings]
+      summary: Upload or replace the instance logo (admin)
+      description: >
+        `multipart/form-data`, field `file`. PNG, JPEG or WebP, max 1 MB; magic
+        bytes must match the declared type. Writes a `branding_logo_update`
+        audit row.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file: { type: string, format: binary }
+      responses:
+        "200":
+          description: New branding info
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BrandingInfo" }
+        "400": { $ref: "#/components/responses/Error" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    delete:
+      operationId: settingsDeleteLogo
+      tags: [Settings]
+      summary: Remove the instance logo (admin)
+      description: Idempotent - `204` even when no logo was set. Writes a `branding_logo_delete` audit row.
+      security:
+        - bearerAuth: []
+          csrfToken: []
+        - apiKeyAuth: []
+      responses:
+        "204":
+          description: Removed
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3388,6 +4814,7 @@ components:
         email: { type: string, format: email }
         display_name: { type: string }
         role: { type: string, enum: [admin, user] }
+        mustChangePassword: { type: boolean, description: "Sätts på konton en admin skapat tills lösenordet byts. Finns i login-svaret." }
 
     Ticket:
       type: object
@@ -3477,7 +4904,6 @@ components:
         email: { type: string, nullable: true }
         phone: { type: string, nullable: true }
         address: { type: string, nullable: true }
-        sla_disabled: { type: integer, enum: [0, 1] }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
         contact_count: { type: integer }
@@ -3499,7 +4925,8 @@ components:
       properties:
         id: { type: string }
         title: { type: string }
-        content: { type: string }
+        content: { type: string, description: "Utelämnas när `fields=list`." }
+        preview: { type: string, description: "Bara med `fields=list`." }
         category_id: { type: string, nullable: true }
         category_name: { type: string, nullable: true }
         article_type: { type: string, enum: [how-to, solution] }
@@ -4145,6 +5572,7 @@ components:
         nextRunAt: { type: string, format: date-time, nullable: true, description: "null when paused (enabled=false)." }
         consecutiveFailures: { type: integer }
         offsiteFailureCount: { type: integer }
+        lastError: { type: string, nullable: true, description: Last backup failure message. }
 
     WebhooksWebhook:
       type: object
@@ -4179,3 +5607,116 @@ components:
         attempts: { type: integer }
         delivered_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
+
+    Pagination:
+      type: object
+      required: [page, limit, total]
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer, description: Only on ticket lists. }
+        hasNext: { type: boolean, description: Only on ticket lists. }
+        hasPrev: { type: boolean, description: Only on ticket lists. }
+
+    TicketListItem:
+      type: object
+      description: Ticket as returned by list endpoints - without the heavy `description`, `notes` and `solution` fields.
+      properties:
+        id: { type: string }
+        title: { type: string }
+        status: { type: string, enum: [open, in-progress, waiting, resolved, closed] }
+        priority: { type: string, enum: [low, medium, high, critical] }
+        category_id: { type: string, nullable: true }
+        category_label: { type: string, nullable: true }
+        requester_id: { type: string, nullable: true }
+        requester_name: { type: string, nullable: true }
+        company_id: { type: string, nullable: true }
+        assigned_to: { type: string, nullable: true }
+        assigned_to_name: { type: string, nullable: true }
+        template_id: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        resolved_at: { type: string, format: date-time, nullable: true }
+        closed_at: { type: string, format: date-time, nullable: true }
+
+    TicketHistoryEvent:
+      type: object
+      properties:
+        id: { type: string }
+        ticket_id: { type: string }
+        user_id: { type: string, nullable: true }
+        user_name: { type: string, nullable: true }
+        field_name: { type: string, description: "`status`, `priority`, `category_id`, `assigned_to`, ..." }
+        old_value: { type: string, nullable: true }
+        new_value: { type: string, nullable: true }
+        changed_at: { type: string, format: date-time }
+
+    TicketReminder:
+      type: object
+      properties:
+        id: { type: string }
+        ticket_id: { type: string }
+        user_id: { type: string }
+        reminder_time: { type: string, format: date-time }
+        message: { type: string, nullable: true }
+        sent: { type: integer, enum: [0, 1] }
+        created_at: { type: string, format: date-time }
+        sent_at: { type: string, format: date-time, nullable: true }
+        user_name: { type: string, nullable: true, description: Only on the list endpoint. }
+        user_email: { type: string, nullable: true, description: Only on the list endpoint. }
+
+    ImportPreview:
+      type: object
+      properties:
+        total: { type: integer }
+        valid: { type: integer }
+        invalid: { type: integer }
+        duplicates: { type: integer }
+        results:
+          type: array
+          items:
+            type: object
+            description: One entry per CSV row, with `valid`, `errors` and the parsed values.
+            additionalProperties: true
+
+    ImportResult:
+      type: object
+      properties:
+        success: { type: boolean }
+        created: { type: integer }
+        failed: { type: integer }
+        errors:
+          type: array
+          items: { type: string }
+        error: { type: string }
+        message: { type: string }
+
+    KbCategory:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string, nullable: true }
+        position: { type: integer }
+        created_at: { type: string, format: date-time }
+        article_count: { type: integer, description: Published articles only. Present on the list endpoint. }
+
+    KbCategoryInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        color: { type: string, nullable: true }
+
+    BackupFile:
+      type: object
+      properties:
+        name: { type: string, example: backup-2026-10-09-0200.zip }
+        sizeBytes: { type: integer }
+        modifiedAt: { type: string, format: date-time }
+
+    BrandingInfo:
+      type: object
+      properties:
+        logoUrl: { type: string, nullable: true, example: "/api/public/branding/logo?v=1760000000000" }

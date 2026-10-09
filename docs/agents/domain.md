@@ -5,7 +5,8 @@
 This is a single-context repository:
 
 - `GLOSSARY.md` at the repository root.
-- Architecture decision records in `docs/adr/`.
+- Architecture decision records in `docs/adr/` (index in `docs/adr/README.md`; currently
+  0001 ticket access policy, 0002 hashed refresh tokens, 0003 ISO timestamps).
 
 The frontend and backend share this domain documentation.
 
@@ -13,9 +14,10 @@ The frontend and backend share this domain documentation.
 
 Read `GLOSSARY.md` and ADRs relevant to the work.
 
-If these files do not exist, proceed silently. Do not suggest
-creating placeholders. The domain-modeling skill creates them
-when terms or decisions are resolved.
+If a file you expect is missing, proceed silently. Do not suggest
+creating placeholders. The domain-modeling skill creates glossary
+terms and ADRs when terms or decisions are resolved; new ADRs follow
+the format described in `docs/adr/README.md` and get the next number.
 
 ## Vocabulary and decisions
 

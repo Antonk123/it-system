@@ -71,8 +71,8 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
     const secret = randomBytes(32).toString('hex');
 
     db.prepare(
-      'INSERT INTO webhooks (id, url, events, secret) VALUES (?, ?, ?, ?)'
-    ).run(id, url, JSON.stringify(checkedEvents.events), secret);
+      'INSERT INTO webhooks (id, url, events, secret, created_at) VALUES (?, ?, ?, ?, ?)'
+    ).run(id, url, JSON.stringify(checkedEvents.events), secret, new Date().toISOString());
 
     res.status(201).json({
       id,

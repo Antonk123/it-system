@@ -147,9 +147,9 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
     try {
       // Insert user - UNIQUE constraint on email will catch race conditions
       db.prepare(`
-        INSERT INTO users (id, email, password_hash, role, display_name, must_change_password)
-        VALUES (?, ?, ?, ?, ?, 1)
-      `).run(id, email, passwordHash, userRole, resolvedDisplayName);
+        INSERT INTO users (id, email, password_hash, role, display_name, must_change_password, created_at)
+        VALUES (?, ?, ?, ?, ?, 1, ?)
+      `).run(id, email, passwordHash, userRole, resolvedDisplayName, new Date().toISOString());
 
       logAudit(req.user!.id, 'user_create', 'user', id, `email: ${email}, role: ${userRole}`, req.ip, req.apiKey?.id ?? null);
 

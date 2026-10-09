@@ -11,7 +11,7 @@ export function mapTicketRow(t: TicketRow): Ticket {
   return {
     id: t.id,
     title: t.title,
-    description: t.description,
+    description: t.description ?? '',
     status: t.status as TicketStatus,
     priority: t.priority as TicketPriority,
     category: t.category_id || undefined,
@@ -25,13 +25,9 @@ export function mapTicketRow(t: TicketRow): Ticket {
     notes: t.notes || undefined,
     solution: t.solution || undefined,
     templateId: t.template_id || undefined,
-    assignedTo: (t as any).assigned_to ?? null,
-    assignedToName: (t as any).assigned_to_name ?? null,
-    companyId: (t as any).company_id ?? null,
-    companyName: (t as any).company_name ?? null,
-    assigned_to: (t as any).assigned_to ?? null,
-    assigned_to_name: (t as any).assigned_to_name ?? null,
-    company_id: (t as any).company_id ?? null,
-    company_name: (t as any).company_name ?? null,
-  } as Ticket;
+    assignedTo: t.assigned_to ?? null,
+    assignedToName: t.assigned_to_name ?? null,
+    companyId: t.company_id ?? null,
+    companyName: t.company_name ?? null,
+  };
 }

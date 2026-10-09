@@ -127,11 +127,12 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 
     const position = (maxPos.maxPosition ?? -1) + 1;
     const id = randomUUID();
+    const now = new Date().toISOString();
 
     db.prepare(`
-      INSERT INTO ticket_checklists (id, ticket_id, label, position, parent_id, due_date)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(id, req.params.ticketId, label.trim(), position, parent_id || null, due_date || null);
+      INSERT INTO ticket_checklists (id, ticket_id, label, position, parent_id, due_date, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, req.params.ticketId, label.trim(), position, parent_id || null, due_date || null, now, now);
 
     const item = db.prepare('SELECT * FROM ticket_checklists WHERE id = ?').get(id) as ChecklistRow;
     res.status(201).json(mapItem(item));
@@ -185,16 +186,17 @@ router.post('/ticket/:ticketId/bulk', authenticate, (req: AuthRequest, res: Resp
     }
 
     const insertStmt = db.prepare(`
-      INSERT INTO ticket_checklists (id, ticket_id, label, position, parent_id, due_date)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO ticket_checklists (id, ticket_id, label, position, parent_id, due_date, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
+    const now = new Date().toISOString();
 
     const createdIds: string[] = [];
 
     const insertMany = db.transaction((items: typeof rawItems) => {
       items.forEach((item, index) => {
         const id = randomUUID();
-        insertStmt.run(id, req.params.ticketId, item.label.trim(), index, item.parent_id ?? null, item.due_date ?? null);
+        insertStmt.run(id, req.params.ticketId, item.label.trim(), index, item.parent_id ?? null, item.due_date ?? null, now, now);
         createdIds.push(id);
       });
     });

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { backupFilesKeys } from '@/hooks/useBackupFiles';
 import { toast } from 'sonner';
 
 export const backupConfigKeys = {
@@ -36,6 +37,7 @@ export const useRunBackupNow = () => {
     mutationFn: () => api.runBackupNow(),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: backupConfigKeys.config() });
+      queryClient.invalidateQueries({ queryKey: backupFilesKeys.all });
       const sizeMB = data.lastSizeBytes != null
         ? ` (${(data.lastSizeBytes / (1024 * 1024)).toFixed(1)} MB)`
         : '';

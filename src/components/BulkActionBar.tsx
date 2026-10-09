@@ -140,7 +140,7 @@ export function BulkActionBar({
                 Du håller på att radera <strong>{selectedCount} ärende(n)</strong> permanent från databasen.
               </span>
               <span className="block text-foreground font-medium">
-                Detta tar bort all data — kommentarer, bilagor, historik och tidsregistreringar — för dessa ärenden. Det finns ingen ångerfunktion.
+                Detta tar bort all data — kommentarer, bilagor, checklistor och historik — för dessa ärenden. Det finns ingen ångerfunktion.
               </span>
               <span className="block text-sm">
                 Om du vill behålla data men dölja ärendena, stäng dem istället (status: Stängd).

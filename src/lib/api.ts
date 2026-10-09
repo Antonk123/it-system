@@ -1,4 +1,6 @@
 
+import { safeStorage } from '@/lib/safeStorage';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 interface ApiOptions {
@@ -6,6 +8,18 @@ interface ApiOptions {
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
+  onResponse?: (headers: Headers) => void;
+  // Anrop från oinloggade sidor (login, logout, publika vyer): ett 401 är ett
+  // vanligt svar att visa för användaren — inte en utgången session. Hoppar över
+  // den proaktiva förnyelsen, refresh-kedjan och sessionExpired()-redirecten.
+  skipAuthRefresh?: boolean;
+}
+
+interface ErrorBody {
+  error?: string;
+  message?: string;
+  code?: string;
+  requestId?: string;
 }
 
 export interface PaginatedResponse<T> {
@@ -20,7 +34,76 @@ export interface PaginatedResponse<T> {
   };
 }
 
+export interface ListPage<T> {
+  data: T[];
+  pagination: { page: number; limit: number; total: number };
+}
+
+interface TemplateFieldPayload {
+  field_name: string;
+  field_label: string;
+  field_type: string;
+  placeholder?: string | null;
+  default_value?: string | null;
+  required?: boolean | number; // skickas som 0/1 (SQLite-flagga); backend coercar truthiness
+  options?: string[];
+}
+
+interface KbArticlesQuery {
+  search?: string;
+  category_id?: string;
+  article_type?: string;
+  tag?: string;
+  stale?: boolean;
+  status?: 'draft' | 'published' | 'all';
+  fields?: 'list';
+  page?: number;
+  limit?: number;
+}
+
+function kbArticlesQueryString(params?: KbArticlesQuery): string {
+  const qs = new URLSearchParams();
+  if (params?.search) qs.set('search', params.search);
+  if (params?.category_id) qs.set('category_id', params.category_id);
+  if (params?.article_type) qs.set('article_type', params.article_type);
+  if (params?.tag) qs.set('tag', params.tag);
+  if (params?.stale) qs.set('stale', '1');
+  if (params?.status) qs.set('status', params.status);
+  if (params?.fields) qs.set('fields', params.fields);
+  if (params?.page) qs.set('page', String(params.page));
+  if (params?.limit) qs.set('limit', String(params.limit));
+  return qs.toString() ? `?${qs.toString()}` : '';
+}
+
 const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+/** Sparar en blob som fil via en tillfällig länk. */
+export function downloadBlob(blob: Blob, filename: string): void {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
+// Fel från ett icke-OK API-svar. `status` låter anroparen skilja t.ex. 404 och
+// 403 från nätverks- och serverfel (status 0) utan att tolka meddelandetexten.
+export class ApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly requestId?: string;
+
+  constructor(message: string, status: number, details: { code?: string; requestId?: string } = {}) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = details.code;
+    this.requestId = details.requestId;
+  }
+}
 
 class ApiClient {
   private baseUrl: string;
@@ -31,31 +114,42 @@ class ApiClient {
   }
 
   private getToken(): string | null {
-    return localStorage.getItem('auth_token');
+    return safeStorage.getItem('auth_token');
   }
 
   setToken(token: string): void {
-    localStorage.setItem('auth_token', token);
+    safeStorage.setItem('auth_token', token);
     this.csrfToken = null; // Invalidera cachad CSRF-token vid auth-byte
   }
 
   clearToken(): void {
-    localStorage.removeItem('auth_token');
-    localStorage.removeItem('token');
-    localStorage.removeItem('refreshToken'); // rensa ev. gammal token (pre-cookie-migration)
+    safeStorage.removeItem('auth_token');
+    safeStorage.removeItem('token');
+    safeStorage.removeItem('refreshToken'); // rensa ev. gammal token (pre-cookie-migration)
     this.csrfToken = null;
+  }
+
+  private async readErrorBody(response: Response, fallbackMessage: string): Promise<ErrorBody> {
+    return response.json().catch(() => ({ error: fallbackMessage }));
+  }
+
+  private toApiError(response: Response, body: ErrorBody, fallbackMessage: string): ApiError {
+    return new ApiError(body.error || body.message || fallbackMessage, response.status, {
+      code: body.code,
+      requestId: body.requestId,
+    });
   }
 
   // Lazily fetch and cache the CSRF token. The token is bound to the current
   // auth session via the Authorization header (see backend getSessionIdentifier).
-  private async getCsrfToken(): Promise<string> {
+  private async getCsrfToken(skipAuthRefresh = false): Promise<string> {
     if (this.csrfToken) return this.csrfToken;
-    const data = await this.request<{ csrfToken: string }>('/csrf-token');
+    const data = await this.request<{ csrfToken: string }>('/csrf-token', { skipAuthRefresh });
     this.csrfToken = data.csrfToken;
     return this.csrfToken;
   }
 
-  private isCsrfError(error: { error?: string; code?: string }): boolean {
+  private isCsrfError(error: ErrorBody): boolean {
     return error.code === 'EBADCSRFTOKEN' || !!(error.error?.toLowerCase().includes('csrf'));
   }
 
@@ -85,22 +179,29 @@ class ApiClient {
     return this.refreshPromise;
   }
 
+  // false = definitivt utloggad (cookien saknas, är ogiltig eller utgången:
+  // 400/401/403). Serverfel, rate limit och nätverksfel är transienta och kastas
+  // som ApiError — då ska användaren se ett tillfälligt fel, inte kastas ut.
   private async performRefresh(): Promise<boolean> {
+    let res: Response;
     try {
       // Refresh-token ligger i en HttpOnly-cookie (ej läsbar för JS).
       // credentials:'include' skickar cookien; servern roterar och sätter ny cookie.
-      const res = await fetch(`${this.baseUrl}/auth/refresh`, {
+      res = await fetch(`${this.baseUrl}/auth/refresh`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
       });
-      if (!res.ok) return false;
-      const data = await res.json() as { accessToken: string };
-      this.setToken(data.accessToken);
-      return true;
     } catch {
-      return false;
+      throw new ApiError('Kunde inte nå servern', 0);
     }
+    if (res.status === 400 || res.status === 401 || res.status === 403) return false;
+    if (!res.ok) {
+      throw this.toApiError(res, await this.readErrorBody(res, 'Sessionen kunde inte förnyas'), 'Sessionen kunde inte förnyas');
+    }
+    const data = await res.json() as { accessToken: string };
+    this.setToken(data.accessToken);
+    return true;
   }
 
   // Proaktiv refresh: om access-token är utgången, uppdatera innan requesten
@@ -108,7 +209,9 @@ class ApiClient {
   private async getFreshToken(isRetry: boolean): Promise<string | null> {
     let token = this.getToken();
     if (token && !isRetry && this.isTokenExpired(token)) {
-      const refreshed = await this.tryRefresh();
+      // Transient refresh-fel sväljs här: anropet går ut med nuvarande token och
+      // ett eventuellt 401 förnyas (och felet kastas) i request().
+      const refreshed = await this.tryRefresh().catch(() => false);
       if (refreshed) {
         token = this.getToken();
       }
@@ -124,7 +227,7 @@ class ApiClient {
   // konsumtion i Login (sanitizeReturnTo).
   private sessionExpired(): never {
     this.clearToken();
-    localStorage.removeItem('user');
+    safeStorage.removeItem('user');
     // String(...) skyddar mot minimala window.location-stubbar i andra
     // testfiler (bara { href }, utan pathname/search) — där skulle
     // `undefined + undefined` annars ge NaN (taladdition, inte
@@ -135,13 +238,13 @@ class ApiClient {
     window.location.href = !here || here.startsWith('/login')
       ? '/login'
       : `/login?returnTo=${encodeURIComponent(here)}`;
-    throw new Error('Session expired');
+    throw new ApiError('Session expired', 401);
   }
 
   async request<T>(endpoint: string, options: ApiOptions = {}, isRetry = false): Promise<T> {
-    const { method = 'GET', body, headers = {}, signal } = options;
+    const { method = 'GET', body, headers = {}, signal, onResponse, skipAuthRefresh = false } = options;
 
-    const token = await this.getFreshToken(isRetry);
+    const token = skipAuthRefresh ? this.getToken() : await this.getFreshToken(isRetry);
 
     const requestHeaders: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -154,7 +257,7 @@ class ApiClient {
 
     // Attach CSRF token for all state-changing requests
     if (MUTATING_METHODS.has(method)) {
-      requestHeaders['X-CSRF-Token'] = await this.getCsrfToken();
+      requestHeaders['X-CSRF-Token'] = await this.getCsrfToken(skipAuthRefresh);
     }
 
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -167,14 +270,14 @@ class ApiClient {
 
     if (!response.ok) {
       // Handle 401: attempt silent token refresh BEFORE consuming body
-      if (response.status === 401 && !isRetry) {
+      if (response.status === 401 && !isRetry && !skipAuthRefresh) {
         if (await this.tryRefresh()) {
           return this.request<T>(endpoint, options, true);
         }
         this.sessionExpired();
       }
 
-      const error = await response.json().catch(() => ({ error: `Request failed (${response.status})` }));
+      const error = await this.readErrorBody(response, `Request failed (${response.status})`);
 
       // On CSRF failure: clear stale token and retry once
       if (response.status === 403 && !isRetry && this.isCsrfError(error)) {
@@ -182,8 +285,10 @@ class ApiClient {
         return this.request<T>(endpoint, options, true);
       }
 
-      throw new Error(error.error || error.message || 'Request failed');
+      throw this.toApiError(response, error, 'Request failed');
     }
+
+    onResponse?.(response.headers);
 
     // Handle empty responses (204) and non-JSON responses gracefully
     if (response.status === 204) {
@@ -207,8 +312,12 @@ class ApiClient {
 
   // Hämtar en binär resurs (t.ex. bilagor) med samma refresh-retry och
   // session-expiry-hantering som request() — men utan JSON-parsning/Content-Type.
-  async requestBlob(endpoint: string, options: { signal?: AbortSignal } = {}, isRetry = false): Promise<Blob> {
-    const { signal } = options;
+  async requestBlob(
+    endpoint: string,
+    options: { signal?: AbortSignal; onResponse?: (headers: Headers) => void } = {},
+    isRetry = false,
+  ): Promise<Blob> {
+    const { signal, onResponse } = options;
 
     const token = await this.getFreshToken(isRetry);
 
@@ -232,11 +341,24 @@ class ApiClient {
         this.sessionExpired();
       }
 
-      const error = await response.json().catch(() => ({ error: `Request failed (${response.status})` }));
-      throw new Error(error.error || error.message || 'Request failed');
+      const error = await this.readErrorBody(response, `Request failed (${response.status})`);
+      throw this.toApiError(response, error, 'Request failed');
     }
 
+    onResponse?.(response.headers);
     return response.blob();
+  }
+
+  // Hämtar en exportfil (med 401-refresh via requestBlob) och sparar den
+  // under filnamnet från Content-Disposition, annars `fallbackFilename`.
+  private async downloadExport(endpoint: string, fallbackFilename: string): Promise<void> {
+    let filename = fallbackFilename;
+    const blob = await this.requestBlob(endpoint, {
+      onResponse: (headers) => {
+        filename = headers.get('Content-Disposition')?.match(/filename="(.+)"/)?.[1] ?? fallbackFilename;
+      },
+    });
+    downloadBlob(blob, filename);
   }
 
   async uploadFile<T>(endpoint: string, file: File, isRetry = false): Promise<T> {
@@ -280,14 +402,14 @@ class ApiClient {
         this.sessionExpired();
       }
 
-      const error = await response.json().catch(() => ({ error: fallbackMessage }));
+      const error = await this.readErrorBody(response, fallbackMessage);
 
       if (response.status === 403 && !isRetry && this.isCsrfError(error)) {
         this.csrfToken = null;
         return this.postFile<T>(endpoint, file, fieldName, fallbackMessage, true);
       }
 
-      throw new Error(error.error || error.message || fallbackMessage);
+      throw this.toApiError(response, error, fallbackMessage);
     }
 
     return response.json();
@@ -298,6 +420,7 @@ class ApiClient {
     const data = await this.request<{ user: AuthUser; token: string; accessToken?: string; refreshToken?: string }>('/auth/login', {
       method: 'POST',
       body: { email, password },
+      skipAuthRefresh: true,
     });
     this.setToken(data.token);
     // Refresh-token kommer som HttpOnly-cookie (request() skickar credentials:'include').
@@ -395,17 +518,22 @@ class ApiClient {
     return this.request<{ user: AuthUser }>('/auth/me');
   }
 
+  // Servern roterar sessionen vid lösenordsbyte: den gamla access-token slutar
+  // gälla, så den nya måste lagras direkt.
   async changePassword(currentPassword: string, newPassword: string) {
-    return this.request<{ message: string }>('/auth/change-password', {
+    const data = await this.request<{ message: string; accessToken: string }>('/auth/change-password', {
       method: 'POST',
       body: { currentPassword, newPassword },
     });
+    this.setToken(data.accessToken);
+    return data;
   }
 
   async forgotPassword(email: string) {
     return this.request<{ message: string }>('/auth/forgot-password', {
       method: 'POST',
       body: { email },
+      skipAuthRefresh: true,
     });
   }
 
@@ -413,6 +541,7 @@ class ApiClient {
     return this.request<{ message: string }>('/auth/reset-password', {
       method: 'POST',
       body: { token, newPassword },
+      skipAuthRefresh: true,
     });
   }
 
@@ -420,7 +549,7 @@ class ApiClient {
     try {
       // Refresh-token-cookien skickas automatiskt (credentials:'include');
       // servern revokerar token och rensar cookien.
-      await this.request('/auth/logout', { method: 'POST' });
+      await this.request('/auth/logout', { method: 'POST', skipAuthRefresh: true });
     } catch (error) {
       if (import.meta.env.DEV) console.error('Logout error:', error);
     } finally {
@@ -439,75 +568,11 @@ class ApiClient {
   }
 
   async exportTickets(queryString?: string): Promise<void> {
-    const token = this.getToken();
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${this.baseUrl}/tickets/export${queryString || ''}`, {
-      method: 'GET',
-      headers,
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to export tickets');
-    }
-
-    // Get filename from Content-Disposition header or use default
-    const contentDisposition = response.headers.get('Content-Disposition');
-    let filename = `arenden-export-${new Date().toISOString().split('T')[0]}.xlsx`;
-    if (contentDisposition) {
-      const match = contentDisposition.match(/filename="(.+)"/);
-      if (match) filename = match[1];
-    }
-
-    // Download the file
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+    await this.downloadExport(`/tickets/export${queryString || ''}`, `arenden-export-${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
   async exportArchive(queryString?: string): Promise<void> {
-    const token = this.getToken();
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${this.baseUrl}/tickets/export-archive${queryString || ''}`, {
-      method: 'GET',
-      headers,
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to export archive');
-    }
-
-    // Get filename from Content-Disposition header or use default
-    const contentDisposition = response.headers.get('Content-Disposition');
-    let filename = `arkiv-export-${new Date().toISOString().split('T')[0]}.xlsx`;
-    if (contentDisposition) {
-      const match = contentDisposition.match(/filename="(.+)"/);
-      if (match) filename = match[1];
-    }
-
-    // Download the file
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+    await this.downloadExport(`/tickets/export-archive${queryString || ''}`, `arkiv-export-${new Date().toISOString().split('T')[0]}.xlsx`);
   }
 
   async importTicketsPreview(file: File) {
@@ -570,6 +635,18 @@ class ApiClient {
   // Ticket Comments
   async getComments(ticketId: string) {
     return this.request(`/comments/ticket/${ticketId}`);
+  }
+
+  // Servern returnerar högst 1000 kommentarer; X-Total-Count anger det verkliga antalet.
+  async getCommentsWithTotal(ticketId: string): Promise<{ comments: unknown[]; total: number }> {
+    let total: number | null = null;
+    const comments = await this.request<unknown[]>(`/comments/ticket/${ticketId}`, {
+      onResponse: (headers) => {
+        const header = Number(headers.get('X-Total-Count'));
+        total = Number.isFinite(header) && header > 0 ? header : null;
+      },
+    });
+    return { comments, total: total ?? comments.length };
   }
 
   async createComment(ticketId: string, content: string, isInternal: boolean = true) {
@@ -681,6 +758,7 @@ class ApiClient {
     category_id?: string | null;
     notes_template?: string | null;
     solution_template?: string | null;
+    fields?: TemplateFieldPayload[];
   }) {
     return this.request<TemplateRow>('/templates', {
       method: 'POST',
@@ -722,16 +800,7 @@ class ApiClient {
     return this.request<TemplateFieldRow[]>(`/templates/${templateId}/fields`);
   }
 
-  async createTemplateField(templateId: string, data: {
-    field_name: string;
-    field_label: string;
-    field_type: string;
-    placeholder?: string | null;
-    default_value?: string | null;
-    required?: boolean | number; // skickas som 0/1 (SQLite-flagga); backend coercar truthiness
-    options?: string[];
-    position?: number;
-  }) {
+  async createTemplateField(templateId: string, data: TemplateFieldPayload & { position?: number }) {
     return this.request<TemplateFieldRow>(`/templates/${templateId}/fields`, {
       method: 'POST',
       body: data,
@@ -771,6 +840,12 @@ class ApiClient {
     return this.request<ContactRow[]>('/contacts');
   }
 
+  async getContactsPage(params: { page: number; limit: number; search?: string }) {
+    const qs = new URLSearchParams({ page: String(params.page), limit: String(params.limit) });
+    if (params.search) qs.set('search', params.search);
+    return this.request<ListPage<ContactRow>>(`/contacts?${qs.toString()}`);
+  }
+
   async createContact(contact: Partial<ContactRow>) {
     return this.request<ContactRow>('/contacts', {
       method: 'POST',
@@ -792,39 +867,7 @@ class ApiClient {
   }
 
   async exportContacts(): Promise<void> {
-    const token = this.getToken();
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const response = await fetch(`${this.baseUrl}/contacts/export`, {
-      method: 'GET',
-      headers,
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to export contacts');
-    }
-
-    // Get filename from Content-Disposition header or use default
-    const contentDisposition = response.headers.get('Content-Disposition');
-    let filename = 'kontakter-export.xlsx';
-    if (contentDisposition) {
-      const match = contentDisposition.match(/filename="(.+)"/);
-      if (match) filename = match[1];
-    }
-
-    // Download the file
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
+    await this.downloadExport('/contacts/export', 'kontakter-export.xlsx');
   }
 
   async importContactsPreview(file: File) {
@@ -973,7 +1016,7 @@ class ApiClient {
   }
 
   async getSharedTicket(token: string) {
-    return this.request<SharedTicketData>(`/shares/public/${token}`);
+    return this.request<SharedTicketData>(`/shares/public/${token}`, { skipAuthRefresh: true });
   }
 
   // System Users
@@ -1064,15 +1107,14 @@ class ApiClient {
   }
 
   // Knowledge Base - Articles
-  async getKbArticles(params?: { search?: string; category_id?: string; article_type?: string; tag?: string; stale?: boolean }) {
-    const qs = new URLSearchParams();
-    if (params?.search) qs.set('search', params.search);
-    if (params?.category_id) qs.set('category_id', params.category_id);
-    if (params?.article_type) qs.set('article_type', params.article_type);
-    if (params?.tag) qs.set('tag', params.tag);
-    if (params?.stale) qs.set('stale', '1');
-    const query = qs.toString() ? `?${qs.toString()}` : '';
-    return this.request<KbArticleRow[]>(`/kb/articles${query}`);
+  async getKbArticles(params?: KbArticlesQuery) {
+    return this.request<KbArticleRow[]>(`/kb/articles${kbArticlesQueryString(params)}`);
+  }
+
+  async getKbArticlesPage(params: KbArticlesQuery & { page: number; limit: number }) {
+    return this.request<ListPage<KbArticleSummary>>(
+      `/kb/articles${kbArticlesQueryString({ ...params, fields: 'list' })}`,
+    );
   }
 
   async getKbArticle(id: string) {
@@ -1180,12 +1222,12 @@ class ApiClient {
   }
 
   async getPublicKbArticle(token: string) {
-    return this.request<KbArticleRow>(`/kb/public/${token}`);
+    return this.request<KbArticleRow>(`/kb/public/${token}`, { skipAuthRefresh: true });
   }
 
   // Knowledge Base - Public portal (no authentication required)
   async getKbPortalCategories(token: string) {
-    return this.request<KbPortalCategoryRow[]>(`/kb/portal/${encodeURIComponent(token)}/categories`);
+    return this.request<KbPortalCategoryRow[]>(`/kb/portal/${encodeURIComponent(token)}/categories`, { skipAuthRefresh: true });
   }
 
   async getKbPortalArticles(
@@ -1198,12 +1240,14 @@ class ApiClient {
     const query = qs.toString() ? `?${qs.toString()}` : '';
     return this.request<KbPortalArticleSummary[]>(
       `/kb/portal/${encodeURIComponent(token)}/articles${query}`,
+      { skipAuthRefresh: true },
     );
   }
 
   async getKbPortalArticle(token: string, articleId: string) {
     return this.request<KbPortalArticle>(
       `/kb/portal/${encodeURIComponent(token)}/articles/${encodeURIComponent(articleId)}`,
+      { skipAuthRefresh: true },
     );
   }
 
@@ -1213,7 +1257,7 @@ class ApiClient {
 
   // Public endpoints (no auth)
   async getPublicCategories() {
-    return this.request<{ id: string; label: string }[]>('/public/categories');
+    return this.request<{ id: string; label: string }[]>('/public/categories', { skipAuthRefresh: true });
   }
 
   async getPublicTemplates() {
@@ -1226,7 +1270,7 @@ class ApiClient {
       priority: string;
       category_id: string | null;
       fields?: TemplateFieldRow[];
-    }[]>('/public/templates');
+    }[]>('/public/templates', { skipAuthRefresh: true });
   }
 
   async submitPublicTicket(data: {
@@ -1238,10 +1282,13 @@ class ApiClient {
     priority?: string;
     customFields?: CustomFieldInput[];
     template_id?: string;
+    website?: string; // honeypot — måste vara tomt
+    formStartedAt?: number; // ms när formuläret öppnades
   }) {
     return this.request<{ message: string; ticketId: string }>('/public/tickets', {
       method: 'POST',
       body: data,
+      skipAuthRefresh: true,
     });
   }
 
@@ -1332,47 +1379,15 @@ class ApiClient {
 
   // Backup
   async downloadBackup(): Promise<Blob> {
-    const token = this.getToken();
+    return this.requestBlob('/backup');
+  }
 
-    // Proactive refresh before fetching large binary — same pattern as exportTickets
-    if (token && this.isTokenExpired(token)) {
-      await this.tryRefresh();
-    }
+  async getBackupFiles() {
+    return this.request<BackupFileRow[]>('/backup/files');
+  }
 
-    const headers: Record<string, string> = {};
-    const currentToken = this.getToken();
-    if (currentToken) {
-      headers['Authorization'] = `Bearer ${currentToken}`;
-    }
-
-    const response = await fetch(`${this.baseUrl}/backup`, {
-      method: 'GET',
-      headers,
-      credentials: 'include',
-    });
-
-    if (response.status === 401) {
-      // Attempt one silent refresh, then retry
-      if (await this.tryRefresh()) {
-        const retryToken = this.getToken();
-        const retryHeaders: Record<string, string> = {};
-        if (retryToken) retryHeaders['Authorization'] = `Bearer ${retryToken}`;
-        const retryResponse = await fetch(`${this.baseUrl}/backup`, {
-          method: 'GET',
-          headers: retryHeaders,
-          credentials: 'include',
-        });
-        if (!retryResponse.ok) throw new Error('Backup failed');
-        return retryResponse.blob();
-      }
-      this.clearToken();
-      localStorage.removeItem('user');
-      window.location.href = '/login';
-      throw new Error('Session expired');
-    }
-
-    if (!response.ok) throw new Error('Backup failed');
-    return response.blob();
+  async downloadBackupFile(name: string): Promise<Blob> {
+    return this.requestBlob(`/backup/files/${encodeURIComponent(name)}`);
   }
 
   // Backup schedule
@@ -1410,12 +1425,14 @@ export interface AuthUser {
   id: string;
   email: string;
   role: 'admin' | 'user';
+  mustChangePassword?: boolean;
 }
 
 export interface TicketRow {
   id: string;
   title: string;
-  description: string;
+  // Utelämnas i listsvar — endast ärendedetaljen (GET /tickets/:id) bär text-fälten.
+  description?: string;
   status: string;
   priority: string;
   category_id: string | null;
@@ -1426,8 +1443,8 @@ export interface TicketRow {
   company_name?: string | null;
   assigned_to: string | null;
   assigned_to_name?: string | null;
-  notes: string | null;
-  solution: string | null;
+  notes?: string | null;
+  solution?: string | null;
   created_at: string;
   updated_at: string;
   resolved_at: string | null;
@@ -1660,6 +1677,10 @@ export interface KbArticleRow {
   last_reviewed_at?: string | null;
 }
 
+export interface KbArticleSummary extends Omit<KbArticleRow, 'content'> {
+  preview: string;
+}
+
 export interface KbPortalCategoryRow {
   id: string;
   name: string;
@@ -1743,6 +1764,14 @@ export interface BackupConfig {
   lastStatus: 'success' | 'failed' | null;
   lastSizeBytes: number | null;
   nextRunAt: string | null;
+  consecutiveFailures: number;
+  lastError: string | null;
+}
+
+export interface BackupFileRow {
+  name: string;
+  sizeBytes: number;
+  modifiedAt: string;
 }
 
 export interface WebhookDeliveryRow {

@@ -1,16 +1,20 @@
 {
   "name": "it-ticketing-backend",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=22 <23"
+  },
   "type": "module",
   "license": "MIT",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc; cp src/db/schema.sql dist/db/schema.sql",
+    "build": "tsc && cp src/db/schema.sql dist/db/schema.sql",
     "start": "node dist/index.js",
     "init-db": "tsx src/db/init.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:unused": "tsc --noEmit --noUnusedLocals --noUnusedParameters"
+    "check:unused": "tsc --noEmit --noUnusedLocals --noUnusedParameters",
+    "typecheck:tests": "tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
     "@azure/msal-node": "^5.6.0",

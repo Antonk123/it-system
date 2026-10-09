@@ -141,6 +141,7 @@ function createSchema(db: InstanceType<typeof Database>) {
       content TEXT NOT NULL,
       is_internal INTEGER DEFAULT 1,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       email_from_name TEXT DEFAULT NULL,
       email_from_address TEXT DEFAULT NULL,
       email_message_id TEXT DEFAULT NULL

@@ -1,8 +1,9 @@
 import { useCallback } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { CustomFieldInput } from '@/lib/api';
-import { Ticket } from '@/types/ticket';
 import {
+  NewTicket,
+  TicketUpdates,
   buildAddTicketMutationOptions,
   buildUpdateTicketMutationOptions,
   buildDeleteTicketMutationOptions,
@@ -23,7 +24,7 @@ export const useTicketMutations = () => {
   const deleteTicketMutation = useMutation(buildDeleteTicketMutationOptions(queryClient));
 
   const addTicket = useCallback(
-    async (ticket: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { assigned_to?: string; company_id?: string }, customFields?: CustomFieldInput[]) => {
+    async (ticket: NewTicket, customFields?: CustomFieldInput[]) => {
       // Let the mutation handle errors (it shows toast on error)
       return await addTicketMutation.mutateAsync({ ...ticket, customFields });
     },
@@ -31,7 +32,7 @@ export const useTicketMutations = () => {
   );
 
   const updateTicket = useCallback(
-    async (id: string, updates: Partial<Ticket>, customFields?: CustomFieldInput[]) => {
+    async (id: string, updates: TicketUpdates, customFields?: CustomFieldInput[]) => {
       await updateTicketMutation.mutateAsync({ id, updates, customFields });
     },
     [updateTicketMutation]

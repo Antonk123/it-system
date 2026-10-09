@@ -28,6 +28,21 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { EmailBehaviorSection } from '@/components/settings/EmailBehaviorSection';
 import { useAuth } from '@/contexts/AuthContext';
 
+const emailInboundStatusKeys = {
+  all: ['email-inbound-status'] as const,
+};
+
+const WEBHOOK_EVENTS = [
+  'ticket.created',
+  'ticket.updated',
+  'ticket.closed',
+  'ticket.deleted',
+  'ticket.status_changed',
+  'contact.created',
+  'contact.updated',
+  '*',
+];
+
 const WebhookDeliveriesPanel = memo(({ webhookId }: { webhookId: string }) => {
   const { deliveries, isLoading } = useWebhookDeliveries(webhookId);
 
@@ -100,6 +115,7 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
   const [deleteApiKeyId, setDeleteApiKeyId] = useState<string | null>(null);
 
   const [newWebhookUrl, setNewWebhookUrl] = useState('');
+  const [createdWebhookSecret, setCreatedWebhookSecret] = useState<string | null>(null);
   const [newWebhookEvents, setNewWebhookEvents] = useState<string[]>([]);
   const [deleteWebhookId, setDeleteWebhookId] = useState<string | null>(null);
   const [viewDeliveriesId, setViewDeliveriesId] = useState<string | null>(null);
@@ -118,7 +134,7 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
     polling_interval: number;
     auto_create_contact: boolean;
   }>({
-    queryKey: ['email-inbound-status'],
+    queryKey: emailInboundStatusKeys.all,
     queryFn: () => api.request('/email-inbound/status'),
     staleTime: 60 * 1000,
   });
@@ -285,9 +301,13 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
                       <Button
                         size="icon"
                         variant="ghost"
-                        onClick={() => {
-                          navigator.clipboard.writeText(createdApiKey);
-                          toast.success('Kopierad till urklipp');
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(createdApiKey);
+                            toast.success('Kopierad till urklipp');
+                          } catch {
+                            toast.error('Kunde inte kopiera nyckeln');
+                          }
                         }}
                         aria-label="Kopiera API-nyckel"
                       >
@@ -359,7 +379,7 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
                   <div className="space-y-2">
                     <p className="text-sm font-medium">Händelser</p>
                     <div className="flex flex-wrap gap-3">
-                      {['ticket.created', 'ticket.updated', 'ticket.closed', '*'].map((evt) => (
+                      {WEBHOOK_EVENTS.map((evt) => (
                         <label key={evt} className="flex items-center gap-1.5 text-sm">
                           <Checkbox
                             checked={newWebhookEvents.includes(evt)}
@@ -374,12 +394,16 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
                       ))}
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Anropen signeras med HMAC-SHA256: <code className="font-mono">X-Webhook-Signature</code> = HMAC(hemlighet, <code className="font-mono">tidsstämpel.id.innehåll</code>). Tidsstämpel och id skickas i <code className="font-mono">X-Webhook-Timestamp</code> och <code className="font-mono">X-Webhook-Id</code>.
+                  </p>
                   <Button
                     size="sm"
                     onClick={() => {
                       if (!newWebhookUrl.trim()) { toast.error('Ange en URL'); return; }
                       if (newWebhookEvents.length === 0) { toast.error('Välj minst en händelse'); return; }
-                      createWebhook({ url: newWebhookUrl.trim(), events: newWebhookEvents }).then(() => {
+                      createWebhook({ url: newWebhookUrl.trim(), events: newWebhookEvents }).then((created) => {
+                        setCreatedWebhookSecret(created.secret ?? null);
                         setNewWebhookUrl('');
                         setNewWebhookEvents([]);
                         toast.success('Webhook skapad');
@@ -391,6 +415,31 @@ const IntegrationsTab = ({ section = 'all' }: { section?: 'all' | 'email' | 'tec
                     Skapa webhook
                   </Button>
                 </div>
+
+                {createdWebhookSecret && (
+                  <div className="rounded-md border border-warning/30 bg-warning/10 p-3 space-y-2">
+                    <p className="text-sm font-medium text-warning">Kopiera hemligheten nu – den visas inte igen</p>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 text-xs bg-background/50 p-2 rounded font-mono break-all">{createdWebhookSecret}</code>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(createdWebhookSecret);
+                            toast.success('Kopierad till urklipp');
+                          } catch {
+                            toast.error('Kunde inte kopiera hemligheten');
+                          }
+                        }}
+                        aria-label="Kopiera webhook-hemlighet"
+                      >
+                        <Copy className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => setCreatedWebhookSecret(null)}>Stäng</Button>
+                  </div>
+                )}
 
                 <div className="divide-y divide-border rounded-md border">
                   {webhooks.length === 0 && (

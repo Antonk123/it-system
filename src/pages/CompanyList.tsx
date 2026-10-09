@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { Building2, Plus, Search, Trash2, Loader2, MoreHorizontal } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -59,7 +58,7 @@ const CompanyList = () => {
   };
 
   return (
-    <Layout>
+    <>
       <div className="space-y-6">
 <nav aria-label="Kontakter och företag" className="flex gap-4 border-b pb-3"><Link className="inline-flex min-h-11 items-center hover:underline" to="/users">Kontakter</Link><Link className="inline-flex min-h-11 items-center hover:underline" to="/companies" aria-current="page">Företag</Link></nav>
         {/* Header */}
@@ -322,7 +321,7 @@ const CompanyList = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </Layout>
+    </>
   );
 };
 

@@ -13,6 +13,9 @@ import { dispatchModeChange } from '@/hooks/useMode';
 import { RouteBreadcrumbs } from '@/components/RouteBreadcrumbs';
 import { BrandLogo } from '@/components/BrandLogo';
 import { forwardSearchToPrefabnavet } from '@/lib/prefabnavetBridge';
+import { safeStorage } from '@/lib/safeStorage';
+
+const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed';
 
 interface LayoutProps {
   children: ReactNode;
@@ -157,7 +160,7 @@ export const Layout = ({
   const location = useLocation();
 
   const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile toggle
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false); // Desktop collapse
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => safeStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1'); // Desktop collapse
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { signOut, user } = useAuth();
 
@@ -183,6 +186,12 @@ export const Layout = ({
     applyMode(next);
     saveModeTheme(next);
     dispatchModeChange(next);
+  };
+
+  const toggleSidebarCollapsed = () => {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    safeStorage.setItem(SIDEBAR_COLLAPSED_KEY, next ? '1' : '0');
   };
 
   const handleLogout = async () => {
@@ -228,7 +237,7 @@ export const Layout = ({
         <TitleSection open={!sidebarCollapsed} />
 
         {/* Nav Items */}
-        <nav className="p-2 space-y-1">
+        <nav className="p-2 space-y-1" aria-label="Huvudmeny">
           {navItems.map((item) => (
             <NavOption
               key={item.path}
@@ -245,13 +254,13 @@ export const Layout = ({
           open={!sidebarCollapsed}
           user={user}
           onLogout={handleLogout}
-          onToggle={() => setSidebarCollapsed(!sidebarCollapsed)}
+          onToggle={toggleSidebarCollapsed}
           onNavigate={() => setSidebarOpen(false)}
         />
       </aside>
 
       {/* Main content */}
-      <main id="main-content" className="flex-1 min-w-0 relative">
+      <main id="main-content" tabIndex={-1} className="flex-1 min-w-0 relative focus:outline-hidden">
         <EmbeddedTabs />
 
         {/* Mobile header */}
@@ -263,12 +272,12 @@ export const Layout = ({
           >
             <Menu className="w-6 h-6" />
           </button>
-          <div className="flex-1 relative rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
-            <div className="relative flex w-full items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-border text-muted-foreground text-sm cursor-pointer transition-colors">
+          <button type="button" className="flex-1 relative rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} aria-label="Sök överallt">
+            <span className="relative flex w-full items-center gap-2 px-3 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-border text-muted-foreground text-sm cursor-pointer transition-colors">
               <Search className="w-4 h-4" />
               <span>Sök överallt...</span>
-            </div>
-          </div>
+            </span>
+          </button>
           <Button className="prefabnavet-standalone-only" variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">
             {mode === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </Button>
@@ -278,15 +287,15 @@ export const Layout = ({
         <div data-print-hide className="prefabnavet-embed-header hidden lg:block sticky top-0 z-30 bg-background border-b border-border p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4 flex-1">
-              <div className="prefabnavet-standalone-only relative w-80 shrink-0 cursor-pointer rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setPaletteOpen(true); }} aria-label="Sök överallt">
-                <div className="relative flex items-center gap-2 px-4 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-border text-muted-foreground text-sm transition-colors">
+              <button type="button" className="prefabnavet-standalone-only relative w-80 shrink-0 cursor-pointer rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background" onClick={() => setPaletteOpen(true)} aria-label="Sök överallt">
+                <span className="relative flex items-center gap-2 px-4 py-2 rounded-lg bg-[hsl(var(--search-input-bg))] border border-border text-muted-foreground text-sm transition-colors">
                   <Search className="w-4 h-4" />
                   <span>Sök överallt...</span>
                   <kbd className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono">
                     {navigator.platform?.includes('Mac') ? '⌘K' : 'Ctrl+K'}
                   </kbd>
-                </div>
-              </div>
+                </span>
+              </button>
               <RouteBreadcrumbs />
             </div>
             <Button className="prefabnavet-standalone-only" variant="ghost" size="icon" onClick={handleModeToggle} aria-label="Byt tema-läge">

@@ -71,7 +71,7 @@ passport.use(new LocalStrategy(
       }
 
       // Update last login
-      db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
+      db.prepare('UPDATE users SET last_login = ? WHERE id = ?').run(new Date().toISOString(), user.id);
 
       return done(null, {
         id: user.id,

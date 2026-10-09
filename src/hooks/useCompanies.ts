@@ -2,6 +2,8 @@ import { useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, CompanyRow } from '@/lib/api';
 import { companySchema, getValidationError } from '@/lib/validations';
+import { userKeys } from '@/hooks/useUsers';
+import { ticketKeys } from '@/hooks/useTickets';
 import { toast } from 'sonner';
 
 export const companyKeys = {
@@ -14,6 +16,14 @@ export const companyKeys = {
 
 export const useCompanies = () => {
   const queryClient = useQueryClient();
+
+  // Kontakters och ärendens företagsnamn kommer från companies — invalidera
+  // beroende cachar när ett företag ändras eller tas bort.
+  const invalidateDependents = (id: string) => {
+    queryClient.invalidateQueries({ queryKey: userKeys.list() });
+    queryClient.invalidateQueries({ queryKey: ticketKeys.all });
+    queryClient.invalidateQueries({ queryKey: companyKeys.detail(id) });
+  };
 
   const { data: companies = [], isLoading, isError } = useQuery({
     queryKey: companyKeys.list(),
@@ -36,7 +46,7 @@ export const useCompanies = () => {
       });
       toast.success('Företag skapat');
     },
-    onError: () => toast.error('Kunde inte skapa företag'),
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Kunde inte skapa företag'),
   });
 
   const updateMutation = useMutation({
@@ -48,10 +58,10 @@ export const useCompanies = () => {
         if (!old) return old;
         return old.map(c => c.id === updated.id ? { ...c, ...updated } : c);
       });
-      queryClient.invalidateQueries({ queryKey: companyKeys.detail(updated.id) });
+      invalidateDependents(updated.id);
       toast.success('Företag uppdaterat');
     },
-    onError: () => toast.error('Kunde inte uppdatera företag'),
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Kunde inte uppdatera företag'),
   });
 
   const deleteMutation = useMutation({
@@ -61,9 +71,12 @@ export const useCompanies = () => {
         if (!old) return old;
         return old.filter(c => c.id !== id);
       });
+      queryClient.removeQueries({ queryKey: companyKeys.detail(id) });
+      invalidateDependents(id);
       toast.success('Företag borttaget');
     },
-    onError: () => toast.error('Kunde inte ta bort företag'),
+    // Servern svarar 409 med förklaring när företaget har sparad historik.
+    onError: (error) => toast.error(error instanceof Error ? error.message : 'Kunde inte ta bort företag'),
   });
 
   const createCompany = useCallback(

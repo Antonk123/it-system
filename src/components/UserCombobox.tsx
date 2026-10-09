@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { Check, ChevronsUpDown, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,7 @@ export const UserCombobox = ({
   onValueChange,
   placeholder = 'Välj kontakt',
 }: UserComboboxProps) => {
+  const listboxId = useId();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -46,7 +47,9 @@ export const UserCombobox = ({
           variant="outline"
           role="combobox"
           aria-label="Beställare"
+          aria-haspopup="listbox"
           aria-expanded={open}
+          aria-controls={open ? listboxId : undefined}
           className="w-full justify-between font-normal"
         >
           {selectedUser ? selectedUser.name : placeholder}
@@ -58,12 +61,13 @@ export const UserCombobox = ({
           <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
           <Input
             placeholder="Sök kontakt..."
+            aria-label="Sök kontakt"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="h-8 border-0 bg-transparent p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
           />
         </div>
-        <div className="max-h-60 overflow-y-auto">
+        <div id={listboxId} role="listbox" aria-label="Kontakter" className="max-h-60 overflow-y-auto">
           {filteredUsers.length === 0 ? (
             <div className="py-6 text-center text-sm text-muted-foreground">
               {users.length === 0

@@ -18,8 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import { useKbCategories } from '@/hooks/useKbCategories';
+import { useKbCategories, invalidateKbCaches } from '@/hooks/useKbCategories';
 import { migrateContent, cleanImportedMarkdownTables } from '@/lib/contentMigration';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -102,6 +103,7 @@ function isAcceptedFile(file: File): boolean {
 
 export function KBImportDialog({ open, onOpenChange, defaultCategoryId, onImported }: KBImportDialogProps) {
   const [files, setFiles] = useState<QueuedFile[]>([]);
+  const queryClient = useQueryClient();
   const { categories } = useKbCategories();
   const [categoryId, setCategoryId] = useState<string>(defaultCategoryId || '');
   const [status, setStatus] = useState<'draft' | 'published'>('published');
@@ -235,6 +237,7 @@ export function KBImportDialog({ open, onOpenChange, defaultCategoryId, onImport
 
     setIsImporting(false);
     if (okCount > 0) {
+      invalidateKbCaches(queryClient);
       toast.success(`Importerade ${okCount} artikel${okCount === 1 ? '' : 'ar'}`);
       onImported?.();
     }

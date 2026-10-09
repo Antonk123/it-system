@@ -22,7 +22,7 @@ const { DB_PATH, sendMailMock, createTransportMock } = vi.hoisted(() => {
   process.env.EMAIL_FROM = 'support@example.com';
   process.env.EMAIL_TO = 'support@example.com';
   process.env.IMAP_USER = 'support@example.com';
-  const sendMailMock = vi.fn(async () => ({ messageId: 'accepted' }));
+  const sendMailMock = vi.fn(async (_options: Record<string, unknown>) => ({ messageId: 'accepted' }));
   const createTransportMock = vi.fn((_options: Record<string, unknown>) => ({ sendMail: sendMailMock }));
   return { DB_PATH: dbPath, sendMailMock, createTransportMock };
 });

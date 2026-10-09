@@ -16,6 +16,7 @@ import { Ticket as TicketType, TicketStatus } from '@/types/ticket';
 import { STATUS_LABELS } from '@/lib/constants';
 import { KanbanCard } from './KanbanCard';
 import { KanbanColumn } from './KanbanColumn';
+import { KanbanContext } from './KanbanContext';
 
 interface KanbanViewProps {
   tickets: TicketType[];
@@ -41,6 +42,8 @@ export const KanbanView = memo(function KanbanView({ tickets, onStatusChange, on
       keyboardCodes: { start: ['Space'], cancel: ['Escape'], end: ['Space'] },
     })
   );
+
+  const kanbanContext = useMemo(() => ({ onTicketClick }), [onTicketClick]);
 
   // Group tickets by status
   const ticketsByStatus = useMemo(() => {
@@ -112,38 +115,39 @@ export const KanbanView = memo(function KanbanView({ tickets, onStatusChange, on
   };
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      accessibility={{
-        announcements,
-        // Default-instruktionen (engelska) säger "press space or enter" — men Enter
-        // öppnar nu ärendet, inte plockar upp. Egen svensk instruktion som matchar.
-        screenReaderInstructions: {
-          draggable:
-            'Tryck på mellanslag för att plocka upp ärendet. Använd piltangenterna för att flytta det, mellanslag igen för att släppa, Escape för att avbryta. Tryck Enter för att öppna ärendet.',
-        },
-      }}
-    >
-      <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 overflow-x-auto pb-4">
-        {STATUSES.map(status => (
-          <KanbanColumn
-            key={status}
-            status={status}
-            label={STATUS_LABELS[status]}
-            tickets={ticketsByStatus[status]}
-            onTicketClick={onTicketClick}
-          />
-        ))}
-      </div>
-      <DragOverlay>
-        {activeId ? (() => {
-          const activeTicket = tickets.find(t => t.id === activeId);
-          return activeTicket ? <KanbanCard ticket={activeTicket} /> : null;
-        })() : null}
-      </DragOverlay>
-    </DndContext>
+    <KanbanContext.Provider value={kanbanContext}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        accessibility={{
+          announcements,
+          // Default-instruktionen (engelska) säger "press space or enter" — men Enter
+          // öppnar nu ärendet, inte plockar upp. Egen svensk instruktion som matchar.
+          screenReaderInstructions: {
+            draggable:
+              'Tryck på mellanslag för att plocka upp ärendet. Använd piltangenterna för att flytta det, mellanslag igen för att släppa, Escape för att avbryta. Tryck Enter för att öppna ärendet.',
+          },
+        }}
+      >
+        <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 overflow-x-auto pb-4">
+          {STATUSES.map(status => (
+            <KanbanColumn
+              key={status}
+              status={status}
+              label={STATUS_LABELS[status]}
+              tickets={ticketsByStatus[status]}
+            />
+          ))}
+        </div>
+        <DragOverlay>
+          {activeId ? (() => {
+            const activeTicket = tickets.find(t => t.id === activeId);
+            return activeTicket ? <KanbanCard ticket={activeTicket} /> : null;
+          })() : null}
+        </DragOverlay>
+      </DndContext>
+    </KanbanContext.Provider>
   );
 });

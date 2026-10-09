@@ -154,8 +154,8 @@ async function deliverOne(webhook: WebhookRow, event: string, body: string): Pro
   // attemptDelivery() skriver över värdet vid varje utfall.
   const graceUntil = new Date(Date.now() + FIRST_ATTEMPT_GRACE_MS).toISOString();
   db.prepare(
-    'INSERT INTO webhook_deliveries (id, webhook_id, event, payload, attempts, next_retry_at) VALUES (?, ?, ?, ?, 0, ?)'
-  ).run(deliveryId, webhook.id, event, body, graceUntil);
+    'INSERT INTO webhook_deliveries (id, webhook_id, event, payload, attempts, next_retry_at, created_at) VALUES (?, ?, ?, ?, 0, ?, ?)'
+  ).run(deliveryId, webhook.id, event, body, graceUntil, new Date().toISOString());
 
   await attemptDelivery(
     { id: webhook.id, url: webhook.url, secret: webhook.secret },

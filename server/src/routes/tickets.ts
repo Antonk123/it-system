@@ -278,8 +278,8 @@ router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, re
     const contactByEmailMap = new Map(contacts.map((c) => [c.email.toLowerCase(), c.id]));
 
     const stmt = db.prepare(`
-      INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, notes, solution, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, notes, solution, created_by, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const importedBy = req.user!.id;
@@ -303,12 +303,13 @@ router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, re
       rows.push({ input: result.value, ticket });
     }
 
-    const contactStmt = db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)');
+    const contactStmt = db.prepare('INSERT INTO contacts (id, name, email, created_at) VALUES (?, ?, ?, ?)');
 
     // Use transaction for bulk insert - all-or-nothing approach
     // If ANY ticket fails, the entire transaction rolls back
     const insertMany = db.transaction(() => {
       let created = 0;
+      const now = new Date().toISOString();
 
       for (const { input, ticket } of rows) {
         const id = randomUUID(); // Always generate new ID
@@ -330,7 +331,7 @@ router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, re
           // If contact doesn't exist and we have both name and email, create it
           if (!requesterId && requesterName && requesterEmail) {
             const newContactId = randomUUID();
-            contactStmt.run(newContactId, requesterName, requesterEmail);
+            contactStmt.run(newContactId, requesterName, requesterEmail, now);
             requesterId = newContactId;
           }
         }
@@ -346,7 +347,9 @@ router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, re
           requesterId,
           input.notes || null,
           input.solution || null,
-          importedBy
+          importedBy,
+          now,
+          now
         );
 
         // FTS5 synkas automatiskt via triggers (migration 050)
@@ -798,10 +801,11 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
       : (detectAutoPriority(title, finalDescription) ?? 'medium');
 
     // Wrap all inserts in a transaction for atomicity
+    const now = new Date().toISOString();
     const createTransaction = db.transaction(() => {
       db.prepare(`
-        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, template_id, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, template_id, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         title,
@@ -815,25 +819,27 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
         notes || null,
         solution || null,
         template_id || null,
-        req.user!.id
+        req.user!.id,
+        now,
+        now
       );
 
       // Store custom field values if provided
       if (customFields && Array.isArray(customFields) && customFields.length > 0) {
         const insertFieldStmt = db.prepare(`
-          INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)
         `);
         customFields.forEach((field: CustomFieldInput) => {
           if (field.fieldName && field.fieldLabel) {
-            insertFieldStmt.run(randomUUID(), id, field.fieldName, field.fieldLabel, field.fieldValue || '');
+            insertFieldStmt.run(randomUUID(), id, field.fieldName, field.fieldLabel, field.fieldValue || '', now);
           }
         });
       }
 
       // Log ticket creation in history
-      db.prepare('INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(randomUUID(), id, req.user!.id, 'created', null, null);
+      db.prepare('INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value, changed_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        .run(randomUUID(), id, req.user!.id, 'created', null, null, now);
 
       // FTS5 synkas automatiskt via triggers (migration 050)
     });
@@ -936,7 +942,8 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
     const userId = req.user!.id;
 
     const historyInsert = db.prepare(
-      'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
+      `INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value, changed_at)
+       VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
     );
 
     // Lyft userLabel ur loopen — anroparen är densamma för alla rader
@@ -1240,7 +1247,8 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
 
       // Log meaningful field changes to history (inside transaction)
       const historyInsert = db.prepare(
-        'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
+        `INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value, changed_at)
+       VALUES (?, ?, ?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`
       );
       if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
         historyInsert.run(randomUUID(), req.params.id, req.user!.id, 'status', existing.status as string, safeUpdates.status as string);
@@ -1287,12 +1295,12 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
       if (Array.isArray(customFields)) {
         db.prepare('DELETE FROM ticket_field_values WHERE ticket_id = ?').run(req.params.id);
         const insertFieldStmt = db.prepare(`
-          INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value, created_at)
+          VALUES (?, ?, ?, ?, ?, ?)
         `);
         customFields.forEach((field: CustomFieldInput) => {
           if (field.fieldName && field.fieldLabel) {
-            insertFieldStmt.run(randomUUID(), req.params.id, field.fieldName, field.fieldLabel, field.fieldValue || '');
+            insertFieldStmt.run(randomUUID(), req.params.id, field.fieldName, field.fieldLabel, field.fieldValue || '', new Date().toISOString());
           }
         });
       }
@@ -1451,9 +1459,9 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
 
     const id = randomUUID();
     db.prepare(`
-      INSERT INTO ticket_reminders (id, ticket_id, user_id, reminder_time, message)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(id, ticketId, userId, reminderDate.toISOString(), message || null);
+      INSERT INTO ticket_reminders (id, ticket_id, user_id, reminder_time, message, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(id, ticketId, userId, reminderDate.toISOString(), message || null, new Date().toISOString());
 
     const reminder = db.prepare(
       'SELECT id, ticket_id, user_id, reminder_time, message, sent, created_at, sent_at FROM ticket_reminders WHERE id = ?'

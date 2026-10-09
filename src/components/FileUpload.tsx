@@ -4,12 +4,12 @@ import { Button } from '@/components/ui/button';
 import { TicketAttachment } from '@/hooks/useTicketAttachments';
 import { cn } from '@/lib/utils';
 import { SecureImage, SecureDownloadLink } from '@/components/SecureAttachment';
-import { ALLOWED_ATTACHMENT_EXTENSIONS } from '@/lib/validations';
+import { ALLOWED_ATTACHMENT_EXTENSIONS, ALLOWED_ATTACHMENT_MIME_TYPES } from '@/lib/validations';
 import { toast } from 'sonner';
 
-// "image/*" covers the image extensions in ALLOWED_ATTACHMENT_EXTENSIONS too,
-// but listing both is harmless and keeps the picker's filter in sync with fileUploadSchema.
-const FILE_INPUT_ACCEPT = ['image/*', ...ALLOWED_ATTACHMENT_EXTENSIONS].join(',');
+// Explicit MIME types and extensions (not "image/*", which would also offer SVG)
+// keep the picker's filter in sync with fileUploadSchema.
+const FILE_INPUT_ACCEPT = [...ALLOWED_ATTACHMENT_MIME_TYPES, ...ALLOWED_ATTACHMENT_EXTENSIONS].join(',');
 
 // Matches the backend multer limit (server/src/routes/tickets.ts).
 // Bumping this means bumping it on the server too.

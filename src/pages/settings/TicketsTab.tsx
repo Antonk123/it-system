@@ -245,7 +245,7 @@ const TicketsTab = () => {
         setEditingName('');
         toast.success('Kategori uppdaterad');
       } catch {
-        toast.error('Kunde inte uppdatera kategori');
+        // Felet visas som toast av useCategories; redigeringen står kvar för nytt försök.
       }
     }
   }, [editingName, editingId, updateCategory]);
@@ -307,8 +307,12 @@ const TicketsTab = () => {
   }, []);
 
   const handleTemplateDelete = useCallback(async () => {
-    if (deleteTemplateId) {
+    if (!deleteTemplateId) return;
+    try {
       await deleteTemplate(deleteTemplateId);
+    } catch {
+      // Felet visas som toast av useTemplates.
+    } finally {
       setDeleteTemplateId(null);
     }
   }, [deleteTemplate, deleteTemplateId]);
@@ -352,11 +356,12 @@ const TicketsTab = () => {
     });
     setIsSavingCl(true);
     try {
-      if (clEditingId) {
-        await updateChecklistTemplate(clEditingId, { name: clTemplateName.trim(), description: clTemplateDesc.trim() || undefined, items: apiItems });
-      } else {
-        await createChecklistTemplate({ name: clTemplateName.trim(), description: clTemplateDesc.trim() || undefined, items: apiItems });
-      }
+      const payload = { name: clTemplateName.trim(), description: clTemplateDesc.trim() || undefined, items: apiItems };
+      // Hooken sväljer fel (toast visas) och returnerar null — behåll formuläret så inget går förlorat.
+      const saved = clEditingId
+        ? await updateChecklistTemplate(clEditingId, payload)
+        : await createChecklistTemplate(payload);
+      if (!saved) return;
       setClTemplateFormOpen(false);
       await fetchChecklistTemplates();
     } finally {
