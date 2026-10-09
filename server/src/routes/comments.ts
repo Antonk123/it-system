@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
 import { sanitizeRichText } from '../lib/htmlSanitizer.js';
@@ -8,6 +8,18 @@ import { canAccessTicket } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
+
+const MAX_COMMENT_LENGTH = 20000;
+const COMMENTS_LIMIT = 1000;
+
+// Accepterar bara riktiga booleans (samt strängarna 'true'/'false'); allt annat
+// ger null så att t.ex. "false" inte tolkas som sant via truthy-coercion.
+function parseIsInternal(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return null;
+}
 
 interface CommentRow {
   id: string;
@@ -29,16 +41,10 @@ interface CommentRow {
 // GET /api/comments/ticket/:ticketId - Fetch all comments for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    // Behörighetskontroll: spegla PUT /:id EXAKT (se tickets.ts). Otilldelade
-    // ärenden är öppna för self-service-pickup — vilken agent som helst kan
-    // läsa kommentarerna på ett köärende. Tilldelade ärenden kräver
-    // admin/requester/assignee/creator.
-    const t = db.prepare('SELECT assigned_to FROM tickets WHERE id = ?').get(req.params.ticketId) as { assigned_to: string | null } | undefined;
+    // Läsning är öppen för alla inloggade (även interna anteckningar).
+    const t = db.prepare('SELECT 1 FROM tickets WHERE id = ?').get(req.params.ticketId);
     if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
-    }
-    if (t.assigned_to !== null && !canAccessTicket(req, req.params.ticketId)) {
-      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
     const comments = db.prepare(`
@@ -52,9 +58,14 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
       LEFT JOIN contacts contact ON contact.email = u.email
       WHERE c.ticket_id = ? AND c.deleted_at IS NULL
       ORDER BY c.created_at ASC
-      LIMIT 500
-    `).all(req.params.ticketId) as CommentRow[];
+      LIMIT ?
+    `).all(req.params.ticketId, COMMENTS_LIMIT) as CommentRow[];
 
+    // Arrayformen behålls för klienten; totalen i headern visar om listan trunkerats.
+    const { total } = db.prepare(
+      'SELECT COUNT(*) AS total FROM ticket_comments WHERE ticket_id = ? AND deleted_at IS NULL'
+    ).get(req.params.ticketId) as { total: number };
+    res.setHeader('X-Total-Count', String(total));
     res.json(comments);
   } catch (error) {
     logger.error('Error fetching comments:', { error: String(error) });
@@ -64,10 +75,17 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
 
 // POST /api/comments/ticket/:ticketId - Create new comment
 router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
-  const { content, isInternal = true } = req.body;
+  const { content, isInternal: rawIsInternal = true } = req.body;
 
   if (!content || typeof content !== 'string' || content.trim().length === 0) {
     return res.status(400).json({ error: 'Content is required' });
+  }
+  if (content.length > MAX_COMMENT_LENGTH) {
+    return res.status(400).json({ error: 'Content must be 20000 characters or less' });
+  }
+  const isInternal = parseIsInternal(rawIsInternal);
+  if (isInternal === null) {
+    return res.status(400).json({ error: 'isInternal must be a boolean' });
   }
 
   if (!req.user) {
@@ -75,19 +93,16 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
   }
 
   try {
-    // Behörighetskontroll: spegla PUT /:id EXAKT (se tickets.ts). Otilldelade
-    // ärenden är öppna för self-service-pickup — vilken agent som helst kan
-    // kommentera på ett köärende. Tilldelade ärenden kräver
-    // admin/requester/assignee/creator.
-    const t = db.prepare('SELECT assigned_to FROM tickets WHERE id = ?').get(req.params.ticketId) as { assigned_to: string | null } | undefined;
+    // Skrivbehörighet: admin, tilldelad, skapare eller otilldelat ärende.
+    const t = db.prepare('SELECT 1 FROM tickets WHERE id = ?').get(req.params.ticketId);
     if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (t.assigned_to !== null && !canAccessTicket(req, req.params.ticketId)) {
+    if (!canAccessTicket(req, req.params.ticketId, { write: true })) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
-    const id = uuidv4();
+    const id = randomUUID();
     const now = new Date().toISOString();
 
     // Defense-in-depth: sanitera HTML server-side (TipTap rich-text).
@@ -137,6 +152,9 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
   if (!content || typeof content !== 'string' || content.trim().length === 0) {
     return res.status(400).json({ error: 'Content is required' });
   }
+  if (content.length > MAX_COMMENT_LENGTH) {
+    return res.status(400).json({ error: 'Content must be 20000 characters or less' });
+  }
 
   if (!req.user) {
     return res.status(401).json({ error: 'User not authenticated' });
@@ -145,7 +163,8 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const existing = db.prepare('SELECT id, ticket_id, user_id, content, is_internal, created_at, updated_at, deleted_at FROM ticket_comments WHERE id = ?').get(req.params.id) as CommentRow | undefined;
 
-    if (!existing) {
+    // Raderade kommentarer går inte att redigera.
+    if (!existing || existing.deleted_at) {
       return res.status(404).json({ error: 'Comment not found' });
     }
 
@@ -187,7 +206,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const existing = db.prepare('SELECT id, ticket_id, user_id, content, is_internal, created_at, updated_at, deleted_at FROM ticket_comments WHERE id = ?').get(req.params.id) as CommentRow | undefined;
 
-    if (!existing) {
+    if (!existing || existing.deleted_at) {
       return res.status(404).json({ error: 'Comment not found' });
     }
 

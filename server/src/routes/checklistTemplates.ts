@@ -1,9 +1,10 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
+import { logAudit } from '../lib/auditLog.js';
 
 const router = Router();
 
@@ -35,6 +36,34 @@ interface ChecklistRow {
   updated_at: string;
 }
 
+interface TemplateItemInput {
+  label: string;
+  parent_label: string | null;
+}
+
+// Validerar items-arrayen: label/parent_label måste vara strängar (annars null).
+// Rader med tom label hoppas över, som tidigare.
+function parseTemplateItems(items: unknown): TemplateItemInput[] | null {
+  if (!Array.isArray(items)) return null;
+  const parsed: TemplateItemInput[] = [];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') return null;
+    const { label, parent_label } = item as { label?: unknown; parent_label?: unknown };
+    if (typeof label !== 'string') return null;
+    if (parent_label != null && typeof parent_label !== 'string') return null;
+    if (!label.trim()) continue;
+    parsed.push({ label: label.trim(), parent_label: (parent_label as string | null | undefined)?.trim() || null });
+  }
+  return parsed;
+}
+
+const insertTemplateItems = (templateId: string, items: TemplateItemInput[]) => {
+  const insertItem = db.prepare(
+    'INSERT INTO checklist_template_items (id, template_id, label, parent_label, position) VALUES (?, ?, ?, ?, ?)'
+  );
+  items.forEach((item, i) => insertItem.run(randomUUID(), templateId, item.label, item.parent_label, i));
+};
+
 // GET /api/checklist-templates — list all templates with items
 router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
   try {
@@ -58,25 +87,26 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     return res.status(400).json({ error: 'Name is required' });
   }
-  if (!Array.isArray(items) || items.length === 0) {
+  if (description != null && typeof description !== 'string') {
+    return res.status(400).json({ error: 'Description must be a string' });
+  }
+  const parsedItems = parseTemplateItems(items);
+  if (!parsedItems) {
+    return res.status(400).json({ error: 'Each item needs a string label and parent_label' });
+  }
+  if (parsedItems.length === 0) {
     return res.status(400).json({ error: 'At least one item is required' });
   }
 
   try {
-    const id = uuidv4();
-    db.prepare('INSERT INTO checklist_templates (id, name, description) VALUES (?, ?, ?)').run(
-      id, name.trim(), description?.trim() || null
-    );
-
-    const insertItem = db.prepare(
-      'INSERT INTO checklist_template_items (id, template_id, label, parent_label, position) VALUES (?, ?, ?, ?, ?)'
-    );
-    const insertAll = db.transaction((rows: { label: string; parent_label?: string }[]) => {
-      rows.forEach((row, i) => {
-        insertItem.run(uuidv4(), id, row.label.trim(), row.parent_label?.trim() || null, i);
-      });
-    });
-    insertAll(items.filter((i: any) => typeof i.label === 'string' && i.label.trim().length > 0));
+    const id = randomUUID();
+    // Mall + rader i en transaktion så en felande rad inte lämnar en tom mall.
+    db.transaction(() => {
+      db.prepare('INSERT INTO checklist_templates (id, name, description) VALUES (?, ?, ?)').run(
+        id, name.trim(), description?.trim() || null
+      );
+      insertTemplateItems(id, parsedItems);
+    })();
 
     const template = db.prepare('SELECT * FROM checklist_templates WHERE id = ?').get(id) as TemplateRow;
     const templateItems = db.prepare(
@@ -97,28 +127,43 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
 router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { name, description, items } = req.body;
 
+  if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
+    return res.status(400).json({ error: 'Name is required' });
+  }
+  if (description != null && typeof description !== 'string') {
+    return res.status(400).json({ error: 'Description must be a string' });
+  }
+  let parsedItems: TemplateItemInput[] | undefined;
+  if (items !== undefined) {
+    const parsed = parseTemplateItems(items);
+    if (!parsed) {
+      return res.status(400).json({ error: 'Each item needs a string label and parent_label' });
+    }
+    parsedItems = parsed;
+  }
+
   try {
-    const existing = db.prepare('SELECT id FROM checklist_templates WHERE id = ?').get(req.params.id);
+    const existing = db.prepare('SELECT id, name, description FROM checklist_templates WHERE id = ?')
+      .get(req.params.id) as Pick<TemplateRow, 'id' | 'name' | 'description'> | undefined;
     if (!existing) return res.status(404).json({ error: 'Template not found' });
 
-    if (name !== undefined) {
-      db.prepare(
-        'UPDATE checklist_templates SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
-      ).run(name.trim(), description?.trim() || null, req.params.id);
-    }
-
-    if (Array.isArray(items)) {
-      db.prepare('DELETE FROM checklist_template_items WHERE template_id = ?').run(req.params.id);
-      const insertItem = db.prepare(
-        'INSERT INTO checklist_template_items (id, template_id, label, parent_label, position) VALUES (?, ?, ?, ?, ?)'
-      );
-      const insertAll = db.transaction((rows: { label: string; parent_label?: string }[]) => {
-        rows.forEach((row, i) => {
-          insertItem.run(uuidv4(), req.params.id, row.label.trim(), row.parent_label?.trim() || null, i);
-        });
-      });
-      insertAll(items.filter((i: any) => typeof i.label === 'string' && i.label.trim().length > 0));
-    }
+    // Hela uppdateringen i en transaktion: namn/beskrivning och radbytet lyckas
+    // eller misslyckas tillsammans (annars överlever en halv uppdatering).
+    db.transaction(() => {
+      if (name !== undefined || description !== undefined) {
+        db.prepare(
+          'UPDATE checklist_templates SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+        ).run(
+          name !== undefined ? name.trim() : existing.name,
+          description !== undefined ? (description?.trim() || null) : existing.description,
+          req.params.id
+        );
+      }
+      if (parsedItems) {
+        db.prepare('DELETE FROM checklist_template_items WHERE template_id = ?').run(req.params.id);
+        insertTemplateItems(req.params.id as string, parsedItems);
+      }
+    })();
 
     const template = db.prepare('SELECT * FROM checklist_templates WHERE id = ?').get(req.params.id) as TemplateRow;
     const templateItems = db.prepare(
@@ -140,6 +185,7 @@ router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respon
   try {
     const result = db.prepare('DELETE FROM checklist_templates WHERE id = ?').run(req.params.id);
     if (result.changes === 0) return res.status(404).json({ error: 'Template not found' });
+    logAudit(req.user!.id, 'checklist_template_delete', 'checklist_template', req.params.id, null, req.ip, req.apiKey?.id ?? null);
     res.json({ message: 'Template deleted' });
   } catch (error) {
     logger.error('Error deleting checklist template:', { error: String(error) });
@@ -150,12 +196,12 @@ router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respon
 // POST /api/checklist-templates/:id/apply — apply template items to a ticket
 router.post('/:id/apply', authenticate, (req: AuthRequest, res: Response) => {
   const { ticketId } = req.body;
-  if (!ticketId) return res.status(400).json({ error: 'ticketId is required' });
+  if (!ticketId || typeof ticketId !== 'string') return res.status(400).json({ error: 'ticketId is required' });
 
   try {
     const ticket = db.prepare('SELECT id FROM tickets WHERE id = ?').get(ticketId);
     if (!ticket) return res.status(404).json({ error: 'Ticket not found' });
-    if (!canAccessTicket(req, ticketId as string)) {
+    if (!canAccessTicket(req, ticketId, { write: true })) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -181,13 +227,13 @@ router.post('/:id/apply', authenticate, (req: AuthRequest, res: Response) => {
 
     const doInsert = db.transaction(() => {
       for (const item of parentItems) {
-        const newId = uuidv4();
+        const newId = randomUUID();
         insertItem.run(newId, ticketId, item.label, pos++, null);
         labelToId[item.label] = newId;
       }
       for (const item of templateItems.filter(i => i.parent_label)) {
         const parentId = labelToId[item.parent_label!] || null;
-        insertItem.run(uuidv4(), ticketId, item.label, pos++, parentId);
+        insertItem.run(randomUUID(), ticketId, item.label, pos++, parentId);
       }
     });
     doInsert();

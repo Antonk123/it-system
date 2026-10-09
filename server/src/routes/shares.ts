@@ -8,6 +8,8 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { logger } from '../lib/logger.js';
 import { logAudit } from '../lib/auditLog.js';
+import { attachmentDisposition } from '../lib/contentDisposition.js';
+import { resolveUploadPath } from '../lib/uploadPath.js';
 import { SHARE_DEFAULT_EXPIRY_DAYS, mintShareToken, getActiveShareByToken } from '../lib/shares.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -78,9 +80,6 @@ interface ChecklistRow {
 // Get existing share token for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    if (!canAccessTicket(req, req.params.ticketId as string)) {
-      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
-    }
     // Endast aktiva shares räknas — en utgången rad ska visas som "ingen
     // delning" tills en ny myntas (samma fail-closed-villkor som publika vyn).
     const share = db.prepare(
@@ -114,7 +113,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     }
     // Behörighet FÖRE den idempotenta returen — annars kan en inloggad
     // användare utan åtkomst till ärendet hämta ut en redan myntad token.
-    if (!canAccessTicket(req, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string, { write: true })) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -154,7 +153,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 // Delete share link
 router.delete('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    if (!canAccessTicket(req, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string, { write: true })) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
     const result = db.prepare('DELETE FROM ticket_shares WHERE ticket_id = ?').run(req.params.ticketId);
@@ -268,18 +267,15 @@ router.get('/public/file/:token/:attachmentId', sharePublicRateLimiter, (req: Re
       return res.status(404).json({ error: 'Attachment not found' });
     }
 
-    const filePath = join(UPLOAD_DIR, attachment.file_path);
-    
-    if (!existsSync(filePath)) {
+    const filePath = resolveUploadPath(UPLOAD_DIR, attachment.file_path);
+
+    if (!filePath || !existsSync(filePath)) {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    // Sanitize filename to prevent header injection
-    const safeFilename = attachment.file_name.replace(/["\r\n]/g, '');
-
     res.setHeader('Content-Type', attachment.file_type || 'application/octet-stream');
     // Use 'attachment' instead of 'inline' to force download and prevent execution
-    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"`);
+    res.setHeader('Content-Disposition', attachmentDisposition(attachment.file_name));
     res.sendFile(filePath);
   } catch (error) {
     logger.error('Error serving shared file:', { error: String(error) });

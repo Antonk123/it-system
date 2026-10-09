@@ -102,6 +102,16 @@ describe('cleanupRefreshTokens', () => {
     expect(remaining.size).toBe(2);
   });
 
+  it('also applies the retention policy (old audit log rows are removed)', () => {
+    const oldDate = daysAgoIso(400);
+    db.prepare("INSERT INTO audit_log (id, action, entity_type, created_at) VALUES ('old-audit', 'a', 'e', ?)").run(oldDate);
+    db.prepare("INSERT INTO audit_log (id, action, entity_type, created_at) VALUES ('new-audit', 'a', 'e', ?)").run(daysAgoIso(1));
+
+    cleanupRefreshTokens();
+
+    expect((db.prepare("SELECT id FROM audit_log WHERE id IN ('old-audit', 'new-audit')").all() as { id: string }[]).map((r) => r.id)).toEqual(['new-audit']);
+  });
+
   it('is idempotent — a second run deletes nothing further', () => {
     seedToken({ expiresAt: daysAgoIso(1), revoked: false });
     seedToken({ expiresAt: daysFromNowIso(30), revoked: true, createdAt: daysAgoIso(8) });

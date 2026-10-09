@@ -21,6 +21,63 @@ interface TemplateFieldRow {
   updated_at: string;
 }
 
+// Tillåtna fälttyper — speglar CHECK-villkoret på template_fields.field_type.
+const FIELD_TYPES = ['text', 'textarea', 'number', 'select', 'date', 'checkbox'];
+
+export interface TemplateFieldInput {
+  field_name: string;
+  field_label: string;
+  field_type: string;
+  placeholder: string | null;
+  default_value: string | null;
+  required: number;
+  options: string | null;
+}
+
+const isOptionalText = (value: unknown): value is string | null | undefined =>
+  value == null || typeof value === 'string';
+
+/**
+ * Validerar ett fält från request-body. Utan `existing` (skapa) krävs
+ * field_name/field_label/field_type; med `existing` (uppdatera) ärvs
+ * utelämnade (undefined) värden. `options` tas emot som array (lagras som JSON)
+ * eller null. Delas med POST /api/templates (inline-fält).
+ */
+export function parseTemplateField(
+  body: Record<string, unknown>,
+  existing?: TemplateFieldRow,
+): { value: TemplateFieldInput } | { error: string } {
+  const { field_name, field_label, field_type, placeholder, default_value, required, options } = body;
+
+  const name = field_name ?? existing?.field_name;
+  const label = field_label ?? existing?.field_label;
+  const type = field_type ?? existing?.field_type;
+  if (typeof name !== 'string' || !name.trim() || typeof label !== 'string' || !label.trim() || typeof type !== 'string') {
+    return { error: 'field_name, field_label, and field_type are required' };
+  }
+  if (!FIELD_TYPES.includes(type)) {
+    return { error: `field_type must be one of: ${FIELD_TYPES.join(', ')}` };
+  }
+  if (!isOptionalText(placeholder) || !isOptionalText(default_value)) {
+    return { error: 'placeholder and default_value must be strings' };
+  }
+  if (options != null && (!Array.isArray(options) || options.some((o) => typeof o !== 'string'))) {
+    return { error: 'options must be an array of strings' };
+  }
+
+  return {
+    value: {
+      field_name: name.trim(),
+      field_label: label.trim(),
+      field_type: type,
+      placeholder: placeholder !== undefined ? placeholder || null : existing?.placeholder ?? null,
+      default_value: default_value !== undefined ? default_value || null : existing?.default_value ?? null,
+      required: required !== undefined ? (required ? 1 : 0) : existing?.required ?? 0,
+      options: options !== undefined ? (options ? JSON.stringify(options) : null) : existing?.options ?? null,
+    },
+  };
+}
+
 // GET /api/templates/:templateId/fields
 router.get('/', authenticate, (req: AuthRequest, res: Response) => {
   try {
@@ -37,10 +94,14 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
 router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const { templateId } = req.params;
-    const { field_name, field_label, field_type, placeholder, default_value, required, options } = req.body;
+    const parsed = parseTemplateField(req.body);
+    if ('error' in parsed) {
+      return res.status(400).json({ error: parsed.error });
+    }
+    const { field_name, field_label, field_type, placeholder, default_value, required, options } = parsed.value;
 
-    if (!field_name || !field_label || !field_type) {
-      return res.status(400).json({ error: 'field_name, field_label, and field_type are required' });
+    if (!db.prepare('SELECT 1 FROM ticket_templates WHERE id = ?').get(templateId)) {
+      return res.status(404).json({ error: 'Template not found' });
     }
 
     const id = randomUUID();
@@ -50,7 +111,7 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
     db.prepare(`
       INSERT INTO template_fields (id, template_id, field_name, field_label, field_type, placeholder, default_value, required, options, position)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, templateId, field_name, field_label, field_type, placeholder || null, default_value || null, required ? 1 : 0, options ? JSON.stringify(options) : null, position);
+    `).run(id, templateId, field_name, field_label, field_type, placeholder, default_value, required, options, position);
 
     const field = db.prepare('SELECT * FROM template_fields WHERE id = ?').get(id) as TemplateFieldRow;
     res.status(201).json(field);
@@ -69,10 +130,10 @@ router.put('/reorder', authenticate, requireAdmin, (req: AuthRequest, res: Respo
       return res.status(400).json({ error: 'ids must be an array' });
     }
 
-    const updateStmt = db.prepare('UPDATE template_fields SET position = ? WHERE id = ?');
+    const updateStmt = db.prepare('UPDATE template_fields SET position = ? WHERE id = ? AND template_id = ?');
     const transaction = db.transaction((fieldIds: string[]) => {
       fieldIds.forEach((id, index) => {
-        updateStmt.run(index, id);
+        updateStmt.run(index, id, req.params.templateId);
       });
     });
 
@@ -89,28 +150,25 @@ router.put('/reorder', authenticate, requireAdmin, (req: AuthRequest, res: Respo
 // PUT /api/templates/:templateId/fields/:fieldId
 router.put('/:fieldId', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
-    const { fieldId } = req.params;
-    const { field_name, field_label, field_type, placeholder, default_value, required, options } = req.body;
+    const { templateId, fieldId } = req.params;
 
-    const existing = db.prepare('SELECT * FROM template_fields WHERE id = ?').get(fieldId) as TemplateFieldRow | undefined;
+    // Fältet måste tillhöra mallen i URL:en.
+    const existing = db.prepare('SELECT * FROM template_fields WHERE id = ? AND template_id = ?').get(fieldId, templateId) as TemplateFieldRow | undefined;
     if (!existing) {
       return res.status(404).json({ error: 'Template field not found' });
     }
 
+    const parsed = parseTemplateField(req.body, existing);
+    if ('error' in parsed) {
+      return res.status(400).json({ error: parsed.error });
+    }
+    const { field_name, field_label, field_type, placeholder, default_value, required, options } = parsed.value;
+
     db.prepare(`
       UPDATE template_fields
       SET field_name = ?, field_label = ?, field_type = ?, placeholder = ?, default_value = ?, required = ?, options = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `).run(
-      field_name ?? existing.field_name,
-      field_label ?? existing.field_label,
-      field_type ?? existing.field_type,
-      placeholder ?? existing.placeholder,
-      default_value ?? existing.default_value,
-      required !== undefined ? (required ? 1 : 0) : existing.required,
-      options ? JSON.stringify(options) : existing.options,
-      fieldId
-    );
+      WHERE id = ? AND template_id = ?
+    `).run(field_name, field_label, field_type, placeholder, default_value, required, options, fieldId, templateId);
 
     const field = db.prepare('SELECT * FROM template_fields WHERE id = ?').get(fieldId) as TemplateFieldRow;
     res.json(field);
@@ -123,7 +181,7 @@ router.put('/:fieldId', authenticate, requireAdmin, (req: AuthRequest, res: Resp
 // DELETE /api/templates/:templateId/fields/:fieldId
 router.delete('/:fieldId', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
-    const result = db.prepare('DELETE FROM template_fields WHERE id = ?').run(req.params.fieldId);
+    const result = db.prepare('DELETE FROM template_fields WHERE id = ? AND template_id = ?').run(req.params.fieldId, req.params.templateId);
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Template field not found' });
     }

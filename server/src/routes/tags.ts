@@ -1,10 +1,28 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { logger } from '../lib/logger.js';
+import { sanitizeLabel } from '../lib/ticketValidation.js';
 
 const router = Router();
+
+const MAX_NAME_LENGTH = 100;
+const DEFAULT_TAG_COLOR = '#3b82f6';
+const COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+
+// Validerar { name, color } från request-body. Namnet saneras och trimmas;
+// färg utelämnad/tom ger standardfärgen, annars krävs #rrggbb.
+function parseTagInput(body: { name?: unknown; color?: unknown }): { name: string; color: string } | { error: string } {
+  const { name, color } = body;
+  const cleanName = sanitizeLabel(name, MAX_NAME_LENGTH);
+  if (!cleanName) return { error: 'Name is required (max 100 characters)' };
+  if (color == null || color === '') return { name: cleanName, color: DEFAULT_TAG_COLOR };
+  if (typeof color !== 'string' || !COLOR_PATTERN.test(color)) {
+    return { error: 'Color must be a hex value like #3b82f6' };
+  }
+  return { name: cleanName, color };
+}
 
 interface TagRow {
   id: string;
@@ -26,21 +44,15 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
 
 // Create tag
 router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
-  const { name, color } = req.body;
-
-  if (!name || typeof name !== 'string' || name.trim().length === 0) {
-    return res.status(400).json({ error: 'Name is required' });
+  const input = parseTagInput(req.body);
+  if ('error' in input) {
+    return res.status(400).json({ error: input.error });
   }
 
   try {
-    const id = uuidv4();
-    const tagColor = color || '#3b82f6';
+    const id = randomUUID();
 
-    db.prepare('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)').run(
-      id,
-      name.trim(),
-      tagColor
-    );
+    db.prepare('INSERT INTO tags (id, name, color) VALUES (?, ?, ?)').run(id, input.name, input.color);
 
     const tag = db.prepare('SELECT * FROM tags WHERE id = ?').get(id) as TagRow;
     res.status(201).json(tag);
@@ -55,16 +67,15 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
 
 // Update tag
 router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
-  const { name, color } = req.body;
-
-  if (!name || typeof name !== 'string' || name.trim().length === 0) {
-    return res.status(400).json({ error: 'Name is required' });
+  const input = parseTagInput(req.body);
+  if ('error' in input) {
+    return res.status(400).json({ error: input.error });
   }
 
   try {
     const result = db.prepare('UPDATE tags SET name = ?, color = ? WHERE id = ?').run(
-      name.trim(),
-      color || '#3b82f6',
+      input.name,
+      input.color,
       req.params.id
     );
 

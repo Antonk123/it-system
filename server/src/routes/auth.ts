@@ -2,14 +2,20 @@ import { Router, Request, Response } from 'express';
 import passport from 'passport';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-import { v4 as uuidv4 } from 'uuid';
+import crypto, { randomUUID } from 'node:crypto';
 import { db } from '../db/connection.js';
 import { JWT_SECRET } from '../config/passport.js';
 import { authenticate, requireAdmin, AuthRequest, AuthUser } from '../middleware/auth.js';
-import { loginRateLimiter, createRateLimiter } from '../middleware/rateLimit.js';
+import {
+  createRateLimiter,
+  loginRateLimiter,
+  forgotPasswordRateLimiter,
+  resetPasswordRateLimiter,
+  refreshRateLimiter,
+  loginFailureTracker,
+} from '../middleware/rateLimit.js';
 import { sendPasswordResetEmail } from '../lib/email.js';
-import { validatePassword } from '../lib/passwordPolicy.js';
+import { validatePassword, BCRYPT_ROUNDS } from '../lib/passwordPolicy.js';
 import { logAudit } from '../lib/auditLog.js';
 import { logger } from '../lib/logger.js';
 import { cookieSecure } from '../config/cookies.js';
@@ -25,13 +31,6 @@ import {
 } from '../lib/oidc.js';
 
 /**
- * Rate limiter for token refresh endpoint.
- * 10 attempts per 15 minutes per IP — generous for legitimate silent refresh
- * but blocks brute-force token replay attacks.
- */
-const refreshRateLimiter = createRateLimiter(15 * 60 * 1000, 10);
-
-/**
  * Rate limiter for change-password endpoint.
  * 5 attempts per 15 minutes per IP — same budget as login. Without this, an
  * attacker holding a stolen/valid JWT could brute-force the user's current
@@ -45,10 +44,21 @@ const router = Router();
 // Token expiration times
 const ACCESS_TOKEN_EXPIRY = '15m'; // Short-lived access token (silent refresh handles re-auth)
 const REFRESH_TOKEN_EXPIRY_DAYS = 7; // Refresh token valid for 7 days
+// En just roterad refresh-token godtas igen så här länge (två flikar som förnyar samtidigt).
+const REFRESH_ROTATION_GRACE_MS = 10 * 1000;
+
+const LOCKED_ACCOUNT_MESSAGE = 'För många misslyckade inloggningsförsök, försök igen om en stund';
+const EMAIL_SHAPE = /^[^@\s]+@[^@\s]+$/;
 
 // Generate cryptographically secure refresh token
 function generateRefreshToken(): string {
   return crypto.randomBytes(32).toString('hex');
+}
+
+// Refresh-tokens lagras som sha256-hex i kolumnen `token` — en läckt DB-dump ger
+// därmed inga användbara sessioner.
+function hashRefreshToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
 }
 
 // Calculate refresh token expiration date
@@ -56,6 +66,38 @@ function getRefreshTokenExpiry(): string {
   const date = new Date();
   date.setDate(date.getDate() + REFRESH_TOKEN_EXPIRY_DAYS);
   return date.toISOString();
+}
+
+// Skapar en refresh-token åt användaren och returnerar råvärdet (för cookien) + radens id.
+function issueRefreshToken(userId: string): { token: string; id: string } {
+  const token = generateRefreshToken();
+  const id = randomUUID();
+  db.prepare(
+    'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
+  ).run(id, userId, hashRefreshToken(token), getRefreshTokenExpiry());
+  return { token, id };
+}
+
+// `tv` = users.token_version: höjs vid lösenordsbyte så att gamla access-tokens dör direkt.
+function signAccessToken(user: { id: string; email: string; role: string }, tokenVersion: number): string {
+  return jwt.sign(
+    { sub: user.id, email: user.email, role: user.role, tv: tokenVersion },
+    JWT_SECRET,
+    { expiresIn: ACCESS_TOKEN_EXPIRY }
+  );
+}
+
+// Återkallar hela kedjan som börjar i `startId` genom att följa replaced_by.
+// UNION avdupar raderna, så en trasig (cirkulär) kedja ändå terminerar.
+function revokeRefreshFamily(startId: string): void {
+  db.prepare(`
+    WITH RECURSIVE chain(id) AS (
+      SELECT id FROM refresh_tokens WHERE id = ?
+      UNION
+      SELECT r.replaced_by FROM refresh_tokens r JOIN chain c ON r.id = c.id WHERE r.replaced_by IS NOT NULL
+    )
+    UPDATE refresh_tokens SET revoked = 1 WHERE id IN (SELECT id FROM chain)
+  `).run(startId);
 }
 
 // Refresh-token lagras i en HttpOnly-cookie (ej läsbar via JS) istället för
@@ -81,41 +123,47 @@ function setRefreshCookie(res: Response, token: string): void {
 function clearRefreshCookie(res: Response): void {
   res.clearCookie(REFRESH_COOKIE, refreshCookieOptions());
 }
-// Läs refresh-token från cookie (ny klient) med fallback till body (bakåtkompat
-// under rollout / icke-webb-klienter).
+// Refresh-token läses enbart från cookien (aldrig från body).
 function readRefreshToken(req: Request): string | undefined {
-  return (req.cookies?.[REFRESH_COOKIE] as string | undefined) || req.body?.refreshToken;
+  const token = req.cookies?.[REFRESH_COOKIE];
+  return typeof token === 'string' && token ? token : undefined;
 }
 
-// Login with rate limiting (5 attempts per 15 minutes)
+type LoginUser = Required<AuthUser>;
+
+// Login with rate limiting (5 failed attempts per 15 minutes per IP, 10 per account)
 router.post('/login', loginRateLimiter, (req: Request, res: Response) => {
-  passport.authenticate('local', { session: false }, (err: Error | null, user: AuthUser | false, info: { message?: string }) => {
+  const rawEmail: unknown = req.body?.email;
+  const accountKey = typeof rawEmail === 'string' ? rawEmail.toLowerCase().trim() : null;
+
+  if (accountKey) {
+    const lockedFor = loginFailureTracker.lockedFor(accountKey);
+    if (lockedFor > 0) {
+      res.set('Retry-After', String(lockedFor));
+      return res.status(429).json({ error: LOCKED_ACCOUNT_MESSAGE, retryAfter: lockedFor });
+    }
+  }
+
+  passport.authenticate('local', { session: false }, (err: Error | null, user: LoginUser | false, info: { message?: string }) => {
     if (err) {
       return res.status(500).json({ error: 'Login failed' });
     }
     if (!user) {
-      logAudit(null, 'login_failure', 'session', null, `email: ${req.body?.email ?? 'unknown'}`, req.ip);
+      if (accountKey) loginFailureTracker.recordFailure(accountKey);
+      // Råa fältet kan innehålla vad som helst (t.ex. ett inklistrat lösenord) — logga bara e-postlika värden.
+      const loggedEmail = typeof rawEmail === 'string' && EMAIL_SHAPE.test(rawEmail)
+        ? rawEmail.slice(0, 254)
+        : '<ogiltigt format>';
+      logAudit(null, 'login_failure', 'session', null, `email: ${loggedEmail}`, req.ip);
       return res.status(401).json({ error: info?.message || 'Invalid credentials' });
     }
 
     try {
-      // Generate short-lived access token (1 hour)
-      const accessToken = jwt.sign(
-        { sub: user.id, email: user.email, role: user.role },
-        JWT_SECRET,
-        { expiresIn: ACCESS_TOKEN_EXPIRY }
-      );
+      if (accountKey) loginFailureTracker.reset(accountKey);
+      const accessToken = signAccessToken(user, user.tokenVersion);
 
-      // Generate long-lived refresh token (7 days)
-      const refreshToken = generateRefreshToken();
-      const refreshTokenId = uuidv4();
-      const expiresAt = getRefreshTokenExpiry();
-
-      // Store refresh token in database
-      db.prepare(`
-        INSERT INTO refresh_tokens (id, user_id, token, expires_at)
-        VALUES (?, ?, ?, ?)
-      `).run(refreshTokenId, user.id, refreshToken, expiresAt);
+      // Generate long-lived refresh token (7 days) and store its hash
+      const { token: refreshToken } = issueRefreshToken(user.id);
 
       logAudit(user.id, 'login_success', 'session', user.id, null, req.ip);
 
@@ -128,6 +176,7 @@ router.post('/login', loginRateLimiter, (req: Request, res: Response) => {
           id: user.id,
           email: user.email,
           role: user.role,
+          mustChangePassword: user.mustChangePassword,
         },
         token: accessToken, // For backward compatibility
         accessToken,
@@ -139,7 +188,7 @@ router.post('/login', loginRateLimiter, (req: Request, res: Response) => {
   })(req, res);
 });
 
-// Refresh access token using refresh token
+// Refresh access token using refresh token (cookie only)
 router.post('/refresh', refreshRateLimiter, (req: Request, res: Response) => {
   const refreshToken = readRefreshToken(req);
 
@@ -148,27 +197,54 @@ router.post('/refresh', refreshRateLimiter, (req: Request, res: Response) => {
   }
 
   try {
-    // Find refresh token in database
     interface RefreshTokenRow {
       id: string;
       user_id: string;
-      token: string;
       expires_at: string;
       revoked: number;
+      replaced_by: string | null;
+      last_used_at: string | null;
     }
 
     const tokenRow = db.prepare(`
-      SELECT id, user_id, token, expires_at, revoked
+      SELECT id, user_id, expires_at, revoked, replaced_by, last_used_at
       FROM refresh_tokens
       WHERE token = ?
-    `).get(refreshToken) as RefreshTokenRow | undefined;
+    `).get(hashRefreshToken(refreshToken)) as RefreshTokenRow | undefined;
 
     if (!tokenRow) {
       return res.status(401).json({ error: 'Invalid refresh token' });
     }
 
-    // Check if token is revoked
+    // Get user details
+    interface UserRow {
+      id: string;
+      email: string;
+      role: string;
+      token_version: number;
+    }
+    const loadUser = () => db.prepare('SELECT id, email, role, token_version FROM users WHERE id = ?')
+      .get(tokenRow.user_id) as UserRow | undefined;
+
     if (tokenRow.revoked === 1) {
+      // Roterad men visad igen: antingen två flikar som tävlar (godtas inom nådetiden,
+      // utan ny cookie — flik 1 har redan fått efterträdaren) eller en stulen/återanvänd
+      // token, då hela kedjan återkallas.
+      if (tokenRow.replaced_by) {
+        const rotatedAt = tokenRow.last_used_at ? Date.parse(tokenRow.last_used_at) : 0;
+        const successor = db.prepare('SELECT revoked FROM refresh_tokens WHERE id = ?')
+          .get(tokenRow.replaced_by) as { revoked: number } | undefined;
+        if (successor?.revoked === 0 && Date.now() - rotatedAt <= REFRESH_ROTATION_GRACE_MS) {
+          const graceUser = loadUser();
+          if (!graceUser) {
+            return res.status(401).json({ error: 'User not found' });
+          }
+          const graceAccessToken = signAccessToken(graceUser, graceUser.token_version);
+          return res.json({ accessToken: graceAccessToken, token: graceAccessToken });
+        }
+        revokeRefreshFamily(tokenRow.id);
+        logAudit(tokenRow.user_id, 'refresh_token_reuse', 'session', tokenRow.user_id, null, req.ip);
+      }
       return res.status(401).json({ error: 'Refresh token has been revoked' });
     }
 
@@ -182,38 +258,34 @@ router.post('/refresh', refreshRateLimiter, (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Refresh token expired' });
     }
 
-    // Get user details
-    interface UserRow {
-      id: string;
-      email: string;
-      role: string;
-    }
-
-    const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(tokenRow.user_id) as UserRow | undefined;
+    const user = loadUser();
 
     if (!user) {
       return res.status(401).json({ error: 'User not found' });
     }
 
     // Generate new access token
-    const accessToken = jwt.sign(
-      { sub: user.id, email: user.email, role: user.role },
-      JWT_SECRET,
-      { expiresIn: ACCESS_TOKEN_EXPIRY }
-    );
+    const accessToken = signAccessToken(user, user.token_version);
 
-    // Atomically rotate refresh token (delete old + insert new in one transaction)
-    // Prevents session loss if server crashes between operations.
+    // Atomically rotate: markera den gamla som ersatt (behålls för återanvändnings-
+    // detektering) och lägg in den nya i samma transaktion. `revoked = 0` i WHERE
+    // gör att bara en samtidig förnyelse vinner.
     const newRefreshToken = generateRefreshToken();
-    const newRefreshTokenId = uuidv4();
+    const newRefreshTokenId = randomUUID();
     const newExpiresAt = getRefreshTokenExpiry();
     const rotateToken = db.transaction(() => {
-      db.prepare('DELETE FROM refresh_tokens WHERE id = ?').run(tokenRow.id);
+      const claimed = db.prepare(
+        'UPDATE refresh_tokens SET revoked = 1, replaced_by = ?, last_used_at = ? WHERE id = ? AND revoked = 0'
+      ).run(newRefreshTokenId, now.toISOString(), tokenRow.id);
+      if (claimed.changes !== 1) return false;
       db.prepare(
         'INSERT INTO refresh_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
-      ).run(newRefreshTokenId, tokenRow.user_id, newRefreshToken, newExpiresAt);
+      ).run(newRefreshTokenId, tokenRow.user_id, hashRefreshToken(newRefreshToken), newExpiresAt);
+      return true;
     });
-    rotateToken();
+    if (!rotateToken()) {
+      return res.status(401).json({ error: 'Refresh token has been revoked' });
+    }
 
     // Roterad refresh-token i ny HttpOnly-cookie — ej i body.
     setRefreshCookie(res, newRefreshToken);
@@ -228,26 +300,19 @@ router.post('/refresh', refreshRateLimiter, (req: Request, res: Response) => {
   }
 });
 
-// Logout (revoke refresh token)
-router.post('/logout', authenticate, (req: AuthRequest, res: Response) => {
+// Logout (revoke refresh token). Kräver ingen access-token: en utgången token ska
+// inte hindra utloggning, och cookien identifierar sessionen.
+router.post('/logout', (req: Request, res: Response) => {
   const refreshToken = readRefreshToken(req);
 
   // Rensa alltid cookien, även om token saknas i DB.
   clearRefreshCookie(res);
 
-  if (!refreshToken) {
-    return res.json({ message: 'Logged out successfully' });
-  }
-
   try {
-    // Revoke refresh token
-    db.prepare(`
-      UPDATE refresh_tokens
-      SET revoked = 1
-      WHERE token = ? AND user_id = ?
-    `).run(refreshToken, req.user!.id);
-
-    res.json({ message: 'Logged out successfully' });
+    if (refreshToken) {
+      db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE token = ?').run(hashRefreshToken(refreshToken));
+    }
+    res.status(204).end();
   } catch (error) {
     logger.error('Error during logout:', { error: String(error) });
     res.status(500).json({ error: 'Failed to logout' });
@@ -256,7 +321,9 @@ router.post('/logout', authenticate, (req: AuthRequest, res: Response) => {
 
 // Get current user
 router.get('/me', authenticate, (req: AuthRequest, res: Response) => {
-  res.json({ user: req.user });
+  const row = db.prepare('SELECT must_change_password FROM users WHERE id = ?')
+    .get(req.user!.id) as { must_change_password: number } | undefined;
+  res.json({ user: { ...req.user, mustChangePassword: row?.must_change_password === 1 } });
 });
 
 // Change password
@@ -288,18 +355,27 @@ router.post('/change-password', authenticate, changePasswordRateLimiter, async (
       return res.status(400).json({ error: 'Current password is incorrect' });
     }
 
-    const newHash = await bcrypt.hash(newPassword, 10);
+    const newHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     // Update the hash and revoke every existing refresh token for this user in
     // one transaction, so a password change logs out all other sessions/devices
     // (OWASP session-management). Mirrors the reset-password handler below.
-    db.transaction(() => {
-      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, req.user!.id);
+    // token_version höjs så även utestående access-tokens slutar gälla direkt.
+    const applyChange = db.transaction(() => {
+      db.prepare(
+        'UPDATE users SET password_hash = ?, must_change_password = 0, token_version = token_version + 1 WHERE id = ?'
+      ).run(newHash, req.user!.id);
       db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE user_id = ?').run(req.user!.id);
-    })();
+      return db.prepare('SELECT token_version FROM users WHERE id = ?').get(req.user!.id) as { token_version: number };
+    });
+    const { token_version: tokenVersion } = applyChange();
+
+    // Den här sessionen ska överleva bytet: ny refresh-cookie + ny access-token.
+    setRefreshCookie(res, issueRefreshToken(req.user!.id).token);
+    const accessToken = signAccessToken(req.user!, tokenVersion);
 
     logAudit(req.user!.id, 'password_change', 'user', req.user!.id, null, req.ip, req.apiKey?.id ?? null);
 
-    res.json({ message: 'Password changed successfully' });
+    res.json({ message: 'Password changed successfully', accessToken, token: accessToken });
   } catch (error) {
     logger.error('Error changing password:', { error: String(error) });
     res.status(500).json({ error: 'Failed to change password' });
@@ -315,59 +391,56 @@ const FORGOT_GENERIC_RESPONSE = {
   message: 'Om e-postadressen finns i systemet har en återställningslänk skickats.',
 };
 
-router.post('/forgot-password', loginRateLimiter, async (req: Request, res: Response) => {
+// Körs EFTER att svaret skickats: mejlutskicket tar sekunder och skulle annars
+// avslöja via svarstiden om adressen finns.
+async function issueResetLink(email: string): Promise<void> {
+  const user = db.prepare('SELECT id, email, display_name FROM users WHERE LOWER(email) = LOWER(?)')
+    .get(email) as { id: string; email: string; display_name: string | null } | undefined;
+  if (!user) return;
+
+  const token = crypto.randomBytes(32).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+  const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MINUTES * 60 * 1000).toISOString();
+
+  const issueTokens = db.transaction(() => {
+    // Invalidate previously issued unused tokens for this user — only the latest
+    // request can complete a reset.
+    db.prepare(`UPDATE password_reset_tokens
+                SET used_at = CURRENT_TIMESTAMP
+                WHERE user_id = ? AND used_at IS NULL`).run(user.id);
+    db.prepare(`INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at)
+                VALUES (?, ?, ?, ?)`).run(randomUUID(), user.id, tokenHash, expiresAt);
+  });
+  issueTokens();
+
+  const baseUrl = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
+  if (!baseUrl) {
+    logger.warn('[forgot-password] APP_BASE_URL not configured — reset link cannot be built');
+    return;
+  }
+  await sendPasswordResetEmail({
+    toEmail: user.email,
+    toName: user.display_name || user.email.split('@')[0],
+    resetUrl: `${baseUrl}/reset-password/${token}`,
+    expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES,
+  });
+}
+
+router.post('/forgot-password', forgotPasswordRateLimiter, (req: Request, res: Response) => {
   const { email } = req.body;
   if (!email || typeof email !== 'string') {
     return res.status(400).json({ error: 'E-post krävs' });
   }
 
-  const normalizedEmail = email.toLowerCase().trim();
-
-  const user = db.prepare('SELECT id, email, display_name FROM users WHERE LOWER(email) = ?')
-    .get(normalizedEmail) as { id: string; email: string; display_name: string | null } | undefined;
-
-  if (user) {
-    try {
-      const token = crypto.randomBytes(32).toString('hex');
-      const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-      const expiresAt = new Date(Date.now() + RESET_TOKEN_EXPIRY_MINUTES * 60 * 1000).toISOString();
-
-      const issueTokens = db.transaction(() => {
-        // Invalidate previously issued unused tokens for this user — only the latest
-        // request can complete a reset.
-        db.prepare(`UPDATE password_reset_tokens
-                    SET used_at = CURRENT_TIMESTAMP
-                    WHERE user_id = ? AND used_at IS NULL`).run(user.id);
-        db.prepare(`INSERT INTO password_reset_tokens (id, user_id, token_hash, expires_at)
-                    VALUES (?, ?, ?, ?)`).run(uuidv4(), user.id, tokenHash, expiresAt);
-      });
-      issueTokens();
-
-      const baseUrl = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
-      if (!baseUrl) {
-        logger.warn('[forgot-password] APP_BASE_URL not configured — reset link cannot be built');
-      } else {
-        const resetUrl = `${baseUrl}/reset-password/${token}`;
-        try {
-          await sendPasswordResetEmail({
-            toEmail: user.email,
-            toName: user.display_name || user.email.split('@')[0],
-            resetUrl,
-            expiryMinutes: RESET_TOKEN_EXPIRY_MINUTES,
-          });
-        } catch (err) {
-          logger.error('[forgot-password] email send failed:', { error: String(err) });
-        }
-      }
-    } catch (err) {
-      logger.error('[forgot-password] token issue failed:', { error: String(err) });
-    }
-  }
-
-  return res.json(FORGOT_GENERIC_RESPONSE);
+  res.json(FORGOT_GENERIC_RESPONSE);
+  setImmediate(() => {
+    void issueResetLink(email.trim()).catch((err) => {
+      logger.error('[forgot-password] failed:', { error: String(err) });
+    });
+  });
 });
 
-router.post('/reset-password', loginRateLimiter, async (req: Request, res: Response) => {
+router.post('/reset-password', resetPasswordRateLimiter, async (req: Request, res: Response) => {
   const { token, newPassword } = req.body;
 
   if (!token || typeof token !== 'string') {
@@ -400,11 +473,21 @@ router.post('/reset-password', loginRateLimiter, async (req: Request, res: Respo
       return res.status(400).json({ error: 'Länken har gått ut' });
     }
 
-    const passwordHash = await bcrypt.hash(newPassword, 10);
+    // Förbruka länken atomärt INNAN den dyra hashningen: två samtidiga anrop med
+    // samma token kan annars båda passera used_at-kontrollen ovan.
+    const claimed = db.prepare(
+      'UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL'
+    ).run(row.id);
+    if (claimed.changes !== 1) {
+      return res.status(400).json({ error: 'Länken har redan använts' });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
 
     const applyReset = db.transaction(() => {
-      db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, row.user_id);
-      db.prepare('UPDATE password_reset_tokens SET used_at = CURRENT_TIMESTAMP WHERE id = ?').run(row.id);
+      db.prepare(
+        'UPDATE users SET password_hash = ?, must_change_password = 0, token_version = token_version + 1 WHERE id = ?'
+      ).run(passwordHash, row.user_id);
       // Force re-login on every device — the old refresh tokens may be in attacker
       // hands if the reset was triggered by a compromise.
       db.prepare('UPDATE refresh_tokens SET revoked = 1 WHERE user_id = ?').run(row.user_id);
@@ -674,12 +757,7 @@ router.get('/oidc/callback', oidcCallbackRateLimiter, async (req: Request, res: 
     }
 
     db.prepare('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?').run(user.id);
-    const refreshToken = generateRefreshToken();
-    db.prepare(`
-      INSERT INTO refresh_tokens (id, user_id, token, expires_at)
-      VALUES (?, ?, ?, ?)
-    `).run(uuidv4(), user.id, refreshToken, getRefreshTokenExpiry());
-    setRefreshCookie(res, refreshToken);
+    setRefreshCookie(res, issueRefreshToken(user.id).token);
     logAudit(user.id, 'login_success', 'session', user.id, 'oidc', req.ip);
     // Access-token hämtas av SPA:n via befintliga POST /refresh (cookien ovan).
     // Fast intern path — aldrig redirect till något från requesten (open redirect).

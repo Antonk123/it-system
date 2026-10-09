@@ -1,6 +1,6 @@
 import cron, { ScheduledTask } from 'node-cron';
 import { db } from '../db/connection.js';
-import { sendPushToAllSubscriptions, isPushEnabled } from './push.js';
+import { loadPushSubscriptions, sendPushToSubscriptions, isPushEnabled } from './push.js';
 import { logger } from './logger.js';
 
 const AGING_DAYS = parseInt(process.env.PUSH_AGING_DAYS || '7', 10);
@@ -31,6 +31,13 @@ async function checkAgingTickets(): Promise<void> {
     return;
   }
 
+  // Prenumerationerna hämtas en gång per körning, inte en gång per ärende.
+  const subs = loadPushSubscriptions();
+  if (subs.length === 0) {
+    logger.info('Push aging check: no push subscriptions, skipping');
+    return;
+  }
+
   logger.info(`Push aging check: ${tickets.length} ticket(s) inactive >${AGING_DAYS} days`);
 
   const markNotified = db.prepare('UPDATE tickets SET last_aging_notified_at = ? WHERE id = ?');
@@ -39,15 +46,15 @@ async function checkAgingTickets(): Promise<void> {
     const daysSince = Math.floor(
       (Date.now() - new Date(ticket.updated_at).getTime()) / (1000 * 60 * 60 * 24)
     );
-    await sendPushToAllSubscriptions({
+    const { sent } = await sendPushToSubscriptions(subs, {
       type: 'aging',
       ticketId: ticket.id,
       title: `Inaktivt ärende: ${ticket.title}`,
       body: `Ärendet "${ticket.title}" har inte uppdaterats på ${daysSince} dagar.`,
     });
-    // Sätt last_aging_notified_at EFTER lyckad sändning så att en push-server
+    // Markera först när minst en push faktiskt gick fram, så att push-tjänster
     // som är nere inte stänger ute framtida försök.
-    markNotified.run(new Date().toISOString(), ticket.id);
+    if (sent > 0) markNotified.run(new Date().toISOString(), ticket.id);
   }
 }
 

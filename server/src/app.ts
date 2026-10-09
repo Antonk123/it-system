@@ -3,12 +3,15 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { doubleCsrf } from 'csrf-csrf';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHash } from 'node:crypto';
+import jwt from 'jsonwebtoken';
+import type { MulterError } from 'multer';
 import passport from './config/passport.js';
 import { logger } from './lib/logger.js';
 import { cookieSecure } from './config/cookies.js';
 import { validateSecret } from './config/secretValidation.js';
 import { isApiKeyRequest } from './middleware/auth.js';
+import { createWriteRateLimiter } from './middleware/rateLimit.js';
 import { db } from './db/connection.js';
 
 // Import routes
@@ -37,6 +40,45 @@ import emailInboundRoutes from './routes/emailInbound.js';
 import settingsRoutes from './routes/settings.js';
 import architectureMapRoutes from './routes/architectureMap.js';
 
+declare global {
+  namespace Express {
+    interface Request {
+      // Korrelations-id för loggar och 5xx-svar (X-Request-ID eller genererat).
+      id?: string;
+    }
+  }
+}
+
+const REQUEST_ID_PATTERN = /^[\w-]{1,64}$/;
+const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+// Egna begränsare finns redan för dessa (login/refresh/… resp. publika formulär).
+const WRITE_LIMIT_EXEMPT_PREFIXES = ['/auth/', '/public/'];
+
+// Nyckel för skrivbegränsaren: API-nyckelns id eller (verifierat) användar-id ur JWT.
+// authenticate körs per route och har inte hunnit sätta req.user här, så identiteten
+// härleds på nytt — okända/ogiltiga uppgifter faller tillbaka på IP.
+function writeLimitKey(req: express.Request): string | undefined {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) return undefined;
+  const raw = header.slice('Bearer '.length);
+  if (isApiKeyRequest(req)) {
+    const keyHash = createHash('sha256').update(raw).digest('hex');
+    const row = db.prepare('SELECT id FROM api_keys WHERE key_hash = ?').get(keyHash) as { id: string } | undefined;
+    return row ? `key:${row.id}` : undefined;
+  }
+  try {
+    const payload = jwt.verify(raw, process.env.JWT_SECRET!, { algorithms: ['HS256'] });
+    const sub = typeof payload === 'object' ? payload.sub : undefined;
+    return sub ? `user:${sub}` : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isMulterError(err: unknown): err is MulterError {
+  return err instanceof Error && err.name === 'MulterError';
+}
+
 /**
  * Bygger Express-appen med all middleware och alla routes — men UTAN sidoeffekter
  * (ingen DB-init, inga schemaläggare, ingen app.listen). Det gör appen importerbar
@@ -56,10 +98,12 @@ export function createApp() {
   app.set('trust proxy', 1);
 
   // Request ID tracking — allows tracing requests through logs
+  // Inkommande id:n valideras — annars hamnar godtycklig klientdata i svarshuvud och loggar.
   app.use((req, res, next) => {
-    const requestId = req.headers['x-request-id'] as string || randomUUID();
+    const incoming = req.headers['x-request-id'];
+    const requestId = typeof incoming === 'string' && REQUEST_ID_PATTERN.test(incoming) ? incoming : randomUUID();
     res.setHeader('X-Request-ID', requestId);
-    (req as any).requestId = requestId;
+    req.id = requestId;
     next();
   });
 
@@ -130,6 +174,11 @@ export function createApp() {
     credentials: true,
   }));
   app.use(express.json());
+  // Express 5 lämnar req.body undefined utan body — destrukturering i routes skulle ge 500.
+  app.use((req, _res, next) => {
+    req.body ??= {};
+    next();
+  });
   app.use(cookieParser());
   app.use(passport.initialize());
 
@@ -173,7 +222,9 @@ export function createApp() {
   // Paths exempt from CSRF validation
   // - /api/auth/* — authenticate by credentials, not session cookies
   // - /api/public/* — credentialless endpoints for the unauthenticated public ticket form
-  const csrfExemptPrefixes = ['/api/auth/login', '/api/auth/refresh', '/api/public/'];
+  // - /api/auth/logout — kräver ingen access-token (en utgången ska inte hindra utloggning);
+  //   cookien är SameSite=strict och värsta utfall av en forcerad logout är just en utloggning
+  const csrfExemptPrefixes = ['/api/auth/login', '/api/auth/refresh', '/api/auth/logout', '/api/public/'];
 
   const conditionalCsrf = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     // API-nyckel-requests (Authorization: Bearer itk_live_…) autentiseras
@@ -197,6 +248,16 @@ export function createApp() {
   };
 
   app.use(conditionalCsrf);
+
+  // Skrivbegränsning för alla muterande /api-anrop (300 per 5 min och användare/nyckel).
+  // Efter CSRF så att avvisade anrop inte räknas.
+  const writeLimiter = createWriteRateLimiter(writeLimitKey);
+  app.use('/api', (req, res, next) => {
+    if (!WRITE_METHODS.has(req.method) || WRITE_LIMIT_EXEMPT_PREFIXES.some((p) => req.path.startsWith(p))) {
+      return next();
+    }
+    writeLimiter(req, res, next);
+  });
 
   // Health check — verifies the process is up AND the DB is reachable. A trivial
   // `SELECT 1` proves the SQLite handle responds; on failure we return 503 so
@@ -254,14 +315,31 @@ export function createApp() {
 
   // Error handling
   // HttpErrors (from csrf-csrf etc.) carry a .status field — forward it to the client
-  app.use((err: Error & { status?: number; code?: string }, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  app.use((err: Error & { status?: number; code?: string }, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (res.headersSent) return next(err);
+
+    // Multer-fel (för stor fil, oväntat fält …) är klientfel även när routen glömt fånga dem.
+    if (isMulterError(err)) {
+      const tooLarge = err.code === 'LIMIT_FILE_SIZE';
+      return res.status(tooLarge ? 413 : 400).json({
+        error: tooLarge ? 'Filen är för stor' : 'Ogiltig filuppladdning',
+        code: err.code,
+      });
+    }
+
     const status = err.status ?? 500;
     if (status >= 400 && status < 500) {
       // Client errors: forward the error message and optional code (e.g. EBADCSRFTOKEN)
       res.status(status).json({ error: err.message, code: err.code });
     } else {
-      logger.error('Unhandled error', { error: err.message, stack: err.stack });
-      res.status(500).json({ error: 'Internal server error' });
+      logger.error('Unhandled error', {
+        requestId: req.id,
+        method: req.method,
+        path: req.path,
+        error: err.message,
+        stack: err.stack,
+      });
+      res.status(500).json({ error: 'Internal server error', requestId: req.id });
     }
   });
 

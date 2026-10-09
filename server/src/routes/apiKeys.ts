@@ -41,6 +41,12 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
 
 // POST / — create a new API key
 router.post('/', authenticate, (req: AuthRequest, res: Response) => {
+  // En API-nyckel får inte skapa nya nycklar: en läckt nyckel skulle annars kunna
+  // förevigas genom att den föder egna ersättare (eventuellt med bredare scope).
+  if (req.apiKey) {
+    return res.status(403).json({ error: 'API-nycklar kan inte skapa nya API-nycklar' });
+  }
+
   const { name, permissions, expires_at } = req.body;
 
   if (!name || typeof name !== 'string' || !name.trim()) {
@@ -89,18 +95,6 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
     if (permissions.includes('admin') && req.user!.role !== 'admin') {
       return res.status(403).json({ error: 'Endast administratörer kan skapa nycklar med admin-scope' });
     }
-    // G1: om requesten själv är autentiserad via en API-nyckel (inte en
-    // JWT-session) och den vill skapa en admin-scopad nyckel, måste den
-    // ANROPANDE nyckeln också ha admin-scope. Utan detta kunde en läckt
-    // ['read','write']-nyckel bunden till en admin-användare passera
-    // write-scope-guarden (den har 'write') och sedan mynta en NY nyckel med
-    // ['read','admin'] — grant-kollen ovan kollar bara ägarens roll, som ÄR
-    // admin. Samma princip som requireAdmin (auth.ts): en nyckels scope kan
-    // bara INSKRÄNKA, aldrig UTÖKA vad den själv redan kan göra. Additiv —
-    // rollkontrollen ovan gäller fortfarande, båda måste passera.
-    if (permissions.includes('admin') && req.apiKey && !req.apiKey.permissions.includes('admin')) {
-      return res.status(403).json({ error: 'API-nyckeln saknar admin-scope för att skapa admin-nycklar' });
-    }
     perms = permissions;
   } else {
     perms = ['read'];
@@ -129,7 +123,7 @@ router.post('/', authenticate, (req: AuthRequest, res: Response) => {
       'INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).run(id, name.trim(), keyPrefix, keyHash, req.user!.id, permsJson, normalizedExpiresAt);
 
-    logAudit(req.user!.id, 'api_key_create', 'api_key', id, `name: ${name.trim()}, prefix: ${keyPrefix}`, req.ip, req.apiKey?.id ?? null);
+    logAudit(req.user!.id, 'api_key_create', 'api_key', id, `name: ${name.trim()}, prefix: ${keyPrefix}`, req.ip);
 
     res.status(201).json({
       id,

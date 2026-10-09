@@ -7,6 +7,11 @@ interface RateLimitStore {
   };
 }
 
+export interface RateLimiterOptions {
+  skipSuccessfulRequests?: boolean;
+  keyGenerator?: (req: Request) => string | undefined;
+}
+
 /**
  * Simple in-memory rate limiter middleware.
  *
@@ -25,11 +30,16 @@ interface RateLimitStore {
  *   Defaults to a JSON 429 body. Use this for routes where a raw JSON response is
  *   wrong for the context — e.g. a top-level browser navigation that should redirect
  *   instead of rendering JSON.
+ * @param options.skipSuccessfulRequests - Räkna bara misslyckade svar (status >= 400):
+ *   lyckade anrop ger tillbaka sitt tillskott när svaret är skickat. För login/refresh,
+ *   där legitima användare annars tömmer sin egen budget.
+ * @param options.keyGenerator - Egen bucket-nyckel (t.ex. användar-id); default är IP.
  */
 export function createRateLimiter(
   windowMs: number,
   max: number,
-  onLimitExceeded?: (req: Request, res: Response, retryAfter: number) => void
+  onLimitExceeded?: (req: Request, res: Response, retryAfter: number) => void,
+  options: RateLimiterOptions = {}
 ) {
   const store: RateLimitStore = {};
 
@@ -45,8 +55,17 @@ export function createRateLimiter(
   // Allow Node to exit without waiting for this interval
   if (cleanupInterval.unref) cleanupInterval.unref();
 
+  // Vid skipSuccessfulRequests: lyckade svar (< 400) drar tillbaka sitt tillskott.
+  // Posten fångas som referens — en ny ruta efter fönstret påverkas inte.
+  const refundOnSuccess = (res: Response, entry: { count: number }) => {
+    if (!options.skipSuccessfulRequests) return;
+    res.on('finish', () => {
+      if (res.statusCode < 400 && entry.count > 0) entry.count--;
+    });
+  };
+
   return (req: Request, res: Response, next: NextFunction) => {
-    const key = req.ip || req.socket.remoteAddress || 'unknown';
+    const key = options.keyGenerator?.(req) ?? (req.ip || req.socket.remoteAddress || 'unknown');
     const now = Date.now();
 
     if (!store[key] || store[key].resetTime < now) {
@@ -55,10 +74,12 @@ export function createRateLimiter(
         count: 1,
         resetTime: now + windowMs
       };
+      refundOnSuccess(res, store[key]);
       return next();
     }
 
     store[key].count++;
+    refundOnSuccess(res, store[key]);
 
     if (store[key].count > max) {
       const retryAfter = Math.ceil((store[key].resetTime - now) / 1000);
@@ -67,7 +88,7 @@ export function createRateLimiter(
         return onLimitExceeded(req, res, retryAfter);
       }
       return res.status(429).json({
-        error: 'Too many requests, please try again later.',
+        error: 'För många förfrågningar, försök igen om en stund',
         retryAfter
       });
     }
@@ -77,17 +98,94 @@ export function createRateLimiter(
 }
 
 /**
- * Pre-configured rate limiter for login endpoints
- * 5 attempts per 15 minutes
+ * Login: 5 misslyckade försök per 15 minuter och IP. Lyckade inloggningar räknas
+ * inte — annars låser en delad NAT-adress (kontor) ut sig själv.
  */
 export const loginRateLimiter = createRateLimiter(
-  15 * 60 * 1000, // 15 minutes
-  5 // max 5 requests
+  15 * 60 * 1000,
+  5,
+  undefined,
+  { skipSuccessfulRequests: true }
 );
 
 /**
- * Rate limiter for write endpoints (POST/PUT/DELETE)
- * 60 requests per minute
+ * Glömt lösenord: egen budget (5 per 15 min och IP). Svaret är alltid 200, så
+ * här räknas varje anrop — det är mejlutskicket som ska skyddas.
+ */
+export const forgotPasswordRateLimiter = createRateLimiter(15 * 60 * 1000, 5);
+
+/** Återställning: egen budget, lyckade återställningar räknas inte. */
+export const resetPasswordRateLimiter = createRateLimiter(
+  15 * 60 * 1000,
+  10,
+  undefined,
+  { skipSuccessfulRequests: true }
+);
+
+/**
+ * Refresh: 60 per 15 minuter och IP (access-token lever 15 min, så en tyst
+ * förnyelse per flik och kvart äts snabbt upp av 10). Bara misslyckade
+ * förnyelser räknas, så brute-force/replay bromsas utan att bränna legitima.
+ */
+export const refreshRateLimiter = createRateLimiter(
+  15 * 60 * 1000,
+  60,
+  undefined,
+  { skipSuccessfulRequests: true }
+);
+
+/**
+ * Räknare för misslyckade inloggningar per konto (e-post), oberoende av IP.
+ * In-memory av samma skäl som createRateLimiter (single-instance). Fast fönster
+ * från första felet; nollställs vid lyckad inloggning.
+ */
+export function createFailureTracker(windowMs: number, max: number) {
+  const entries = new Map<string, { count: number; resetTime: number }>();
+  const cleanup = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of entries) {
+      if (entry.resetTime < now) entries.delete(key);
+    }
+  }, 60000);
+  if (cleanup.unref) cleanup.unref();
+
+  return {
+    /** Sekunder kvar av låsningen, eller 0 om kontot inte är låst. */
+    lockedFor(key: string): number {
+      const entry = entries.get(key);
+      if (!entry || entry.resetTime < Date.now() || entry.count < max) return 0;
+      return Math.ceil((entry.resetTime - Date.now()) / 1000);
+    },
+    recordFailure(key: string): void {
+      const now = Date.now();
+      const entry = entries.get(key);
+      if (!entry || entry.resetTime < now) {
+        entries.set(key, { count: 1, resetTime: now + windowMs });
+      } else {
+        entry.count++;
+      }
+    },
+    reset(key: string): void {
+      entries.delete(key);
+    },
+  };
+}
+
+/** 10 misslyckade inloggningar per konto och 15 minuter. */
+export const loginFailureTracker = createFailureTracker(15 * 60 * 1000, 10);
+
+/**
+ * Skrivbegränsning för hela API:t: 300 muterande anrop per 5 min och identitet.
+ * Nyckeln (användar-id / API-nyckel-id, annars IP) löses av anroparen eftersom
+ * authenticate körs per route, efter att den här middlewaren monterats.
+ */
+export function createWriteRateLimiter(keyGenerator: (req: Request) => string | undefined) {
+  return createRateLimiter(5 * 60 * 1000, 300, undefined, { keyGenerator });
+}
+
+/**
+ * Rate limiter for write endpoints (POST/PUT/DELETE), per IP — används direkt
+ * på enskilda routes (tickets, attachments, kb). 60 requests per minute.
  */
 export const writeRateLimiter = createRateLimiter(
   60 * 1000, // 1 minute
@@ -96,10 +194,10 @@ export const writeRateLimiter = createRateLimiter(
 
 /**
  * Rate limiter for public unauthenticated endpoints (ticket form).
- * 30 requests per minute per IP — generous enough for legitimate use but
- * blocks attempts to DoS or fill the DB with bot submissions.
+ * 5 requests per minute per IP — each submission mails staff, creates a
+ * contact and fires webhooks/push, so the budget is deliberately tight.
  */
 export const publicWriteRateLimiter = createRateLimiter(
   60 * 1000,
-  30
+  5
 );

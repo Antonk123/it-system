@@ -115,6 +115,33 @@ describe('POST /api/tags — auth', () => {
   });
 });
 
+describe('Tag name and color validation', () => {
+  const send = (method: 'post' | 'put', path: string, body: unknown) =>
+    adminAgent[method](path).set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf).send(body as object);
+
+  it('accepts #rrggbb colors and rejects anything else with 400', async () => {
+    const ok = await send('post', '/api/tags', { name: 'Färgtest', color: '#A1b2C3' });
+    expect(ok.status).toBe(201);
+    expect(ok.body.color).toBe('#A1b2C3');
+
+    for (const color of ['red', '#fff', '#12345g', 'url(javascript:alert(1))', 123, '#1234567']) {
+      const bad = await send('post', '/api/tags', { name: `Dålig färg ${String(color)}`, color });
+      expect(bad.status).toBe(400);
+    }
+    const bad = await send('put', `/api/tags/${ok.body.id}`, { name: 'Färgtest', color: 'blue' });
+    expect(bad.status).toBe(400);
+  });
+
+  it('sanitises the name and caps it at 100 characters', async () => {
+    const res = await send('post', '/api/tags', { name: '<img src=x onerror=alert(1)>Nätverk' });
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe('Nätverk');
+
+    expect((await send('post', '/api/tags', { name: 'x'.repeat(101) })).status).toBe(400);
+    expect((await send('post', '/api/tags', { name: 42 })).status).toBe(400);
+  });
+});
+
 describe('Tag CRUD cycle (admin)', () => {
   let tagId: string;
 

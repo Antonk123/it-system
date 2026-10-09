@@ -695,3 +695,231 @@ describe('KB public portal', () => {
     expect((await request(app).get(`/api/kb/public/${legacyToken}`).set('X-Forwarded-For', freshIp())).status).toBe(404);
   });
 });
+
+// ─── 7. Audit fixes: status filter, list mode, pagination ────────────────────
+
+describe('GET /api/kb/articles — status filter, fields=list and pagination', () => {
+  const marker = `Statusmark${Date.now()}`;
+  let publishedId: string;
+  let draftId: string;
+
+  async function create(title: string, content: string, status: 'draft' | 'published') {
+    const res = await adminAgent
+      .post('/api/kb/articles')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .send({ title, content, category_id: categoryId, status });
+    expect(res.status).toBe(201);
+    return res.body.id as string;
+  }
+  const list = (token: string, qs: string) =>
+    request(app).get(`/api/kb/articles?${qs}`).set('Authorization', `Bearer ${token}`);
+  const ids = (body: Array<{ id: string }>) => body.map((a) => a.id);
+
+  beforeAll(async () => {
+    publishedId = await create(`${marker} publicerad`, `<p>${'x'.repeat(500)}</p><script>bad()</script>`, 'published');
+    draftId = await create(`${marker} utkast`, '<p>utkast</p>', 'draft');
+  });
+
+  it('defaults to published only, for admins as well', async () => {
+    const res = await list(adminToken, `search=${marker}`);
+    expect(ids(res.body)).toEqual([publishedId]);
+    const plain = await list(adminToken, '');
+    expect(ids(plain.body)).not.toContain(draftId);
+  });
+
+  it('admin can list drafts (?status=draft) in both the FTS and the plain branch', async () => {
+    const fts = await list(adminToken, `search=${marker}&status=draft`);
+    expect(ids(fts.body)).toEqual([draftId]);
+    const plain = await list(adminToken, 'status=draft');
+    expect(ids(plain.body)).toContain(draftId);
+    expect(ids(plain.body)).not.toContain(publishedId);
+  });
+
+  it('?status=all returns both; ?status=bogus falls back to published', async () => {
+    const all = await list(adminToken, `search=${marker}&status=all`);
+    expect(ids(all.body).sort()).toEqual([draftId, publishedId].sort());
+    const bogus = await list(adminToken, `search=${marker}&status=bogus`);
+    expect(ids(bogus.body)).toEqual([publishedId]);
+  });
+
+  it('non-admins always get published only, regardless of ?status', async () => {
+    for (const status of ['draft', 'all']) {
+      const res = await list(userToken, `search=${marker}&status=${status}`);
+      expect(ids(res.body)).toEqual([publishedId]);
+    }
+  });
+
+  it('an admin-owner API key without admin scope cannot list drafts', async () => {
+    const res = await request(app).get(`/api/kb/articles?search=${marker}&status=draft`).set('Authorization', `Bearer ${scopedAdminKey}`);
+    expect(ids(res.body)).toEqual([publishedId]);
+  });
+
+  it('default shape keeps full content', async () => {
+    const res = await list(userToken, `search=${marker}`);
+    expect(res.body[0].content).toContain('xxxx');
+    expect(res.body[0].preview).toBeUndefined();
+  });
+
+  it('?fields=list replaces content with a 300-char plain-text preview', async () => {
+    const res = await list(userToken, `search=${marker}&fields=list`);
+    const article = res.body[0];
+    expect(article.content).toBeUndefined();
+    expect(article.preview).toHaveLength(300);
+    expect(article.preview).not.toMatch(/[<>]/);
+    expect(article.preview).not.toContain('bad()');
+    expect(article.title).toContain(marker);
+  });
+
+  it('?page returns { data, pagination } and paginates', async () => {
+    for (let i = 0; i < 3; i++) await create(`Pagemark${marker} ${i}`, '<p>p</p>', 'published');
+    const first = await list(userToken, `search=Pagemark${marker}&page=1&limit=2&fields=list`);
+    expect(first.status).toBe(200);
+    expect(first.body.data).toHaveLength(2);
+    expect(first.body.pagination).toEqual({ page: 1, limit: 2, total: 3 });
+    const second = await list(userToken, `search=Pagemark${marker}&page=2&limit=2`);
+    expect(second.body.data).toHaveLength(1);
+    expect(ids(first.body.data)).not.toContain(second.body.data[0].id);
+  });
+
+  it('paginates the plain (non-search) branch and clamps limit', async () => {
+    const res = await list(userToken, 'page=1&limit=100000');
+    expect(res.body.pagination.limit).toBe(100);
+    expect(res.body.pagination.total).toBeGreaterThanOrEqual(4);
+  });
+});
+
+// ─── 8. Audit fixes: ticket links & share access ─────────────────────────────
+
+describe('KB ticket links — access control', () => {
+  let publishedId: string;
+  let draftId: string;
+  let openTicket: string;
+  let lockedTicket: string;
+  const asUser = (r: request.Test) => r.set('Authorization', `Bearer ${userToken}`).set('x-csrf-token', userCsrfToken);
+  const asAdmin = (r: request.Test) => r.set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken);
+
+  beforeAll(async () => {
+    const mk = async (title: string, status: string) => (await asAdmin(adminAgent.post('/api/kb/articles'))
+      .send({ title, content: '<p>x</p>', category_id: categoryId, status })).body.id as string;
+    publishedId = await mk('Länkbar publicerad', 'published');
+    draftId = await mk('Länkbar utkast', 'draft');
+    openTicket = randomUUID();
+    lockedTicket = randomUUID();
+    const insert = db.prepare("INSERT INTO tickets (id, title, description, status, priority, assigned_to, created_by) VALUES (?, 't', 'd', 'open', 'medium', ?, ?)");
+    insert.run(openTicket, null, null);
+    insert.run(lockedTicket, adminId, adminId);
+  });
+
+  it('a user may link a published article to an unassigned ticket (201)', async () => {
+    const res = await asUser(userAgent.post(`/api/kb/ticket/${openTicket}`)).send({ articleId: publishedId });
+    expect(res.status).toBe(201);
+  });
+
+  it('a user cannot link to a ticket assigned to someone else (403)', async () => {
+    const res = await asUser(userAgent.post(`/api/kb/ticket/${lockedTicket}`)).send({ articleId: publishedId });
+    expect(res.status).toBe(403);
+  });
+
+  it('linking to a non-existent ticket is 404 (not 500/403)', async () => {
+    const res = await asAdmin(adminAgent.post(`/api/kb/ticket/${randomUUID()}`)).send({ articleId: publishedId });
+    expect(res.status).toBe(404);
+  });
+
+  it('a non-admin cannot link a draft article (404), an admin can (201)', async () => {
+    const asNonAdmin = await asUser(userAgent.post(`/api/kb/ticket/${openTicket}`)).send({ articleId: draftId });
+    expect(asNonAdmin.status).toBe(404);
+    const asAdminRes = await asAdmin(adminAgent.post(`/api/kb/ticket/${openTicket}`)).send({ articleId: draftId });
+    expect(asAdminRes.status).toBe(201);
+  });
+
+  it('rejects a missing/non-string articleId (400) and a duplicate link (409)', async () => {
+    expect((await asAdmin(adminAgent.post(`/api/kb/ticket/${openTicket}`)).send({})).status).toBe(400);
+    expect((await asAdmin(adminAgent.post(`/api/kb/ticket/${openTicket}`)).send({ articleId: { a: 1 } })).status).toBe(400);
+    expect((await asAdmin(adminAgent.post(`/api/kb/ticket/${openTicket}`)).send({ articleId: draftId })).status).toBe(409);
+  });
+
+  it('GET /kb/ticket/:id hides linked drafts from non-admins but shows them to admins', async () => {
+    const asNonAdmin = await request(app).get(`/api/kb/ticket/${openTicket}`).set('Authorization', `Bearer ${userToken}`);
+    expect(asNonAdmin.status).toBe(200);
+    expect(asNonAdmin.body.map((a: { id: string }) => a.id)).toEqual([publishedId]);
+    const asAdminRes = await request(app).get(`/api/kb/ticket/${openTicket}`).set('Authorization', `Bearer ${adminToken}`);
+    expect(asAdminRes.body.map((a: { id: string }) => a.id).sort()).toEqual([draftId, publishedId].sort());
+  });
+
+  it('GET /kb/ticket/:id returns 403 for a non-existent ticket', async () => {
+    const res = await request(app).get(`/api/kb/ticket/${randomUUID()}`).set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('a user cannot remove a link from a ticket assigned to someone else (403)', async () => {
+    db.prepare('INSERT INTO ticket_kb_links (id, ticket_id, article_id) VALUES (?, ?, ?)').run(randomUUID(), lockedTicket, publishedId);
+    const res = await asUser(userAgent.delete(`/api/kb/ticket/${lockedTicket}/${publishedId}`));
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('KB article share — admin-only read, optional expiry, image throttle', () => {
+  let articleId: string;
+  const asAdmin = (r: request.Test) => r.set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken);
+
+  beforeAll(async () => {
+    const res = await asAdmin(adminAgent.post('/api/kb/articles'))
+      .send({ title: 'Delad artikel', content: '<p>x</p>', category_id: categoryId });
+    articleId = res.body.id;
+  });
+
+  it('GET /articles/:id/share is admin only (403 for a user, 401 anonymous)', async () => {
+    expect((await request(app).get(`/api/kb/articles/${articleId}/share`).set('Authorization', `Bearer ${userToken}`)).status).toBe(403);
+    expect((await request(app).get(`/api/kb/articles/${articleId}/share`)).status).toBe(401);
+    expect((await request(app).get(`/api/kb/articles/${articleId}/share`).set('Authorization', `Bearer ${adminToken}`)).status).toBe(200);
+  });
+
+  it('POST /share validates expiresInDays (400)', async () => {
+    for (const bad of [0, 366, 1.5, 'abc']) {
+      expect((await asAdmin(adminAgent.post(`/api/kb/articles/${articleId}/share`)).send({ expiresInDays: bad })).status).toBe(400);
+    }
+  });
+
+  it('works without an expires_at column and with it (NULL = no expiry, past = expired)', async () => {
+    const created = await asAdmin(adminAgent.post(`/api/kb/articles/${articleId}/share`)).send({});
+    expect([200, 201]).toContain(created.status);
+    const token = created.body.share_token as string;
+    expect((await request(app).get(`/api/kb/public/${token}`).set('X-Forwarded-For', freshIp())).status).toBe(200);
+
+    const columns = db.prepare('PRAGMA table_info(kb_article_shares)').all() as { name: string }[];
+    if (!columns.some((c) => c.name === 'expires_at')) {
+      db.prepare('ALTER TABLE kb_article_shares ADD COLUMN expires_at TEXT').run();
+    }
+
+    // NULL expiry (legacy row) stays valid.
+    expect((await request(app).get(`/api/kb/public/${token}`).set('X-Forwarded-For', freshIp())).status).toBe(200);
+
+    db.prepare("UPDATE kb_article_shares SET expires_at = datetime('now', '-1 day') WHERE share_token = ?").run(token);
+    expect((await request(app).get(`/api/kb/public/${token}`).set('X-Forwarded-For', freshIp())).status).toBe(404);
+    expect((await request(app).get(`/api/kb/articles/${articleId}/share`).set('Authorization', `Bearer ${adminToken}`)).body.share_token).toBeNull();
+
+    // An expired link is replaced by a fresh one with the requested lifetime.
+    const renewed = await asAdmin(adminAgent.post(`/api/kb/articles/${articleId}/share`)).send({ expiresInDays: 7 });
+    expect(renewed.status).toBe(201);
+    expect(renewed.body.share_token).not.toBe(token);
+    const row = db.prepare('SELECT expires_at FROM kb_article_shares WHERE share_token = ?').get(renewed.body.share_token) as { expires_at: string };
+    expect(row.expires_at).toBeTruthy();
+    expect((await request(app).get(`/api/kb/public/${renewed.body.share_token}`).set('X-Forwarded-For', freshIp())).status).toBe(200);
+  });
+
+  it('GET /images/:filename is rate limited (300/min per IP)', async () => {
+    const ip = '198.51.100.77';
+    // En gemensam lyssnande server undviker att 300 efemära servrar skapas/stängs (flaky "socket hang up").
+    const server = app.listen(0);
+    let last = 0;
+    try {
+      for (let i = 0; i < 301; i++) {
+        last = (await request(server).get('/api/kb/images/kb-missing.png').set('X-Forwarded-For', ip)).status;
+      }
+    } finally {
+      server.close();
+    }
+    expect(last).toBe(429);
+  });
+});

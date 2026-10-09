@@ -46,7 +46,7 @@ function makeTicketWithRequester(): string {
   const contactId = randomUUID();
   const ticketId = randomUUID();
   db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)')
-    .run(contactId, 'Kund', 'kund@customer.example');
+    .run(contactId, 'Kund', `kund-${contactId.slice(0, 8)}@customer.example`);
   db.prepare(
     `INSERT INTO tickets (id, title, description, status, priority, requester_id)
      VALUES (?, 'Nätverket nere', 'Ingen anslutning', 'open', 'high', ?)`

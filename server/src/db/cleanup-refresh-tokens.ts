@@ -1,12 +1,15 @@
 /**
- * Cleanup Expired Refresh Tokens
- * Removes expired and revoked refresh tokens from database
+ * Nightly cleanup
+ * Removes expired and revoked refresh tokens, then applies the retention policy
+ * (webhook deliveries, password reset tokens, ticket shares, audit log).
  *
  * Run with: tsx src/db/cleanup-refresh-tokens.ts
  * Or scheduled automatically via cron in index.ts (daily at 03:00)
  */
 
 import { db } from './connection.js';
+import { logger } from '../lib/logger.js';
+import { runRetention } from '../lib/retention.js';
 
 export function cleanupRefreshTokens() {
   const now = new Date().toISOString();
@@ -24,17 +27,27 @@ export function cleanupRefreshTokens() {
   });
 
   const { beforeCount, totalDeleted } = cleanup();
-  console.log(`🧹 Refresh token cleanup: removed ${totalDeleted} tokens (${beforeCount - totalDeleted} remaining)`);
+  logger.info('Refresh token cleanup done', { removed: totalDeleted, remaining: beforeCount - totalDeleted });
+
+  // Nycklar med "password"/"token" maskas av loggern, därför de neutrala namnen.
+  const retention = runRetention(db);
+  logger.info('Retention cleanup done', {
+    webhookDeliveries: retention.webhookDeliveries,
+    resetRequests: retention.passwordResetTokens,
+    ticketShares: retention.ticketShares,
+    auditLog: retention.auditLog,
+    orphanKbImages: retention.orphanKbImages,
+  });
 }
 
 // Allow running as standalone script
 if (process.argv[1]?.includes('cleanup-refresh-tokens')) {
-  console.log('🧹 Running refresh token cleanup manually...');
+  logger.info('Running nightly cleanup manually');
   try {
     cleanupRefreshTokens();
     process.exit(0);
   } catch (error) {
-    console.error('❌ Cleanup failed:', error);
+    logger.error('Cleanup failed', { error: String(error) });
     process.exit(1);
   }
 }

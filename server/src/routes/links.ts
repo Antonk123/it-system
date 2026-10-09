@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { db } from '../db/connection.js';
-import { authenticate, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
+import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
 
@@ -41,9 +41,6 @@ interface TicketLinkWithDetails {
 // GET /api/links/ticket/:ticketId - Fetch all links for a ticket (bidirectional)
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    if (!canAccessTicket(req, req.params.ticketId as string)) {
-      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
-    }
     // Get links where ticket is either source or target
     const links = db.prepare(`
       SELECT
@@ -145,9 +142,9 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
       return res.status(404).json({ error: 'Target ticket not found' });
     }
 
-    // Authz: must be able to access BOTH tickets to link them (closes IDOR).
-    if (!canAccessTicket(req, req.params.ticketId as string) ||
-        !canAccessTicket(req, targetTicketId)) {
+    // Authz: skrivåtkomst till BÅDA ärendena krävs för att länka dem (länken syns på båda).
+    if (!canAccessTicket(req, req.params.ticketId as string, { write: true }) ||
+        !canAccessTicket(req, targetTicketId, { write: true })) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -162,7 +159,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
       return res.status(409).json({ error: 'Link already exists between these tickets' });
     }
 
-    const id = uuidv4();
+    const id = randomUUID();
     const now = new Date().toISOString();
 
     db.prepare(`
@@ -226,20 +223,10 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Link not found' });
     }
 
-    // Ownership-check: admin får alltid radera. Övriga måste vara assigned_to
-    // eller created_by på något av de länkade ärendena.
-    if (!isEffectiveAdmin(req)) {
-      const userId = req.user.id;
-      const ticketAccess = db.prepare(`
-        SELECT 1 FROM tickets
-        WHERE id IN (?, ?)
-          AND (assigned_to = ? OR created_by = ?)
-        LIMIT 1
-      `).get(existing.source_ticket_id, existing.target_ticket_id, userId, userId);
-
-      if (!ticketAccess) {
-        return res.status(403).json({ error: 'Not authorized to delete this link' });
-      }
+    // Skrivåtkomst till något av de länkade ärendena räcker för att ta bort länken.
+    if (!canAccessTicket(req, existing.source_ticket_id, { write: true }) &&
+        !canAccessTicket(req, existing.target_ticket_id, { write: true })) {
+      return res.status(403).json({ error: 'Not authorized to delete this link' });
     }
 
     db.prepare('DELETE FROM ticket_links WHERE id = ?').run(req.params.id);

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { db } from '../db/connection.js';
 import { sendTicketCreatedEmail } from '../lib/email.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
@@ -19,10 +19,33 @@ const router = Router();
 // 120/min still bounds it without degrading the login page for real users.
 const publicBrandingReadRateLimiter = createRateLimiter(60 * 1000, 120);
 
+// Honeypot (dolt fält "website") och minsta ifyllnadstid mot enkla bottar.
+const MIN_FORM_FILL_MS = 3000;
+
 // ─── Idempotency key store (in-memory, 5-minute TTL) ────────────────────────
 // Prevents duplicate ticket creation from network retries on the public form.
 const idempotencyStore = new Map<string, { ticketId: string; expiresAt: number }>();
 const IDEMPOTENCY_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
+const MAX_IDEMPOTENCY_ENTRIES = 10_000;
+
+function rememberIdempotencyKey(key: string, ticketId: string): void {
+  // Map bevarar insättningsordning: vid tak slängs äldsta posten först.
+  if (idempotencyStore.size >= MAX_IDEMPOTENCY_ENTRIES && !idempotencyStore.has(key)) {
+    const oldest = idempotencyStore.keys().next().value;
+    if (oldest !== undefined) idempotencyStore.delete(oldest);
+  }
+  idempotencyStore.set(key, { ticketId, expiresAt: Date.now() + IDEMPOTENCY_TTL_MS });
+}
+
+/** formStartedAt kan vara epoch-ms eller ISO-sträng; ogiltigt värde ignoreras. */
+function formFillTooFast(formStartedAt: unknown): boolean {
+  if (formStartedAt === undefined || formStartedAt === null || formStartedAt === '') return false;
+  const started = typeof formStartedAt === 'number' ? formStartedAt : Date.parse(String(formStartedAt));
+  if (!Number.isFinite(started)) return false;
+  const elapsed = Date.now() - started;
+  return elapsed >= 0 && elapsed < MIN_FORM_FILL_MS;
+}
 
 // Periodic cleanup every 60s to evict expired entries
 setInterval(() => {
@@ -67,7 +90,7 @@ const MAX_FIELD_LABEL_LENGTH = 200;
 const MAX_FIELD_VALUE_LENGTH = 2000;
 
 // Get public templates (for public ticket form)
-router.get('/templates', (_req: Request, res: Response) => {
+router.get('/templates', publicBrandingReadRateLimiter, (_req: Request, res: Response) => {
   try {
     const templates = db.prepare('SELECT id, name, description, title_template, description_template, priority, category_id FROM ticket_templates ORDER BY position ASC, name ASC').all() as TemplateRow[];
 
@@ -97,7 +120,7 @@ router.get('/templates', (_req: Request, res: Response) => {
 });
 
 // Get public categories (for public ticket form)
-router.get('/categories', (_req: Request, res: Response) => {
+router.get('/categories', publicBrandingReadRateLimiter, (_req: Request, res: Response) => {
   try {
     const categories = db.prepare('SELECT id, label FROM categories ORDER BY position ASC, created_at ASC').all() as CategoryRow[];
     res.json(categories);
@@ -182,6 +205,9 @@ router.get('/branding/logo', publicBrandingReadRateLimiter, (_req: Request, res:
 router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) => {
   // ─── Idempotency: prevent duplicate tickets from network retries ───
   const idempotencyKey = req.headers['idempotency-key'] as string | undefined;
+  if (idempotencyKey && idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
+    return res.status(400).json({ error: `Idempotency-Key must be ${MAX_IDEMPOTENCY_KEY_LENGTH} characters or less` });
+  }
   if (idempotencyKey) {
     const existing = idempotencyStore.get(idempotencyKey);
     if (existing && existing.expiresAt > Date.now()) {
@@ -193,6 +219,17 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
   }
 
   let { name, email, title, description, category, priority, customFields, template_id } = req.body;
+  const { website, formStartedAt } = req.body;
+
+  // Honeypot: riktiga användare ser aldrig fältet. Boten får ett falskt
+  // lyckat svar men ingenting sparas.
+  if (typeof website === 'string' && website.trim() !== '') {
+    logger.warn('Public ticket honeypot triggered', { ip: req.ip });
+    return res.status(200).json({ message: 'Ticket submitted successfully', ticketId: randomUUID() });
+  }
+  if (formFillTooFast(formStartedAt)) {
+    return res.status(400).json({ error: 'Formuläret skickades för snabbt. Vänta en stund och försök igen.' });
+  }
 
   // Validate required fields
   if (!name || !email || !title) {
@@ -293,62 +330,67 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
   }
 
   try {
-    // Find or create contact
-    let contact = db.prepare('SELECT id FROM contacts WHERE email = ?').get(email) as ContactRow | undefined;
+    // Kontakt, ärende och fältvärden skrivs i en transaktion så ett fel
+    // mitt i inte lämnar en föräldralös kontakt eller ett ärende utan fält.
+    const createTicket = db.transaction(() => {
+      // Find or create contact (e-post matchas skiftlägesokänsligt)
+      let contact = db.prepare('SELECT id, name, email FROM contacts WHERE lower(email) = lower(?)').get(email) as ContactRow | undefined;
 
-    if (!contact) {
-      const contactId = uuidv4();
-      db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)').run(contactId, name, email);
-      contact = { id: contactId, name, email };
-    }
-
-    // Validate category exists if provided
-    let categoryId: string | null = null;
-    if (category) {
-      const cat = db.prepare('SELECT id FROM categories WHERE id = ?').get(category);
-      if (cat) {
-        categoryId = category;
+      if (!contact) {
+        const contactId = randomUUID();
+        db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)').run(contactId, name, email);
+        contact = { id: contactId, name, email };
       }
-    }
 
-    // Validate template exists if provided. Coerce to NULL on miss instead of
-    // 400 — en publik inlämnare ska inte blockeras av ett trasigt template_id.
-    let templateId: string | null = null;
-    if (template_id) {
-      const tpl = db.prepare('SELECT id FROM ticket_templates WHERE id = ?').get(template_id);
-      if (tpl) {
-        templateId = template_id;
-      } else {
-        logger.warn('Public ticket submitted with unknown template_id — coercing to NULL', { template_id: String(template_id) });
-      }
-    }
-
-    // Create ticket
-    const ticketId = uuidv4();
-
-    // finalDescription was already composed (from sanitizedCustomFields or
-    // description) and length-validated above, before any DB writes.
-
-    db.prepare(`
-      INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, template_id)
-      VALUES (?, ?, ?, 'open', ?, ?, ?, ?)
-    `).run(ticketId, title, finalDescription, ticketPriority, categoryId, contact.id, templateId);
-
-    // FTS5 synkas automatiskt via triggers (migration 050)
-
-    // Store custom field values if provided (already sanitized above)
-    if (sanitizedCustomFields.length > 0) {
-      const insertFieldStmt = db.prepare(`
-        INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
-        VALUES (?, ?, ?, ?, ?)
-      `);
-
-      sanitizedCustomFields.forEach((field) => {
-        if (field.fieldName && field.fieldLabel) {
-          insertFieldStmt.run(uuidv4(), ticketId, field.fieldName, field.fieldLabel, field.fieldValue || '');
+      // Validate category exists if provided
+      let categoryId: string | null = null;
+      if (category) {
+        const cat = db.prepare('SELECT id FROM categories WHERE id = ?').get(category);
+        if (cat) {
+          categoryId = category;
         }
-      });
-    }
+      }
+
+      // Validate template exists if provided. Coerce to NULL on miss instead of
+      // 400 — en publik inlämnare ska inte blockeras av ett trasigt template_id.
+      let templateId: string | null = null;
+      if (template_id) {
+        const tpl = db.prepare('SELECT id FROM ticket_templates WHERE id = ?').get(template_id);
+        if (tpl) {
+          templateId = template_id;
+        } else {
+          logger.warn('Public ticket submitted with unknown template_id — coercing to NULL', { template_id: String(template_id) });
+        }
+      }
+
+      // finalDescription was already composed (from sanitizedCustomFields or
+      // description) and length-validated above, before any DB writes.
+      const ticketId = randomUUID();
+      db.prepare(`
+        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, template_id)
+        VALUES (?, ?, ?, 'open', ?, ?, ?, ?)
+      `).run(ticketId, title, finalDescription, ticketPriority, categoryId, contact.id, templateId);
+
+      // FTS5 synkas automatiskt via triggers (migration 050)
+
+      // Store custom field values if provided (already sanitized above)
+      if (sanitizedCustomFields.length > 0) {
+        const insertFieldStmt = db.prepare(`
+          INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value)
+          VALUES (?, ?, ?, ?, ?)
+        `);
+
+        sanitizedCustomFields.forEach((field) => {
+          if (field.fieldName && field.fieldLabel) {
+            insertFieldStmt.run(randomUUID(), ticketId, field.fieldName, field.fieldLabel, field.fieldValue || '');
+          }
+        });
+      }
+
+      return { ticketId, categoryId, contact };
+    });
+
+    const { ticketId, categoryId, contact } = createTicket();
 
     sendTicketCreatedEmail({
       id: ticketId,
@@ -363,13 +405,8 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
       logger.error('Error sending public ticket email:', { error: String(error) });
     });
 
-    // Store idempotency key so retries return the same ticket
-    if (idempotencyKey) {
-      idempotencyStore.set(idempotencyKey, {
-        ticketId,
-        expiresAt: Date.now() + IDEMPOTENCY_TTL_MS,
-      });
-    }
+    // Store idempotency key (efter commit) so retries return the same ticket
+    if (idempotencyKey) rememberIdempotencyKey(idempotencyKey, ticketId);
 
     res.status(201).json({
       message: 'Ticket submitted successfully',

@@ -1,10 +1,13 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import ExcelJS from 'exceljs';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import multer from 'multer';
 import { logger } from '../lib/logger.js';
+import { logAudit } from '../lib/auditLog.js';
+import { sanitizePlainText } from '../lib/htmlSanitizer.js';
+import { dispatchWebhook } from '../lib/webhookDispatcher.js';
 
 const router = Router();
 // Import-parsern stödjer bara CSV — avvisa andra format tidigt.
@@ -31,17 +34,124 @@ interface ContactRow {
   created_at: string;
 }
 
-// Get all contacts (max 500 per anrop för att undvika minnesproblem; full paginering hanteras i senare wave)
-router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
+const EMAIL_REGEX = /^[^\s@<>"',;()[\]\\]+@[^\s@<>"',;()[\]\\]+\.[^\s@<>"',;()[\]\\]+$/;
+const MAX_NAME_LENGTH = 200;
+const MAX_EMAIL_LENGTH = 254;
+const MAX_PHONE_LENGTH = 50;
+const MAX_DEPARTMENT_LENGTH = 200;
+const MAX_PAGE_LIMIT = 200;
+const LEGACY_LIST_LIMIT = 500;
+
+interface ValidatedContact {
+  name?: string;
+  email?: string;
+  phone?: string | null;
+  department?: string | null;
+}
+
+/**
+ * Delad validering för POST, PUT och import/confirm. `partial` (PUT) tillåter
+ * utelämnade fält; annars krävs name och email. Returnerar sanerade värden och
+ * alla fel (på svenska) så importen kan rapportera per rad.
+ */
+function validateContactInput(
+  input: { name?: unknown; email?: unknown; phone?: unknown; department?: unknown },
+  { partial }: { partial: boolean },
+): { value: ValidatedContact; errors: string[] } {
+  const value: ValidatedContact = {};
+  const errors: string[] = [];
+
+  const readText = (raw: unknown, label: string): string | undefined => {
+    if (typeof raw !== 'string') {
+      errors.push(`${label} måste vara text`);
+      return undefined;
+    }
+    return raw.trim();
+  };
+
+  if (input.name !== undefined || !partial) {
+    const name = input.name === undefined ? '' : readText(input.name, 'Namn');
+    if (name !== undefined) {
+      if (name.length < 1) errors.push('Namn saknas');
+      else if (name.length > MAX_NAME_LENGTH) errors.push(`Namn för långt (max ${MAX_NAME_LENGTH} tecken)`);
+      else value.name = sanitizePlainText(name);
+    }
+  }
+
+  if (input.email !== undefined || !partial) {
+    const email = input.email === undefined ? '' : readText(input.email, 'E-post');
+    if (email !== undefined) {
+      if (email.length < 1) errors.push('Email saknas');
+      else if (email.length > MAX_EMAIL_LENGTH) errors.push(`E-post för lång (max ${MAX_EMAIL_LENGTH} tecken)`);
+      else if (!EMAIL_REGEX.test(email)) errors.push('Ogiltig e-postadress');
+      else value.email = email;
+    }
+  }
+
+  const optionalFields: ['phone' | 'department', string, number][] = [
+    ['phone', 'Telefon', MAX_PHONE_LENGTH],
+    ['department', 'Avdelning', MAX_DEPARTMENT_LENGTH],
+  ];
+  for (const [key, label, max] of optionalFields) {
+    const raw = input[key];
+    if (raw === undefined) continue;
+    if (raw === null || raw === '') {
+      value[key] = null;
+      continue;
+    }
+    const text = readText(raw, label);
+    if (text === undefined) continue;
+    if (text.length > max) errors.push(`${label} för lång (max ${max} tecken)`);
+    else value[key] = sanitizePlainText(text) || null;
+  }
+
+  return { value, errors };
+}
+
+/** Skiftlägesokänslig dubblettkontroll; excludeId utesluter kontakten som redigeras. */
+function emailInUse(email: string, excludeId?: string): boolean {
+  const row = db.prepare('SELECT id FROM contacts WHERE lower(email) = lower(?) AND id IS NOT ?')
+    .get(email, excludeId ?? null);
+  return row !== undefined;
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('UNIQUE');
+}
+
+function companyExists(companyId: unknown): boolean {
+  return typeof companyId === 'string' && db.prepare('SELECT id FROM companies WHERE id = ?').get(companyId) !== undefined;
+}
+
+// Get contacts. Utan ?page returneras en ren array (max 500, bakåtkompatibelt);
+// med ?page&limit returneras { data, pagination }. ?search matchar namn/e-post/telefon.
+router.get('/', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const contacts = db.prepare(`
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+    const where = search
+      ? "WHERE c.name LIKE @q ESCAPE '\\' OR c.email LIKE @q ESCAPE '\\' OR c.phone LIKE @q ESCAPE '\\'"
+      : '';
+    const params: Record<string, unknown> = search
+      ? { q: `%${search.replace(/[\\%_]/g, '\\$&')}%` }
+      : {};
+    const select = `
       SELECT c.id, c.name, c.email, c.phone, c.company_id, co.name as company_name, c.department, c.created_at
       FROM contacts c
       LEFT JOIN companies co ON c.company_id = co.id
-      ORDER BY c.created_at DESC
-      LIMIT 500
-    `).all() as ContactRow[];
-    res.json(contacts);
+      ${where}
+      ORDER BY c.created_at DESC`;
+
+    if (req.query.page === undefined) {
+      res.json(db.prepare(`${select} LIMIT ${LEGACY_LIST_LIMIT}`).all(params) as ContactRow[]);
+      return;
+    }
+
+    const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
+    const limit = Math.min(MAX_PAGE_LIMIT, Math.max(1, parseInt(String(req.query.limit), 10) || 50));
+    const total = (db.prepare(`SELECT COUNT(*) as n FROM contacts c ${where}`).get(params) as { n: number }).n;
+    const data = db.prepare(`${select} LIMIT @limit OFFSET @offset`)
+      .all({ ...params, limit, offset: (page - 1) * limit }) as ContactRow[];
+    res.json({ data, pagination: { page, limit, total } });
   } catch (error) {
     logger.error('Error fetching contacts:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch contacts' });
@@ -192,7 +302,7 @@ router.post('/import/preview', authenticate, requireAdmin, (req: AuthRequest, re
         }
         if (!normalized.email || !normalized.email.trim()) {
           errors.push('Email saknas');
-        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized.email.trim())) {
+        } else if (!EMAIL_REGEX.test(normalized.email.trim())) {
           errors.push('Ogiltig e-postadress');
         }
 
@@ -233,8 +343,6 @@ router.post('/import/preview', authenticate, requireAdmin, (req: AuthRequest, re
 });
 
 // Import contacts - Confirm (must come before /:id route)
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { contacts } = req.body;
 
@@ -252,38 +360,39 @@ router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, re
     // rapport istället för att dåliga rader tyst hoppas över eller delvis sparas.
     const rowErrors: { row: number; errors: string[] }[] = [];
 
-    contacts.forEach((contact: { name?: string; email?: string; company?: string }, idx: number) => {
+    const existingEmails = new Set(
+      (db.prepare('SELECT email FROM contacts').all() as { email: string }[]).map((c) => c.email.toLowerCase())
+    );
+    const seenInBatch = new Set<string>();
+    const validated: { name: string; email: string; phone: string | null; company: string | null }[] = [];
+
+    contacts.forEach((contact: { name?: unknown; email?: unknown; phone?: unknown; company?: unknown }, idx: number) => {
       // Radnummer för användaren: 1-baserat (matchar CSV-radordningen i preview).
       const rowNumber = idx + 1;
-      const errors: string[] = [];
+      const { value, errors } = validateContactInput(contact ?? {}, { partial: false });
 
-      const name = typeof contact.name === 'string' ? contact.name.trim() : '';
-      const email = typeof contact.email === 'string' ? contact.email.trim() : '';
-
-      // Name: required, length 1–100.
-      if (name.length < 1) {
-        errors.push('Namn saknas');
-      } else if (name.length > 100) {
-        errors.push('Namn för långt (max 100 tecken)');
-      }
-
-      // Email: required, must match basic email format.
-      if (email.length < 1) {
-        errors.push('Email saknas');
-      } else if (!EMAIL_REGEX.test(email)) {
-        errors.push('Ogiltig e-postadress');
+      if (value.email) {
+        const key = value.email.toLowerCase();
+        if (existingEmails.has(key)) errors.push('E-post finns redan i systemet');
+        else if (seenInBatch.has(key)) errors.push('E-post förekommer flera gånger i importen');
+        seenInBatch.add(key);
       }
 
       // Company (if referenced) must resolve — antingen finns den redan eller
       // så skapar vi den i pass 2. Tomt företag är giltigt (null).
-      // Ingen extra resolve-kontroll behövs eftersom pass 2 alltid kan skapa
-      // saknade företag, men vi validerar att ett angivet namn inte är blankt-only.
-      if (contact.company !== undefined && contact.company !== null && typeof contact.company !== 'string') {
-        errors.push('Ogiltigt företagsnamn');
+      let company: string | null = null;
+      if (contact?.company !== undefined && contact.company !== null) {
+        if (typeof contact.company !== 'string') {
+          errors.push('Ogiltigt företagsnamn');
+        } else {
+          company = sanitizePlainText(contact.company.trim()) || null;
+        }
       }
 
       if (errors.length > 0) {
         rowErrors.push({ row: rowNumber, errors });
+      } else {
+        validated.push({ name: value.name!, email: value.email!, phone: value.phone ?? null, company });
       }
     });
 
@@ -304,37 +413,35 @@ router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, re
     // Att skapa företag separat förhindrar orphan-företag om ett kontakt-insert
     // senare skulle misslyckas (företaget är då redan giltigt och återanvändbart).
     const insertCompanyStmt = db.prepare('INSERT INTO companies (id, name) VALUES (?, ?)');
-    const ensureCompanies = db.transaction((rows: typeof contacts) => {
+    const ensureCompanies = db.transaction((rows: typeof validated) => {
       for (const contact of rows) {
-        if (contact.company && contact.company.trim()) {
-          const normalizedName = contact.company.trim().toLowerCase();
+        if (contact.company) {
+          const normalizedName = contact.company.toLowerCase();
           if (!companyNameMap.has(normalizedName)) {
-            const companyId = uuidv4();
-            insertCompanyStmt.run(companyId, contact.company.trim());
+            const companyId = randomUUID();
+            insertCompanyStmt.run(companyId, contact.company);
             companyNameMap.set(normalizedName, companyId);
           }
         }
       }
     });
-    ensureCompanies(contacts);
+    ensureCompanies(validated);
 
     // --- Pass 2b: insert kontakter. Alla rader är redan validerade och alla
     // företag finns redan i companyNameMap — varje rad transaktioneras isolerat.
     const insertStmt = db.prepare('INSERT INTO contacts (id, name, email, phone, company_id) VALUES (?, ?, ?, ?, ?)');
 
-    const insertContact = db.transaction((contact: typeof contacts[number]) => {
-      const id = uuidv4();
-      const companyId = (contact.company && contact.company.trim())
-        ? companyNameMap.get(contact.company.trim().toLowerCase()) || null
-        : null;
-      insertStmt.run(id, contact.name.trim(), contact.email.trim(), contact.phone?.trim() || null, companyId);
+    const insertContact = db.transaction((contact: typeof validated[number]) => {
+      const id = randomUUID();
+      const companyId = contact.company ? companyNameMap.get(contact.company.toLowerCase()) || null : null;
+      insertStmt.run(id, contact.name, contact.email, contact.phone, companyId);
     });
 
     let created = 0;
     let failed = 0;
     const errors: string[] = [];
 
-    for (const contact of contacts) {
+    for (const contact of validated) {
       try {
         insertContact(contact);
         created++;
@@ -344,6 +451,7 @@ router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, re
       }
     }
 
+    logAudit(req.user!.id, 'contact_import', 'contact', null, `created: ${created}, failed: ${failed}`, req.ip, req.apiKey?.id ?? null);
     res.json({ success: true, created, failed, errors });
   } catch (error) {
     logger.error('Error confirming contact import:', { error: String(error) });
@@ -374,16 +482,22 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
 // Create contact
 router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
-  const { name, email, phone, company_id, department } = req.body;
-
-  if (!name || !email) {
-    return res.status(400).json({ error: 'Name and email are required' });
+  const { company_id } = req.body;
+  const { value, errors } = validateContactInput(req.body ?? {}, { partial: false });
+  if (errors.length > 0) {
+    return res.status(400).json({ error: errors[0], errors });
+  }
+  if (company_id && !companyExists(company_id)) {
+    return res.status(400).json({ error: 'Företaget finns inte' });
+  }
+  if (emailInUse(value.email!)) {
+    return res.status(409).json({ error: 'E-post finns redan i systemet' });
   }
 
   try {
-    const id = uuidv4();
+    const id = randomUUID();
     db.prepare('INSERT INTO contacts (id, name, email, phone, company_id, department) VALUES (?, ?, ?, ?, ?, ?)').run(
-      id, name, email, phone || null, company_id || null, department || null
+      id, value.name, value.email, value.phone ?? null, company_id || null, value.department ?? null
     );
 
     const contact = db.prepare(`
@@ -392,8 +506,13 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
       LEFT JOIN companies co ON c.company_id = co.id
       WHERE c.id = ?
     `).get(id) as ContactRow;
+    dispatchWebhook('contact.created', { id: contact.id, name: contact.name, email: contact.email, company_id: contact.company_id })
+      .catch((e) => logger.error('Webhook dispatch error (contact.created):', { error: String(e) }));
     res.status(201).json(contact);
   } catch (error) {
+    if (isUniqueViolation(error)) {
+      return res.status(409).json({ error: 'E-post finns redan i systemet' });
+    }
     logger.error('Error creating contact:', { error: String(error) });
     res.status(500).json({ error: 'Failed to create contact' });
   }
@@ -401,7 +520,11 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
 
 // Update contact
 router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
-  const { name, email, phone, company_id, department } = req.body;
+  const { company_id } = req.body;
+  const { value, errors } = validateContactInput(req.body ?? {}, { partial: true });
+  if (errors.length > 0) {
+    return res.status(400).json({ error: errors[0], errors });
+  }
 
   try {
     const existing = db.prepare(`
@@ -415,12 +538,15 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
       return res.status(404).json({ error: 'Contact not found' });
     }
 
-    const updates: Record<string, unknown> = {};
-    if (name !== undefined) updates.name = name;
-    if (email !== undefined) updates.email = email;
-    if (phone !== undefined) updates.phone = phone || null;
+    if (company_id && !companyExists(company_id)) {
+      return res.status(400).json({ error: 'Företaget finns inte' });
+    }
+    if (value.email !== undefined && emailInUse(value.email, existing.id)) {
+      return res.status(409).json({ error: 'E-post finns redan i systemet' });
+    }
+
+    const updates: Record<string, unknown> = { ...value };
     if (company_id !== undefined) updates.company_id = company_id || null;
-    if (department !== undefined) updates.department = department || null;
 
     // Whitelist of allowed field names to prevent SQL injection.
     // OBS: contacts-tabellen har INGEN updated_at-kolumn (till skillnad från
@@ -453,8 +579,13 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
       LEFT JOIN companies co ON c.company_id = co.id
       WHERE c.id = ?
     `).get(req.params.id) as ContactRow;
+    dispatchWebhook('contact.updated', { id: contact.id, name: contact.name, email: contact.email, company_id: contact.company_id })
+      .catch((e) => logger.error('Webhook dispatch error (contact.updated):', { error: String(e) }));
     res.json(contact);
   } catch (error) {
+    if (isUniqueViolation(error)) {
+      return res.status(409).json({ error: 'E-post finns redan i systemet' });
+    }
     logger.error('Error updating contact:', { error: String(error) });
     res.status(500).json({ error: 'Failed to update contact' });
   }
@@ -463,12 +594,13 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
 // Delete contact
 router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
-    const result = db.prepare('DELETE FROM contacts WHERE id = ?').run(req.params.id);
-
-    if (result.changes === 0) {
+    const existing = db.prepare('SELECT email FROM contacts WHERE id = ?').get(req.params.id) as { email: string } | undefined;
+    if (!existing) {
       return res.status(404).json({ error: 'Contact not found' });
     }
+    db.prepare('DELETE FROM contacts WHERE id = ?').run(req.params.id);
 
+    logAudit(req.user!.id, 'contact_delete', 'contact', req.params.id, `email: ${existing.email}`, req.ip, req.apiKey?.id ?? null);
     res.json({ message: 'Contact deleted' });
   } catch (error) {
     logger.error('Error deleting contact:', { error: String(error) });

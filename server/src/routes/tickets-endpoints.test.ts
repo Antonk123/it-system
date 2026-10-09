@@ -688,12 +688,12 @@ describe('POST/GET/DELETE .../sent /:id/reminders — authorization (canAccessTi
     expect(res.body.error).toMatch(/behörighet/i);
   });
 
-  it('GET returns 403 for an unrelated non-admin user on a ticket assigned to someone else', async () => {
+  it('GET returns 200 for an unrelated non-admin user on a ticket assigned to someone else (reads are open)', async () => {
     const res = await bob.agent
       .get(`/api/tickets/${assignedTicketId}/reminders`)
       .set('Authorization', `Bearer ${bob.token}`);
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/behörighet/i);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
   });
 
   it('DELETE .../sent returns 403 for an unrelated non-admin user on a ticket assigned to someone else', async () => {

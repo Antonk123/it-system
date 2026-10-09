@@ -27,6 +27,7 @@ vi.mock('../db/connection.js', () => {
   const proxy = {
     prepare: (...args: Parameters<InstanceType<typeof Database>['prepare']>) =>
       memDb.prepare(...args),
+    transaction: (fn: () => unknown) => memDb.transaction(fn),
     pragma: vi.fn(),
     exec: vi.fn(),
   };
@@ -43,6 +44,8 @@ vi.mock('@azure/msal-node', () => ({ ConfidentialClientApplication: class {} }))
 vi.mock('./webhookDispatcher.js', () => ({
   dispatchWebhook: vi.fn(async () => undefined),
 }));
+
+vi.mock('./systemUser.js', () => ({ getSystemUserId: () => 'system-user' }));
 
 vi.mock('./email.js', () => ({
   sendTicketReceivedConfirmation: vi.fn(async () => undefined),
@@ -84,7 +87,8 @@ function createSchema(db: InstanceType<typeof Database>) {
       id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL, user_id TEXT NOT NULL,
       content TEXT NOT NULL, is_internal INTEGER DEFAULT 1,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      email_from_name TEXT DEFAULT NULL, email_from_address TEXT DEFAULT NULL
+      email_from_name TEXT DEFAULT NULL, email_from_address TEXT DEFAULT NULL,
+      email_message_id TEXT DEFAULT NULL
     );
 
     CREATE TABLE ticket_history (
@@ -309,7 +313,8 @@ describe('emailInbound — riktig mailparser + html-to-text', () => {
       config
     );
 
-    expect(getTicket().description).toContain('> Vi har bytt tonern, testa gärna igen.');
+    // Beskrivningen är HTML (sanitizeRichText vid ingestion), så `>` lagras som entitet.
+    expect(getTicket().description).toContain('&gt; Vi har bytt tonern, testa gärna igen.');
   });
 
   it('använder text/plain-delen när mejlet saknar HTML', async () => {

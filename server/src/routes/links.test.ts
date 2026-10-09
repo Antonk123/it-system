@@ -89,11 +89,11 @@ beforeAll(async () => {
   ticketB = randomUUID();
   strangerTicket = randomUUID();
   db.prepare(`INSERT INTO tickets (id, title, description, status, assigned_to, created_by) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(ticketA, 'Ticket A', 'owner ticket A', 'open', null, ownerId);
+    .run(ticketA, 'Ticket A', 'owner ticket A', 'open', ownerId, ownerId);
   db.prepare(`INSERT INTO tickets (id, title, description, status, assigned_to, created_by) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(ticketB, 'Ticket B', 'owner ticket B', 'open', null, ownerId);
+    .run(ticketB, 'Ticket B', 'owner ticket B', 'open', ownerId, ownerId);
   db.prepare(`INSERT INTO tickets (id, title, description, status, assigned_to, created_by) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(strangerTicket, 'Stranger Ticket', 'stranger ticket', 'open', null, strangerId);
+    .run(strangerTicket, 'Stranger Ticket', 'stranger ticket', 'open', strangerId, strangerId);
 
   const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
   const keyPrefix = rawKey.substring('itk_live_'.length, 'itk_live_'.length + 8);
@@ -136,11 +136,12 @@ describe('GET /api/links/ticket/:ticketId — authorization', () => {
     expect(Array.isArray(res.body)).toBe(true);
   });
 
-  it('returns 403 for a logged-in stranger (no relationship to the ticket)', async () => {
+  it('returns 200 for a logged-in stranger (reads are open to any authenticated user)', async () => {
     const res = await strangerAgent
       .get(`/api/links/ticket/${ticketA}`)
       .set('Authorization', `Bearer ${strangerToken}`);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
   });
 
   it('returns 401 when no auth token is provided', async () => {
@@ -161,7 +162,7 @@ describe('POST /api/links/ticket/:ticketId — authorization', () => {
     expect(res.body.targetTicketId).toBe(ticketB);
   });
 
-  it('returns 403 for a stranger with no access to the source ticket', async () => {
+  it('returns 403 for a stranger without write access to the source ticket', async () => {
     const res = await strangerAgent
       .post(`/api/links/ticket/${ticketA}`)
       .set('Authorization', `Bearer ${strangerToken}`)
@@ -170,8 +171,8 @@ describe('POST /api/links/ticket/:ticketId — authorization', () => {
     expect(res.status).toBe(403);
   });
 
-  it('returns 403 for a user who owns the SOURCE but not the TARGET ticket', async () => {
-    // Stranger owns strangerTicket (source) but NOT ticketA (target) → target check must fire.
+  it('returns 403 for a user who may write the SOURCE but not the TARGET ticket', async () => {
+    // Stranger is assigned strangerTicket (source) but not ticketA (target) → target check must fire.
     const res = await strangerAgent
       .post(`/api/links/ticket/${strangerTicket}`)
       .set('Authorization', `Bearer ${strangerToken}`)
@@ -189,6 +190,38 @@ describe('POST /api/links/ticket/:ticketId — authorization', () => {
       .post(`/api/links/ticket/${ticketA}`)
       .send({ targetTicketId: ticketB, linkType: 'related' });
     expect(res.status).toBe(403);
+  });
+});
+
+describe('links on unassigned tickets and DELETE policy', () => {
+  it('lets any authenticated user link two unassigned tickets (self-service pickup)', async () => {
+    const queueA = randomUUID();
+    const queueB = randomUUID();
+    for (const id of [queueA, queueB]) {
+      db.prepare(`INSERT INTO tickets (id, title, description, status) VALUES (?, ?, ?, 'open')`).run(id, `Queue ${id}`, 'queue');
+    }
+    const res = await strangerAgent
+      .post(`/api/links/ticket/${queueA}`)
+      .set('Authorization', `Bearer ${strangerToken}`)
+      .set('x-csrf-token', strangerCsrf)
+      .send({ targetTicketId: queueB });
+    expect(res.status).toBe(201);
+  });
+
+  it('DELETE: 403 for a stranger, 200 for the assignee of one of the linked tickets', async () => {
+    const linkRow = db.prepare('SELECT id FROM ticket_links WHERE source_ticket_id = ? AND target_ticket_id = ?').get(ticketA, ticketB) as { id: string };
+
+    const denied = await strangerAgent
+      .delete(`/api/links/${linkRow.id}`)
+      .set('Authorization', `Bearer ${strangerToken}`)
+      .set('x-csrf-token', strangerCsrf);
+    expect(denied.status).toBe(403);
+
+    const ok = await ownerAgent
+      .delete(`/api/links/${linkRow.id}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .set('x-csrf-token', ownerCsrf);
+    expect(ok.status).toBe(200);
   });
 });
 

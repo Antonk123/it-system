@@ -16,7 +16,8 @@ const { DB_PATH } = vi.hoisted(() => {
   return { DB_PATH: dbPath };
 });
 
-import { db, closeDatabase } from './connection.js';
+import { db, closeDatabase, initializeDatabase } from './connection.js';
+import { logger } from '../lib/logger.js';
 
 afterAll(() => {
   try { closeDatabase(); } catch { /* ignore */ }
@@ -37,5 +38,29 @@ describe('connection PRAGMAs', () => {
 
   it('enforces foreign keys', () => {
     expect(db.pragma('foreign_keys', { simple: true })).toBe(1);
+  });
+
+  it('caps the WAL file at 64MB after checkpoint (journal_size_limit)', () => {
+    expect(db.pragma('journal_size_limit', { simple: true })).toBe(67108864);
+  });
+});
+
+describe('initializeDatabase: FTS drift check', () => {
+  it('stays quiet when the indexes match and warns (without rebuilding) when they drift', () => {
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+    initializeDatabase();
+    expect(warn).not.toHaveBeenCalled();
+
+    db.prepare("INSERT INTO tickets (id, title, description) VALUES ('drift', 'T', 'D')").run();
+    db.exec('DELETE FROM tickets_fts');
+    initializeDatabase();
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('FTS index out of sync'),
+      expect.objectContaining({ drift: expect.objectContaining({ tickets: { rows: 1, fts: 0 } }) })
+    );
+    // Varnar bara — bygger inte om automatiskt.
+    expect(db.prepare('SELECT COUNT(*) FROM tickets_fts').pluck().get()).toBe(0);
+    warn.mockRestore();
   });
 });

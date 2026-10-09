@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { type Transporter } from 'nodemailer';
 import { db } from '../db/connection.js';
 import { stripHtml } from './htmlUtils.js';
 import { buildReplyHeaders, generateMessageId } from './emailThreading.js';
@@ -34,23 +34,33 @@ const getEmailConfig = () => {
   return { host, port, user, pass, from, to, appBaseUrl };
 };
 
-const createTransporter = () => {
-  const host = process.env.SMTP_HOST;
-  const port = Number(process.env.SMTP_PORT || 587);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
+// En delad, poolad transporter återanvänder SMTP-anslutningar i stället för att
+// öppna en ny TCP/TLS-handskakning per mail. Skapas första gången den behövs.
+let sharedTransporter: Transporter | null = null;
 
+const createTransporter = (): Transporter | null => {
+  const host = process.env.SMTP_HOST;
   if (!host) {
     return null;
   }
+  if (sharedTransporter) return sharedTransporter;
 
-  return nodemailer.createTransport({
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const implicitTls = port === 465;
+
+  sharedTransporter = nodemailer.createTransport({
     host,
     port,
-    secure: port === 465,
-    requireTLS: port === 587,
+    secure: implicitTls,
+    // STARTTLS krävs på alla portar utom 465 (implicit TLS) så att inloggning
+    // aldrig skickas i klartext. Lokala testrelän kan släppas igenom explicit.
+    requireTLS: !implicitTls && process.env.SMTP_ALLOW_PLAINTEXT !== 'true',
     auth: user && pass ? { user, pass } : undefined,
     tls: { ciphers: 'TLSv1.2' },
+    pool: true,
+    maxConnections: 3,
     // Defense in depth: cap a slow relay so a (now backgrounded) send fails
     // fast instead of holding a connection for nodemailer's 30s/120s/600s
     // greeting/connection/socket defaults.
@@ -58,6 +68,7 @@ const createTransporter = () => {
     greetingTimeout: 10_000,
     socketTimeout: 20_000,
   });
+  return sharedTransporter;
 };
 
 // ── Data helpers ────────────────────────────────────────────────────
@@ -133,7 +144,7 @@ const FM = `'SF Mono', 'Cascadia Code', Consolas, monospace`;
 
 // White-label brand name. Override via BRAND_NAME env var to use the
 // installation owner's company name in outgoing email branding/footer.
-const getBrandName = () => process.env.BRAND_NAME || 'IT-Support';
+const getBrandName = () => escapeHtml(process.env.BRAND_NAME || 'IT-Support');
 
 const T = {
   bg:       '#eef2f7',
@@ -230,7 +241,7 @@ const buildBadge = (label: string, style: { bg: string; text: string; dot: strin
     <tr>
       <td bgcolor="${style.dot}" width="6" height="6" style="width: 6px; height: 6px; font-size: 0; line-height: 0; background-color: ${style.dot};">&nbsp;</td>
       <td width="6" style="width: 6px; font-size: 0;">&nbsp;</td>
-      <td style="font-family: ${F}; font-size: 12px; font-weight: 600; color: ${style.text}; white-space: nowrap; mso-line-height-rule: exactly;">${label}</td>
+      <td style="font-family: ${F}; font-size: 12px; font-weight: 600; color: ${style.text}; white-space: nowrap; mso-line-height-rule: exactly;">${escapeHtml(label)}</td>
     </tr>
   </table>
 </td>`;
@@ -406,11 +417,17 @@ const sendEmail = async (subject: string, payload: TicketEmailPayload) => {
     subject,
     text,
     html,
+    headers: AUTO_GENERATED_HEADERS,
   });
 };
 
 /** Strip CR/LF from a string to prevent email header injection. */
 const sanitizeSubject = (s: string): string => s.replace(/[\r\n]/g, ' ');
+
+// RFC 3834: markerar maskingenererad post så att andra system (och vår egen
+// IMAP-inkorg) inte svarar på den och startar en mail-loop.
+const AUTO_REPLIED_HEADERS = { 'Auto-Submitted': 'auto-replied', 'X-Auto-Response-Suppress': 'All' };
+const AUTO_GENERATED_HEADERS = { 'Auto-Submitted': 'auto-generated', 'X-Auto-Response-Suppress': 'All' };
 
 export const sendTicketCreatedEmail = async (payload: TicketEmailPayload) => {
   const safeTitle = sanitizeSubject(payload.title);
@@ -496,6 +513,7 @@ export const sendTicketReceivedConfirmation = async (opts: {
     subject: `[#${shortId}] Ärende mottaget: ${safeTitle}`,
     text,
     html,
+    headers: AUTO_REPLIED_HEADERS,
   }).catch(error => {
     logger.error('[email-inbound] Failed to send confirmation', { error: String(error) });
   });
@@ -667,6 +685,7 @@ export const sendAgentReplyNotificationEmail = async (opts: {
     subject: `[#${shortId}] Nytt kundsvar: ${safeTitle}`,
     text,
     html,
+    headers: AUTO_GENERATED_HEADERS,
   }).catch(error => {
     logger.error('[agent-notify] Failed to send reply notification', { error: String(error) });
   });
@@ -750,8 +769,7 @@ export const sendTicketReminderEmail = async (data: {
     subject,
     text,
     html,
-  }).catch(error => {
-    logger.error('Failed to send reminder email', { error: String(error) });
+    headers: AUTO_GENERATED_HEADERS,
   });
 };
 
@@ -784,13 +802,13 @@ export const sendTicketAssignedEmail = async (opts: {
         Du har tilldelats ett nytt &#228;rende
       </h1>
       <p style="margin: 0 0 20px 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.6;">
-        Hej ${opts.toName},<br>
-        ${opts.assignerName} har tilldelat dig &#228;rende <strong>#${shortId}</strong>.
+        Hej ${escapeHtml(opts.toName)},<br>
+        ${escapeHtml(opts.assignerName)} har tilldelat dig &#228;rende <strong>#${shortId}</strong>.
       </p>
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom: 16px;">
         <tr>
           <td style="padding: 14px 16px; background-color: ${T.surface}; border-radius: 8px; border: 1px solid ${T.line};">
-            <div style="font-family: ${F}; font-size: 13px; font-weight: 600; color: ${T.text}; margin-bottom: 6px;">${opts.ticketTitle}</div>
+            <div style="font-family: ${F}; font-size: 13px; font-weight: 600; color: ${T.text}; margin-bottom: 6px;">${escapeHtml(opts.ticketTitle)}</div>
             <span style="display: inline-block; padding: 2px 8px; background-color: ${prioStyle.bg}; color: ${prioStyle.text}; border-radius: 4px; font-family: ${F}; font-size: 11px; font-weight: 600;">${prioLabel}</span>
           </td>
         </tr>
@@ -830,6 +848,7 @@ export const sendTicketAssignedEmail = async (opts: {
     subject,
     text,
     html,
+    headers: AUTO_GENERATED_HEADERS,
   });
 };
 
@@ -858,7 +877,7 @@ export const sendPasswordResetEmail = async (opts: {
         &#197;terst&#228;ll ditt l&#246;senord
       </h1>
       <p style="margin: 0 0 16px 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.6;">
-        Hej ${opts.toName},
+        Hej ${escapeHtml(opts.toName)},
       </p>
       <p style="margin: 0 0 24px 0; font-family: ${F}; color: ${T.textSec}; font-size: 14px; line-height: 1.6;">
         Vi tog emot en beg&#228;ran om att &#229;terst&#228;lla l&#246;senordet f&#246;r ditt konto i IT-&#228;rendesystemet.
@@ -915,5 +934,6 @@ export const sendPasswordResetEmail = async (opts: {
     subject,
     text,
     html,
+    headers: AUTO_GENERATED_HEADERS,
   });
 };

@@ -8,6 +8,8 @@
 # --- Konfiguration ---
 INSTALL_DIR="/opt/it-ticketing"
 LEGACY_DIR="$HOME/it-ticketing"
+DATA_VOLUME="it-ticketing-data"
+BACKUP_VOLUME="it-ticketing-backups-local"
 
 # --- Färger ---
 RED='\033[0;31m'
@@ -27,7 +29,7 @@ echo -e "\n${BOLD}IT Ticket System — Avinstallation${NC}"
 echo "  ─────────────────────────────────"
 echo ""
 warn "Detta tar bort ALLT: containers, images, volymer och installationskatalogen."
-warn "All data (tickets, bilagor, användare) raderas permanent."
+warn "All data (tickets, bilagor, användare) raderas permanent — även backuperna."
 echo ""
 read -r -p "  Är du säker? (skriv 'ja' för att fortsätta): " CONFIRM </dev/tty
 if [ "$CONFIRM" != "ja" ]; then
@@ -51,7 +53,8 @@ header "Stoppar containers"
 if [ -n "$DIR" ] && [ -f "$DIR/docker-compose.local.yml" ]; then
   ENV_FLAG=""
   [ -f "$DIR/.env" ] && ENV_FLAG="--env-file $DIR/.env"
-  docker compose -f "$DIR/docker-compose.local.yml" $ENV_FLAG down --volumes --remove-orphans 2>/dev/null && ok "Containers stoppade och borttagna" || info "Inga aktiva containers hittades"
+  # Utan --volumes: volymerna raderas först längre ner, efter backup-exporten och bekräftelsen.
+  docker compose -f "$DIR/docker-compose.local.yml" $ENV_FLAG down --remove-orphans 2>/dev/null && ok "Containers stoppade och borttagna" || info "Inga aktiva containers hittades"
 else
   docker rm -f it-ticketing-backend it-ticketing-frontend 2>/dev/null && ok "Containers borttagna" || info "Inga containers hittades"
 fi
@@ -61,9 +64,38 @@ header "Tar bort Docker-images"
 docker rmi it-ticketing-backend:latest 2>/dev/null && ok "Image it-ticketing-backend borttagen" || info "Image it-ticketing-backend hittades inte"
 docker rmi it-ticketing-frontend:latest 2>/dev/null && ok "Image it-ticketing-frontend borttagen" || info "Image it-ticketing-frontend hittades inte"
 
-# --- Ta bort volym ---
-header "Tar bort datavolym"
-docker volume rm it-ticketing-data 2>/dev/null && ok "Volym it-ticketing-data borttagen" || info "Volym hittades inte"
+# --- Exportera senaste backup, ta sedan bort volymerna ---
+header "Backuper och datavolymer"
+BACKUP_MOUNT=$(docker volume inspect "$BACKUP_VOLUME" --format '{{.Mountpoint}}' 2>/dev/null || true)
+if [ -n "$BACKUP_MOUNT" ]; then
+  LATEST_BACKUP=$(ls -t "$BACKUP_MOUNT"/backup-*.zip 2>/dev/null | head -1 || true)
+  if [ -n "$LATEST_BACKUP" ]; then
+    info "Senaste backup: $(basename "$LATEST_BACKUP")"
+    read -r -p "  Kopiera den till $(pwd) innan volymerna raderas? (skriv 'ja'): " EXPORT </dev/tty
+    if [ "$EXPORT" = "ja" ]; then
+      cp "$LATEST_BACKUP" . && ok "Backup kopierad till $(pwd)/$(basename "$LATEST_BACKUP")" || warn "Kopieringen misslyckades"
+    fi
+  else
+    warn "Ingen backup kunde läsas som din användare (volymen ägs av containerns användare, eller så finns ingen)."
+    warn "Vill du spara en backup: kopiera den själv innan du går vidare, t.ex."
+    warn "  sudo cp $BACKUP_MOUNT/backup-*.zip ."
+    warn "(Volymens sökväg ovan kommer från 'docker volume inspect $BACKUP_VOLUME'. På Docker Desktop"
+    warn " ligger volymer inne i en VM och går inte att nå från värden — ladda då ner backupen i appen först.)"
+  fi
+fi
+
+for VOLUME in "$DATA_VOLUME" "$BACKUP_VOLUME"; do
+  if docker volume inspect "$VOLUME" &>/dev/null; then
+    read -r -p "  Skriv volymens namn ($VOLUME) för att radera den permanent: " TYPED </dev/tty
+    if [ "$TYPED" = "$VOLUME" ]; then
+      docker volume rm "$VOLUME" 2>/dev/null && ok "Volym $VOLUME borttagen" || warn "Kunde inte ta bort volymen $VOLUME"
+    else
+      info "Volym $VOLUME behålls (namnet stämde inte)"
+    fi
+  else
+    info "Volym $VOLUME hittades inte"
+  fi
+done
 
 # --- Ta bort nätverket ---
 docker network rm it-ticketing_ticketing 2>/dev/null || true

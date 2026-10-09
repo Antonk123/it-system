@@ -1,12 +1,15 @@
 import { createApp } from './app.js';
-import { initializeDatabase, closeDatabase } from './db/connection.js';
+import { initializeDatabase, closeDatabase, db } from './db/connection.js';
 import { startReminderScheduler, stopReminderScheduler } from './lib/reminderScheduler.js';
 import { cleanupRefreshTokens } from './db/cleanup-refresh-tokens.js';
 import { startAutoCloseScheduler, stopAutoCloseScheduler } from './lib/autoCloseScheduler.js';
 import { startWebhookRetryScheduler, stopWebhookRetryScheduler } from './lib/webhookRetryScheduler.js';
 import { initWebPush } from './lib/push.js';
 import { startPushScheduler, stopPushScheduler } from './lib/pushScheduler.js';
-import { startBackupScheduler, stopBackupScheduler } from './lib/backupScheduler.js';
+import { startBackupScheduler, stopBackupScheduler, waitForBackup } from './lib/backupScheduler.js';
+import { warnIfOffsiteMissing } from './lib/offsiteBackup.js';
+import { cleanupPreRestoreArtifacts } from './routes/backup.js';
+import { checkFtsDrift } from './lib/fts.js';
 import { startEmailPolling, stopEmailPolling } from './lib/emailInbound.js';
 import { getOidcConfigStatus, probeOidcAtBoot, OIDC_REQUIRED_ENV } from './lib/oidc.js';
 import cron from 'node-cron';
@@ -58,8 +61,9 @@ process.on('uncaughtException', (error) => {
 const PORT = Number(process.env.PORT) || 3001;
 
 // Hur länge vi väntar på att pågående requests + cleanup ska avslutas innan vi
-// tvångsavslutar (hard exit). Behåller 10s som default men gör det justerbart.
-const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 10000;
+// tvångsavslutar (hard exit). Default 15s — måste ligga under Dockers stop-grace
+// (stop_grace_period: 20s i compose) så att processen hinner stänga DB:n själv.
+const SHUTDOWN_TIMEOUT_MS = Number(process.env.SHUTDOWN_TIMEOUT_MS) || 15000;
 
 // APP_BASE_URL används för att bygga absoluta länkar i utgående mail (t.ex.
 // glömt-lösenord). Saknas den blir länkarna trasiga — varna och fall tillbaka
@@ -78,6 +82,21 @@ if (!process.env.APP_BASE_URL) {
 
 // Initialize database
 initializeDatabase();
+
+// Servern har startat på den (ev. återställda) datan: migrationer och schemakontroll
+// gick igenom, så uploads.pre-restore från en tidigare restore behövs inte längre.
+cleanupPreRestoreArtifacts(Date.now() - process.uptime() * 1000);
+
+// Drift mellan FTS5-indexen och tabellerna ger tysta sökmiss — varna så det syns i loggen.
+const ftsDrift = checkFtsDrift(db);
+if (ftsDrift.tickets.rows !== ftsDrift.tickets.fts || ftsDrift.kbArticles.rows !== ftsDrift.kbArticles.fts) {
+  logger.warn('FTS-index avviker från tabellerna — sökresultat kan vara ofullständiga', ftsDrift);
+}
+
+if (process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'true') {
+  logger.warn('COOKIE_SECURE är inte "true" i produktion — CSRF-/refresh-cookies skickas utan Secure-flaggan. Sätt COOKIE_SECURE=true i Portainer-stacken om TLS termineras framför appen.');
+}
+warnIfOffsiteMissing();
 
 // Init push notifications (VAPID keys are optional - gracefully disabled if not set)
 const pushReady = initWebPush();
@@ -175,10 +194,15 @@ const gracefulShutdown = (signal: string) => {
   clearInterval(unhandledRejectionResetTimer);
 
   server.close(() => {
-    try { closeDatabase(); } catch (err) { logger.error('Error closing DB', { error: String(err) }); }
-    process.exit(0);
+    // En pågående backup använder DB-handtaget (database.backup) — vänta in den,
+    // begränsat så att hard-exit-timern nedan alltid hinner före Dockers SIGKILL.
+    void waitForBackup(Math.max(SHUTDOWN_TIMEOUT_MS - 1000, 0)).then((finished) => {
+      if (!finished) logger.warn('Backup pågick fortfarande vid shutdown — stänger databasen ändå');
+      try { closeDatabase(); } catch (err) { logger.error('Error closing DB', { error: String(err) }); }
+      process.exit(0);
+    });
   });
-  // Hard exit if cleanup hangs (configurable via SHUTDOWN_TIMEOUT_MS, default 10s)
+  // Hard exit if cleanup hangs (configurable via SHUTDOWN_TIMEOUT_MS, default 15s)
   setTimeout(() => process.exit(1), SHUTDOWN_TIMEOUT_MS).unref();
 };
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

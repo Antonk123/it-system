@@ -12,8 +12,8 @@ import { randomUUID, createHmac } from 'crypto';
  *     URL validation (SSRF guard) and event validation are also exercised.
  *  2. HMAC-SHA256 signing (audit-v3 MEDIUM — previously untested): when a
  *     delivery is dispatched, the X-Webhook-Signature header equals
- *     HMAC-SHA256(payload, secret). A consumer can recompute and match; a
- *     tampered payload fails verification.
+ *     HMAC-SHA256(secret, `${timestamp}.${deliveryId}.${body}`). A consumer can
+ *     recompute and match; a tampered payload fails verification.
  *
  *     Why we call dispatchWebhook() directly instead of triggering it via an
  *     HTTP route: the route handlers fire dispatchWebhook() fire-and-forget
@@ -192,6 +192,77 @@ describe('Webhook CRUD authorization (admin-only)', () => {
     expect(res.status).toBe(400);
   });
 
+  it('PUT validates events (400 on unknown/non-array/empty)', async () => {
+    const id = randomUUID();
+    db.prepare('INSERT INTO webhooks (id, url, events, secret) VALUES (?, ?, ?, ?)')
+      .run(id, PUBLIC_URL, JSON.stringify(['ticket.created']), 'secret-put');
+    for (const bad of [['bogus.event'], 'ticket.created', [], [1, 2], { a: 1 }]) {
+      const res = await admin.agent
+        .put(`/api/webhooks/${id}`)
+        .set('Authorization', `Bearer ${admin.token}`)
+        .set('x-csrf-token', admin.csrf)
+        .send({ events: bad });
+      expect(res.status).toBe(400);
+    }
+    // Stored events unchanged after the rejected updates.
+    const row = db.prepare('SELECT events FROM webhooks WHERE id = ?').get(id) as { events: string };
+    expect(JSON.parse(row.events)).toEqual(['ticket.created']);
+  });
+
+  it('PUT stores validated, de-duplicated events', async () => {
+    const id = randomUUID();
+    db.prepare('INSERT INTO webhooks (id, url, events, secret) VALUES (?, ?, ?, ?)')
+      .run(id, PUBLIC_URL, JSON.stringify(['ticket.created']), 'secret-put2');
+    const res = await admin.agent
+      .put(`/api/webhooks/${id}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ events: ['contact.created', 'contact.created', 'contact.updated'], active: false });
+    expect(res.status).toBe(200);
+    expect(JSON.parse(res.body.events)).toEqual(['contact.created', 'contact.updated']);
+    expect(res.body.active).toBe(0);
+  });
+
+  it('PUT returns 404 for an unknown webhook and 400 for an unsafe URL', async () => {
+    const missing = await admin.agent
+      .put(`/api/webhooks/${randomUUID()}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ active: true });
+    expect(missing.status).toBe(404);
+
+    const id = randomUUID();
+    db.prepare('INSERT INTO webhooks (id, url, events, secret) VALUES (?, ?, ?, ?)')
+      .run(id, PUBLIC_URL, JSON.stringify(['ticket.created']), 'secret-put3');
+    const unsafe = await admin.agent
+      .put(`/api/webhooks/${id}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ url: 'https://[::ffff:127.0.0.1]/x' });
+    expect(unsafe.status).toBe(400);
+  });
+
+  it('lists deliveries for a webhook (admin only)', async () => {
+    const id = randomUUID();
+    db.prepare('INSERT INTO webhooks (id, url, events, secret) VALUES (?, ?, ?, ?)')
+      .run(id, PUBLIC_URL, JSON.stringify(['ticket.created']), 'secret-del-list');
+    db.prepare('INSERT INTO webhook_deliveries (id, webhook_id, event, payload, attempts) VALUES (?, ?, ?, ?, 0)')
+      .run(randomUUID(), id, 'ticket.created', '{}');
+    const res = await request(app).get(`/api/webhooks/${id}/deliveries`).set('Authorization', `Bearer ${admin.token}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(1);
+    const denied = await request(app).get(`/api/webhooks/${id}/deliveries`).set('Authorization', `Bearer ${user.token}`);
+    expect(denied.status).toBe(403);
+  });
+
+  it('DELETE returns 404 for an unknown webhook', async () => {
+    const res = await admin.agent
+      .delete(`/api/webhooks/${randomUUID()}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf);
+    expect(res.status).toBe(404);
+  });
+
   it('blocks a non-admin from deleting a webhook (403)', async () => {
     const id = randomUUID();
     db.prepare('INSERT INTO webhooks (id, url, events, secret) VALUES (?, ?, ?, ?)')
@@ -226,7 +297,7 @@ describe('Webhook HMAC-SHA256 signing on delivery', () => {
 
   let webhookId: string;
   // Captured from the stubbed fetch on the most recent delivery.
-  let captured: { url: string; signature: string | undefined; event: string | undefined; body: string } | null;
+  let captured: { url: string; signature: string | undefined; event: string | undefined; timestamp: string | undefined; deliveryId: string | undefined; body: string; redirect: RequestRedirect | undefined } | null;
 
   beforeAll(() => {
     webhookId = randomUUID();
@@ -248,14 +319,17 @@ describe('Webhook HMAC-SHA256 signing on delivery', () => {
           url: String(url),
           signature: headers['X-Webhook-Signature'],
           event: headers['X-Webhook-Event'],
+          timestamp: headers['X-Webhook-Timestamp'],
+          deliveryId: headers['X-Webhook-Id'],
           body: String(init.body),
+          redirect: init.redirect,
         };
         return new Response(null, { status });
       }),
     );
   }
 
-  it('sends X-Webhook-Signature == HMAC-SHA256(payload, secret) that a consumer can recompute', async () => {
+  it('sends X-Webhook-Signature == HMAC-SHA256(secret, timestamp.id.body) that a consumer can recompute', async () => {
     stubFetch(200);
 
     await dispatchWebhook('ticket.created', { id: 'tkt-1', title: 'Hello', status: 'open' });
@@ -266,8 +340,15 @@ describe('Webhook HMAC-SHA256 signing on delivery', () => {
     expect(typeof captured!.signature).toBe('string');
 
     // A consumer recomputes the signature from the raw body + shared secret.
-    const expected = createHmac('sha256', SECRET).update(captured!.body).digest('hex');
+    expect(captured!.timestamp).toMatch(/^\d{10}$/);
+    expect(captured!.deliveryId).toMatch(/^[0-9a-f-]{36}$/);
+    const expected = createHmac('sha256', SECRET)
+      .update(`${captured!.timestamp}.${captured!.deliveryId}.${captured!.body}`)
+      .digest('hex');
     expect(captured!.signature).toBe(expected);
+
+    // Redirects must never be followed (SSRF bypass).
+    expect(captured!.redirect).toBe('manual');
 
     // Sanity: the body is the JSON envelope the dispatcher builds.
     const parsed = JSON.parse(captured!.body);
@@ -296,12 +377,14 @@ describe('Webhook HMAC-SHA256 signing on delivery', () => {
     // the secret. Recomputing over the tampered body yields a different MAC.
     const tamperedBody = captured!.body.replace('Original', 'Tampered');
     expect(tamperedBody).not.toBe(captured!.body);
-    const macOverTampered = createHmac('sha256', SECRET).update(tamperedBody).digest('hex');
-    expect(macOverTampered).not.toBe(realSignature);
+    const signed = (secret: string, ts: string, id: string, body: string) =>
+      createHmac('sha256', secret).update(`${ts}.${id}.${body}`).digest('hex');
+    expect(signed(SECRET, captured!.timestamp!, captured!.deliveryId!, tamperedBody)).not.toBe(realSignature);
 
-    // And a wrong secret cannot reproduce the real signature either.
-    const macWrongSecret = createHmac('sha256', 'wrong-secret').update(captured!.body).digest('hex');
-    expect(macWrongSecret).not.toBe(realSignature);
+    // And a wrong secret, timestamp or delivery id cannot reproduce it either.
+    expect(signed('wrong-secret', captured!.timestamp!, captured!.deliveryId!, captured!.body)).not.toBe(realSignature);
+    expect(signed(SECRET, String(Number(captured!.timestamp) + 1), captured!.deliveryId!, captured!.body)).not.toBe(realSignature);
+    expect(signed(SECRET, captured!.timestamp!, 'other-id', captured!.body)).not.toBe(realSignature);
   });
 
   it('does not deliver to webhooks that did not subscribe to the event', async () => {

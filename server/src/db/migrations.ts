@@ -13,11 +13,15 @@
  * tableExists / columnExists helpers; guard column-dependent DDL accordingly.
  */
 import type { Database as DatabaseType } from 'better-sqlite3';
-import { randomUUID } from 'crypto';
+import { randomBytes, randomUUID } from 'crypto';
+import bcrypt from 'bcryptjs';
 import { stripHtml } from '../lib/htmlUtils.js';
 import { stripQuotedReply } from '../lib/emailQuote.js';
+import { rebuildKbFts } from '../lib/fts.js';
+import { logger } from '../lib/logger.js';
+import { SYSTEM_USER_EMAIL, SYSTEM_USER_ID } from '../lib/systemUser.js';
 
-interface MigrationHelpers {
+export interface MigrationHelpers {
   tableExists: (name: string) => boolean;
   columnExists: (table: string, column: string) => boolean;
 }
@@ -25,7 +29,32 @@ interface MigrationHelpers {
 export interface Migration {
   id: string;
   name: string;
+  /**
+   * Slå av foreign_keys under migrationen (rebuild av tabell som andra tabeller
+   * refererar med ON DELETE CASCADE). Runnern gör det utanför transaktionen och
+   * kör foreign_key_check innan den slår på igen.
+   */
+  disableForeignKeys?: boolean;
   up: (db: DatabaseType, helpers: MigrationHelpers) => void;
+}
+
+// Släpper triggers under en backfill som annars skulle stämpla updated_at på varje
+// rad (mönstret från migration 071) och återskapar dem exakt som de låg. Namnen
+// kommer alltid från konstanter i migrationen. Körs i migrationens transaktion.
+function withTriggersSuspended(db: DatabaseType, names: string[], fn: () => void): void {
+  const saved = names
+    .map((name) => ({
+      name,
+      sql: (
+        db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?").get(name) as
+          | { sql: string }
+          | undefined
+      )?.sql,
+    }))
+    .filter((t): t is { name: string; sql: string } => t.sql !== undefined);
+  for (const t of saved) db.exec(`DROP TRIGGER ${t.name}`);
+  fn();
+  for (const t of saved) db.exec(t.sql);
 }
 
 export const migrations: Migration[] = [
@@ -463,7 +492,7 @@ export const migrations: Migration[] = [
     name: 'create_refresh_tokens_table',
     up: (db, { tableExists }) => {
       if (tableExists('refresh_tokens')) return;
-      db.prepare(`CREATE TABLE refresh_tokens (
+      db.prepare(`CREATE TABLE IF NOT EXISTS refresh_tokens (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         token TEXT NOT NULL UNIQUE,
@@ -472,9 +501,9 @@ export const migrations: Migration[] = [
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         last_used_at TEXT
       )`).run();
-      db.prepare('CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id)').run();
-      db.prepare('CREATE INDEX idx_refresh_tokens_token ON refresh_tokens(token)').run();
-      db.prepare('CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens(expires_at)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON refresh_tokens(expires_at)').run();
     },
   },
   {
@@ -502,7 +531,7 @@ export const migrations: Migration[] = [
     name: 'create_companies_table_and_migrate_contacts',
     up: (db, { tableExists, columnExists }) => {
       if (!tableExists('companies')) {
-        db.prepare(`CREATE TABLE companies (
+        db.prepare(`CREATE TABLE IF NOT EXISTS companies (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           org_number TEXT,
@@ -512,7 +541,7 @@ export const migrations: Migration[] = [
           created_at TEXT DEFAULT CURRENT_TIMESTAMP,
           updated_at TEXT DEFAULT CURRENT_TIMESTAMP
         )`).run();
-        db.prepare('CREATE INDEX idx_companies_name ON companies(name)').run();
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_companies_name ON companies(name)').run();
       }
 
       if (columnExists('contacts', 'company') && !columnExists('contacts', 'company_id')) {
@@ -530,7 +559,7 @@ export const migrations: Migration[] = [
         }
 
         db.prepare('ALTER TABLE contacts ADD COLUMN company_id TEXT REFERENCES companies(id) ON DELETE SET NULL').run();
-        db.prepare('CREATE INDEX idx_contacts_company ON contacts(company_id)').run();
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_contacts_company ON contacts(company_id)').run();
 
         const updateContact = db.prepare('UPDATE contacts SET company_id = ? WHERE id = ?');
         const contacts = db.prepare(
@@ -552,7 +581,7 @@ export const migrations: Migration[] = [
     up: (db, { columnExists }) => {
       if (!columnExists('tickets', 'company_id')) {
         db.prepare('ALTER TABLE tickets ADD COLUMN company_id TEXT REFERENCES companies(id) ON DELETE SET NULL').run();
-        db.prepare('CREATE INDEX idx_tickets_company ON tickets(company_id)').run();
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_tickets_company ON tickets(company_id)').run();
 
         db.prepare(`
           UPDATE tickets SET company_id = (
@@ -564,7 +593,7 @@ export const migrations: Migration[] = [
 
       if (!columnExists('tickets', 'assigned_to')) {
         db.prepare('ALTER TABLE tickets ADD COLUMN assigned_to TEXT REFERENCES users(id) ON DELETE SET NULL').run();
-        db.prepare('CREATE INDEX idx_tickets_assigned ON tickets(assigned_to)').run();
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_tickets_assigned ON tickets(assigned_to)').run();
       }
     },
   },
@@ -573,7 +602,7 @@ export const migrations: Migration[] = [
     name: 'create_sla_policies_table',
     up: (db, { tableExists }) => {
       if (tableExists('sla_policies')) return;
-      db.prepare(`CREATE TABLE sla_policies (
+      db.prepare(`CREATE TABLE IF NOT EXISTS sla_policies (
         id TEXT PRIMARY KEY,
         company_id TEXT REFERENCES companies(id) ON DELETE CASCADE,
         priority TEXT NOT NULL CHECK(priority IN ('low', 'medium', 'high', 'critical')),
@@ -583,7 +612,7 @@ export const migrations: Migration[] = [
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(company_id, priority)
       )`).run();
-      db.prepare('CREATE INDEX idx_sla_policies_company ON sla_policies(company_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_sla_policies_company ON sla_policies(company_id)').run();
     },
   },
   {
@@ -597,8 +626,8 @@ export const migrations: Migration[] = [
         db.prepare('ALTER TABLE tickets ADD COLUMN sla_paused_duration INTEGER DEFAULT 0').run();
         db.prepare('ALTER TABLE tickets ADD COLUMN sla_response_met INTEGER').run();
         db.prepare('ALTER TABLE tickets ADD COLUMN sla_resolution_met INTEGER').run();
-        db.prepare('CREATE INDEX idx_tickets_sla_response ON tickets(sla_response_deadline)').run();
-        db.prepare('CREATE INDEX idx_tickets_sla_resolution ON tickets(sla_resolution_deadline)').run();
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_tickets_sla_response ON tickets(sla_response_deadline)').run();
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_tickets_sla_resolution ON tickets(sla_resolution_deadline)').run();
       }
     },
   },
@@ -607,7 +636,7 @@ export const migrations: Migration[] = [
     name: 'create_billing_rates_table',
     up: (db, { tableExists }) => {
       if (tableExists('billing_rates')) return;
-      db.prepare(`CREATE TABLE billing_rates (
+      db.prepare(`CREATE TABLE IF NOT EXISTS billing_rates (
         id TEXT PRIMARY KEY,
         company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
         rate_per_hour REAL NOT NULL,
@@ -616,7 +645,7 @@ export const migrations: Migration[] = [
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(company_id)
       )`).run();
-      db.prepare('CREATE INDEX idx_billing_rates_company ON billing_rates(company_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_billing_rates_company ON billing_rates(company_id)').run();
     },
   },
   {
@@ -624,7 +653,7 @@ export const migrations: Migration[] = [
     name: 'create_invoices_tables',
     up: (db, { tableExists }) => {
       if (tableExists('invoices')) return;
-      db.prepare(`CREATE TABLE invoices (
+      db.prepare(`CREATE TABLE IF NOT EXISTS invoices (
         id TEXT PRIMARY KEY,
         company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
         period_start TEXT NOT NULL,
@@ -638,10 +667,10 @@ export const migrations: Migration[] = [
         sent_at TEXT,
         paid_at TEXT
       )`).run();
-      db.prepare('CREATE INDEX idx_invoices_company ON invoices(company_id)').run();
-      db.prepare('CREATE INDEX idx_invoices_status ON invoices(status)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_invoices_company ON invoices(company_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)').run();
 
-      db.prepare(`CREATE TABLE invoice_lines (
+      db.prepare(`CREATE TABLE IF NOT EXISTS invoice_lines (
         id TEXT PRIMARY KEY,
         invoice_id TEXT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
         ticket_id TEXT REFERENCES tickets(id) ON DELETE SET NULL,
@@ -652,9 +681,9 @@ export const migrations: Migration[] = [
         amount REAL NOT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )`).run();
-      db.prepare('CREATE INDEX idx_invoice_lines_invoice ON invoice_lines(invoice_id)').run();
-      db.prepare('CREATE INDEX idx_invoice_lines_ticket ON invoice_lines(ticket_id)').run();
-      db.prepare('CREATE INDEX idx_invoice_lines_time_entry ON invoice_lines(time_entry_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_invoice_lines_invoice ON invoice_lines(invoice_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_invoice_lines_ticket ON invoice_lines(ticket_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_invoice_lines_time_entry ON invoice_lines(time_entry_id)').run();
     },
   },
   {
@@ -662,7 +691,7 @@ export const migrations: Migration[] = [
     name: 'create_api_keys_table',
     up: (db, { tableExists }) => {
       if (tableExists('api_keys')) return;
-      db.prepare(`CREATE TABLE api_keys (
+      db.prepare(`CREATE TABLE IF NOT EXISTS api_keys (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         key_prefix TEXT NOT NULL,
@@ -673,8 +702,8 @@ export const migrations: Migration[] = [
         expires_at TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )`).run();
-      db.prepare('CREATE INDEX idx_api_keys_prefix ON api_keys(key_prefix)').run();
-      db.prepare('CREATE INDEX idx_api_keys_user ON api_keys(user_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id)').run();
     },
   },
   {
@@ -682,7 +711,7 @@ export const migrations: Migration[] = [
     name: 'create_webhooks_tables',
     up: (db, { tableExists }) => {
       if (tableExists('webhooks')) return;
-      db.prepare(`CREATE TABLE webhooks (
+      db.prepare(`CREATE TABLE IF NOT EXISTS webhooks (
         id TEXT PRIMARY KEY,
         url TEXT NOT NULL,
         events TEXT NOT NULL DEFAULT '[]',
@@ -692,7 +721,7 @@ export const migrations: Migration[] = [
         last_triggered_at TEXT
       )`).run();
 
-      db.prepare(`CREATE TABLE webhook_deliveries (
+      db.prepare(`CREATE TABLE IF NOT EXISTS webhook_deliveries (
         id TEXT PRIMARY KEY,
         webhook_id TEXT NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
         event TEXT NOT NULL,
@@ -702,7 +731,7 @@ export const migrations: Migration[] = [
         delivered_at TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )`).run();
-      db.prepare('CREATE INDEX idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook ON webhook_deliveries(webhook_id)').run();
     },
   },
   {
@@ -740,7 +769,7 @@ export const migrations: Migration[] = [
 
       // Token-logg för kostnadsuppföljning
       if (!tableExists('ai_usage_log')) {
-        db.prepare(`CREATE TABLE ai_usage_log (
+        db.prepare(`CREATE TABLE IF NOT EXISTS ai_usage_log (
           id TEXT PRIMARY KEY,
           feature TEXT NOT NULL CHECK(feature IN ('categorize','draft','summary','suggest')),
           model TEXT NOT NULL,
@@ -751,9 +780,9 @@ export const migrations: Migration[] = [
           ok INTEGER NOT NULL DEFAULT 0,
           created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )`).run();
-        db.prepare('CREATE INDEX idx_ai_usage_log_created ON ai_usage_log(created_at DESC)').run();
-        db.prepare('CREATE INDEX idx_ai_usage_log_feature ON ai_usage_log(feature)').run();
-        db.prepare('CREATE INDEX idx_ai_usage_log_ticket ON ai_usage_log(ticket_id)').run();
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_ai_usage_log_created ON ai_usage_log(created_at DESC)').run();
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_ai_usage_log_feature ON ai_usage_log(feature)').run();
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_ai_usage_log_ticket ON ai_usage_log(ticket_id)').run();
       }
     },
   },
@@ -765,7 +794,7 @@ export const migrations: Migration[] = [
       // och vad användaren valde efter det. Det här blir guld i pilotrapportering:
       // "67 % av enkla L1-ärenden löstes utan att de nådde IT".
       if (tableExists('ai_deflections')) return;
-      db.prepare(`CREATE TABLE ai_deflections (
+      db.prepare(`CREATE TABLE IF NOT EXISTS ai_deflections (
         id TEXT PRIMARY KEY,
         problem_text TEXT NOT NULL,
         suggestion_text TEXT,
@@ -777,8 +806,8 @@ export const migrations: Migration[] = [
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         resolved_at TEXT
       )`).run();
-      db.prepare('CREATE INDEX idx_ai_deflections_outcome ON ai_deflections(outcome)').run();
-      db.prepare('CREATE INDEX idx_ai_deflections_created ON ai_deflections(created_at DESC)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_ai_deflections_outcome ON ai_deflections(outcome)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_ai_deflections_created ON ai_deflections(created_at DESC)').run();
     },
   },
   {
@@ -811,7 +840,7 @@ export const migrations: Migration[] = [
     up: (db, { columnExists }) => {
       if (!columnExists('tickets', 'email_message_id')) {
         db.prepare('ALTER TABLE tickets ADD COLUMN email_message_id TEXT').run();
-        db.prepare('CREATE INDEX idx_tickets_email_message_id ON tickets(email_message_id)').run();
+        db.prepare('CREATE INDEX IF NOT EXISTS idx_tickets_email_message_id ON tickets(email_message_id)').run();
       }
     },
   },
@@ -820,7 +849,7 @@ export const migrations: Migration[] = [
     name: 'create_password_reset_tokens_table',
     up: (db, { tableExists }) => {
       if (tableExists('password_reset_tokens')) return;
-      db.prepare(`CREATE TABLE password_reset_tokens (
+      db.prepare(`CREATE TABLE IF NOT EXISTS password_reset_tokens (
         id TEXT PRIMARY KEY,
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         token_hash TEXT NOT NULL UNIQUE,
@@ -828,30 +857,18 @@ export const migrations: Migration[] = [
         used_at TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )`).run();
-      db.prepare('CREATE INDEX idx_password_reset_user ON password_reset_tokens(user_id)').run();
-      db.prepare('CREATE INDEX idx_password_reset_token_hash ON password_reset_tokens(token_hash)').run();
-      db.prepare('CREATE INDEX idx_password_reset_expires ON password_reset_tokens(expires_at)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_password_reset_user ON password_reset_tokens(user_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_password_reset_token_hash ON password_reset_tokens(token_hash)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_password_reset_expires ON password_reset_tokens(expires_at)').run();
     },
   },
   {
     id: '042',
     name: 'seed_default_sla_policies',
-    up: (db) => {
-      // Only seed if no default-policy rows exist (idempotent across reruns
-      // and respects manual customization done after first seed).
-      const existing = db.prepare('SELECT COUNT(*) as n FROM sla_policies WHERE company_id IS NULL').get() as { n: number };
-      if (existing.n > 0) return;
-
-      const insert = db.prepare(
-        'INSERT INTO sla_policies (id, company_id, priority, response_time_minutes, resolution_time_minutes) VALUES (?, ?, ?, ?, ?)'
-      );
-
-      // Industry-typical defaults for internal IT helpdesk. Values can be
-      // tuned per company via PUT /api/sla.
-      insert.run(randomUUID(), null, 'critical', 30, 240);    // 30m response / 4h resolution
-      insert.run(randomUUID(), null, 'high',     60, 480);    // 1h / 8h
-      insert.run(randomUUID(), null, 'medium',   240, 1440);  // 4h / 24h
-      insert.run(randomUUID(), null, 'low',      480, 4320);  // 8h / 72h
+    up: () => {
+      // SLA är avvecklat. Prod har redan de fyra standardraderna från den här
+      // migrationen (bevaras som historik); nya installationer ska inte få dem.
+      // Id:t finns kvar så schema_migrations är konsekvent mellan installationerna.
     },
   },
   {
@@ -1029,7 +1046,7 @@ export const migrations: Migration[] = [
     name: 'create_audit_log_table',
     up: (db, { tableExists }) => {
       if (tableExists('audit_log')) return;
-      db.prepare(`CREATE TABLE audit_log (
+      db.prepare(`CREATE TABLE IF NOT EXISTS audit_log (
         id TEXT PRIMARY KEY,
         user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
         action TEXT NOT NULL,
@@ -1039,8 +1056,8 @@ export const migrations: Migration[] = [
         ip_address TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       )`).run();
-      db.prepare('CREATE INDEX idx_audit_log_created_at ON audit_log(created_at)').run();
-      db.prepare('CREATE INDEX idx_audit_log_user_id ON audit_log(user_id)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at)').run();
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_audit_log_user_id ON audit_log(user_id)').run();
     },
   },
   {
@@ -1429,9 +1446,9 @@ export const migrations: Migration[] = [
     name: 'create_indexes_missed_by_columnexists_guards',
     up: (db) => {
       // Nio index existerade BARA på uppgraderade databaser. Sju av dem skapades
-      // inuti `if (!columnExists(tabell, kolumn)) { ALTER …; CREATE INDEX … }`:
+      // inuti `if (!columnExists(tabell, kolumn)) { ALTER …; CREATE INDEX IF NOT EXISTS … }`:
       // på en fresh install står kolumnen redan i schema.sql, guarden blir false
-      // och hoppar därmed över CREATE INDEX också — indexet uppstod alltså bara
+      // och hoppar därmed över CREATE INDEX IF NOT EXISTS också — indexet uppstod alltså bara
       // där ALTER faktiskt behövdes. Samma miss som migration 059 lappade för
       // refresh_tokens, i sju nya instanser. Här skapas de utanför alla guards:
       // kolumnerna finns garanterat vid det här laget, oavsett väg.
@@ -1612,6 +1629,409 @@ export const migrations: Migration[] = [
         console.log(
           `[migration 071] Flyttade avsändaren ur brödtexten på ${migrated} mejlkommentar(er).`
         );
+      }
+    },
+  },
+  {
+    id: '072',
+    name: 'update_ticket_updated_at_only_on_content_columns',
+    up: (db) => {
+      // Triggern fyrade på VARJE UPDATE och stämplade därmed updated_at även vid
+      // bokföring (last_aging_notified_at, email_message_id, ai_*, sla_*) — ärenden
+      // hoppade uppåt i "senast uppdaterad" utan att någon rört dem. Nu fyrar den
+      // bara när en innehållskolumn skrivs. resolved_at/closed_at/template_id står
+      // medvetet utanför: de ändras alltid tillsammans med status (som fyrar) resp.
+      // är bokföring, och backfills av dem ska inte stämpla om hela tabellen.
+      db.exec('DROP TRIGGER IF EXISTS update_ticket_updated_at');
+      db.exec(`CREATE TRIGGER update_ticket_updated_at
+        AFTER UPDATE OF title, description, status, priority, category_id, requester_id,
+          notes, solution, company_id, assigned_to, created_by ON tickets FOR EACH ROW BEGIN
+          UPDATE tickets SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
+        END`);
+    },
+  },
+  {
+    id: '073',
+    name: 'normalize_sqlite_timestamps_to_iso',
+    up: (db, { columnExists }) => {
+      // created_at m.fl. har DEFAULT CURRENT_TIMESTAMP ('YYYY-MM-DD HH:MM:SS') medan
+      // appen skriver ISO ('YYYY-MM-DDTHH:MM:SS.sssZ'). Jämförs de som text hamnar
+      // blanksteg före 'T' — dagens första ärenden föll utanför ett dateFrom-filter
+      // och sortering inom samma dag blev fel. Normalisera bara värden som matchar
+      // SQLite-formatet; ISO-värden rörs inte. DEFAULT-klausulerna ligger kvar
+      // (ändring kräver tabell-rebuild) — appkoden ska skriva ISO explicit.
+      const columns: [string, string[]][] = [
+        ['tickets', ['created_at', 'updated_at']],
+        ['ticket_history', ['changed_at']],
+        ['ticket_comments', ['created_at', 'updated_at']],
+        ['ticket_checklists', ['created_at', 'updated_at']],
+        ['ticket_attachments', ['created_at']],
+        ['ticket_shares', ['created_at']],
+        ['ticket_links', ['created_at']],
+        ['ticket_tags', ['created_at']],
+        ['ticket_kb_links', ['created_at']],
+        ['ticket_reminders', ['created_at']],
+        ['ticket_field_values', ['created_at']],
+        ['users', ['created_at', 'last_login']],
+        ['password_reset_tokens', ['created_at', 'used_at']],
+        ['refresh_tokens', ['created_at', 'last_used_at']],
+        ['contacts', ['created_at']],
+        ['companies', ['created_at', 'updated_at']],
+        ['categories', ['created_at']],
+        ['tags', ['created_at']],
+        ['kb_categories', ['created_at']],
+        ['kb_articles', ['created_at', 'updated_at']],
+        ['kb_article_shares', ['created_at']],
+        ['kb_article_tags', ['created_at']],
+        ['kb_article_links', ['created_at']],
+        ['audit_log', ['created_at']],
+        ['webhooks', ['created_at']],
+        ['webhook_deliveries', ['created_at']],
+        ['push_subscriptions', ['created_at']],
+        ['api_keys', ['created_at']],
+        ['ticket_templates', ['created_at', 'updated_at']],
+        ['template_checklists', ['created_at']],
+        ['template_fields', ['created_at', 'updated_at']],
+        ['checklist_templates', ['created_at', 'updated_at']],
+        ['checklist_template_items', ['created_at']],
+        ['recurring_templates', ['created_at', 'updated_at']],
+        ['recurring_ticket_history', ['created_at']],
+        ['time_entries', ['created_at']],
+        ['invoices', ['created_at']],
+        ['invoice_lines', ['created_at']],
+        ['billing_rates', ['created_at', 'updated_at']],
+        ['sla_policies', ['created_at', 'updated_at']],
+        ['ai_usage_log', ['created_at']],
+        ['ai_deflections', ['created_at']],
+      ];
+      const sqliteFormat = "'[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]'";
+      // update_*_updated_at fyrar på alla UPDATE och skulle skriva över updated_at.
+      withTriggersSuspended(db, ['update_checklist_updated_at', 'update_comment_updated_at'], () => {
+        for (const [table, cols] of columns) {
+          for (const col of cols) {
+            if (!columnExists(table, col)) continue;
+            db.prepare(
+              `UPDATE ${table} SET ${col} = strftime('%Y-%m-%dT%H:%M:%fZ', ${col}) WHERE ${col} GLOB ${sqliteFormat}`
+            ).run();
+          }
+        }
+      });
+    },
+  },
+  {
+    id: '074',
+    name: 'clear_stale_resolved_and_closed_at',
+    up: (db) => {
+      // PUT/bulk i tickets.ts sätter resolved_at/closed_at men nollställer dem aldrig
+      // när ett ärende öppnas igen — rapporterna räknade återöppnade ärenden som
+      // stängda. Backfill: tidsstämpeln hör bara hemma på ett ärende i motsvarande status.
+      db.prepare("UPDATE tickets SET closed_at = NULL WHERE status != 'closed' AND closed_at IS NOT NULL").run();
+      db.prepare(
+        "UPDATE tickets SET resolved_at = NULL WHERE status NOT IN ('resolved', 'closed') AND resolved_at IS NOT NULL"
+      ).run();
+    },
+  },
+  {
+    id: '075',
+    name: 'rebuild_ticket_templates_canonical_form',
+    disableForeignKeys: true,
+    up: (db, { tableExists }) => {
+      // Fresh och uppgraderad installation hade två olika ticket_templates (se
+      // schema-path-parity.test.ts): uppgraderad saknade FK på created_by och hade
+      // description_template nullable, fresh saknade CHECK på template_type. Båda
+      // vägarna bygger nu om till samma form. template_checklists/template_fields
+      // hänger på tabellen med ON DELETE CASCADE — därför disableForeignKeys, annars
+      // cascade-raderar DROP TABLE alla deras rader.
+      if (!tableExists('ticket_templates')) return;
+      db.exec(`CREATE TABLE ticket_templates_new (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        template_type TEXT DEFAULT 'standard' CHECK(template_type IN ('standard', 'dynamic')),
+        title_template TEXT NOT NULL,
+        description_template TEXT NOT NULL,
+        priority TEXT DEFAULT 'medium',
+        category_id TEXT REFERENCES categories(id) ON DELETE SET NULL,
+        notes_template TEXT,
+        solution_template TEXT,
+        position INTEGER DEFAULT 0,
+        created_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`);
+      // Explicit kolumnlista (kolumnordningen skiljer mellan vägarna). created_by
+      // utan FK kan peka på raderade användare och category_id på raderade kategorier.
+      db.exec(`INSERT INTO ticket_templates_new
+        (id, name, description, template_type, title_template, description_template, priority,
+         category_id, notes_template, solution_template, position, created_by, created_at, updated_at)
+        SELECT id, name, description,
+          CASE WHEN template_type IN ('standard', 'dynamic') THEN template_type ELSE 'standard' END,
+          title_template, COALESCE(description_template, ''), priority,
+          CASE WHEN category_id IN (SELECT id FROM categories) THEN category_id END,
+          notes_template, solution_template, position,
+          CASE WHEN created_by IN (SELECT id FROM users) THEN created_by END,
+          created_at, updated_at
+        FROM ticket_templates`);
+      db.exec('DROP TABLE ticket_templates');
+      db.exec('ALTER TABLE ticket_templates_new RENAME TO ticket_templates');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_ticket_templates_position ON ticket_templates(position)');
+    },
+  },
+  {
+    id: '076',
+    name: 'rebuild_tags_not_null_color',
+    disableForeignKeys: true,
+    up: (db) => {
+      // Uppgraderad: color NOT NULL DEFAULT #6366f1, fresh: nullable DEFAULT #3b82f6.
+      // Båda landar nu på NOT NULL DEFAULT #3b82f6 (routes/tags.ts skickar alltid
+      // explicit färg, #3b82f6 när inget anges). ticket_tags och kb_article_tags
+      // refererar tags med ON DELETE CASCADE → foreign_keys av under rebuilden.
+      const color = (
+        db.prepare("SELECT \"notnull\" AS nn, dflt_value AS dflt FROM pragma_table_info('tags') WHERE name = 'color'").get() as
+          | { nn: number; dflt: string | null }
+          | undefined
+      );
+      if (color?.nn === 1 && color.dflt === "'#3b82f6'") return;
+      db.exec(`CREATE TABLE tags_new (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        color TEXT NOT NULL DEFAULT '#3b82f6',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      )`);
+      db.exec(`INSERT INTO tags_new (id, name, color, created_at)
+        SELECT id, name, COALESCE(color, '#3b82f6'), created_at FROM tags`);
+      db.exec('DROP TABLE tags');
+      db.exec('ALTER TABLE tags_new RENAME TO tags');
+    },
+  },
+  {
+    id: '077',
+    name: 'dedupe_contacts_and_unique_email_nocase',
+    up: (db) => {
+      // contacts.email var inte unik: samma adress i olika skiftläge gav flera
+      // kontakter och ärendehistoriken splittrades. Behåll den äldsta raden per
+      // adress, peka om ärendena och radera resten — sedan unikt index.
+      const groups = db
+        .prepare('SELECT MIN(email) AS email FROM contacts GROUP BY email COLLATE NOCASE HAVING COUNT(*) > 1')
+        .all() as { email: string }[];
+      const members = db.prepare(
+        'SELECT id FROM contacts WHERE email = ? COLLATE NOCASE ORDER BY created_at ASC, rowid ASC'
+      );
+      const repoint = db.prepare('UPDATE tickets SET requester_id = ? WHERE requester_id = ?');
+      const remove = db.prepare('DELETE FROM contacts WHERE id = ?');
+
+      let removed = 0;
+      // Ommärkningen av requester_id ska inte stämpla om updated_at på ärendena.
+      withTriggersSuspended(db, ['update_ticket_updated_at'], () => {
+        for (const { email } of groups) {
+          const [keeper, ...duplicates] = (members.all(email) as { id: string }[]).map((r) => r.id);
+          for (const duplicate of duplicates) {
+            repoint.run(keeper, duplicate);
+            remove.run(duplicate);
+            removed++;
+          }
+        }
+      });
+      if (removed > 0) {
+        logger.warn(`[migration 077] ${removed} dubblettkontakt(er) (samma e-post, olika skiftläge) sammanslagna med den äldsta.`);
+      }
+
+      db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_email_unique ON contacts(email COLLATE NOCASE)').run();
+    },
+  },
+  {
+    id: '078',
+    name: 'add_missing_foreign_key_indexes',
+    up: (db) => {
+      // Verifierade SCAN på cascade/SET NULL-uppslag. Utanför alla columnExists-
+      // guards så fresh och uppgraderad får samma index.
+      const indexes: [string, string][] = [
+        ['idx_ticket_shares_ticket', 'ticket_shares(ticket_id)'],
+        ['idx_ticket_shares_created_by', 'ticket_shares(created_by)'],
+        ['idx_ticket_links_created_by', 'ticket_links(created_by)'],
+        ['idx_ticket_templates_category', 'ticket_templates(category_id)'],
+        ['idx_ticket_templates_created_by', 'ticket_templates(created_by)'],
+        ['idx_tickets_ai_suggested_category', 'tickets(ai_suggested_category_id)'],
+        ['idx_ticket_comments_ticket_deleted_created', 'ticket_comments(ticket_id, deleted_at, created_at)'],
+        ['idx_tickets_resolved_at', 'tickets(resolved_at)'],
+        ['idx_tickets_closed_at_only', 'tickets(closed_at)'],
+      ];
+      for (const [name, target] of indexes) {
+        db.prepare(`CREATE INDEX IF NOT EXISTS ${name} ON ${target}`).run();
+      }
+    },
+  },
+  {
+    id: '079',
+    name: 'drop_redundant_indexes',
+    up: (db) => {
+      // Varje index nedan är antingen en dubblett av UNIQUE-villkorets autoindex
+      // eller ett strikt prefix av ett sammansatt index (bekräftas i
+      // migration079.test.ts via PRAGMA index_info). De kostar skrivningar utan
+      // att ge något vid läsning. Måste även bort ur schema.sql, annars skapas de
+      // om vid varje start.
+      const redundant = [
+        'idx_users_email',
+        'idx_refresh_tokens_token',
+        'idx_ticket_shares_token',
+        'idx_kb_article_shares_token',
+        'idx_password_reset_token_hash',
+        'idx_billing_rates_company',
+        'idx_push_subscriptions_endpoint',
+        'idx_checklist_templates_name',
+        'idx_ticket_tags_ticket',
+        'idx_ticket_kb_links_ticket',
+        'idx_ticket_links_source',
+        'idx_kb_article_tags_article',
+        'idx_kb_article_links_source',
+        'idx_sla_policies_company',
+        'idx_tickets_status',
+        'idx_ticket_field_values_ticket',
+        'idx_ticket_field_values_field',
+        'idx_ticket_comments_ticket',
+      ];
+      for (const name of redundant) {
+        db.prepare(`DROP INDEX IF EXISTS ${name}`).run();
+      }
+    },
+  },
+  {
+    id: '080',
+    name: 'clear_ticket_template_id_on_template_delete',
+    up: (db) => {
+      // tickets.template_id saknar FK och pekade på raderade mallar. Rensa gamla
+      // hängande värden och låt en trigger göra det framåt (templates.ts raderar
+      // bara mallen). Triggern ligger här, inte i schema.sql: ticket_templates
+      // skapas av migration 005, inte av schema.sql.
+      db.prepare(
+        'UPDATE tickets SET template_id = NULL WHERE template_id IS NOT NULL AND template_id NOT IN (SELECT id FROM ticket_templates)'
+      ).run();
+      db.exec('DROP TRIGGER IF EXISTS ticket_templates_clear_ticket_template_id');
+      db.exec(`CREATE TRIGGER ticket_templates_clear_ticket_template_id
+        AFTER DELETE ON ticket_templates FOR EACH ROW BEGIN
+          UPDATE tickets SET template_id = NULL WHERE template_id = OLD.id;
+        END`);
+    },
+  },
+  {
+    id: '081',
+    name: 'rebuild_kb_articles_fts_contentless_delete',
+    up: (db, { tableExists }) => {
+      // kb_articles_fts var contentless utan contentless_delete: radering krävde
+      // 'delete'-kommandot med exakt gamla värden (stämmer inte → tyst korrupt index)
+      // och det gick aldrig att bygga om. Nu som tickets_fts (migration 052).
+      // remove_diacritics 0 håller å/ä/ö isär från a/o — "får" ska inte matcha "far".
+      // Källtabellen har TEXT-PK, så FTS-raderna nycklas på rowid: kör aldrig VACUUM.
+      if (!tableExists('kb_articles')) return;
+      db.exec('DROP TABLE IF EXISTS kb_articles_fts');
+      db.exec(`CREATE VIRTUAL TABLE kb_articles_fts USING fts5(
+        title, content_plain,
+        content='', contentless_delete=1, tokenize='unicode61 remove_diacritics 0'
+      )`);
+      rebuildKbFts(db);
+    },
+  },
+  {
+    id: '082',
+    name: 'add_backup_config_failure_tracking',
+    up: (db, { columnExists }) => {
+      if (!columnExists('backup_config', 'consecutive_failures')) {
+        db.prepare('ALTER TABLE backup_config ADD COLUMN consecutive_failures INTEGER NOT NULL DEFAULT 0').run();
+      }
+      if (!columnExists('backup_config', 'last_error')) {
+        db.prepare('ALTER TABLE backup_config ADD COLUMN last_error TEXT').run();
+      }
+    },
+  },
+  {
+    id: '083',
+    name: 'add_users_must_change_password',
+    up: (db, { columnExists }) => {
+      if (!columnExists('users', 'must_change_password')) {
+        db.prepare('ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0').run();
+      }
+    },
+  },
+  {
+    id: '084',
+    name: 'create_system_user',
+    up: (db) => {
+      // Ägare till kommentarer som kommer in via e-post. Tidigare valdes "första
+      // användaren" (SELECT id FROM users LIMIT 1), vilket pekade på en riktig person.
+      // Lösenordet är ett slumpat bcrypt-hash som ingen känner → raden kan inte logga in.
+      if (db.prepare('SELECT 1 FROM users WHERE id = ?').get(SYSTEM_USER_ID)) return;
+      const unusableHash = bcrypt.hashSync(randomBytes(32).toString('hex'), 10);
+      db.prepare(
+        'INSERT INTO users (id, email, display_name, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+      ).run(SYSTEM_USER_ID, SYSTEM_USER_EMAIL, 'System (e-post)', unusableHash, 'user', new Date().toISOString());
+    },
+  },
+  {
+    id: '085',
+    name: 'revoke_plaintext_refresh_tokens',
+    up: (db) => {
+      // refresh_tokens.token lagrade klartext; auth.ts lagrar nu SHA-256 (hex) i samma
+      // kolumn. Klartextraderna kan inte matchas längre och är en läckrisk — rensa
+      // dem en gång. Användare loggas ut och loggar in igen.
+      db.prepare('DELETE FROM refresh_tokens').run();
+    },
+  },
+  {
+    id: '086',
+    name: 'add_ticket_reminders_attempts',
+    up: (db, { columnExists }) => {
+      // Räknare för omförsök så en påminnelse som aldrig går att skicka inte
+      // plockas upp för evigt av reminderScheduler.
+      if (!columnExists('ticket_reminders', 'attempts')) {
+        db.prepare('ALTER TABLE ticket_reminders ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0').run();
+      }
+    },
+  },
+  {
+    id: '087',
+    name: 'add_ticket_comments_email_message_id',
+    up: (db, { columnExists }) => {
+      // Message-ID för inkommande mejl som blev kommentar — behövs för att
+      // deduplicera ett mejl som levereras två gånger (tickets.email_message_id
+      // täcker bara mejl som skapade ärendet).
+      if (!columnExists('ticket_comments', 'email_message_id')) {
+        db.prepare('ALTER TABLE ticket_comments ADD COLUMN email_message_id TEXT DEFAULT NULL').run();
+      }
+      db.prepare(
+        'CREATE INDEX IF NOT EXISTS idx_ticket_comments_email_message_id ON ticket_comments(email_message_id)'
+      ).run();
+    },
+  },
+  {
+    id: '088',
+    name: 'add_users_token_version',
+    up: (db, { columnExists }) => {
+      // Höjs vid lösenordsbyte; access-token bär versionen (tv) och middleware/auth.ts
+      // avvisar tokens med lägre värde, så gamla sessioner dör direkt.
+      if (!columnExists('users', 'token_version')) {
+        db.prepare('ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0').run();
+      }
+    },
+  },
+  {
+    id: '089',
+    name: 'add_refresh_tokens_replaced_by',
+    up: (db, { columnExists }) => {
+      // Rotationskedja för reuse-detection: en roterad token pekar på sin efterföljare,
+      // så ett återanvänt (redan roterat) token kan spåras och hela kedjan återkallas.
+      if (!columnExists('refresh_tokens', 'replaced_by')) {
+        db.prepare('ALTER TABLE refresh_tokens ADD COLUMN replaced_by TEXT').run();
+      }
+      db.prepare('CREATE INDEX IF NOT EXISTS idx_refresh_tokens_replaced_by ON refresh_tokens(replaced_by)').run();
+    },
+  },
+  {
+    id: '090',
+    name: 'add_kb_article_shares_expires_at',
+    up: (db, { columnExists }) => {
+      // NULL = ingen utgång (befintliga delningslänkar fortsätter gälla).
+      if (!columnExists('kb_article_shares', 'expires_at')) {
+        db.prepare('ALTER TABLE kb_article_shares ADD COLUMN expires_at TEXT').run();
       }
     },
   },

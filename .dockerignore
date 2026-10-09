@@ -6,8 +6,13 @@ server/node_modules
 .claude
 .superpowers
 .remember
+.impeccable
+graphify-out
+docs
+tools
+scripts
 *.md
-!README.md
+*.png
 dist
 server/dist
 .env

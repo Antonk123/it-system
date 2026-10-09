@@ -9,7 +9,7 @@
 
 set -e
 
-# --- Konfiguration (uppdatera REPO_URL innan publicering) ---
+# --- Konfiguration ---
 REPO_URL="https://github.com/Antonk123/it-system"
 INSTALL_DIR="/opt/it-ticketing"
 
@@ -107,7 +107,8 @@ echo ""
 if [ ${#ADMIN_PASSWORD} -lt 12 ]; then
   err "Lösenordet måste vara minst 12 tecken."
 fi
-if ! echo "$ADMIN_PASSWORD" | grep -qP '(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])'; then
+password_has() { [[ "$ADMIN_PASSWORD" =~ $1 ]]; }
+if ! password_has '[a-z]' || ! password_has '[A-Z]' || ! password_has '[0-9]' || ! password_has '[@$!%*?&]'; then
   err "Lösenordet måste innehålla minst en versal, en gemen, en siffra och ett specialtecken (@\$!%*?&)"
 fi
 
@@ -129,7 +130,15 @@ if [[ ! "$APP_URL" =~ ^https?:// ]]; then
 fi
 
 # --- 3b. Detektera maskinens IP för CORS ---
-DETECTED_IP=$(hostname -I | awk '{print $1}' | tr -d '[:space:]')
+# `hostname -I` finns bara på Linux; macOS får IP:n via ipconfig.
+detect_ip() {
+  if hostname -I &>/dev/null; then
+    hostname -I | awk '{print $1}'
+  elif command -v ipconfig &>/dev/null; then
+    ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true
+  fi
+}
+DETECTED_IP=$(detect_ip | tr -d '[:space:]')
 if [ -n "$DETECTED_IP" ] && [ "$DETECTED_IP" != "127.0.0.1" ]; then
   CORS_ORIGINS="${APP_URL},http://${DETECTED_IP}:${FRONTEND_PORT}"
   info "Detekterad IP: ${DETECTED_IP} — CORS tillåter både URL:en och ${DETECTED_IP}"
@@ -172,6 +181,10 @@ ok "CSRF_SECRET genererad"
 # push-notiser var tyst avstängda vid varje installation.
 
 # --- 5. Skriv .env ---
+# Filen innehåller JWT/CSRF-hemligheter och admin-lösenordet: skapa den som 0600 från
+# början (umask) i stället för att först skriva den världsläsbar och chmod:a efteråt.
+previous_umask=$(umask)
+umask 077
 cat > .env << EOF
 # Genererat av setup.sh $(date +%Y-%m-%d\ %H:%M)
 # ${COMPANY_NAME}
@@ -208,7 +221,9 @@ SMTP_PASS=${SMTP_PASS}
 EMAIL_FROM=${EMAIL_FROM}
 EMAIL_TO=${EMAIL_TO}
 EOF
-ok ".env skapad"
+umask "$previous_umask"
+chmod 600 .env
+ok ".env skapad (endast ägaren kan läsa den)"
 
 # --- 5b. docker-compose.local.yml ---
 # Filen är versionsspårad i repot och underhålls där — den ligger alltså redan i
@@ -293,8 +308,18 @@ ok "Backend svarar (${WAITED}s)"
 
 # --- 10. Initiera databas med admin-användare ---
 header "Initierar databas"
-docker exec -e ADMIN_EMAIL="${ADMIN_EMAIL}" -e ADMIN_PASSWORD="${ADMIN_PASSWORD}" -e ADMIN_NAME="${ADMIN_NAME}" \
-  it-ticketing-backend node dist/db/init.js
+# Uppgifterna skickas via en temporär --env-file (0600) i stället för -e på kommandoraden,
+# där lösenordet annars syns i `ps` och shell-historiken.
+seed_env=$(mktemp)
+trap 'rm -f "$seed_env"' EXIT
+chmod 600 "$seed_env"
+{
+  echo "ADMIN_EMAIL=${ADMIN_EMAIL}"
+  echo "ADMIN_PASSWORD=${ADMIN_PASSWORD}"
+  echo "ADMIN_NAME=${ADMIN_NAME}"
+} > "$seed_env"
+docker exec --env-file "$seed_env" it-ticketing-backend node dist/db/init.js
+rm -f "$seed_env"
 ok "Databas initierad med admin: ${ADMIN_EMAIL}"
 
 # --- 11. Klar! ---
@@ -312,4 +337,6 @@ echo "    docker compose -f docker-compose.local.yml --env-file .env down     # 
 echo "    docker compose -f docker-compose.local.yml logs -f                  # Loggar"
 echo ""
 echo -e "  ${BOLD}Konfiguration:${NC} ${INSTALL_DIR}/.env"
+echo ""
+warn "Ta bort raden ADMIN_PASSWORD från ${INSTALL_DIR}/.env nu — den behövs bara för första uppstarten."
 echo ""

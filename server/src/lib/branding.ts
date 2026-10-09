@@ -30,7 +30,7 @@ if (!existsSync(BRANDING_DIR)) {
 
 /** Max accepted logo size (bytes). Lower than the 10 MB attachment cap — a
  * logo doesn't need it, and a tighter limit is a smaller attack surface. */
-export const MAX_LOGO_SIZE = 1 * 1024 * 1024; // 1 MB
+const MAX_LOGO_SIZE = 1 * 1024 * 1024; // 1 MB
 
 // Allowlist: PNG/JPEG/WebP only — explicitly NOT image/svg+xml. This file is
 // served with `Content-Disposition: inline` from our own origin (see

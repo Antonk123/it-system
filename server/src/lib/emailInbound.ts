@@ -1,5 +1,5 @@
 import { ImapFlow } from 'imapflow';
-import { simpleParser } from 'mailparser';
+import { simpleParser, type ParsedMail } from 'mailparser';
 import { convert } from 'html-to-text';
 import { ConfidentialClientApplication } from '@azure/msal-node';
 import { db } from '../db/connection.js';
@@ -11,6 +11,8 @@ import { stripQuotedReply } from './emailQuote.js';
 import { logger } from './logger.js';
 import { logAudit } from './auditLog.js';
 import { mintShareToken } from './shares.js';
+import { getSystemUserId } from './systemUser.js';
+import { sanitizePlainText, sanitizeRichText } from './htmlSanitizer.js';
 import { ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS, MAX_FILE_SIZE, hasMagicByteMatch } from '../routes/attachments.js';
 
 interface EmailConfig {
@@ -39,6 +41,23 @@ function useOAuth2(): boolean {
  */
 const envBool = (v: string | undefined, def: boolean): boolean =>
   v == null ? def : v.toLowerCase() !== 'false';
+
+const MAX_EMAIL_BYTES = 25 * 1024 * 1024;
+const MAX_ATTACHMENTS_PER_TICKET = 50;
+const DEFAULT_POLL_INTERVAL_SECONDS = 60;
+const MIN_POLL_INTERVAL_SECONDS = 10;
+
+/** IMAP_POLL_INTERVAL i sekunder; ogiltigt eller för lågt värde ger default (annars hot loop vid NaN). */
+function pollIntervalSeconds(): number {
+  const n = parseInt(process.env.IMAP_POLL_INTERVAL || '', 10);
+  return Number.isFinite(n) && n >= MIN_POLL_INTERVAL_SECONDS ? n : DEFAULT_POLL_INTERVAL_SECONDS;
+}
+
+/** Max antal nya ärenden per avsändare och dygn via e-post (skydd mot mail-loopar och spam). */
+function maxTicketsPerSenderPerDay(): number {
+  const n = parseInt(process.env.EMAIL_INBOUND_MAX_PER_SENDER_PER_DAY || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : 20;
+}
 
 let msalClient: ConfidentialClientApplication | null = null;
 
@@ -78,7 +97,7 @@ async function getEmailConfig(): Promise<EmailConfig | null> {
     // Default true: IMAP körs nästan alltid över TLS (port 993). Stäng av med IMAP_SECURE=false.
     secure: envBool(process.env.IMAP_SECURE, true),
     user,
-    pollingInterval: parseInt(process.env.IMAP_POLL_INTERVAL || '60'),
+    pollingInterval: pollIntervalSeconds(),
     // Default true: okända avsändare får automatiskt en kontakt. Stäng av med IMAP_AUTO_CREATE_CONTACT=false.
     autoCreateContact: envBool(process.env.IMAP_AUTO_CREATE_CONTACT, true),
   };
@@ -109,9 +128,11 @@ function findTicketByShortId(subject: string): { id: string } | undefined {
   const match = subject.match(/\[#([A-F0-9]{8})\]/i);
   if (!match) return undefined;
   const shortId = match[1].toLowerCase();
+  // Prefix-intervall på primärnyckeln (id är gemena UUID:n) i stället för
+  // LOWER(SUBSTR(id)) som tvingar en full tabellskanning per mail.
   return db
-    .prepare('SELECT id FROM tickets WHERE LOWER(SUBSTR(id, 1, 8)) = ? LIMIT 1')
-    .get(shortId) as { id: string } | undefined;
+    .prepare('SELECT id FROM tickets WHERE id >= ? AND id < ? LIMIT 1')
+    .get(shortId, `${shortId}\u{10FFFF}`) as { id: string } | undefined;
 }
 
 /**
@@ -131,7 +152,7 @@ function findTicketBySubject(subject: string, fromAddress: string): { id: string
       SELECT t.id FROM tickets t
       JOIN contacts c ON c.id = t.requester_id
       WHERE t.title = ?
-        AND LOWER(c.email) = LOWER(?)
+        AND c.email = ? COLLATE NOCASE
         AND t.status NOT IN ('closed')
       ORDER BY t.created_at DESC LIMIT 1
     `)
@@ -140,7 +161,7 @@ function findTicketBySubject(subject: string, fromAddress: string): { id: string
 
 function resolveOrCreateContact(fromAddress: string, fromName: string, autoCreate: boolean) {
   let contact = db
-    .prepare('SELECT id, company_id FROM contacts WHERE LOWER(email) = LOWER(?)')
+    .prepare('SELECT id, company_id FROM contacts WHERE email = ? COLLATE NOCASE')
     .get(fromAddress) as { id: string; company_id: string | null } | undefined;
 
   if (!contact && autoCreate) {
@@ -157,31 +178,103 @@ function resolveOrCreateContact(fromAddress: string, fromName: string, autoCreat
   return contact;
 }
 
-function addCommentToTicket(ticketId: string, body: string, fromAddress: string, fromName: string): void {
+function addCommentToTicket(
+  ticketId: string,
+  body: string,
+  fromAddress: string,
+  fromName: string,
+  opts: { internal?: boolean; messageId?: string | null } = {}
+): void {
   const commentId = randomUUID();
-  const systemUserId = (db.prepare('SELECT id FROM users LIMIT 1').get() as { id: string } | undefined)?.id;
-  if (!systemUserId) {
-    logger.warn('No system user found, cannot add email comment');
-    return;
-  }
 
   // user_id måste peka på en riktig användare (FK), men systemanvändaren säger
   // inget om vem som faktiskt skrev — avsändaren bärs av email_from_*-kolumnerna
   // (migration 071) och renderas i kommentarhuvudet, inte i brödtexten.
   db.prepare(
-    `INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal, email_from_name, email_from_address)
-     VALUES (?, ?, ?, ?, 0, ?, ?)`
-  ).run(commentId, ticketId, systemUserId, body, fromName, fromAddress);
+    `INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal, email_from_name, email_from_address, email_message_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    commentId,
+    ticketId,
+    getSystemUserId(),
+    sanitizeRichText(body),
+    opts.internal ? 1 : 0,
+    fromName,
+    fromAddress,
+    opts.messageId ?? null
+  );
 
   db.prepare('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(ticketId);
 
-  logger.info('Added email comment to ticket', { ticketId, from: fromAddress });
+  logger.info('Added email comment to ticket', { ticketId, from: fromAddress, internal: !!opts.internal });
+}
+
+/**
+ * Är avsändaren någon som har med ärendet att göra: beställarens kontakt-mail,
+ * en tidigare e-postavsändare vars kommentar var publik (alltså redan betrodd),
+ * eller en inloggad användare som kommenterat publikt? Interna anteckningar räknas
+ * inte — annars kunde en avvisad avsändare göra sig betrodd genom sitt eget mail.
+ */
+function isTrustedSender(ticketId: string, fromAddress: string): boolean {
+  const row = db
+    .prepare(
+      `SELECT 1 AS ok FROM tickets t
+         JOIN contacts c ON c.id = t.requester_id
+         WHERE t.id = @ticketId AND c.email = @email COLLATE NOCASE
+       UNION ALL
+       SELECT 1 FROM ticket_comments tc
+         LEFT JOIN users u ON u.id = tc.user_id
+         WHERE tc.ticket_id = @ticketId AND tc.is_internal = 0
+           AND (tc.email_from_address = @email COLLATE NOCASE
+                OR (tc.email_from_address IS NULL AND u.email = @email COLLATE NOCASE))
+       LIMIT 1`
+    )
+    .get({ ticketId, email: fromAddress });
+  return !!row;
+}
+
+function headerText(parsed: ParsedMail, name: string): string {
+  return String(parsed.headers?.get(name) ?? '');
+}
+
+const AUTOMATED_SENDER = /^(?:mailer-daemon|postmaster|no-?reply|do-?not-?reply|bounces?|bounce[+._-].*)@/i;
+
+/** Autosvar, studsar och listpost får aldrig skapa ärenden eller bekräftelser (backscatter/mail-loop). */
+function isAutomatedMail(parsed: ParsedMail, fromAddress: string): boolean {
+  const autoSubmitted = headerText(parsed, 'auto-submitted').trim().toLowerCase();
+  if (autoSubmitted && autoSubmitted !== 'no') return true;
+  if (/^(?:bulk|junk|auto_reply|list)\b/i.test(headerText(parsed, 'precedence').trim())) return true;
+  if (parsed.headers?.has('x-auto-response-suppress')) return true;
+  return AUTOMATED_SENDER.test(fromAddress);
+}
+
+/** Avsändare som SPF/DMARC underkänt kan vara förfalskade och får inte skriva publikt. */
+function failedSenderAuthentication(parsed: ParsedMail): boolean {
+  return /\b(?:spf|dmarc)=fail\b/i.test(headerText(parsed, 'authentication-results'));
+}
+
+function senderTicketsLastDay(fromAddress: string): number {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM tickets t
+         JOIN contacts c ON c.id = t.requester_id
+         JOIN ticket_history h ON h.ticket_id = t.id AND h.field_name = 'created' AND h.new_value = 'email'
+         WHERE c.email = ? COLLATE NOCASE AND t.created_at >= datetime('now', '-1 day')`
+    )
+    .get(fromAddress) as { n: number };
+  return row.n;
 }
 
 /**
  * Parsar ett råmail (Buffer) och skapar antingen ett nytt ärende eller lägger till
  * en kommentar på ett befintligt ärende via trådnings-/ämneslogik.
  * Bilagor sparas via saveAttachments med MIME- och storleksvalidering.
+ *
+ * Returnerar 'rejected' när mailet avvisats och ska läggas i Errors-mappen
+ * (för stort, eller avsändaren har nått dygnsgränsen); annars 'processed'.
+ *
+ * Före trådningen stoppas autosvar/studsar (inga ärenden, kontakter eller
+ * bekräftelser) och dubbletter på Message-ID.
  *
  * Tråd- och dedupliceringsordning (i prioritetsordning):
  *
@@ -199,6 +292,11 @@ function addCommentToTicket(ticketId: string, body: string, fromAddress: string,
  *    kopplas mailet till det ärendet. Avsändarkontrollen förhindrar att externa
  *    svar på ett slumpmässigt matchande ämne kopplas till fel ärende.
  *
+ * Träff via 1–2 blir en publik kommentar bara om avsändaren är beställaren eller
+ * redan har kommenterat publikt på ärendet och SPF/DMARC inte underkänts —
+ * annars en intern anteckning, så att ett förfalskat kort-id inte kan skriva
+ * i kundens tråd.
+ *
  * 4. **~60-sekunders nära-dubblett-fönster** — om inget av ovan matchar men
  *    ett ärende med samma titel och avsändare skapades inom de senaste 60
  *    sekunderna, läggs mailet till som kommentar på det ärendet i stället för
@@ -206,24 +304,45 @@ function addCommentToTicket(ticketId: string, body: string, fromAddress: string,
  *
  * Om ingen av de fyra ovan stämmer skapas ett nytt ärende.
  */
-async function processEmail(source: Buffer, config: EmailConfig): Promise<void> {
+async function processEmail(source: Buffer, config: EmailConfig): Promise<'processed' | 'rejected'> {
   // Guard against oversized emails that could OOM the process during parsing.
   // 25 MB is generous — most legitimate emails are well under 10 MB.
-  if (source.length > 25 * 1024 * 1024) {
+  if (source.length > MAX_EMAIL_BYTES) {
     logger.warn('Skipping oversized email', { sizeMB: (source.length / 1024 / 1024).toFixed(1), limitMB: 25 });
-    return;
+    return 'rejected';
   }
 
   const parsed = await simpleParser(source);
 
   const fromAddress = parsed.from?.value?.[0]?.address;
   const fromName = parsed.from?.value?.[0]?.name || fromAddress || '';
-  const subject = parsed.subject || '(Inget ämne)';
+  const subject = sanitizePlainText(parsed.subject) || '(Inget ämne)';
   const messageId = parsed.messageId || null;
 
   if (!fromAddress) {
     logger.warn('Email without from address, skipping');
-    return;
+    return 'processed';
+  }
+
+  if (isAutomatedMail(parsed, fromAddress)) {
+    logger.info('Skipping automated email (auto-reply/bounce/list)', { from: fromAddress });
+    return 'processed';
+  }
+
+  // --- Deduplication: samma Message-ID har redan blivit ärende eller kommentar ---
+  if (messageId) {
+    const duplicate = db
+      .prepare(
+        `SELECT id FROM tickets WHERE email_message_id = @messageId
+         UNION ALL
+         SELECT ticket_id FROM ticket_comments WHERE email_message_id = @messageId
+         LIMIT 1`
+      )
+      .get({ messageId }) as { id: string } | undefined;
+    if (duplicate) {
+      logger.info('Duplicate email skipped', { messageId, existingTicketId: duplicate.id });
+      return 'processed';
+    }
   }
 
   let body = '';
@@ -280,8 +399,16 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     // själva innehållet.
     const replyBody = stripQuotedReply(body);
 
+    const trusted = !failedSenderAuthentication(parsed) && isTrustedSender(existingTicket.id, fromAddress);
+    if (!trusted) {
+      logger.warn('Reply from unverified sender stored as internal note', {
+        ticketId: existingTicket.id,
+        from: fromAddress,
+      });
+    }
+
     resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
-    addCommentToTicket(existingTicket.id, replyBody, fromAddress, fromName);
+    addCommentToTicket(existingTicket.id, replyBody, fromAddress, fromName, { internal: !trusted, messageId });
 
     if (parsed.attachments && parsed.attachments.length > 0) {
       await saveAttachments(parsed.attachments, existingTicket.id);
@@ -291,18 +418,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     // technician (webhook + push + email). Fire-and-forget.
     notifyAgentOfCustomerReply(existingTicket.id, replyBody)
       .catch((err) => logger.error('notifyAgentOfCustomerReply failed', { error: String(err) }));
-    return;
-  }
-
-  // --- Deduplication: skip if this messageId already created a ticket ---
-  if (messageId) {
-    const duplicate = db
-      .prepare('SELECT id FROM tickets WHERE email_message_id = ? LIMIT 1')
-      .get(messageId) as { id: string } | undefined;
-    if (duplicate) {
-      logger.info('Duplicate email skipped', { messageId, existingTicketId: duplicate.id });
-      return;
-    }
+    return 'processed';
   }
 
   // --- Deduplication: check if a ticket with same sender + similar subject was created very recently ---
@@ -313,7 +429,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
         `SELECT t.id FROM tickets t
          JOIN contacts c ON c.id = t.requester_id
          WHERE t.title = ?
-           AND LOWER(c.email) = LOWER(?)
+           AND c.email = ? COLLATE NOCASE
            AND t.created_at >= datetime('now', '-60 seconds')
          LIMIT 1`
       )
@@ -322,30 +438,39 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
     if (recentDuplicate) {
       logger.info('Near-duplicate email, adding as comment', { subject, from: fromAddress, ticketId: recentDuplicate.id });
       resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
-      addCommentToTicket(recentDuplicate.id, stripQuotedReply(body), fromAddress, fromName);
+      addCommentToTicket(recentDuplicate.id, stripQuotedReply(body), fromAddress, fromName, { messageId });
       if (parsed.attachments && parsed.attachments.length > 0) {
         await saveAttachments(parsed.attachments, recentDuplicate.id);
       }
-      return;
+      return 'processed';
     }
   }
 
   // --- New ticket ---
-  const contact = resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
+  const dailyLimit = maxTicketsPerSenderPerDay();
+  if (senderTicketsLastDay(fromAddress) >= dailyLimit) {
+    logger.warn('Sender exceeded daily email-ticket limit, rejecting', { from: fromAddress, limit: dailyLimit });
+    return 'rejected';
+  }
 
   const ticketId = randomUUID();
-  const companyId = contact?.company_id || null;
 
-  db.prepare(
-    `INSERT INTO tickets (id, title, description, status, priority, requester_id, company_id, email_message_id)
-     VALUES (?, ?, ?, 'open', 'medium', ?, ?, ?)`
-  ).run(ticketId, subject, body, contact?.id || null, companyId, messageId);
+  // Kontakt, ärende och historik skapas atomärt — ett fel mitt i får inte lämna
+  // en halv rad som nästa poll sedan dedupar bort.
+  const createTicket = db.transaction(() => {
+    const contact = resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
+    db.prepare(
+      `INSERT INTO tickets (id, title, description, status, priority, requester_id, company_id, email_message_id)
+       VALUES (?, ?, ?, 'open', 'medium', ?, ?, ?)`
+    ).run(ticketId, subject, sanitizeRichText(body), contact?.id || null, contact?.company_id || null, messageId);
 
-  // FTS5 synkas automatiskt via triggers (migration 050)
+    // FTS5 synkas automatiskt via triggers (migration 050)
 
-  db.prepare(
-    'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(randomUUID(), ticketId, null, 'created', null, 'email');
+    db.prepare(
+      'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(randomUUID(), ticketId, null, 'created', null, 'email');
+  });
+  createTicket();
 
   if (parsed.attachments && parsed.attachments.length > 0) {
     await saveAttachments(parsed.attachments, ticketId);
@@ -381,6 +506,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<void> 
   }).catch(error => logger.error('Confirmation email failed', { error: String(error) }));
 
   logger.info('Created ticket from email', { ticketId, subject, from: fromAddress });
+  return 'processed';
 }
 
 function isSignatureImage(attachment: any): boolean {
@@ -397,66 +523,84 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
   const path = await import('path');
   const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'data/uploads');
 
+  // Samma tak per ärende som HTTP-uppladdningen (routes/attachments.ts)
+  const existing = (db.prepare('SELECT COUNT(*) AS n FROM ticket_attachments WHERE ticket_id = ?').get(ticketId) as { n: number }).n;
+  let remaining = MAX_ATTACHMENTS_PER_TICKET - existing;
+
   // Limit to 20 attachments per email to prevent abuse
   const limited = attachments.slice(0, 20);
 
   for (const attachment of limited) {
+    if (remaining <= 0) {
+      logger.warn('Attachment limit reached for ticket, skipping the rest', { ticketId, limit: MAX_ATTACHMENTS_PER_TICKET });
+      break;
+    }
     if (!attachment.filename) continue;
-    if (isSignatureImage(attachment)) {
-      logger.debug('Skipping signature image', { filename: attachment.filename, size: attachment.size });
-      continue;
-    }
 
-    // Validera MIME-typ och filändelse mot samma whitelist som HTTP-uppladdningar
-    const mime: string = (attachment.contentType || '').toLowerCase().split(';')[0].trim();
-    const extNoDot = path.extname(attachment.filename).replace(/^\./, '').toLowerCase();
-    if (!ALLOWED_MIME_TYPES.includes(mime)) {
-      logger.warn('Skipping mail attachment with disallowed MIME type', { filename: attachment.filename, mime });
-      continue;
-    }
-    if (!ALLOWED_EXTENSIONS.includes(extNoDot)) {
-      logger.warn('Skipping mail attachment with disallowed extension', { filename: attachment.filename, ext: extNoDot });
-      continue;
-    }
-
-    // Kontrollera storleksgräns (samma som HTTP-gränsen)
-    const attachmentSize: number = attachment.size ?? (attachment.content?.length ?? 0);
-    if (attachmentSize > MAX_FILE_SIZE) {
-      logger.warn('Skipping mail attachment exceeding size limit', {
-        filename: attachment.filename,
-        sizeMB: (attachmentSize / 1024 / 1024).toFixed(1),
-        limitMB: MAX_FILE_SIZE / 1024 / 1024,
-      });
-      continue;
-    }
-
-    const attachId = randomUUID();
-    const ext = path.extname(attachment.filename);
-    const storedName = `${attachId}${ext}`;
-    const filePath = path.join(uploadDir, storedName);
-
-    // Insert DB row first, then write file. If file write fails, clean up the DB row.
-    // This avoids orphaned files on disk when the DB insert would have failed.
-    db.prepare(
-      `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type)
-       VALUES (?, ?, ?, ?, ?, ?)`
-    ).run(attachId, ticketId, attachment.filename, storedName, attachment.size, attachment.contentType);
-
+    // En trasig bilaga får inte stoppa resten av mailets bilagor.
     try {
-      fs.mkdirSync(uploadDir, { recursive: true });
-      fs.writeFileSync(filePath, attachment.content);
-      // Verifiera magiska bytes mot deklarerad MIME — samma skydd som HTTP-uppladdningar.
-      // En avsändarstyrd Content-Type kan ljuga; vägra filer vars innehåll inte matchar.
-      if (!hasMagicByteMatch(filePath, mime)) {
-        try { fs.unlinkSync(filePath); } catch { /* ignore */ }
-        db.prepare('DELETE FROM ticket_attachments WHERE id = ?').run(attachId);
-        logger.warn('Skipping mail attachment failing magic-byte check', { filename: attachment.filename, mime });
+      if (isSignatureImage(attachment)) {
+        logger.debug('Skipping signature image', { filename: attachment.filename, size: attachment.size });
         continue;
       }
-    } catch (writeErr) {
-      // File write failed — remove the DB row to stay consistent
-      db.prepare('DELETE FROM ticket_attachments WHERE id = ?').run(attachId);
-      logger.error('Failed to write attachment file, DB row cleaned up', { storedName, error: String(writeErr) });
+
+      // Validera MIME-typ och filändelse mot samma whitelist som HTTP-uppladdningar
+      const mime: string = (attachment.contentType || '').toLowerCase().split(';')[0].trim();
+      const extNoDot = path.extname(attachment.filename).replace(/^\./, '').toLowerCase();
+      if (!ALLOWED_MIME_TYPES.includes(mime)) {
+        logger.warn('Skipping mail attachment with disallowed MIME type', { filename: attachment.filename, mime });
+        continue;
+      }
+      if (!ALLOWED_EXTENSIONS.includes(extNoDot)) {
+        logger.warn('Skipping mail attachment with disallowed extension', { filename: attachment.filename, ext: extNoDot });
+        continue;
+      }
+
+      // Kontrollera storleksgräns (samma som HTTP-gränsen)
+      const attachmentSize: number = attachment.size ?? (attachment.content?.length ?? 0);
+      if (attachmentSize > MAX_FILE_SIZE) {
+        logger.warn('Skipping mail attachment exceeding size limit', {
+          filename: attachment.filename,
+          sizeMB: (attachmentSize / 1024 / 1024).toFixed(1),
+          limitMB: MAX_FILE_SIZE / 1024 / 1024,
+        });
+        continue;
+      }
+
+      const attachId = randomUUID();
+      const ext = path.extname(attachment.filename);
+      const storedName = `${attachId}${ext}`;
+      const filePath = path.join(uploadDir, storedName);
+
+      // Insert DB row first, then write file. If file write fails, clean up the DB row.
+      // This avoids orphaned files on disk when the DB insert would have failed.
+      db.prepare(
+        `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      ).run(attachId, ticketId, attachment.filename, storedName, attachment.size, attachment.contentType);
+
+      try {
+        fs.mkdirSync(uploadDir, { recursive: true });
+        fs.writeFileSync(filePath, attachment.content);
+        // Verifiera magiska bytes mot deklarerad MIME — samma skydd som HTTP-uppladdningar.
+        // En avsändarstyrd Content-Type kan ljuga; vägra filer vars innehåll inte matchar.
+        if (!hasMagicByteMatch(filePath, mime)) {
+          try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+          db.prepare('DELETE FROM ticket_attachments WHERE id = ?').run(attachId);
+          logger.warn('Skipping mail attachment failing magic-byte check', { filename: attachment.filename, mime });
+          continue;
+        }
+        remaining--;
+      } catch (writeErr) {
+        // File write failed — remove the DB row to stay consistent
+        db.prepare('DELETE FROM ticket_attachments WHERE id = ?').run(attachId);
+        logger.error('Failed to write attachment file, DB row cleaned up', { storedName, error: String(writeErr) });
+      }
+    } catch (attachErr) {
+      logger.error('Failed to save mail attachment, continuing with the rest', {
+        filename: attachment.filename,
+        error: String(attachErr),
+      });
     }
   }
 }
@@ -479,6 +623,7 @@ type ImapClientLike = Pick<
   | 'getMailboxLock'
   | 'search'
   | 'fetch'
+  | 'fetchOne'
   | 'messageMove'
   | 'messageCopy'
   | 'messageFlagsAdd'
@@ -488,35 +633,39 @@ type ImapClientFactory = (options: ConstructorParameters<typeof ImapFlow>[0]) =>
 
 const defaultImapClientFactory: ImapClientFactory = (options) => new ImapFlow(options);
 
+function isImapConfigured(): boolean {
+  return !!(process.env.IMAP_HOST && process.env.IMAP_USER && (process.env.IMAP_PASS || useOAuth2()));
+}
+
 /** Returnerar aktuell konfigurationsstatus för inkommande e-post (IMAP). */
 export function getEmailInboundStatus() {
-  const configured = !!(
-    process.env.IMAP_HOST &&
-    process.env.IMAP_USER &&
-    (process.env.IMAP_PASS || useOAuth2())
-  );
+  const configured = isImapConfigured();
   return {
     configured,
     active: pollingTimer !== null,
     host: process.env.IMAP_HOST || null,
     user: process.env.IMAP_USER || null,
-    polling_interval: parseInt(process.env.IMAP_POLL_INTERVAL || '60'),
+    polling_interval: pollIntervalSeconds(),
     auto_create_contact: envBool(process.env.IMAP_AUTO_CREATE_CONTACT, true),
   };
 }
 
 /**
- * Kör ett enskilt IMAP-pollningsvarv: ansluter, hämtar olästa meddelanden,
- * processar dem, och flyttar processade/dead-lettrade meddelanden till
- * "Processed"/"Errors". Utbruten till modulnivå (från en tidigare nested
- * funktion i startEmailPolling) enbart för att göra `createClient`
- * injicerbar i tester — logik och kontrollflöde är oförändrade.
+ * Kör ett enskilt IMAP-pollningsvarv: ansluter, listar olästa meddelanden,
+ * hämtar och processar dem ett i taget och flyttar varje meddelande till
+ * "Processed"/"Errors" direkt när det är klart (så att ett senare fel inte
+ * gör att redan lyckade mail körs om). Utbruten till modulnivå (från en
+ * tidigare nested funktion i startEmailPolling) enbart för att göra
+ * `createClient` injicerbar i tester.
+ *
+ * `config` kan vara null om OAuth-token inte gick att hämta vid uppstart —
+ * konfigurationen slås då upp på nytt här.
  */
-async function poll(config: EmailConfig, createClient: ImapClientFactory = defaultImapClientFactory) {
+async function poll(config: EmailConfig | null, createClient: ImapClientFactory = defaultImapClientFactory) {
   let client: ImapClientLike | null = null;
   try {
     // Refresh token each poll for OAuth2
-    const currentConfig = useOAuth2() ? await getEmailConfig() : config;
+    const currentConfig = config && !useOAuth2() ? config : await getEmailConfig();
     if (!currentConfig) return;
 
     client = createClient({
@@ -527,97 +676,96 @@ async function poll(config: EmailConfig, createClient: ImapClientFactory = defau
       logger: false as any,
       socketTimeout: 90000,
     });
+    const imap = client;
 
     let connectionDead = false;
-    client.on('error', (err: Error) => {
+    imap.on('error', (err: Error) => {
       connectionDead = true;
       logger.error('IMAP connection error', { error: err.message });
     });
 
-    await client.connect();
+    await imap.connect();
 
     // Ensure "Processed" mailbox exists
     try {
-      await client.mailboxCreate('Processed');
+      await imap.mailboxCreate('Processed');
     } catch {
       // already exists
     }
 
     // Ensure "Errors" mailbox exists (dead-letter for repeatedly failing messages)
     try {
-      await client.mailboxCreate('Errors');
+      await imap.mailboxCreate('Errors');
     } catch {
       // already exists
     }
 
-    const lock = await client.getMailboxLock('INBOX');
+    const moveTo = async (uids: number[], folder: 'Processed' | 'Errors') => {
+      if (connectionDead) return;
+      try {
+        await imap.messageMove(uids, folder, { uid: true });
+        logger.info(`Moved emails to ${folder} folder`, { count: uids.length });
+      } catch (moveErr: any) {
+        logger.warn(`MOVE to ${folder} failed, trying COPY+DELETE fallback`, { error: moveErr.message });
+        try {
+          await imap.messageCopy(uids, folder, { uid: true });
+          await imap.messageFlagsAdd(uids, ['\\Deleted'], { uid: true });
+          logger.info(`COPY+DELETE fallback to ${folder} succeeded`, { count: uids.length });
+        } catch (fallbackErr: any) {
+          logger.error(`COPY+DELETE fallback to ${folder} also failed`, { error: fallbackErr.message });
+        }
+      }
+    };
+
+    const lock = await imap.getMailboxLock('INBOX');
 
     try {
-      const uids = await client.search({ all: true }, { uid: true });
-      const processedMsgUids: number[] = [];
-      const deadLetterMsgUids: number[] = [];
+      const uids = await imap.search({ all: true }, { uid: true });
+      const candidateUids: number[] = [];
+      const oversizedUids: number[] = [];
 
+      // Steg 1: bara storlek + kuvert, så att ett jättemail aldrig läses in i minnet.
+      // IMAP-kommandon får inte köras mitt i en fetch-ström, därför hämtas
+      // själva källorna först i steg 2.
       if (uids && uids.length > 0) {
-        const messages = client.fetch(
-          uids,
-          { source: true, envelope: true, uid: true },
-          { uid: true }
-        );
-
-        for await (const message of messages) {
+        for await (const meta of imap.fetch(uids, { uid: true, size: true, envelope: true }, { uid: true })) {
           if (connectionDead) break;
-          try {
-            if (!message.source) continue;
-            await processEmail(message.source, currentConfig);
-            processedMsgUids.push(message.uid);
-            emailFailureCounts.delete(message.uid);
-          } catch (error) {
-            logger.error('Error processing email', { error: String(error) });
-            const failureCount = (emailFailureCounts.get(message.uid) ?? 0) + 1;
-            if (failureCount >= EMAIL_DEAD_LETTER_THRESHOLD) {
-              deadLetterMsgUids.push(message.uid);
-              emailFailureCounts.delete(message.uid);
-              logger.error('Dead-lettering email after repeated failures, will not be retried', {
-                uid: message.uid,
-                failureCount,
-              });
-            } else {
-              emailFailureCounts.set(message.uid, failureCount);
-            }
+          if ((meta.size ?? 0) > MAX_EMAIL_BYTES) {
+            logger.warn('Skipping oversized email', {
+              uid: meta.uid,
+              sizeMB: ((meta.size ?? 0) / 1024 / 1024).toFixed(1),
+              limitMB: MAX_EMAIL_BYTES / 1024 / 1024,
+              subject: meta.envelope?.subject,
+            });
+            oversizedUids.push(meta.uid);
+          } else {
+            candidateUids.push(meta.uid);
           }
         }
       }
 
-      // Move all processed messages to "Processed" folder
-      if (processedMsgUids.length > 0 && !connectionDead) {
-        try {
-          await client.messageMove(processedMsgUids, 'Processed', { uid: true });
-          logger.info('Moved emails to Processed folder', { count: processedMsgUids.length });
-        } catch (moveErr: any) {
-          logger.warn('MOVE failed, trying COPY+DELETE fallback', { error: moveErr.message });
-          try {
-            await client.messageCopy(processedMsgUids, 'Processed', { uid: true });
-            await client.messageFlagsAdd(processedMsgUids, ['\\Deleted'], { uid: true });
-            logger.info('COPY+DELETE fallback succeeded', { count: processedMsgUids.length });
-          } catch (fallbackErr: any) {
-            logger.error('COPY+DELETE fallback also failed', { error: fallbackErr.message });
-          }
-        }
-      }
+      if (oversizedUids.length > 0) await moveTo(oversizedUids, 'Errors');
 
-      // Move dead-lettered messages to "Errors" folder
-      if (deadLetterMsgUids.length > 0 && !connectionDead) {
+      for (const uid of candidateUids) {
+        if (connectionDead) break;
         try {
-          await client.messageMove(deadLetterMsgUids, 'Errors', { uid: true });
-          logger.info('Moved emails to Errors folder', { count: deadLetterMsgUids.length });
-        } catch (moveErr: any) {
-          logger.warn('MOVE to Errors failed, trying COPY+DELETE fallback', { error: moveErr.message });
-          try {
-            await client.messageCopy(deadLetterMsgUids, 'Errors', { uid: true });
-            await client.messageFlagsAdd(deadLetterMsgUids, ['\\Deleted'], { uid: true });
-            logger.info('COPY+DELETE fallback to Errors succeeded', { count: deadLetterMsgUids.length });
-          } catch (fallbackErr: any) {
-            logger.error('COPY+DELETE fallback to Errors also failed', { error: fallbackErr.message });
+          const message = await imap.fetchOne(String(uid), { source: true, uid: true }, { uid: true });
+          if (!message || !message.source) continue;
+          const outcome = await processEmail(message.source, currentConfig);
+          emailFailureCounts.delete(uid);
+          await moveTo([uid], outcome === 'rejected' ? 'Errors' : 'Processed');
+        } catch (error) {
+          logger.error('Error processing email', { error: String(error) });
+          const failureCount = (emailFailureCounts.get(uid) ?? 0) + 1;
+          if (failureCount >= EMAIL_DEAD_LETTER_THRESHOLD) {
+            emailFailureCounts.delete(uid);
+            logger.error('Dead-lettering email after repeated failures, will not be retried', {
+              uid,
+              failureCount,
+            });
+            await moveTo([uid], 'Errors');
+          } else {
+            emailFailureCounts.set(uid, failureCount);
           }
         }
       }
@@ -625,7 +773,7 @@ async function poll(config: EmailConfig, createClient: ImapClientFactory = defau
       lock.release();
     }
 
-    await client.logout();
+    await imap.logout();
   } catch (error: any) {
     if (error?.code !== 'ETIMEOUT') {
       logger.error('IMAP polling error', { error: String(error) });
@@ -642,25 +790,32 @@ async function poll(config: EmailConfig, createClient: ImapClientFactory = defau
  * Startar periodisk IMAP-polling för inkommande e-post.
  * Använder rekursiv setTimeout för att undvika överlappande polls.
  * Hämtar ny OAuth2-token inför varje poll vid OAuth2-konfiguration.
+ * Ett tillfälligt fel vid uppstart (t.ex. token-hämtning) stoppar inte
+ * pollingen — första varvet schemaläggs ändå och löser konfigurationen själv.
  */
 export async function startEmailPolling(): Promise<void> {
-  const config = await getEmailConfig();
-  if (!config) {
+  let config: EmailConfig | null = null;
+  try {
+    config = await getEmailConfig();
+  } catch (error) {
+    logger.error('Could not resolve IMAP config at startup, will retry on next poll', { error: String(error) });
+  }
+  if (!config && !isImapConfigured()) {
     logger.info('IMAP not configured, email-to-ticket disabled');
     return;
   }
 
-  const authMethod = useOAuth2() ? 'OAuth2' : 'Basic';
+  const intervalSeconds = pollIntervalSeconds();
   logger.info('Starting email polling', {
-    intervalSeconds: config.pollingInterval,
-    user: config.user,
-    authMethod,
+    intervalSeconds,
+    user: process.env.IMAP_USER,
+    authMethod: useOAuth2() ? 'OAuth2' : 'Basic',
   });
 
   // Recursive setTimeout instead of setInterval prevents overlapping polls when
   // an IMAP fetch takes longer than the configured interval (mailbox lock, slow
   // network). Each new poll starts only after the previous one resolves.
-  const intervalMs = config.pollingInterval * 1000;
+  const intervalMs = intervalSeconds * 1000;
   let stopped = false;
 
   const scheduleNext = () => {
@@ -677,9 +832,6 @@ export async function startEmailPolling(): Promise<void> {
     }, intervalMs);
   };
 
-  await poll(config);
-  scheduleNext();
-
   stopPolling = () => {
     stopped = true;
     if (pollingTimer) {
@@ -687,6 +839,9 @@ export async function startEmailPolling(): Promise<void> {
       pollingTimer = null;
     }
   };
+
+  await poll(config);
+  scheduleNext();
 }
 
 let stopPolling: (() => void) | null = null;

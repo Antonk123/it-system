@@ -12,6 +12,7 @@ import {
   LogoValidationError,
 } from '../lib/branding.js';
 import { logger } from '../lib/logger.js';
+import { logAudit } from '../lib/auditLog.js';
 
 const router = Router();
 
@@ -30,6 +31,7 @@ router.put('/two-way-email', authenticate, requireAdmin, (req: AuthRequest, res:
     return res.status(400).json({ error: 'enabled måste vara en boolean' });
   }
   setSetting(TWO_WAY_EMAIL_KEY, enabled ? '1' : '0');
+  logAudit(req.user!.id, 'settings_update', 'setting', TWO_WAY_EMAIL_KEY, `enabled: ${enabled}`, req.ip, req.apiKey?.id ?? null);
   return res.json({ twoWayEmailEnabled: enabled });
 });
 
@@ -70,6 +72,7 @@ router.post('/branding/logo', authenticate, requireAdmin, (req: AuthRequest, res
 
     try {
       saveLogoSettings(req.file.filename, req.file.mimetype);
+      logAudit(req.user!.id, 'branding_logo_update', 'branding', 'logo', `mime: ${req.file.mimetype}`, req.ip, req.apiKey?.id ?? null);
       return res.json(getBrandingInfo());
     } catch (error) {
       logger.error('Error saving branding logo:', { error: String(error) });
@@ -79,9 +82,10 @@ router.post('/branding/logo', authenticate, requireAdmin, (req: AuthRequest, res
 });
 
 // Remove the instance logo — admin only, idempotent (204 even if none was set).
-router.delete('/branding/logo', authenticate, requireAdmin, (_req: AuthRequest, res: Response) => {
+router.delete('/branding/logo', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     deleteLogo();
+    logAudit(req.user!.id, 'branding_logo_delete', 'branding', 'logo', null, req.ip, req.apiKey?.id ?? null);
     return res.status(204).send();
   } catch (error) {
     logger.error('Error deleting branding logo:', { error: String(error) });

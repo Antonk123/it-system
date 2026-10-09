@@ -404,39 +404,33 @@ describe('POST /api/api-keys: permissions allowlist + admin-scope grant restrict
 });
 
 /**
- * G1: an API-key-authenticated request must never be able to mint a NEW key
- * with a scope the CALLING key itself lacks. Before this fix, POST
- * /api/api-keys only checked the underlying user's ROLE (`req.user.role`) —
- * so a leaked ['read','write'] key bound to an admin user could pass the
- * write-method guard (it has 'write') and then mint a brand-new
- * ['read','admin'] key, since the grant check only ever looked at the
- * owner's role (which IS admin). The new guard additionally requires
- * `req.apiKey.permissions` to include 'admin' whenever the request itself
- * was authenticated via API key — narrowing only, the role check above still
- * applies unchanged.
+ * An API key must never be able to mint further API keys (a leaked key could
+ * otherwise perpetuate itself, even with a broader scope than its own).
+ * POST /api/api-keys rejects every API-key-authenticated request with 403,
+ * regardless of the calling key's scope. JWT sessions are unaffected.
  */
-describe('POST /api/api-keys via API-key auth: escalation guard (G1)', () => {
-  it('a ["read","write"]-key bound to an admin user is blocked (403) from minting an admin-scope key — the escalation chain this fix closes', async () => {
-    const rwKey = (await createKey(admin, 'admin rw key (G1 probe)', ['read', 'write'])).key;
+describe('POST /api/api-keys via API-key auth: keys cannot mint keys', () => {
+  it('a ["read","write"]-key is blocked (403) from minting an admin-scope key', async () => {
+    const rwKey = (await createKey(admin, 'admin rw key (probe)', ['read', 'write'])).key;
     const res = await request(app)
       .post('/api/api-keys')
       .set('Authorization', `Bearer ${rwKey}`)
       .send({ name: 'escalated admin key', permissions: ['read', 'admin'] });
     expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/admin-scope/i);
-    // No such key was actually created — the guard fired before the INSERT.
+    expect(res.body.error).toMatch(/API-nycklar kan inte skapa/);
     const rows = db.prepare('SELECT id FROM api_keys WHERE name = ?').all('escalated admin key');
     expect(rows.length).toBe(0);
   });
 
-  it('a ["read","write","admin"]-key still CAN mint admin-scope keys (legitimate automation is not broken)', async () => {
-    const rwaKey = (await createKey(admin, 'admin rwa key (G1 probe)', ['read', 'write', 'admin'])).key;
+  it('even a ["read","write","admin"]-key is blocked (403) from minting a key', async () => {
+    const rwaKey = (await createKey(admin, 'admin rwa key (probe)', ['read', 'write', 'admin'])).key;
     const res = await request(app)
       .post('/api/api-keys')
       .set('Authorization', `Bearer ${rwaKey}`)
-      .send({ name: 'legit automation admin key', permissions: ['read', 'admin'] });
-    expect(res.status).toBe(201);
-    expect(typeof res.body.key).toBe('string');
+      .send({ name: 'automation key', permissions: ['read'] });
+    expect(res.status).toBe(403);
+    const rows = db.prepare('SELECT id FROM api_keys WHERE name = ?').all('automation key');
+    expect(rows.length).toBe(0);
   });
 });
 

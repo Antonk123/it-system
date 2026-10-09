@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { existsSync, rmSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, rmSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync, copyFileSync } from 'fs';
 import { join, dirname } from 'node:path';
 import { tmpdir as osTmpdir } from 'node:os';
 import http from 'node:http';
@@ -22,10 +22,9 @@ import { randomUUID, randomBytes, createHash } from 'crypto';
  * Rate-limit note: the login route is rate-limited to 5 attempts / 15 min per
  * IP. To stay safely below that cap we share a single login session per role
  * across all tests in this file (2 logins total: one admin, one regular user).
- * The restore route itself is separately rate-limited to 5 requests / 15 min
- * per IP (only counted for requests that pass admin auth) — this file makes
- * exactly 5 such requests total (4 pre-existing 400-path tests + the 1 new
- * happy-path test), staying at the cap rather than over it.
+ * createRateLimiter is mocked to a pass-through below (login uses its own,
+ * unmocked limiter), so the restore/download limiters (5 and 10 per 15 min)
+ * don't cap how many restore/download scenarios this file can cover.
  */
 
 const USER_EMAIL = 'user@backuptest.local';
@@ -50,14 +49,33 @@ const { DB_PATH, UPLOAD_DIR } = vi.hoisted(() => {
   return { DB_PATH: dbPath, UPLOAD_DIR: uploadDir };
 });
 
+vi.mock('../middleware/rateLimit.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../middleware/rateLimit.js')>()),
+  createRateLimiter: () => (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
+
+vi.mock('../lib/fts.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/fts.js')>()),
+  rebuildFts: vi.fn(() => ({ tickets: 0, kbArticles: 0 })),
+}));
+
 import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { ZipArchive } from 'archiver';
 import { PassThrough } from 'node:stream';
+import express from 'express';
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
 import { createApp } from '../app.js';
 import { stopBackupScheduler } from '../lib/backupScheduler.js';
-import { performRestoreSwap, logRestoreAudit } from './backup.js';
+import { rebuildFts } from '../lib/fts.js';
+import {
+  performRestoreSwap,
+  logRestoreAudit,
+  rebuildRestoredFts,
+  cleanupPreRestoreArtifacts,
+  createRestoreUpload,
+  restoreLimits,
+} from './backup.js';
 
 let app: ReturnType<typeof createApp>;
 
@@ -311,6 +329,7 @@ afterAll(() => {
   }
   try {
     rmSync(`${DB_PATH}.pre-restore`, { force: true });
+    rmSync(`${UPLOAD_DIR}.pre-restore`, { recursive: true, force: true });
   } catch {
     /* ignore */
   }
@@ -349,6 +368,12 @@ describe('GET /api/backup', () => {
     // Content-Disposition must include "attachment" and a .zip filename.
     expect(res.headers['content-disposition']).toMatch(/attachment/);
     expect(res.headers['content-disposition']).toMatch(/\.zip/);
+
+    // Temp-dumpen ligger i backup-katalogen (inte /tmp) och städas när svaret är klart.
+    const backupDir = join(dirname(DB_PATH), 'backups');
+    await vi.waitFor(() => {
+      expect(readdirSync(backupDir).filter((f) => f.startsWith('tmp-download-'))).toEqual([]);
+    });
   });
 
   it('skriver en audit-rad vid nedladdning (session, ingen API-nyckel → api_key_id NULL)', async () => {
@@ -409,13 +434,13 @@ describe('GET /api/backup', () => {
         httpReq.end();
       });
 
-      // Ge servern en kort stund att hantera avbrottet (res 'close'/'error').
-      await new Promise((r) => setTimeout(r, 200));
-
-      const after = (
-        db.prepare("SELECT COUNT(*) as count FROM audit_log WHERE action = 'backup_download'").get() as { count: number }
-      ).count;
-      expect(after).toBe(before + 1);
+      // Raden skrivs innan strömningen börjar — vänta in den i stället för att sova.
+      await vi.waitFor(() => {
+        const after = (
+          db.prepare("SELECT COUNT(*) as count FROM audit_log WHERE action = 'backup_download'").get() as { count: number }
+        ).count;
+        expect(after).toBe(before + 1);
+      });
 
       const row = db.prepare(
         "SELECT * FROM audit_log WHERE action = 'backup_download' ORDER BY created_at DESC, rowid DESC LIMIT 1"
@@ -514,6 +539,93 @@ describe('GET /api/backup', () => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /api/backup/files — lagrade backuper (lista + nedladdning)
+// ---------------------------------------------------------------------------
+
+describe('GET /api/backup/files', () => {
+  const backupDir = join(dirname(DB_PATH), 'backups');
+  const goodName = 'backup-2026-01-01-0400.zip';
+  const goodContent = Buffer.from('PK-fake-zip-content');
+
+  beforeAll(() => {
+    mkdirSync(backupDir, { recursive: true });
+    writeFileSync(join(backupDir, goodName), goodContent);
+    writeFileSync(join(backupDir, 'backup-2025-12-31.zip'), 'older');
+    writeFileSync(join(backupDir, 'backup-2026-01-02-0400.zip.tmp'), 'half-written');
+    writeFileSync(join(backupDir, 'notes.txt'), 'not a backup');
+  });
+
+  afterAll(() => {
+    for (const f of [goodName, 'backup-2025-12-31.zip', 'backup-2026-01-02-0400.zip.tmp', 'notes.txt']) {
+      rmSync(join(backupDir, f), { force: true });
+    }
+  });
+
+  it('requires authentication and admin', async () => {
+    expect((await request(app).get('/api/backup/files')).status).toBe(401);
+    const res = await userAgent.get('/api/backup/files').set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('lists only backup-*.zip files with name, size and mtime, newest first', async () => {
+    const res = await adminAgent.get('/api/backup/files').set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+
+    const names = (res.body as { name: string }[]).map((f) => f.name);
+    expect(names).not.toContain('notes.txt');
+    expect(names).not.toContain('backup-2026-01-02-0400.zip.tmp');
+    expect(names.indexOf(goodName)).toBeLessThan(names.indexOf('backup-2025-12-31.zip'));
+
+    const entry = (res.body as { name: string; sizeBytes: number; modifiedAt: string }[]).find((f) => f.name === goodName)!;
+    expect(entry.sizeBytes).toBe(goodContent.length);
+    expect(new Date(entry.modifiedAt).toISOString()).toBe(entry.modifiedAt);
+  });
+
+  it('downloads a stored backup as application/zip with an audit row', async () => {
+    const before = (
+      db.prepare("SELECT COUNT(*) as count FROM audit_log WHERE action = 'backup_download'").get() as { count: number }
+    ).count;
+
+    const res = await adminAgent
+      .get(`/api/backup/files/${goodName}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .buffer(true)
+      .parse((r, cb) => {
+        const chunks: Buffer[] = [];
+        r.on('data', (c: Buffer) => chunks.push(c));
+        r.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/application\/zip/);
+    expect(res.headers['content-disposition']).toContain(`filename="${goodName}"`);
+    expect(Buffer.from(res.body).equals(goodContent)).toBe(true);
+
+    const after = (
+      db.prepare("SELECT COUNT(*) as count FROM audit_log WHERE action = 'backup_download'").get() as { count: number }
+    ).count;
+    expect(after).toBe(before + 1);
+  });
+
+  it('rejects names that do not match the backup pattern (traversal, tmp files, other extensions)', async () => {
+    for (const bad of ['..%2F..%2Fetc%2Fpasswd', 'backup-2026-01-02-0400.zip.tmp', 'notes.txt', 'backup-1.zip', '..%2Fdatabase.sqlite']) {
+      const res = await adminAgent.get(`/api/backup/files/${bad}`).set('Authorization', `Bearer ${adminToken}`);
+      expect(res.status, bad).toBe(400);
+    }
+  });
+
+  it('returns 404 for a well-formed name that does not exist', async () => {
+    const res = await adminAgent.get('/api/backup/files/backup-1999-01-01.zip').set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('blocks non-admins from downloading', async () => {
+    const res = await userAgent.get(`/api/backup/files/${goodName}`).set('Authorization', `Bearer ${userToken}`);
+    expect(res.status).toBe(403);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // POST /api/backup/restore — upload
 // ---------------------------------------------------------------------------
 
@@ -595,7 +707,7 @@ describe('POST /api/backup/restore', () => {
 
     // The zip-slip guard rejects with a validationError → outer catch → 400.
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/oväntade eller osäkra/i);
+    expect(res.body.error).toMatch(/oväntade, osäkra/i);
   });
 
   it('returns 400 when the database.sqlite inside the ZIP lacks required tables', async () => {
@@ -628,6 +740,114 @@ describe('POST /api/backup/restore', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/tabeller/i);
+  });
+
+  it('returns 400 when the uploaded database fails PRAGMA quick_check', async () => {
+    const Database = (await import('better-sqlite3')).default;
+    const dir = mkdtempSync(join(osTmpdir(), 'backup-corrupt-'));
+    const dbFile = join(dir, 'corrupt.sqlite');
+    const corruptDb = new Database(dbFile);
+    corruptDb.pragma('page_size = 1024');
+    corruptDb.exec(`
+      CREATE TABLE tickets (id INTEGER PRIMARY KEY, title TEXT);
+      CREATE TABLE users (id INTEGER PRIMARY KEY);
+      CREATE INDEX idx_tickets_title ON tickets(title);
+    `);
+    const insert = corruptDb.prepare('INSERT INTO tickets (title) VALUES (?)');
+    for (let i = 0; i < 500; i++) insert.run(`ticket title number ${i} ${'x'.repeat(40)}`);
+    const indexRoot = (
+      corruptDb.prepare("SELECT rootpage FROM sqlite_master WHERE name = 'idx_tickets_title'").get() as { rootpage: number }
+    ).rootpage;
+    corruptDb.pragma('wal_checkpoint(TRUNCATE)');
+    corruptDb.close();
+
+    // Skadat indexträd: tabellerna går fortfarande att läsa, men integriteten är bruten.
+    const bytes = readFileSync(dbFile);
+    bytes.fill(0xff, (indexRoot - 1) * 1024 + 8, indexRoot * 1024);
+    rmSync(dir, { recursive: true, force: true });
+
+    const zip = await buildZipBuffer([{ name: 'data/database.sqlite', content: bytes }]);
+    const res = await adminAgent
+      .post('/api/backup/restore')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .attach('file', zip, { filename: 'backup.zip', contentType: 'application/zip' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/integritetskontrollen/i);
+  });
+
+  it('returns 400 when the ZIP has more entries than the cap', async () => {
+    const zip = await buildZipBuffer([
+      { name: 'data/uploads/a.txt', content: 'a' },
+      { name: 'data/uploads/b.txt', content: 'b' },
+      { name: 'data/uploads/c.txt', content: 'c' },
+    ]);
+    const previous = restoreLimits.maxEntries;
+    restoreLimits.maxEntries = 2;
+    try {
+      const res = await adminAgent
+        .post('/api/backup/restore')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('x-csrf-token', adminCsrfToken)
+        .attach('file', zip, { filename: 'backup.zip', contentType: 'application/zip' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/för många\/stora poster/i);
+    } finally {
+      restoreLimits.maxEntries = previous;
+    }
+  });
+
+  it('returns 400 when the ZIP expands beyond the extracted-bytes cap', async () => {
+    const zip = await buildZipBuffer([{ name: 'data/uploads/big.txt', content: 'x'.repeat(10_000) }]);
+    const previous = restoreLimits.maxExtractedBytes;
+    restoreLimits.maxExtractedBytes = 1_000;
+    try {
+      const res = await adminAgent
+        .post('/api/backup/restore')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('x-csrf-token', adminCsrfToken)
+        .attach('file', zip, { filename: 'backup.zip', contentType: 'application/zip' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/för många\/stora poster/i);
+    } finally {
+      restoreLimits.maxExtractedBytes = previous;
+    }
+  });
+});
+
+// Multer-felen måste bli 400/413 — inte 500 från Expressens felhanterare.
+describe('createRestoreUpload (multer error mapping)', () => {
+  const makeApp = (maxBytes: number) => {
+    const mini = express();
+    mini.post('/upload', createRestoreUpload(maxBytes), (req, res) => {
+      if (req.file) rmSync(req.file.path, { force: true });
+      res.json({ ok: true });
+    });
+    return mini;
+  };
+
+  it('returns 400 with a Swedish message for a non-ZIP upload', async () => {
+    const res = await request(makeApp(1024 * 1024))
+      .post('/upload')
+      .attach('file', Buffer.from('hej'), { filename: 'notes.txt', contentType: 'text/plain' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Endast ZIP-filer är tillåtna.');
+  });
+
+  it('returns 413 when the file exceeds the size limit', async () => {
+    const res = await request(makeApp(1024))
+      .post('/upload')
+      .attach('file', Buffer.alloc(4096), { filename: 'backup.zip', contentType: 'application/zip' });
+    expect(res.status).toBe(413);
+    expect(res.body.error).toMatch(/för stor/i);
+  });
+
+  it('passes a valid ZIP upload through to the handler', async () => {
+    const res = await request(makeApp(1024 * 1024))
+      .post('/upload')
+      .attach('file', Buffer.from('PK'), { filename: 'backup.zip', contentType: 'application/zip' });
+    expect(res.status).toBe(200);
   });
 });
 
@@ -797,59 +1017,177 @@ describe('performRestoreSwap (M14)', () => {
     mkdirSync(uploadsDest, { recursive: true });
     writeFileSync(join(uploadsDest, 'stale.txt'), 'should be removed');
 
-    return { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest };
+    // Fejkad WAL-säker snapshot: kopierar live-filen (testerna behöver ingen riktig db).
+    const snapshotDb = async (dest: string) => { copyFileSync(dbPath, dest); };
+
+    return { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest, snapshotDb };
   };
 
-  it('swaps the DB file, deletes sidecars, mirrors uploads and removes the rollback copy', () => {
-    const { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest } = setup();
-    const closeDb = vi.fn();
+  it('swaps the DB file, deletes sidecars, mirrors uploads and keeps the pre-restore copies', async () => {
+    const { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest, snapshotDb } = setup();
+    const order: string[] = [];
+    const closeDb = vi.fn(() => { order.push('close'); });
 
-    performRestoreSwap({ restoredDbPath, dbPath, uploadsSrc, uploadsDest, closeDb });
+    await performRestoreSwap({
+      restoredDbPath, dbPath, uploadsSrc, uploadsDest, closeDb,
+      snapshotDb: async (dest) => { order.push('snapshot'); await snapshotDb(dest); },
+    });
 
-    expect(closeDb).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['snapshot', 'close']); // kopian tas FÖRE stängning
     expect(readFileSync(dbPath, 'utf8')).toBe('NEW DB CONTENT');
     expect(existsSync(`${dbPath}-wal`)).toBe(false);
     expect(existsSync(`${dbPath}-shm`)).toBe(false);
     // uploads speglar backupen exakt: nytt innehåll in, gammalt bort.
     expect(readFileSync(join(uploadsDest, 'restored.txt'), 'utf8')).toBe('from backup');
     expect(existsSync(join(uploadsDest, 'stale.txt'))).toBe(false);
-    // rollback-kopian städad efter lyckad swap.
-    expect(existsSync(`${dbPath}.pre-restore`)).toBe(false);
+    // rollback-artefakterna finns kvar tills nästa lyckade uppstart städar dem.
+    expect(readFileSync(`${dbPath}.pre-restore`, 'utf8')).toBe('OLD DB CONTENT');
+    expect(readFileSync(join(`${uploadsDest}.pre-restore`, 'stale.txt'), 'utf8')).toBe('should be removed');
 
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('leaves uploadsDest untouched when the backup contains no uploads directory', () => {
-    const { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest } = setup();
+  it('snapshots through the live connection so rows still sitting in the WAL are preserved', async () => {
+    const Database = (await import('better-sqlite3')).default;
+    const { dir, restoredDbPath, uploadsSrc, uploadsDest } = setup();
+    const dbPath = join(dir, 'live', 'wal.sqlite');
+    const live = new Database(dbPath);
+    live.pragma('journal_mode = WAL');
+    live.pragma('wal_autocheckpoint = 0');
+    live.exec('CREATE TABLE t (v TEXT)');
+    live.prepare('INSERT INTO t (v) VALUES (?)').run('only-in-wal');
+
+    await performRestoreSwap({
+      restoredDbPath, dbPath, uploadsSrc, uploadsDest,
+      snapshotDb: (dest) => live.backup(dest),
+      closeDb: () => live.close(),
+    });
+
+    const snapshot = new Database(`${dbPath}.pre-restore`, { readonly: true });
+    try {
+      expect((snapshot.prepare('SELECT v FROM t').get() as { v: string }).v).toBe('only-in-wal');
+    } finally {
+      snapshot.close();
+    }
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('replaces stale pre-restore leftovers from an earlier restore', async () => {
+    const { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest, snapshotDb } = setup();
+    writeFileSync(`${dbPath}.pre-restore`, 'ANCIENT');
+    mkdirSync(`${uploadsDest}.pre-restore`, { recursive: true });
+    writeFileSync(join(`${uploadsDest}.pre-restore`, 'ancient.txt'), 'old');
+
+    await performRestoreSwap({ restoredDbPath, dbPath, uploadsSrc, uploadsDest, snapshotDb });
+
+    expect(readFileSync(`${dbPath}.pre-restore`, 'utf8')).toBe('OLD DB CONTENT');
+    expect(existsSync(join(`${uploadsDest}.pre-restore`, 'ancient.txt'))).toBe(false);
+
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('leaves uploadsDest untouched when the backup contains no uploads directory', async () => {
+    const { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest, snapshotDb } = setup();
     rmSync(uploadsSrc, { recursive: true, force: true });
 
-    performRestoreSwap({ restoredDbPath, dbPath, uploadsSrc, uploadsDest });
+    await performRestoreSwap({ restoredDbPath, dbPath, uploadsSrc, uploadsDest, snapshotDb });
 
     expect(readFileSync(dbPath, 'utf8')).toBe('NEW DB CONTENT');
     expect(readFileSync(join(uploadsDest, 'stale.txt'), 'utf8')).toBe('should be removed');
+    expect(existsSync(`${uploadsDest}.pre-restore`)).toBe(false);
 
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('rolls back the DB file and rethrows when closeDb throws', () => {
-    const { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest } = setup();
+  it('rolls back the DB file and rethrows when closeDb throws', async () => {
+    const { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest, snapshotDb } = setup();
 
-    expect(() =>
+    await expect(
       performRestoreSwap({
-        restoredDbPath,
-        dbPath,
-        uploadsSrc,
-        uploadsDest,
+        restoredDbPath, dbPath, uploadsSrc, uploadsDest, snapshotDb,
         closeDb: () => {
           throw new Error('checkpoint failed');
         },
       }),
-    ).toThrow('checkpoint failed');
+    ).rejects.toThrow('checkpoint failed');
 
     // Pre-restore-kopian har rullat tillbaka DB-filen; uploads orörda.
     expect(readFileSync(dbPath, 'utf8')).toBe('OLD DB CONTENT');
     expect(readFileSync(join(uploadsDest, 'stale.txt'), 'utf8')).toBe('should be removed');
 
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it.skipIf(process.getuid?.() === 0)('restores BOTH the DB and the original uploads when copying uploads fails midway', async () => {
+    const { dir, dbPath, restoredDbPath, uploadsSrc, uploadsDest, snapshotDb } = setup();
+    const unreadable = join(uploadsSrc, 'unreadable.txt');
+    writeFileSync(unreadable, 'cannot be copied');
+    chmodSync(unreadable, 0o000);
+
+    try {
+      await expect(
+        performRestoreSwap({ restoredDbPath, dbPath, uploadsSrc, uploadsDest, snapshotDb }),
+      ).rejects.toThrow();
+
+      expect(readFileSync(dbPath, 'utf8')).toBe('OLD DB CONTENT');
+      expect(existsSync(`${dbPath}-wal`)).toBe(false); // nya DB:ns sidofiler får inte följa med
+      expect(readFileSync(join(uploadsDest, 'stale.txt'), 'utf8')).toBe('should be removed');
+      expect(existsSync(join(uploadsDest, 'restored.txt'))).toBe(false);
+      expect(existsSync(`${uploadsDest}.pre-restore`)).toBe(false);
+    } finally {
+      chmodSync(unreadable, 0o600);
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('cleanupPreRestoreArtifacts', () => {
+  it('removes uploads.pre-restore older than this boot but keeps the pre-restore DB', () => {
+    const dir = mkdtempSync(join(osTmpdir(), 'restore-cleanup-'));
+    const uploads = join(dir, 'uploads');
+    mkdirSync(`${uploads}.pre-restore`, { recursive: true });
+    writeFileSync(join(`${uploads}.pre-restore`, 'a.txt'), 'a');
+    writeFileSync(join(dir, 'database.sqlite.pre-restore'), 'db');
+
+    cleanupPreRestoreArtifacts(Date.now() + 60_000, uploads);
+
+    expect(existsSync(`${uploads}.pre-restore`)).toBe(false);
+    expect(readFileSync(join(dir, 'database.sqlite.pre-restore'), 'utf8')).toBe('db');
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('keeps artifacts newer than this boot and tolerates a missing directory', () => {
+    const dir = mkdtempSync(join(osTmpdir(), 'restore-cleanup-new-'));
+    const uploads = join(dir, 'uploads');
+    mkdirSync(`${uploads}.pre-restore`, { recursive: true });
+
+    cleanupPreRestoreArtifacts(Date.now() - 60_000, uploads);
+    expect(existsSync(`${uploads}.pre-restore`)).toBe(true);
+
+    expect(() => cleanupPreRestoreArtifacts(Date.now(), join(dir, 'missing'))).not.toThrow();
+    rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('rebuildRestoredFts', () => {
+  it('rebuilds the FTS indexes on the restored file and closes the connection', async () => {
+    const dir = mkdtempSync(join(osTmpdir(), 'restore-fts-'));
+    const dbFile = join(dir, 'restored.sqlite');
+    const Database = (await import('better-sqlite3')).default;
+    new Database(dbFile).close();
+
+    vi.mocked(rebuildFts).mockClear();
+    await rebuildRestoredFts(dbFile);
+
+    expect(rebuildFts).toHaveBeenCalledTimes(1);
+    expect((vi.mocked(rebuildFts).mock.calls[0][0] as { name: string }).name).toBe(dbFile);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('never throws, even when the restored file lacks the FTS tables', async () => {
+    vi.mocked(rebuildFts).mockImplementationOnce(() => { throw new Error('no such table: tickets_fts'); });
+    const dir = mkdtempSync(join(osTmpdir(), 'restore-fts-old-'));
+    await expect(rebuildRestoredFts(join(dir, 'old.sqlite'))).resolves.toBeUndefined();
     rmSync(dir, { recursive: true, force: true });
   });
 });
@@ -969,8 +1307,11 @@ describe('logRestoreAudit (F1)', () => {
 // ---------------------------------------------------------------------------
 
 describe('POST /api/backup/restore — successful restore path (M14 happy path)', () => {
-  it('extracts the ZIP, validates the DB, swaps DB_PATH + UPLOAD_DIR, cleans up the rollback file, returns 200, and schedules process.exit(0)', async () => {
+  it('extracts the ZIP, validates the DB, swaps DB_PATH + UPLOAD_DIR, keeps the pre-restore copies, rebuilds FTS, returns 200, and schedules process.exit(0)', async () => {
     const processExitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never);
+    // Bara setTimeout fejkas, så restore-handlerns omstartstimer (1500 ms) kan köras utan verklig väntan.
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    vi.mocked(rebuildFts).mockClear();
 
     try {
       // Prove uploads are truly *mirrored* (old content removed), not just
@@ -993,8 +1334,12 @@ describe('POST /api/backup/restore — successful restore path (M14 happy path)'
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ success: true, restartRequired: true });
 
-      // Rollback-kopian (${DB_PATH}.pre-restore) är borttagen efter lyckad restore.
-      expect(existsSync(`${DB_PATH}.pre-restore`)).toBe(false);
+      // Rollback-kopiorna finns kvar efter restore — de städas först av nästa lyckade uppstart.
+      expect(existsSync(`${DB_PATH}.pre-restore`)).toBe(true);
+      expect(readFileSync(join(`${UPLOAD_DIR}.pre-restore`, 'stale-before-restore.txt'), 'utf8')).toBe(
+        'this must vanish after restore',
+      );
+      expect(rebuildFts).toHaveBeenCalledTimes(1);
 
       // DB_PATH har faktiskt bytts ut mot backupens innehåll — inte bara "en
       // giltig databas", utan just VÅR databas (unik markörrad). Öppnar en
@@ -1035,12 +1380,13 @@ describe('POST /api/backup/restore — successful restore path (M14 happy path)'
       expect(existsSync(staleUploadPath)).toBe(false);
 
       // process.exit(0) är schemalagt via setTimeout(…, 1500) EFTER res.json() —
-      // supertest har redan fått sitt svar (ovan), så vi väntar bara in den
-      // riktiga timern (mockad process.exit förhindrar att vitest-processen dör).
-      await new Promise((resolve) => setTimeout(resolve, 1700));
+      // supertest har redan fått sitt svar (ovan), så vi spolar fram den fejkade
+      // timern (mockad process.exit förhindrar att vitest-processen dör).
+      await vi.advanceTimersByTimeAsync(1500);
       expect(processExitSpy).toHaveBeenCalledTimes(1);
       expect(processExitSpy).toHaveBeenCalledWith(0);
     } finally {
+      vi.useRealTimers();
       processExitSpy.mockRestore();
     }
   }, 10_000);

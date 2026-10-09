@@ -1,10 +1,10 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
+import crypto, { randomUUID } from 'node:crypto';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
-import { validatePassword } from '../lib/passwordPolicy.js';
+import { validatePassword, BCRYPT_ROUNDS } from '../lib/passwordPolicy.js';
+import { SYSTEM_USER_ID } from '../lib/systemUser.js';
 import { logAudit } from '../lib/auditLog.js';
 import { logger } from '../lib/logger.js';
 import { normalizeEmail } from '../lib/oidc.js';
@@ -91,8 +91,9 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
 
   // Om admin sätter ett konkret lösenord ska det följa samma policy som
   // change-password / reset-password. Auto-genererade lösenord (32 tecken hex,
-  // utan specialtecken) skickas tillbaka som temporaryPassword och måste
-  // bytas vid första inloggning — de behöver inte uppfylla policyn.
+  // utan specialtecken) skickas tillbaka som temporaryPassword — de behöver inte
+  // uppfylla policyn. Oavsett vilket bär kontot must_change_password = 1 tills
+  // användaren själv byter lösenord.
   if (password !== undefined && password !== null && password !== '') {
     const policy = validatePassword(password);
     if (!policy.ok) {
@@ -135,8 +136,8 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
       return res.status(400).json({ error: 'Email already registered' });
     }
 
-    const id = uuidv4();
-    const passwordHash = await bcrypt.hash(userPassword, 10);
+    const id = randomUUID();
+    const passwordHash = await bcrypt.hash(userPassword, BCRYPT_ROUNDS);
     const userRole = role === 'admin' ? 'admin' : 'user';
     const contact = db.prepare('SELECT name FROM contacts WHERE email = ?').get(email) as { name: string } | undefined;
     const resolvedDisplayName = typeof displayName === 'string' && displayName.trim()
@@ -146,8 +147,8 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
     try {
       // Insert user - UNIQUE constraint on email will catch race conditions
       db.prepare(`
-        INSERT INTO users (id, email, password_hash, role, display_name)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO users (id, email, password_hash, role, display_name, must_change_password)
+        VALUES (?, ?, ?, ?, ?, 1)
       `).run(id, email, passwordHash, userRole, resolvedDisplayName);
 
       logAudit(req.user!.id, 'user_create', 'user', id, `email: ${email}, role: ${userRole}`, req.ip, req.apiKey?.id ?? null);
@@ -277,7 +278,21 @@ router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Respon
       return res.status(400).json({ error: 'Cannot delete your own account' });
     }
 
-    const result = db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+    // Systemanvändaren äger kommentarer/ärenden från raderade konton — den får aldrig tas bort.
+    if (req.params.id === SYSTEM_USER_ID) {
+      return res.status(409).json({ error: 'Systemanvändaren kan inte tas bort' });
+    }
+
+    // ticket_comments.user_id är ON DELETE CASCADE: utan omflyttning skulle
+    // användarens alla kommentarer försvinna med kontot. Flytta historiken till
+    // systemanvändaren i samma transaktion som raderingen.
+    const deleteUser = db.transaction((id: string) => {
+      db.prepare('UPDATE ticket_comments SET user_id = ? WHERE user_id = ?').run(SYSTEM_USER_ID, id);
+      db.prepare('UPDATE ticket_history SET user_id = ? WHERE user_id = ?').run(SYSTEM_USER_ID, id);
+      db.prepare('UPDATE tickets SET created_by = ? WHERE created_by = ?').run(SYSTEM_USER_ID, id);
+      return db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    });
+    const result = deleteUser(req.params.id);
 
     if (result.changes === 0) {
       return res.status(404).json({ error: 'User not found' });

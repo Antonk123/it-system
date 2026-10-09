@@ -19,8 +19,8 @@ import { randomUUID, createHash } from 'crypto';
  * the admin seed lives in db/init.ts (a standalone script) and is NOT run by
  * initializeDatabase(), so we must create the user ourselves.
  *
- * Login is rate-limited (5 attempts / 15 min per IP). This file performs exactly
- * 4 logins, staying safely under the cap.
+ * Login only counts FAILED attempts against its 5 / 15 min per-IP budget; this file
+ * performs a handful of logins and stays well under it.
  */
 
 const ADMIN_EMAIL = 'admin@test.local';
@@ -157,19 +157,34 @@ describe('Auth — refresh-token rotation', () => {
     // The rotated cookie value differs from the original (token was replaced).
     expect(newRefreshCookie).not.toBe(oldRefreshCookie);
 
-    // Replay protection: reusing the OLD refresh token is rejected (rotation
-    // deleted it from the DB).
+    // Replay protection: reusing the OLD refresh token is rejected once the
+    // 10 s grace window for racing tabs has passed (the old row is kept,
+    // revoked, so reuse can be detected). Age the rotation to leave the window.
+    db.prepare("UPDATE refresh_tokens SET last_used_at = ? WHERE revoked = 1 AND replaced_by IS NOT NULL")
+      .run(new Date(Date.now() - 60_000).toISOString());
     const replay = await request(app)
       .post('/api/auth/refresh')
       .set('Cookie', oldRefreshCookie);
     expect(replay.status).toBe(401);
 
-    // The freshly rotated token still works.
+    // Reuse of a rotated token revokes the whole family: the freshly rotated
+    // token (held by the thief or the victim — we cannot tell) is dead too.
     const refresh2 = await request(app)
       .post('/api/auth/refresh')
       .set('Cookie', newRefreshCookie);
+    expect(refresh2.status).toBe(401);
+  });
+
+  it('a freshly rotated token keeps working when the old one is not replayed', async () => {
+    const login = await request(app)
+      .post('/api/auth/login')
+      .send({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    const cookie = (login.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('refreshToken='))!;
+    const refresh1 = await request(app).post('/api/auth/refresh').set('Cookie', cookie);
+    expect(refresh1.status).toBe(200);
+    const next = (refresh1.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('refreshToken='))!;
+    const refresh2 = await request(app).post('/api/auth/refresh').set('Cookie', next);
     expect(refresh2.status).toBe(200);
-    expect(typeof refresh2.body.accessToken).toBe('string');
   });
 });
 
@@ -430,5 +445,151 @@ describe('Retired recurring tickets preserve stored history', () => {
       expect(response.status).toBe(404);
     }
     expect(readHistory()).toEqual(before);
+  });
+});
+
+describe('Request id', () => {
+  it('echoes a well-formed X-Request-ID', async () => {
+    const res = await request(app).get('/api/health').set('X-Request-ID', 'abc-123_DEF');
+    expect(res.headers['x-request-id']).toBe('abc-123_DEF');
+  });
+
+  it('replaces a malformed or oversized X-Request-ID with a generated UUID', async () => {
+    for (const bad of ['has space', 'semi;colon', 'x'.repeat(65)]) {
+      const res = await request(app).get('/api/health').set('X-Request-ID', bad);
+      expect(res.headers['x-request-id']).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    }
+  });
+});
+
+describe('Bodyless requests', () => {
+  it('a POST without any body reaches the route as an empty object (400 from validation, not 500)', async () => {
+    const agent = request.agent(app);
+    const csrf = (await agent.get('/api/csrf-token')).body.csrfToken as string;
+    const res = await agent.post('/api/auth/reset-password').set('x-csrf-token', csrf);
+    expect(res.status).toBe(400);
+  });
+});
+
+describe('Global error handler', () => {
+  const KEY = 'itk_live_errhAAAA0123456789abcdef01234567';
+
+  beforeAll(() => {
+    const prefix = KEY.substring('itk_live_'.length, 'itk_live_'.length + 8);
+    db.prepare(
+      `INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions) VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(randomUUID(), 'err-key', prefix, createHash('sha256').update(KEY).digest('hex'), adminId, JSON.stringify(['read', 'write']));
+  });
+
+  // Skrivbegränsarens nyckeluppslag är första db-anropet för en API-nyckel-request,
+  // så ett kastat fel där når den globala felhanteraren via vanlig middleware-väg.
+  it('5xx: generic message plus the request id the user can quote (and it matches the header)', async () => {
+    const spy = vi.spyOn(db, 'prepare').mockImplementationOnce(() => {
+      throw new Error('boom');
+    });
+    const res = await request(app)
+      .post('/api/tickets')
+      .set('X-Request-ID', 'quote-me-1')
+      .set('Authorization', `Bearer ${KEY}`)
+      .send({ title: 'x', description: 'y' });
+    spy.mockRestore();
+    expect(res.status).toBe(500);
+    expect(res.body).toEqual({ error: 'Internal server error', requestId: 'quote-me-1' });
+    expect(res.headers['x-request-id']).toBe('quote-me-1');
+  });
+
+  it('logs requestId, method, path and stack on 5xx', async () => {
+    const logSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const spy = vi.spyOn(db, 'prepare').mockImplementationOnce(() => {
+      throw new Error('boom-log');
+    });
+    await request(app)
+      .post('/api/tickets')
+      .set('X-Request-ID', 'log-me-1')
+      .set('Authorization', `Bearer ${KEY}`)
+      .send({ title: 'x', description: 'y' });
+    spy.mockRestore();
+    const entries = logSpy.mock.calls.map((c) => JSON.parse(c[0] as string));
+    logSpy.mockRestore();
+    const entry = entries.find((e) => e.message === 'Unhandled error' && e.requestId === 'log-me-1');
+    expect(entry).toMatchObject({ method: 'POST', path: '/api/tickets', error: 'boom-log' });
+    expect(entry.stack).toContain('boom-log');
+  });
+
+  it('maps a MulterError that a route forgot to wrap to a JSON client error (413 for size, 400 otherwise)', async () => {
+    for (const [code, status] of [['LIMIT_FILE_SIZE', 413], ['LIMIT_UNEXPECTED_FILE', 400]] as const) {
+      const spy = vi.spyOn(db, 'prepare').mockImplementationOnce(() => {
+        throw Object.assign(new Error(code), { name: 'MulterError', code });
+      });
+      const res = await request(app)
+        .post('/api/tickets')
+        .set('Authorization', `Bearer ${KEY}`)
+        .send({ title: 'x', description: 'y' });
+      spy.mockRestore();
+      expect(res.status).toBe(status);
+      expect(res.body.code).toBe(code);
+      expect(res.headers['content-type']).toMatch(/json/);
+    }
+  });
+});
+
+describe('Write rate limiter (all mutating /api routes)', () => {
+  const mkKey = (raw: string, permissions: string[]) => {
+    const prefix = raw.substring('itk_live_'.length, 'itk_live_'.length + 8);
+    const id = randomUUID();
+    db.prepare(
+      `INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions) VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(id, `wl-${prefix}`, prefix, createHash('sha256').update(raw).digest('hex'), adminId, JSON.stringify(permissions));
+  };
+  const KEY_A = 'itk_live_wlimAAAA0123456789abcdef01234567';
+  const KEY_B = 'itk_live_wlimBBBB0123456789abcdef01234567';
+
+  beforeAll(() => {
+    // read-only: skrivningar avvisas med 403 av authenticate, men begränsaren räknar dem först.
+    mkKey(KEY_A, ['read']);
+    mkKey(KEY_B, ['read']);
+  });
+
+  it('allows 300 writes per API key per window regardless of source IP, then 429 — another key is unaffected', async () => {
+    let lastStatus = 0;
+    for (let i = 0; i < 300; i++) {
+      const res = await request(app)
+        .post('/api/tickets')
+        .set('X-Forwarded-For', `203.0.113.${(i % 200) + 1}`)
+        .set('Authorization', `Bearer ${KEY_A}`)
+        .send({});
+      lastStatus = res.status;
+      if (res.status === 429) break;
+    }
+    expect(lastStatus).toBe(403);
+
+    const blocked = await request(app).post('/api/tickets').set('Authorization', `Bearer ${KEY_A}`).send({});
+    expect(blocked.status).toBe(429);
+    expect(blocked.headers['retry-after']).toBeDefined();
+
+    const other = await request(app).post('/api/tickets').set('Authorization', `Bearer ${KEY_B}`).send({});
+    expect(other.status).toBe(403);
+  });
+
+  it('does not count GET requests and keys JWT sessions by user id (writes still pass after 305 GETs)', async () => {
+    const login = await request(app).post('/api/auth/login').set('X-Forwarded-For', '203.0.113.250')
+      .send({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD });
+    const jwtHeader = `Bearer ${login.body.accessToken}`;
+    const server = app.listen(0);
+    try {
+      const api = request(server);
+      for (let i = 0; i < 305; i++) {
+        const res = await api.get('/api/health').set('Authorization', jwtHeader);
+        if (res.status !== 200) throw new Error(`GET counted at ${i}`);
+      }
+      const agent = request.agent(server);
+      const csrf = (await agent.get('/api/csrf-token').set('Authorization', jwtHeader)).body.csrfToken as string;
+      // Vilken route som helst räcker: målet är att begränsaren inte slår till (429) och CSRF/auth passerar.
+      const res = await agent.post('/api/tags').set('Authorization', jwtHeader).set('x-csrf-token', csrf)
+        .send({ name: 'wl-tag', color: '#112233' });
+      expect([401, 403, 429]).not.toContain(res.status);
+    } finally {
+      server.close();
+    }
   });
 });

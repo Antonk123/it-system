@@ -6,6 +6,9 @@ import { logger } from '../lib/logger.js';
 
 const router = Router();
 
+// sla_disabled hör till den avvecklade SLA-modulen och exponeras inte längre.
+const COMPANY_COLUMNS = 'id, name, org_number, email, phone, address, created_at, updated_at';
+
 interface CompanyRow {
   id: string;
   name: string;
@@ -13,7 +16,6 @@ interface CompanyRow {
   email: string | null;
   phone: string | null;
   address: string | null;
-  sla_disabled: number;
   created_at: string;
   updated_at: string;
 }
@@ -29,7 +31,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
   try {
     const companies = db.prepare(`
       SELECT
-        co.*,
+        co.id, co.name, co.org_number, co.email, co.phone, co.address, co.created_at, co.updated_at,
         (SELECT COUNT(*) FROM contacts c WHERE c.company_id = co.id) as contact_count,
         (SELECT COUNT(*) FROM tickets t WHERE t.company_id = co.id AND t.status NOT IN ('closed', 'resolved')) as open_ticket_count,
         (SELECT COUNT(*) FROM tickets t WHERE t.company_id = co.id) as total_ticket_count
@@ -46,7 +48,7 @@ router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
 // GET /:id — single company with full stats
 router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const company = db.prepare('SELECT * FROM companies WHERE id = ?').get(req.params.id) as CompanyRow | undefined;
+    const company = db.prepare(`SELECT ${COMPANY_COLUMNS} FROM companies WHERE id = ?`).get(req.params.id) as CompanyRow | undefined;
     if (!company) {
       return res.status(404).json({ error: 'Company not found' });
     }
@@ -61,7 +63,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
         SUM(CASE WHEN status NOT IN ('closed', 'resolved') THEN 1 ELSE 0 END) as open_count,
         SUM(CASE WHEN status = 'closed' AND closed_at IS NOT NULL THEN 1 ELSE 0 END) as closed_count,
         AVG(CASE
-          WHEN closed_at IS NOT NULL AND created_at IS NOT NULL
+          WHEN status IN ('resolved', 'closed') AND closed_at IS NOT NULL AND created_at IS NOT NULL
           THEN julianday(closed_at) - julianday(created_at)
           ELSE NULL
         END) as avg_resolution_days
@@ -94,7 +96,7 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
       'INSERT INTO companies (id, name, org_number, email, phone, address) VALUES (?, ?, ?, ?, ?, ?)'
     ).run(id, name.trim(), org_number?.trim() || null, email?.trim() || null, phone?.trim() || null, address?.trim() || null);
 
-    const company = db.prepare('SELECT * FROM companies WHERE id = ?').get(id) as CompanyRow;
+    const company = db.prepare(`SELECT ${COMPANY_COLUMNS} FROM companies WHERE id = ?`).get(id) as CompanyRow;
     res.status(201).json(company);
   } catch (error) {
     logger.error('Error creating company:', { error: String(error) });
@@ -105,7 +107,7 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
 // PUT /:id — update company
 router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
-    const existing = db.prepare('SELECT * FROM companies WHERE id = ?').get(req.params.id) as CompanyRow | undefined;
+    const existing = db.prepare(`SELECT ${COMPANY_COLUMNS} FROM companies WHERE id = ?`).get(req.params.id) as CompanyRow | undefined;
     if (!existing) {
       return res.status(404).json({ error: 'Company not found' });
     }
@@ -134,7 +136,7 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
 
     db.prepare(`UPDATE companies SET ${setClauses.join(', ')} WHERE id = ?`).run(...values, req.params.id);
 
-    const company = db.prepare('SELECT * FROM companies WHERE id = ?').get(req.params.id) as CompanyRow;
+    const company = db.prepare(`SELECT ${COMPANY_COLUMNS} FROM companies WHERE id = ?`).get(req.params.id) as CompanyRow;
     res.json(company);
   } catch (error) {
     logger.error('Error updating company:', { error: String(error) });
@@ -142,12 +144,33 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
   }
 });
 
+// Bokförings- och SLA-historik som raderas med företaget (ON DELETE CASCADE) och därför
+// måste stoppa borttagningen. Tidsposter hör till företaget via ärendet.
+const RETAINED_HISTORY: { label: string; sql: string }[] = [
+  { label: 'fakturor', sql: 'SELECT COUNT(*) FROM invoices WHERE company_id = ?' },
+  { label: 'prisavtal', sql: 'SELECT COUNT(*) FROM billing_rates WHERE company_id = ?' },
+  { label: 'SLA-policyer', sql: 'SELECT COUNT(*) FROM sla_policies WHERE company_id = ?' },
+  {
+    label: 'tidsregistreringar',
+    sql: 'SELECT COUNT(*) FROM time_entries te JOIN tickets t ON t.id = te.ticket_id WHERE t.company_id = ?',
+  },
+];
+
 // DELETE /:id — delete company (contacts keep their data, company_id set to null via FK)
 router.delete('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
-    const existing = db.prepare('SELECT * FROM companies WHERE id = ?').get(req.params.id) as CompanyRow | undefined;
+    const existing = db.prepare(`SELECT ${COMPANY_COLUMNS} FROM companies WHERE id = ?`).get(req.params.id) as CompanyRow | undefined;
     if (!existing) {
       return res.status(404).json({ error: 'Company not found' });
+    }
+
+    const retained = RETAINED_HISTORY
+      .filter(({ sql }) => (db.prepare(sql).pluck().get(existing.id) as number) > 0)
+      .map(({ label }) => label);
+    if (retained.length > 0) {
+      return res.status(409).json({
+        error: `Företaget kan inte raderas eftersom det har sparad historik (${retained.join(', ')}) som skulle försvinna.`,
+      });
     }
 
     db.prepare('DELETE FROM companies WHERE id = ?').run(req.params.id);

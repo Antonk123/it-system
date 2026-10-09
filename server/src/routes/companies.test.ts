@@ -246,3 +246,57 @@ describe('Company CRUD cycle (admin)', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('DELETE /api/companies/:id — retained billing history', () => {
+  async function createCompany(name: string) {
+    const res = await adminAgent
+      .post('/api/companies')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrf)
+      .send({ name });
+    expect(res.status).toBe(201);
+    return res.body.id as string;
+  }
+
+  const attempt = (id: string) =>
+    adminAgent
+      .delete(`/api/companies/${id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrf);
+
+  it('does not expose the retired sla_disabled column', async () => {
+    const id = await createCompany('Utan SLA-kolumn AB');
+    const res = await adminAgent.get(`/api/companies/${id}`).set('Authorization', `Bearer ${adminToken}`);
+    expect(res.body).not.toHaveProperty('sla_disabled');
+    const list = await adminAgent.get('/api/companies').set('Authorization', `Bearer ${adminToken}`);
+    expect(list.body.find((c: { id: string }) => c.id === id)).not.toHaveProperty('sla_disabled');
+  });
+
+  it.each([
+    ['invoices', (id: string) => db.prepare("INSERT INTO invoices (id, company_id, period_start, period_end) VALUES (?, ?, '2026-01-01', '2026-01-31')").run(randomUUID(), id), 'fakturor'],
+    ['billing_rates', (id: string) => db.prepare('INSERT INTO billing_rates (id, company_id, rate_per_hour) VALUES (?, ?, 900)').run(randomUUID(), id), 'prisavtal'],
+    ['sla_policies', (id: string) => db.prepare("INSERT INTO sla_policies (id, company_id, priority, response_time_minutes, resolution_time_minutes) VALUES (?, ?, 'high', 60, 480)").run(randomUUID(), id), 'SLA-policyer'],
+    ['time_entries', (id: string) => {
+      const ticketId = randomUUID();
+      db.prepare("INSERT INTO tickets (id, title, description, company_id) VALUES (?, 'T', 'D', ?)").run(ticketId, id);
+      db.prepare('INSERT INTO time_entries (id, ticket_id, duration_minutes) VALUES (?, ?, 30)').run(randomUUID(), ticketId);
+    }, 'tidsregistreringar'],
+  ])('409s and keeps the company when %s reference it', async (_table, seed, label) => {
+    const id = await createCompany(`Historik ${label} AB`);
+    seed(id);
+
+    const res = await attempt(id);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toContain(label);
+    expect(db.prepare('SELECT id FROM companies WHERE id = ?').get(id)).toBeDefined();
+  });
+
+  it('still deletes a company that only has tickets and contacts', async () => {
+    const id = await createCompany('Bara ärenden AB');
+    db.prepare("INSERT INTO tickets (id, title, description, company_id) VALUES (?, 'T', 'D', ?)").run(randomUUID(), id);
+
+    const res = await attempt(id);
+    expect(res.status).toBe(200);
+    expect(db.prepare('SELECT id FROM companies WHERE id = ?').get(id)).toBeUndefined();
+  });
+});

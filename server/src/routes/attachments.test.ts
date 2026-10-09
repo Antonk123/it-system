@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { existsSync, mkdirSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'fs';
 import { randomUUID } from 'crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -60,7 +60,7 @@ import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
 import { createApp } from '../app.js';
-import { ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS } from './attachments.js';
+import { ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS, hasMagicByteMatch } from './attachments.js';
 
 // ─── Shared state ─────────────────────────────────────────────────────────────
 
@@ -426,13 +426,13 @@ describe('GET /api/attachments/ticket/:ticketId — list attachments (authorizat
     expect(Array.isArray(res.body)).toBe(true);
   });
 
-  it('returns 403 for a user who is not admin/requester/assignee/creator', async () => {
+  it('returns 200 for any authenticated user (reads are open)', async () => {
     const res = await otherAgent
       .get(`/api/attachments/ticket/${ticketId}`)
       .set('Authorization', `Bearer ${otherToken}`);
 
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/forbidden/i);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
   });
 
   it('returns 401 when no auth token is provided', async () => {
@@ -485,13 +485,12 @@ describe('GET /api/attachments/file/:id — serve file (authorization)', () => {
     expect(res.status).toBe(200);
   });
 
-  it('returns 403 when an unrelated user attempts to download the file', async () => {
+  it('returns 200 when an unrelated user downloads the file (reads are open)', async () => {
     const res = await otherAgent
       .get(`/api/attachments/file/${attachmentId}`)
       .set('Authorization', `Bearer ${otherToken}`);
 
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/forbidden/i);
+    expect(res.status).toBe(200);
   });
 
   it('returns 404 for a non-existent attachment ID', async () => {
@@ -575,10 +574,9 @@ describe('DELETE /api/attachments/:id', () => {
  * bytes (so hasMagicByteMatch passes) plus a representative allowed extension,
  * and assert the upload is accepted (201).
  *
- * Magic-byte rules live in attachments.ts::hasMagicByteMatch — only PDF / PNG /
- * JPEG / GIF / the PK-zip family (zip + OOXML docx/xlsx/pptx) have a signature.
- * Every other allowed MIME type (svg, webp, txt, csv, eml, legacy Office,
- * rar, 7z) is a pass-through, so any byte content is accepted.
+ * Magic-byte rules live in attachments.ts::hasMagicByteMatch — binary types (PDF,
+ * PNG, JPEG, GIF, WebP, legacy Office/OLE, rar, 7z, the PK-zip family) have a
+ * signature; text types (txt, csv, md, eml) are pass-through.
  */
 const PK_ZIP = Buffer.from([0x50, 0x4b, 0x03, 0x04]); // PK\x03\x04
 const PDF_SIG = Buffer.from([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]); // %PDF-1.4
@@ -593,23 +591,22 @@ const MIME_FIXTURES: Fixture[] = [
   { mime: 'image/jpeg', ext: 'jpg', magic: JPEG_SIG },
   { mime: 'image/png', ext: 'png', magic: PNG_SIG },
   { mime: 'image/gif', ext: 'gif', magic: GIF_SIG },
-  { mime: 'image/webp', ext: 'webp', magic: Buffer.from('RIFF....WEBP') }, // pass-through (no rule)
-  { mime: 'image/svg+xml', ext: 'svg', magic: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>') }, // pass-through
+  { mime: 'image/webp', ext: 'webp', magic: Buffer.from('RIFF....WEBP') },
   { mime: 'application/pdf', ext: 'pdf', magic: PDF_SIG },
   { mime: 'text/plain', ext: 'txt', magic: Buffer.from('hello world') }, // pass-through
   { mime: 'text/csv', ext: 'csv', magic: Buffer.from('a,b,c\n1,2,3') }, // pass-through
   { mime: 'text/markdown', ext: 'md', magic: Buffer.from('# Heading\n\nbody') }, // pass-through
   { mime: 'message/rfc822', ext: 'eml', magic: Buffer.from('From: a@b\r\nSubject: x\r\n\r\nhi') }, // pass-through
-  { mime: 'application/msword', ext: 'doc', magic: Buffer.from([0xd0, 0xcf, 0x11, 0xe0]) }, // pass-through
+  { mime: 'application/msword', ext: 'doc', magic: Buffer.from([0xd0, 0xcf, 0x11, 0xe0]) },
   { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', ext: 'docx', magic: PK_ZIP },
-  { mime: 'application/vnd.ms-excel', ext: 'xls', magic: Buffer.from([0xd0, 0xcf, 0x11, 0xe0]) }, // pass-through
+  { mime: 'application/vnd.ms-excel', ext: 'xls', magic: Buffer.from([0xd0, 0xcf, 0x11, 0xe0]) },
   { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', ext: 'xlsx', magic: PK_ZIP },
-  { mime: 'application/vnd.ms-powerpoint', ext: 'ppt', magic: Buffer.from([0xd0, 0xcf, 0x11, 0xe0]) }, // pass-through
+  { mime: 'application/vnd.ms-powerpoint', ext: 'ppt', magic: Buffer.from([0xd0, 0xcf, 0x11, 0xe0]) },
   { mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', ext: 'pptx', magic: PK_ZIP },
   { mime: 'application/zip', ext: 'zip', magic: PK_ZIP },
   { mime: 'application/x-zip-compressed', ext: 'zip', magic: PK_ZIP },
-  { mime: 'application/x-rar-compressed', ext: 'rar', magic: Buffer.from('Rar!\x1a\x07\x00') }, // pass-through
-  { mime: 'application/x-7z-compressed', ext: '7z', magic: Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]) }, // pass-through
+  { mime: 'application/x-rar-compressed', ext: 'rar', magic: Buffer.from('Rar!\x1a\x07\x00') },
+  { mime: 'application/x-7z-compressed', ext: '7z', magic: Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]) },
 ];
 
 describe('POST /api/attachments — full ALLOWED_MIME_TYPES / ALLOWED_EXTENSIONS coverage', () => {
@@ -647,6 +644,19 @@ describe('POST /api/attachments — full ALLOWED_MIME_TYPES / ALLOWED_EXTENSIONS
     expect(res.status).toBe(201);
     expect(res.body.file_type).toBe(mime);
     expect(res.body.file_name).toBe(`fixture.${ext}`);
+  });
+
+  it('rejects SVG uploads (active format removed from the allowlist → 400)', async () => {
+    const res = await adminAgent
+      .post(`/api/attachments/ticket/${coverageTicketId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .attach('file', Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'), { filename: 'icon.svg', contentType: 'image/svg+xml' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not allowed/i);
+    expect(ALLOWED_MIME_TYPES).not.toContain('image/svg+xml');
+    expect(ALLOWED_EXTENSIONS).not.toContain('svg');
   });
 
   it('rejects a MIME type that is NOT in ALLOWED_MIME_TYPES (image/bmp → 400)', async () => {
@@ -811,3 +821,103 @@ describe('POST /api/attachments — per-ticket count limit (MAX_ATTACHMENTS_PER_
 // That coupling makes a reliable, isolated unit test impractical without
 // touching rateLimit.ts (out of scope here) to inject a lower limit for tests.
 // The wiring itself is verified by reading the route registration above.
+
+// ─── Audit fixes: extra signatures, orphan cleanup, containment, filenames ────
+
+describe('hasMagicByteMatch — webp / OLE / rar / 7z signatures', () => {
+  const dir = join(tmpdir(), `itticket-attach-magic-${process.pid}-${Date.now()}`);
+
+  beforeAll(() => {
+    mkdirSync(dir, { recursive: true });
+  });
+
+  afterAll(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const check = (name: string, bytes: Buffer, mime: string) => {
+    const file = join(dir, name);
+    writeFileSync(file, bytes);
+    return hasMagicByteMatch(file, mime);
+  };
+
+  it('requires both RIFF and WEBP for image/webp', () => {
+    expect(check('ok.webp', Buffer.from('RIFF\x00\x00\x00\x00WEBPVP8 '), 'image/webp')).toBe(true);
+    expect(check('wav.webp', Buffer.from('RIFF\x00\x00\x00\x00WAVEfmt '), 'image/webp')).toBe(false);
+    expect(check('text.webp', Buffer.from('not an image at all'), 'image/webp')).toBe(false);
+  });
+
+  it('requires the OLE header for legacy Office types', () => {
+    const ole = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
+    for (const mime of ['application/msword', 'application/vnd.ms-excel', 'application/vnd.ms-powerpoint']) {
+      expect(check('ok.doc', ole, mime)).toBe(true);
+      expect(check('bad.doc', Buffer.from('<html>fake xls</html>'), mime)).toBe(false);
+    }
+  });
+
+  it('requires Rar! and the 7z signature for archives', () => {
+    expect(check('ok.rar', Buffer.from('Rar!\x1a\x07\x00'), 'application/x-rar-compressed')).toBe(true);
+    expect(check('bad.rar', Buffer.from('PK\x03\x04'), 'application/x-rar-compressed')).toBe(false);
+    expect(check('ok.7z', Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c, 0x00, 0x04]), 'application/x-7z-compressed')).toBe(true);
+    expect(check('bad.7z', Buffer.from('Rar!\x1a\x07\x00'), 'application/x-7z-compressed')).toBe(false);
+  });
+});
+
+describe('attachments — upload cleanup, containment and filenames', () => {
+  const uploadedFiles = () => readdirSync(UPLOAD_TEST_DIR);
+
+  it('removes the stored file when the ticket does not exist (404)', async () => {
+    const before = uploadedFiles().length;
+    const res = await adminAgent
+      .post(`/api/attachments/ticket/${randomUUID()}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .attach('file', VALID_PNG_BUFFER, { filename: 'orphan.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(404);
+    expect(uploadedFiles().length).toBe(before);
+  });
+
+  it('stores files under a UUID-based name and keeps åäö in the original filename', async () => {
+    const res = await adminAgent
+      .post(`/api/attachments/ticket/${ticketId}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrfToken)
+      .attach('file', VALID_PNG_BUFFER, { filename: 'räksmörgås.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(201);
+    expect(res.body.file_name).toBe('räksmörgås.png');
+    expect(res.body.file_path).toMatch(/^\d+-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.png$/);
+
+    const download = await adminAgent
+      .get(`/api/attachments/file/${res.body.id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(download.status).toBe(200);
+    expect(download.headers['content-disposition']).toContain("filename*=UTF-8''r%C3%A4ksm%C3%B6rg%C3%A5s.png");
+  });
+
+  it('refuses to serve or unlink a file_path that escapes the upload dir', async () => {
+    const outside = join(UPLOAD_TEST_DIR, '..', `itticket-outside-${process.pid}.txt`);
+    writeFileSync(outside, 'secret');
+    const attachmentId = randomUUID();
+    db.prepare(
+      `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type) VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(attachmentId, ticketId, 'escape.txt', `../${outside.split('/').pop()}`, 6, 'text/plain');
+
+    try {
+      const serve = await adminAgent
+        .get(`/api/attachments/file/${attachmentId}`)
+        .set('Authorization', `Bearer ${adminToken}`);
+      expect(serve.status).toBe(404);
+
+      const del = await adminAgent
+        .delete(`/api/attachments/${attachmentId}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .set('x-csrf-token', adminCsrfToken);
+      expect(del.status).toBe(200);
+      expect(existsSync(outside)).toBe(true);
+    } finally {
+      rmSync(outside, { force: true });
+    }
+  });
+});

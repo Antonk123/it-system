@@ -8,7 +8,9 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   last_login TEXT,
   oidc_sub TEXT,
-  oidc_iss TEXT
+  oidc_iss TEXT,
+  must_change_password INTEGER NOT NULL DEFAULT 0,  -- migration 083
+  token_version INTEGER NOT NULL DEFAULT 0          -- migration 088
 );
 -- OBS: idx_users_oidc_identity skapas ENDAST i migration 068 (add_users_oidc_iss),
 -- INTE här. schema.sql exec:as före migrationerna vid varje start; på en äldre
@@ -127,7 +129,8 @@ CREATE TABLE IF NOT EXISTS ticket_comments (
   -- Deklarerade SIST för att matcha ALTER TABLE ADD COLUMN på uppgraderings-
   -- vägen (schema-path-parity.test.ts jämför kolumnordning).
   email_from_name TEXT DEFAULT NULL,
-  email_from_address TEXT DEFAULT NULL
+  email_from_address TEXT DEFAULT NULL,
+  email_message_id TEXT DEFAULT NULL  -- migration 087
 );
 
 -- Ticket shares (public share tokens)
@@ -154,7 +157,7 @@ CREATE TABLE IF NOT EXISTS ticket_links (
 CREATE TABLE IF NOT EXISTS tags (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
-  color TEXT DEFAULT '#3b82f6',
+  color TEXT NOT NULL DEFAULT '#3b82f6',
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -176,7 +179,8 @@ CREATE TABLE IF NOT EXISTS ticket_reminders (
   message TEXT,
   sent INTEGER DEFAULT 0,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  sent_at TEXT DEFAULT NULL
+  sent_at TEXT DEFAULT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0  -- migration 086
 );
 
 -- Knowledge Base categories
@@ -203,13 +207,14 @@ CREATE TABLE IF NOT EXISTS kb_article_shares (
   id TEXT PRIMARY KEY,
   article_id TEXT NOT NULL REFERENCES kb_articles(id) ON DELETE CASCADE,
   share_token TEXT UNIQUE NOT NULL,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  expires_at TEXT  -- migration 090 (NULL = ingen utgång)
 );
 
 -- Refresh tokens (for JWT token rotation)
 -- OBS: måste matcha migration 027 exakt — fresh-install skapar tabellen här och
 -- migration 027 hoppar då över (tableExists-guard). Kolumn + index måste därför
--- finnas redan här, annars saknas idx_refresh_tokens_token på fresh-installs.
+-- finnas redan här. token har UNIQUE (eget autoindex) — inget separat token-index.
 CREATE TABLE IF NOT EXISTS refresh_tokens (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -217,10 +222,10 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
   expires_at TEXT NOT NULL,
   revoked INTEGER DEFAULT 0,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  last_used_at TEXT
+  last_used_at TEXT,
+  replaced_by TEXT  -- migration 089 (index idx_refresh_tokens_replaced_by ligger bara i migrationen)
 );
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
-CREATE INDEX IF NOT EXISTS idx_refresh_tokens_token ON refresh_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_expires ON refresh_tokens(expires_at);
 
 -- Ticket <-> KB article links
@@ -233,45 +238,49 @@ CREATE TABLE IF NOT EXISTS ticket_kb_links (
 );
 
 -- Create indexes
-CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
 -- Sammansatt index för listvyer som filtrerar på status och sorterar updated_at DESC.
--- Täcker även status-bara filter via leftmost-prefix (inget separat status-index behövs utöver idx_tickets_status).
+-- Täcker även status-bara filter via leftmost-prefix (därför inget separat status-index).
 CREATE INDEX IF NOT EXISTS idx_tickets_status_updated ON tickets(status, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_tickets_priority ON tickets(priority);
 CREATE INDEX IF NOT EXISTS idx_tickets_category ON tickets(category_id);
 CREATE INDEX IF NOT EXISTS idx_tickets_requester ON tickets(requester_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_resolved_at ON tickets(resolved_at);
+CREATE INDEX IF NOT EXISTS idx_tickets_closed_at_only ON tickets(closed_at);
 CREATE INDEX IF NOT EXISTS idx_ticket_attachments_ticket ON ticket_attachments(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_checklists_ticket ON ticket_checklists(ticket_id);
-CREATE INDEX IF NOT EXISTS idx_ticket_comments_ticket ON ticket_comments(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_comments_ticket_deleted_created ON ticket_comments(ticket_id, deleted_at, created_at);
 CREATE INDEX IF NOT EXISTS idx_ticket_comments_created ON ticket_comments(created_at);
-CREATE INDEX IF NOT EXISTS idx_ticket_shares_token ON ticket_shares(share_token);
-CREATE INDEX IF NOT EXISTS idx_ticket_links_source ON ticket_links(source_ticket_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_shares_ticket ON ticket_shares(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_shares_created_by ON ticket_shares(created_by);
+CREATE INDEX IF NOT EXISTS idx_ticket_links_created_by ON ticket_links(created_by);
 CREATE INDEX IF NOT EXISTS idx_ticket_links_target ON ticket_links(target_ticket_id);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ticket_links_unique ON ticket_links(source_ticket_id, target_ticket_id);
+-- OBS: det unika skiftlägesokänsliga e-postindexet (idx_contacts_email_unique)
+-- skapas ENDAST i migration 077, efter dedupe. Här skulle det krascha starten på en
+-- databas som ännu har dubbletter.
 CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
-CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
-CREATE INDEX IF NOT EXISTS idx_ticket_tags_ticket ON ticket_tags(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_tags_tag ON ticket_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_ticket ON ticket_reminders(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_user ON ticket_reminders(user_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_time ON ticket_reminders(reminder_time);
 CREATE INDEX IF NOT EXISTS idx_ticket_reminders_sent ON ticket_reminders(sent);
-CREATE INDEX IF NOT EXISTS idx_kb_article_shares_token ON kb_article_shares(share_token);
 CREATE INDEX IF NOT EXISTS idx_kb_article_shares_article ON kb_article_shares(article_id);
 CREATE INDEX IF NOT EXISTS idx_kb_articles_category ON kb_articles(category_id);
 CREATE INDEX IF NOT EXISTS idx_kb_articles_updated ON kb_articles(updated_at);
 -- OBS: idx_kb_articles_status_updated och idx_kb_articles_last_reviewed skapas i
 -- migration 062, INTE här. kb_articles.status/last_reviewed_at adderas av migration
 -- 015/018 som körs EFTER schema.sql — kolumnerna finns inte när detta exekveras.
-CREATE INDEX IF NOT EXISTS idx_ticket_kb_links_ticket ON ticket_kb_links(ticket_id);
 CREATE INDEX IF NOT EXISTS idx_ticket_kb_links_article ON ticket_kb_links(article_id);
 
 -- Trigger to update updated_at on tickets.
 -- Skriver ISO-8601 (matchar app-kodens new Date().toISOString()) så datumfilter
 -- på updated_at träffar exakta gränser. Tidigare CURRENT_TIMESTAMP gav SQLite-
 -- format ('YYYY-MM-DD HH:MM:SS') som skiljde sig från app-värdet.
+-- Fyrar bara på innehållskolumner (migration 072) — inte på bokföring som
+-- last_aging_notified_at, email_message_id, ai_* eller sla_*.
 CREATE TRIGGER IF NOT EXISTS update_ticket_updated_at
-AFTER UPDATE ON tickets
+AFTER UPDATE OF title, description, status, priority, category_id, requester_id,
+  notes, solution, company_id, assigned_to, created_by ON tickets
 FOR EACH ROW
 BEGIN
   UPDATE tickets SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
@@ -309,7 +318,9 @@ CREATE TABLE IF NOT EXISTS backup_config (
   last_run_at     TEXT,
   last_status     TEXT,
   last_size_bytes INTEGER,
-  updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+  updated_at      TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  consecutive_failures INTEGER NOT NULL DEFAULT 0,  -- migration 082
+  last_error      TEXT                              -- migration 082
 );
 
 -- App settings (generic key-value runtime settings; first key: two_way_email_enabled)
@@ -317,3 +328,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- OBS: tickets_fts och kb_articles_fts (migration 052/081) är contentless och nycklade
+-- på rowid i tabeller med TEXT-PK. Kör ALDRIG VACUUM manuellt — det får numrera om
+-- rowid och då pekar varje FTS-rad på fel post. Bygg om med rebuildFts() (lib/fts.ts).

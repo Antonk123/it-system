@@ -83,7 +83,7 @@ afterAll(() => {
   }
 });
 
-describe('GET /api/tickets/:id/history — authz mirrors PUT', () => {
+describe('GET /api/tickets/:id/history — reads are open to any authenticated user', () => {
   it('non-owner agent CAN read history of an UNASSIGNED ticket (self-service)', async () => {
     const res = await userBAgent.get(`/api/tickets/${unassignedTicket}/history`)
       .set('Authorization', `Bearer ${userBToken}`);
@@ -92,10 +92,11 @@ describe('GET /api/tickets/:id/history — authz mirrors PUT', () => {
     expect(res.body.length).toBeGreaterThan(0);
   });
 
-  it('non-owner agent is BLOCKED (403) from history of a ticket assigned to someone else', async () => {
+  it('non-owner agent CAN read history of a ticket assigned to someone else (reads are open)', async () => {
     const res = await userBAgent.get(`/api/tickets/${assignedToOtherTicket}/history`)
       .set('Authorization', `Bearer ${userBToken}`);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
   });
 
   it('admin CAN read history of an assigned ticket', async () => {

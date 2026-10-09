@@ -1,10 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import { randomBytes } from 'crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'crypto';
 import multer from 'multer';
 import { existsSync, mkdirSync, unlinkSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import { db } from '../db/connection.js';
 import { stripHtml } from '../lib/htmlUtils.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
@@ -15,11 +13,7 @@ import { createRateLimiter, writeRateLimiter } from '../middleware/rateLimit.js'
 import { logger } from '../lib/logger.js';
 import { deleteSetting, getSetting, setSetting } from '../lib/settings.js';
 import { logAudit } from '../lib/auditLog.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const UPLOAD_DIR = process.env.UPLOAD_DIR || join(__dirname, '../../data/uploads');
+import { UPLOAD_DIR, extractKbImageFilenames, deleteKbImageFile } from '../lib/kbImages.js';
 
 if (!existsSync(UPLOAD_DIR)) {
   mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -52,41 +46,14 @@ const uploadImage = multer({
 
 const kbShareRateLimiter = createRateLimiter(60 * 1000, 30);
 const kbPortalRateLimiter = createRateLimiter(60 * 1000, 120);
+// Bilderna är publika (delade artiklar renderar dem utan inloggning) men ska inte kunna hamras.
+const kbImageRateLimiter = createRateLimiter(60 * 1000, 300);
 const KB_PORTAL_SHARE_TOKEN_SETTING = 'kb_public_share_token';
 
 const router = Router();
 
-// Extraherar kb-* bildfilnamn refererade via <img src="/api/kb/images/kb-…"> i
-// artikelinnehåll. Delas mellan PUT (diff mot gammalt innehåll) och DELETE
-// (radera alla) för att undvika duplicerad parsing-/path-traversal-logik.
-function extractKbImageFilenames(content: string): Set<string> {
-  const filenames = new Set<string>();
-  const imgSrcPattern = /<img[^>]+src="([^"]+)"/gi;
-  let match: RegExpExecArray | null;
-  while ((match = imgSrcPattern.exec(content)) !== null) {
-    const src = match[1];
-    // Matcha bara lokalt uppladdade KB-bilder: /api/kb/images/<filename>
-    const localMatch = src.match(/\/api\/kb\/images\/(kb-[^/?#"]+)$/);
-    if (!localMatch) continue;
-    const filename = localMatch[1];
-    // Förhindra path-traversal: filnamnet får inte innehålla sökvägskomponenter.
-    if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) continue;
-    filenames.add(filename);
-  }
-  return filenames;
-}
-
-// Raderar en enskild lokalt uppladdad KB-bildfil (best-effort, icke-fatalt).
-function deleteKbImageFile(filename: string): void {
-  const filePath = join(UPLOAD_DIR, filename);
-  // Radera bara filer som faktiskt ligger i UPLOAD_DIR.
-  if (!filePath.startsWith(UPLOAD_DIR + '/') && filePath !== UPLOAD_DIR) return;
-  try {
-    if (existsSync(filePath)) unlinkSync(filePath);
-  } catch (unlinkErr) {
-    logger.warn('KB: kunde inte radera inbäddad bild', { filePath, error: String(unlinkErr) });
-  }
-}
+const MAX_ARTICLE_PAGE_LIMIT = 100;
+const ARTICLE_PREVIEW_LENGTH = 300;
 
 interface KbCategoryRow {
   id: string;
@@ -151,12 +118,26 @@ function publicPortalHeaders(_req: Request, res: Response, next: NextFunction): 
   next();
 }
 
+function tokensMatch(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
+}
+
+// kb_article_shares saknar expires_at tills en migration lägger till kolumnen;
+// NULL (eller ingen kolumn) betyder "ingen utgång".
+function shareExpirySupported(): boolean {
+  return (db.prepare('PRAGMA table_info(kb_article_shares)').all() as { name: string }[])
+    .some((col) => col.name === 'expires_at');
+}
+const SHARE_NOT_EXPIRED_SQL = " AND (expires_at IS NULL OR expires_at > datetime('now'))";
+
 /** Validates the global portal token without revealing whether it was revoked. */
 function requirePublicPortalToken(req: Request, res: Response): boolean {
   applyPortalSecurityHeaders(res);
-  const token = req.params.token;
+  const token = String(req.params.token);
   const activeToken = getSetting(KB_PORTAL_SHARE_TOKEN_SETTING);
-  if (!activeToken || token !== activeToken) {
+  if (!activeToken || !tokensMatch(token, activeToken)) {
     res.status(404).json({ error: 'Not found' });
     return false;
   }
@@ -188,7 +169,7 @@ router.post('/categories', authenticate, requireAdmin, (req: AuthRequest, res: R
     return res.status(400).json({ error: 'Name is required' });
   }
   try {
-    const id = uuidv4();
+    const id = randomUUID();
     const now = new Date().toISOString();
     const safeName = sanitizePlainText(name.trim());
     const maxPos = (db.prepare('SELECT MAX(position) as m FROM kb_categories').get() as { m: number | null }).m ?? -1;
@@ -238,52 +219,64 @@ router.delete('/categories/:id', authenticate, requireAdmin, (req: AuthRequest, 
 
 // ─── Articles ─────────────────────────────────────────────────────────────────
 
-// GET /api/kb/articles?search=&category_id=&article_type=&tag=
+// GET /api/kb/articles?search=&category_id=&article_type=&tag=&stale=&status=&fields=&page=&limit=
+// status (draft|published|all) gäller bara admins; övriga ser alltid publicerade.
+// fields=list ersätter content med en textförhandsvisning (preview). Utan page
+// returneras en ren array (bakåtkompatibelt); med page returneras { data, pagination }.
 router.get('/articles', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const { search, category_id, article_type, tag, stale } = req.query as Record<string, string>;
+    const { search, category_id, article_type, tag, stale, status, fields, page } = req.query as Record<string, string>;
     const trimmedSearch = search?.trim();
+    const statusFilter = isEffectiveAdmin(req) && (status === 'draft' || status === 'all') ? status : 'published';
 
-    let rawArticles: KbArticleRow[];
+    const filters = `(@status = 'all' OR a.status = @status)
+          AND (@category_id IS NULL OR a.category_id = @category_id)
+          AND (@article_type IS NULL OR a.article_type = @article_type)
+          AND (@tag IS NULL OR EXISTS (SELECT 1 FROM kb_article_tags WHERE article_id = a.id AND tag_id = @tag))
+          AND (@stale IS NULL OR (julianday('now') - julianday(COALESCE(a.last_reviewed_at, a.created_at))) > 90)`;
+    const columns = `a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.last_reviewed_at, a.created_at, a.updated_at,
+          c.name as category_name, c.color as category_color`;
+    const params: Record<string, string | null> = {
+      status: statusFilter, category_id: category_id || null, article_type: article_type || null, tag: tag || null, stale: stale || null,
+    };
 
+    let from: string;
+    let selectColumns = columns;
+    let orderBy: string;
     if (trimmedSearch) {
-      const safeQuery = '"' + trimmedSearch.replace(/"/g, '""') + '"';
-      rawArticles = db.prepare(`
-        SELECT
-          a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.last_reviewed_at, a.created_at, a.updated_at,
-          c.name as category_name, c.color as category_color,
-          snippet(kb_articles_fts, 1, '__MARK_START__', '__MARK_END__', '...', 25) AS snippet
-        FROM kb_articles_fts fts
+      params.search = '"' + trimmedSearch.replace(/"/g, '""') + '"';
+      from = `FROM kb_articles_fts fts
         JOIN kb_articles a ON a.rowid = fts.rowid
         LEFT JOIN kb_categories c ON a.category_id = c.id
-        WHERE kb_articles_fts MATCH @search
-          AND a.status = 'published'
-          AND (@category_id IS NULL OR a.category_id = @category_id)
-          AND (@article_type IS NULL OR a.article_type = @article_type)
-          AND (@tag IS NULL OR EXISTS (SELECT 1 FROM kb_article_tags WHERE article_id = a.id AND tag_id = @tag))
-          AND (@stale IS NULL OR (julianday('now') - julianday(COALESCE(a.last_reviewed_at, a.created_at))) > 90)
-        ORDER BY rank
-      `).all({ search: safeQuery, category_id: category_id || null, article_type: article_type || null, tag: tag || null, stale: stale || null }) as KbArticleRow[];
+        WHERE kb_articles_fts MATCH @search AND ${filters}`;
+      selectColumns += ", snippet(kb_articles_fts, 1, '__MARK_START__', '__MARK_END__', '...', 25) AS snippet";
+      orderBy = 'ORDER BY rank';
     } else {
-      rawArticles = db.prepare(`
-        SELECT
-          a.id, a.title, a.content, a.category_id, a.article_type, a.status, a.last_reviewed_at, a.created_at, a.updated_at,
-          c.name as category_name, c.color as category_color
-        FROM kb_articles a
+      from = `FROM kb_articles a
         LEFT JOIN kb_categories c ON a.category_id = c.id
-        WHERE a.status = 'published'
-          AND (@category_id IS NULL OR a.category_id = @category_id)
-          AND (@article_type IS NULL OR a.article_type = @article_type)
-          AND (@tag IS NULL OR EXISTS (SELECT 1 FROM kb_article_tags WHERE article_id = a.id AND tag_id = @tag))
-          AND (@stale IS NULL OR (julianday('now') - julianday(COALESCE(a.last_reviewed_at, a.created_at))) > 90)
-        ORDER BY a.updated_at DESC
-      `).all({ category_id: category_id || null, article_type: article_type || null, tag: tag || null, stale: stale || null }) as KbArticleRow[];
+        WHERE ${filters}`;
+      orderBy = 'ORDER BY a.updated_at DESC';
     }
 
-    const tagsByArticle = getTagsForArticles(rawArticles.map(a => a.id));
-    const articles = rawArticles.map(a => ({ ...a, tags: tagsByArticle.get(a.id) || [] }));
+    const paginated = page !== undefined;
+    const pageNumber = Math.max(1, parseInt(String(page), 10) || 1);
+    const limit = Math.min(MAX_ARTICLE_PAGE_LIMIT, Math.max(1, parseInt(String(req.query.limit), 10) || 20));
 
-    res.json(articles);
+    const rawArticles = (paginated
+      ? db.prepare(`SELECT ${selectColumns} ${from} ${orderBy} LIMIT @limit OFFSET @offset`)
+          .all({ ...params, limit, offset: (pageNumber - 1) * limit })
+      : db.prepare(`SELECT ${selectColumns} ${from} ${orderBy}`).all(params)) as KbArticleRow[];
+
+    const tagsByArticle = getTagsForArticles(rawArticles.map(a => a.id));
+    const articles = rawArticles.map(({ content, ...rest }) => ({
+      ...rest,
+      ...(fields === 'list' ? { preview: stripHtml(content).slice(0, ARTICLE_PREVIEW_LENGTH) } : { content }),
+      tags: tagsByArticle.get(rest.id) || [],
+    }));
+
+    if (!paginated) return res.json(articles);
+    const { total } = db.prepare(`SELECT COUNT(*) AS total ${from}`).get(params) as { total: number };
+    res.json({ data: articles, pagination: { page: pageNumber, limit, total } });
   } catch (error) {
     logger.error('Error fetching KB articles:', { error: String(error) });
     res.status(500).json({ error: 'Failed to fetch KB articles' });
@@ -354,7 +347,7 @@ router.post('/articles', authenticate, requireAdmin, (req: AuthRequest, res: Res
     return res.status(400).json({ error: 'Category not found' });
   }
   try {
-    const id = uuidv4();
+    const id = randomUUID();
     const now = new Date().toISOString();
     const articleStatus: 'draft' | 'published' = status === 'draft' ? 'draft' : 'published';
 
@@ -372,7 +365,7 @@ router.post('/articles', authenticate, requireAdmin, (req: AuthRequest, res: Res
       if (Array.isArray(tag_ids) && tag_ids.length > 0) {
         const insertTag = db.prepare('INSERT OR IGNORE INTO kb_article_tags (id, article_id, tag_id) VALUES (?, ?, ?)');
         for (const tagId of tag_ids) {
-          if (typeof tagId === 'string' && tagId.trim()) insertTag.run(uuidv4(), articleId, tagId);
+          if (typeof tagId === 'string' && tagId.trim()) insertTag.run(randomUUID(), articleId, tagId);
         }
       }
     });
@@ -420,8 +413,7 @@ router.put('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, res: 
     const articleStatus: 'draft' | 'published' = status === 'draft' ? 'draft' : 'published';
 
     const updateArticleAndFts = db.transaction((aid: string, articleTitle: string, articleContent: string, categoryId: string | null, articleTypeVal: string | null, articleStatusVal: string, timestamp: string) => {
-      db.prepare("INSERT INTO kb_articles_fts(kb_articles_fts, rowid, title, content_plain) VALUES('delete', ?, ?, ?)")
-        .run(existing!.rowid, existing!.title, stripHtml(existing!.content));
+      db.prepare('DELETE FROM kb_articles_fts WHERE rowid = ?').run(existing!.rowid);
       db.prepare(
         'UPDATE kb_articles SET title = ?, content = ?, category_id = ?, article_type = ?, status = ?, updated_at = ? WHERE id = ?'
       ).run(articleTitle, articleContent, categoryId, articleTypeVal, articleStatusVal, timestamp, aid);
@@ -431,7 +423,7 @@ router.put('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, res: 
       if (Array.isArray(tag_ids) && tag_ids.length > 0) {
         const insertTag = db.prepare('INSERT OR IGNORE INTO kb_article_tags (id, article_id, tag_id) VALUES (?, ?, ?)');
         for (const tagId of tag_ids) {
-          if (typeof tagId === 'string' && tagId.trim()) insertTag.run(uuidv4(), aid, tagId);
+          if (typeof tagId === 'string' && tagId.trim()) insertTag.run(randomUUID(), aid, tagId);
         }
       }
     });
@@ -489,8 +481,7 @@ router.delete('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, re
     const existing = db.prepare('SELECT id, title, content, rowid FROM kb_articles WHERE id = ?').get(req.params.id) as { id: string; title: string; content: string; rowid: number } | undefined;
     if (!existing) return res.status(404).json({ error: 'Article not found' });
     db.transaction(() => {
-      db.prepare("INSERT INTO kb_articles_fts(kb_articles_fts, rowid, title, content_plain) VALUES('delete', ?, ?, ?)")
-        .run(existing.rowid, existing.title, stripHtml(existing.content));
+      db.prepare('DELETE FROM kb_articles_fts WHERE rowid = ?').run(existing.rowid);
       db.prepare('DELETE FROM kb_articles WHERE id = ?').run(req.params.id);
     })();
 
@@ -516,7 +507,11 @@ router.delete('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, re
 
 // GET /api/kb/ticket/:ticketId
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
+  if (!canAccessTicket(req, req.params.ticketId as string)) {
+    return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+  }
   try {
+    // Utkast är bara synliga för admins, även när de är länkade till ett ärende.
     const articles = db.prepare(`
       SELECT
         a.id, a.title, a.content, a.category_id, a.created_at, a.updated_at,
@@ -526,8 +521,9 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
       JOIN kb_articles a ON tkl.article_id = a.id
       LEFT JOIN kb_categories c ON a.category_id = c.id
       WHERE tkl.ticket_id = ?
+        AND (? = 1 OR a.status = 'published')
       ORDER BY tkl.created_at DESC
-    `).all(req.params.ticketId);
+    `).all(req.params.ticketId, isEffectiveAdmin(req) ? 1 : 0);
     res.json(articles);
   } catch (error) {
     logger.error('Error fetching ticket KB links:', { error: String(error) });
@@ -538,22 +534,29 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
 // POST /api/kb/ticket/:ticketId
 router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   const { articleId } = req.body;
-  if (!articleId) return res.status(400).json({ error: 'articleId is required' });
-  // Kontrollera att användaren har behörighet till ärendet
-  if (!canAccessTicket(req, req.params.ticketId)) {
-    return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
-  }
+  if (!articleId || typeof articleId !== 'string') return res.status(400).json({ error: 'articleId is required' });
+  const ticketId = req.params.ticketId as string;
   try {
-    const article = db.prepare('SELECT id FROM kb_articles WHERE id = ?').get(articleId);
-    if (!article) return res.status(404).json({ error: 'Article not found' });
+    if (!db.prepare('SELECT id FROM tickets WHERE id = ?').get(ticketId)) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    // Kontrollera att användaren får ändra ärendet
+    if (!canAccessTicket(req, ticketId, { write: true })) {
+      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
+    // Bara publicerade artiklar kan länkas av andra än admins (som även får länka utkast).
+    const article = db.prepare('SELECT id, status FROM kb_articles WHERE id = ?').get(articleId) as { id: string; status: string } | undefined;
+    if (!article || (article.status !== 'published' && !isEffectiveAdmin(req))) {
+      return res.status(404).json({ error: 'Article not found' });
+    }
 
-    const id = uuidv4();
+    const id = randomUUID();
     const now = new Date().toISOString();
     db.prepare(
       'INSERT INTO ticket_kb_links (id, ticket_id, article_id, created_at) VALUES (?, ?, ?, ?)'
-    ).run(id, req.params.ticketId, articleId, now);
+    ).run(id, ticketId, articleId, now);
 
-    res.status(201).json({ id, ticket_id: req.params.ticketId, article_id: articleId, created_at: now });
+    res.status(201).json({ id, ticket_id: ticketId, article_id: articleId, created_at: now });
   } catch (error: any) {
     if (error?.message?.includes('UNIQUE')) {
       return res.status(409).json({ error: 'Article already linked to this ticket' });
@@ -565,8 +568,8 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
 
 // DELETE /api/kb/ticket/:ticketId/:articleId
 router.delete('/ticket/:ticketId/:articleId', authenticate, (req: AuthRequest, res: Response) => {
-  // Kontrollera att användaren har behörighet till ärendet
-  if (!canAccessTicket(req, req.params.ticketId)) {
+  // Kontrollera att användaren får ändra ärendet
+  if (!canAccessTicket(req, req.params.ticketId as string, { write: true })) {
     return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
   }
   try {
@@ -624,7 +627,7 @@ router.post('/articles/:id/links', authenticate, requireAdmin, async (req: AuthR
     `).get(id, targetArticleId, targetArticleId, id);
     if (existing) return res.status(409).json({ error: 'Link already exists' });
 
-    const linkId = uuidv4();
+    const linkId = randomUUID();
     db.prepare(`
       INSERT INTO kb_article_links (id, source_article_id, target_article_id)
       VALUES (?, ?, ?)
@@ -780,10 +783,11 @@ router.get('/portal/:token/articles/:articleId', publicPortalHeaders, kbPortalRa
 
 // ─── Article Sharing ──────────────────────────────────────────────────────────
 
-// GET /api/kb/articles/:id/share — get existing share token
-router.get('/articles/:id/share', authenticate, (req: AuthRequest, res: Response) => {
+// GET /api/kb/articles/:id/share — get existing share token (admin only)
+router.get('/articles/:id/share', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
-    const row = db.prepare('SELECT share_token FROM kb_article_shares WHERE article_id = ?').get(req.params.id) as { share_token: string } | undefined;
+    const row = db.prepare(`SELECT share_token FROM kb_article_shares WHERE article_id = ?${shareExpirySupported() ? SHARE_NOT_EXPIRED_SQL : ''}`)
+      .get(req.params.id) as { share_token: string } | undefined;
     res.json({ share_token: row?.share_token || null });
   } catch (error) {
     logger.error('Error fetching KB share:', { error: String(error) });
@@ -791,21 +795,37 @@ router.get('/articles/:id/share', authenticate, (req: AuthRequest, res: Response
   }
 });
 
-// POST /api/kb/articles/:id/share — create share token (idempotent)
+// POST /api/kb/articles/:id/share — create share token (idempotent).
+// Valfri body { expiresInDays: 1-365 } sätter utgångsdatum när kolumnen finns.
 router.post('/articles/:id/share', authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
     const article = db.prepare('SELECT id, status FROM kb_articles WHERE id = ?').get(req.params.id) as { id: string; status: 'draft' | 'published' } | undefined;
     if (!article) return res.status(404).json({ error: 'Article not found' });
     if (article.status !== 'published') return res.status(409).json({ error: 'Only published articles can be shared' });
 
+    const expiresInDays = req.body?.expiresInDays;
+    if (expiresInDays !== undefined && (!Number.isInteger(expiresInDays) || expiresInDays < 1 || expiresInDays > 365)) {
+      return res.status(400).json({ error: 'expiresInDays måste vara ett heltal mellan 1 och 365' });
+    }
+    const supportsExpiry = shareExpirySupported();
+
+    // En utgången länk ersätts av en ny; en giltig returneras som den är.
+    if (supportsExpiry) {
+      db.prepare("DELETE FROM kb_article_shares WHERE article_id = ? AND expires_at IS NOT NULL AND expires_at <= datetime('now')").run(req.params.id);
+    }
     const existing = db.prepare('SELECT share_token FROM kb_article_shares WHERE article_id = ?').get(req.params.id) as { share_token: string } | undefined;
     if (existing) return res.json({ share_token: existing.share_token });
 
-    const id = uuidv4();
+    const id = randomUUID();
     const shareToken = randomBytes(12).toString('hex');
     const now = new Date().toISOString();
-    db.prepare('INSERT INTO kb_article_shares (id, article_id, share_token, created_at) VALUES (?, ?, ?, ?)')
-      .run(id, req.params.id, shareToken, now);
+    if (supportsExpiry && expiresInDays !== undefined) {
+      db.prepare("INSERT INTO kb_article_shares (id, article_id, share_token, created_at, expires_at) VALUES (?, ?, ?, ?, datetime('now', ?))")
+        .run(id, req.params.id, shareToken, now, `+${expiresInDays} days`);
+    } else {
+      db.prepare('INSERT INTO kb_article_shares (id, article_id, share_token, created_at) VALUES (?, ?, ?, ?)')
+        .run(id, req.params.id, shareToken, now);
+    }
 
     res.status(201).json({ share_token: shareToken });
   } catch (error) {
@@ -830,7 +850,8 @@ router.delete('/articles/:id/share', authenticate, requireAdmin, (req: AuthReque
 router.get('/public/:token', kbShareRateLimiter, (_req: Request, res: Response) => {
   const { token } = _req.params;
   try {
-    const share = db.prepare('SELECT article_id FROM kb_article_shares WHERE share_token = ?').get(token) as { article_id: string } | undefined;
+    const share = db.prepare(`SELECT article_id FROM kb_article_shares WHERE share_token = ?${shareExpirySupported() ? SHARE_NOT_EXPIRED_SQL : ''}`)
+      .get(token) as { article_id: string } | undefined;
     if (!share) return res.status(404).json({ error: 'Invalid or expired link' });
 
     const article = db.prepare(`
@@ -876,7 +897,7 @@ router.post('/upload-image', writeRateLimiter, authenticate, requireAdmin, (req:
 // Only files written by uploadImage.storage are served (prefix kb-, see line 29).
 // This prevents an attacker from enumerating ticket-attachment filenames in the
 // shared UPLOAD_DIR and bypassing the authenticated /api/attachments/file/:id route.
-router.get('/images/:filename', (req: Request, res: Response) => {
+router.get('/images/:filename', kbImageRateLimiter, (req: Request, res: Response) => {
   const filename = req.params.filename as string;
   // Basic path traversal protection
   if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {

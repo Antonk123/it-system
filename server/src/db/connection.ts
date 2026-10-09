@@ -2,13 +2,16 @@ import Database, { Database as DatabaseType } from 'better-sqlite3';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { migrations } from './migrations.js';
+import { runMigrations, tableExists as tableExistsIn } from './runner.js';
+import { checkFtsDrift } from '../lib/fts.js';
 import { logger } from '../lib/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const DB_PATH = process.env.DB_PATH || join(__dirname, '../../data/database.sqlite');
+// Samma katalog som backupScheduler.ts använder (DB-filens katalog + /backups).
+const BACKUP_DIR = join(dirname(DB_PATH), 'backups');
 
 export const db: DatabaseType = new Database(DB_PATH);
 
@@ -32,60 +35,11 @@ db.pragma('synchronous = NORMAL');
 // Increase cache size to 64MB for better performance
 db.pragma('cache_size = -64000');
 
-const tableExists = (name: string) => {
-  const row = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) as { name: string } | undefined;
-  return !!row;
-};
+// Håll WAL-filen under 64MB efter checkpoint (default är obegränsad och filen
+// krymper aldrig efter en stor skrivning). wal_autocheckpoint lämnas på default.
+db.pragma('journal_size_limit = 67108864');
 
-// SQLite-identifier whitelist regex: bokstäver, siffror, underscore — startar inte med siffra.
-// Skyddar PRAGMA table_info(${tableName}) mot injection eftersom det inte går att parametrisera.
-const VALID_IDENTIFIER = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
-
-const columnExists = (tableName: string, columnName: string) => {
-  if (!VALID_IDENTIFIER.test(tableName)) {
-    throw new Error(`columnExists: invalid table name "${tableName}"`);
-  }
-  // Returnera false om tabellen inte finns istället för att kasta — migrations kan
-  // legitimt kolla columnExists FÖRE tabellen skapas (defensiv idempotent kod).
-  if (!tableExists(tableName)) return false;
-  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[];
-  return columns.some((column) => column.name === columnName);
-};
-
-function createSchemaMigrationsTable(): void {
-  db.prepare(`CREATE TABLE IF NOT EXISTS schema_migrations (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`).run();
-}
-
-function runMigrations(): void {
-  createSchemaMigrationsTable();
-
-  const applied = new Set(
-    (db.prepare('SELECT id FROM schema_migrations').all() as { id: string }[]).map(r => r.id)
-  );
-
-  const markApplied = db.prepare(
-    'INSERT INTO schema_migrations (id, name, applied_at) VALUES (?, ?, ?)'
-  );
-
-  for (const migration of migrations) {
-    if (applied.has(migration.id)) continue;
-    logger.info(`Running migration ${migration.id}: ${migration.name}`);
-    try {
-      db.transaction(() => {
-        migration.up(db, { tableExists, columnExists });
-        markApplied.run(migration.id, migration.name, new Date().toISOString());
-      })();
-    } catch (err) {
-      logger.error(`Migration ${migration.id} (${migration.name}) failed`, { error: String(err) });
-      throw err; // Stop startup — don't run further migrations on partial state
-    }
-    logger.info(`Migration ${migration.id} applied`);
-  }
-}
+const tableExists = (name: string) => tableExistsIn(db, name);
 
 // Kärntabeller som ALLTID måste finnas efter schema + migrations. Saknas någon
 // är databasen i ett inkonsekvent läge (t.ex. avbruten migration) och servern
@@ -106,14 +60,24 @@ function verifySchemaIntegrity(): void {
   logger.info('Schema integrity check passed', { verified: REQUIRED_TABLES });
 }
 
+// FTS-tabellerna är contentless och synkas av triggers resp. routes/kb.ts — driften
+// syns bara som radantal som skiljer sig. Varnar, bygger aldrig om automatiskt.
+function warnOnFtsDrift(): void {
+  const drift = checkFtsDrift(db);
+  if (drift.tickets.rows !== drift.tickets.fts || drift.kbArticles.rows !== drift.kbArticles.fts) {
+    logger.warn('FTS index out of sync with source tables — rebuild with rebuildFts()', { drift });
+  }
+}
+
 export function initializeDatabase() {
   const schemaPath = join(__dirname, 'schema.sql');
   const schema = readFileSync(schemaPath, 'utf-8');
   // schema.sql contains multi-statement DDL — exec handles multiple statements at once
   db.exec(schema);
-  runMigrations();
+  runMigrations(db, undefined, { snapshotDir: BACKUP_DIR });
   // Fail fast if a core table is missing (catches partial/aborted migrations).
   verifySchemaIntegrity();
+  warnOnFtsDrift();
   logger.info('Database initialized successfully');
 }
 

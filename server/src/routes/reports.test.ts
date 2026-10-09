@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
+import express from 'express';
+import request from 'supertest';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // In-memory DB setup.
@@ -24,11 +26,15 @@ vi.mock('../db/connection.js', () => {
   return { db: proxy };
 });
 
+vi.mock('../middleware/auth.js', () => ({
+  authenticate: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
+
 vi.mock('../lib/logger.js', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 
-import { computeStatusFlow, computeKpiTickets } from './reports.js';
+import reportsRouter, { computeStatusFlow, computeKpiTickets } from './reports.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Schema + fixtures
@@ -63,7 +69,7 @@ function createSchema(db: InstanceType<typeof Database>) {
       sla_paused_duration INTEGER
     );
     CREATE TABLE contacts (id TEXT PRIMARY KEY, name TEXT);
-    CREATE TABLE categories (id TEXT PRIMARY KEY, label TEXT);
+    CREATE TABLE categories (id TEXT PRIMARY KEY, label TEXT, created_at TEXT);
     CREATE TABLE users (
       id TEXT PRIMARY KEY,
       display_name TEXT,
@@ -240,7 +246,7 @@ function dateDaysAgo(daysAgo: number): string {
 describe('computeKpiTickets', () => {
   it('returns requester and category labels alongside their IDs', () => {
     memDb.prepare('INSERT INTO contacts VALUES (?, ?)').run('requester-1', 'Anna Beställare');
-    memDb.prepare('INSERT INTO categories VALUES (?, ?)').run('category-1', 'Telefoni');
+    memDb.prepare('INSERT INTO categories (id, label) VALUES (?, ?)').run('category-1', 'Telefoni');
     insertKpiTicket(memDb, 'ticket-1', 'open', '2026-09-08 12:00:00');
     memDb.prepare('UPDATE tickets SET requester_id = ?, category_id = ? WHERE id = ?')
       .run('requester-1', 'category-1', 'ticket-1');
@@ -326,5 +332,63 @@ describe('computeKpiTickets', () => {
 
     const result = computeKpiTickets(memDb, 'total');
     expect(result).toHaveLength(200);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /reports/summary
+// categories har egen created_at, så ett oprefixerat created_at i JOIN-frågan
+// gav "ambiguous column name" så snart ett år valdes.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('GET /reports/summary', () => {
+  const app = express().use('/reports', reportsRouter);
+
+  const seedCategorised = () => {
+    memDb.prepare('INSERT INTO categories (id, label, created_at) VALUES (?, ?, ?)').run('c1', 'Telefoni', '2020-01-01');
+    memDb.prepare('INSERT INTO categories (id, label, created_at) VALUES (?, ?, ?)').run('c2', 'Nätverk', '2020-01-01');
+    const insert = memDb.prepare('INSERT INTO tickets (id, status, priority, category_id, created_at) VALUES (?, ?, ?, ?, ?)');
+    insert.run('a', 'open', 'high', 'c1', '2026-03-10 12:00:00');
+    insert.run('b', 'open', 'low', 'c1', '2026-03-11T08:00:00.000Z');
+    insert.run('c', 'closed', 'low', 'c2', '2026-04-02 09:00:00');
+    insert.run('d', 'open', 'low', 'c2', '2025-12-31 23:00:00');
+  };
+
+  it('does not crash on the category query when a year is selected', async () => {
+    seedCategorised();
+    const res = await request(app).get('/reports/summary?year=2026');
+    expect(res.status).toBe(200);
+    expect(res.body.byCategory).toEqual([
+      { category: 'Telefoni', count: 2 },
+      { category: 'Nätverk', count: 1 },
+    ]);
+    expect(res.body.totals.total).toBe(3);
+  });
+
+  it('does not crash on the category query with year and month', async () => {
+    seedCategorised();
+    const res = await request(app).get('/reports/summary?year=2026&month=2');
+    expect(res.status).toBe(200);
+    expect(res.body.byCategory).toEqual([{ category: 'Telefoni', count: 2 }]);
+  });
+
+  it('still works without a year filter', async () => {
+    seedCategorised();
+    const res = await request(app).get('/reports/summary');
+    expect(res.status).toBe(200);
+    expect(res.body.totals.total).toBe(4);
+  });
+
+  it('does not count a reopened ticket with a stale closed_at as closed', async () => {
+    const insert = memDb.prepare(
+      'INSERT INTO tickets (id, status, created_at, closed_at) VALUES (?, ?, ?, ?)',
+    );
+    insert.run('reopened', 'open', '2026-03-01T00:00:00.000Z', '2026-03-03T00:00:00.000Z');
+    insert.run('really-closed', 'closed', '2026-03-01T00:00:00.000Z', '2026-03-05T00:00:00.000Z');
+
+    const res = await request(app).get('/reports/summary?year=2026');
+    expect(res.status).toBe(200);
+    expect(res.body.trend).toEqual([{ month: '2026-03', created: 2, closed: 1 }]);
+    expect(res.body.avgResolutionDays).toBe(4);
   });
 });

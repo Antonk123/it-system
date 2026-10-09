@@ -227,8 +227,7 @@ export async function getOidcConfig(): Promise<client.Configuration> {
   return cachedConfig;
 }
 
-// Exporteras separat för tester som bara vill nollställa avstängningsflaggan.
-export function resetOidcDiscoveryRejection(): void {
+function resetOidcDiscoveryRejection(): void {
   discoveryRejectionReason = null;
 }
 

@@ -1,11 +1,11 @@
-import { Router, Response } from 'express';
+import { Router, Response, Request, NextFunction } from 'express';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { db, closeDatabase } from '../db/connection.js';
 import type { Database as DatabaseType } from 'better-sqlite3';
 import { ZipArchive } from 'archiver';
-import { join, dirname, resolve } from 'path';
+import { join, dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync, unlinkSync, mkdirSync, createReadStream, createWriteStream, copyFileSync, cpSync, rmSync, openSync, readSync, closeSync, chmodSync } from 'fs';
+import { existsSync, unlinkSync, mkdirSync, createReadStream, createWriteStream, copyFileSync, cpSync, rmSync, openSync, readSync, closeSync, chmodSync, renameSync, readdirSync, statSync } from 'fs';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
 import multer from 'multer';
@@ -14,14 +14,16 @@ import { logger } from '../lib/logger.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
 import {
   getBackupConfig,
+  getBackupDir,
   runBackup,
   isBackupRunning,
   reconfigureBackupScheduler,
-  getConsecutiveBackupFailures,
+  BACKUP_ZIP_NAME_RE,
   type BackupConfig,
 } from '../lib/backupScheduler.js';
 import { getOffsiteFailureCount } from '../lib/offsiteBackup.js';
 import { logAudit } from '../lib/auditLog.js';
+import { rebuildFts } from '../lib/fts.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -32,20 +34,43 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || join(__dirname, '../../data/uploads
 // Fynd 3: Använd diskStorage för restore-uppladdning för att undvika OOM vid stora ZIP:ar.
 // Filen sparas till OS:ets tmp-katalog och refereras sedan via req.file.path.
 const restoreTmpDir = tmpdir();
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, restoreTmpDir),
-    filename: (_req, _file, cb) => cb(null, `restore-upload-${randomUUID()}.zip`),
-  }),
-  limits: { fileSize: 500 * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    if (file.mimetype === 'application/zip' || file.originalname.endsWith('.zip')) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only ZIP files are allowed'));
-    }
-  },
-});
+const MAX_RESTORE_UPLOAD_BYTES = 500 * 1024 * 1024;
+
+// Multer-fel (fel filtyp, för stor fil) är klientfel: 400/413 i stället för att
+// falla igenom till Expressens 500-hanterare. Fabrik så att testerna kan använda en liten gräns.
+export function createRestoreUpload(maxBytes: number = MAX_RESTORE_UPLOAD_BYTES) {
+  const upload = multer({
+    storage: multer.diskStorage({
+      destination: (_req, _file, cb) => cb(null, restoreTmpDir),
+      filename: (_req, _file, cb) => cb(null, `restore-upload-${randomUUID()}.zip`),
+    }),
+    limits: { fileSize: maxBytes },
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype === 'application/zip' || file.originalname.endsWith('.zip')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Endast ZIP-filer är tillåtna'));
+      }
+    },
+  });
+
+  return (req: Request, res: Response, next: NextFunction): void => {
+    upload.single('file')(req, res, (err: unknown) => {
+      if (!err) return next();
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        res.status(413).json({ error: 'Filen är för stor. Max 500 MB.' });
+        return;
+      }
+      res.status(400).json({ error: err instanceof multer.MulterError ? 'Uppladdningen misslyckades.' : 'Endast ZIP-filer är tillåtna.' });
+    });
+  };
+}
+
+const restoreUpload = createRestoreUpload();
+
+// Tak för extraktionen: en liten ZIP kan expandera till långt mer än disken rymmer.
+// Exporterat objekt (inte konstanter) så testerna kan sänka taken i stället för att bygga 2 GB.
+export const restoreLimits = { maxExtractedBytes: 2 * 1024 * 1024 * 1024, maxEntries: 100_000 };
 
 // Fynd 6: Rate limit för backup-download (max 10 nedladdningar per 15 min per IP).
 const backupDownloadLimiter = createRateLimiter(15 * 60 * 1000, 10);
@@ -55,45 +80,79 @@ const restoreLimiter = createRateLimiter(15 * 60 * 1000, 5);
 
 // Fynd M14: swap-logiken för restore utbruten ur route-handlern så att den lyckade
 // vägen kan testas direkt (process.exit(0) stannar kvar i handlern). Invariant:
-// pre-restore-kopian tas FÖRE closeDb (checkpoint + closeDatabase i prod) och
-// rollback sker vid varje fel efter den punkten — DB-filen lämnas aldrig halvbytt.
-export function performRestoreSwap(opts: {
+// pre-restore-kopiorna (DB via WAL-säker snapshot, uploads via omdöpning) tas FÖRE
+// closeDb och varje fel efter den punkten återställer BÅDE DB och uploads — inget
+// lämnas halvbytt. pre-restore-artefakterna raderas inte här: de städas först av
+// cleanupPreRestoreArtifacts efter nästa lyckade uppstart (migrationer + schemakontroll).
+export async function performRestoreSwap(opts: {
   restoredDbPath: string;
   dbPath: string;
   uploadsSrc: string;
   uploadsDest: string;
+  // WAL-säker snapshot av live-DB:n (db.backup). copyFileSync av en WAL-DB missar
+  // allt som ännu bara finns i -wal och kan ge en inkonsistent kopia.
+  snapshotDb: (destPath: string) => Promise<unknown>;
   // Körs efter pre-restore-kopian men före filbytet. Route-handlern skickar
   // WAL-checkpoint + closeDatabase här; testerna kan utelämna eller kasta.
   closeDb?: () => void;
-}): void {
-  const { restoredDbPath, dbPath, uploadsSrc, uploadsDest, closeDb } = opts;
+}): Promise<void> {
+  const { restoredDbPath, dbPath, uploadsSrc, uploadsDest, snapshotDb, closeDb } = opts;
 
   const dbBackup = `${dbPath}.pre-restore`;
-  copyFileSync(dbPath, dbBackup);
+  const uploadsBackup = `${uploadsDest}.pre-restore`;
+  const walFile = `${dbPath}-wal`;
+  const shmFile = `${dbPath}-shm`;
 
+  // Rester av en tidigare restore ska inte blandas ihop med den nya rollback-kopian.
+  rmSync(dbBackup, { force: true });
+  rmSync(uploadsBackup, { recursive: true, force: true });
+  await snapshotDb(dbBackup);
+
+  let uploadsMovedAside = false;
   try {
     closeDb?.();
 
     copyFileSync(restoredDbPath, dbPath);
-    const walFile = `${dbPath}-wal`;
-    const shmFile = `${dbPath}-shm`;
     if (existsSync(walFile)) unlinkSync(walFile);
     if (existsSync(shmFile)) unlinkSync(shmFile);
 
     if (existsSync(uploadsSrc)) {
-      // Fynd 4: Rensa uploads-katalogen innan återställning så att den exakt speglar backupen.
-      rmSync(uploadsDest, { recursive: true, force: true });
+      // Fynd 4: uploads-katalogen ska exakt spegla backupen. Den gamla flyttas undan
+      // (inte raderas) så att den kan återställas om kopieringen faller halvvägs.
+      if (existsSync(uploadsDest)) {
+        renameSync(uploadsDest, uploadsBackup);
+        uploadsMovedAside = true;
+      }
       mkdirSync(uploadsDest, { recursive: true });
       cpSync(uploadsSrc, uploadsDest, { recursive: true });
     }
   } catch (restoreError) {
     copyFileSync(dbBackup, dbPath);
+    // Sidofiler från den nya DB:n får inte följa med den gamla filen.
+    rmSync(walFile, { force: true });
+    rmSync(shmFile, { force: true });
+    if (uploadsMovedAside) {
+      rmSync(uploadsDest, { recursive: true, force: true });
+      renameSync(uploadsBackup, uploadsDest);
+    }
     throw restoreError;
   }
+}
 
-  // Fynd pre-restore-backup-not-cleaned-up: Ta bort rollback-filen efter lyckad
-  // återställning så att den inte ligger kvar och tar diskutrymme i onödan.
-  try { unlinkSync(dbBackup); } catch { /* ignore — filen kanske redan är borta */ }
+// Raderar uploads.pre-restore när servern har startat OK på den återställda datan
+// (anropas efter migrationer + schemakontroll). Bara artefakter som är äldre än
+// aktuell uppstart tas bort. DB-kopian (database.sqlite.pre-restore) behålls medvetet
+// som sista skyddsnät tills nästa restore skriver över den.
+export function cleanupPreRestoreArtifacts(bootedAtMs: number, uploadsDir: string = UPLOAD_DIR): void {
+  const uploadsBackup = `${uploadsDir}.pre-restore`;
+  try {
+    if (existsSync(uploadsBackup) && statSync(uploadsBackup).mtimeMs < bootedAtMs) {
+      rmSync(uploadsBackup, { recursive: true, force: true });
+      logger.info('Raderade uploads.pre-restore efter lyckad uppstart', { path: uploadsBackup });
+    }
+  } catch (err) {
+    logger.warn('Kunde inte städa uploads.pre-restore (non-fatal)', { path: uploadsBackup, error: String(err) });
+  }
 }
 
 // Fynd F1: audit-raden för 'backup_restore' fick tidigare aldrig persisteras.
@@ -129,6 +188,8 @@ export async function logRestoreAudit(
   try {
     const Database = (await import('better-sqlite3')).default;
     conn = new Database(dbPath);
+    conn.pragma('foreign_keys = ON');
+    conn.pragma('busy_timeout = 5000');
     const columns = conn.prepare('PRAGMA table_info(audit_log)').all() as { name: string }[];
     const hasApiKeyId = columns.some((c) => c.name === 'api_key_id');
     if (hasApiKeyId) {
@@ -151,12 +212,37 @@ export async function logRestoreAudit(
   }
 }
 
+// FTS5-indexen är contentless och ligger i databasfilen, men en backup kan vara tagen
+// med inaktuella eller saknade index. Bygg om dem i den återställda filen innan
+// omstarten så sökningen inte ger tomma/föråldrade träffar. Får aldrig kasta: en
+// backup äldre än FTS-migrationerna saknar tabellerna, och bootens migrationer
+// bygger dem då själva.
+export async function rebuildRestoredFts(dbPath: string): Promise<void> {
+  let conn: DatabaseType | undefined;
+  try {
+    const Database = (await import('better-sqlite3')).default;
+    conn = new Database(dbPath);
+    conn.pragma('foreign_keys = ON');
+    conn.pragma('busy_timeout = 5000');
+    const counts = rebuildFts(conn);
+    logger.info('FTS-index ombyggda efter restore', counts);
+  } catch (err) {
+    logger.warn('Kunde inte bygga om FTS-index efter restore (non-fatal)', { error: String(err) });
+  } finally {
+    try { conn?.close(); } catch { /* ignore */ }
+  }
+}
+
 const router = Router();
 
 router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (req: AuthRequest, res: Response) => {
-  const tmpFile = join(tmpdir(), `backup-${randomUUID()}.sqlite`);
+  // Temp-dumpen ligger i backup-katalogen (samma volym som övriga backuper, 0o700),
+  // inte i världsläsbara /tmp. Prefixet tmp- gör att retention och fillistan ignorerar den.
+  const backupDir = getBackupDir();
+  const tmpFile = join(backupDir, `tmp-download-${randomUUID()}.sqlite`);
 
   try {
+    mkdirSync(backupDir, { recursive: true, mode: 0o700 });
     await db.backup(tmpFile);
 
     // Backup-dumpen innehåller hela databasen (inkl. hemligheter) → minsta-rättighet 0o600.
@@ -214,7 +300,41 @@ router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (req: A
   }
 });
 
-router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.single('file'), async (req: AuthRequest, res: Response) => {
+// Lagrade backuper på servern (backup-katalogen) — så en admin kan hämta en
+// tidigare automatisk backup utan SSH/Portainer-åtkomst.
+router.get('/files', authenticate, requireAdmin, (_req: AuthRequest, res: Response) => {
+  const backupDir = getBackupDir();
+  if (!existsSync(backupDir)) {
+    return res.json([]);
+  }
+  const files = readdirSync(backupDir)
+    .filter((name) => BACKUP_ZIP_NAME_RE.test(name))
+    .map((name) => {
+      const stat = statSync(join(backupDir, name));
+      return { name, sizeBytes: stat.size, modifiedAt: stat.mtime.toISOString() };
+    })
+    .sort((a, b) => b.name.localeCompare(a.name));
+  return res.json(files);
+});
+
+router.get('/files/:name', authenticate, requireAdmin, backupDownloadLimiter, (req: AuthRequest, res: Response) => {
+  const name = String(req.params.name);
+  if (!BACKUP_ZIP_NAME_RE.test(name)) {
+    return res.status(400).json({ error: 'Ogiltigt backup-filnamn' });
+  }
+  const backupDir = resolve(getBackupDir());
+  const filePath = resolve(backupDir, name);
+  if (!filePath.startsWith(backupDir + sep) || !existsSync(filePath)) {
+    return res.status(404).json({ error: 'Backupen hittades inte' });
+  }
+
+  logAudit(req.user!.id, 'backup_download', 'backup', null, name, req.ip, req.apiKey?.id ?? null);
+  res.setHeader('Content-Type', 'application/zip');
+  res.setHeader('Content-Disposition', `attachment; filename="${name}"`);
+  createReadStream(filePath).on('error', () => res.destroy()).pipe(res);
+});
+
+router.post('/restore', authenticate, requireAdmin, restoreLimiter, restoreUpload, async (req: AuthRequest, res: Response) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Ingen fil skickades. Ladda upp en backup-ZIP.' });
   }
@@ -267,17 +387,30 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
     await new Promise<void>((resolveP, rejectP) => {
       const writeFinishPromises: Promise<void>[] = [];
       let rejected = false;
+      let entryCount = 0;
+      let extractedBytes = 0;
+      const source = createReadStream(uploadedZip);
 
       const reject = (err: Error) => {
         if (!rejected) {
           rejected = true;
+          source.destroy();
           rejectP(err);
         }
       };
 
-      createReadStream(uploadedZip)
+      source
         .pipe(unzipper.Parse())
         .on('entry', (entry: unzipper.Entry) => {
+          if (rejected) {
+            entry.autodrain();
+            return;
+          }
+          if (++entryCount > restoreLimits.maxEntries) {
+            entry.autodrain();
+            reject(validationError(`För många poster i backup-ZIP (max ${restoreLimits.maxEntries})`));
+            return;
+          }
           // Fynd backup-audit-2: Validera varje entry innan extraktion.
           // (a) Zip-slip / path-traversal: normaliserad sökväg måste ligga under extractDir
           //     och får inte vara absolut eller innehålla '..'-segment.
@@ -320,6 +453,15 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
               ws.on('error', rej);
             });
             writeFinishPromises.push(finishP);
+            // Löpande räkning av faktiskt extraherade bytes (ZIP-headerns storleksfält går att förfalska).
+            entry.on('data', (chunk: Buffer) => {
+              extractedBytes += chunk.length;
+              if (extractedBytes > restoreLimits.maxExtractedBytes) {
+                reject(validationError('Backup-ZIP expanderar till mer än 2 GB'));
+                entry.unpipe(ws);
+                ws.destroy();
+              }
+            });
             entry.pipe(ws).on('error', reject);
           }
         })
@@ -357,6 +499,19 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
     const Database = (await import('better-sqlite3')).default;
     const testDb = new Database(restoredDb, { readonly: true });
     try {
+      // quick_check fångar trasiga sidor/index som magic-header och tabellkontrollen missar —
+      // en korrupt DB ska avvisas INNAN live-databasen byts ut.
+      let quickCheckOk = false;
+      try {
+        const quickCheck = testDb.pragma('quick_check') as Array<{ quick_check: string }>;
+        quickCheckOk = quickCheck.length === 1 && quickCheck[0].quick_check === 'ok';
+      } catch {
+        // SQLite kastar SQLITE_CORRUPT på vissa skador i stället för att returnera felrader.
+      }
+      if (!quickCheckOk) {
+        try { unlinkSync(uploadedZip); } catch { /* ignore */ }
+        return res.status(400).json({ error: 'Ogiltig backup: databasen klarade inte integritetskontrollen.' });
+      }
       const tables = testDb.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[];
       const tableNames = new Set(tables.map(t => t.name));
       if (!tableNames.has('tickets') || !tableNames.has('users')) {
@@ -369,11 +524,12 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
 
     // Fynd M14: hela swap-sekvensen (pre-restore-kopia → checkpoint/close → filbyte →
     // sidofiler → uploads, med rollback) ligger i performRestoreSwap så den är testbar.
-    performRestoreSwap({
+    await performRestoreSwap({
       restoredDbPath: restoredDb,
       dbPath: DB_PATH,
       uploadsSrc: join(extractDir, 'data', 'uploads'),
       uploadsDest: UPLOAD_DIR,
+      snapshotDb: (destPath) => db.backup(destPath),
       closeDb: () => {
         // Fynd backup-audit-1: RESTART (inte TRUNCATE) väntar in pågående läsare/skrivare
         // innan checkpointen slutförs. Det undviker att vi skriver över DB-filen mitt i en
@@ -396,6 +552,7 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
     // (som skriver mot den delade anslutningen) fungerar inte här — den är
     // stängd och skulle ändå träffat fel fil. Se logRestoreAudit ovan.
     await logRestoreAudit(DB_PATH, req.user!.id, req.ip, req.apiKey?.id ?? null);
+    await rebuildRestoredFts(DB_PATH);
 
     // Fynd 1: Skicka svar och schemalägg process.exit(0) så Docker (restart: unless-stopped)
     // startar om containern med den nya DB:n i ett rent tillstånd.
@@ -418,7 +575,7 @@ router.post('/restore', authenticate, requireAdmin, restoreLimiter, upload.singl
     // Dessa kastas innan DB-handtaget stängts, så ingen omstart behövs.
     if ((error as { isValidationError?: boolean })?.isValidationError) {
       logger.warn('Restore avvisad: ogiltig backup-ZIP', { error: String(error) });
-      return res.status(400).json({ error: 'Ogiltig backup-ZIP: filen innehåller oväntade eller osäkra poster.' });
+      return res.status(400).json({ error: 'Ogiltig backup-ZIP: filen innehåller oväntade, osäkra eller för många/stora poster.' });
     }
 
     logger.error('Restore failed:', { error: String(error) });
@@ -459,13 +616,12 @@ function computeNextRunAt(cfg: BackupConfig): string | null {
   return next.toISOString();
 }
 
-// Fynd M13: räknarna exponeras så admin-UI:t kan varna vid upprepade fel —
-// tidigare syntes fel bara som en passiv ikon.
+// Fynd M13: räknarna (consecutiveFailures/lastError ur cfg, offsiteFailureCount) exponeras
+// så admin-UI:t kan varna vid upprepade fel — tidigare syntes fel bara som en passiv ikon.
 function configResponse(cfg: BackupConfig) {
   return {
     ...cfg,
     nextRunAt: computeNextRunAt(cfg),
-    consecutiveFailures: getConsecutiveBackupFailures(),
     offsiteFailureCount: getOffsiteFailureCount(),
   };
 }

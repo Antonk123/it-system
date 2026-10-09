@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { randomUUID, randomBytes } from 'crypto';
 import { db } from '../db/connection.js';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
-import { isSafeWebhookUrl } from '../lib/webhookValidator.js';
+import { isSafeWebhookUrl, validateWebhookEvents, VALID_WEBHOOK_EVENTS } from '../lib/webhookValidator.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
@@ -55,14 +55,9 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
     return res.status(400).json({ error: `Invalid webhook URL: ${safe.reason}` });
   }
 
-  if (!events || !Array.isArray(events) || events.length === 0) {
-    return res.status(400).json({ error: 'At least one event is required' });
-  }
-
-  const VALID_EVENTS = ['ticket.created', 'ticket.updated', 'ticket.closed', 'ticket.deleted', 'ticket.status_changed', 'comment.created', 'contact.created', 'contact.updated'];
-  const invalidEvents = events.filter((e: string) => !VALID_EVENTS.includes(e));
-  if (invalidEvents.length > 0) {
-    return res.status(400).json({ error: `Invalid event type(s): ${invalidEvents.join(', ')}`, validEvents: VALID_EVENTS });
+  const checkedEvents = validateWebhookEvents(events);
+  if (!checkedEvents.ok) {
+    return res.status(400).json({ error: checkedEvents.error, validEvents: VALID_WEBHOOK_EVENTS });
   }
 
   try {
@@ -77,12 +72,12 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res: Respo
 
     db.prepare(
       'INSERT INTO webhooks (id, url, events, secret) VALUES (?, ?, ?, ?)'
-    ).run(id, url, JSON.stringify(events), secret);
+    ).run(id, url, JSON.stringify(checkedEvents.events), secret);
 
     res.status(201).json({
       id,
       url,
-      events: JSON.stringify(events),
+      events: JSON.stringify(checkedEvents.events),
       secret,
       active: 1,
       created_at: new Date().toISOString(),
@@ -116,8 +111,12 @@ router.put('/:id', authenticate, requireAdmin, async (req: AuthRequest, res: Res
       values.push(url);
     }
     if (events !== undefined) {
+      const checkedEvents = validateWebhookEvents(events);
+      if (!checkedEvents.ok) {
+        return res.status(400).json({ error: checkedEvents.error, validEvents: VALID_WEBHOOK_EVENTS });
+      }
       updates.push('events = ?');
-      values.push(JSON.stringify(events));
+      values.push(JSON.stringify(checkedEvents.events));
     }
     if (active !== undefined) {
       updates.push('active = ?');

@@ -224,6 +224,65 @@ describe('Checklist template CRUD cycle (admin)', () => {
   });
 });
 
+describe('Checklist template writes are atomic and validated', () => {
+  const adminPost = (body: unknown) =>
+    adminAgent.post('/api/checklist-templates').set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf).send(body as object);
+  const adminPut = (id: string, body: unknown) =>
+    adminAgent.put(`/api/checklist-templates/${id}`).set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf).send(body as object);
+  const itemLabels = (id: string) =>
+    (db.prepare('SELECT label FROM checklist_template_items WHERE template_id = ? ORDER BY position').all(id) as { label: string }[]).map(i => i.label);
+
+  it('POST rejects non-string label/parent_label with 400 and creates no template row', async () => {
+    const res = await adminPost({ name: 'Atomic POST', items: [{ label: 'ok' }, { label: 42 }] });
+    expect(res.status).toBe(400);
+    expect(db.prepare('SELECT id FROM checklist_templates WHERE name = ?').get('Atomic POST')).toBeUndefined();
+
+    const res2 = await adminPost({ name: 'Atomic POST', items: [{ label: 'ok', parent_label: { a: 1 } }] });
+    expect(res2.status).toBe(400);
+    expect(db.prepare('SELECT id FROM checklist_templates WHERE name = ?').get('Atomic POST')).toBeUndefined();
+  });
+
+  it('PUT with an invalid item leaves name and items untouched', async () => {
+    const created = await adminPost({ name: 'Atomic PUT', description: 'orig', items: [{ label: 'A' }, { label: 'B' }] });
+    expect(created.status).toBe(201);
+    const id = created.body.id as string;
+
+    const res = await adminPut(id, { name: 'Renamed', items: [{ label: 'A' }, { label: null }] });
+    expect(res.status).toBe(400);
+
+    const row = db.prepare('SELECT name, description FROM checklist_templates WHERE id = ?').get(id) as { name: string; description: string };
+    expect(row.name).toBe('Atomic PUT');
+    expect(row.description).toBe('orig');
+    expect(itemLabels(id)).toEqual(['A', 'B']);
+  });
+
+  it('PUT rolls back the name change when the item insert fails (409 on duplicate name keeps items)', async () => {
+    const a = await adminPost({ name: 'Rollback A', items: [{ label: 'keep me' }] });
+    await adminPost({ name: 'Rollback B', items: [{ label: 'other' }] });
+    const res = await adminPut(a.body.id, { name: 'Rollback B', items: [{ label: 'new item' }] });
+    expect(res.status).toBe(409);
+    expect(itemLabels(a.body.id)).toEqual(['keep me']);
+  });
+
+  it('PUT applies a description-only update without touching name or items', async () => {
+    const created = await adminPost({ name: 'Desc only', description: 'before', items: [{ label: 'X' }] });
+    const id = created.body.id as string;
+
+    const res = await adminPut(id, { description: '  after  ' });
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Desc only');
+    expect(res.body.description).toBe('after');
+    expect(itemLabels(id)).toEqual(['X']);
+  });
+
+  it('PUT with only a name keeps the existing description', async () => {
+    const created = await adminPost({ name: 'Name only', description: 'stay', items: [{ label: 'X' }] });
+    const res = await adminPut(created.body.id, { name: 'Name only v2' });
+    expect(res.status).toBe(200);
+    expect(res.body.description).toBe('stay');
+  });
+});
+
 describe('POST /api/checklist-templates/:id/apply — canAccessTicket authorization (not requireAdmin)', () => {
   let applyTemplateId: string;
   let ownedTicketId: string;
@@ -235,8 +294,9 @@ describe('POST /api/checklist-templates/:id/apply — canAccessTicket authorizat
       .run(randomUUID(), applyTemplateId, 'Applied Step 1', 0);
 
     ownedTicketId = randomUUID();
-    db.prepare(`INSERT INTO tickets (id, title, description, status, created_by) VALUES (?, ?, ?, 'open', ?)`)
-      .run(ownedTicketId, 'Owned Ticket', 'desc', userId);
+    // Tilldelat `userId` så att en främling saknar skrivrätt (otilldelade ärenden är öppna).
+    db.prepare(`INSERT INTO tickets (id, title, description, status, created_by, assigned_to) VALUES (?, ?, ?, 'open', ?, ?)`)
+      .run(ownedTicketId, 'Owned Ticket', 'desc', userId, userId);
   });
 
   it('lets the ticket creator (non-admin) apply the template (201), creating checklist rows', async () => {
@@ -253,7 +313,7 @@ describe('POST /api/checklist-templates/:id/apply — canAccessTicket authorizat
     expect(rows.length).toBe(1);
   });
 
-  it('403s a stranger with no relationship to the ticket', async () => {
+  it('403s a stranger on a ticket assigned to someone else', async () => {
     const res = await strangerAgent
       .post(`/api/checklist-templates/${applyTemplateId}/apply`)
       .set('Authorization', `Bearer ${strangerToken}`)

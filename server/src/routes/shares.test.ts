@@ -96,7 +96,7 @@ beforeAll(async () => {
 
   ticketId = randomUUID();
   db.prepare(`INSERT INTO tickets (id, title, description, status, assigned_to, created_by) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(ticketId, 'Shares Test Ticket', 'owner ticket', 'open', null, ownerId);
+    .run(ticketId, 'Shares Test Ticket', 'owner ticket', 'open', ownerId, ownerId);
 
   app = createApp();
 
@@ -131,11 +131,11 @@ describe('GET /api/shares/ticket/:ticketId — authorization', () => {
     expect(res.status).toBe(200);
   });
 
-  it('returns 403 for a logged-in stranger (no relationship to the ticket)', async () => {
+  it('returns 200 for a logged-in stranger (reads are open to any authenticated user)', async () => {
     const res = await request(app)
       .get(`/api/shares/ticket/${ticketId}`)
       .set('Authorization', `Bearer ${strangerToken}`);
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
   });
 
   it('returns 401 when no auth token is provided', async () => {
@@ -147,7 +147,7 @@ describe('GET /api/shares/ticket/:ticketId — authorization', () => {
 function insertTicket(ownerIdForTicket: string, title = 'Expiry Test Ticket'): string {
   const id = randomUUID();
   db.prepare(`INSERT INTO tickets (id, title, description, status, assigned_to, created_by) VALUES (?, ?, ?, ?, ?, ?)`)
-    .run(id, title, 'expiry test', 'open', null, ownerIdForTicket);
+    .run(id, title, 'expiry test', 'open', ownerIdForTicket, ownerIdForTicket);
   return id;
 }
 
@@ -229,6 +229,45 @@ describe('GET /api/shares/public/:token — fail-closed expiry enforcement', () 
 
     const res = await request(app).get(`/api/shares/public/${token}`);
     expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/shares/public/file/:token/:attachmentId — download headers and containment', () => {
+  async function shareWithAttachment(fileName: string, filePath: string) {
+    const tid = insertTicket(ownerId, 'File Headers Ticket');
+    const createRes = await ownerAgent
+      .post(`/api/shares/ticket/${tid}`)
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .set('x-csrf-token', ownerCsrf)
+      .send({});
+    const attachmentId = randomUUID();
+    db.prepare(
+      `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_type, file_size) VALUES (?, ?, ?, ?, ?, ?)`
+    ).run(attachmentId, tid, fileName, filePath, 'text/plain', 5);
+    return { token: createRes.body.share_token as string, attachmentId };
+  }
+
+  it('sends an RFC 5987 Content-Disposition with a neutralised ASCII fallback', async () => {
+    const stored = `headers-${randomUUID()}.txt`;
+    writeFileSync(join(UPLOAD_DIR, stored), 'hello');
+    const { token, attachmentId } = await shareWithAttachment('räk;"smörgås.txt', stored);
+
+    const res = await request(app).get(`/api/shares/public/file/${token}/${attachmentId}`);
+    expect(res.status).toBe(200);
+    const header = res.headers['content-disposition'];
+    expect(header).toBe(`attachment; filename="r_k__sm_rg_s.txt"; filename*=UTF-8''r%C3%A4k%3B%22sm%C3%B6rg%C3%A5s.txt`);
+  });
+
+  it('404s when the stored file_path escapes the upload dir', async () => {
+    const outside = join(UPLOAD_DIR, '..', `shares-outside-${process.pid}.txt`);
+    writeFileSync(outside, 'secret');
+    try {
+      const { token, attachmentId } = await shareWithAttachment('x.txt', `../${outside.split('/').pop()}`);
+      const res = await request(app).get(`/api/shares/public/file/${token}/${attachmentId}`);
+      expect(res.status).toBe(404);
+    } finally {
+      rmSync(outside, { force: true });
+    }
   });
 });
 

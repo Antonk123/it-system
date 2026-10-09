@@ -2,11 +2,13 @@ import cron from 'node-cron';
 import { ZipArchive } from 'archiver';
 import Database from 'better-sqlite3';
 import type { Database as DatabaseType } from 'better-sqlite3';
-import { existsSync, mkdirSync, unlinkSync, createWriteStream, statSync, readdirSync, chmodSync } from 'fs';
+import unzipper from 'unzipper';
+import { existsSync, mkdirSync, unlinkSync, createWriteStream, statSync, readdirSync, chmodSync, renameSync, statfsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { db as defaultDb } from '../db/connection.js';
 import { uploadBackupOffsite } from './offsiteBackup.js';
+import { sendPushToAllSubscriptions } from './push.js';
 import { logger } from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -23,6 +25,10 @@ export interface BackupConfig {
   lastRunAt: string | null;
   lastStatus: BackupRunStatus | null;
   lastSizeBytes: number | null;
+  // Persisteras i backup_config så räknaren överlever omstart (annars nollas den
+  // av varje deploy och larmet efter 3 fel kan aldrig nås vid restart-loopar).
+  consecutiveFailures: number;
+  lastError: string | null;
 }
 
 export interface RunResult {
@@ -39,9 +45,18 @@ interface ConfigRow {
   last_run_at: string | null;
   last_status: string | null;
   last_size_bytes: number | null;
+  consecutive_failures: number;
+  last_error: string | null;
 }
 
-function defaultBackupDir(): string {
+// backup-YYYY-MM-DD[-HHMM].zip — samma mönster används för listning/nedladdning i routes/backup.ts.
+export const BACKUP_ZIP_NAME_RE = /^backup-\d{4}-\d{2}-\d{2}(-\d{4})?\.zip$/;
+const BACKUP_FILE_DATE_RE = /^backup-(\d{4}-\d{2}-\d{2})(?:-\d{4})?\.(?:zip|sqlite)$/;
+
+// Lägsta lediga utrymme som krävs för en backup-körning, oavsett datamängd.
+const MIN_FREE_BYTES = 500 * 1024 * 1024;
+
+export function getBackupDir(): string {
   const dbPath = process.env.DB_PATH || join(__dirname, '../../data/database.sqlite');
   return join(dirname(dbPath), 'backups');
 }
@@ -59,13 +74,16 @@ export function timeToCron(time: string): string {
 export function getBackupConfig(database: DatabaseType = defaultDb): BackupConfig {
   const row = database
     .prepare(
-      'SELECT enabled, time, retention_days, last_run_at, last_status, last_size_bytes FROM backup_config WHERE id = 1',
+      'SELECT enabled, time, retention_days, last_run_at, last_status, last_size_bytes, consecutive_failures, last_error FROM backup_config WHERE id = 1',
     )
     .get() as ConfigRow | undefined;
 
   // Säkerhetsfallback om raden saknas (bör inte hända efter migration 061).
   if (!row) {
-    return { enabled: true, time: '04:00', retentionDays: 7, lastRunAt: null, lastStatus: null, lastSizeBytes: null };
+    return {
+      enabled: true, time: '04:00', retentionDays: 7, lastRunAt: null, lastStatus: null, lastSizeBytes: null,
+      consecutiveFailures: 0, lastError: null,
+    };
   }
 
   return {
@@ -75,6 +93,8 @@ export function getBackupConfig(database: DatabaseType = defaultDb): BackupConfi
     lastRunAt: row.last_run_at,
     lastStatus: row.last_status as BackupRunStatus | null,
     lastSizeBytes: row.last_size_bytes,
+    consecutiveFailures: row.consecutive_failures,
+    lastError: row.last_error,
   };
 }
 
@@ -84,42 +104,121 @@ export function isBackupRunning(): boolean {
   return running;
 }
 
-// Fynd M13: konsekutiva HELT misslyckade körningar (lokalt backup-fel). Speglar
-// consecutiveFailures-mönstret i aiHelper.ts. 'offsite_failed' nollställer — den
-// lokala pipelinen är då frisk och offsite har egen räknare (offsiteBackup.ts).
-// Ingen generell mail-hjälpare finns i server/src/lib (email.ts är ticketmall-
-// specifik), så larmet går via logg + exponeras i GET /api/backup/config.
-let consecutiveBackupFailures = 0;
-const BACKUP_FAILURE_ALERT_THRESHOLD = 3;
-
-/** Antal konsekutiva misslyckade backup-körningar (in-memory, ingen DB). */
-export function getConsecutiveBackupFailures(): number {
-  return consecutiveBackupFailures;
+/**
+ * Väntar (max timeoutMs) tills en pågående backup är klar. Returnerar true om ingen
+ * körning pågår längre. Används vid shutdown så closeDatabase() inte stänger
+ * handtaget under en pågående database.backup().
+ */
+export async function waitForBackup(timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (running && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return !running;
 }
 
-function recordRun(database: DatabaseType, status: BackupRunStatus, sizeBytes: number | null): void {
+// Fynd M13: larm efter N konsekutiva HELT misslyckade körningar (lokalt backup-fel).
+// Räknaren ligger i backup_config.consecutive_failures så den överlever omstart.
+// 'offsite_failed' nollställer — den lokala pipelinen är då frisk och offsite har
+// egen räknare (offsiteBackup.ts).
+const BACKUP_FAILURE_ALERT_THRESHOLD = 3;
+
+async function notifyAdminsOfBackupFailure(database: DatabaseType, failures: number): Promise<void> {
+  const admins = database.prepare("SELECT id FROM users WHERE role = 'admin'").all() as { id: string }[];
+  for (const admin of admins) {
+    await sendPushToAllSubscriptions(
+      {
+        type: 'backup_failed',
+        ticketId: '',
+        url: '/settings',
+        title: 'Backup misslyckades',
+        body: `Den automatiska backupen har misslyckats ${failures} gånger i rad. Kontrollera Inställningar > Backup.`,
+      },
+      admin.id,
+    );
+  }
+}
+
+function recordRun(database: DatabaseType, status: BackupRunStatus, sizeBytes: number | null, error: string | null = null): void {
+  let previousFailures: number;
+  let failures: number;
+  try {
+    previousFailures = getBackupConfig(database).consecutiveFailures;
+    const now = new Date().toISOString();
+    database
+      .prepare(
+        `UPDATE backup_config
+         SET last_run_at = ?, last_status = ?, last_size_bytes = ?, last_error = ?,
+             consecutive_failures = CASE WHEN ? = 'failed' THEN consecutive_failures + 1 ELSE 0 END,
+             updated_at = ?
+         WHERE id = 1`,
+      )
+      .run(now, status, sizeBytes, error?.slice(0, 500) ?? null, status, now);
+    failures = getBackupConfig(database).consecutiveFailures;
+  } catch (e) {
+    logger.error('Failed to record backup status', { error: String(e) });
+    return;
+  }
+
   if (status === 'failed') {
-    consecutiveBackupFailures++;
-    if (consecutiveBackupFailures >= BACKUP_FAILURE_ALERT_THRESHOLD) {
+    if (failures >= BACKUP_FAILURE_ALERT_THRESHOLD) {
       logger.error('BACKUP ALERT: consecutive backup failures — investigate immediately', {
-        consecutiveFailures: consecutiveBackupFailures,
+        consecutiveFailures: failures,
         threshold: BACKUP_FAILURE_ALERT_THRESHOLD,
       });
     }
-  } else {
-    if (consecutiveBackupFailures >= BACKUP_FAILURE_ALERT_THRESHOLD) {
-      logger.info('Backup recovered after consecutive failures', { count: consecutiveBackupFailures });
+    if (failures === BACKUP_FAILURE_ALERT_THRESHOLD) {
+      void notifyAdminsOfBackupFailure(database, failures).catch((e) => {
+        logger.error('Kunde inte skicka push om misslyckad backup', { error: String(e) });
+      });
     }
-    consecutiveBackupFailures = 0;
+  } else if (previousFailures >= BACKUP_FAILURE_ALERT_THRESHOLD) {
+    logger.info('Backup recovered after consecutive failures', { count: previousFailures });
   }
+}
 
-  try {
-    const now = new Date().toISOString();
-    database
-      .prepare('UPDATE backup_config SET last_run_at = ?, last_status = ?, last_size_bytes = ?, updated_at = ? WHERE id = 1')
-      .run(now, status, sizeBytes, now);
-  } catch (e) {
-    logger.error('Failed to record backup status', { error: String(e) });
+function dirSizeBytes(dir: string): number {
+  if (!existsSync(dir)) return 0;
+  let total = 0;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) total += dirSizeBytes(full);
+    else if (entry.isFile()) total += statSync(full).size;
+  }
+  return total;
+}
+
+/** Kastar om lediga bytes inte räcker till 2 × datamängden (och minst 500 MB). Exporterad för test. */
+export function assertEnoughDiskSpace(freeBytes: number, dataBytes: number): void {
+  const required = Math.max(2 * dataBytes, MIN_FREE_BYTES);
+  if (freeBytes < required) {
+    throw new Error(`Otillräckligt diskutrymme för backup: ${freeBytes} byte lediga, ${required} krävs`);
+  }
+}
+
+// ZIP-filen öppnas på nytt efter skrivning: ett arkiv som inte går att läsa eller
+// saknar databasen får aldrig räknas som en lyckad backup.
+async function verifyBackupZip(zipPath: string): Promise<void> {
+  const directory = await unzipper.Open.file(zipPath);
+  const dbEntry = directory.files.find((f) => f.path === 'data/database.sqlite');
+  if (directory.files.length === 0 || !dbEntry || dbEntry.uncompressedSize <= 0) {
+    throw new Error('Backup-ZIP:en är ofullständig: data/database.sqlite saknas eller är tom');
+  }
+}
+
+// Retention i dagar: datumet tolkas ur filnamnet (inte mtime, som ändras av kopiering/restore).
+// Kvarlämnade *.zip.tmp (krasch mitt i en körning) städas också — in-flight-guarden
+// garanterar att ingen annan körning skriver en sådan fil just nu.
+function purgeOldBackups(backupDir: string, retentionDays: number): void {
+  const cutoffMs = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+  for (const file of readdirSync(backupDir)) {
+    const match = BACKUP_FILE_DATE_RE.exec(file);
+    const isStaleTmp = /^backup-.*\.zip\.tmp$/.test(file);
+    if (!isStaleTmp && (!match || Date.parse(`${match[1]}T00:00:00Z`) >= cutoffMs)) continue;
+    try {
+      unlinkSync(join(backupDir, file));
+      logger.info('Deleted old backup', { file });
+    } catch { /* ignore */ }
   }
 }
 
@@ -136,15 +235,20 @@ export async function runBackup(
     return { status: 'skipped' };
   }
   running = true;
-  const backupDir = opts.backupDir ?? defaultBackupDir();
+  const backupDir = opts.backupDir ?? getBackupDir();
   const uploadDir = opts.uploadDir ?? defaultUploadDir();
   const tmpDbPath = join(backupDir, `tmp-${Date.now()}.sqlite`);
+  let tmpZipPath: string | null = null;
 
   // Städar tmp-snapshot + dess -wal/-shm/-journal-sidecars (tidigare läcka:
-  // unlink tog bara .sqlite och lämnade kvar -shm/-wal per körning).
+  // unlink tog bara .sqlite och lämnade kvar -shm/-wal per körning) samt en
+  // halvskriven ZIP.
   const cleanupTmp = () => {
     for (const suffix of ['', '-wal', '-shm', '-journal']) {
       try { unlinkSync(tmpDbPath + suffix); } catch { /* redan borta */ }
+    }
+    if (tmpZipPath) {
+      try { unlinkSync(tmpZipPath); } catch { /* redan borta eller omdöpt */ }
     }
   };
 
@@ -153,8 +257,17 @@ export async function runBackup(
     mkdirSync(backupDir, { recursive: true, mode: 0o700 });
     // Fynd backup-audit-6: logga att backup-katalogen är redo (skapad/verifierad).
     logger.info('Backup directory ready', { path: backupDir });
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const backupPath = join(backupDir, `backup-${dateStr}.zip`);
+
+    // Diskkontroll före första skrivningen: en full disk ger annars en halv ZIP och
+    // riskerar att fylla volymen som databasen själv ligger på.
+    const dataBytes = statSync(database.name).size + dirSizeBytes(uploadDir);
+    const fsStats = statfsSync(backupDir);
+    assertEnoughDiskSpace(fsStats.bavail * fsStats.bsize, dataBytes);
+
+    // HHMM i namnet så flera körningar samma dag (catch-up + cron) inte skriver över varandra.
+    const stamp = new Date().toISOString();
+    const backupPath = join(backupDir, `backup-${stamp.slice(0, 10)}-${stamp.slice(11, 13)}${stamp.slice(14, 16)}.zip`);
+    tmpZipPath = `${backupPath}.tmp`;
 
     // 1. WAL-säker online-snapshot
     await database.backup(tmpDbPath);
@@ -170,9 +283,11 @@ export async function runBackup(
       verifyDb.close();
     }
 
-    // 3. Bunta DB + uploads till ZIP (samma struktur som manuell download → direkt restorebar)
+    // 3. Bunta DB + uploads till ZIP (samma struktur som manuell download → direkt restorebar).
+    // Skrivs till *.tmp och döps om först när arkivet är komplett och verifierat, så att
+    // en krasch eller full disk aldrig lämnar en trasig fil under ett riktigt backup-namn.
     await new Promise<void>((resolve, reject) => {
-      const output = createWriteStream(backupPath);
+      const output = createWriteStream(tmpZipPath!);
       const archive = new ZipArchive({ zlib: { level: 6 } });
       output.on('close', () => resolve());
       output.on('error', reject);
@@ -185,17 +300,20 @@ export async function runBackup(
       archive.finalize();
     });
 
+    await verifyBackupZip(tmpZipPath);
+
     // Fynd backup-audit-5 + commit-säkerhetsgranskning: arkivet är nu fullständigt
     // skrivet (output 'close' har triggat ovan). Backup-ZIP:en innehåller HELA
     // databasen (inkl. hemligheter) → minsta-rättighet 0o600 (endast ägaren).
     // OFFSITE_BACKUP_CMD spawnas av samma Node-process (samma uid) och kan läsa
     // 0o600. Gör INTE filen world-readable. Icke-fatalt — logga bara vid fel.
     try {
-      chmodSync(backupPath, 0o600);
+      chmodSync(tmpZipPath, 0o600);
     } catch (chmodErr) {
       logger.warn('Kunde inte sätta läsrättigheter (0o600) på backup-filen', { path: backupPath, error: String(chmodErr) });
     }
 
+    renameSync(tmpZipPath, backupPath);
     cleanupTmp();
     const sizeBytes = statSync(backupPath).size;
     logger.info('Automatic backup completed', { path: backupPath, sizeBytes });
@@ -207,38 +325,24 @@ export async function runBackup(
     // giltig lokal backup fanns och hoppade över retention för dagen). Vi fångar felet,
     // markerar 'offsite_failed' och låter retention köras ändå. Icke-required-fel har
     // funktionen själv redan loggat och returnerat normalt.
-    let offsiteFailed = false;
+    let offsiteError: string | null = null;
     try {
       await uploadBackupOffsite(backupPath);
     } catch (offSiteErr) {
-      offsiteFailed = true;
-      logger.error('Off-site backup failed — local backup kept, run marked offsite_failed', { error: String(offSiteErr) });
+      offsiteError = String(offSiteErr);
+      logger.error('Off-site backup failed — local backup kept, run marked offsite_failed', { error: offsiteError });
     }
 
-    // 4. Retention — behåll nyaste N, radera äldre .zip/.sqlite-snapshots.
-    // Fynd backup-audit-4: läs retentionDays EN gång och ta EN ögonblicksbild av
-    // fillistan i början av passet. Loopen itererar bara över denna frusna snapshot
-    // (readdirSync görs aldrig om mitt i loopen), så en samtidig config-/filändring
-    // kan inte ge inkonsekventa raderingsbeslut.
-    const retentionDays = getBackupConfig(database).retentionDays;
-    const retentionSnapshot = readdirSync(backupDir)
-      .filter((f) => f.startsWith('backup-') && (f.endsWith('.zip') || f.endsWith('.sqlite')))
-      .sort()
-      .reverse();
-    for (const old of retentionSnapshot.slice(retentionDays)) {
-      try {
-        unlinkSync(join(backupDir, old));
-        logger.info('Deleted old backup', { file: old });
-      } catch { /* ignore */ }
-    }
+    // 4. Retention — radera backuper äldre än retention_days (datum ur filnamnet).
+    purgeOldBackups(backupDir, getBackupConfig(database).retentionDays);
 
-    const status: BackupRunStatus = offsiteFailed ? 'offsite_failed' : 'success';
-    recordRun(database, status, sizeBytes);
+    const status: BackupRunStatus = offsiteError ? 'offsite_failed' : 'success';
+    recordRun(database, status, sizeBytes, offsiteError);
     return { status, path: backupPath, sizeBytes };
   } catch (error) {
     cleanupTmp();
     logger.error('Automatic backup failed', { error: String(error) });
-    recordRun(database, 'failed', null);
+    recordRun(database, 'failed', null, String(error));
     return { status: 'failed', error: String(error) };
   } finally {
     running = false;
@@ -266,7 +370,7 @@ export function startBackupScheduler(
 ): void {
   // Fynd backup-audit-6: säkerställ + logga backup-katalogen redan vid schedulerstart,
   // inte först vid första körningen.
-  const backupDir = opts.backupDir ?? defaultBackupDir();
+  const backupDir = opts.backupDir ?? getBackupDir();
   try {
     mkdirSync(backupDir, { recursive: true, mode: 0o700 });
     logger.info('Backup directory ready', { path: backupDir });

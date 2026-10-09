@@ -5,6 +5,7 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { migrations } from './migrations.js';
+import { runMigrations } from './runner.js';
 
 /**
  * Fresh install ↔ uppgraderad install: landar de i SAMMA schema?
@@ -59,49 +60,10 @@ const upgradedInstallSnapshot = readFileSync(
 
 // ── riggen: samma runner, två utgångslägen ─────────────────────────────────
 
-/** Speglar connection.ts:s helpers — columnExists svarar false (kastar inte) när tabellen saknas. */
-function migrationHelpers(db: DatabaseType) {
-  const tableExists = (name: string) =>
-    !!db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(name);
-  return {
-    tableExists,
-    columnExists: (table: string, column: string) => {
-      if (!tableExists(table)) return false;
-      return (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).some(
-        (c) => c.name === column
-      );
-    },
-  };
-}
-
-/** Speglar runMigrations() i connection.ts: arrayordning, en transaktion per migration, bokförd id. */
-function runMigrations(db: DatabaseType) {
-  db.prepare(
-    `CREATE TABLE IF NOT EXISTS schema_migrations (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    )`
-  ).run();
-  const applied = new Set(
-    (db.prepare('SELECT id FROM schema_migrations').all() as { id: string }[]).map((r) => r.id)
-  );
-  const markApplied = db.prepare(
-    'INSERT INTO schema_migrations (id, name, applied_at) VALUES (?, ?, ?)'
-  );
-  for (const migration of migrations) {
-    if (applied.has(migration.id)) continue;
-    db.transaction(() => {
-      migration.up(db, migrationHelpers(db));
-      markApplied.run(migration.id, migration.name, new Date().toISOString());
-    })();
-  }
-}
-
 /** Det en riktig serverstart gör: exec schema.sql, sedan de migrationer som återstår. */
 function boot(db: DatabaseType) {
   db.exec(currentSchema);
-  runMigrations(db);
+  runMigrations(db); // samma runner som servern (inkl. foreign_keys-hantering för rebuilds)
 }
 
 function newDb(): DatabaseType {
@@ -335,7 +297,6 @@ const ACCEPTED_COLUMN_ORDER: Record<string, string> = {
   companies: 'sla_disabled lades till av migration 045, står inline i schema.sql',
   contacts: 'company_id + department lades till med ALTER, står inline i schema.sql',
   refresh_tokens: 'revoked resp. last_used_at tillkom i olika ordning i schema.sql och migration',
-  ticket_templates: 'template_type lades till av migration 046, står inline i den äldre formen',
   users: 'display_name fanns inte i den äldsta formen och lades till med ALTER',
 };
 
@@ -346,41 +307,9 @@ const ACCEPTED_COLUMN_ORDER: Record<string, string> = {
  * hör den inte hit utan i en rebuild-migration.
  */
 const ACCEPTED_COLUMN_ATTRIBUTES: Record<string, string> = {
-  'tags.color':
-    'uppgraderad: NOT NULL DEFAULT #6366f1, fresh: nullable DEFAULT #3b82f6. Ofarligt — ' +
-    'routes/tags.ts skickar alltid color explicit, så defaulten används aldrig.',
-  'ticket_templates.description_template':
-    'uppgraderad: nullable, fresh: NOT NULL. Ofarligt — routes/templates.ts:104 (POST) ' +
-    "skriver `description_template || ''`, aldrig NULL. PUT (:190) skriver " +
-    '`description_template ?? existing.description_template` och kan alltså bevara ett ' +
-    'redan befintligt NULL, men bara på den uppgraderade formen där kolumnen tillåter det — ' +
-    'på fresh är den NOT NULL, så existing kan aldrig vara NULL.',
   'refresh_tokens.last_used_at':
     'uppgraderad: DEFAULT CURRENT_TIMESTAMP, fresh: utan default. Ofarligt — kolumnen ' +
     'skrivs alltid explicit av den som uppdaterar den.',
-};
-
-/**
- * Främmande nycklar och CHECK-villkor som skiljer sig. ticket_templates skapades
- * i den uppgraderade formen av ett äldre schema.sql (med template_type + dess
- * CHECK, utan FK på created_by); fresh får migration 005:s form
- * (ensure_ticket_templates_table — FK på created_by, template_type tillagd med
- * ALTER av migration 046 och därmed utan CHECK).
- *
- * Rebuild är MEDVETET inte gjord: template_fields hänger på ticket_templates med
- * ON DELETE CASCADE, och migrationsrunnern kör varje migration i en transaktion
- * där `PRAGMA foreign_keys = OFF` inte biter. En DROP TABLE på förälder hade
- * därmed cascade-raderat alla template_fields-rader. Kräver en migration med
- * egen pragma-hantering utanför transaktionen — eget, riskbedömt pass.
- */
-const ACCEPTED_FOREIGN_KEYS: Record<string, string> = {
-  ticket_templates: 'created_by → users saknas i den uppgraderade formen (äldre CREATE TABLE)',
-};
-
-const ACCEPTED_CHECKS: Record<string, string> = {
-  ticket_templates:
-    "CHECK(template_type IN ('standard','dynamic')) finns bara i den uppgraderade formen — " +
-    'ALTER TABLE ADD COLUMN kan inte lägga till ett CHECK, så fresh saknar det',
 };
 
 // ── testerna ───────────────────────────────────────────────────────────────
@@ -501,13 +430,13 @@ describe('schema-vägar: fresh install ↔ uppgraderad install', () => {
   });
 
   it('varje tabell har samma främmande nycklar', () => {
-    const { unexpected, stale } = diffByTable(foreignKeys, ACCEPTED_FOREIGN_KEYS);
+    const { unexpected, stale } = diffByTable(foreignKeys, {});
     expect(unexpected).toEqual([]);
     expect(stale).toEqual([]);
   });
 
   it('varje tabell har samma CHECK-villkor', () => {
-    const { unexpected, stale } = diffByTable(checkConstraints, ACCEPTED_CHECKS);
+    const { unexpected, stale } = diffByTable(checkConstraints, {});
     expect(unexpected).toEqual([]);
     expect(stale).toEqual([]);
   });

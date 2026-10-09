@@ -33,11 +33,17 @@ lokal tid, 7 dagars retention**. Vid varje körning:
 
 1. WAL-säker online-snapshot av SQLite-databasen.
 2. `PRAGMA integrity_check` — en korrupt snapshot rullar aldrig in i retention.
-3. Buntar `data/database.sqlite` + `data/uploads/` till en `backup-<YYYY-MM-DD>.zip`
-   i `<DB_PATH-katalog>/backups` (`chmod 0o600`).
-4. Valfri off-site-uppladdning (`OFFSITE_BACKUP_CMD` i `.env` — se `.env.example`).
-5. Rensar äldre backupar enligt retention.
-6. Skriver status (`last_run_at`, `last_status`, `last_size_bytes`) till `backup_config`.
+3. Kontrollerar lediga disken (minst 2 × datamängden och 500 MB, annars misslyckas körningen).
+4. Buntar `data/database.sqlite` + `data/uploads/` till `backup-<YYYY-MM-DD-HHMM>.zip`
+   i `<DB_PATH-katalog>/backups` (`chmod 0o600`). Filen skrivs som `*.tmp` och döps om
+   först när den är komplett.
+5. Öppnar ZIP:en igen och verifierar att `data/database.sqlite` finns och inte är tom —
+   annars räknas körningen som misslyckad.
+6. Valfri off-site-uppladdning (`OFFSITE_BACKUP_CMD` — se "Off-site backup" nedan).
+7. Rensar backuper äldre än `retention_days` (datumet läses ur filnamnet).
+8. Skriver status (`last_run_at`, `last_status`, `last_size_bytes`, `last_error`,
+   `consecutive_failures`) till `backup_config`. Efter **3 misslyckade körningar i rad**
+   skickas en push-notis till alla admins.
 
 Missar servern schemalagt klockslag (t.ex. nere vid 04:00) körs en catch-up-backup
 direkt vid nästa serverstart om senaste körningen saknas eller är äldre än ~24h.
@@ -49,8 +55,9 @@ direkt vid nästa serverstart om senaste körningen saknas eller är äldre än 
   men off-site-uppladdningen inte gjorde det (se `OFFSITE_BACKUP_REQUIRED` i
   `.env.example`), samt en räknare för konsekutiva misslyckanden.
 
-Motsvarande API: `GET/PUT /api/backup/config`, `POST /api/backup/run-now`
-(admin-only).
+Motsvarande API: `GET/PUT /api/backup/config`, `POST /api/backup/run-now`,
+`GET /api/backup/files` (lista lagrade backuper) och `GET /api/backup/files/:name`
+(ladda ner en) — alla admin-only.
 
 ### Manuell nedladdning
 
@@ -70,76 +77,110 @@ Innan live-databasen rörs valideras uppladdningen i ordning:
 2. **Allowlist** — endast `data/database.sqlite` och `data/uploads/*` accepteras.
 3. `data/database.sqlite` måste finnas i ZIP:en.
 4. **SQLite-magic-header** verifieras (`SQLite format 3\0`) innan filen öppnas.
-5. Öppnas read-only och måste innehålla tabellerna `tickets` och `users`.
+5. Öppnas read-only och måste klara `PRAGMA quick_check` samt innehålla tabellerna
+   `tickets` och `users`.
+6. Extraktionen avbryts över 2 GB utpackat eller 100 000 poster (ZIP-bomb-skydd).
 
-Vid godkänd validering tas en `<DB_PATH>.pre-restore`-kopia (rollback om något
-går fel), WAL checkpointas, DB-filen och uploads ersätts, och servern svarar
-med `restartRequired: true` och kör därefter `process.exit(0)` — Docker
+Vid godkänd validering tas en WAL-säker `<DB_PATH>.pre-restore`-kopia (`db.backup()`)
+och `uploads` flyttas till `<UPLOAD_DIR>.pre-restore`. Därefter checkpointas WAL,
+DB-filen och uploads ersätts och FTS5-indexen byggs om. Går något fel efter bytet
+återställs **både** DB och uploads från pre-restore-kopiorna. Servern svarar med
+`restartRequired: true` och kör därefter `process.exit(0)` — Docker
 (`restart: unless-stopped`) startar om containern automatiskt med den nya
 databasen. Verifiera `GET /api/health` = 200 efteråt.
 
-### Off-site backup (rekommenderas)
+`uploads.pre-restore` raderas automatiskt vid nästa lyckade uppstart (efter
+migrationer och schemakontroll). `database.sqlite.pre-restore` ligger kvar som
+sista skyddsnät tills nästa restore skriver över den — radera den för hand när du
+är nöjd.
 
-Konfigureras via `.env` — inget separat script:
+### Off-site backup (krävs i produktion)
+
+Utan off-site-kopia ligger alla backuper på **samma host och samma Docker-volymmiljö**
+som databasen — en diskkrasch eller ett raderat Portainer-stack tar dem med sig.
+Servern loggar en varning vid start i produktion om `OFFSITE_BACKUP_CMD` är tomt.
+
+Konfigureras som miljövariabler i Portainer-stacken (inte i repots compose-fil, som
+är en separat kopia). `rclone` ingår i backend-imagen. De exakta raderna — inklusive
+montering av rclone-config och kryptering med `rclone crypt` — står i
+[`docs/OPERATIONS.md`, "Off-site-backup"](./OPERATIONS.md#off-site-backup-rclone).
 
 ```bash
-# .env
-OFFSITE_BACKUP_CMD=rclone copy {file} remote:itticket/backups/
-OFFSITE_BACKUP_REQUIRED=false
+OFFSITE_BACKUP_CMD=rclone copy {file} itticket-crypt:backups/
+OFFSITE_BACKUP_REQUIRED=true
 ```
 
 `{file}` ersätts av filsökvägen via en env-var (aldrig interpolerad i shell-
-strängen → ingen shell-injection). Se `.env.example` för fler exempel-providers
-via [rclone](https://rclone.org/). `OFFSITE_BACKUP_REQUIRED=true` gör en
+strängen → ingen shell-injection). `OFFSITE_BACKUP_REQUIRED=true` gör en
 misslyckad off-site-uppladdning fatal för körningen (markeras `offsite_failed`,
-lokal backup + retention körs ändå) — default `false` loggar bara felet.
+lokal backup + retention körs ändå). Kommandot avbryts efter 15 minuter.
+
+### Restore-övning (kvartalsvis)
+
+En backup som aldrig återställts är en gissning. Gör detta var tredje månad, mot en
+**separat testinstans** (aldrig mot prod):
+
+- [ ] Hämta den senaste backupen **från off-site-lagringen** (inte från servern) och
+      avkryptera den om `rclone crypt` används.
+- [ ] Kontrollera att ZIP:en går att öppna och innehåller `data/database.sqlite` och `data/uploads/`.
+- [ ] Starta en testinstans (lokal stack, annan port) och ladda upp ZIP:en via
+      Inställningar → Backup → Återställ.
+- [ ] Servern svarar 200 på `GET /api/health` efter den automatiska omstarten.
+- [ ] Logga in med ett riktigt konto och öppna ett nyligen skapat ärende — datan är färsk.
+- [ ] Öppna ett ärende med bilaga och ladda ner bilagan (uploads återställdes).
+- [ ] Sök på ett ord ur ett nyligen skapat ärende och en KB-artikel (FTS5-indexen byggdes om).
+- [ ] Inställningar → Backup visar status och ingen `consecutive_failures`.
+- [ ] Notera tiden restoren tog och eventuella fel i `docs/OPERATIONS.md`/lessons.
+- [ ] Verifiera att Portainer-stackens env (hemligheter) finns säkrad enligt checklistan i
+      `docs/OPERATIONS.md` — utan `JWT_SECRET`/`CSRF_SECRET`/VAPID-nycklar är en återställd
+      databas bara halva systemet.
 
 ### Reservprocedur (manuell)
 
 > Använd bara om det inbyggda systemet ovan inte är tillgängligt (t.ex. servern
 > startar inte, eller du behöver en kopia från utsidan utan att gå via API:et).
 > Den rekommenderade vägen är alltid den inbyggda schemalagda backupen +
-> admin-UI:t.
+> admin-UI:t. Container-livscykeln (stopp/start) sköts i Portainer — aldrig med
+> `docker run` eller compose från terminalen, då tappar Portainer kontrollen över stacken.
+
+**Backup** (containern kör):
 
 ```bash
-# Kopiera databas och uppladdningar direkt från Docker-volymen
-BACKUP_DIR="/opt/it-ticketing/backups-manual"
-mkdir -p "$BACKUP_DIR"
-TIMESTAMP=$(date +%Y%m%d-%H%M)
+# Föredraget: den inbyggda nedladdningen (WAL-säker, innehåller uploads)
+curl -sf -H "Authorization: Bearer itk_live_<admin-scopad API-nyckel>" \
+  -o manual-backup.zip https://<din-domän>/api/backup \
+  || { echo "BACKUP MISSLYCKADES"; exit 1; }
 
-docker run --rm \
-  -v it-ticketing-data:/data:ro \
-  -v "$BACKUP_DIR":/backup \
-  alpine sh -c "
-    cp /data/database.sqlite /backup/database-${TIMESTAMP}.sqlite
-    tar czf /backup/uploads-${TIMESTAMP}.tar.gz -C /data uploads/
-  "
-
-echo "Backup klar: $BACKUP_DIR/database-${TIMESTAMP}.sqlite"
+# Alternativ om bara databasen behövs: SQLites online-backup via better-sqlite3
+# (sqlite3-CLI:t finns inte i imagen). Kopierar aldrig en levande WAL-fil rakt av.
+docker exec it-ticketing-backend node -e "
+  const Database = require('better-sqlite3');
+  new Database('/app/data/database.sqlite').backup('/app/data/backups/manual.sqlite')
+    .then(() => console.log('Backup klar'));
+"
+docker cp it-ticketing-backend:/app/data/backups/manual.sqlite ./manual.sqlite
+docker exec it-ticketing-backend rm /app/data/backups/manual.sqlite
 ```
 
-Manuell restore från en sådan kopia (systemet måste vara nere):
+**Restore** (kräver att backend-containern är stoppad):
 
-```bash
-cd /opt/it-ticketing
+1. Portainer → Containers → `it-ticketing-backend` → **Stop**.
+2. På hosten, mot volymens sökväg (`docker volume inspect it-ticketing-data` → `Mountpoint`):
 
-# 1. Stoppa systemet
-docker compose -f docker-compose.local.yml --env-file .env down
+   ```bash
+   VOL=$(docker volume inspect it-ticketing-data --format '{{.Mountpoint}}')
+   sudo rm -f "$VOL/database.sqlite-wal" "$VOL/database.sqlite-shm"
+   sudo cp manual.sqlite "$VOL/database.sqlite"
+   sudo chown 1000:1000 "$VOL/database.sqlite"
+   ```
 
-# 2. Kopiera backup till volymen
-docker run --rm \
-  -v it-ticketing-data:/data \
-  -v /opt/it-ticketing/backups-manual:/backup:ro \
-  alpine sh -c "
-    cp /backup/database-YYYYMMDD-HHMM.sqlite /data/database.sqlite
-    tar xzf /backup/uploads-YYYYMMDD-HHMM.tar.gz -C /data
-  "
-
-# 3. Starta om
-docker compose -f docker-compose.local.yml --env-file .env up -d
-```
-
-Byt `YYYYMMDD-HHMM` mot tidsstämpeln på backupen du vill återställa.
+   Radera alltid `-wal` och `-shm` **före** kopieringen: en kvarglömd WAL från den gamla
+   databasen appliceras annars på den återställda filen och korrumperar den. För uploads:
+   packa upp `data/uploads/` ur en ZIP från `GET /api/backup` till `$VOL/uploads/` och
+   `chown -R 1000:1000` dem.
+3. Portainer → `it-ticketing-backend` → **Start**.
+4. Verifiera: `curl -sf https://<din-domän>/api/health` och kontrollera loggen
+   (`docker logs it-ticketing-backend --tail 30`) att migrationerna gick igenom.
 
 ---
 

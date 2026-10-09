@@ -3,10 +3,16 @@ services:
     image: it-ticketing-backend:latest
     container_name: it-ticketing-backend
     restart: unless-stopped
+    # Endast loopback (se docker-compose.yml): appen litar på X-Forwarded-For via
+    # `trust proxy 1`, så en port öppen mot LAN låter vem som helst förfalska sin IP.
     ports:
-      - "${BACKEND_PORT:-3002}:3001"
+      - "127.0.0.1:${BACKEND_PORT:-3002}:3001"
+    # Appen väntar upp till 15 s på pågående backup/requests vid stopp (SHUTDOWN_TIMEOUT_MS).
+    stop_grace_period: 20s
     volumes:
       - it-ticketing-data:/app/data
+      # Backuper på egen volym: raderas data-volymen följer annars backuperna med.
+      - it-ticketing-backups-local:/app/data/backups
     environment:
       - NODE_ENV=production
       # Tidszon för schemalagda jobb (backup-tid m.fl.). Kräver tzdata i imagen
@@ -22,8 +28,8 @@ services:
       - ADMIN_EMAIL=${ADMIN_EMAIL:-}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - ADMIN_NAME=${ADMIN_NAME:-}
-      - CORS_ORIGIN=${CORS_ORIGIN}
-      - APP_BASE_URL=${APP_BASE_URL}
+      - CORS_ORIGIN=${CORS_ORIGIN:-}
+      - APP_BASE_URL=${APP_BASE_URL:-}
       - BRAND_NAME=${BRAND_NAME:-IT-Support}
       - AUTO_CLOSE_DAYS=${AUTO_CLOSE_DAYS:-30}
       - BACKUP_RETENTION_DAYS=${BACKUP_RETENTION_DAYS:-7}
@@ -61,7 +67,7 @@ services:
       - OFFSITE_BACKUP_CMD=${OFFSITE_BACKUP_CMD:-}
       - OFFSITE_BACKUP_REQUIRED=${OFFSITE_BACKUP_REQUIRED:-false}
       - PUSH_AGING_DAYS=${PUSH_AGING_DAYS:-7}
-      - SHUTDOWN_TIMEOUT_MS=${SHUTDOWN_TIMEOUT_MS:-10000}
+      - SHUTDOWN_TIMEOUT_MS=${SHUTDOWN_TIMEOUT_MS:-15000}
     logging:
       driver: "json-file"
       options:
@@ -92,4 +98,6 @@ networks:
 
 volumes:
   it-ticketing-data:
+    driver: local
+  it-ticketing-backups-local:
     driver: local

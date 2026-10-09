@@ -3,20 +3,11 @@ import { existsSync, rmSync } from 'fs';
 import { randomUUID } from 'crypto';
 
 /**
- * Unit tests for ticketAccess.ts — in particular filterAccessibleTicketIds(),
- * the batched (single IN(...) query) variant of canAccessTicket() added to
- * close an N+1 in POST /api/checklists/progress (previously one SELECT per
- * requested ticket id). These tests prove filterAccessibleTicketIds() has the
- * exact same access semantics as canAccessTicket() for the same inputs:
- * admin → everything; non-admin → only requester/assignee/creator matches;
- * non-existent ids are excluded either way.
- *
- * Uses a real (temp file) DB directly — no HTTP layer — matching the pattern
- * in ticketNotifications.test.ts. UNIQUE DB_PATH suffix (-ticketaccess) so
- * parallel suites don't collide. vi.hoisted() is required (not a plain
- * function call) because ESM import statements are hoisted above ordinary
- * code — only vi.hoisted()/vi.mock() are moved above them by vitest's
- * transform, so DB_PATH must be set that way before '../db/connection.js' is
+ * Unit tests for ticketAccess.ts. Policy: any authenticated user may READ any
+ * ticket; WRITE requires admin, assignee, creator or an unassigned ticket
+ * (self-service pickup). Uses a real (temp file) DB directly — no HTTP layer.
+ * UNIQUE DB_PATH suffix (-ticketaccess) so parallel suites don't collide.
+ * vi.hoisted() is required so DB_PATH is set before '../db/connection.js' is
  * imported below.
  */
 
@@ -32,23 +23,23 @@ const { DB_PATH } = vi.hoisted(() => {
 });
 
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
-import { canAccessTicket, filterAccessibleTicketIds } from './ticketAccess.js';
+import { canAccessTicket, canWriteTicketRow } from './ticketAccess.js';
 
 let adminId: string;
-let ownerId: string;   // matches via created_by
+let creatorId: string;  // matches via created_by
 let assigneeId: string; // matches via assigned_to
 let strangerId: string; // matches nothing
 
-let ownedTicketId: string;     // created_by = owner
-let assignedTicketId: string;  // assigned_to = assignee
-let unrelatedTicketId: string; // belongs to no one relevant
+let createdTicketId: string;    // created_by = creator, assigned to someone else
+let assignedTicketId: string;   // assigned_to = assignee
+let unassignedTicketId: string; // assigned_to = NULL
 const missingTicketId = randomUUID(); // never inserted
 
 beforeAll(() => {
   initializeDatabase();
 
   adminId = randomUUID();
-  ownerId = randomUUID();
+  creatorId = randomUUID();
   assigneeId = randomUUID();
   strangerId = randomUUID();
 
@@ -56,7 +47,7 @@ beforeAll(() => {
     `INSERT INTO users (id, email, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?)`
   );
   insertUser.run(adminId, 'admin@ticketaccesstest.local', 'x', 'admin', 'TA Admin');
-  insertUser.run(ownerId, 'owner@ticketaccesstest.local', 'x', 'user', 'TA Owner');
+  insertUser.run(creatorId, 'creator@ticketaccesstest.local', 'x', 'user', 'TA Creator');
   insertUser.run(assigneeId, 'assignee@ticketaccesstest.local', 'x', 'user', 'TA Assignee');
   insertUser.run(strangerId, 'stranger@ticketaccesstest.local', 'x', 'user', 'TA Stranger');
 
@@ -65,14 +56,14 @@ beforeAll(() => {
      VALUES (?, ?, ?, 'open', ?, ?)`
   );
 
-  ownedTicketId = randomUUID();
-  insertTicket.run(ownedTicketId, 'Owned ticket', 'desc', null, ownerId);
+  createdTicketId = randomUUID();
+  insertTicket.run(createdTicketId, 'Created ticket', 'desc', assigneeId, creatorId);
 
   assignedTicketId = randomUUID();
   insertTicket.run(assignedTicketId, 'Assigned ticket', 'desc', assigneeId, null);
 
-  unrelatedTicketId = randomUUID();
-  insertTicket.run(unrelatedTicketId, 'Unrelated ticket', 'desc', null, null);
+  unassignedTicketId = randomUUID();
+  insertTicket.run(unassignedTicketId, 'Unassigned ticket', 'desc', null, null);
 });
 
 afterAll(() => {
@@ -83,90 +74,88 @@ afterAll(() => {
   }
 });
 
-// Both functions take a request-shaped object ({ user, apiKey? }) rather than
-// a bare user, so isEffectiveAdmin (server/src/middleware/auth.ts) can see an
-// API key's own scope — asReq() wraps a plain {id,role} for these JWT-session
-// (no apiKey) test cases.
+// canAccessTicket takes a request-shaped object ({ user, apiKey? }) so
+// isEffectiveAdmin can see an API key's own scope — asReq() wraps a plain
+// {id,role} for the JWT-session (no apiKey) cases.
 function asReq(user: { id: string; role: 'admin' | 'user' }) {
   return { user };
 }
 
-describe('filterAccessibleTicketIds', () => {
-  it('returns [] for an empty input array without touching the DB', () => {
-    expect(filterAccessibleTicketIds(asReq({ id: strangerId, role: 'user' }), [])).toEqual([]);
-  });
-
-  it('returns all ids for an admin, including ones that do not exist', () => {
-    const input = [ownedTicketId, assignedTicketId, unrelatedTicketId, missingTicketId];
-    const result = filterAccessibleTicketIds(asReq({ id: adminId, role: 'admin' }), input);
-    expect(result.sort()).toEqual([...input].sort());
-  });
-
-  it('keeps only the owner-created ticket for a non-admin matched via created_by', () => {
-    const result = filterAccessibleTicketIds(
-      asReq({ id: ownerId, role: 'user' }),
-      [ownedTicketId, assignedTicketId, unrelatedTicketId]
-    );
-    expect(result).toEqual([ownedTicketId]);
-  });
-
-  it('keeps only the assigned ticket for a non-admin matched via assigned_to', () => {
-    const result = filterAccessibleTicketIds(
-      asReq({ id: assigneeId, role: 'user' }),
-      [ownedTicketId, assignedTicketId, unrelatedTicketId]
-    );
-    expect(result).toEqual([assignedTicketId]);
-  });
-
-  it('drops all ids for a stranger with no relationship to any ticket', () => {
-    const result = filterAccessibleTicketIds(
-      asReq({ id: strangerId, role: 'user' }),
-      [ownedTicketId, assignedTicketId, unrelatedTicketId]
-    );
-    expect(result).toEqual([]);
-  });
-
-  it('excludes non-existent ticket ids for non-admins', () => {
-    const result = filterAccessibleTicketIds(asReq({ id: ownerId, role: 'user' }), [missingTicketId]);
-    expect(result).toEqual([]);
-  });
-
-  it('chunks batches larger than the SQLite parameter ceiling (900)', () => {
-    // 950 missing ids + the one real, accessible id — forces >1 IN(...) chunk.
-    const filler = Array.from({ length: 950 }, () => randomUUID());
-    const input = [...filler, ownedTicketId];
-    const result = filterAccessibleTicketIds(asReq({ id: ownerId, role: 'user' }), input);
-    expect(result).toEqual([ownedTicketId]);
-  });
-
-  it('matches canAccessTicket exactly for every (user, ticket) pair', () => {
-    const users: { id: string; role: 'admin' | 'user' }[] = [
-      { id: adminId, role: 'admin' },
-      { id: ownerId, role: 'user' },
-      { id: assigneeId, role: 'user' },
-      { id: strangerId, role: 'user' },
-    ];
-    const ticketIds = [ownedTicketId, assignedTicketId, unrelatedTicketId, missingTicketId];
-
-    for (const user of users) {
-      const batched = new Set(filterAccessibleTicketIds(asReq(user), ticketIds));
-      for (const ticketId of ticketIds) {
-        expect(batched.has(ticketId)).toBe(canAccessTicket(asReq(user), ticketId));
+describe('canAccessTicket (read)', () => {
+  it('lets any authenticated user read any existing ticket', () => {
+    for (const user of [
+      { id: adminId, role: 'admin' as const },
+      { id: creatorId, role: 'user' as const },
+      { id: strangerId, role: 'user' as const },
+    ]) {
+      for (const ticketId of [createdTicketId, assignedTicketId, unassignedTicketId]) {
+        expect(canAccessTicket(asReq(user), ticketId)).toBe(true);
       }
     }
   });
 
+  it('is false for a missing ticket and for a request without a user', () => {
+    expect(canAccessTicket(asReq({ id: adminId, role: 'admin' }), missingTicketId)).toBe(false);
+    expect(canAccessTicket({}, createdTicketId)).toBe(false);
+  });
+});
+
+describe('canAccessTicket (write)', () => {
+  const write = { write: true };
+
+  it('allows admin on any existing ticket', () => {
+    const admin = asReq({ id: adminId, role: 'admin' });
+    expect(canAccessTicket(admin, createdTicketId, write)).toBe(true);
+    expect(canAccessTicket(admin, assignedTicketId, write)).toBe(true);
+    expect(canAccessTicket(admin, unassignedTicketId, write)).toBe(true);
+  });
+
+  it('allows the assignee and the creator on an assigned ticket', () => {
+    expect(canAccessTicket(asReq({ id: assigneeId, role: 'user' }), assignedTicketId, write)).toBe(true);
+    expect(canAccessTicket(asReq({ id: creatorId, role: 'user' }), createdTicketId, write)).toBe(true);
+  });
+
+  it('denies a stranger on an assigned ticket', () => {
+    const stranger = asReq({ id: strangerId, role: 'user' });
+    expect(canAccessTicket(stranger, assignedTicketId, write)).toBe(false);
+    expect(canAccessTicket(stranger, createdTicketId, write)).toBe(false);
+  });
+
+  it('allows anyone on an unassigned ticket (self-service pickup)', () => {
+    expect(canAccessTicket(asReq({ id: strangerId, role: 'user' }), unassignedTicketId, write)).toBe(true);
+  });
+
+  it('is false for a missing ticket', () => {
+    expect(canAccessTicket(asReq({ id: adminId, role: 'admin' }), missingTicketId, write)).toBe(false);
+  });
+
   it('an admin-owner API key WITHOUT admin scope is treated as non-admin (isEffectiveAdmin)', () => {
     const req = { user: { id: adminId, role: 'admin' as const }, apiKey: { permissions: ['read', 'write'] } };
-    const result = filterAccessibleTicketIds(req, [ownedTicketId, assignedTicketId, unrelatedTicketId]);
-    expect(result).toEqual([]); // admin has no requester/assignee/creator relation to any of them
-    expect(canAccessTicket(req, ownedTicketId)).toBe(false);
+    expect(canAccessTicket(req, assignedTicketId, write)).toBe(false);
+    expect(canAccessTicket(req, unassignedTicketId, write)).toBe(true);
   });
 
   it('an admin-owner API key WITH admin scope keeps full access (isEffectiveAdmin)', () => {
     const req = { user: { id: adminId, role: 'admin' as const }, apiKey: { permissions: ['read', 'admin'] } };
-    const result = filterAccessibleTicketIds(req, [ownedTicketId, assignedTicketId, unrelatedTicketId]);
-    expect(result.sort()).toEqual([ownedTicketId, assignedTicketId, unrelatedTicketId].sort());
-    expect(canAccessTicket(req, ownedTicketId)).toBe(true);
+    expect(canAccessTicket(req, assignedTicketId, write)).toBe(true);
+  });
+});
+
+describe('canWriteTicketRow', () => {
+  it('matches canAccessTicket(write) for every (user, ticket) pair', () => {
+    const users = [
+      { id: adminId, role: 'admin' as const },
+      { id: creatorId, role: 'user' as const },
+      { id: assigneeId, role: 'user' as const },
+      { id: strangerId, role: 'user' as const },
+    ];
+    for (const user of users) {
+      for (const ticketId of [createdTicketId, assignedTicketId, unassignedTicketId]) {
+        const row = db.prepare('SELECT assigned_to, created_by FROM tickets WHERE id = ?').get(ticketId) as {
+          assigned_to: string | null; created_by: string | null;
+        };
+        expect(canWriteTicketRow(asReq(user), row)).toBe(canAccessTicket(asReq(user), ticketId, { write: true }));
+      }
+    }
   });
 });

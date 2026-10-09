@@ -370,16 +370,16 @@ describe('POST /api/public/tickets', () => {
     });
   });
 
-  // ─── Rate limiting: publicWriteRateLimiter (30/min per IP) ───────────────
+  // ─── Rate limiting: publicTicketSubmitRateLimiter (5/min per IP) ─────────
   describe('rate limiting', () => {
-    it('allows 30 requests per IP, then 429s on the 31st', async () => {
+    it('allows 5 requests per IP, then 429s on the 6th', async () => {
       const RATE_LIMIT_IP = '192.0.2.201'; // TEST-NET-1, dedicated to this test only
       const statuses: number[] = [];
 
-      for (let i = 0; i < 31; i++) {
+      for (let i = 0; i < 6; i++) {
         // Deliberately invalid body (cheap 400) — the limiter runs BEFORE
         // handler validation, so it still consumes the rate-limit budget
-        // without writing 30 ticket rows to the DB.
+        // without writing ticket rows to the DB.
         const res = await request(app)
           .post('/api/public/tickets')
           .set('X-Forwarded-For', RATE_LIMIT_IP)
@@ -387,8 +387,140 @@ describe('POST /api/public/tickets', () => {
         statuses.push(res.status);
       }
 
-      expect(statuses.slice(0, 30).every((s) => s === 400)).toBe(true);
-      expect(statuses[30]).toBe(429);
+      expect(statuses.slice(0, 5).every((s) => s === 400)).toBe(true);
+      expect(statuses[5]).toBe(429);
+    });
+
+    it('rate limits GET /templates and GET /categories (120/min per IP)', async () => {
+      // En gemensam lyssnande server undviker flaky "socket hang up" vid många anrop.
+      const server = app.listen(0);
+      try {
+        for (const path of ['/api/public/templates', '/api/public/categories']) {
+          const ip = path.endsWith('templates') ? '192.0.2.202' : '192.0.2.203';
+          let last = 0;
+          for (let i = 0; i < 121; i++) {
+            last = (await request(server).get(path).set('X-Forwarded-For', ip)).status;
+          }
+          expect(last).toBe(429);
+        }
+      } finally {
+        server.close();
+      }
+    });
+  });
+
+  // ─── Bot protection: honeypot + minimum fill time ────────────────────────
+  describe('bot protection', () => {
+    it('honeypot "website" filled → fake 200 success and NOTHING is stored', async () => {
+      const body = validTicketBody({ website: 'http://spam.example' });
+      const res = await request(app)
+        .post('/api/public/tickets')
+        .set('X-Forwarded-For', freshIp())
+        .send(body);
+      expect(res.status).toBe(200);
+      expect(typeof res.body.ticketId).toBe('string');
+      expect(db.prepare('SELECT id FROM tickets WHERE title = ?').get(body.title)).toBeUndefined();
+      expect(db.prepare('SELECT id FROM contacts WHERE email = ?').get(body.email)).toBeUndefined();
+    });
+
+    it('an empty honeypot ("") is accepted as a normal submission', async () => {
+      const res = await request(app)
+        .post('/api/public/tickets')
+        .set('X-Forwarded-For', freshIp())
+        .send(validTicketBody({ website: '', formStartedAt: Date.now() - 10_000 }));
+      expect(res.status).toBe(201);
+    });
+
+    it('formStartedAt less than 3 s ago → 400 and nothing stored', async () => {
+      const body = validTicketBody({ formStartedAt: Date.now() - 500 });
+      const res = await request(app)
+        .post('/api/public/tickets')
+        .set('X-Forwarded-For', freshIp())
+        .send(body);
+      expect(res.status).toBe(400);
+      expect(db.prepare('SELECT id FROM tickets WHERE title = ?').get(body.title)).toBeUndefined();
+    });
+
+    it('accepts formStartedAt as an ISO string older than 3 s', async () => {
+      const res = await request(app)
+        .post('/api/public/tickets')
+        .set('X-Forwarded-For', freshIp())
+        .send(validTicketBody({ formStartedAt: new Date(Date.now() - 5_000).toISOString() }));
+      expect(res.status).toBe(201);
+    });
+
+    it('ignores an unparseable formStartedAt and a missing one (legacy clients)', async () => {
+      const bad = await request(app)
+        .post('/api/public/tickets')
+        .set('X-Forwarded-For', freshIp())
+        .send(validTicketBody({ formStartedAt: 'garbage' }));
+      expect(bad.status).toBe(201);
+    });
+
+    it('rejects an Idempotency-Key longer than 128 characters (400)', async () => {
+      const res = await request(app)
+        .post('/api/public/tickets')
+        .set('X-Forwarded-For', freshIp())
+        .set('Idempotency-Key', 'k'.repeat(129))
+        .send(validTicketBody());
+      expect(res.status).toBe(400);
+    });
+
+    it('accepts an Idempotency-Key of exactly 128 characters', async () => {
+      const res = await request(app)
+        .post('/api/public/tickets')
+        .set('X-Forwarded-For', freshIp())
+        .set('Idempotency-Key', 'k'.repeat(128))
+        .send(validTicketBody());
+      expect(res.status).toBe(201);
+    });
+  });
+
+  // ─── Atomicity: contact + ticket + field values in ONE transaction ────────
+  describe('transaction', () => {
+    it('a failure while storing custom field values rolls back contact and ticket, and the idempotency key is NOT stored', async () => {
+      const body = validTicketBody({
+        description: undefined,
+        customFields: [{ fieldName: 'f1', fieldLabel: 'Fält', fieldValue: 'v' }],
+      });
+      const key = `idem-rollback-${randomUUID()}`;
+      const realPrepare = db.prepare.bind(db);
+      const spy = vi.spyOn(db, 'prepare').mockImplementation(((sql: string) => {
+        if (sql.includes('INSERT INTO ticket_field_values')) {
+          return { run: () => { throw new Error('disk full'); } };
+        }
+        return realPrepare(sql);
+      }) as unknown as typeof db.prepare);
+
+      let res;
+      try {
+        res = await request(app)
+          .post('/api/public/tickets')
+          .set('X-Forwarded-For', freshIp())
+          .set('Idempotency-Key', key)
+          .send(body);
+      } finally {
+        spy.mockRestore();
+      }
+      expect(res.status).toBe(500);
+      expect(db.prepare('SELECT id FROM tickets WHERE title = ?').get(body.title)).toBeUndefined();
+      expect(db.prepare('SELECT id FROM contacts WHERE email = ?').get(body.email)).toBeUndefined();
+
+      // Samma nyckel kan användas igen eftersom den inte sparades.
+      const retry = await request(app)
+        .post('/api/public/tickets')
+        .set('X-Forwarded-For', freshIp())
+        .set('Idempotency-Key', key)
+        .send(body);
+      expect(retry.status).toBe(201);
+    });
+
+    it('matches an existing contact case-insensitively', async () => {
+      const email = `MiXeD-${randomUUID()}@publictest.local`;
+      await request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp()).send(validTicketBody({ email }));
+      await request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp()).send(validTicketBody({ email: email.toLowerCase() }));
+      const rows = db.prepare('SELECT id FROM contacts WHERE lower(email) = ?').all(email.toLowerCase());
+      expect(rows).toHaveLength(1);
     });
   });
 });

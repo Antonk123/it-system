@@ -178,6 +178,36 @@ describe('Category CRUD cycle (admin)', () => {
   });
 });
 
+describe('Category label sanitising, cap and delete audit', () => {
+  const post = (body: unknown) =>
+    adminAgent.post('/api/categories').set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf).send(body as object);
+
+  it('strips HTML from the label and derives the slug from the clean text', async () => {
+    const res = await post({ label: '<script>alert(1)</script><b>Skrivare</b> & Scanner' });
+    expect(res.status).toBe(201);
+    expect(res.body.label).toBe('Skrivare & Scanner');
+    expect(res.body.name).toBe('skrivare-&-scanner');
+  });
+
+  it('rejects labels over 100 characters and non-string/HTML-only labels with 400', async () => {
+    expect((await post({ label: 'x'.repeat(101) })).status).toBe(400);
+    expect((await post({ label: 123 })).status).toBe(400);
+    expect((await post({ label: '<b></b>' })).status).toBe(400);
+    expect((await post({ label: 'x'.repeat(100) })).status).toBe(201);
+  });
+
+  it('writes a category_delete audit row on DELETE', async () => {
+    const created = await post({ label: 'Audit mig' });
+    const res = await adminAgent
+      .delete(`/api/categories/${created.body.id}`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .set('x-csrf-token', adminCsrf);
+    expect(res.status).toBe(200);
+    const audit = db.prepare("SELECT entity_type FROM audit_log WHERE action = 'category_delete' AND entity_id = ?").get(created.body.id) as { entity_type: string } | undefined;
+    expect(audit?.entity_type).toBe('category');
+  });
+});
+
 describe('Category ordering and linked records', () => {
   it('reorders categories and preserves linked ticket/template when a category is removed', async () => {
     const a = randomUUID();

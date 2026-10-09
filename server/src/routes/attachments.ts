@@ -1,5 +1,5 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import multer from 'multer';
 import { existsSync, mkdirSync, unlinkSync, openSync, readSync, closeSync } from 'fs';
 import { join, dirname } from 'path';
@@ -9,6 +9,8 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { writeRateLimiter } from '../middleware/rateLimit.js';
 import { canAccessTicket } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
+import { attachmentDisposition } from '../lib/contentDisposition.js';
+import { resolveUploadPath } from '../lib/uploadPath.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -26,9 +28,14 @@ export const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 /** Max number of attachments allowed per ticket */
 const MAX_ATTACHMENTS_PER_TICKET = 50;
 
-// Whitelist of allowed MIME types
+// Whitelist of allowed MIME types.
+// SVG är medvetet BORTTAGET: en SVG kan bära <script>/onload och exekveras i appens
+// origin om den någon gång renderas inline (även av misstag via en framtida ändring).
+// Bilagor serveras visserligen alltid som attachment, men aktiva format hör inte
+// hemma i en allowlist för ärendebilagor. Tidigare uppladdade SVG:er serveras fortsatt
+// som nedladdning.
 export const ALLOWED_MIME_TYPES = [
-  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
   'application/pdf',
   'text/plain', 'text/csv', 'text/markdown',
   'message/rfc822', // .eml
@@ -44,7 +51,7 @@ export const ALLOWED_MIME_TYPES = [
 
 // Whitelist of allowed file extensions (as backup check)
 export const ALLOWED_EXTENSIONS = [
-  'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
+  'jpg', 'jpeg', 'png', 'gif', 'webp',
   'pdf',
   'txt', 'csv', 'md', 'markdown', 'eml',
   'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
@@ -62,14 +69,15 @@ const storage = multer.diskStorage({
     cb(null, UPLOAD_DIR);
   },
   filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).substring(2)}`;
     const ext = file.originalname.split('.').pop()?.toLowerCase() || '';
-    cb(null, `${uniqueSuffix}.${ext}`);
+    cb(null, `${Date.now()}-${randomUUID()}.${ext}`);
   },
 });
 
 const upload = multer({
   storage,
+  // Multipart-filnamn är UTF-8 i moderna webbläsare; standardvärdet latin1 förvanskar åäö.
+  defParamCharset: 'utf8',
   limits: {
     fileSize: MAX_FILE_SIZE,
   },
@@ -123,17 +131,25 @@ interface AttachmentRow {
  * Okända/textbaserade MIME-typer släpps igenom utan kontroll.
  */
 export function hasMagicByteMatch(filePath: string, declaredMime: string): boolean {
-  // Signaturer för kända binära typer
-  const signatures: Array<{ mime: string | string[]; magic: Buffer; offset?: number }> = [
-    { mime: 'application/pdf',                                                    magic: Buffer.from([0x25, 0x50, 0x44, 0x46]) }, // %PDF
-    { mime: 'image/png',                                                          magic: Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) }, // \x89PNG
-    { mime: 'image/jpeg',                                                         magic: Buffer.from([0xFF, 0xD8, 0xFF]) },
-    { mime: 'image/gif',                                                          magic: Buffer.from([0x47, 0x49, 0x46, 0x38]) }, // GIF8
+  // Signaturer för kända binära typer; varje signatur är en lista av (offset, bytes)
+  // som alla måste matcha (WebP kräver både RIFF vid 0 och WEBP vid 8).
+  const OLE = Buffer.from([0xD0, 0xCF, 0x11, 0xE0]);
+  const signatures: Array<{ mime: string | string[]; parts: Array<{ bytes: Buffer; offset: number }> }> = [
+    { mime: 'application/pdf',  parts: [{ offset: 0, bytes: Buffer.from([0x25, 0x50, 0x44, 0x46]) }] }, // %PDF
+    { mime: 'image/png',        parts: [{ offset: 0, bytes: Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) }] }, // \x89PNG
+    { mime: 'image/jpeg',       parts: [{ offset: 0, bytes: Buffer.from([0xFF, 0xD8, 0xFF]) }] },
+    { mime: 'image/gif',        parts: [{ offset: 0, bytes: Buffer.from([0x47, 0x49, 0x46, 0x38]) }] }, // GIF8
+    { mime: 'image/webp',       parts: [{ offset: 0, bytes: Buffer.from('RIFF') }, { offset: 8, bytes: Buffer.from('WEBP') }] },
+    // Äldre Office-format (OLE2/CFB-container)
+    { mime: ['application/msword', 'application/vnd.ms-excel', 'application/vnd.ms-powerpoint'],
+      parts: [{ offset: 0, bytes: OLE }] },
+    { mime: 'application/x-rar-compressed', parts: [{ offset: 0, bytes: Buffer.from('Rar!') }] },
+    { mime: 'application/x-7z-compressed',  parts: [{ offset: 0, bytes: Buffer.from([0x37, 0x7A, 0xBC, 0xAF, 0x27, 0x1C]) }] }, // 7z\xBC\xAF'\x1C
     { mime: ['application/zip', 'application/x-zip-compressed',
              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
              'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
-             magic: Buffer.from([0x50, 0x4B, 0x03, 0x04]) }, // PK\x03\x04
+      parts: [{ offset: 0, bytes: Buffer.from([0x50, 0x4B, 0x03, 0x04]) }] }, // PK\x03\x04
   ];
 
   const matchingRule = signatures.find(s =>
@@ -146,7 +162,7 @@ export function hasMagicByteMatch(filePath: string, declaredMime: string): boole
   }
 
   // Läs bara de första bytena — öppna fd och läs exakt vad vi behöver
-  const readLen = Math.max(matchingRule.magic.length + (matchingRule.offset ?? 0), 16);
+  const readLen = Math.max(...matchingRule.parts.map(p => p.offset + p.bytes.length), 16);
   const header = Buffer.alloc(readLen);
   try {
     const fd = openSync(filePath, 'r');
@@ -159,21 +175,12 @@ export function hasMagicByteMatch(filePath: string, declaredMime: string): boole
     return false;
   }
 
-  const offset = matchingRule.offset ?? 0;
-  for (let i = 0; i < matchingRule.magic.length; i++) {
-    if (header[offset + i] !== matchingRule.magic[i]) return false;
-  }
-  return true;
+  return matchingRule.parts.every(({ bytes, offset }) => header.subarray(offset, offset + bytes.length).equals(bytes));
 }
 
 // Get attachments for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    // Authorization: verify user has access to the parent ticket before listing metadata
-    if (!canAccessTicket(req, req.params.ticketId as string)) {
-      return res.status(403).json({ error: 'Forbidden: you do not have access to this ticket' });
-    }
-
     const attachments = db.prepare(`
       SELECT id, ticket_id, file_name, file_path, file_size, file_type, created_at FROM ticket_attachments WHERE ticket_id = ? ORDER BY created_at ASC
     `).all(req.params.ticketId) as AttachmentRow[];
@@ -205,10 +212,15 @@ router.post('/ticket/:ticketId', writeRateLimiter, authenticate, (req: AuthReque
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // Magic-byte-kontroll: verifiera att filens faktiska innehåll matchar deklarerad MIME
+    // Filen är redan skriven till disk av multer — varje tidig retur nedan måste ta bort den.
     const uploadedPath = join(UPLOAD_DIR, req.file.filename);
-    if (!hasMagicByteMatch(uploadedPath, req.file.mimetype)) {
+    const discardUpload = () => {
       try { unlinkSync(uploadedPath); } catch { /* ignore cleanup error */ }
+    };
+
+    // Magic-byte-kontroll: verifiera att filens faktiska innehåll matchar deklarerad MIME
+    if (!hasMagicByteMatch(uploadedPath, req.file.mimetype)) {
+      discardUpload();
       logger.warn('Magic-byte mismatch for uploaded file', {
         filename: req.file.originalname,
         declaredMime: req.file.mimetype,
@@ -217,48 +229,48 @@ router.post('/ticket/:ticketId', writeRateLimiter, authenticate, (req: AuthReque
     }
 
     try {
-    // Verify ticket exists
-    const ticket = db.prepare('SELECT id FROM tickets WHERE id = ?').get(req.params.ticketId);
-    if (!ticket) {
-      return res.status(404).json({ error: 'Ticket not found' });
-    }
+      // Verify ticket exists
+      const ticket = db.prepare('SELECT id FROM tickets WHERE id = ?').get(req.params.ticketId);
+      if (!ticket) {
+        discardUpload();
+        return res.status(404).json({ error: 'Ticket not found' });
+      }
 
-    if (!canAccessTicket(req, req.params.ticketId as string)) {
-      // Unauthorized: remove the file multer already wrote to disk, then reject.
-      try { unlinkSync(uploadedPath); } catch { /* ignore cleanup error */ }
-      return res.status(403).json({ error: 'Forbidden: you do not have access to this ticket' });
-    }
+      if (!canAccessTicket(req, req.params.ticketId as string, { write: true })) {
+        discardUpload();
+        return res.status(403).json({ error: 'Forbidden: you do not have access to this ticket' });
+      }
 
-    // Enforce per-ticket attachment cap to prevent unbounded growth.
-    const { c: attachmentCount } = db.prepare(
-      'SELECT COUNT(*) AS c FROM ticket_attachments WHERE ticket_id = ?'
-    ).get(req.params.ticketId) as { c: number };
-    if (attachmentCount >= MAX_ATTACHMENTS_PER_TICKET) {
-      // Remove the file multer already wrote to disk before rejecting.
-      try { unlinkSync(uploadedPath); } catch { /* ignore cleanup error */ }
-      return res.status(400).json({ error: 'Maximum attachments reached' });
-    }
+      // Enforce per-ticket attachment cap to prevent unbounded growth.
+      const { c: attachmentCount } = db.prepare(
+        'SELECT COUNT(*) AS c FROM ticket_attachments WHERE ticket_id = ?'
+      ).get(req.params.ticketId) as { c: number };
+      if (attachmentCount >= MAX_ATTACHMENTS_PER_TICKET) {
+        discardUpload();
+        return res.status(400).json({ error: 'Maximum attachments reached' });
+      }
 
-    const id = uuidv4();
-    db.prepare(`
-      INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      req.params.ticketId,
-      req.file.originalname,
-      req.file.filename,
-      req.file.size,
-      req.file.mimetype
-    );
+      const id = randomUUID();
+      db.prepare(`
+        INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        req.params.ticketId,
+        req.file.originalname,
+        req.file.filename,
+        req.file.size,
+        req.file.mimetype
+      );
 
-    const attachment = db.prepare('SELECT id, ticket_id, file_name, file_path, file_size, file_type, created_at FROM ticket_attachments WHERE id = ?').get(id) as AttachmentRow;
-    
+      const attachment = db.prepare('SELECT id, ticket_id, file_name, file_path, file_size, file_type, created_at FROM ticket_attachments WHERE id = ?').get(id) as AttachmentRow;
+
       res.status(201).json({
         ...attachment,
         url: `/api/attachments/file/${attachment.id}`,
       });
     } catch (error) {
+      discardUpload();
       logger.error('Error uploading attachment:', { error: String(error) });
       res.status(500).json({ error: 'Failed to upload attachment' });
     }
@@ -274,42 +286,20 @@ router.get('/file/:id', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Attachment not found' });
     }
 
-    // Authorization: verify user has access to the parent ticket
-    if (!canAccessTicket(req, attachment.ticket_id)) {
-      return res.status(403).json({ error: 'Forbidden: you do not have access to this attachment' });
-    }
+    // Läsning är öppen för alla inloggade. file_path ligger i DB:n, så kontrollera
+    // att den löser sig innanför uppladdningskatalogen innan filen skickas.
+    const filePath = resolveUploadPath(UPLOAD_DIR, attachment.file_path);
 
-    const filePath = join(UPLOAD_DIR, attachment.file_path);
-
-    if (!existsSync(filePath)) {
+    if (!filePath || !existsSync(filePath)) {
       return res.status(404).json({ error: 'File not found' });
     }
 
-    // Truncera filnamnet till 200 tecken innan headern byggs — håller
-    // Content-Disposition inom rimliga header-storleksgränser även för
-    // patologiskt långa originalfilnamn.
-    const truncatedFilename = attachment.file_name.slice(0, 200);
-
-    // Sanitera filnamnet strikt: tillåt endast säkra ASCII-tecken i fallback-formen,
-    // och skicka även RFC 5987-kodat namn (filename*) för korrekt hantering av
-    // icke-ASCII, semikolon och andra specialtecken i moderna klienter.
-    const safeAsciiFilename = truncatedFilename
-      .replace(/[^\x20-\x7E]/g, '_')  // ersätt icke-ASCII med _
-      .replace(/[";\\]/g, '_');         // ersätt semikolon, citattecken, backslash
-    const encodedFilename = encodeURIComponent(truncatedFilename);
-
     res.setHeader('Content-Type', attachment.file_type || 'application/octet-stream');
     // SÄKERHETSINVARIANT: ALLA bilagor serveras med Content-Disposition: attachment
-    // (aldrig 'inline'), ovillkorligt för varje filtyp. Detta tvingar nedladdning i
-    // stället för rendering i webbläsaren. Det är ENDA anledningen till att SVG är
-    // säkert att tillåta i ALLOWED_MIME_TYPES: en SVG som aldrig renderas inline kan
-    // inte exekvera inbäddad <script>/onload-XSS i appens origin. Ändra ALDRIG detta
-    // till 'inline' utan att först ta bort SVG (och andra aktiva format) från whitelisten.
-    // filename* (RFC 5987) hanterar icke-ASCII korrekt; filename= är fallback för äldre klienter.
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${safeAsciiFilename}"; filename*=UTF-8''${encodedFilename}`
-    );
+    // (aldrig 'inline'), ovillkorligt för varje filtyp. Det tvingar nedladdning i
+    // stället för rendering i webbläsaren, så att en uppladdad fil aldrig kan köra
+    // script i appens origin. Ändra ALDRIG detta till 'inline'.
+    res.setHeader('Content-Disposition', attachmentDisposition(attachment.file_name));
     res.sendFile(filePath);
   } catch (error) {
     logger.error('Error serving file:', { error: String(error) });
@@ -326,8 +316,8 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
       return res.status(404).json({ error: 'Attachment not found' });
     }
 
-    // Authorization: verify user has access to the parent ticket
-    if (!canAccessTicket(req, attachment.ticket_id)) {
+    // Authorization: skrivbehörighet på det överordnade ärendet krävs
+    if (!canAccessTicket(req, attachment.ticket_id, { write: true })) {
       return res.status(403).json({ error: 'Forbidden: you do not have access to this attachment' });
     }
 
@@ -337,8 +327,8 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
     db.prepare('DELETE FROM ticket_attachments WHERE id = ?').run(req.params.id);
 
     // Delete file from disk after successful DB deletion
-    const filePath = join(UPLOAD_DIR, attachment.file_path);
-    if (existsSync(filePath)) {
+    const filePath = resolveUploadPath(UPLOAD_DIR, attachment.file_path);
+    if (filePath && existsSync(filePath)) {
       try {
         unlinkSync(filePath);
       } catch (fileError) {

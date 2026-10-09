@@ -213,3 +213,73 @@ describe('Template field CRUD cycle (admin)', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('Template field validation and template scoping', () => {
+  let otherTemplateId: string;
+  let otherFieldId: string;
+
+  const send = (method: 'post' | 'put' | 'delete', path: string, body?: unknown) =>
+    adminAgent[method](path).set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf).send(body as object);
+
+  beforeAll(() => {
+    otherTemplateId = randomUUID();
+    db.prepare(`INSERT INTO ticket_templates (id, name, title_template, description_template, template_type) VALUES (?, ?, ?, ?, 'dynamic')`)
+      .run(otherTemplateId, 'Other Fields Template', 'T', 'D');
+    otherFieldId = randomUUID();
+    db.prepare(`INSERT INTO template_fields (id, template_id, field_name, field_label, field_type, position) VALUES (?, ?, ?, ?, 'text', 7)`)
+      .run(otherFieldId, otherTemplateId, 'other', 'Other');
+  });
+
+  it('rejects an unknown field_type with 400 instead of a CHECK-constraint 500', async () => {
+    const res = await send('post', `/api/templates/${templateId}/fields`, { field_name: 'a', field_label: 'A', field_type: 'password' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/field_type/);
+  });
+
+  it('rejects non-array options and non-string text values', async () => {
+    const base = { field_name: 'opt', field_label: 'Opt', field_type: 'select' };
+    expect((await send('post', `/api/templates/${templateId}/fields`, { ...base, options: 'a,b' })).status).toBe(400);
+    expect((await send('post', `/api/templates/${templateId}/fields`, { ...base, options: [1, 2] })).status).toBe(400);
+    expect((await send('post', `/api/templates/${templateId}/fields`, { ...base, placeholder: { a: 1 } })).status).toBe(400);
+  });
+
+  it('stores options as JSON and a PUT can clear placeholder/options with null', async () => {
+    const created = await send('post', `/api/templates/${templateId}/fields`, {
+      field_name: 'choice', field_label: 'Val', field_type: 'select', placeholder: 'Välj', options: ['A', 'B'],
+    });
+    expect(created.status).toBe(201);
+    expect(JSON.parse(created.body.options)).toEqual(['A', 'B']);
+
+    const cleared = await send('put', `/api/templates/${templateId}/fields/${created.body.id}`, { placeholder: null, options: null });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.placeholder).toBeNull();
+    expect(cleared.body.options).toBeNull();
+    expect(cleared.body.field_label).toBe('Val');
+  });
+
+  it('rejects an invalid field_type on update and creating a field for an unknown template', async () => {
+    const field = db.prepare('SELECT id FROM template_fields WHERE template_id = ? LIMIT 1').get(templateId) as { id: string };
+    expect((await send('put', `/api/templates/${templateId}/fields/${field.id}`, { field_type: 'nope' })).status).toBe(400);
+    const res = await send('post', `/api/templates/${randomUUID()}/fields`, { field_name: 'a', field_label: 'A', field_type: 'text' });
+    expect(res.status).toBe(404);
+  });
+
+  it('PUT and DELETE ignore a field that belongs to a different template (404)', async () => {
+    const put = await send('put', `/api/templates/${templateId}/fields/${otherFieldId}`, { field_label: 'Hijacked' });
+    expect(put.status).toBe(404);
+    const del = await send('delete', `/api/templates/${templateId}/fields/${otherFieldId}`);
+    expect(del.status).toBe(404);
+
+    const row = db.prepare('SELECT field_label FROM template_fields WHERE id = ?').get(otherFieldId) as { field_label: string };
+    expect(row.field_label).toBe('Other');
+  });
+
+  it('reorder only touches fields of the template in the URL', async () => {
+    const mine = db.prepare('SELECT id FROM template_fields WHERE template_id = ? LIMIT 1').get(templateId) as { id: string };
+    await send('put', `/api/templates/${templateId}/fields/reorder`, { ids: [otherFieldId, mine.id] });
+    const other = db.prepare('SELECT position FROM template_fields WHERE id = ?').get(otherFieldId) as { position: number };
+    expect(other.position).toBe(7); // opåverkad av reorder i en annan mall
+    const own = db.prepare('SELECT position FROM template_fields WHERE id = ?').get(mine.id) as { position: number };
+    expect(own.position).toBe(1);
+  });
+});

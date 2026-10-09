@@ -155,3 +155,188 @@ describe('POST /api/contacts/import/preview and /import/confirm (admin-only)', (
     expect(res.body.error).toBeDefined();
   });
 });
+
+describe('contact validation, uniqueness and audit (POST/PUT/DELETE)', () => {
+  const post = (body: unknown) => adminAgent.post('/api/contacts')
+    .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf).send(body as object);
+  const put = (id: string, body: unknown) => adminAgent.put(`/api/contacts/${id}`)
+    .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf).send(body as object);
+
+  it('POST rejects missing name/email, bad email, over-long fields and non-strings (400)', async () => {
+    expect((await post({ email: 'a@b.se' })).status).toBe(400);
+    expect((await post({ name: 'X' })).status).toBe(400);
+    expect((await post({ name: 'X', email: 'not-an-email' })).status).toBe(400);
+    expect((await post({ name: 'X', email: '<script>@b.se' })).status).toBe(400);
+    expect((await post({ name: 'x'.repeat(201), email: 'long@b.se' })).status).toBe(400);
+    expect((await post({ name: 'X', email: `${'a'.repeat(250)}@b.se` })).status).toBe(400);
+    expect((await post({ name: 'X', email: 'ph@b.se', phone: '1'.repeat(51) })).status).toBe(400);
+    expect((await post({ name: { a: 1 }, email: 'obj@b.se' })).status).toBe(400);
+    expect((await post({ name: 'X', email: 'co@b.se', company_id: randomUUID() })).status).toBe(400);
+  });
+
+  it('POST strips HTML from name/phone/department and trims', async () => {
+    const res = await post({ name: '  <b>Anna</b> ', email: ' anna@validation.test ', phone: '<i>070</i>', department: '<u>IT</u>' });
+    expect(res.status).toBe(201);
+    expect(res.body.name).toBe('Anna');
+    expect(res.body.email).toBe('anna@validation.test');
+    expect(res.body.phone).toBe('070');
+    expect(res.body.department).toBe('IT');
+  });
+
+  it('POST returns 409 for a duplicate e-mail, case-insensitively', async () => {
+    expect((await post({ name: 'Dup', email: 'dup@validation.test' })).status).toBe(201);
+    const again = await post({ name: 'Dup 2', email: 'DUP@Validation.TEST' });
+    expect(again.status).toBe(409);
+  });
+
+  it('PUT returns 409 when changing to another contact\'s e-mail, but allows keeping its own', async () => {
+    const a = await post({ name: 'A', email: 'put-a@validation.test' });
+    const b = await post({ name: 'B', email: 'put-b@validation.test' });
+    expect((await put(b.body.id, { email: 'PUT-A@validation.test' })).status).toBe(409);
+    expect((await put(b.body.id, { email: 'PUT-B@validation.test', name: 'B2' })).status).toBe(200);
+    expect(a.status).toBe(201);
+  });
+
+  it('PUT validates provided fields and rejects an empty name', async () => {
+    const c = await post({ name: 'V', email: 'put-v@validation.test' });
+    expect((await put(c.body.id, { name: '   ' })).status).toBe(400);
+    expect((await put(c.body.id, { email: 'nope' })).status).toBe(400);
+    expect((await put(c.body.id, { phone: 'x'.repeat(51) })).status).toBe(400);
+    expect((await put(c.body.id, {})).status).toBe(400);
+    expect((await put(randomUUID(), { name: 'Z' })).status).toBe(404);
+  });
+
+  it('PUT clears phone with an empty string', async () => {
+    const c = await post({ name: 'P', email: 'put-p@validation.test', phone: '123' });
+    const res = await put(c.body.id, { phone: '' });
+    expect(res.status).toBe(200);
+    expect(res.body.phone).toBeNull();
+  });
+
+  it('DELETE writes an audit row and 404s for unknown ids', async () => {
+    const c = await post({ name: 'Del', email: 'del@validation.test' });
+    const res = await adminAgent.delete(`/api/contacts/${c.body.id}`)
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf);
+    expect(res.status).toBe(200);
+    const audit = db.prepare("SELECT details FROM audit_log WHERE action = 'contact_delete' AND entity_id = ?")
+      .get(c.body.id) as { details: string } | undefined;
+    expect(audit?.details).toContain('del@validation.test');
+
+    const missing = await adminAgent.delete(`/api/contacts/${randomUUID()}`)
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf);
+    expect(missing.status).toBe(404);
+  });
+
+  it('dispatches contact.created and contact.updated webhooks', async () => {
+    const hookId = randomUUID();
+    db.prepare('INSERT INTO webhooks (id, url, events, secret) VALUES (?, ?, ?, ?)')
+      .run(hookId, 'https://93.184.216.34/hook', JSON.stringify(['contact.created', 'contact.updated']), 'sec');
+    const fetchMock = vi.fn(async () => new Response(null, { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const created = await post({ name: 'Hook', email: 'hook@validation.test' });
+      await put(created.body.id, { name: 'Hook 2' });
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+      const events = fetchMock.mock.calls.map((c) => ((c as unknown[])[1] as RequestInit).headers as Record<string, string>)
+        .map((h) => h['X-Webhook-Event']);
+      expect(events).toEqual(['contact.created', 'contact.updated']);
+    } finally {
+      vi.unstubAllGlobals();
+      db.prepare('DELETE FROM webhooks WHERE id = ?').run(hookId);
+    }
+  });
+});
+
+describe('GET /api/contacts (bare array vs pagination, search)', () => {
+  const get = (qs = '') => adminAgent.get(`/api/contacts${qs}`).set('Authorization', `Bearer ${adminToken}`);
+
+  beforeAll(() => {
+    const insert = db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)');
+    for (let i = 0; i < 25; i++) insert.run(randomUUID(), `Pagtest ${String(i).padStart(2, '0')}`, `pag${i}@pagination.test`);
+    insert.run(randomUUID(), '100% Match_Test', 'wild@pagination.test');
+  });
+
+  it('returns a bare array when no page param is given (legacy shape)', async () => {
+    const res = await get();
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+  });
+
+  it('applies ?search to a bare-array response too', async () => {
+    const res = await get('?search=pagination.test');
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body).toHaveLength(26);
+  });
+
+  it('returns { data, pagination } when page is given', async () => {
+    const res = await get('?page=2&limit=10&search=pagination.test');
+    expect(res.status).toBe(200);
+    expect(res.body.data).toHaveLength(10);
+    expect(res.body.pagination).toEqual({ page: 2, limit: 10, total: 26 });
+  });
+
+  it('clamps limit to 200 and page to >= 1', async () => {
+    const res = await get('?page=0&limit=100000');
+    expect(res.body.pagination.page).toBe(1);
+    expect(res.body.pagination.limit).toBe(200);
+  });
+
+  it('escapes LIKE wildcards in search', async () => {
+    const res = await get('?page=1&search=100%25%20Match_');
+    expect(res.body.data).toHaveLength(1);
+    expect((await get('?page=1&search=%25')).body.pagination.total).toBe(1);
+  });
+
+  it('requires authentication', async () => {
+    expect((await request(app).get('/api/contacts?page=1')).status).toBe(401);
+  });
+});
+
+describe('POST /api/contacts/import/confirm validation', () => {
+  const confirm = (contacts: unknown) => adminAgent.post('/api/contacts/import/confirm')
+    .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf).send({ contacts });
+
+  it('aborts the whole import on a duplicate against existing contacts (case-insensitive)', async () => {
+    const res = await confirm([
+      { name: 'Fresh', email: 'fresh-import@import.test' },
+      { name: 'Existing', email: 'OLD@contactstest.local' },
+    ]);
+    expect(res.status).toBe(400);
+    expect(res.body.rowErrors).toEqual([{ row: 2, errors: ['E-post finns redan i systemet'] }]);
+    expect(db.prepare('SELECT id FROM contacts WHERE email = ?').get('fresh-import@import.test')).toBeUndefined();
+  });
+
+  it('aborts on duplicates within the same batch', async () => {
+    const res = await confirm([
+      { name: 'A', email: 'same@import.test' },
+      { name: 'B', email: 'SAME@import.test' },
+    ]);
+    expect(res.status).toBe(400);
+    expect(res.body.rowErrors[0].row).toBe(2);
+  });
+
+  it('validates name length (200), phone length and email format per row', async () => {
+    const res = await confirm([
+      { name: 'x'.repeat(201), email: 'a1@import.test' },
+      { name: 'ok', email: 'bad' },
+      { name: 'ok', email: 'a3@import.test', phone: '1'.repeat(51) },
+    ]);
+    expect(res.status).toBe(400);
+    expect(res.body.rowErrors.map((r: { row: number }) => r.row)).toEqual([1, 2, 3]);
+  });
+
+  it('accepts a 150-char name (previous limit was 100) and sanitizes HTML', async () => {
+    const res = await confirm([{ name: `<b>${'n'.repeat(150)}</b>`, email: 'long-ok@import.test', phone: ' 070 ', company: ' Importbolaget ' }]);
+    expect(res.status).toBe(200);
+    expect(res.body.created).toBe(1);
+    const row = db.prepare('SELECT name, phone FROM contacts WHERE email = ?').get('long-ok@import.test') as { name: string; phone: string };
+    expect(row.name).toBe('n'.repeat(150));
+    expect(row.phone).toBe('070');
+    expect(db.prepare("SELECT id FROM audit_log WHERE action = 'contact_import'").get()).toBeDefined();
+  });
+
+  it('rejects a non-array body and a non-object row', async () => {
+    expect((await confirm('nope')).status).toBe(400);
+    expect((await confirm([null])).status).toBe(400);
+  });
+});

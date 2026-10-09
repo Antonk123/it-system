@@ -9,7 +9,7 @@ import { randomUUID } from 'crypto';
  * exact sendMail options without a real SMTP connection.
  */
 
-const { DB_PATH, sendMailMock } = vi.hoisted(() => {
+const { DB_PATH, sendMailMock, createTransportMock } = vi.hoisted(() => {
   const { tmpdir } = require('node:os') as typeof import('node:os');
   const { join } = require('node:path') as typeof import('node:path');
   const dbPath = join(tmpdir(), `itticket-test-${process.pid}-${Date.now()}-emailreply.sqlite`);
@@ -23,22 +23,31 @@ const { DB_PATH, sendMailMock } = vi.hoisted(() => {
   process.env.EMAIL_TO = 'support@example.com';
   process.env.IMAP_USER = 'support@example.com';
   const sendMailMock = vi.fn(async () => ({ messageId: 'accepted' }));
-  return { DB_PATH: dbPath, sendMailMock };
+  const createTransportMock = vi.fn((_options: Record<string, unknown>) => ({ sendMail: sendMailMock }));
+  return { DB_PATH: dbPath, sendMailMock, createTransportMock };
 });
 
 vi.mock('nodemailer', () => ({
-  default: { createTransport: () => ({ sendMail: sendMailMock }) },
+  default: { createTransport: createTransportMock },
 }));
 
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
-import { sendTicketReplyEmail, sendAgentReplyNotificationEmail, sendTicketReceivedConfirmation } from './email.js';
+import {
+  sendTicketReplyEmail,
+  sendAgentReplyNotificationEmail,
+  sendTicketReceivedConfirmation,
+  sendTicketAssignedEmail,
+  sendPasswordResetEmail,
+  sendTicketReminderEmail,
+  sendTicketCreatedEmail,
+} from './email.js';
 import { setSetting } from './settings.js';
 
 function makeTicket(emailMessageId: string | null): string {
   const contactId = randomUUID();
   const ticketId = randomUUID();
   db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)')
-    .run(contactId, 'Kund Kundsson', 'kund@customer.example');
+    .run(contactId, 'Kund Kundsson', `kund-${contactId}@customer.example`);
   db.prepare(
     `INSERT INTO tickets (id, title, description, status, priority, requester_id, email_message_id)
      VALUES (?, ?, ?, 'open', 'medium', ?, ?)`
@@ -175,5 +184,123 @@ describe('two-way email gate (shouldEmailCustomer)', () => {
 
     expect(sendMailMock).toHaveBeenCalledTimes(1);
     expect((sendMailMock.mock.calls[0][0] as Record<string, unknown>).to).toBe('kund@customer.example');
+  });
+});
+
+describe('delad transporter', () => {
+  it('skapar en poolad transporter en gång och kräver STARTTLS på port 587', async () => {
+    sendMailMock.mockClear();
+    await sendTicketReceivedConfirmation({
+      toEmail: 'kund@customer.example',
+      toName: 'Kund',
+      ticketId: 'abc12345-0000-0000-0000-000000000000',
+      title: 'Ett',
+    });
+    await sendTicketReceivedConfirmation({
+      toEmail: 'kund@customer.example',
+      toName: 'Kund',
+      ticketId: 'abc12345-0000-0000-0000-000000000000',
+      title: 'Två',
+    });
+
+    expect(createTransportMock).toHaveBeenCalledTimes(1);
+    expect(createTransportMock.mock.calls[0][0]).toMatchObject({
+      pool: true,
+      secure: false,
+      requireTLS: true,
+    });
+  });
+});
+
+describe('autosvarsrubriker (RFC 3834)', () => {
+  it('bekräftelsen markeras som auto-replied och undertrycker autosvar', async () => {
+    sendMailMock.mockClear();
+    await sendTicketReceivedConfirmation({
+      toEmail: 'kund@customer.example',
+      toName: 'Kund',
+      ticketId: 'abc12345-0000-0000-0000-000000000000',
+      title: 'Nytt ärende',
+    });
+
+    const opts = sendMailMock.mock.calls[0][0] as { headers: Record<string, string> };
+    expect(opts.headers).toEqual({ 'Auto-Submitted': 'auto-replied', 'X-Auto-Response-Suppress': 'All' });
+  });
+
+  it('personalens svar till kunden är inte markerat som automatiskt', async () => {
+    sendMailMock.mockClear();
+    const ticketId = makeTicket(null);
+    await sendTicketReplyEmail({ ticketId, toEmail: 'kund@customer.example', toName: 'Kund', title: 'T', body: 'Hej' });
+
+    expect((sendMailMock.mock.calls[0][0] as Record<string, unknown>).headers).toBeUndefined();
+  });
+
+  it('notismail till personal markeras som auto-generated', async () => {
+    sendMailMock.mockClear();
+    await sendTicketCreatedEmail({
+      id: 'abc12345-0000-0000-0000-000000000000',
+      title: 'T',
+      description: 'D',
+      status: 'open',
+      priority: 'medium',
+      categoryId: null,
+    });
+
+    expect((sendMailMock.mock.calls[0][0] as { headers: Record<string, string> }).headers['Auto-Submitted']).toBe(
+      'auto-generated'
+    );
+  });
+});
+
+describe('HTML-escaping i utgående mail', () => {
+  const evil = '<img src=x onerror=alert(1)>';
+
+  it('tilldelningsmailet escapar mottagare, tilldelare och titel', async () => {
+    sendMailMock.mockClear();
+    await sendTicketAssignedEmail({
+      toEmail: 'agent@itticket.local',
+      toName: evil,
+      ticketId: 'abc12345-0000-0000-0000-000000000000',
+      ticketTitle: evil,
+      ticketPriority: 'high',
+      assignerName: evil,
+    });
+
+    const html = String((sendMailMock.mock.calls[0][0] as Record<string, unknown>).html);
+    expect(html).not.toContain(evil);
+    expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;');
+  });
+
+  it('lösenordsmailet escapar mottagarens namn', async () => {
+    sendMailMock.mockClear();
+    await sendPasswordResetEmail({
+      toEmail: 'agent@itticket.local',
+      toName: evil,
+      resetUrl: 'https://ticket.example/reset?token=abc',
+      expiryMinutes: 30,
+    });
+
+    const html = String((sendMailMock.mock.calls[0][0] as Record<string, unknown>).html);
+    expect(html).not.toContain(evil);
+  });
+});
+
+describe('sendTicketReminderEmail', () => {
+  it('låter SMTP-fel propagera så att schemaläggaren kan försöka igen', async () => {
+    sendMailMock.mockRejectedValueOnce(new Error('smtp nere'));
+
+    await expect(
+      sendTicketReminderEmail({
+        ticket: {
+          id: 'abc12345-0000-0000-0000-000000000000',
+          title: 'T',
+          description: 'D',
+          status: 'open',
+          priority: 'medium',
+          categoryId: null,
+        },
+        userEmail: 'agent@itticket.local',
+        userName: 'Agent',
+      })
+    ).rejects.toThrow('smtp nere');
   });
 });

@@ -3,6 +3,7 @@ import { authenticate, AuthRequest } from '../middleware/auth.js';
 import { db } from '../db/connection.js';
 import { randomUUID } from 'crypto';
 import { logger } from '../lib/logger.js';
+import { isAllowedPushEndpoint } from '../lib/push.js';
 
 const router = Router();
 
@@ -17,12 +18,18 @@ router.post('/subscribe', authenticate, (req: AuthRequest, res) => {
     const { endpoint, keys } = req.body;
     if (!endpoint || !keys?.p256dh || !keys?.auth)
       return res.status(400).json({ error: 'Invalid subscription' });
-    // Inkludera user_id så att push-notiser kan skickas per användare
-    db.prepare(`
+    if (!isAllowedPushEndpoint(endpoint))
+      return res.status(400).json({ error: 'Ogiltig push-endpoint' });
+    // Inkludera user_id så att push-notiser kan skickas per användare. En endpoint
+    // som tillhör en annan användare får aldrig skrivas över.
+    const result = db.prepare(`
       INSERT INTO push_subscriptions (id, endpoint, p256dh, auth, user_id)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth, user_id = excluded.user_id
+      WHERE push_subscriptions.user_id IS NULL OR push_subscriptions.user_id = excluded.user_id
     `).run(randomUUID(), endpoint, keys.p256dh, keys.auth, req.user!.id);
+    if (result.changes === 0)
+      return res.status(409).json({ error: 'Endpointen tillhör en annan användare' });
     res.status(201).json({ ok: true });
   } catch (err) {
     logger.error('Error subscribing to push notifications:', { error: String(err) });
@@ -34,7 +41,7 @@ router.delete('/unsubscribe', authenticate, (req: AuthRequest, res) => {
   try {
     const { endpoint } = req.body;
     if (!endpoint) return res.status(400).json({ error: 'Missing endpoint' });
-    db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(endpoint);
+    db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').run(endpoint, req.user!.id);
     res.json({ ok: true });
   } catch (err) {
     logger.error('Error unsubscribing from push notifications:', { error: String(err) });

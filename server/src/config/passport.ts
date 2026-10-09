@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import { db } from '../db/connection.js';
 import { logger } from '../lib/logger.js';
 import { validateSecret } from './secretValidation.js';
+import { BCRYPT_ROUNDS } from '../lib/passwordPolicy.js';
 
 // CRITICAL: JWT_SECRET must be set in environment variables
 // Never use a hardcoded fallback in production.
@@ -31,7 +32,12 @@ interface UserRow {
   role: 'admin' | 'user';
   created_at: string;
   last_login: string | null;
+  must_change_password: number;
+  token_version: number;
 }
+
+// Jämförs mot när e-posten saknas, så svarstiden inte avslöjar om kontot finns.
+const DUMMY_PASSWORD_HASH = '$2b$12$cFBeDiwTqF0dDKRWu0X8B.DDBSp/EY4jlWkSjQL/L52Zjvx/em6Py';
 
 // Local strategy for username/password login
 passport.use(new LocalStrategy(
@@ -42,16 +48,26 @@ passport.use(new LocalStrategy(
   async (email, password, done) => {
     try {
       // Only select columns needed for authentication (not all columns)
-      const user = db.prepare('SELECT id, email, password_hash, role FROM users WHERE email = ?').get(email) as UserRow | undefined;
+      const user = typeof email === 'string'
+        ? db.prepare(
+            'SELECT id, email, password_hash, role, must_change_password, token_version FROM users WHERE LOWER(email) = LOWER(?)'
+          ).get(email) as UserRow | undefined
+        : undefined;
 
-      if (!user) {
+      const isMatch = await bcrypt.compare(password, user?.password_hash ?? DUMMY_PASSWORD_HASH);
+
+      if (!user || !isMatch) {
         return done(null, false, { message: 'Incorrect email or password.' });
       }
 
-      const isMatch = await bcrypt.compare(password, user.password_hash);
-      
-      if (!isMatch) {
-        return done(null, false, { message: 'Incorrect email or password.' });
+      // Höj kostnaden för äldre hashar (cost 10) i takt med att användarna loggar in.
+      if (bcrypt.getRounds(user.password_hash) < BCRYPT_ROUNDS) {
+        try {
+          const upgraded = await bcrypt.hash(password, BCRYPT_ROUNDS);
+          db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(upgraded, user.id);
+        } catch (rehashError) {
+          logger.warn('Password rehash failed (non-fatal)', { error: String(rehashError) });
+        }
       }
 
       // Update last login
@@ -61,6 +77,8 @@ passport.use(new LocalStrategy(
         id: user.id,
         email: user.email,
         role: user.role,
+        mustChangePassword: user.must_change_password === 1,
+        tokenVersion: user.token_version,
       });
     } catch (error) {
       return done(error);
@@ -79,9 +97,11 @@ passport.use(new JwtStrategy(
   },
   (payload, done) => {
     try {
-      const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(payload.sub) as UserRow | undefined;
+      const user = db.prepare('SELECT id, email, role, token_version FROM users WHERE id = ?').get(payload.sub) as UserRow | undefined;
 
-      if (!user) {
+      // `tv` höjs vid lösenordsbyte/-återställning: äldre access-tokens dör direkt
+      // i stället för att leva kvar upp till 15 minuter. Token utan `tv` räknas som 0.
+      if (!user || (typeof payload.tv === 'number' ? payload.tv : 0) < user.token_version) {
         return done(null, false);
       }
 

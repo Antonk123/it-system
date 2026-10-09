@@ -37,6 +37,10 @@ let userToken: string;
 let userCsrf: string;
 let userId: string;
 
+let otherAgent: ReturnType<typeof request.agent>;
+let otherToken: string;
+let otherCsrf: string;
+
 async function loginAgent(email: string, password: string) {
   const agent = request.agent(app);
   const login = await agent.post('/api/auth/login').send({ email, password });
@@ -62,9 +66,14 @@ beforeAll(async () => {
   db.prepare(`INSERT INTO users (id, email, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?)`)
     .run(userId, 'user@pushtest.local', userHash, 'user', 'Push User');
 
+  const otherHash = await bcrypt.hash('Other-P@ss1234!', 10);
+  db.prepare(`INSERT INTO users (id, email, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?)`)
+    .run(randomUUID(), 'other@pushtest.local', otherHash, 'user', 'Other User');
+
   app = createApp();
 
   ({ agent: userAgent, token: userToken, csrf: userCsrf } = await loginAgent('user@pushtest.local', 'User-P@ss1234!'));
+  ({ agent: otherAgent, token: otherToken, csrf: otherCsrf } = await loginAgent('other@pushtest.local', 'Other-P@ss1234!'));
 });
 
 afterAll(() => {
@@ -112,9 +121,9 @@ describe('POST /api/push/subscribe — auth', () => {
     const res = await agent
       .post('/api/push/subscribe')
       .set('x-csrf-token', csrf)
-      .send({ endpoint: 'https://push.example.com/should-not-insert', keys: { p256dh: 'p', auth: 'a' } });
+      .send({ endpoint: 'https://fcm.googleapis.com/should-not-insert', keys: { p256dh: 'p', auth: 'a' } });
     expect(res.status).toBe(401);
-    const row = db.prepare('SELECT id FROM push_subscriptions WHERE endpoint = ?').get('https://push.example.com/should-not-insert');
+    const row = db.prepare('SELECT id FROM push_subscriptions WHERE endpoint = ?').get('https://fcm.googleapis.com/should-not-insert');
     expect(row).toBeUndefined();
   });
 
@@ -123,13 +132,13 @@ describe('POST /api/push/subscribe — auth', () => {
       .post('/api/push/subscribe')
       .set('Authorization', `Bearer ${userToken}`)
       .set('x-csrf-token', userCsrf)
-      .send({ endpoint: 'https://push.example.com/no-keys' });
+      .send({ endpoint: 'https://fcm.googleapis.com/no-keys' });
     expect(res.status).toBe(400);
   });
 });
 
 describe('Subscribe → unsubscribe cycle', () => {
-  const endpoint = 'https://push.example.com/sub-1';
+  const endpoint = 'https://fcm.googleapis.com/sub-1';
 
   it('creates a subscription row tied to the authenticated user (201)', async () => {
     const res = await userAgent
@@ -179,5 +188,57 @@ describe('Subscribe → unsubscribe cycle', () => {
       .set('x-csrf-token', userCsrf)
       .send({});
     expect(res.status).toBe(400);
+  });
+});
+
+describe('Subscribe — endpoint-validering och ägarskap', () => {
+  const subscribe = (agent: ReturnType<typeof request.agent>, token: string, csrf: string, endpoint: string) =>
+    agent
+      .post('/api/push/subscribe')
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-csrf-token', csrf)
+      .send({ endpoint, keys: { p256dh: 'p', auth: 'a' } });
+
+  it.each([
+    'http://fcm.googleapis.com/fcm/send/plain-http',
+    'https://169.254.169.254/latest/meta-data',
+    'https://localhost:3001/internal',
+    'https://evil.example/push',
+  ])('400 för endpoint utanför tillåtlistan: %s', async (endpoint) => {
+    const res = await subscribe(userAgent, userToken, userCsrf, endpoint);
+    expect(res.status).toBe(400);
+    expect(db.prepare('SELECT id FROM push_subscriptions WHERE endpoint = ?').get(endpoint)).toBeUndefined();
+  });
+
+  it('409 och oförändrad ägare när en annan användare försöker ta över en befintlig endpoint', async () => {
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/owned-by-user';
+    expect((await subscribe(userAgent, userToken, userCsrf, endpoint)).status).toBe(201);
+
+    const res = await subscribe(otherAgent, otherToken, otherCsrf, endpoint);
+
+    expect(res.status).toBe(409);
+    const row = db.prepare('SELECT user_id, p256dh FROM push_subscriptions WHERE endpoint = ?').get(endpoint) as
+      { user_id: string; p256dh: string };
+    expect(row.user_id).toBe(userId);
+    expect(row.p256dh).toBe('p');
+  });
+
+  it('unsubscribe tar bara bort den egna prenumerationen', async () => {
+    const endpoint = 'https://fcm.googleapis.com/fcm/send/mine-only';
+    expect((await subscribe(userAgent, userToken, userCsrf, endpoint)).status).toBe(201);
+
+    await otherAgent
+      .delete('/api/push/unsubscribe')
+      .set('Authorization', `Bearer ${otherToken}`)
+      .set('x-csrf-token', otherCsrf)
+      .send({ endpoint });
+    expect(db.prepare('SELECT id FROM push_subscriptions WHERE endpoint = ?').get(endpoint)).toBeDefined();
+
+    await userAgent
+      .delete('/api/push/unsubscribe')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('x-csrf-token', userCsrf)
+      .send({ endpoint });
+    expect(db.prepare('SELECT id FROM push_subscriptions WHERE endpoint = ?').get(endpoint)).toBeUndefined();
   });
 });

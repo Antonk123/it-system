@@ -25,15 +25,22 @@ ENV NODE_ENV=production
 # namngivna tidszoner. Utan den faller Node tyst tillbaka till UTC på alpine,
 # så schemalagda jobb (backup, auto-close, push-aging, recurring) kör på fel
 # väggklocka — t.ex. "04:00" i UI:t blir 06:00 svensk tid.
-RUN apk add --no-cache tzdata
+# rclone: OFFSITE_BACKUP_CMD (t.ex. `rclone copy {file} remote:itticket/`) körs i
+# den här containern — utan binären misslyckas varje off-site-upload. Se docs/OPERATIONS.md.
+RUN apk add --no-cache tzdata rclone
 
 COPY server/package*.json ./
 # --ignore-scripts: se motiveringen i build-steget ovan.
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/admin_assets ./admin_assets
-RUN mkdir -p /app/data/uploads
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/admin_assets ./admin_assets
+
+# Kör som icke-root. Appen skriver bara under /app/data (databas, uploads, backuper).
+# Befintliga volymer skapade som root måste chownas EN gång (docs/OPERATIONS.md):
+#   chown -R 1000:1000 <volymens host-sökväg>
+RUN mkdir -p /app/data/uploads && chown -R node:node /app/data
+USER node
 
 EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \

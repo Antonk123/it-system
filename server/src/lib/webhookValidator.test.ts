@@ -33,7 +33,7 @@ vi.mock('dns', () => ({
   default: { promises: { lookup: lookupMock } },
 }));
 
-import { isSafeWebhookUrl } from './webhookValidator.js';
+import { isSafeWebhookUrl, validateWebhookEvents } from './webhookValidator.js';
 
 beforeEach(() => {
   lookupMock.mockReset();
@@ -237,5 +237,95 @@ describe('isSafeWebhookUrl — scheme/host format handling', () => {
 
     expect(result.ok).toBe(true);
     expect(lookupMock).toHaveBeenCalledWith('good.example.com', { all: true });
+  });
+});
+
+describe('isSafeWebhookUrl — extended SSRF ranges', () => {
+  it.each([
+    '100.64.0.1', '100.127.255.255', // CGNAT 100.64.0.0/10
+    '198.18.0.1', '198.19.255.255', // benchmarking 198.18.0.0/15
+    '192.0.0.1', // 192.0.0.0/24
+    '224.0.0.1', '239.255.255.255', // multicast
+    '240.0.0.1', '255.255.255.255', // reserved
+  ])('rejects IPv4 literal %s', async (ip) => {
+    const result = await isSafeWebhookUrl(`https://${ip}/hook`);
+    expect(result.ok).toBe(false);
+    expect(lookupMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['100.63.255.255', '100.128.0.1', '198.17.255.255', '198.20.0.1', '192.0.1.1', '223.255.255.255'])(
+    'allows public IPv4 literal %s just outside the blocked ranges',
+    async (ip) => {
+      const result = await isSafeWebhookUrl(`https://${ip}/hook`);
+      expect(result.ok).toBe(true);
+    },
+  );
+
+  it.each([
+    '[::]',
+    '[::1]',
+    '[::ffff:127.0.0.1]',
+    '[::ffff:7f00:1]',
+    '[::ffff:10.0.0.1]',
+    '[::ffff:a9fe:a9fe]', // 169.254.169.254 in hex form
+    '[::ffff:c0a8:101]', // 192.168.1.1
+    '[::127.0.0.1]', // IPv4-compatible
+    '[fe80::1]',
+    '[febf::1]', // still inside fe80::/10
+    '[fc00::1]',
+    '[fdff::1]',
+    '[ff02::1]', // multicast
+  ])('rejects IPv6 literal %s', async (host) => {
+    const result = await isSafeWebhookUrl(`https://${host}/hook`);
+    expect(result.ok).toBe(false);
+    expect(lookupMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['[::ffff:5db8:d822]', '[2001:4860:4860::8888]', '[fec0::1]', '[::ffff:8.8.8.8]'])(
+    'allows public IPv6 / mapped public literal %s',
+    async (host) => {
+      const result = await isSafeWebhookUrl(`https://${host}/hook`);
+      expect(result.ok).toBe(true);
+    },
+  );
+
+  it('rejects a hostname resolving to an IPv4-mapped loopback address', async () => {
+    lookupMock.mockResolvedValueOnce([{ address: '::ffff:127.0.0.1', family: 6 }]);
+    const result = await isSafeWebhookUrl('https://mapped.example.com/hook');
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects a hostname resolving to CGNAT space', async () => {
+    lookupMock.mockResolvedValueOnce([{ address: '100.64.1.1', family: 4 }]);
+    const result = await isSafeWebhookUrl('https://cgnat.example.com/hook');
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects "localhost." with a trailing dot', async () => {
+    const result = await isSafeWebhookUrl('https://localhost./hook');
+    expect(result.ok).toBe(false);
+    expect(lookupMock).not.toHaveBeenCalled();
+  });
+
+  it('normalises obfuscated IPv4 forms (decimal/hex) before checking', async () => {
+    expect((await isSafeWebhookUrl('https://2130706433/hook')).ok).toBe(false); // 127.0.0.1
+    expect((await isSafeWebhookUrl('https://0x7f.1/hook')).ok).toBe(false);
+  });
+});
+
+describe('validateWebhookEvents', () => {
+  it('accepts known events and removes duplicates', () => {
+    expect(validateWebhookEvents(['ticket.created', 'ticket.created', 'contact.updated']))
+      .toEqual({ ok: true, events: ['ticket.created', 'contact.updated'] });
+  });
+
+  it.each([undefined, null, 'ticket.created', [], {}])('rejects non-array/empty input %j', (input) => {
+    expect(validateWebhookEvents(input).ok).toBe(false);
+  });
+
+  it('rejects unknown and non-string entries', () => {
+    const result = validateWebhookEvents(['ticket.created', 'nope', 5]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toMatch(/nope, 5/);
   });
 });

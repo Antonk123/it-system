@@ -134,13 +134,23 @@ Default om raden saknas: aktiverad, `04:00`, retention 7 dagar.
 
 Körningssteg i `runBackup()`:
 1. In-flight-guard hindrar överlappande körningar (cron vs. manuell).
-2. WAL-säker online-snapshot via `database.backup(tmpDbPath)`.
-3. `PRAGMA integrity_check` — korrupt snapshot rullar **aldrig** in i retention.
-4. Buntar `data/database.sqlite` + `data/uploads/` till `backup-<YYYY-MM-DD>.zip`.
-5. Sätter `chmod 0o600` på ZIP:en (innehåller hela DB:n inkl. hemligheter).
-6. Off-site-upload (se nedan).
-7. Retention: behåller nyaste N `backup-*.zip`/`.sqlite`, raderar äldre.
-8. Skriver status (`last_run_at`, `last_status`, `last_size_bytes`) till `backup_config`.
+2. Diskkontroll: lediga byte i backup-katalogen måste vara minst 2 × (DB + uploads)
+   och minst 500 MB, annars misslyckas körningen (loggas som fel).
+3. WAL-säker online-snapshot via `database.backup(tmpDbPath)`.
+4. `PRAGMA integrity_check` — korrupt snapshot rullar **aldrig** in i retention.
+5. Buntar `data/database.sqlite` + `data/uploads/` till `backup-<YYYY-MM-DD-HHMM>.zip.tmp`
+   (HHMM i namnet så flera körningar samma dag inte skriver över varandra).
+6. Öppnar ZIP:en igen och verifierar att den har poster och att `data/database.sqlite`
+   finns och inte är tom — annars misslyckas körningen och `.tmp`-filen raderas.
+7. `chmod 0o600` (ZIP:en innehåller hela DB:n inkl. hemligheter) och omdöpning till
+   det slutliga `backup-*.zip`-namnet.
+8. Off-site-upload (se nedan).
+9. Retention i **dagar**: `backup-*.zip`/`.sqlite` vars datum i filnamnet är äldre än
+   `retention_days` raderas (samt kvarlämnade `*.zip.tmp`).
+10. Skriver status (`last_run_at`, `last_status`, `last_size_bytes`, `last_error`,
+    `consecutive_failures`) till `backup_config`. Räknaren är persistent och överlever
+    omstart. Efter **3 misslyckade körningar i rad** loggas `BACKUP ALERT` och en push
+    skickas till alla admins (en gång — inte vid varje följande miss).
 
 Backup-katalogen är `<DB_PATH-katalog>/backups` (skapas med `mode 0o700`).
 Cron-tiden tolkas i containerns lokaltid (styrs av `TZ`; prod = Europe/Stockholm
@@ -151,27 +161,113 @@ kräver `tzdata` i imagen, annars UTC).
 - `UPLOAD_DIR` — vilka filer som buntas in.
 - `TZ` — tolkning av schemats klockslag.
 - `OFFSITE_BACKUP_CMD` — shell-mall som körs efter nattlig backup (se nedan).
-- `OFFSITE_BACKUP_REQUIRED` — om `true` blir misslyckad off-site-upload **fatal**
-  (hela backupen markeras `failed`); annars loggas felet och backupen förblir lyckad.
+- `OFFSITE_BACKUP_REQUIRED` — om `true` markeras en misslyckad off-site-upload som
+  `offsite_failed` (den lokala backupen och retention körs ändå); annars loggas
+  felet och backupen förblir `success`.
 
 ### Manuell backup / nedladdning
 
-- `GET /api/backup/` — laddar ner en färsk ZIP (rate limit: 10/15 min/IP).
+- `GET /api/backup/` — laddar ner en färsk ZIP (rate limit: 10/15 min/IP). Den
+  temporära dumpen skrivs i backup-katalogen (inte `/tmp`).
+- `GET /api/backup/files` — lista lagrade `backup-*.zip` (`[{ name, sizeBytes, modifiedAt }]`, nyast först).
+- `GET /api/backup/files/:name` — ladda ner en lagrad backup (samma rate limit som ovan;
+  `name` måste matcha `backup-YYYY-MM-DD[-HHMM].zip`).
 - `POST /api/backup/run-now` — kör schemalagd backup direkt (409 om en redan körs).
-- `GET /api/backup/config` / `PUT /api/backup/config` — läs/ändra schema.
+- `GET /api/backup/config` / `PUT /api/backup/config` — läs/ändra schema
+  (svaret innehåller `consecutiveFailures`, `lastError`, `offsiteFailureCount`).
 
-### Off-site backup
+### Off-site-backup (rclone)
 
 `server/src/lib/offsiteBackup.ts`: om `OFFSITE_BACKUP_CMD` är satt körs den via
 `sh -c` där `{file}` ersätts av env-variabeln `$BACKUP_FILE` (filvägen
-interpoleras **aldrig** in i shell-strängen → ingen shell-injection). Ej satt =
-ingen off-site-kopia (lokal backup opåverkad).
+interpoleras **aldrig** in i shell-strängen → ingen shell-injection). Kommandot
+avbryts med SIGKILL efter 15 minuter. Ej satt = ingen off-site-kopia, och då
+ligger alla backuper på samma host som databasen; servern loggar i så fall
+`Ingen off-site-backup konfigurerad` vid varje start i produktion.
+
+`rclone` ingår i backend-imagen (`apk add rclone` i `Dockerfile.server`). Så här
+sätter du upp det i produktion:
+
+**1. Skapa rclone-config** (på en dator med rclone, `rclone config`). Skapa först en
+ordinär remote för lagringen (SFTP, S3, B2, OneDrive …) — här kallad `itticket-remote`
+— och sedan en **crypt-remote** ovanpå den så att backuperna (som innehåller hela
+databasen, inkl. hashar och hemligheter) aldrig ligger okrypterade hos tredje part:
+
+```ini
+[itticket-crypt]
+type = crypt
+remote = itticket-remote:itticket-backups
+filename_encryption = standard
+directory_name_encryption = true
+password = <utdata från: rclone obscure '<långt lösenord>'>
+password2 = <utdata från: rclone obscure '<salt>'>
+```
+
+Spara crypt-lösenordet och saltet i lösenordshanteraren. **Utan dem går off-site-
+backuperna inte att läsa.**
+
+**2. Lägg configen på servern** (en katalog, inte en enskild fil) och gör den läsbar för
+containerns icke-root-användare (`node`, uid 1000):
 
 ```bash
-# Exempel
-OFFSITE_BACKUP_CMD=rclone copy {file} remote:itticket/backups/
-OFFSITE_BACKUP_REQUIRED=false
+sudo mkdir -p /opt/it-system/rclone
+sudo cp rclone.conf /opt/it-system/rclone/rclone.conf
+sudo chown -R 1000:1000 /opt/it-system/rclone
+sudo chmod 600 /opt/it-system/rclone/rclone.conf
 ```
+
+**3. Portainer → Stacks → `it-ticket-system` → Editor / Environment variables.**
+Lägg till under backend-tjänstens `volumes:` (byt `:ro` mot `:rw` för OAuth-baserade
+remotes som OneDrive/Drive, som skriver tillbaka förnyade tokens):
+
+```yaml
+      - /opt/it-system/rclone:/home/node/.config/rclone:ro
+```
+
+och sätt dessa miljövariabler (repots compose-fil har redan raderna, men standardvärdet
+är tomt/`false`):
+
+```bash
+OFFSITE_BACKUP_CMD=rclone copy {file} itticket-crypt:backups/
+OFFSITE_BACKUP_REQUIRED=true
+```
+
+Redeploya stacken.
+
+**4. Verifiera.**
+
+```bash
+docker exec it-ticketing-backend rclone lsd itticket-crypt:      # ska lista utan fel
+```
+
+Kör sedan Inställningar → Backup → **Kör backup nu**. Status ska bli `success` (inte
+`offsite_failed`) och filen ska synas på lagringen (`rclone ls itticket-crypt:backups/`).
+Dekryptering sker transparent via crypt-remoten.
+
+**5. Retention hos lagringen.** `rclone copy` raderar aldrig. Låt leverantörens
+livscykelregler eller ett separat jobb (`rclone delete --min-age 30d itticket-crypt:backups/`)
+rensa gamla kopior.
+
+### Säkerhetskopiera Portainer-stackens env (hemligheterna)
+
+Backup-ZIP:en innehåller **databasen och uploads — inte hemligheterna**. De ligger bara i
+Portainer-stackens miljövariabler (och `rclone.conf`). Förloras stacken (raderad, ny
+host, Portainer-krasch) kan en återställd databas inte användas fullt ut. Spara en
+kopia av följande i lösenordshanteraren (eller annan krypterad plats) och uppdatera den
+varje gång något ändras:
+
+- [ ] `JWT_SECRET`, `CSRF_SECRET` (nya värden = alla användare loggas ut, annars ingen skada)
+- [ ] `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` (nya nycklar = alla
+      push-prenumerationer ogiltiga, användarna måste slå på notiser igen)
+- [ ] `OIDC_ISSUER_URL`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_REDIRECT_URI`
+      (klienthemligheten går bara att förnya i Entra)
+- [ ] `SMTP_HOST/PORT/USER/PASS`, `EMAIL_FROM`, `EMAIL_TO`
+- [ ] `IMAP_HOST/PORT/USER/PASS` samt `IMAP_TENANT_ID/CLIENT_ID/CLIENT_SECRET` (OAuth2)
+- [ ] `ADMIN_EMAIL`, `ADMIN_NAME`, `CORS_ORIGIN`, `APP_BASE_URL`, `COOKIE_SECURE`
+- [ ] `OFFSITE_BACKUP_CMD`, `OFFSITE_BACKUP_REQUIRED`
+- [ ] `/opt/it-system/rclone/rclone.conf` samt rclone-crypt-lösenord och salt
+- [ ] Hela stack-definitionen (Portainer → Stacks → Editor → kopiera texten) — den är en
+      separat kopia av repots compose-fil
 
 ### Restore
 
@@ -184,15 +280,26 @@ Valideringskedjan i `routes/backup.ts` innan live-DB:n rörs:
 2. **Allowlist** — endast `data/database.sqlite` och `data/uploads/*` accepteras.
 3. `data/database.sqlite` måste finnas i ZIP:en.
 4. **SQLite-magic-header** verifieras (`SQLite format 3\0`, 16 bytes).
-5. Öppnas read-only och måste innehålla tabellerna `tickets` och `users`.
+5. Öppnas read-only och måste klara `PRAGMA quick_check` (annars 400) samt innehålla
+   tabellerna `tickets` och `users`.
+6. Extraktionen avbryts (400) över 2 GB utpackat eller 100 000 poster.
 
-Återställning:
-- `<DB_PATH>.pre-restore` skapas som rollback-kopia.
+Multer-fel ger klientfel i stället för 500: fel filtyp → 400, för stor fil (> 500 MB) → 413.
+
+Återställning (`performRestoreSwap`):
+- `<DB_PATH>.pre-restore` skapas med `db.backup()` (WAL-säker; en filkopia av en
+  WAL-databas missar allt som bara finns i `-wal`).
+- `<UPLOAD_DIR>` flyttas till `<UPLOAD_DIR>.pre-restore` (raderas inte).
 - `PRAGMA wal_checkpoint(RESTART)` väntar in läsare/skrivare.
-- DB-handtaget stängs, filen skrivs över, WAL/SHM raderas, uploads ersätts.
-- Vid fel rullas pre-restore-kopian tillbaka.
+- DB-handtaget stängs, filen skrivs över, WAL/SHM raderas, uploads kopieras in.
+- Vid fel efter bytet återställs **både** DB och uploads från pre-restore-kopiorna.
+- FTS5-indexen byggs om i den återställda filen (`rebuildFts`).
 - Vid lyckad restore svarar servern och kör sedan `process.exit(0)` efter 1,5 s
   → Docker (`restart: unless-stopped`) startar om med den nya DB:n.
+- Efter nästa lyckade uppstart (migrationer + `verifySchemaIntegrity`) raderas
+  `<UPLOAD_DIR>.pre-restore`. `<DB_PATH>.pre-restore` ligger kvar som sista skyddsnät;
+  radera den för hand när du är nöjd. Vid uppstart loggas även en varning om
+  FTS5-indexen avviker från tabellerna (`checkFtsDrift`).
 
 > Efter en restore kommer containern att starta om automatiskt. Verifiera
 > `GET /api/health` = 200 efteråt.
@@ -299,12 +406,15 @@ orchestrator) och `SIGINT` (Ctrl-C) via en idempotent handler:
 1. Stoppar e-postpolling och alla schedulers (webhook-retry, reminder, recurring,
    auto-close, push, backup) samt inline-cron (refresh-token-cleanup).
 2. `server.close()` slutar ta emot nya requests och låter pågående avslutas.
-3. `closeDatabase()` stänger SQLite rent (WAL checkpointas) i `server.close`-callbacken.
-4. **Hard exit-vakt:** om cleanup hänger tvångsavslutas processen efter
-   `SHUTDOWN_TIMEOUT_MS` (default `10000` ms = 10 s) med `process.exit(1)`.
+3. En pågående backup väntas in (`waitForBackup`, max `SHUTDOWN_TIMEOUT_MS` − 1 s) så att
+   databasen inte stängs under `database.backup()`.
+4. `closeDatabase()` stänger SQLite rent (WAL checkpointas) i `server.close`-callbacken.
+5. **Hard exit-vakt:** om cleanup hänger tvångsavslutas processen efter
+   `SHUTDOWN_TIMEOUT_MS` (default `15000` ms = 15 s) med `process.exit(1)`.
 
 > Ge containern minst `SHUTDOWN_TIMEOUT_MS` + marginal som stop-grace-period i
-> Docker/Portainer så att WAL hinner checkpointa rent.
+> Docker/Portainer så att WAL hinner checkpointa rent. Repots compose-filer sätter
+> `stop_grace_period: 20s` (Dockers default på 10 s ger SIGKILL mitt i en backup).
 
 ---
 
@@ -334,3 +444,70 @@ Snabb triage vid driftstörning:
 
 Deploy-flödet (bygga images, redeploy i Portainer) ligger i `CLAUDE.md` och
 `docs/RUNBOOK.md` — Claude/operatören kör aldrig `docker-compose up` mot prod.
+
+---
+
+## 9. Portainer-stack, nätverk och hemligheter
+
+> **Portainer-stacken (id 39) är en SEPARAT kopia av `docker-compose.yml`. Ändringarna
+> nedan slår INTE igenom av `git pull` eller av att du bygger nya images — du måste
+> klistra in den nya compose-filen (eller göra ändringarna för hand) i Portainers
+> editor och redeploya stacken.**
+
+### Ändringar som måste göras för hand i stacken
+
+- [ ] **Backend-porten: `"127.0.0.1:3002:3001"`** (i stället för `"3002:3001"`).
+      Appen kör med `trust proxy 1` och litar på `X-Forwarded-For`. En backend-port öppen
+      mot LAN låter vem som helst skicka en egen `X-Forwarded-For` och därmed förfalska
+      sin IP (kringgå rate limits, förvilla `audit_log`). nginx i frontend-containern når
+      backend via docker-nätverket (`it-ticketing-backend:3001`) och behöver inte porten.
+      **Kontrollera först att inget annat (t.ex. Navet eller en extern proxy) anropar
+      `:3002` direkt.**
+- [ ] **`COOKIE_SECURE=true`** i stackens env. Compose-defaulten är `false` (HTTP-på-LAN),
+      men prod körs bakom TLS på `ticket.prefabmastarna.se`. Servern loggar
+      `COOKIE_SECURE är inte "true" i produktion` vid start om den saknas.
+- [ ] **`stop_grace_period: 20s`** på backend-tjänsten och `SHUTDOWN_TIMEOUT_MS=15000`.
+- [ ] **Off-site-backup:** `OFFSITE_BACKUP_CMD`, `OFFSITE_BACKUP_REQUIRED=true` och
+      rclone-volymen (se "Off-site-backup (rclone)" i §4).
+- [ ] **Icke-root-container (engångs-`chown`).** Backend-imagen kör nu som användaren
+      `node` (uid 1000) i stället för root. Volymer som skapades när containern körde som
+      root är ägda av root och blir skrivskyddade för appen (databasen går inte att öppna).
+      Gör detta **en gång**, med backend-containern stoppad i Portainer, innan du
+      redeployar med den nya imagen:
+
+      ```bash
+      for v in it-ticketing-data it-ticketing-backups; do
+        sudo chown -R 1000:1000 "$(docker volume inspect "$v" --format '{{.Mountpoint}}')"
+      done
+      ```
+
+      Verifiera efter redeploy: `docker exec it-ticketing-backend id` ska visa
+      `uid=1000(node)`, och `GET /api/health` ska ge 200.
+
+### Klient-IP bakom TLS-proxyn (nginx `real_ip`)
+
+Front-proxyn som terminerar TLS skickar `X-Forwarded-For`. `nginx.conf` i
+frontend-imagen återställer klientens riktiga IP (`set_real_ip_from` för RFC1918-näten +
+`real_ip_header X-Forwarded-For` + `real_ip_recursive on`). Utan detta ser backend
+proxyns adress för alla användare: alla delar samma rate-limit-bucket och samma IP i
+`audit_log`. **Smalna av `set_real_ip_from` till front-proxyns faktiska IP** när den är
+känd, annars litar nginx på `X-Forwarded-For` från vilken privat adress som helst.
+
+Verifiera med `audit_log.ip_address` — logga in från en klient och kontrollera att det är
+*klientens* IP som sparats, inte proxyns eller en `172.x`-adress:
+
+```bash
+docker exec it-ticketing-backend node -e "
+  const Database = require('better-sqlite3');
+  const db = new Database('/app/data/database.sqlite', { readonly: true });
+  console.table(db.prepare('SELECT action, ip_address, created_at FROM audit_log ORDER BY created_at DESC LIMIT 10').all());
+"
+```
+
+Visar alla rader samma privata adress har `real_ip` inte slagit igenom (fel proxy-IP i
+`set_real_ip_from`, eller proxyn skickar inget `X-Forwarded-For`). Frontend-containerns
+access-logg (`docker logs it-ticketing-frontend`) visar samma sak i första kolumnen.
+
+nginx maskerar engångstokens (`/reset-password/<token>`, `/shared/<token>`,
+`/kb/public/<token>`, motsvarande `/api/`-vägar och OIDC-callbackens query) som
+`<redacted>` i access-loggen — även när adressen står i `Referer`.

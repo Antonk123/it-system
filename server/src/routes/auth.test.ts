@@ -19,9 +19,9 @@ import { randomUUID, createHash, randomBytes } from 'crypto';
  * process.env.DB_PATH at import time. vi.hoisted() sets env (UNIQUE -auth DB
  * suffix, NODE_ENV=test, ≥32-char secrets) BEFORE any import pulls in connection.ts.
  *
- * Rate-limit budget: the SAME module-level loginRateLimiter (5 attempts /
- * 15 min per IP) guards /login, /forgot-password AND /reset-password, and there
- * is no test-mode bypass in the source. The app runs with `trust proxy = 1`, so
+ * Rate-limit budget: login (5 failed / 15 min per IP), forgot-password (5 / 15 min),
+ * reset-password and refresh (60 failed / 15 min) are separate module-level
+ * limiters, and there is no test-mode bypass in the source. The app runs with `trust proxy = 1`, so
  * `req.ip` is taken from the first X-Forwarded-For entry. We exploit that to give
  * each rate-limited request a UNIQUE source IP, isolating every call into its own
  * rate-limit bucket — the suite is then deterministic regardless of ordering or
@@ -63,11 +63,29 @@ function futureIso(daysFromNow: number): string {
 }
 
 /** Insert a refresh token row directly and return its raw token value. */
-function seedRefreshToken(userId: string, opts: { revoked?: boolean; expiresAt?: string } = {}): string {
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+// Refresh tokens are stored as sha256(token): look a row up by its raw value.
+function refreshRow(rawToken: string) {
+  return db.prepare('SELECT id, user_id, revoked, replaced_by, last_used_at FROM refresh_tokens WHERE token = ?')
+    .get(sha256(rawToken)) as
+    | { id: string; user_id: string; revoked: number; replaced_by: string | null; last_used_at: string | null }
+    | undefined;
+}
+
+function seedRefreshToken(
+  userId: string,
+  opts: { revoked?: boolean; expiresAt?: string; id?: string; replacedBy?: string; lastUsedAt?: string } = {}
+): string {
   const token = randomUUID() + randomUUID(); // unique 64-ish hex-ish value
   db.prepare(
-    'INSERT INTO refresh_tokens (id, user_id, token, expires_at, revoked) VALUES (?, ?, ?, ?, ?)'
-  ).run(randomUUID(), userId, token, opts.expiresAt ?? futureIso(REFRESH_EXPIRY_DAYS), opts.revoked ? 1 : 0);
+    'INSERT INTO refresh_tokens (id, user_id, token, expires_at, revoked, replaced_by, last_used_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(
+    opts.id ?? randomUUID(), userId, sha256(token), opts.expiresAt ?? futureIso(REFRESH_EXPIRY_DAYS),
+    opts.revoked ? 1 : 0, opts.replacedBy ?? null, opts.lastUsedAt ?? null
+  );
   return token;
 }
 
@@ -187,9 +205,13 @@ describe('POST /api/auth/login', () => {
     expect(cookie!.toLowerCase()).toContain('httponly');
     expect(res.body.refreshToken).toBeUndefined();
 
-    // The login actually persisted a refresh token for this user.
+    // The login actually persisted a refresh token for this user — stored hashed.
     const count = (db.prepare('SELECT COUNT(*) as c FROM refresh_tokens WHERE user_id = ?').get(userId) as { c: number }).c;
     expect(count).toBeGreaterThanOrEqual(1);
+    const rawCookieValue = cookie!.split(';')[0].slice('refreshToken='.length);
+    expect(db.prepare('SELECT id FROM refresh_tokens WHERE token = ?').get(rawCookieValue)).toBeUndefined();
+    expect(refreshRow(rawCookieValue)?.user_id).toBe(userId);
+    expect(res.body.user.mustChangePassword).toBe(false);
   });
 
   it('wrong password → 401, no access token', async () => {
@@ -224,29 +246,30 @@ describe('POST /api/auth/refresh', () => {
     expect(typeof res.body.accessToken).toBe('string');
     expect(res.body.token).toBe(res.body.accessToken);
 
-    // Rotation: a fresh refresh cookie is set, and the old token is gone from the DB.
+    // Rotation: a fresh refresh cookie is set; the old row is kept, revoked and linked to its successor.
     const setCookie = res.headers['set-cookie'] as unknown as string[] | undefined;
     const rotated = setCookie?.find((c) => c.startsWith('refreshToken='));
     expect(rotated).toBeTruthy();
     expect(rotated).not.toContain(token);
-    const oldStillThere = db.prepare('SELECT id FROM refresh_tokens WHERE token = ?').get(token);
-    expect(oldStillThere).toBeUndefined();
-  });
-
-  it('replaying the rotated-away old token → 401', async () => {
-    const token = seedRefreshToken(userId);
-    // First refresh consumes (rotates away) the token.
-    const first = await refreshPost().set('Cookie',refreshCookie(token));
-    expect(first.status).toBe(200);
-    // Replay the now-deleted token.
-    const replay = await refreshPost().set('Cookie',refreshCookie(token));
-    expect(replay.status).toBe(401);
+    const oldRow = refreshRow(token);
+    expect(oldRow?.revoked).toBe(1);
+    expect(oldRow?.replaced_by).toBeTruthy();
+    const newValue = rotated!.split(';')[0].slice('refreshToken='.length);
+    expect(refreshRow(newValue)?.id).toBe(oldRow!.replaced_by);
+    expect(refreshRow(newValue)?.revoked).toBe(0);
   });
 
   it('no refresh token at all → 400', async () => {
     const res = await refreshPost().send({});
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/required/i);
+  });
+
+  it('a refresh token in the request body is ignored (cookie only) → 400', async () => {
+    const token = seedRefreshToken(userId);
+    const res = await refreshPost().send({ refreshToken: token });
+    expect(res.status).toBe(400);
+    expect(refreshRow(token)?.revoked).toBe(0);
   });
 
   it('unknown / invalid refresh token → 401', async () => {
@@ -266,8 +289,7 @@ describe('POST /api/auth/refresh', () => {
     const res = await refreshPost().set('Cookie',refreshCookie(token));
     expect(res.status).toBe(401);
     expect(res.body.error).toMatch(/expired/i);
-    const row = db.prepare('SELECT id FROM refresh_tokens WHERE token = ?').get(token);
-    expect(row).toBeUndefined();
+    expect(refreshRow(token)).toBeUndefined();
   });
 
   // NOTE: the handler's "user not found" branch (refresh token with a dangling
@@ -280,35 +302,39 @@ describe('POST /api/auth/refresh', () => {
 // 3. POST /api/auth/logout — revokes the presented refresh token
 // ───────────────────────────────────────────────────────────────────────────
 describe('POST /api/auth/logout', () => {
-  // logout requires `authenticate` (a valid access token via login) AND is a
-  // mutating route that is NOT CSRF-exempt, so it needs the x-csrf-token header.
-  it('revokes the refresh token so a subsequent refresh with it → 401', async () => {
+  // logout kräver ingen access-token; cookien identifierar sessionen. Den är
+  // fortfarande en muterande route men CSRF-undantagen, så inget x-csrf-token behövs.
+  it('revokes the refresh token (by cookie only) so a subsequent refresh with it → 401', async () => {
     const email = 'logout@authtest.local';
-    await createUser(email, PASSWORD);
-    const { agent, token, csrf } = await loginAgent(email, PASSWORD);
+    const userId = await createUser(email, PASSWORD);
+    const refreshToken = seedRefreshToken(userId);
 
-    // The login set a refresh cookie on the agent; grab its raw value from the DB
-    // (the cookie is HttpOnly so we cannot read it from JS, but it is the only
-    // refresh token for this user).
-    const row = db.prepare('SELECT token FROM refresh_tokens WHERE user_id = (SELECT id FROM users WHERE email = ?)')
-      .get(email) as { token: string } | undefined;
-    expect(row?.token).toBeTruthy();
-    const refreshToken = row!.token;
-
-    const logout = await agent
+    const logout = await request(app)
       .post('/api/auth/logout')
-      .set('Authorization', `Bearer ${token}`)
-      .set('x-csrf-token', csrf);
-    expect(logout.status).toBe(200);
-    expect(logout.body.message).toMatch(/logged out/i);
+      .set('Cookie', refreshCookie(refreshToken));
+    expect(logout.status).toBe(204);
+    expect(logout.text).toBe('');
+
+    // Cookien rensas alltid.
+    const setCookie = logout.headers['set-cookie'] as unknown as string[] | undefined;
+    const cleared = setCookie?.find((c) => c.startsWith('refreshToken='));
+    expect(cleared).toMatch(/Expires=Thu, 01 Jan 1970/);
 
     // The token is now revoked in the DB.
-    const after = db.prepare('SELECT revoked FROM refresh_tokens WHERE token = ?').get(refreshToken) as { revoked: number } | undefined;
-    expect(after?.revoked).toBe(1);
+    expect(refreshRow(refreshToken)?.revoked).toBe(1);
 
     // And refresh with that (revoked) token is rejected.
-    const refresh = await refreshPost().set('Cookie',refreshCookie(refreshToken));
+    const refresh = await refreshPost().set('Cookie', refreshCookie(refreshToken));
     expect(refresh.status).toBe(401);
+  });
+
+  it('works with an expired/garbage access token and without any cookie (204, cookie still cleared)', async () => {
+    const res = await request(app)
+      .post('/api/auth/logout')
+      .set('Authorization', 'Bearer expired.or.garbage');
+    expect(res.status).toBe(204);
+    const setCookie = res.headers['set-cookie'] as unknown as string[] | undefined;
+    expect(setCookie?.some((c) => c.startsWith('refreshToken='))).toBe(true);
   });
 });
 
@@ -337,9 +363,11 @@ describe('POST /api/auth/change-password', () => {
     const refresh = await refreshPost().set('Cookie',refreshCookie(otherSessionToken));
     expect(refresh.status).toBe(401);
 
-    // Every refresh token for this user is revoked.
+    // Every OLD refresh token is revoked; only the new session's token (issued by the
+    // response so the caller stays logged in) is live.
     const live = (db.prepare('SELECT COUNT(*) as c FROM refresh_tokens WHERE user_id = ? AND revoked = 0').get(userId) as { c: number }).c;
-    expect(live).toBe(0);
+    expect(live).toBe(1);
+    expect(refreshRow(otherSessionToken)?.revoked).toBe(1);
 
     // The new password hash actually verifies.
     const hash = (db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as { password_hash: string }).password_hash;
@@ -557,5 +585,291 @@ describe('POST /api/auth/login — rate limiting', () => {
     // First 5 are processed by the handler (401 for bad creds), the 6th is 429.
     expect(statuses.slice(0, 5)).toEqual([401, 401, 401, 401, 401]);
     expect(statuses[5]).toBe(429);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 7. Refresh-token reuse detection + rotation grace window
+// ───────────────────────────────────────────────────────────────────────────
+describe('POST /api/auth/refresh — reuse detection', () => {
+  it('a just-rotated token replayed within the grace window → 200 access token, no new cookie, successor stays live', async () => {
+    const userId = await createUser('grace@authtest.local', PASSWORD);
+    const successorId = randomUUID();
+    const successor = seedRefreshToken(userId, { id: successorId });
+    const old = seedRefreshToken(userId, { revoked: true, replacedBy: successorId, lastUsedAt: new Date().toISOString() });
+
+    const res = await refreshPost().set('Cookie', refreshCookie(old));
+    expect(res.status).toBe(200);
+    expect(typeof res.body.accessToken).toBe('string');
+    expect(res.headers['set-cookie']).toBeUndefined();
+    expect(refreshRow(successor)?.revoked).toBe(0);
+  });
+
+  it('a rotated token replayed after the grace window → 401 and the whole family is revoked', async () => {
+    const userId = await createUser('reuse@authtest.local', PASSWORD);
+    const id3 = randomUUID();
+    const id2 = randomUUID();
+    const t3 = seedRefreshToken(userId, { id: id3 });
+    const t2 = seedRefreshToken(userId, { id: id2, revoked: true, replacedBy: id3, lastUsedAt: new Date().toISOString() });
+    const t1 = seedRefreshToken(userId, { revoked: true, replacedBy: id2, lastUsedAt: new Date(Date.now() - 60_000).toISOString() });
+    const bystander = seedRefreshToken(userId); // annan session, ska inte beröras
+
+    const res = await refreshPost().set('Cookie', refreshCookie(t1));
+    expect(res.status).toBe(401);
+    expect(refreshRow(t2)?.revoked).toBe(1);
+    expect(refreshRow(t3)?.revoked).toBe(1);
+    expect(refreshRow(bystander)?.revoked).toBe(0);
+
+    // The live head of the family can no longer refresh.
+    const head = await refreshPost().set('Cookie', refreshCookie(t3));
+    expect(head.status).toBe(401);
+
+    const audit = db.prepare("SELECT id FROM audit_log WHERE action = 'refresh_token_reuse' AND user_id = ?").get(userId);
+    expect(audit).toBeDefined();
+  });
+
+  it('a token revoked by logout/password change (no successor) → 401 without touching the user\'s other tokens', async () => {
+    const userId = await createUser('revoked-plain@authtest.local', PASSWORD);
+    const revoked = seedRefreshToken(userId, { revoked: true });
+    const other = seedRefreshToken(userId);
+
+    const res = await refreshPost().set('Cookie', refreshCookie(revoked));
+    expect(res.status).toBe(401);
+    expect(refreshRow(other)?.revoked).toBe(0);
+  });
+
+  it('a successor that is itself revoked does not extend the grace window', async () => {
+    const userId = await createUser('grace-dead@authtest.local', PASSWORD);
+    const successorId = randomUUID();
+    seedRefreshToken(userId, { id: successorId, revoked: true });
+    const old = seedRefreshToken(userId, { revoked: true, replacedBy: successorId, lastUsedAt: new Date().toISOString() });
+
+    const res = await refreshPost().set('Cookie', refreshCookie(old));
+    expect(res.status).toBe(401);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 8. Rate limiter budgets
+// ───────────────────────────────────────────────────────────────────────────
+describe('rate limiter budgets', () => {
+  it('successful refreshes do not consume the refresh budget (62 in a row from one IP)', async () => {
+    const IP = '192.0.2.90';
+    const userId = await createUser('refresh-budget@authtest.local', PASSWORD);
+    let token = seedRefreshToken(userId);
+    for (let i = 0; i < 62; i++) {
+      const res = await request(app).post('/api/auth/refresh').set('X-Forwarded-For', IP).set('Cookie', refreshCookie(token));
+      expect(res.status).toBe(200);
+      const cookie = (res.headers['set-cookie'] as unknown as string[]).find((c) => c.startsWith('refreshToken='))!;
+      token = cookie.split(';')[0].slice('refreshToken='.length);
+    }
+  });
+
+  it('failed refreshes are limited to 60 per window (61st → 429)', async () => {
+    const IP = '192.0.2.91';
+    const statuses: number[] = [];
+    for (let i = 0; i < 61; i++) {
+      const res = await request(app).post('/api/auth/refresh').set('X-Forwarded-For', IP).set('Cookie', refreshCookie('bogus-' + i));
+      statuses.push(res.status);
+    }
+    expect(statuses.slice(0, 60).every((s) => s === 401)).toBe(true);
+    expect(statuses[60]).toBe(429);
+  });
+
+  it('successful logins do not consume the login budget (7 in a row from one IP)', async () => {
+    const IP = '192.0.2.92';
+    const email = 'login-budget@authtest.local';
+    await createUser(email, PASSWORD);
+    for (let i = 0; i < 7; i++) {
+      const res = await request(app).post('/api/auth/login').set('X-Forwarded-For', IP).send({ email, password: PASSWORD });
+      expect(res.status).toBe(200);
+    }
+  });
+
+  it('forgot-password has its own budget: login failures from the same IP do not exhaust it', async () => {
+    await initAnonCsrf();
+    const IP = '192.0.2.93';
+    for (let i = 0; i < 5; i++) {
+      await request(app).post('/api/auth/login').set('X-Forwarded-For', IP).send({ email: 'x@authtest.local', password: 'nope' });
+    }
+    const res = await anonAgent
+      .post('/api/auth/forgot-password')
+      .set('X-Forwarded-For', IP)
+      .set('x-csrf-token', anonCsrf)
+      .send({ email: 'nobody@authtest.local' });
+    expect(res.status).toBe(200);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 9. Login hardening: per-account lockout, case-insensitive email, audit hygiene, rehash
+// ───────────────────────────────────────────────────────────────────────────
+describe('POST /api/auth/login — hardening', () => {
+  const login = (email: unknown, password: string) =>
+    request(app).post('/api/auth/login').set('X-Forwarded-For', freshIp()).send({ email, password });
+
+  it('email lookup is case-insensitive', async () => {
+    await createUser('mixedcase@authtest.local', PASSWORD);
+    const res = await login('MixedCase@AuthTest.LOCAL', PASSWORD);
+    expect(res.status).toBe(200);
+  });
+
+  it('locks an account after 10 failures (any IP): 429 + Retry-After, even with the right password', async () => {
+    const email = 'lockout@authtest.local';
+    await createUser(email, PASSWORD);
+    for (let i = 0; i < 10; i++) {
+      expect((await login(email, 'wrong-' + i)).status).toBe(401);
+    }
+    const locked = await login(email, PASSWORD);
+    expect(locked.status).toBe(429);
+    expect(locked.body.error).toBe('För många misslyckade inloggningsförsök, försök igen om en stund');
+    expect(Number(locked.headers['retry-after'])).toBeGreaterThan(0);
+
+    // Case variants hit the same counter; other accounts are unaffected.
+    expect((await login('LOCKOUT@authtest.local', PASSWORD)).status).toBe(429);
+    await createUser('lockout-other@authtest.local', PASSWORD);
+    expect((await login('lockout-other@authtest.local', PASSWORD)).status).toBe(200);
+  });
+
+  it('counts failures for unknown emails too (no enumeration via lockout behaviour)', async () => {
+    const email = 'never-existed@authtest.local';
+    for (let i = 0; i < 10; i++) {
+      expect((await login(email, 'whatever')).status).toBe(401);
+    }
+    expect((await login(email, 'whatever')).status).toBe(429);
+  });
+
+  it('a successful login resets the per-account counter', async () => {
+    const email = 'lockout-reset@authtest.local';
+    await createUser(email, PASSWORD);
+    for (let i = 0; i < 9; i++) await login(email, 'wrong');
+    expect((await login(email, PASSWORD)).status).toBe(200);
+    for (let i = 0; i < 9; i++) {
+      expect((await login(email, 'wrong')).status).toBe(401);
+    }
+    expect((await login(email, PASSWORD)).status).toBe(200);
+  });
+
+  it('login_failure audit stores email-shaped input, but not arbitrary text (e.g. a pasted password)', async () => {
+    await login('someone@authtest.local', 'x');
+    await login('hunter2 is my password', 'x');
+    const details = (db.prepare("SELECT details FROM audit_log WHERE action = 'login_failure' ORDER BY rowid DESC LIMIT 2").all() as { details: string }[])
+      .map((r) => r.details);
+    expect(details).toContain('email: <ogiltigt format>');
+    expect(details).toContain('email: someone@authtest.local');
+    expect(details.join('|')).not.toContain('hunter2');
+  });
+
+  it('a non-string email is rejected with 401/400 and does not crash', async () => {
+    const res = await login({ $ne: 1 }, 'x');
+    expect([400, 401]).toContain(res.status);
+  });
+
+  it('rehashes a legacy cost-10 hash to cost 12 on successful login, password still works', async () => {
+    const email = 'rehash@authtest.local';
+    const userId = await createUser(email, PASSWORD); // createUser hashes with cost 10
+    const before = (db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as { password_hash: string }).password_hash;
+    expect(bcrypt.getRounds(before)).toBe(10);
+
+    expect((await login(email, PASSWORD)).status).toBe(200);
+    const after = (db.prepare('SELECT password_hash FROM users WHERE id = ?').get(userId) as { password_hash: string }).password_hash;
+    expect(bcrypt.getRounds(after)).toBe(12);
+    expect(await bcrypt.compare(PASSWORD, after)).toBe(true);
+    expect((await login(email, PASSWORD)).status).toBe(200);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 10. must_change_password + token_version (access-token revocation)
+// ───────────────────────────────────────────────────────────────────────────
+describe('mustChangePassword + token_version', () => {
+  it('login and /me expose mustChangePassword; change-password clears it', async () => {
+    const email = 'mustchange@authtest.local';
+    const userId = await createUser(email, PASSWORD);
+    db.prepare('UPDATE users SET must_change_password = 1 WHERE id = ?').run(userId);
+
+    const loginRes = await request(app).post('/api/auth/login').set('X-Forwarded-For', freshIp()).send({ email, password: PASSWORD });
+    expect(loginRes.body.user.mustChangePassword).toBe(true);
+
+    const me = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${loginRes.body.accessToken}`);
+    expect(me.status).toBe(200);
+    expect(me.body.user.mustChangePassword).toBe(true);
+
+    const { agent, token, csrf } = await loginAgent(email, PASSWORD);
+    const change = await agent
+      .post('/api/auth/change-password')
+      .set('X-Forwarded-For', freshIp())
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-csrf-token', csrf)
+      .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+    expect(change.status).toBe(200);
+
+    const after = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${change.body.accessToken}`);
+    expect(after.body.user.mustChangePassword).toBe(false);
+  });
+
+  it('change-password kills the old access token at once (tv bump) and hands the caller a working new one + cookie', async () => {
+    const email = 'tv-change@authtest.local';
+    const userId = await createUser(email, PASSWORD);
+    const { agent, token, csrf } = await loginAgent(email, PASSWORD);
+    expect((await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`)).status).toBe(200);
+
+    const change = await agent
+      .post('/api/auth/change-password')
+      .set('X-Forwarded-For', freshIp())
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-csrf-token', csrf)
+      .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+    expect(change.status).toBe(200);
+    expect((change.headers['set-cookie'] as unknown as string[]).some((c) => c.startsWith('refreshToken='))).toBe(true);
+
+    expect((await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`)).status).toBe(401);
+    expect((await request(app).get('/api/auth/me').set('Authorization', `Bearer ${change.body.accessToken}`)).status).toBe(200);
+    expect((db.prepare('SELECT token_version FROM users WHERE id = ?').get(userId) as { token_version: number }).token_version).toBe(1);
+  });
+
+  it('a token whose tv is lower than the stored token_version is rejected; equal/missing tv is accepted', async () => {
+    const email = 'tv-manual@authtest.local';
+    const userId = await createUser(email, PASSWORD);
+    const { token } = await loginAgent(email, PASSWORD);
+    expect((await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`)).status).toBe(200);
+    db.prepare('UPDATE users SET token_version = 3 WHERE id = ?').run(userId);
+    expect((await request(app).get('/api/auth/me').set('Authorization', `Bearer ${token}`)).status).toBe(401);
+
+    // Refresh mints a token carrying the current version.
+    const refreshToken = seedRefreshToken(userId);
+    const refreshed = await refreshPost().set('Cookie', refreshCookie(refreshToken));
+    expect(refreshed.status).toBe(200);
+    expect((await request(app).get('/api/auth/me').set('Authorization', `Bearer ${refreshed.body.accessToken}`)).status).toBe(200);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// 11. reset-password race + forgot-password background send
+// ───────────────────────────────────────────────────────────────────────────
+describe('reset-password / forgot-password hardening', () => {
+  beforeAll(async () => {
+    await initAnonCsrf();
+  });
+
+  it('two concurrent resets with the same token: exactly one wins, the other gets 400', async () => {
+    const userId = await createUser('reset-race@authtest.local', PASSWORD);
+    const rawToken = seedResetToken(userId);
+    const [a, b] = await Promise.all([
+      resetPost().send({ token: rawToken, newPassword: NEW_PASSWORD }),
+      resetPost().send({ token: rawToken, newPassword: 'AnotherStr0ng!Pw99' }),
+    ]);
+    expect([a.status, b.status].sort()).toEqual([200, 400]);
+    expect((db.prepare('SELECT token_version FROM users WHERE id = ?').get(userId) as { token_version: number }).token_version).toBe(1);
+  });
+
+  it('forgot-password matches the email case-insensitively and issues the token after responding', async () => {
+    const userId = await createUser('forgot-case@authtest.local', PASSWORD);
+    const res = await forgotPost().send({ email: '  Forgot-Case@AuthTest.local ' });
+    expect(res.status).toBe(200);
+    await vi.waitFor(() => {
+      const row = db.prepare('SELECT id FROM password_reset_tokens WHERE user_id = ?').get(userId);
+      expect(row).toBeDefined();
+    });
   });
 });

@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 /**
  * Fynd M26: offsiteBackup var helt otestad. Kommandokörningen (execFile via
@@ -8,6 +11,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  *   - misslyckad + REQUIRED=false → loggas men kastar inte
  *   - misslyckad + OFFSITE_BACKUP_REQUIRED=true → kastar
  *   - konsekutiv-räknaren ökar vid fel och nollställs vid lyckad uppladdning
+ *   - kommandot körs med timeout + SIGKILL så ett hängande rclone inte blockerar för evigt
+ *   - uppstartsvarning i produktion när ingen off-site-backup är konfigurerad
  */
 
 const { execFileMock } = vi.hoisted(() => ({ execFileMock: vi.fn() }));
@@ -16,7 +21,15 @@ vi.mock('child_process', () => ({
   execFile: execFileMock,
 }));
 
-import { uploadBackupOffsite, getOffsiteFailureCount } from './offsiteBackup.js';
+// Förväntade fel ("Off-site backup failed") ska inte spamma testutskriften.
+vi.mock('./logger.js', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+import { uploadBackupOffsite, getOffsiteFailureCount, warnIfOffsiteMissing } from './offsiteBackup.js';
+import { logger } from './logger.js';
+
+const backupFile = join(mkdtempSync(join(tmpdir(), 'offsite-test-')), 'backup.zip');
 
 type ExecCallback = (error: Error | null, stdout: string, stderr: string) => void;
 
@@ -30,7 +43,7 @@ const mockExecFailure = () =>
     cb(new Error('Command failed: exit 1'), '', 'rclone: connection refused');
   });
 
-const ENV_KEYS = ['OFFSITE_BACKUP_CMD', 'OFFSITE_BACKUP_REQUIRED'] as const;
+const ENV_KEYS = ['OFFSITE_BACKUP_CMD', 'OFFSITE_BACKUP_REQUIRED', 'NODE_ENV'] as const;
 const savedEnv: Partial<Record<(typeof ENV_KEYS)[number], string | undefined>> = {};
 
 beforeEach(() => {
@@ -50,7 +63,7 @@ afterEach(() => {
 describe('uploadBackupOffsite', () => {
   it('is a no-op when OFFSITE_BACKUP_CMD is not set', async () => {
     const before = getOffsiteFailureCount();
-    await expect(uploadBackupOffsite('/tmp/backup.zip')).resolves.toBeUndefined();
+    await expect(uploadBackupOffsite(backupFile)).resolves.toBeUndefined();
     expect(execFileMock).not.toHaveBeenCalled();
     expect(getOffsiteFailureCount()).toBe(before);
   });
@@ -59,7 +72,7 @@ describe('uploadBackupOffsite', () => {
     process.env.OFFSITE_BACKUP_CMD = 'rclone copy {file} remote:itticket/';
     mockExecSuccess();
 
-    const filePath = '/tmp/backup med mellanslag (1).zip';
+    const filePath = join(mkdtempSync(join(tmpdir(), 'offsite-test-')), 'backup med mellanslag (1).zip');
     await expect(uploadBackupOffsite(filePath)).resolves.toBeUndefined();
 
     expect(execFileMock).toHaveBeenCalledTimes(1);
@@ -71,16 +84,27 @@ describe('uploadBackupOffsite', () => {
     expect(opts.env.BACKUP_FILE).toBe(filePath);
   });
 
+  it('runs the command with a timeout and SIGKILL so a hung upload cannot block forever', async () => {
+    process.env.OFFSITE_BACKUP_CMD = 'rclone copy {file} remote:itticket/';
+    mockExecSuccess();
+
+    await uploadBackupOffsite(backupFile);
+
+    const opts = execFileMock.mock.calls[0][2] as { timeout: number; killSignal: string };
+    expect(opts.timeout).toBe(15 * 60 * 1000);
+    expect(opts.killSignal).toBe('SIGKILL');
+  });
+
   it('does not throw on failure when OFFSITE_BACKUP_REQUIRED is unset, but increments the counter', async () => {
     process.env.OFFSITE_BACKUP_CMD = 'rclone copy {file} remote:itticket/';
     mockExecFailure();
 
     const before = getOffsiteFailureCount();
-    await expect(uploadBackupOffsite('/tmp/backup.zip')).resolves.toBeUndefined();
+    await expect(uploadBackupOffsite(backupFile)).resolves.toBeUndefined();
     expect(getOffsiteFailureCount()).toBe(before + 1);
 
     // Konsekutiva fel fortsätter räknas upp.
-    await expect(uploadBackupOffsite('/tmp/backup.zip')).resolves.toBeUndefined();
+    await expect(uploadBackupOffsite(backupFile)).resolves.toBeUndefined();
     expect(getOffsiteFailureCount()).toBe(before + 2);
   });
 
@@ -90,7 +114,7 @@ describe('uploadBackupOffsite', () => {
     mockExecFailure();
 
     const before = getOffsiteFailureCount();
-    await expect(uploadBackupOffsite('/tmp/backup.zip')).rejects.toThrow(/exit 1/);
+    await expect(uploadBackupOffsite(backupFile)).rejects.toThrow(/exit 1/);
     expect(getOffsiteFailureCount()).toBe(before + 1);
   });
 
@@ -98,11 +122,34 @@ describe('uploadBackupOffsite', () => {
     process.env.OFFSITE_BACKUP_CMD = 'rclone copy {file} remote:itticket/';
 
     mockExecFailure();
-    await uploadBackupOffsite('/tmp/backup.zip');
+    await uploadBackupOffsite(backupFile);
     expect(getOffsiteFailureCount()).toBeGreaterThan(0);
 
     mockExecSuccess();
-    await uploadBackupOffsite('/tmp/backup.zip');
+    await uploadBackupOffsite(backupFile);
     expect(getOffsiteFailureCount()).toBe(0);
+  });
+});
+
+describe('warnIfOffsiteMissing', () => {
+  beforeEach(() => vi.mocked(logger.warn).mockClear());
+
+  it('warns in production when OFFSITE_BACKUP_CMD is empty', () => {
+    process.env.NODE_ENV = 'production';
+    warnIfOffsiteMissing();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Ingen off-site-backup konfigurerad'));
+  });
+
+  it('stays silent in production when a command is configured', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.OFFSITE_BACKUP_CMD = 'rclone copy {file} remote:itticket/';
+    warnIfOffsiteMissing();
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  it('stays silent outside production', () => {
+    process.env.NODE_ENV = 'development';
+    warnIfOffsiteMissing();
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });

@@ -5,12 +5,18 @@ import { sendPushToAllSubscriptions } from './push.js';
 import { logger } from './logger.js';
 
 let schedulerTask: ScheduledTask | null = null;
+let running = false;
+
+// Misslyckade mail försöks om varje minut upp till så här många gånger;
+// därefter ges påminnelsen upp så att en permanent trasig adress inte loopar.
+const MAX_SEND_ATTEMPTS = 5;
 
 interface DueReminder {
   id: string;
   ticket_id: string;
   message: string | null;
   reminder_time: string;
+  attempts: number;
   title: string;
   description: string;
   status: string;
@@ -29,10 +35,16 @@ export function startReminderScheduler() {
 
   // Run every minute: '* * * * *'
   schedulerTask = cron.schedule('* * * * *', async () => {
+    // Reentrancy guard — ett segt SMTP-relä får inte ge överlappande körningar
+    // som skickar samma påminnelse flera gånger.
+    if (running) return;
+    running = true;
     try {
       await checkAndSendReminders();
     } catch (error) {
       logger.error('Unhandled error in reminder scheduler tick:', { error: String(error) });
+    } finally {
+      running = false;
     }
   });
 
@@ -54,7 +66,7 @@ async function checkAndSendReminders() {
     // Find all unsent reminders that are due
     const dueReminders = db.prepare(`
       SELECT
-        tr.id, tr.ticket_id, tr.message, tr.reminder_time,
+        tr.id, tr.ticket_id, tr.message, tr.reminder_time, tr.attempts,
         t.title, t.description, t.status, t.priority, t.category_id,
         u.id as user_id, u.email as user_email, u.display_name as user_name
       FROM ticket_reminders tr
@@ -94,20 +106,30 @@ async function checkAndSendReminders() {
           WHERE id = ?
         `).run(new Date().toISOString(), reminder.id);
 
-        // Send push notification (best-effort — failure does not un-send the reminder)
+        // Send push notification (best-effort — failure does not un-send the reminder).
+        // Påminnelsen är personlig: bara ägarens enheter får den.
         sendPushToAllSubscriptions({
           type: 'reminder',
           ticketId: reminder.ticket_id,
           title: `Påminnelse: ${reminder.title}`,
           body: reminder.message || `Ärendet "${reminder.title}" har en påminnelse nu.`,
-        }).catch((err) => {
+        }, reminder.user_id).catch((err) => {
           logger.error(`Push notification failed for reminder ${reminder.id}:`, { error: String(err) });
         });
 
         logger.info(`Reminder ${reminder.id} sent for ticket ${reminder.ticket_id}`);
       } catch (error) {
         logger.error(`Failed to send reminder ${reminder.id}:`, { error: String(error) });
-        // Don't mark as sent if email failed - will retry on next run
+        // Markeras inte som skickad vid mailfel — nästa körning försöker igen,
+        // tills MAX_SEND_ATTEMPTS nåtts.
+        const attempts = reminder.attempts + 1;
+        if (attempts >= MAX_SEND_ATTEMPTS) {
+          db.prepare('UPDATE ticket_reminders SET sent = 1, sent_at = ?, attempts = ? WHERE id = ?')
+            .run(new Date().toISOString(), attempts, reminder.id);
+          logger.error(`Giving up on reminder ${reminder.id} after ${attempts} failed attempts`);
+        } else {
+          db.prepare('UPDATE ticket_reminders SET attempts = ? WHERE id = ?').run(attempts, reminder.id);
+        }
       }
     }
   } catch (error) {

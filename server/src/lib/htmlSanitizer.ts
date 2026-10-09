@@ -15,7 +15,13 @@ const RICH_TEXT_CONFIG: sanitizeHtml.IOptions = {
   allowedAttributes: {
     a: ['href', 'title', 'target', 'rel'],
     img: ['src', 'alt', 'title', 'width', 'height'],
-    '*': ['class'],  // TipTap använder class för code-block styling
+  },
+  // Bara TipTaps code-block-språkklasser (<code class="language-ts">) släpps
+  // igenom. Fri class på alla taggar möjliggör overlay-/phishing-UI via
+  // appens egna Tailwind-klasser (t.ex. "fixed inset-0 z-50").
+  allowedClasses: {
+    code: ['language-*'],
+    pre: ['language-*'],
   },
   allowedSchemes: ['http', 'https', 'mailto', 'tel'],
   allowedSchemesByTag: {

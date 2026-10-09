@@ -184,12 +184,13 @@ describe('POST /api/comments/ticket/:ticketId', () => {
 });
 
 describe('GET/POST /api/comments/ticket/:ticketId — authorization (canAccessTicket)', () => {
-  it('GET returns 403 for an unrelated non-admin user on a ticket assigned to someone else', async () => {
+  it('GET returns 200 for an unrelated non-admin user on a ticket assigned to someone else (reads are open)', async () => {
     const res = await strangerAgent
       .get(`/api/comments/ticket/${assignedTicketId}`)
       .set('Authorization', `Bearer ${strangerToken}`);
-    expect(res.status).toBe(403);
-    expect(res.body.error).toMatch(/behörighet/i);
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.headers['x-total-count']).toBe(String(res.body.length));
   });
 
   it('POST returns 403 for an unrelated non-admin user on a ticket assigned to someone else', async () => {
@@ -229,6 +230,48 @@ describe('GET/POST /api/comments/ticket/:ticketId — authorization (canAccessTi
       .set('x-csrf-token', csrf)
       .send({ content: 'Admin kan alltid kommentera.' });
     expect(postRes.status).toBe(201);
+  });
+
+  it('rejects a non-boolean isInternal (400) and accepts the explicit strings', async () => {
+    const send = (isInternal: unknown) => agent
+      .post(`/api/comments/ticket/${ticketId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-csrf-token', csrf)
+      .send({ content: 'isInternal-test', isInternal });
+    expect((await send('yes')).status).toBe(400);
+    expect((await send(0)).status).toBe(400);
+    expect((await send(null)).status).toBe(400);
+
+    const asFalseString = await send('false');
+    expect(asFalseString.status).toBe(201);
+    expect(asFalseString.body.is_internal).toBe(0);
+    const asTrueString = await send('true');
+    expect(asTrueString.status).toBe(201);
+    expect(asTrueString.body.is_internal).toBe(1);
+  });
+
+  it('caps content at 20000 characters on create and edit', async () => {
+    const tooLong = 'x'.repeat(20001);
+    const created = await agent
+      .post(`/api/comments/ticket/${ticketId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-csrf-token', csrf)
+      .send({ content: tooLong });
+    expect(created.status).toBe(400);
+
+    const ok = await agent
+      .post(`/api/comments/ticket/${ticketId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-csrf-token', csrf)
+      .send({ content: 'x'.repeat(20000) });
+    expect(ok.status).toBe(201);
+
+    const edited = await agent
+      .put(`/api/comments/${ok.body.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-csrf-token', csrf)
+      .send({ content: tooLong });
+    expect(edited.status).toBe(400);
   });
 
   it('returns 404 for a non-existent ticket on both GET and POST', async () => {
@@ -277,6 +320,30 @@ describe('PUT/DELETE /api/comments/:id — admin API-key scope', () => {
       .delete(`/api/comments/${foreignCommentId}`)
       .set('Authorization', `Bearer ${scopedAdminKey}`);
     expect(res.status).toBe(403);
+  });
+
+  it('PUT/DELETE: a soft-deleted comment can no longer be edited or deleted (404)', async () => {
+    const deletedId = randomUUID();
+    db.prepare(
+      `INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal, deleted_at)
+       VALUES (?, ?, ?, ?, 0, ?)`
+    ).run(deletedId, assignedTicketId, assigneeUserId, 'Raderad kommentar', new Date().toISOString());
+
+    const put = await agent
+      .put(`/api/comments/${deletedId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-csrf-token', csrf)
+      .send({ content: 'Återupplivad?' });
+    expect(put.status).toBe(404);
+
+    const del = await agent
+      .delete(`/api/comments/${deletedId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('x-csrf-token', csrf);
+    expect(del.status).toBe(404);
+
+    const row = db.prepare('SELECT content FROM ticket_comments WHERE id = ?').get(deletedId) as { content: string };
+    expect(row.content).toBe('Raderad kommentar');
   });
 
   it('sanity: the same admin via a real session (JWT) still may edit/delete any comment', async () => {

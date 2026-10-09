@@ -49,8 +49,10 @@ router.get('/summary', authenticate, (req: AuthRequest, res) => {
     ? `WHERE ${filterConditions.join(' AND ')}`
     : '';
 
-  // Same conditions but prefixed with table alias for JOIN queries
-  const whereCategoryConditions = filterConditions.map(c => c.replace('created_at', 't.created_at'));
+  // Same conditions but prefixed with table alias for JOIN queries. Globalt och på
+  // ordgräns: villkoren nämner created_at flera gånger och categories har också en
+  // created_at, så en kvarglömd oprefixad förekomst ger "ambiguous column name".
+  const whereCategoryConditions = filterConditions.map(c => c.replace(/\bcreated_at\b/g, 't.created_at'));
   const whereCategoryCreated = whereCategoryConditions.length > 0
     ? `WHERE ${whereCategoryConditions.join(' AND ')}`
     : '';
@@ -115,12 +117,12 @@ router.get('/summary', authenticate, (req: AuthRequest, res) => {
     const yearNum = parseInt(year, 10);
     // Range-filter så att index kan användas (strftime kan inte)
     trendWhereCreated = "WHERE created_at >= ? AND created_at < ?";
-    trendWhereClosed = "WHERE closed_at IS NOT NULL AND closed_at >= ? AND closed_at < ?";
+    trendWhereClosed = "WHERE status IN ('resolved', 'closed') AND closed_at IS NOT NULL AND closed_at >= ? AND closed_at < ?";
     trendParams = [`${yearNum}-01-01`, `${yearNum + 1}-01-01`];
     trendClosedParams = [`${yearNum}-01-01`, `${yearNum + 1}-01-01`];
   } else {
     trendWhereCreated = "WHERE created_at >= date('now', '-12 months')";
-    trendWhereClosed = "WHERE closed_at IS NOT NULL AND closed_at >= date('now', '-12 months')";
+    trendWhereClosed = "WHERE status IN ('resolved', 'closed') AND closed_at IS NOT NULL AND closed_at >= date('now', '-12 months')";
     trendParams = [];
     trendClosedParams = [];
   }
@@ -156,8 +158,9 @@ router.get('/summary', authenticate, (req: AuthRequest, res) => {
   }
   const trend = Array.from(trendMap.values()).sort((a, b) => a.month.localeCompare(b.month));
 
-  // 4. avgResolutionDays — average days between created_at and closed_at
-  const resolutionWhereParts = ['closed_at IS NOT NULL', ...filterConditions];
+  // 4. avgResolutionDays — average days between created_at and closed_at.
+  // Status-vakten: ett återöppnat ärende kan ha kvar en gammal closed_at.
+  const resolutionWhereParts = ["status IN ('resolved', 'closed')", 'closed_at IS NOT NULL', ...filterConditions];
   const resolutionWhere = `WHERE ${resolutionWhereParts.join(' AND ')}`;
 
   const resolutionRow = db.prepare(`

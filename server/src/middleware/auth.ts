@@ -8,6 +8,9 @@ export interface AuthUser {
   id: string;
   email: string;
   role: 'admin' | 'user';
+  // Sätts bara av login-strategin (passport.ts); JWT-/API-nyckel-användare saknar dem.
+  mustChangePassword?: boolean;
+  tokenVersion?: number;
 }
 
 // Identity of the API key that authenticated the current request (absent for

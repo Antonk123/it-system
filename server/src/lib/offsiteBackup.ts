@@ -1,6 +1,10 @@
 import { execFile } from 'child_process';
 import { logger } from './logger.js';
 
+// Ett hängande rclone/curl får aldrig blockera backup-pipelinen (och därmed
+// shutdown) för evigt. SIGKILL eftersom sh -c annars kan lämna barnprocessen kvar.
+const OFFSITE_TIMEOUT_MS = 15 * 60 * 1000;
+
 /**
  * Off-site backup stub.
  *
@@ -18,8 +22,8 @@ import { logger } from './logger.js';
  * If the variable is not set the function logs a notice and returns without
  * doing anything — the local backup cron continues unaffected.
  *
- * NOTE for ops: add the following line to your .env (see .env.example):
- *   # OFFSITE_BACKUP_CMD=rclone copy {file} remote:itticket/
+ * NOTE for ops: sätt OFFSITE_BACKUP_CMD i Portainer-stackens env (se docs/OPERATIONS.md
+ * och .env.example), t.ex. `rclone copy {file} remote:itticket/`.
  *
  * Fynd backup-audit-7 + M13: håll en in-memory-räknare över KONSEKUTIVA misslyckade
  * offsite-uppladdningar — ökar vid fel, nollställs vid lyckad uppladdning (annars
@@ -32,6 +36,16 @@ let offsiteFailureCount = 0;
 /** Antal konsekutiva misslyckade offsite-uppladdningar (in-memory, ingen DB). */
 export function getOffsiteFailureCount(): number {
   return offsiteFailureCount;
+}
+
+/**
+ * Varnar vid uppstart i produktion när ingen off-site-backup är konfigurerad: då ligger
+ * alla backuper på samma host/volym som databasen och går förlorade med den.
+ */
+export function warnIfOffsiteMissing(): void {
+  if (process.env.NODE_ENV === 'production' && !process.env.OFFSITE_BACKUP_CMD) {
+    logger.warn('Ingen off-site-backup konfigurerad — backuper ligger på samma host som databasen. Sätt OFFSITE_BACKUP_CMD (se docs/OPERATIONS.md).');
+  }
 }
 
 export async function uploadBackupOffsite(filePath: string): Promise<void> {
@@ -52,6 +66,8 @@ export async function uploadBackupOffsite(filePath: string): Promise<void> {
     await new Promise<void>((resolve, reject) => {
       execFile('sh', ['-c', shellCmd], {
         env: { ...process.env, BACKUP_FILE: filePath },
+        timeout: OFFSITE_TIMEOUT_MS,
+        killSignal: 'SIGKILL',
       }, (error, stdout, stderr) => {
         if (error) {
           reject(error);

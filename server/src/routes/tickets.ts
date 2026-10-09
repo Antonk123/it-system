@@ -1,24 +1,26 @@
 import { normalizeTemplateValues, missingRequiredTemplateFields, type TemplateFieldValue } from '../lib/templateValidation.js';
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import multer from 'multer';
-import { existsSync, unlinkSync, readFileSync } from 'fs';
+import { existsSync, unlinkSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import ExcelJS from 'exceljs';
 import { db } from '../db/connection.js';
 import { sendTicketClosedEmail, sendTicketCreatedEmail, sendTicketAssignedEmail } from '../lib/email.js';
 import { authenticate, requireAdmin, AuthRequest, isEffectiveAdmin } from '../middleware/auth.js';
-import { canAccessTicket } from '../lib/ticketAccess.js';
+import { canAccessTicket, canWriteTicketRow } from '../lib/ticketAccess.js';
 import { detectAutoPriority } from '../lib/automationHelper.js';
 import { writeRateLimiter } from '../middleware/rateLimit.js';
 import { dispatchWebhook } from '../lib/webhookDispatcher.js';
 import { notifyStaffOfNewTicket } from '../lib/ticketNotifications.js';
-import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
+import { sanitizePlainText } from '../lib/htmlSanitizer.js';
 import { logger } from '../lib/logger.js';
+import { logAudit } from '../lib/auditLog.js';
+import { attachmentDisposition } from '../lib/contentDisposition.js';
+import { resolveUploadPath } from '../lib/uploadPath.js';
+import { validateTicketInput, type TicketInput } from '../lib/ticketValidation.js';
 import {
-  VALID_STATUSES,
-  VALID_PRIORITIES,
   TicketQueryParams,
   validatePaginationParams,
   buildWhereClause,
@@ -51,15 +53,53 @@ const UPLOAD_DIR = process.env.UPLOAD_DIR || join(__dirname, '../../data/uploads
 // `LEFT JOIN users` into every FROM clause here AND coordinating with the joins
 // emitted by buildWhereClause() in another file. That breadth/regression risk
 // outweighs the perf gain of a single per-row subquery, so it is left as-is.
-const TICKET_COLUMNS = [
-  'tickets.id', 'tickets.title', 'tickets.description', 'tickets.status', 'tickets.priority',
+// Listkolumner utan de tunga textfälten (description/notes/solution): listan
+// och kanban-vyerna renderar dem aldrig, och de dominerar annars svarsstorleken.
+const LIST_COLUMN_LIST = [
+  'tickets.id', 'tickets.title', 'tickets.status', 'tickets.priority',
   'tickets.category_id', 'tickets.requester_id', 'tickets.company_id', 'tickets.assigned_to',
   '(SELECT COALESCE(display_name, email) FROM users WHERE id = tickets.assigned_to) AS assigned_to_name',
   '(SELECT name FROM contacts WHERE id = tickets.requester_id) AS requester_name',
   '(SELECT label FROM categories WHERE id = tickets.category_id) AS category_label',
-  'tickets.notes', 'tickets.solution', 'tickets.template_id',
+  'tickets.template_id',
   'tickets.created_at', 'tickets.updated_at', 'tickets.resolved_at', 'tickets.closed_at',
-].join(', ');
+];
+const LIST_COLUMNS = LIST_COLUMN_LIST.join(', ');
+// Detalj-, export- och uppdateringsvägar behöver hela raden.
+const TICKET_COLUMNS = [...LIST_COLUMN_LIST, 'tickets.description', 'tickets.notes', 'tickets.solution'].join(', ');
+
+// Statusar där ett ärende räknas som pågående — att flytta dit rensar resolved_at/closed_at.
+const ACTIVE_STATUSES = ['open', 'in-progress', 'waiting'];
+
+// SQLite-parametertak: IN-listor delas upp i bitar om högst så här många id:n.
+const IN_CHUNK_SIZE = 500;
+const MAX_BULK_IDS = 500;
+const MAX_REMINDER_MESSAGE_LENGTH = 500;
+
+function chunked<T>(items: T[], size = IN_CHUNK_SIZE): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+  return chunks;
+}
+
+const isIdArray = (ids: unknown): ids is string[] =>
+  Array.isArray(ids) && ids.length > 0 && ids.every((id) => typeof id === 'string');
+
+// Tar bort uppladdade filer från disk efter att DB-raderna committats.
+function removeUploadedFiles(filePaths: string[]): void {
+  for (const filePath of filePaths) {
+    const fullPath = resolveUploadPath(UPLOAD_DIR, filePath);
+    if (fullPath && existsSync(fullPath)) {
+      try {
+        unlinkSync(fullPath);
+      } catch (err) {
+        logger.error('Failed to delete attachment file', { filePath: fullPath, error: String(err) });
+      }
+    }
+  }
+}
+
+type TicketListRow = Omit<TicketRow, 'description' | 'notes' | 'solution'>;
 
 // Multer config for CSV upload
 const upload = multer({
@@ -107,8 +147,8 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
     if (!usePagination && !countOnly) {
       // BACKWARD COMPATIBILITY: Return old format (capped at 1000)
       const tickets = db.prepare(`
-        SELECT ${TICKET_COLUMNS} FROM tickets ORDER BY created_at DESC LIMIT 1000
-      `).all() as TicketRow[];
+        SELECT ${LIST_COLUMNS} FROM tickets ORDER BY created_at DESC LIMIT 1000
+      `).all() as TicketListRow[];
       return res.json(tickets);
     }
 
@@ -131,7 +171,7 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
     }
 
     // Get paginated data (use DISTINCT if search has JOINs to avoid duplicates)
-    const selectClause = joins ? `SELECT DISTINCT ${TICKET_COLUMNS}` : `SELECT ${TICKET_COLUMNS}`;
+    const selectClause = joins ? `SELECT DISTINCT ${LIST_COLUMNS}` : `SELECT ${LIST_COLUMNS}`;
     const fromClause = joins ? `FROM tickets ${joins}` : 'FROM tickets';
 
     const offset = (page - 1) * limit;
@@ -141,11 +181,11 @@ router.get('/', authenticate, (req: AuthRequest, res: Response) => {
       WHERE ${whereClause}
       ORDER BY ${orderByClause}
       LIMIT ? OFFSET ?
-    `).all(...params, limit, offset) as TicketRow[];
+    `).all(...params, limit, offset) as TicketListRow[];
 
     // Build pagination metadata
     const totalPages = Math.ceil(total / limit);
-    const paginatedResponse: PaginatedResponse<TicketRow> = {
+    const paginatedResponse: PaginatedResponse<TicketListRow> = {
       data: tickets,
       pagination: {
         page,
@@ -244,33 +284,53 @@ router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, re
 
     const importedBy = req.user!.id;
 
+    // Validera + sanera alla rader före transaktionen (samma regler som POST/PUT).
+    const rows: Array<{ input: TicketInput; ticket: Record<string, unknown> }> = [];
+    for (const [index, ticket] of tickets.entries()) {
+      const result = ticket && typeof ticket === 'object'
+        ? validateTicketInput({
+          title: ticket.title,
+          description: ticket.description,
+          status: ticket.status,
+          priority: ticket.priority,
+          notes: ticket.notes,
+          solution: ticket.solution,
+        }, { partial: false })
+        : { ok: false as const, error: 'ogiltig rad' };
+      if (!result.ok) {
+        return res.status(400).json({ success: false, created: 0, failed: tickets.length, error: `Rad ${index + 1}: ${result.error}` });
+      }
+      rows.push({ input: result.value, ticket });
+    }
+
     const contactStmt = db.prepare('INSERT INTO contacts (id, name, email) VALUES (?, ?, ?)');
 
     // Use transaction for bulk insert - all-or-nothing approach
     // If ANY ticket fails, the entire transaction rolls back
-    const insertMany = db.transaction((ticketList: any[]) => {
+    const insertMany = db.transaction(() => {
       let created = 0;
 
-      for (const ticket of ticketList) {
-        const id = uuidv4(); // Always generate new ID
+      for (const { input, ticket } of rows) {
+        const id = randomUUID(); // Always generate new ID
 
         // Case-insensitive category lookup
-        const categoryId = ticket.category && ticket.category.trim()
-          ? categoryMap.get(ticket.category.toLowerCase()) || null
-          : null;
+        const category = typeof ticket.category === 'string' ? ticket.category.trim() : '';
+        const categoryId = category ? categoryMap.get(category.toLowerCase()) || null : null;
 
         // Try to find or create contact
+        const requesterName = typeof ticket.requester_name === 'string' ? sanitizePlainText(ticket.requester_name).trim() : '';
+        const requesterEmail = typeof ticket.requester_email === 'string' ? sanitizePlainText(ticket.requester_email).trim() : '';
         let requesterId = null;
-        if (ticket.requester_name || ticket.requester_email) {
+        if (requesterName || requesterEmail) {
           // Case-insensitive contact lookup
-          requesterId = (ticket.requester_name ? contactByNameMap.get(ticket.requester_name.toLowerCase()) : null) ||
-                       (ticket.requester_email ? contactByEmailMap.get(ticket.requester_email.toLowerCase()) : null) ||
+          requesterId = (requesterName ? contactByNameMap.get(requesterName.toLowerCase()) : null) ||
+                       (requesterEmail ? contactByEmailMap.get(requesterEmail.toLowerCase()) : null) ||
                        null;
 
           // If contact doesn't exist and we have both name and email, create it
-          if (!requesterId && ticket.requester_name && ticket.requester_email) {
-            const newContactId = uuidv4();
-            contactStmt.run(newContactId, ticket.requester_name.trim(), ticket.requester_email.trim());
+          if (!requesterId && requesterName && requesterEmail) {
+            const newContactId = randomUUID();
+            contactStmt.run(newContactId, requesterName, requesterEmail);
             requesterId = newContactId;
           }
         }
@@ -278,14 +338,14 @@ router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, re
         // Insert ticket - will throw error if validation fails, causing rollback
         stmt.run(
           id,
-          ticket.title,
-          ticket.description,
-          ticket.status || 'open',
-          ticket.priority || 'medium',
+          input.title,
+          input.description || input.title,
+          input.status || 'open',
+          input.priority || 'medium',
           categoryId,
           requesterId,
-          ticket.notes || null,
-          ticket.solution || null,
+          input.notes || null,
+          input.solution || null,
           importedBy
         );
 
@@ -298,7 +358,9 @@ router.post('/import/confirm', authenticate, requireAdmin, (req: AuthRequest, re
 
     // Execute transaction - handle errors outside
     try {
-      const created = insertMany(tickets);
+      const created = insertMany();
+
+      logAudit(req.user!.id, 'ticket_import', 'ticket', null, `created: ${created}`, req.ip, req.apiKey?.id ?? null);
 
       res.json({
         success: true,
@@ -379,7 +441,8 @@ router.get('/export', authenticate, async (req: AuthRequest, res: Response) => {
     const filename = `${parts.join('-')}.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    // Filnamnet byggs av klientstyrda query-värden — attachmentDisposition kodar/neutraliserar dem.
+    res.setHeader('Content-Disposition', attachmentDisposition(filename));
     res.send(xlsxBuffer);
   } catch (error) {
     logger.error('Error exporting tickets:', { error: String(error) });
@@ -400,13 +463,12 @@ router.get('/export-archive', authenticate, async (req: AuthRequest, res: Respon
       if (ids.length === 0) {
         return res.status(400).json({ error: 'No IDs provided' });
       }
-      const placeholders = ids.map(() => '?').join(',');
-      tickets = db.prepare(`
+      tickets = chunked(ids).flatMap((chunk) => db.prepare(`
         SELECT id, title, priority, category_id, closed_at
         FROM tickets
-        WHERE id IN (${placeholders})
-        ORDER BY closed_at DESC
-      `).all(...ids) as typeof tickets;
+        WHERE id IN (${chunk.map(() => '?').join(',')})
+      `).all(...chunk) as typeof tickets);
+      tickets.sort((a, b) => (b.closed_at ?? '').localeCompare(a.closed_at ?? ''));
     } else {
       const archiveQuery = { ...query, status: 'closed' };
       const { whereClause, params, joins } = buildWhereClause(archiveQuery);
@@ -425,16 +487,14 @@ router.get('/export-archive', authenticate, async (req: AuthRequest, res: Respon
 
     // Get tags for all tickets in a single query
     const tagsByTicket: Record<string, string[]> = {};
-    if (tickets.length > 0) {
-      const ticketIds = tickets.map(t => t.id);
-      const placeholders = ticketIds.map(() => '?').join(',');
+    for (const chunk of chunked(tickets.map(t => t.id))) {
       const allTags = db.prepare(`
         SELECT tt.ticket_id, t.name
         FROM tags t
         JOIN ticket_tags tt ON t.id = tt.tag_id
-        WHERE tt.ticket_id IN (${placeholders})
+        WHERE tt.ticket_id IN (${chunk.map(() => '?').join(',')})
         ORDER BY t.name
-      `).all(...ticketIds) as { ticket_id: string; name: string }[];
+      `).all(...chunk) as { ticket_id: string; name: string }[];
 
       allTags.forEach(tag => {
         if (!tagsByTicket[tag.ticket_id]) tagsByTicket[tag.ticket_id] = [];
@@ -463,7 +523,7 @@ router.get('/export-archive', authenticate, async (req: AuthRequest, res: Respon
     const filename = `arkiv-export-${timestamp}.xlsx`;
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', attachmentDisposition(filename));
     res.send(xlsxBuffer);
   } catch (error) {
     logger.error('Error exporting archive:', { error: String(error) });
@@ -510,26 +570,34 @@ router.get('/dashboard-overview', authenticate, (_req: AuthRequest, res: Respons
         c.name as requester_name,
         comp.name as company_name,
         CAST(julianday('now') - julianday(
-          MAX(t.updated_at, COALESCE(
-            (SELECT MAX(tc.created_at) FROM ticket_comments tc WHERE tc.ticket_id = t.id AND tc.deleted_at IS NULL),
-            t.updated_at
-          ))
+          MAX(t.updated_at, COALESCE(lc.last_comment_at, t.updated_at))
         ) AS INTEGER) as age_days
       FROM tickets t
       LEFT JOIN contacts c ON t.requester_id = c.id
       LEFT JOIN companies comp ON t.company_id = comp.id
+      LEFT JOIN (
+        SELECT ticket_id, MAX(created_at) AS last_comment_at
+        FROM ticket_comments
+        WHERE deleted_at IS NULL
+          AND ticket_id IN (SELECT id FROM tickets WHERE status IN ('open', 'in-progress', 'waiting'))
+        GROUP BY ticket_id
+      ) lc ON lc.ticket_id = t.id
       WHERE t.status IN ('open', 'in-progress', 'waiting')
       ORDER BY age_days DESC
       LIMIT 6
     `).all() as AgingTicketRow[];
 
+    // Dagsintervall som textgränser (UTC, som date('now')): fungerar för både
+    // ISO-tider ('2026-01-01T10:00:00Z') och äldre 'YYYY-MM-DD HH:MM:SS', och låter
+    // SQLite använda index i stället för att köra date() på varje rad.
+    const dayStart = new Date().toISOString().slice(0, 10);
+    const dayEnd = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
     const todayCounts = db.prepare(`
       SELECT
-        SUM(CASE WHEN date(created_at) = date('now') THEN 1 ELSE 0 END) as created_today,
-        SUM(CASE WHEN date(resolved_at) = date('now') THEN 1 ELSE 0 END) as resolved_today,
-        SUM(CASE WHEN date(closed_at) = date('now') THEN 1 ELSE 0 END) as closed_today
-      FROM tickets
-    `).get() as TodayCountsRow;
+        (SELECT COUNT(*) FROM tickets WHERE created_at >= ? AND created_at < ?) as created_today,
+        (SELECT COUNT(*) FROM tickets WHERE resolved_at >= ? AND resolved_at < ?) as resolved_today,
+        (SELECT COUNT(*) FROM tickets WHERE closed_at >= ? AND closed_at < ?) as closed_today
+    `).get(dayStart, dayEnd, dayStart, dayEnd, dayStart, dayEnd) as TodayCountsRow;
 
     const criticalRow = db.prepare(`
       SELECT COUNT(*) as n
@@ -670,31 +738,22 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 
 // Create ticket
 router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
-  let { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id } = req.body;
-
-  if (!title) {
-    return res.status(400).json({ error: 'Title is required' });
-  }
-
-  if (!description && (!customFields || customFields.length === 0)) {
-    return res.status(400).json({ error: 'Either description or custom fields are required' });
-  }
-
-  if (status !== undefined && !VALID_STATUSES.includes(status)) {
-    return res.status(400).json({ error: 'Invalid status value' });
-  }
-  if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
-    return res.status(400).json({ error: 'Invalid priority value' });
-  }
-
-  // Defense-in-depth: sanitera HTML server-side så API-direct anrop inte kan
-  // smuggla in <script>/onerror/javascript: även om frontend DOMPurify hoppas över.
-  title = sanitizePlainText(title);
-  if (description !== undefined) description = sanitizeRichText(description);
-  if (notes !== undefined) notes = sanitizeRichText(notes);
-  if (solution !== undefined) solution = sanitizeRichText(solution);
+  let { customFields } = req.body;
+  const { template_id } = req.body;
 
   try {
+    // Längdtak, enum- och FK-kontroller samt HTML-sanering (defense-in-depth så
+    // API-direkta anrop inte kan smuggla in <script>/onerror/javascript:).
+    const validation = validateTicketInput(req.body, { partial: false });
+    if (!validation.ok) {
+      return res.status(400).json({ error: validation.error });
+    }
+    const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution } = validation.value;
+
+    if (!description && (!customFields || customFields.length === 0)) {
+      return res.status(400).json({ error: 'Either description or custom fields are required' });
+    }
+
     if (customFields !== undefined) {
       const normalized = normalizeTemplateValues(customFields);
       if (!normalized) return res.status(400).json({ error: 'Invalid custom fields' });
@@ -704,7 +763,7 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
     if (Object.keys(fieldErrors).length > 0) {
       return res.status(400).json({ error: 'Fyll i obligatoriska mallfält', fieldErrors });
     }
-    const id = uuidv4();
+    const id = randomUUID();
 
     // Auto-set company_id from requester if not provided
     let resolvedCompanyId = company_id || null;
@@ -767,14 +826,14 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
         `);
         customFields.forEach((field: CustomFieldInput) => {
           if (field.fieldName && field.fieldLabel) {
-            insertFieldStmt.run(uuidv4(), id, field.fieldName, field.fieldLabel, field.fieldValue || '');
+            insertFieldStmt.run(randomUUID(), id, field.fieldName, field.fieldLabel, field.fieldValue || '');
           }
         });
       }
 
       // Log ticket creation in history
       db.prepare('INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)')
-        .run(uuidv4(), id, req.user!.id, 'created', null, null);
+        .run(randomUUID(), id, req.user!.id, 'created', null, null);
 
       // FTS5 synkas automatiskt via triggers (migration 050)
     });
@@ -820,17 +879,10 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
 // Get ticket history
 router.get('/:id/history', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    // Behörighetskontroll: spegla PUT /:id EXAKT. Otilldelade ärenden är öppna
-    // för self-service-pickup (vilken agent som helst kan visa+redigera dem), så
-    // historiken måste vara lika öppen — annars blir aktivitetspanelen tom på
-    // köärenden som en icke-ägande agent öppnar. Tilldelade ärenden kräver
-    // admin/requester/assignee/creator.
-    const t = db.prepare('SELECT assigned_to FROM tickets WHERE id = ?').get(req.params.id) as { assigned_to: string | null } | undefined;
+    // Läsning är öppen för alla inloggade.
+    const t = db.prepare('SELECT 1 FROM tickets WHERE id = ?').get(req.params.id);
     if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
-    }
-    if (t.assigned_to !== null && !canAccessTicket(req, req.params.id)) {
-      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
     const history = db.prepare(`
@@ -853,41 +905,33 @@ router.get('/:id/history', authenticate, (req: AuthRequest, res: Response) => {
 router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Response) => {
   const { ids, updates } = req.body;
 
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ error: 'ids must be a non-empty array' });
+  if (!isIdArray(ids)) {
+    return res.status(400).json({ error: 'ids must be a non-empty array of strings' });
   }
 
   // Skydda mot DoS via extremt stora batcher
-  if (ids.length > 500) {
+  if (ids.length > MAX_BULK_IDS) {
     return res.status(400).json({ error: 'För många ärenden i en batch (max 500)' });
   }
 
-  const { status, priority, category_id, assigned_to } = updates || {};
+  const { status: rawStatus, priority: rawPriority, category_id: rawCategoryId, assigned_to: rawAssignedTo } = updates || {};
 
-  if (status === undefined && priority === undefined && category_id === undefined && assigned_to === undefined) {
+  if (rawStatus === undefined && rawPriority === undefined && rawCategoryId === undefined && rawAssignedTo === undefined) {
     return res.status(400).json({ error: 'At least one field to update is required' });
   }
 
-  if (status !== undefined && !VALID_STATUSES.includes(status)) {
-    return res.status(400).json({ error: 'Invalid status value' });
-  }
-  if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
-    return res.status(400).json({ error: 'Invalid priority value' });
-  }
-
-  // assigned_to: self-service tillåts (matchar single-PUT). Bara validate att
-  // target-user existerar — history-loggen spårar vem som ändrade.
-  if (assigned_to !== undefined) {
-    const normalizedAssignee = assigned_to || null;
-    if (normalizedAssignee !== null) {
-      const target = db.prepare('SELECT id FROM users WHERE id = ?').get(normalizedAssignee) as { id: string } | undefined;
-      if (!target) {
-        return res.status(400).json({ error: 'Invalid assigned_to: user does not exist' });
-      }
-    }
-  }
-
   try {
+    // Samma enum- och FK-kontroller som PUT /:id. assigned_to: self-service tillåts
+    // (matchar single-PUT); history-loggen spårar vem som ändrade.
+    const validation = validateTicketInput(
+      { status: rawStatus, priority: rawPriority, category_id: rawCategoryId, assigned_to: rawAssignedTo },
+      { partial: true },
+    );
+    if (!validation.ok) {
+      return res.status(400).json({ error: validation.error });
+    }
+    const { status, priority, category_id, assigned_to } = validation.value;
+
     const now = new Date().toISOString();
     const userId = req.user!.id;
 
@@ -913,6 +957,7 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
     const bulkUpdate = db.transaction(() => {
       let updatedCount = 0;
       const skipped: string[] = [];
+      const statusChanges: { id: string; title: string; from: string; to: string }[] = [];
 
       // Pre-fetch alla berörda ärenden i en enda query för att undvika N+1.
       // created_by ingår (utöver TICKET_COLUMNS) så att behörighetskontrollen
@@ -931,22 +976,13 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
         const existing = existingMap.get(ticketId);
         if (!existing) continue;
 
-        // Behörighetsfilter (matchar PUT /:id): otilldelade ärenden står öppna
-        // för self-service pickup; i övrigt krävs access — admin, requester,
-        // assignee eller creator. Semantiken speglar canAccessTicket exakt
-        // (lib/ticketAccess.ts, som vi inte äger i detta scope) men avgörs
-        // lokalt från den redan batchade `existing`-raden för att undvika en
-        // extra query per ärende. Otillgängliga ärenden tas inte tyst med —
-        // de rapporteras i `skipped`.
-        if (existing.assigned_to !== null) {
-          const hasAccess = isEffectiveAdmin(req)
-            || existing.requester_id === req.user!.id
-            || existing.assigned_to === req.user!.id
-            || existing.created_by === req.user!.id;
-          if (!hasAccess) {
-            skipped.push(ticketId);
-            continue;
-          }
+        // Behörighetsfilter (matchar PUT /:id): samma skrivregel som canAccessTicket
+        // ({ write: true }), men avgjord från den redan batchade `existing`-raden för
+        // att undvika en extra query per ärende. Ärenden utan skrivrätt tas inte tyst
+        // med — de rapporteras i `skipped`.
+        if (!canWriteTicketRow(req, existing)) {
+          skipped.push(ticketId);
+          continue;
         }
 
         const safeUpdates: Record<string, unknown> = {};
@@ -955,30 +991,36 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
           safeUpdates.status = status;
           if (status === 'resolved' && !existing.resolved_at) safeUpdates.resolved_at = now;
           if (status === 'closed' && !existing.closed_at) safeUpdates.closed_at = now;
+          // Återöppnat ärende: rensa lösnings-/stängningstidpunkt.
+          if (ACTIVE_STATUSES.includes(status)) {
+            if (existing.resolved_at) safeUpdates.resolved_at = null;
+            if (existing.closed_at) safeUpdates.closed_at = null;
+          }
           if (status !== existing.status) {
-            historyInsert.run(uuidv4(), ticketId, userId, 'status', existing.status as string, status);
+            historyInsert.run(randomUUID(), ticketId, userId, 'status', existing.status as string, status);
+            statusChanges.push({ id: ticketId, title: existing.title, from: existing.status, to: status });
           }
         }
         if (priority !== undefined) {
           safeUpdates.priority = priority;
           if (priority !== existing.priority) {
-            historyInsert.run(uuidv4(), ticketId, userId, 'priority', existing.priority as string, priority);
+            historyInsert.run(randomUUID(), ticketId, userId, 'priority', existing.priority as string, priority);
           }
         }
         if (category_id !== undefined) {
-          safeUpdates.category_id = category_id || null;
+          safeUpdates.category_id = category_id;
           if (safeUpdates.category_id !== existing.category_id) {
             const oldCat = existing.category_id ? (categoryLabelMap.get(existing.category_id) ?? null) : null;
             const newCat = category_id ? (categoryLabelMap.get(category_id) ?? null) : null;
-            historyInsert.run(uuidv4(), ticketId, userId, 'category_id', oldCat, newCat);
+            historyInsert.run(randomUUID(), ticketId, userId, 'category_id', oldCat, newCat);
           }
         }
         if (assigned_to !== undefined) {
-          const newAssignee = assigned_to || null;
+          const newAssignee = assigned_to;
           safeUpdates.assigned_to = newAssignee;
           if (newAssignee !== existing.assigned_to) {
             historyInsert.run(
-              uuidv4(),
+              randomUUID(),
               ticketId,
               userId,
               'assigned_to',
@@ -996,10 +1038,15 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
         updatedCount++;
       }
 
-      return { updatedCount, skipped };
+      return { updatedCount, skipped, statusChanges };
     });
 
-    const { updatedCount, skipped } = bulkUpdate();
+    const { updatedCount, skipped, statusChanges } = bulkUpdate();
+
+    for (const change of statusChanges) {
+      dispatchWebhook('ticket.status_changed', { id: change.id, title: change.title, old_status: change.from, status: change.to })
+        .catch((e) => logger.error('Webhook dispatch error (ticket.status_changed):', { error: String(e) }));
+    }
 
     // Bakåtkompatibelt: `updated` (antal) behålls oförändrat. `skipped` läggs
     // till med ID:n för ärenden anroparen saknar behörighet till.
@@ -1014,60 +1061,66 @@ router.put('/bulk', writeRateLimiter, authenticate, (req: AuthRequest, res: Resp
 router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   const { ids } = req.body;
 
-  if (!Array.isArray(ids) || ids.length === 0) {
-    return res.status(400).json({ error: 'ids must be a non-empty array' });
+  if (!isIdArray(ids)) {
+    return res.status(400).json({ error: 'ids must be a non-empty array of strings' });
+  }
+  if (ids.length > MAX_BULK_IDS) {
+    return res.status(400).json({ error: 'För många ärenden i en batch (max 500)' });
   }
 
   try {
     const bulkDelete = db.transaction(() => {
-      let deletedCount = 0;
+      const deleted: { id: string; title: string }[] = [];
+      const filePaths: string[] = [];
 
       // Pre-fetch alla filbilagor i en enda query för att undvika N+1
       const placeholders = ids.map(() => '?').join(',');
       const allAttachments = db.prepare(
         `SELECT ticket_id, file_path FROM ticket_attachments WHERE ticket_id IN (${placeholders})`
       ).all(...ids) as { ticket_id: string; file_path: string }[];
-      const attachmentsByTicket = new Map<string, { file_path: string }[]>();
+      const attachmentsByTicket = new Map<string, string[]>();
       for (const att of allAttachments) {
         const list = attachmentsByTicket.get(att.ticket_id) ?? [];
-        list.push({ file_path: att.file_path });
+        list.push(att.file_path);
         attachmentsByTicket.set(att.ticket_id, list);
       }
+      const titles = new Map(
+        (db.prepare(`SELECT id, title FROM tickets WHERE id IN (${placeholders})`).all(...ids) as { id: string; title: string }[])
+          .map((row) => [row.id, row.title])
+      );
 
       for (const ticketId of ids) {
-        // Hämta förpopulerade filbilagor från Map
-        const attachments = attachmentsByTicket.get(ticketId) ?? [];
-
         // FTS5 rensas automatiskt via triggers (migration 050)
         const result = db.prepare('DELETE FROM tickets WHERE id = ?').run(ticketId);
 
         if (result.changes > 0) {
-          deletedCount++;
-          // Clean up attachment files from disk (DB CASCADE handles relation tables)
-          for (const attachment of attachments) {
-            const filePath = join(UPLOAD_DIR, attachment.file_path);
-            if (existsSync(filePath)) {
-              try {
-                unlinkSync(filePath);
-              } catch (err) {
-                logger.error('Failed to delete attachment file', { filePath, error: String(err) });
-              }
-            }
-          }
+          deleted.push({ id: ticketId, title: titles.get(ticketId) ?? '' });
+          // Filerna tas bort först efter commit (DB CASCADE hanterar relationstabellerna)
+          filePaths.push(...(attachmentsByTicket.get(ticketId) ?? []));
         }
       }
 
-      return deletedCount;
+      return { deleted, filePaths };
     });
 
-    const count = bulkDelete();
+    const { deleted, filePaths } = bulkDelete();
+    removeUploadedFiles(filePaths);
+
+    if (deleted.length > 0) {
+      logAudit(req.user!.id, 'ticket_bulk_delete', 'ticket', null, `count: ${deleted.length}, ids: ${deleted.map((t) => t.id).join(',')}`, req.ip, req.apiKey?.id ?? null);
+      for (const ticket of deleted) {
+        dispatchWebhook('ticket.deleted', { id: ticket.id, title: ticket.title })
+          .catch((e) => logger.error('Webhook dispatch error (ticket.deleted):', { error: String(e) }));
+      }
+    }
+
     // Concurrent-guard: `result.changes` per rad räknas exakt, så ärenden som
     // redan hunnit raderas av en samtidig operation (eller aldrig fanns) ger
     // changes=0 och räknas inte med — `deleted` är alltid det faktiska antalet
     // borttagna rader. Ett benignt race 500:ar alltså aldrig endpointen. Om
     // färre raderades än begärt rapporteras differensen i `alreadyGone`.
-    const alreadyGone = ids.length - count;
-    const response: { deleted: number; alreadyGone?: number } = { deleted: count };
+    const alreadyGone = ids.length - deleted.length;
+    const response: { deleted: number; alreadyGone?: number } = { deleted: deleted.length };
     if (alreadyGone > 0) response.alreadyGone = alreadyGone;
     return res.json(response);
   } catch (error) {
@@ -1078,51 +1131,29 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: 
 
 // Update ticket
 router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
-  let { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, customFields, template_id } = req.body;
-
-  if (status !== undefined && !VALID_STATUSES.includes(status)) {
-    return res.status(400).json({ error: 'Invalid status value' });
-  }
-  if (priority !== undefined && !VALID_PRIORITIES.includes(priority)) {
-    return res.status(400).json({ error: 'Invalid priority value' });
-  }
-
-  // Input-längdvalidering före sanitering — matchar publika formulärets caps
-  // (se public.ts). Bara fält som faktiskt skickas valideras (undefined = rör
-  // inte). Mäter rå inkommande längd så att senare HTML-sanitering inte döljer
-  // en överstor payload.
-  if (typeof title === 'string' && title.length > 200) {
-    return res.status(400).json({ error: 'Title must be 200 characters or less' });
-  }
-  if (typeof description === 'string' && description.length > 5000) {
-    return res.status(400).json({ error: 'Description must be 5000 characters or less' });
-  }
-  if (typeof notes === 'string' && notes.length > 5000) {
-    return res.status(400).json({ error: 'Notes must be 5000 characters or less' });
-  }
-  if (typeof solution === 'string' && solution.length > 5000) {
-    return res.status(400).json({ error: 'Solution must be 5000 characters or less' });
-  }
-
-  // Defense-in-depth: sanitera HTML server-side. Bara fält som faktiskt skickas
-  // sanitiseras — undefined betyder "rör inte" i PUT-logiken nedan.
-  if (title !== undefined) title = sanitizePlainText(title);
-  if (description !== undefined) description = sanitizeRichText(description);
-  if (notes !== undefined) notes = sanitizeRichText(notes);
-  if (solution !== undefined) solution = sanitizeRichText(solution);
+  let { customFields } = req.body;
+  const { template_id } = req.body;
 
   try {
+    // Längdtak, enum- och FK-kontroller samt HTML-sanering. Bara fält som faktiskt
+    // skickas valideras — undefined betyder "rör inte" i PUT-logiken nedan.
+    const validation = validateTicketInput(req.body, { partial: true });
+    if (!validation.ok) {
+      return res.status(400).json({ error: validation.error });
+    }
+    const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution } = validation.value;
+
     const existing = db.prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE id = ?`).get(req.params.id) as TicketRow | undefined;
 
     if (!existing) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
 
-    // Authorization: admins, the requester, the assignee or the creator may edit
-    // (canAccessTicket). Unassigned tickets stay open for self-service pickup —
-    // any authenticated agent may claim/work a ticket sitting in the queue. This
-    // blocks a non-owner from rewriting a ticket already assigned to a colleague.
-    if (existing.assigned_to !== null && !canAccessTicket(req, req.params.id as string)) {
+    // Authorization: admin, assignee or creator may edit (canAccessTicket, write).
+    // Unassigned tickets stay open for self-service pickup — any authenticated agent
+    // may claim/work a ticket sitting in the queue. This blocks a non-owner from
+    // rewriting a ticket already assigned to a colleague.
+    if (!canAccessTicket(req, req.params.id as string, { write: true })) {
       return res.status(403).json({ error: 'Du har inte behörighet att ändra detta ärende' });
     }
 
@@ -1175,6 +1206,11 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
     if (status === 'closed' && !existing.closed_at) {
       updates.closed_at = new Date().toISOString();
     }
+    // Återöppnat ärende: rensa lösnings-/stängningstidpunkt.
+    if (status !== undefined && ACTIVE_STATUSES.includes(status)) {
+      if (existing.resolved_at) updates.resolved_at = null;
+      if (existing.closed_at) updates.closed_at = null;
+    }
 
     // Whitelist of allowed field names to prevent SQL injection
     const allowedFields = [
@@ -1207,10 +1243,10 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
         'INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)'
       );
       if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
-        historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'status', existing.status as string, safeUpdates.status as string);
+        historyInsert.run(randomUUID(), req.params.id, req.user!.id, 'status', existing.status as string, safeUpdates.status as string);
       }
       if ('priority' in safeUpdates && safeUpdates.priority !== existing.priority) {
-        historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'priority', existing.priority as string, safeUpdates.priority as string);
+        historyInsert.run(randomUUID(), req.params.id, req.user!.id, 'priority', existing.priority as string, safeUpdates.priority as string);
       }
       if ('category_id' in safeUpdates && safeUpdates.category_id !== existing.category_id) {
         const oldCat = existing.category_id
@@ -1219,7 +1255,7 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
         const newCat = safeUpdates.category_id
           ? (db.prepare('SELECT label FROM categories WHERE id = ?').get(safeUpdates.category_id as string) as { label: string } | undefined)?.label ?? null
           : null;
-        historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'category_id', oldCat, newCat);
+        historyInsert.run(randomUUID(), req.params.id, req.user!.id, 'category_id', oldCat, newCat);
       }
       if ('assigned_to' in safeUpdates && safeUpdates.assigned_to !== existing.assigned_to) {
         const userLabel = (uid: string | null) => {
@@ -1228,7 +1264,7 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
           return u ? (u.display_name || u.email) : null;
         };
         historyInsert.run(
-          uuidv4(),
+          randomUUID(),
           req.params.id,
           req.user!.id,
           'assigned_to',
@@ -1237,14 +1273,14 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
         );
       }
       if ('title' in safeUpdates && safeUpdates.title !== existing.title) {
-        historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'title', null, null);
+        historyInsert.run(randomUUID(), req.params.id, req.user!.id, 'title', null, null);
       }
       if ('notes' in safeUpdates && safeUpdates.notes !== existing.notes) {
-        historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'notes', null, null);
+        historyInsert.run(randomUUID(), req.params.id, req.user!.id, 'notes', null, null);
       }
       if ('solution' in safeUpdates && safeUpdates.solution !== existing.solution) {
         const isNew = !existing.solution && safeUpdates.solution;
-        historyInsert.run(uuidv4(), req.params.id, req.user!.id, 'solution', null, isNew ? 'added' : 'updated');
+        historyInsert.run(randomUUID(), req.params.id, req.user!.id, 'solution', null, isNew ? 'added' : 'updated');
       }
 
       // Replace field values when explicitly supplied, including an empty array.
@@ -1256,7 +1292,7 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
         `);
         customFields.forEach((field: CustomFieldInput) => {
           if (field.fieldName && field.fieldLabel) {
-            insertFieldStmt.run(uuidv4(), req.params.id, field.fieldName, field.fieldLabel, field.fieldValue || '');
+            insertFieldStmt.run(randomUUID(), req.params.id, field.fieldName, field.fieldLabel, field.fieldValue || '');
           }
         });
       }
@@ -1302,9 +1338,19 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
 
     const warnings: string[] = [];
 
-    // Dispatch webhook for ticket update
+    // Dispatch webhook for ticket update. Payloaden är medvetet minimal: interna
+    // anteckningar och lösningstext ska inte lämna systemet till externa URL:er.
     if ('status' in safeUpdates && safeUpdates.status !== existing.status) {
-      dispatchWebhook('ticket.updated', { id: req.params.id, ...safeUpdates }).catch((e) => logger.error('Webhook dispatch error (ticket.updated):', { error: String(e) }));
+      dispatchWebhook('ticket.updated', {
+        id: ticket.id,
+        status: ticket.status,
+        priority: ticket.priority,
+        assigned_to: ticket.assigned_to,
+        title: ticket.title,
+        updated_fields: Object.keys(safeUpdates).filter((field) => field !== 'updated_at'),
+      }).catch((e) => logger.error('Webhook dispatch error (ticket.updated):', { error: String(e) }));
+      dispatchWebhook('ticket.status_changed', { id: ticket.id, title: ticket.title, old_status: existing.status, status: ticket.status })
+        .catch((e) => logger.error('Webhook dispatch error (ticket.status_changed):', { error: String(e) }));
 
       if (safeUpdates.status === 'closed') {
         dispatchWebhook('ticket.closed', { id: req.params.id }).catch((e) => logger.error('Webhook dispatch error (ticket.closed):', { error: String(e) }));
@@ -1339,8 +1385,9 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
 // Delete ticket
 router.delete('/:id', writeRateLimiter, authenticate, requireAdmin, (req: AuthRequest, res: Response) => {
   try {
-    // Hämta data för FTS-rensning och filbilagor innan radering
+    // Hämta data för audit/webhook och filbilagor innan radering
     // FTS5 rensas automatiskt via triggers (migration 050)
+    const ticket = db.prepare('SELECT title FROM tickets WHERE id = ?').get(req.params.id) as { title: string } | undefined;
     const attachments = db.prepare(
       'SELECT file_path FROM ticket_attachments WHERE ticket_id = ?'
     ).all(req.params.id) as { file_path: string }[];
@@ -1352,16 +1399,11 @@ router.delete('/:id', writeRateLimiter, authenticate, requireAdmin, (req: AuthRe
     }
 
     // Clean up attachment files from disk (DB relations cascade automatically)
-    for (const attachment of attachments) {
-      const filePath = join(UPLOAD_DIR, attachment.file_path);
-      if (existsSync(filePath)) {
-        try {
-          unlinkSync(filePath);
-        } catch (err) {
-          logger.error('Failed to delete attachment file', { filePath, error: String(err) });
-        }
-      }
-    }
+    removeUploadedFiles(attachments.map((attachment) => attachment.file_path));
+
+    logAudit(req.user!.id, 'ticket_delete', 'ticket', req.params.id, `title: ${ticket?.title ?? ''}`, req.ip, req.apiKey?.id ?? null);
+    dispatchWebhook('ticket.deleted', { id: req.params.id, title: ticket?.title ?? '' })
+      .catch((e) => logger.error('Webhook dispatch error (ticket.deleted):', { error: String(e) }));
 
     res.json({ message: 'Ticket deleted' });
   } catch (error) {
@@ -1383,28 +1425,35 @@ router.post('/:id/reminders', authenticate, (req: AuthRequest, res: Response) =>
       return res.status(400).json({ error: 'Reminder time is required' });
     }
 
+    // Ogiltigt datum ger NaN, och NaN <= now är false — kontrollera uttryckligen.
+    const reminderDate = new Date(reminder_time);
+    if (Number.isNaN(reminderDate.getTime())) {
+      return res.status(400).json({ error: 'Invalid reminder time' });
+    }
+
     // Validate future time
-    if (new Date(reminder_time) <= new Date()) {
+    if (reminderDate <= new Date()) {
       return res.status(400).json({ error: 'Reminder must be in the future' });
     }
 
-    // Behörighetskontroll: spegla PUT /:id EXAKT (se ovan i denna fil samt
-    // comments.ts). Otilldelade ärenden är öppna för self-service-pickup —
-    // vilken agent som helst kan sätta en påminnelse på ett köärende.
-    // Tilldelade ärenden kräver admin/requester/assignee/creator.
-    const t = db.prepare('SELECT assigned_to FROM tickets WHERE id = ?').get(ticketId) as { assigned_to: string | null } | undefined;
+    if (message != null && (typeof message !== 'string' || message.length > MAX_REMINDER_MESSAGE_LENGTH)) {
+      return res.status(400).json({ error: 'Message must be 500 characters or less' });
+    }
+
+    // Skrivbehörighet: admin, tilldelad, skapare eller otilldelat ärende.
+    const t = db.prepare('SELECT 1 FROM tickets WHERE id = ?').get(ticketId);
     if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (t.assigned_to !== null && !canAccessTicket(req, ticketId)) {
+    if (!canAccessTicket(req, ticketId, { write: true })) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
-    const id = uuidv4();
+    const id = randomUUID();
     db.prepare(`
       INSERT INTO ticket_reminders (id, ticket_id, user_id, reminder_time, message)
       VALUES (?, ?, ?, ?, ?)
-    `).run(id, ticketId, userId, reminder_time, message || null);
+    `).run(id, ticketId, userId, reminderDate.toISOString(), message || null);
 
     const reminder = db.prepare(
       'SELECT id, ticket_id, user_id, reminder_time, message, sent, created_at, sent_at FROM ticket_reminders WHERE id = ?'
@@ -1421,16 +1470,10 @@ router.get('/:id/reminders', authenticate, (req: AuthRequest, res: Response) => 
   try {
     const ticketId = req.params.id;
 
-    // Behörighetskontroll: spegla PUT /:id EXAKT (se ovan i denna fil samt
-    // comments.ts). Otilldelade ärenden är öppna för self-service-pickup —
-    // vilken agent som helst kan lista påminnelser på ett köärende.
-    // Tilldelade ärenden kräver admin/requester/assignee/creator.
-    const t = db.prepare('SELECT assigned_to FROM tickets WHERE id = ?').get(ticketId) as { assigned_to: string | null } | undefined;
+    // Läsning är öppen för alla inloggade.
+    const t = db.prepare('SELECT 1 FROM tickets WHERE id = ?').get(ticketId);
     if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
-    }
-    if (t.assigned_to !== null && !canAccessTicket(req, ticketId)) {
-      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
     const reminders = db.prepare(`
@@ -1456,15 +1499,12 @@ router.delete('/:id/reminders/sent', authenticate, (req: AuthRequest, res: Respo
     const ticketId = req.params.id as string;
     const userId = req.user!.id;
 
-    // Behörighetskontroll: spegla PUT /:id EXAKT (se ovan i denna fil samt
-    // comments.ts). Otilldelade ärenden är öppna för self-service-pickup —
-    // vilken agent som helst kan rensa sina egna skickade påminnelser på ett
-    // köärende. Tilldelade ärenden kräver admin/requester/assignee/creator.
-    const t = db.prepare('SELECT assigned_to FROM tickets WHERE id = ?').get(ticketId) as { assigned_to: string | null } | undefined;
+    // Skrivbehörighet: admin, tilldelad, skapare eller otilldelat ärende.
+    const t = db.prepare('SELECT 1 FROM tickets WHERE id = ?').get(ticketId);
     if (!t) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (t.assigned_to !== null && !canAccessTicket(req, ticketId)) {
+    if (!canAccessTicket(req, ticketId, { write: true })) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
@@ -1483,12 +1523,13 @@ router.delete('/:id/reminders/sent', authenticate, (req: AuthRequest, res: Respo
 // DELETE /api/tickets/:id/reminders/:reminderId - Cancel reminder
 router.delete('/:id/reminders/:reminderId', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    const { reminderId } = req.params;
+    const { id: ticketId, reminderId } = req.params;
     const userId = req.user!.id;
 
+    // Påminnelsen måste tillhöra ärendet i URL:en.
     const reminder = db.prepare(
-      'SELECT id, ticket_id, user_id, reminder_time, message, sent, created_at, sent_at FROM ticket_reminders WHERE id = ?'
-    ).get(reminderId) as { id: string; ticket_id: string; user_id: string; reminder_time: string; message: string | null; sent: number; created_at: string; sent_at: string | null } | undefined;
+      'SELECT id, ticket_id, user_id, reminder_time, message, sent, created_at, sent_at FROM ticket_reminders WHERE id = ? AND ticket_id = ?'
+    ).get(reminderId, ticketId) as { id: string; ticket_id: string; user_id: string; reminder_time: string; message: string | null; sent: number; created_at: string; sent_at: string | null } | undefined;
 
     if (!reminder) {
       return res.status(404).json({ error: 'Reminder not found' });

@@ -34,6 +34,7 @@ import request from 'supertest';
 import bcrypt from 'bcryptjs';
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
 import { createApp } from '../app.js';
+import { SYSTEM_USER_ID } from '../lib/systemUser.js';
 
 type Session = { agent: ReturnType<typeof request.agent>; token: string; csrf: string };
 
@@ -165,7 +166,7 @@ describe('POST /api/users — admin only + password policy', () => {
       .post('/api/users')
       .set('Authorization', `Bearer ${admin.token}`)
       .set('x-csrf-token', admin.csrf)
-      .send({ email: 'nospecial@userstest.local', password: 'Abcdefgh1234', role: 'user' });
+      .send({ email: 'nospecial@userstest.local', password: 'abcdefgh1234', role: 'user' });
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/specialtecken/i);
   });
@@ -309,6 +310,69 @@ describe('DELETE /api/users/:id — admin only', () => {
     const row = db.prepare('SELECT id FROM users WHERE id = ?').get(throwawayId);
     expect(row).toBeUndefined();
   });
+
+  it('keeps the deleted user\'s comments, history rows and created tickets by reassigning them to the system user', async () => {
+    const departingId = randomUUID();
+    db.prepare(`INSERT INTO users (id, email, password_hash, role, display_name) VALUES (?, ?, ?, ?, ?)`)
+      .run(departingId, 'departing@userstest.local', await bcrypt.hash('x', 4), 'user', 'Departing');
+    const ticketId = randomUUID();
+    db.prepare(`INSERT INTO tickets (id, title, description, status, priority, created_by) VALUES (?, ?, ?, ?, ?, ?)`)
+      .run(ticketId, 'Owned by departing', 'd', 'open', 'low', departingId);
+    const commentId = randomUUID();
+    db.prepare(`INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal) VALUES (?, ?, ?, ?, 1)`)
+      .run(commentId, ticketId, departingId, 'Important note');
+    const historyId = randomUUID();
+    db.prepare(`INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, 'status', 'open', 'closed')`)
+      .run(historyId, ticketId, departingId);
+
+    const res = await admin.agent
+      .delete(`/api/users/${departingId}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf);
+    expect(res.status).toBe(200);
+
+    expect(db.prepare('SELECT user_id FROM ticket_comments WHERE id = ?').get(commentId)).toEqual({ user_id: SYSTEM_USER_ID });
+    expect(db.prepare('SELECT user_id FROM ticket_history WHERE id = ?').get(historyId)).toEqual({ user_id: SYSTEM_USER_ID });
+    expect(db.prepare('SELECT created_by FROM tickets WHERE id = ?').get(ticketId)).toEqual({ created_by: SYSTEM_USER_ID });
+  });
+
+  it('refuses to delete the system user (409) and leaves it in place', async () => {
+    const res = await admin.agent
+      .delete(`/api/users/${SYSTEM_USER_ID}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/Systemanvändaren/);
+    expect(db.prepare('SELECT id FROM users WHERE id = ?').get(SYSTEM_USER_ID)).toBeDefined();
+  });
+});
+
+describe('POST /api/users — must_change_password', () => {
+  it('flags admin-created accounts (generated and admin-chosen password) as must_change_password', async () => {
+    for (const body of [
+      { email: 'mcp-generated@userstest.local', role: 'user' },
+      { email: 'mcp-chosen@userstest.local', role: 'user', password: 'Chosen#Pass 2026 ok' },
+    ]) {
+      const res = await admin.agent
+        .post('/api/users')
+        .set('Authorization', `Bearer ${admin.token}`)
+        .set('x-csrf-token', admin.csrf)
+        .send(body);
+      expect(res.status).toBe(201);
+      const row = db.prepare('SELECT must_change_password FROM users WHERE id = ?').get(res.body.user.id) as { must_change_password: number };
+      expect(row.must_change_password).toBe(1);
+    }
+  });
+
+  it('stores new hashes with bcrypt cost 12', async () => {
+    const res = await admin.agent
+      .post('/api/users')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ email: 'cost12@userstest.local', role: 'user' });
+    const row = db.prepare('SELECT password_hash FROM users WHERE id = ?').get(res.body.user.id) as { password_hash: string };
+    expect(bcrypt.getRounds(row.password_hash)).toBe(12);
+  });
 });
 
 /**
@@ -354,14 +418,14 @@ describe('SSO-länk — ssoLinked (GET) och clearSsoLink (PATCH)', () => {
     ).run(
       randomUUID(),
       userIdForToken,
-      token,
+      createHash('sha256').update(token).digest('hex'), // refresh-tokens lagras som sha256
       new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
     );
     return token;
   }
 
   function revokedFlag(token: string): number | undefined {
-    return (db.prepare('SELECT revoked FROM refresh_tokens WHERE token = ?').get(token) as
+    return (db.prepare('SELECT revoked FROM refresh_tokens WHERE token = ?').get(createHash('sha256').update(token).digest('hex')) as
       | { revoked: number }
       | undefined)?.revoked;
   }
@@ -494,7 +558,7 @@ describe('SSO-länk — ssoLinked (GET) och clearSsoLink (PATCH)', () => {
       .send({ clearSsoLink: true })
       .expect(200);
 
-    const res = await request(app).post('/api/auth/refresh').send({ refreshToken: targetToken });
+    const res = await request(app).post('/api/auth/refresh').set('Cookie', `refreshToken=${targetToken}`);
     expect(res.status).toBe(401);
     expect(res.body.error).toMatch(/revoked/i);
   });

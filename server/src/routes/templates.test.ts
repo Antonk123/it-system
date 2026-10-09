@@ -296,3 +296,55 @@ describe('Template default category', () => {
     expect(stored.category_id).toBeNull();
   });
 });
+
+describe('Template input validation, atomic create, delete audit', () => {
+  const send = (method: 'post' | 'put' | 'delete', path: string, body?: unknown) =>
+    adminAgent[method](path).set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrf).send(body as object);
+  const base = { title_template: 'Rubrik', description_template: 'Beskrivning' };
+
+  it('rejects invalid template_type, priority and category_id with 400', async () => {
+    expect((await send('post', '/api/templates', { ...base, name: 'T1', template_type: 'weird' })).status).toBe(400);
+    expect((await send('post', '/api/templates', { ...base, name: 'T2', priority: 'urgent' })).status).toBe(400);
+    expect((await send('post', '/api/templates', { ...base, name: 'T3', category_id: randomUUID() })).status).toBe(400);
+    expect((await send('post', '/api/templates', { ...base, name: 42 })).status).toBe(400);
+    expect(db.prepare("SELECT id FROM ticket_templates WHERE name IN ('T1','T2','T3')").all()).toEqual([]);
+  });
+
+  it('PUT rejects the same invalid values', async () => {
+    const created = await send('post', '/api/templates', { ...base, name: 'Validated PUT' });
+    const url = `/api/templates/${created.body.id}`;
+    expect((await send('put', url, { template_type: 'weird' })).status).toBe(400);
+    expect((await send('put', url, { priority: 'urgent' })).status).toBe(400);
+    expect((await send('put', url, { category_id: randomUUID() })).status).toBe(400);
+    expect((await send('put', url, { title_template: '   ' })).status).toBe(400);
+  });
+
+  it('POST with an invalid inline field creates no template row', async () => {
+    const res = await send('post', '/api/templates', {
+      name: 'Atomic dynamic', title_template: 'T', template_type: 'dynamic',
+      fields: [
+        { field_name: 'ok', field_label: 'Ok', field_type: 'text' },
+        { field_name: 'bad', field_label: 'Bad', field_type: 'not-a-type' },
+      ],
+    });
+    expect(res.status).toBe(400);
+    expect(db.prepare('SELECT id FROM ticket_templates WHERE name = ?').get('Atomic dynamic')).toBeUndefined();
+  });
+
+  it('409s a duplicate template name on POST and PUT instead of 500', async () => {
+    await send('post', '/api/templates', { ...base, name: 'Unique name' });
+    expect((await send('post', '/api/templates', { ...base, name: 'Unique name' })).status).toBe(409);
+    const other = await send('post', '/api/templates', { ...base, name: 'Another name' });
+    expect((await send('put', `/api/templates/${other.body.id}`, { name: 'Unique name' })).status).toBe(409);
+  });
+
+  it('writes a template_delete audit row on DELETE', async () => {
+    const created = await send('post', '/api/templates', { ...base, name: 'Audit template' });
+    const res = await send('delete', `/api/templates/${created.body.id}`);
+    expect(res.status).toBe(200);
+    const audit = db.prepare("SELECT entity_type, details FROM audit_log WHERE action = 'template_delete' AND entity_id = ?")
+      .get(created.body.id) as { entity_type: string; details: string } | undefined;
+    expect(audit?.entity_type).toBe('ticket_template');
+    expect(audit?.details).toBe('name: Audit template');
+  });
+});

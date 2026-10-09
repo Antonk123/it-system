@@ -36,57 +36,56 @@ describe('validatePassword', () => {
     expect(result.ok).toBe(false);
   });
 
-  // ── Missing required character classes ─────────────────────────────────
-
-  it('rejects password with no uppercase letter', () => {
-    // 12+ chars, digit, special, but all lowercase alpha
-    const result = validatePassword('abc1@efghijklm');
-    expect(result.ok).toBe(false);
-    expect(result.error).toBeTruthy();
+  it('rejects a short password with fewer than three character classes', () => {
+    expect(validatePassword('abcdefghijkl1').ok).toBe(false); // gemen + siffra
+    expect(validatePassword('ABCDEFGHIJKL').ok).toBe(false);
+    expect(validatePassword('abcdefghijklm').ok).toBe(false);
   });
 
-  it('rejects password with no lowercase letter', () => {
-    const result = validatePassword('ABC1@EFGHIJKLM');
-    expect(result.ok).toBe(false);
+  it('accepts three character classes at 12+ chars', () => {
+    expect(validatePassword('abcdefghij1!').ok).toBe(true); // gemen + siffra + övrigt
+    expect(validatePassword('Abcdefghijk1').ok).toBe(true); // versal + gemen + siffra
   });
 
-  it('rejects password with no digit', () => {
-    const result = validatePassword('Abcde@fghijkl');
-    expect(result.ok).toBe(false);
+  it('accepts a long passphrase of a single character class (>= 16 chars)', () => {
+    expect(validatePassword('correcthorsebatterystaple').ok).toBe(true);
+    expect(validatePassword('a'.repeat(16)).ok).toBe(true);
+    expect(validatePassword('a'.repeat(15)).ok).toBe(false);
   });
 
-  it('rejects password with no special character', () => {
-    const result = validatePassword('Abcde1fghijkl');
-    expect(result.ok).toBe(false);
-  });
+  // ── Tecken som tidigare avvisades ───────────────────────────────────────
 
-  // ── Invalid special characters ─────────────────────────────────────────
-
-  it('rejects password with unsupported special character (#)', () => {
-    // '#' is NOT in [@$!%*?&] — regex allows only that set
-    const result = validatePassword('Abcde1#ghijkl');
-    expect(result.ok).toBe(false);
-  });
-
-  // ── Valid passwords ─────────────────────────────────────────────────────
-
-  it('accepts a valid 12-character password (minimum length)', () => {
-    const result = validatePassword('Abc1@efghijk'); // exactly 12
-    expect(result.ok).toBe(true);
-    expect(result.error).toBeUndefined();
-  });
-
-  it('accepts a valid long password', () => {
-    const result = validatePassword('SuperSecure1@passphrase99!');
-    expect(result.ok).toBe(true);
-  });
-
-  it('accepts all allowed special characters', () => {
-    for (const special of ['@', '$', '!', '%', '*', '?', '&']) {
-      const pw = `Abcde1${special}ghijkl`;
-      const result = validatePassword(pw);
-      expect(result.ok, `should accept '${special}'`).toBe(true);
+  it('accepts #, _, -, space and åäö', () => {
+    for (const pw of ['Abcde1#ghijkl', 'Abcde1_ghijkl', 'Abcde1-ghijkl', 'Abcde1 ghijkl', 'Åäö1Åäö1Åäö1']) {
+      expect(validatePassword(pw).ok, pw).toBe(true);
     }
+  });
+
+  it('accepts all previously allowed special characters', () => {
+    for (const special of ['@', '$', '!', '%', '*', '?', '&']) {
+      expect(validatePassword(`Abcde1${special}ghijkl`).ok, special).toBe(true);
+    }
+  });
+
+  // ── Maxlängd (bcrypt trunkerar vid 72 byte) ─────────────────────────────
+
+  it('accepts exactly 72 bytes and rejects 73', () => {
+    expect(validatePassword('a'.repeat(72)).ok).toBe(true);
+    const tooLong = validatePassword('a'.repeat(73));
+    expect(tooLong.ok).toBe(false);
+    expect(tooLong.error).toMatch(/högst 72/);
+  });
+
+  it('measures the maximum in UTF-8 bytes, not characters', () => {
+    // 40 x 'å' = 40 tecken men 80 byte
+    expect(validatePassword('å'.repeat(40)).ok).toBe(false);
+    // 36 x 'å' = 72 byte
+    expect(validatePassword('å'.repeat(36)).ok).toBe(true);
+  });
+
+  it('counts the minimum in characters (code points), not bytes', () => {
+    expect(validatePassword('Åäö1Åäö1Åäö').ok).toBe(false); // 11 tecken
+    expect(validatePassword('Åäö1Åäö1Åäö1').ok).toBe(true); // 12 tecken
   });
 
   it('PASSWORD_MIN_LENGTH constant matches actual validation', () => {

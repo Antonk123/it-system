@@ -40,13 +40,14 @@ self.addEventListener('push', (event) => {
     ticketId: string;
     title: string;
     body: string;
+    url?: string;
   };
   event.waitUntil(
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: '/icons/icon-192x192.png',
       badge: '/icons/icon-192x192.png',
-      data: { ticketId: data.ticketId, url: `/tickets/${data.ticketId}` },
+      data: { ticketId: data.ticketId, url: data.url ?? `/tickets/${data.ticketId}` },
     })
   );
 });

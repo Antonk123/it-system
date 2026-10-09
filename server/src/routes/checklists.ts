@@ -1,8 +1,8 @@
 import { Router, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'node:crypto';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
-import { canAccessTicket, filterAccessibleTicketIds } from '../lib/ticketAccess.js';
+import { canAccessTicket } from '../lib/ticketAccess.js';
 import { logger } from '../lib/logger.js';
 
 const router = Router();
@@ -24,6 +24,35 @@ const mapItem = (item: ChecklistRow) => ({
   completed: item.completed === 1,
 });
 
+const MAX_LABEL_LENGTH = 500;
+// SQLite-parametertak: progress-frågan delas upp i bitar om högst så här många id:n.
+const PROGRESS_CHUNK_SIZE = 500;
+const DUE_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:\d{2})?)?$/;
+
+const isValidLabel = (label: unknown): label is string =>
+  typeof label === 'string' && label.trim().length > 0 && label.trim().length <= MAX_LABEL_LENGTH;
+
+const isValidDueDate = (value: unknown): boolean =>
+  typeof value === 'string' && DUE_DATE_PATTERN.test(value) && !Number.isNaN(Date.parse(value));
+
+// Kontrollerar parent_id (måste tillhöra samma ärende, inte vara punkten själv)
+// och due_date. Tomma värden betyder "ingen" och är giltiga.
+function validateParentAndDueDate(
+  ticketId: string,
+  fields: { parent_id?: unknown; due_date?: unknown },
+  selfId?: string,
+): string | null {
+  const { parent_id, due_date } = fields;
+  if (parent_id) {
+    const parentOk = typeof parent_id === 'string'
+      && parent_id !== selfId
+      && db.prepare('SELECT 1 FROM ticket_checklists WHERE id = ? AND ticket_id = ?').get(parent_id, ticketId);
+    if (!parentOk) return 'Invalid parent_id: item not found on this ticket';
+  }
+  if (due_date && !isValidDueDate(due_date)) return 'Invalid due_date';
+  return null;
+}
+
 // Get checklist progress for multiple tickets (batch)
 router.post('/progress', authenticate, (req: AuthRequest, res: Response) => {
   const { ticketIds } = req.body;
@@ -33,33 +62,23 @@ router.post('/progress', authenticate, (req: AuthRequest, res: Response) => {
   }
 
   try {
-    // Authz: only expose progress for tickets the caller may access. Reusing the
-    // shared filterAccessibleTicketIds (admin short-circuits without a DB hit,
-    // otherwise a single batched IN(...) query instead of one SELECT per id)
-    // closes the batch-IDOR where any logged-in user could probe checklist
-    // counts of any ticket. Inaccessible ids are silently dropped — batch
-    // semantics, and the client only ever sends ids from an already
-    // access-scoped ticket list. The typeof guard also hardens against
-    // non-string ids reaching the query.
+    // Läsning är öppen för alla inloggade; typeof-vakten skyddar mot icke-sträng-id:n
+    // i frågan och id:n delas upp i bitar för att hålla sig under parametertaket.
     const candidateIds = (ticketIds as unknown[]).filter((id): id is string => typeof id === 'string');
-    const accessibleIds = filterAccessibleTicketIds(req, candidateIds);
-
-    if (accessibleIds.length === 0) {
-      return res.json({});
-    }
-
-    const placeholders = accessibleIds.map(() => '?').join(',');
-    const rows = db.prepare(`
-      SELECT ticket_id, COUNT(*) as total, SUM(completed) as completed
-      FROM ticket_checklists
-      WHERE ticket_id IN (${placeholders})
-      GROUP BY ticket_id
-    `).all(...accessibleIds) as { ticket_id: string; total: number; completed: number }[];
 
     const result: Record<string, { total: number; completed: number }> = {};
-    rows.forEach(row => {
-      result[row.ticket_id] = { total: row.total, completed: row.completed };
-    });
+    for (let i = 0; i < candidateIds.length; i += PROGRESS_CHUNK_SIZE) {
+      const chunk = candidateIds.slice(i, i + PROGRESS_CHUNK_SIZE);
+      const rows = db.prepare(`
+        SELECT ticket_id, COUNT(*) as total, SUM(completed) as completed
+        FROM ticket_checklists
+        WHERE ticket_id IN (${chunk.map(() => '?').join(',')})
+        GROUP BY ticket_id
+      `).all(...chunk) as { ticket_id: string; total: number; completed: number }[];
+      rows.forEach(row => {
+        result[row.ticket_id] = { total: row.total, completed: row.completed };
+      });
+    }
 
     res.json(result);
   } catch (error) {
@@ -71,9 +90,6 @@ router.post('/progress', authenticate, (req: AuthRequest, res: Response) => {
 // Get checklists for a ticket
 router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   try {
-    if (!canAccessTicket(req, req.params.ticketId as string)) {
-      return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
-    }
     const items = db.prepare(`
       SELECT * FROM ticket_checklists WHERE ticket_id = ? ORDER BY position ASC
     `).all(req.params.ticketId) as ChecklistRow[];
@@ -88,8 +104,8 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
 router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) => {
   const { label, parent_id, due_date } = req.body;
 
-  if (!label || typeof label !== 'string' || label.trim().length === 0) {
-    return res.status(400).json({ error: 'Label is required' });
+  if (!isValidLabel(label)) {
+    return res.status(400).json({ error: `Label is required (max ${MAX_LABEL_LENGTH} characters)` });
   }
 
   try {
@@ -98,9 +114,11 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (!canAccessTicket(req, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string, { write: true })) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
+    const fieldError = validateParentAndDueDate(req.params.ticketId as string, { parent_id, due_date });
+    if (fieldError) return res.status(400).json({ error: fieldError });
 
     // Get max position
     const maxPos = db.prepare(`
@@ -108,7 +126,7 @@ router.post('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response)
     `).get(req.params.ticketId) as { maxPosition: number | null };
 
     const position = (maxPos.maxPosition ?? -1) + 1;
-    const id = uuidv4();
+    const id = randomUUID();
 
     db.prepare(`
       INSERT INTO ticket_checklists (id, ticket_id, label, position, parent_id, due_date)
@@ -156,8 +174,14 @@ router.post('/ticket/:ticketId/bulk', authenticate, (req: AuthRequest, res: Resp
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    if (!canAccessTicket(req, req.params.ticketId as string)) {
+    if (!canAccessTicket(req, req.params.ticketId as string, { write: true })) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
+    }
+    for (const item of rawItems) {
+      const fieldError = !isValidLabel(item.label)
+        ? `Label is required (max ${MAX_LABEL_LENGTH} characters)`
+        : validateParentAndDueDate(req.params.ticketId as string, item);
+      if (fieldError) return res.status(400).json({ error: fieldError });
     }
 
     const insertStmt = db.prepare(`
@@ -169,7 +193,7 @@ router.post('/ticket/:ticketId/bulk', authenticate, (req: AuthRequest, res: Resp
 
     const insertMany = db.transaction((items: typeof rawItems) => {
       items.forEach((item, index) => {
-        const id = uuidv4();
+        const id = randomUUID();
         insertStmt.run(id, req.params.ticketId, item.label.trim(), index, item.parent_id ?? null, item.due_date ?? null);
         createdIds.push(id);
       });
@@ -203,16 +227,21 @@ router.put('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (!existing) {
       return res.status(404).json({ error: 'Checklist item not found' });
     }
-    if (!canAccessTicket(req, existing.ticket_id)) {
+    if (!canAccessTicket(req, existing.ticket_id, { write: true })) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
+    if (label !== undefined && !isValidLabel(label)) {
+      return res.status(400).json({ error: `Label is required (max ${MAX_LABEL_LENGTH} characters)` });
+    }
+    const fieldError = validateParentAndDueDate(existing.ticket_id, { parent_id, due_date }, itemId);
+    if (fieldError) return res.status(400).json({ error: fieldError });
 
     const updates: string[] = [];
     const values: (string | number | null)[] = [];
 
     if (label !== undefined) {
       updates.push('label = ?');
-      values.push(label);
+      values.push(label.trim());
     }
     if (completed !== undefined) {
       updates.push('completed = ?');
@@ -247,7 +276,7 @@ router.delete('/:id', authenticate, (req: AuthRequest, res: Response) => {
     if (!existing) {
       return res.status(404).json({ error: 'Checklist item not found' });
     }
-    if (!canAccessTicket(req, existing.ticket_id)) {
+    if (!canAccessTicket(req, existing.ticket_id, { write: true })) {
       return res.status(403).json({ error: 'Du har inte behörighet till detta ärende' });
     }
 
