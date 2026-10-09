@@ -134,13 +134,20 @@ export const refreshRateLimiter = createRateLimiter(
   { skipSuccessfulRequests: true }
 );
 
+const KNOWN_IPS_PER_ACCOUNT = 5;
+
 /**
  * Räknare för misslyckade inloggningar per konto (e-post), oberoende av IP.
  * In-memory av samma skäl som createRateLimiter (single-instance). Fast fönster
  * från första felet; nollställs vid lyckad inloggning.
+ *
+ * Kontolåset kan utnyttjas för att låsa ute en känd användare. Därför minns den
+ * också de senaste IP-adresserna kontot lyckats logga in från: rätt lösenord
+ * därifrån går igenom trots låset (anroparen avgör, se isKnownIp).
  */
 export function createFailureTracker(windowMs: number, max: number) {
   const entries = new Map<string, { count: number; resetTime: number }>();
+  const knownIps = new Map<string, string[]>();
   const cleanup = setInterval(() => {
     const now = Date.now();
     for (const [key, entry] of entries) {
@@ -167,6 +174,17 @@ export function createFailureTracker(windowMs: number, max: number) {
     },
     reset(key: string): void {
       entries.delete(key);
+    },
+    /** Lyckad inloggning: nollställ felen och kom ihåg IP:n (de senaste fem per konto). */
+    recordSuccess(key: string, ip: string): void {
+      entries.delete(key);
+      const ips = (knownIps.get(key) ?? []).filter((known) => known !== ip);
+      ips.push(ip);
+      knownIps.set(key, ips.slice(-KNOWN_IPS_PER_ACCOUNT));
+    },
+    /** Har kontot tidigare loggat in lyckat från den här IP:n? */
+    isKnownIp(key: string, ip: string): boolean {
+      return knownIps.get(key)?.includes(ip) ?? false;
     },
   };
 }

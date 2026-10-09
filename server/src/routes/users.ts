@@ -25,14 +25,15 @@ interface UserRow {
   oidc_sub: string | null;
 }
 
-// Get all system users. Auth:ade users får en reduced payload (för
-// assignee-dropdown och @-mentions); admins får fullständigt payload (email,
-// lastSignIn, etc) för Administration → Användare-tabben.
+// Get all users, utan systemanvändaren (ingen person att tilldela eller @-nämna).
+// Auth:ade users får en reduced payload (för assignee-dropdown och @-mentions);
+// admins får fullständigt payload (email, lastSignIn, etc) för Administration →
+// Användare-tabben.
 router.get('/', authenticate, (req: AuthRequest, res: Response) => {
   try {
     const users = db.prepare(`
-      SELECT id, email, display_name, role, created_at, last_login, oidc_sub FROM users ORDER BY created_at DESC
-    `).all() as Omit<UserRow, 'password_hash'>[];
+      SELECT id, email, display_name, role, created_at, last_login, oidc_sub FROM users WHERE id != ? ORDER BY created_at DESC
+    `).all(SYSTEM_USER_ID) as Omit<UserRow, 'password_hash'>[];
 
     const isAdmin = isEffectiveAdmin(req);
 

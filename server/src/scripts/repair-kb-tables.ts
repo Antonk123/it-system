@@ -211,7 +211,7 @@ export function findBrokenArticles(db: DatabaseType): ArticleRow[] {
 /**
  * Apply the repair to one article inside the caller's transaction, replicating the
  * EXACT FTS5 sync from PUT /api/kb/articles/:id (server/src/routes/kb.ts ~348-355):
- *   1. delete old FTS row (using OLD title + OLD stripHtml(content))
+ *   1. delete old FTS row (by rowid)
  *   2. UPDATE kb_articles.content (+ updated_at)
  *   3. insert new FTS row (using same title + NEW stripHtml(content))
  */
@@ -221,10 +221,8 @@ export function applyRepairToArticle(
   newContent: string,
   now: string
 ): void {
-  // 1. delete the stale FTS entry (contentless FTS5 requires the old values)
-  db.prepare(
-    "INSERT INTO kb_articles_fts(kb_articles_fts, rowid, title, content_plain) VALUES('delete', ?, ?, ?)"
-  ).run(article.rowid, article.title, stripHtml(article.content));
+  // 1. delete the stale FTS entry (kb_articles_fts is contentless_delete=1 since migration 081)
+  db.prepare('DELETE FROM kb_articles_fts WHERE rowid = ?').run(article.rowid);
 
   // 2. update the article content (title is unchanged by this repair)
   db.prepare('UPDATE kb_articles SET content = ?, updated_at = ? WHERE id = ?').run(

@@ -13,11 +13,14 @@
 // Resolution order:
 //   1. COOKIE_SECURE explicitly set ("true"/"false") → honour it. Operators who
 //      terminate TLS (HTTPS reverse proxy) set COOKIE_SECURE=true.
-//   2. Otherwise fall back to the legacy NODE_ENV=production default so existing
-//      HTTPS deployments that never set the flag keep Secure cookies.
+//   2. Otherwise (unset or empty) NODE_ENV=production means Secure cookies, so a
+//      production deployment behind HTTPS (APP_BASE_URL=https://…) that never
+//      sets the flag is secure by default and only an explicit COOKIE_SECURE=false
+//      turns it off (index.ts warns about that at boot).
 //
-// The shipped docker-compose.yml sets COOKIE_SECURE=false so the default
-// HTTP-on-LAN deployment works out of the box.
+// NOTE: a compose file that hard-codes COOKIE_SECURE=false counts as explicit —
+// leave the variable empty there (COOKIE_SECURE=${COOKIE_SECURE:-}) for HTTPS
+// deployments so this default applies.
 export function cookieSecure(): boolean {
   const explicit = process.env.COOKIE_SECURE;
   if (explicit === 'true') return true;

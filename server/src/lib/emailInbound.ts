@@ -59,6 +59,12 @@ function maxTicketsPerSenderPerDay(): number {
   return Number.isFinite(n) && n > 0 ? n : 20;
 }
 
+/** Max antal nya ärenden via e-post per timme totalt (skydd mot översvämning från förfalskade/roterande avsändare). */
+function maxNewTicketsPerHour(): number {
+  const n = parseInt(process.env.EMAIL_INBOUND_MAX_NEW_PER_HOUR || '', 10);
+  return Number.isFinite(n) && n > 0 ? n : 60;
+}
+
 let msalClient: ConfidentialClientApplication | null = null;
 
 function getMsalClient(): ConfidentialClientApplication {
@@ -248,13 +254,23 @@ function isAutomatedMail(parsed: ParsedMail, fromAddress: string): boolean {
   const autoSubmitted = headerText(parsed, 'auto-submitted').trim().toLowerCase();
   if (autoSubmitted && autoSubmitted !== 'no') return true;
   if (/^(?:bulk|junk|auto_reply|list)\b/i.test(headerText(parsed, 'precedence').trim())) return true;
-  if (parsed.headers?.has('x-auto-response-suppress')) return true;
   return AUTOMATED_SENDER.test(fromAddress);
 }
 
 /** Avsändare som SPF/DMARC underkänt kan vara förfalskade och får inte skriva publikt. */
 function failedSenderAuthentication(parsed: ParsedMail): boolean {
   return /\b(?:spf|dmarc)=fail\b/i.test(headerText(parsed, 'authentication-results'));
+}
+
+function emailTicketsLastHour(): number {
+  const row = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM ticket_history
+         WHERE field_name = 'created' AND new_value = 'email'
+           AND datetime(changed_at) >= datetime('now', '-1 hour')`
+    )
+    .get() as { n: number };
+  return row.n;
 }
 
 function senderTicketsLastDay(fromAddress: string): number {
@@ -307,6 +323,10 @@ function senderTicketsLastDay(fromAddress: string): number {
  *    att skapa ett nytt (skyddar mot snabba e-postklienter som skickar dubbelt).
  *
  * Om ingen av de fyra ovan stämmer skapas ett nytt ärende.
+ *
+ * Avsändare som SPF/DMARC underkänt får på alla tre vägarna: kommentar som intern
+ * anteckning, ingen automatiskt skapad kontakt och ingen bekräftelsemejl. Nya
+ * ärenden via e-post begränsas dessutom totalt (EMAIL_INBOUND_MAX_NEW_PER_HOUR).
  */
 async function processEmail(source: Buffer, config: EmailConfig): Promise<'processed' | 'rejected'> {
   // Guard against oversized emails that could OOM the process during parsing.
@@ -322,6 +342,10 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<'proce
   const fromName = parsed.from?.value?.[0]?.name || fromAddress || '';
   const subject = sanitizePlainText(parsed.subject) || '(Inget ämne)';
   const messageId = parsed.messageId || null;
+  // Gäller alla tre vägar nedan: en avsändare som SPF/DMARC underkänt kan vara
+  // förfalskad och får varken skriva publikt, skapa kontakt eller få bekräftelse.
+  const unverifiedSender = failedSenderAuthentication(parsed);
+  const autoCreateContact = config.autoCreateContact && !unverifiedSender;
 
   if (!fromAddress) {
     logger.warn('Email without from address, skipping');
@@ -403,7 +427,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<'proce
     // själva innehållet.
     const replyBody = stripQuotedReply(body);
 
-    const trusted = !failedSenderAuthentication(parsed) && isTrustedSender(existingTicket.id, fromAddress);
+    const trusted = !unverifiedSender && isTrustedSender(existingTicket.id, fromAddress);
     if (!trusted) {
       logger.warn('Reply from unverified sender stored as internal note', {
         ticketId: existingTicket.id,
@@ -411,7 +435,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<'proce
       });
     }
 
-    resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
+    resolveOrCreateContact(fromAddress, fromName, autoCreateContact);
     addCommentToTicket(existingTicket.id, replyBody, fromAddress, fromName, { internal: !trusted, messageId });
 
     if (parsed.attachments && parsed.attachments.length > 0) {
@@ -441,8 +465,11 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<'proce
 
     if (recentDuplicate) {
       logger.info('Near-duplicate email, adding as comment', { subject, from: fromAddress, ticketId: recentDuplicate.id });
-      resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
-      addCommentToTicket(recentDuplicate.id, stripQuotedReply(body), fromAddress, fromName, { messageId });
+      resolveOrCreateContact(fromAddress, fromName, autoCreateContact);
+      addCommentToTicket(recentDuplicate.id, stripQuotedReply(body), fromAddress, fromName, {
+        internal: unverifiedSender,
+        messageId,
+      });
       if (parsed.attachments && parsed.attachments.length > 0) {
         await saveAttachments(parsed.attachments, recentDuplicate.id);
       }
@@ -456,6 +483,11 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<'proce
     logger.warn('Sender exceeded daily email-ticket limit, rejecting', { from: fromAddress, limit: dailyLimit });
     return 'rejected';
   }
+  const hourlyLimit = maxNewTicketsPerHour();
+  if (emailTicketsLastHour() >= hourlyLimit) {
+    logger.warn('Hourly email-ticket limit reached, rejecting', { from: fromAddress, limit: hourlyLimit });
+    return 'rejected';
+  }
 
   const ticketId = randomUUID();
   const now = new Date().toISOString();
@@ -463,7 +495,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<'proce
   // Kontakt, ärende och historik skapas atomärt — ett fel mitt i får inte lämna
   // en halv rad som nästa poll sedan dedupar bort.
   const createTicket = db.transaction(() => {
-    const contact = resolveOrCreateContact(fromAddress, fromName, config.autoCreateContact);
+    const contact = resolveOrCreateContact(fromAddress, fromName, autoCreateContact);
     db.prepare(
       `INSERT INTO tickets (id, title, description, status, priority, requester_id, company_id, email_message_id, created_at, updated_at)
        VALUES (?, ?, ?, 'open', 'medium', ?, ?, ?, ?, ?)`
@@ -502,13 +534,16 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<'proce
   notifyStaffOfNewTicket(ticketId, subject, body)
     .catch((err) => logger.error('notifyStaffOfNewTicket failed', { error: String(err) }));
 
-  sendTicketReceivedConfirmation({
-    toEmail: fromAddress,
-    toName: fromName,
-    ticketId,
-    title: subject,
-    shareUrl,
-  }).catch(error => logger.error('Confirmation email failed', { error: String(error) }));
+  // Ingen bekräftelse till en möjligen förfalskad avsändare (backscatter).
+  if (!unverifiedSender) {
+    sendTicketReceivedConfirmation({
+      toEmail: fromAddress,
+      toName: fromName,
+      ticketId,
+      title: subject,
+      shareUrl,
+    }).catch(error => logger.error('Confirmation email failed', { error: String(error) }));
+  }
 
   logger.info('Created ticket from email', { ticketId, subject, from: fromAddress });
   return 'processed';

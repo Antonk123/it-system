@@ -135,10 +135,13 @@ type LoginUser = Required<AuthUser>;
 router.post('/login', loginRateLimiter, (req: Request, res: Response) => {
   const rawEmail: unknown = req.body?.email;
   const accountKey = typeof rawEmail === 'string' ? rawEmail.toLowerCase().trim() : null;
+  const clientIp = req.ip ?? '';
 
   if (accountKey) {
+    // Rätt lösenord från en IP som kontot redan loggat in från går igenom trots
+    // låset, så en angripare inte kan låsa ute en känd användare genom att gissa fel.
     const lockedFor = loginFailureTracker.lockedFor(accountKey);
-    if (lockedFor > 0) {
+    if (lockedFor > 0 && !loginFailureTracker.isKnownIp(accountKey, clientIp)) {
       res.set('Retry-After', String(lockedFor));
       return res.status(429).json({ error: LOCKED_ACCOUNT_MESSAGE, retryAfter: lockedFor });
     }
@@ -159,7 +162,7 @@ router.post('/login', loginRateLimiter, (req: Request, res: Response) => {
     }
 
     try {
-      if (accountKey) loginFailureTracker.reset(accountKey);
+      if (accountKey) loginFailureTracker.recordSuccess(accountKey, clientIp);
       const accessToken = signAccessToken(user, user.tokenVersion);
 
       // Generate long-lived refresh token (7 days) and store its hash

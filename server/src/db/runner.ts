@@ -1,5 +1,5 @@
 import type { Database as DatabaseType } from 'better-sqlite3';
-import { copyFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs';
+import { copyFileSync, mkdirSync, readdirSync, rmSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { migrations as allMigrations, type Migration, type MigrationHelpers } from './migrations.js';
 import { logger } from '../lib/logger.js';
@@ -47,9 +47,21 @@ export function takePreMigrationSnapshot(db: DatabaseType, backupDir: string, mi
     throw new Error('wal_checkpoint(TRUNCATE) was busy — snapshot would be incomplete');
   }
   mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+  // Kraschar en migration varje uppstart skulle varje omstart annars skriva en ny
+  // kopia (av ett redan halvbehandlat läge) och tränga ut den riktiga snapshoten
+  // från före uppgraderingen. Första kopian per migrations-id räcker.
+  const prefix = `${SNAPSHOT_PREFIX}${migrationId}-`;
+  if (readdirSync(backupDir).some((f) => f.startsWith(prefix) && f.endsWith('.sqlite'))) return null;
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const target = join(backupDir, `${SNAPSHOT_PREFIX}${migrationId}-${timestamp}.sqlite`);
-  copyFileSync(db.name, target);
+  const target = join(backupDir, `${prefix}${timestamp}.sqlite`);
+  try {
+    copyFileSync(db.name, target);
+  } catch (err) {
+    // En halv kopia får aldrig ligga kvar och räknas som en giltig snapshot.
+    rmSync(target, { force: true });
+    logger.error('Pre-migration snapshot copy failed', { target, error: String(err) });
+    return null;
+  }
 
   const stale = readdirSync(backupDir)
     .filter((f) => f.startsWith(SNAPSHOT_PREFIX) && f.endsWith('.sqlite'))
@@ -59,8 +71,11 @@ export function takePreMigrationSnapshot(db: DatabaseType, backupDir: string, mi
   return target;
 }
 
-function foreignKeyViolations(db: DatabaseType): number {
-  return (db.pragma('foreign_key_check') as unknown[]).length;
+// Mängden brott (inte bara antalet): en migration som rättar ett gammalt brott men
+// skapar ett nytt får annars samma antal och släpps igenom.
+function foreignKeyViolations(db: DatabaseType): Set<string> {
+  const rows = db.pragma('foreign_key_check') as { table: string; rowid: number | null; parent: string; fkid: number }[];
+  return new Set(rows.map((r) => `${r.table}|${r.rowid}|${r.parent}|${r.fkid}`));
 }
 
 function applyMigration(db: DatabaseType, migration: Migration): void {
@@ -85,10 +100,10 @@ function applyMigration(db: DatabaseType, migration: Migration): void {
   try {
     db.transaction(() => {
       run();
-      const violationsAfter = foreignKeyViolations(db);
-      if (violationsAfter > violationsBefore) {
+      const introduced = [...foreignKeyViolations(db)].filter((key) => !violationsBefore.has(key));
+      if (introduced.length > 0) {
         throw new Error(
-          `foreign_key_check: migration ${migration.id} introduced ${violationsAfter - violationsBefore} foreign key violation(s)`
+          `foreign_key_check: migration ${migration.id} introduced ${introduced.length} foreign key violation(s)`
         );
       }
     })();

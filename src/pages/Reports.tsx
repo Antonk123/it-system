@@ -142,6 +142,11 @@ const RequesterTooltip = ({ active, payload }: any) => {
   );
 };
 
+/**
+ * Rapportsidan: KPI-kort, trender och fördelningar per kategori/beställare.
+ * All aggregering sker i backend (/reports/*); komponenten äger bara filter
+ * (år/månad/kategori), diagramval och XLSX-export.
+ */
 const Reports = () => {
   const { users } = useUsers();
   const isMobile = useIsMobile();
@@ -401,7 +406,7 @@ const Reports = () => {
       toast.success(`Excel-export klar: ${filterDesc}`);
     } catch (error) {
       if (import.meta.env.DEV) {
-        console.error('Export failed:', error);
+        if (import.meta.env.DEV) console.error('Export failed:', error);
       }
       toast.error('Kunde inte exportera rapportdata');
     }

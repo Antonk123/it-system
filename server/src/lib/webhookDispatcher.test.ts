@@ -89,6 +89,17 @@ describe('dispatchWebhook', () => {
     expect(d.response_code).toBe(204);
   });
 
+  it.each([200, 500, 302])('cancels the unread response body after a %i so the socket is released', async (status) => {
+    addWebhook();
+    const body = new ReadableStream({ start: (c) => c.enqueue(new TextEncoder().encode('ignored')) });
+    const cancel = vi.spyOn(body, 'cancel');
+    fetchMock.mockResolvedValue(new Response(body, { status }));
+
+    await dispatchWebhook('ticket.created', { id: 't1' });
+
+    expect(cancel).toHaveBeenCalledTimes(1);
+  });
+
   it('schedules a retry in 1 minute after the first non-2xx response', async () => {
     const id = addWebhook();
     fetchMock.mockResolvedValue(new Response(null, { status: 500 }));

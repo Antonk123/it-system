@@ -75,6 +75,20 @@ function writeLimitKey(req: express.Request): string | undefined {
   }
 }
 
+// Webbläsare skickar Sec-Fetch-Site på alla anrop och JS kan inte förfalska den.
+// Saknas headern (curl, serversidan, äldre webbläsare) görs ingen kontroll.
+const ALLOWED_FETCH_SITES = new Set(['same-origin', 'none']);
+function requireSameOriginFetch(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const site = req.headers['sec-fetch-site'];
+  if (site !== undefined && !ALLOWED_FETCH_SITES.has(String(site))) {
+    logger.warn('Blocked cross-site cookie-authenticated request', { path: req.path, site });
+    return res.status(403).json({ error: 'Förfrågan nekades' });
+  }
+  next();
+}
+
+const CACHEABLE_API_PATH = /^\/(?:public\/branding\/logo|kb\/images\/[^/]+)$/;
+
 function isMulterError(err: unknown): err is MulterError {
   return err instanceof Error && err.name === 'MulterError';
 }
@@ -104,6 +118,16 @@ export function createApp() {
     const requestId = typeof incoming === 'string' && REQUEST_ID_PATTERN.test(incoming) ? incoming : randomUUID();
     res.setHeader('X-Request-ID', requestId);
     req.id = requestId;
+    next();
+  });
+
+  // nginx sätter ingen Cache-Control för /api/ — utan den här kan svar (ärenden,
+  // bilagor, tokens) heuristiskt cachas i webbläsare och mellanlager. Allt under /api
+  // är no-store utom det avsiktligt publika: varumärkeslogotypen och KB-bilderna, som
+  // sätter/får sin egen policy. Routes som själva sätter Cache-Control skriver över,
+  // och res.sendFile respekterar en redan satt header.
+  app.use('/api', (req, res, next) => {
+    if (!CACHEABLE_API_PATH.test(req.path)) res.setHeader('Cache-Control', 'no-store');
     next();
   });
 
@@ -222,8 +246,10 @@ export function createApp() {
   // Paths exempt from CSRF validation
   // - /api/auth/* — authenticate by credentials, not session cookies
   // - /api/public/* — credentialless endpoints for the unauthenticated public ticket form
-  // - /api/auth/logout — kräver ingen access-token (en utgången ska inte hindra utloggning);
-  //   cookien är SameSite=strict och värsta utfall av en forcerad logout är just en utloggning
+  // - /api/auth/refresh och /api/auth/logout autentiseras av refresh-cookien (SameSite=strict)
+  //   och saknar CSRF-token — logout kräver ingen access-token, så en utgången ska inte hindra
+  //   utloggning. Som försvar på djupet nekas de när webbläsaren själv uppger att anropet inte
+  //   är same-origin (Sec-Fetch-Site; se requireSameOriginFetch). Klienter utan headern släpps.
   const csrfExemptPrefixes = ['/api/auth/login', '/api/auth/refresh', '/api/auth/logout', '/api/public/'];
 
   const conditionalCsrf = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -248,6 +274,7 @@ export function createApp() {
   };
 
   app.use(conditionalCsrf);
+  app.post(['/api/auth/refresh', '/api/auth/logout'], requireSameOriginFetch);
 
   // Skrivbegränsning för alla muterande /api-anrop (300 per 5 min och användare/nyckel).
   // Efter CSRF så att avvisade anrop inte räknas.

@@ -905,7 +905,6 @@ describe('processEmail — autosvar och studsar', () => {
     ['Auto-Submitted: auto-replied', { 'auto-submitted': 'auto-replied' }, 'alice@example.com'],
     ['Precedence: bulk', { precedence: 'bulk' }, 'alice@example.com'],
     ['Precedence: auto_reply', { precedence: 'auto_reply' }, 'alice@example.com'],
-    ['X-Auto-Response-Suppress', { 'x-auto-response-suppress': 'All' }, 'alice@example.com'],
     ['MAILER-DAEMON-avsändare', {}, 'MAILER-DAEMON@mail.example.com'],
     ['noreply-avsändare', {}, 'no-reply@vendor.example'],
     ['postmaster-avsändare', {}, 'postmaster@vendor.example'],
@@ -918,6 +917,15 @@ describe('processEmail — autosvar och studsar', () => {
     expect(countTickets()).toBe(0);
     expect(countContacts()).toBe(0);
     expect(sendTicketReceivedConfirmation).not.toHaveBeenCalled();
+  });
+
+  it('behandlar X-Auto-Response-Suppress som vanlig post (Exchange stämplar även mänskliga mail)', async () => {
+    insertUser(memDb);
+    nextParsed = makeEmail({ headers: headers({ 'x-auto-response-suppress': 'DR, RN, NRN, OOF' }) });
+
+    await processEmail(Buffer.from('raw'), config);
+
+    expect(countTickets()).toBe(1);
   });
 
   it('släpper igenom Auto-Submitted: no', async () => {
@@ -1006,6 +1014,103 @@ describe('processEmail — svar på befintligt ärende kräver betrodd avsändar
       .prepare("SELECT is_internal FROM ticket_comments WHERE email_message_id IN ('<r4@x>', '<r5@x>') ORDER BY email_message_id")
       .all() as { is_internal: number }[];
     expect(rows.map((r) => r.is_internal)).toEqual([0, 1]);
+  });
+});
+
+describe('processEmail — avsändare som underkänts av SPF/DMARC', () => {
+  const failing = { 'authentication-results': 'mx.example; spf=fail smtp.mailfrom=alice@example.com' };
+
+  it('nytt ärende: ingen kontakt skapas och ingen bekräftelse skickas', async () => {
+    insertUser(memDb);
+    nextParsed = makeEmail({ messageId: '<spoof-new@x>', headers: headers(failing) });
+
+    expect(await processEmail(Buffer.from('raw'), config)).toBe('processed');
+
+    expect(countTickets()).toBe(1);
+    expect(countContacts()).toBe(0);
+    expect(sendTicketReceivedConfirmation).not.toHaveBeenCalled();
+  });
+
+  it('nytt ärende från en verifierad avsändare får fortfarande kontakt och bekräftelse', async () => {
+    insertUser(memDb);
+    nextParsed = makeEmail({
+      messageId: '<ok-new@x>',
+      headers: headers({ 'authentication-results': 'mx.example; spf=pass; dmarc=pass' }),
+    });
+
+    await processEmail(Buffer.from('raw'), config);
+
+    expect(countContacts()).toBe(1);
+    expect(sendTicketReceivedConfirmation).toHaveBeenCalledTimes(1);
+  });
+
+  it('nära-dubblett: kommentaren blir intern', async () => {
+    insertUser(memDb);
+    insertContact(memDb, { id: 'c1', email: 'alice@example.com' });
+    insertTicket(memDb, { id: 't1', title: 'Help me', requester_id: 'c1', createdSecondsAgo: 5 });
+    nextParsed = makeEmail({ messageId: '<dup-2@x>', headers: headers(failing) });
+
+    await processEmail(Buffer.from('raw'), config);
+
+    expect(countTickets()).toBe(1);
+    const row = memDb.prepare("SELECT is_internal FROM ticket_comments WHERE email_message_id = '<dup-2@x>'").get() as { is_internal: number };
+    expect(row.is_internal).toBe(1);
+  });
+
+  it('trådsvar: ingen kontakt skapas och kommentaren blir intern', async () => {
+    insertUser(memDb);
+    insertTicket(memDb, { id: 'abc12345-0000-4000-8000-000000000000', title: 'Skrivare' });
+    nextParsed = makeEmail({
+      from: { value: [{ address: 'mallory@evil.example', name: 'Mallory' }] },
+      subject: 'Re: Skrivare [#ABC12345]',
+      messageId: '<spoof-thread@x>',
+      headers: headers(failing),
+    });
+
+    await processEmail(Buffer.from('raw'), config);
+
+    expect(countContacts()).toBe(0);
+    const row = memDb.prepare('SELECT is_internal FROM ticket_comments').get() as { is_internal: number };
+    expect(row.is_internal).toBe(1);
+  });
+});
+
+describe('processEmail — timtak för nya ärenden via e-post', () => {
+  afterEach(() => {
+    delete process.env.EMAIL_INBOUND_MAX_NEW_PER_HOUR;
+  });
+
+  it("avvisar ('rejected') nya ärenden över taket oavsett avsändare, men släpper igenom svar", async () => {
+    insertUser(memDb);
+    process.env.EMAIL_INBOUND_MAX_NEW_PER_HOUR = '2';
+
+    for (let i = 0; i < 2; i++) {
+      nextParsed = makeEmail({
+        from: { value: [{ address: `user${i}@example.com`, name: 'U' }] },
+        subject: `Ärende ${i}`,
+        messageId: `<h-${i}@x>`,
+      });
+      expect(await processEmail(Buffer.from('raw'), config)).toBe('processed');
+    }
+    nextParsed = makeEmail({
+      from: { value: [{ address: 'user9@example.com', name: 'U' }] },
+      subject: 'Ett till',
+      messageId: '<h-9@x>',
+    });
+    expect(await processEmail(Buffer.from('raw'), config)).toBe('rejected');
+    expect(countTickets()).toBe(2);
+    expect(logger.warn).toHaveBeenCalledWith('Hourly email-ticket limit reached, rejecting', expect.objectContaining({ limit: 2 }));
+  });
+
+  it('räknar inte ärenden äldre än en timme', async () => {
+    insertUser(memDb);
+    process.env.EMAIL_INBOUND_MAX_NEW_PER_HOUR = '1';
+    memDb.prepare(
+      "INSERT INTO ticket_history (id, ticket_id, field_name, new_value, changed_at) VALUES ('old', 'x', 'created', 'email', datetime('now', '-2 hours'))"
+    ).run();
+    nextParsed = makeEmail({ messageId: '<h-old@x>' });
+
+    expect(await processEmail(Buffer.from('raw'), config)).toBe('processed');
   });
 });
 

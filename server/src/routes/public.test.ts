@@ -268,6 +268,19 @@ describe('POST /api/public/tickets', () => {
     expect(res.body.error).toMatch(/Name, email, and title/i);
   });
 
+  it.each([
+    ['name', { name: { first: 'A' } }],
+    ['email', { email: ['a@b.se'] }],
+    ['title', { title: 123 }],
+    ['description', { description: { html: '<p>x</p>' } }],
+  ])('400 (not 500) when %s is not a string', async (_field, override) => {
+    const res = await request(app)
+      .post('/api/public/tickets')
+      .set('X-Forwarded-For', freshIp())
+      .send(validTicketBody(override));
+    expect(res.status).toBe(400);
+  });
+
   it('400 when neither description nor customFields is provided', async () => {
     const res = await request(app)
       .post('/api/public/tickets')

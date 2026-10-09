@@ -92,6 +92,22 @@ describe('GET /api/health', () => {
   });
 });
 
+describe('Cache-Control on /api', () => {
+  it('is no-store for API responses, including errors and 404s', async () => {
+    for (const path of ['/api/health', '/api/csrf-token', '/api/tickets', '/api/finns-inte']) {
+      expect((await request(app).get(path)).headers['cache-control']).toBe('no-store');
+    }
+  });
+
+  it('does not touch the intentionally public logo and KB images', async () => {
+    const image = await request(app).get('/api/kb/images/kb-saknas.png');
+    expect(image.status).toBe(404);
+    expect(image.headers['cache-control']).toBeUndefined();
+    const logo = await request(app).get('/api/public/branding/logo');
+    expect(logo.headers['cache-control']).not.toBe('no-store');
+  });
+});
+
 describe('GET /api/<unknown> (404 catch-all)', () => {
   it('returns JSON 404 instead of Express\'s built-in HTML 404 page', async () => {
     const res = await request(app).get('/api/finns-inte');

@@ -277,10 +277,11 @@ CREATE INDEX IF NOT EXISTS idx_ticket_kb_links_article ON ticket_kb_links(articl
 -- på updated_at träffar exakta gränser. Tidigare CURRENT_TIMESTAMP gav SQLite-
 -- format ('YYYY-MM-DD HH:MM:SS') som skiljde sig från app-värdet.
 -- Fyrar bara på innehållskolumner (migration 072) — inte på bokföring som
--- last_aging_notified_at, email_message_id, ai_* eller sla_*.
+-- last_aging_notified_at, email_message_id, ai_* eller sla_* — och inte på created_by
+-- (omtilldelas när en användare raderas).
 CREATE TRIGGER IF NOT EXISTS update_ticket_updated_at
 AFTER UPDATE OF title, description, status, priority, category_id, requester_id,
-  notes, solution, company_id, assigned_to, created_by ON tickets
+  notes, solution, company_id, assigned_to ON tickets
 FOR EACH ROW
 BEGIN
   UPDATE tickets SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;

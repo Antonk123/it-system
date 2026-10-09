@@ -474,6 +474,32 @@ describe('POST /api/auth/change-password', () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
+// Sec-Fetch-Site: cookie-autentiserade, CSRF-undantagna endpoints
+// ───────────────────────────────────────────────────────────────────────────
+describe('Sec-Fetch-Site on refresh/logout', () => {
+  let userId: string;
+  beforeAll(async () => {
+    userId = await createUser('secfetch@authtest.local', PASSWORD);
+  });
+
+  it.each(['cross-site', 'same-site'])('refresh and logout with Sec-Fetch-Site: %s → 403 and the token stays valid', async (site) => {
+    const token = seedRefreshToken(userId);
+    const refresh = await refreshPost().set('Cookie', refreshCookie(token)).set('Sec-Fetch-Site', site);
+    expect(refresh.status).toBe(403);
+    const logout = await request(app).post('/api/auth/logout').set('Cookie', refreshCookie(token)).set('Sec-Fetch-Site', site);
+    expect(logout.status).toBe(403);
+    expect(refreshRow(token)!.revoked).toBe(0);
+  });
+
+  it.each(['same-origin', 'none'])('Sec-Fetch-Site: %s is allowed', async (site) => {
+    const refresh = await refreshPost().set('Cookie', refreshCookie(seedRefreshToken(userId))).set('Sec-Fetch-Site', site);
+    expect(refresh.status).toBe(200);
+    const logout = await request(app).post('/api/auth/logout').set('Cookie', refreshCookie(seedRefreshToken(userId))).set('Sec-Fetch-Site', site);
+    expect(logout.status).toBe(204);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
 // 5. forgot-password / reset-password
 // ───────────────────────────────────────────────────────────────────────────
 describe('POST /api/auth/forgot-password & /reset-password', () => {
@@ -731,6 +757,30 @@ describe('POST /api/auth/login — hardening', () => {
     expect((await login('lockout-other@authtest.local', PASSWORD)).status).toBe(200);
   });
 
+  it('rätt lösenord från en IP som tidigare loggat in lyckat går igenom låset, andra IP:n får 429', async () => {
+    const email = 'lockout-known-ip@authtest.local';
+    await createUser(email, PASSWORD);
+    const ipA = freshIp();
+    const ipB = freshIp();
+    const ipC = freshIp();
+    const loginFrom = (ip: string, password: string) =>
+      request(app).post('/api/auth/login').set('X-Forwarded-For', ip).send({ email, password });
+
+    expect((await loginFrom(ipB, PASSWORD)).status).toBe(200);
+    // Angriparen låser kontot från IP A (varje fel kommer från en egen IP för att inte stoppas av IP-gränsen).
+    expect((await loginFrom(ipA, 'wrong')).status).toBe(401);
+    for (let i = 0; i < 9; i++) {
+      expect((await login(email, 'wrong-' + i)).status).toBe(401);
+    }
+    expect((await loginFrom(ipA, PASSWORD)).status).toBe(429);
+    expect((await loginFrom(ipC, PASSWORD)).status).toBe(429);
+
+    // Känd IP: fel lösenord nekas fortfarande, rätt lösenord släpps in och nollställer låset.
+    expect((await loginFrom(ipB, 'wrong')).status).toBe(401);
+    expect((await loginFrom(ipB, PASSWORD)).status).toBe(200);
+    expect((await loginFrom(ipA, PASSWORD)).status).toBe(200);
+  });
+
   it('counts failures for unknown emails too (no enumeration via lockout behaviour)', async () => {
     const email = 'never-existed@authtest.local';
     for (let i = 0; i < 10; i++) {
@@ -806,6 +856,48 @@ describe('mustChangePassword + token_version', () => {
 
     const after = await request(app).get('/api/auth/me').set('Authorization', `Bearer ${change.body.accessToken}`);
     expect(after.body.user.mustChangePassword).toBe(false);
+  });
+
+  it('blocks every route except me/change-password/logout/refresh with 403 PASSWORD_CHANGE_REQUIRED', async () => {
+    const email = 'mustchange-block@authtest.local';
+    const userId = await createUser(email, PASSWORD);
+    db.prepare('UPDATE users SET must_change_password = 1 WHERE id = ?').run(userId);
+    const login = await request(app).post('/api/auth/login').set('X-Forwarded-For', freshIp()).send({ email, password: PASSWORD });
+    const auth = { Authorization: `Bearer ${login.body.accessToken}` };
+
+    const blocked = await request(app).get('/api/tickets').set(auth);
+    expect(blocked.status).toBe(403);
+    expect(blocked.body).toEqual({
+      error: 'Lösenordet måste bytas innan du kan fortsätta',
+      code: 'PASSWORD_CHANGE_REQUIRED',
+    });
+    expect((await request(app).get('/api/users').set(auth)).status).toBe(403);
+
+    expect((await request(app).get('/api/auth/me').set(auth)).status).toBe(200);
+    const logout = await request(app).post('/api/auth/logout').set('Cookie', refreshCookie(seedRefreshToken(userId)));
+    expect(logout.status).toBe(204);
+    expect((await refreshPost().set('Cookie', refreshCookie(seedRefreshToken(userId)))).status).toBe(200);
+  });
+
+  it('blocks API-key requests from a user who must change password, but lets change-password through', async () => {
+    const email = 'mustchange-apikey@authtest.local';
+    const userId = await createUser(email, PASSWORD);
+    db.prepare('UPDATE users SET must_change_password = 1 WHERE id = ?').run(userId);
+    const rawKey = `itk_live_${randomBytes(16).toString('hex')}`;
+    db.prepare(
+      'INSERT INTO api_keys (id, name, key_prefix, key_hash, user_id, permissions) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(randomUUID(), 'mustchange-key', rawKey.substring(9, 17), sha256(rawKey), userId, JSON.stringify(['read', 'write']));
+
+    const blocked = await request(app).get('/api/tickets').set('Authorization', `Bearer ${rawKey}`);
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.code).toBe('PASSWORD_CHANGE_REQUIRED');
+
+    const change = await request(app)
+      .post('/api/auth/change-password')
+      .set('Authorization', `Bearer ${rawKey}`)
+      .send({ currentPassword: PASSWORD, newPassword: NEW_PASSWORD });
+    expect(change.status).toBe(200);
+    expect((await request(app).get('/api/tickets').set('Authorization', `Bearer ${rawKey}`)).status).toBe(200);
   });
 
   it('change-password kills the old access token at once (tv bump) and hands the caller a working new one + cookie', async () => {

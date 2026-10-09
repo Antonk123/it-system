@@ -154,7 +154,7 @@ function createSchema(d: InstanceType<typeof Database>) {
       updated_at TEXT NOT NULL
     );
     CREATE VIRTUAL TABLE kb_articles_fts
-      USING fts5(title, content_plain, content='', tokenize='unicode61');
+      USING fts5(title, content_plain, content='', contentless_delete=1, tokenize='unicode61');
   `);
 }
 

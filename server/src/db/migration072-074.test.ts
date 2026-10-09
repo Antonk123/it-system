@@ -47,6 +47,7 @@ describe('migration 072: updated_at trigger only on content columns', () => {
     ['ai_suggested_confidence', 'UPDATE tickets SET ai_suggested_confidence = 0.9 WHERE id = \'t1\''],
     ['sla_response_met', 'UPDATE tickets SET sla_response_met = 1 WHERE id = \'t1\''],
     ['sla_paused_duration', 'UPDATE tickets SET sla_paused_duration = 5 WHERE id = \'t1\''],
+    ['created_by', "UPDATE tickets SET created_by = NULL WHERE id = 't1'"],
   ])('does not touch updated_at when only %s changes', (_col, sql) => {
     db.exec(sql);
     expect(updatedAt()).toBe('2020-01-01T00:00:00.000Z');

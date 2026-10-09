@@ -265,7 +265,7 @@ describe('POST /api/kb/upload-image', () => {
       .attach('image', VALID_PNG_BUFFER, { filename: 'test.png', contentType: 'image/png' });
 
     expect(res.status).toBe(201);
-    expect(res.body.url).toMatch(/^\/api\/kb\/images\/kb-.+\.png$/);
+    expect(res.body.url).toMatch(/^\/api\/kb\/images\/kb-\d+-[0-9a-f]{24}\.png$/);
 
     const filename = res.body.url.replace('/api/kb/images/', '');
     expect(existsSync(join(UPLOAD_TEST_DIR, filename))).toBe(true);

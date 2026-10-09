@@ -14,6 +14,7 @@ import { startEmailPolling, stopEmailPolling } from './lib/emailInbound.js';
 import { getOidcConfigStatus, probeOidcAtBoot, OIDC_REQUIRED_ENV } from './lib/oidc.js';
 import cron from 'node-cron';
 import { logger } from './lib/logger.js';
+import { cookieSecure } from './config/cookies.js';
 
 // Global error handlers — catch unhandled promises and exceptions
 // Räkna avvisningar för att varna om de upprepas ovanligt ofta (möjligt läckage).
@@ -93,8 +94,9 @@ if (ftsDrift.tickets.rows !== ftsDrift.tickets.fts || ftsDrift.kbArticles.rows !
   logger.warn('FTS-index avviker från tabellerna — sökresultat kan vara ofullständiga', ftsDrift);
 }
 
-if (process.env.NODE_ENV === 'production' && process.env.COOKIE_SECURE !== 'true') {
-  logger.warn('COOKIE_SECURE är inte "true" i produktion — CSRF-/refresh-cookies skickas utan Secure-flaggan. Sätt COOKIE_SECURE=true i Portainer-stacken om TLS termineras framför appen.');
+if (process.env.NODE_ENV === 'production' && !cookieSecure()) {
+  const behindHttps = process.env.APP_BASE_URL?.startsWith('https://');
+  logger.warn(`COOKIE_SECURE=false i produktion${behindHttps ? ' trots att APP_BASE_URL är https' : ''} — CSRF-/refresh-cookies skickas utan Secure-flaggan. Ta bort COOKIE_SECURE (eller sätt true) i Portainer-stacken om TLS termineras framför appen.`);
 }
 warnIfOffsiteMissing();
 

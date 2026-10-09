@@ -469,6 +469,7 @@ describe('GET /api/attachments/file/:id — serve file (authorization)', () => {
     expect(res.status).toBe(200);
     expect(res.headers['content-type']).toMatch(/image\/png/);
     expect(res.headers['content-disposition']).toMatch(/attachment/);
+    expect(res.headers['cache-control']).toBe('no-store');
   });
 
   it('returns 200 and serves the file for the assigned user', async () => {

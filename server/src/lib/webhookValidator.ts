@@ -64,6 +64,18 @@ function isUnsafeIPv6(ip: string): UnsafeCheck {
     const v4 = isUnsafeIPv4(embeddedV4);
     return v4.unsafe ? { unsafe: true, reason: `IPv4-embedded IPv6 address: ${v4.reason}` } : v4;
   }
+  // Översättnings-/tunnelprefix bär en IPv4-adress som kan peka in i nätet: NAT64
+  // (64:ff9b::/96, v4 i de sista 32 bitarna) och 6to4 (2002::/16, v4 i bit 16-47).
+  // Alla nekas, och en inbäddad privat adress anges som orsak.
+  const nat64 = g[0] === 0x64 && g[1] === 0xff9b && g.slice(2, 6).every((n) => n === 0);
+  if (nat64 || g[0] === 0x2002) {
+    const tunnelled = nat64 ? embeddedV4 : `${g[1] >> 8}.${g[1] & 255}.${g[2] >> 8}.${g[2] & 255}`;
+    const v4 = isUnsafeIPv4(tunnelled);
+    const prefix = nat64 ? 'NAT64 64:ff9b::/96' : '6to4 2002::/16';
+    return { unsafe: true, reason: `${prefix} not allowed${v4.unsafe ? ` (embedded IPv4: ${v4.reason})` : ''}` };
+  }
+  if (g[0] === 0x2001 && g[1] === 0) return { unsafe: true, reason: 'IPv6 Teredo 2001::/32 not allowed' };
+  if ((g[0] & 0xffc0) === 0xfec0) return { unsafe: true, reason: 'IPv6 site-local fec0::/10 not allowed' };
   if ((g[0] & 0xffc0) === 0xfe80) return { unsafe: true, reason: 'IPv6 link-local fe80::/10 not allowed' };
   if ((g[0] & 0xfe00) === 0xfc00) return { unsafe: true, reason: 'IPv6 unique-local fc00::/7 not allowed' };
   if ((g[0] & 0xff00) === 0xff00) return { unsafe: true, reason: 'IPv6 multicast ff00::/8 not allowed' };

@@ -109,8 +109,12 @@ function tryApiKeyAuth(req: Request): ApiKeyAuthResult {
   }
 
   // Look up user
-  const user = db.prepare('SELECT id, email, role FROM users WHERE id = ?').get(row.user_id) as AuthUser | undefined;
-  if (!user) return { kind: 'invalid' };
+  const userRow = db.prepare('SELECT id, email, role, must_change_password FROM users WHERE id = ?').get(row.user_id) as
+    | (Omit<AuthUser, 'mustChangePassword'> & { must_change_password: number })
+    | undefined;
+  if (!userRow) return { kind: 'invalid' };
+  const { must_change_password: mustChange, ...identity } = userRow;
+  const user: AuthUser = { ...identity, mustChangePassword: mustChange === 1 };
 
   // Update last_used_at, but throttle: only write if last update was > 5 minutes ago.
   // Avoids a DB write on every single API-key-authenticated request.
@@ -123,10 +127,31 @@ function tryApiKeyAuth(req: Request): ApiKeyAuthResult {
   return { kind: 'authenticated', user, apiKey: { id: row.id, permissions } };
 }
 
+// Det enda en användare med tvingat lösenordsbyte får göra: se vem hen är, byta
+// lösenord och förnya/avsluta sessionen. Allt annat nekas serverside — klientens
+// omdirigering är bara en bekvämlighet.
+const PASSWORD_CHANGE_ALLOWED = new Set([
+  'GET /api/auth/me',
+  'POST /api/auth/change-password',
+  'POST /api/auth/logout',
+  'POST /api/auth/refresh',
+]);
+
+function passwordChangeRequired(req: Request, user: AuthUser, res: Response): boolean {
+  if (!user.mustChangePassword) return false;
+  if (PASSWORD_CHANGE_ALLOWED.has(`${req.method} ${req.baseUrl}${req.path}`)) return false;
+  res.status(403).json({
+    error: 'Lösenordet måste bytas innan du kan fortsätta',
+    code: 'PASSWORD_CHANGE_REQUIRED',
+  });
+  return true;
+}
+
 export const authenticate: RequestHandler = (req: Request, res: Response, next: NextFunction) => {
   // Try API key auth first
   const apiKeyResult = tryApiKeyAuth(req);
   if (apiKeyResult.kind === 'authenticated') {
+    if (passwordChangeRequired(req, apiKeyResult.user, res)) return;
     req.user = apiKeyResult.user;
     req.apiKey = apiKeyResult.apiKey;
     return next();
@@ -149,6 +174,7 @@ export const authenticate: RequestHandler = (req: Request, res: Response, next: 
       logger.warn('Unauthorized request', { method: req.method, path: req.path });
       return res.status(401).json({ error: 'Unauthorized' });
     }
+    if (passwordChangeRequired(req, user, res)) return;
     req.user = user;
     next();
   })(req, res, next);

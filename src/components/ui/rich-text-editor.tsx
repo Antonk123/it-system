@@ -256,6 +256,12 @@ export interface RichTextEditorProps {
   id?: string;
 }
 
+/**
+ * TipTap-baserad editor som används för ärenden, kommentarer, mallar och KB.
+ * Verktygsraden, bilduppladdning (via KB-endpointen) och tabellstöd ligger här
+ * så att alla ytor beter sig lika; `compact` fäller ihop verktygsraden bakom
+ * en "Formatering"-knapp på smala ytor.
+ */
 export const RichTextEditor = ({
   value,
   onChange,
@@ -532,7 +538,7 @@ export const RichTextEditor = ({
         toast.error('Inga bilder kunde laddas upp');
       }
     } catch (err) {
-      console.error('KB image upload failed:', err);
+      if (import.meta.env.DEV) console.error('KB image upload failed:', err);
       toast.error('Bildupladdningen misslyckades. Försök igen.');
     } finally {
       setImageUploading(false);

@@ -111,7 +111,8 @@ export async function sendPushToSubscriptions(
     const err = result.reason as { statusCode?: number; message?: string };
     if (err.statusCode === 410 || err.statusCode === 404) {
       deleteSub.run(valid[i].endpoint);
-      logger.info('Removed expired push subscription', { endpoint: valid[i].endpoint });
+      // Bara värden: endpoint-sökvägen är en hemlig mottagaradress.
+      logger.info('Removed expired push subscription', { host: new URL(valid[i].endpoint).hostname });
     } else {
       logger.error('Push send error', { message: err.message });
     }

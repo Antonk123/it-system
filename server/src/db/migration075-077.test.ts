@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import Database from 'better-sqlite3';
 import type { Database as DatabaseType } from 'better-sqlite3';
 import { readFileSync } from 'fs';
@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { migrations } from './migrations.js';
 import { runMigrations } from './runner.js';
+import { logger } from '../lib/logger.js';
 
 // 075: ticket_templates byggs om (FK på created_by, NOT NULL description_template, CHECK).
 // 076: tags.color blir NOT NULL DEFAULT #3b82f6.
@@ -197,6 +198,30 @@ describe('migration 077: dedupe contacts + unique email (NOCASE)', () => {
     runMigrations(db, migrations.filter((m) => m.id === '077'));
     expect(() => db.prepare("INSERT INTO contacts (id, name, email) VALUES ('n', 'N', 'BO@foretag.se')").run()).toThrow(/UNIQUE/);
     expect(() => db.prepare("INSERT INTO contacts (id, name, email) VALUES ('m', 'M', 'ny@foretag.se')").run()).not.toThrow();
+  });
+
+  it('lets a NULL created_at lose to a dated row, and fills the keeper\'s empty fields from the duplicates', () => {
+    db.prepare("INSERT INTO companies (id, name) VALUES ('co1', 'Bolaget')").run();
+    db.prepare("UPDATE contacts SET phone = '070-1', department = NULL, company_id = NULL WHERE id = 'oldest'").run();
+    db.prepare("UPDATE contacts SET phone = '070-2', department = 'IT', company_id = 'co1' WHERE id = 'dup-lower'").run();
+    db.prepare("UPDATE contacts SET department = 'Ekonomi' WHERE id = 'dup-upper'").run();
+    db.prepare("INSERT INTO contacts (id, name, email, created_at) VALUES ('undated', 'Anna U', 'anna@FORETAG.se', NULL)").run();
+
+    runMigrations(db, migrations.filter((m) => m.id === '077'));
+
+    expect(db.prepare("SELECT id, phone, department, company_id FROM contacts WHERE email = 'Anna@Foretag.se' COLLATE NOCASE").all())
+      .toEqual([{ id: 'oldest', phone: '070-1', department: 'IT', company_id: 'co1' }]);
+  });
+
+  it('keeps contacts with an empty email apart and logs which contact was kept', () => {
+    db.prepare("INSERT INTO contacts (id, name, email, created_at) VALUES ('blank-1', 'A', '', '2025-01-01'), ('blank-2', 'B', '', '2025-01-02')").run();
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => logger);
+
+    runMigrations(db, migrations.filter((m) => m.id === '077'));
+
+    expect(count(db, "SELECT COUNT(*) FROM contacts WHERE email = ''")).toBe(2);
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/Behöll kontakt oldest.*dup-lower.*dup-upper/));
+    warn.mockRestore();
   });
 
   it('is a no-op for the data when there are no duplicates (and a second run is safe)', () => {

@@ -137,6 +137,43 @@ describe('POST /api/push/subscribe — auth', () => {
   });
 });
 
+describe('Subscribe — fälttyper, längder och tak per användare', () => {
+  const post = (body: unknown) =>
+    userAgent
+      .post('/api/push/subscribe')
+      .set('Authorization', `Bearer ${userToken}`)
+      .set('x-csrf-token', userCsrf)
+      .send(body as object);
+  const keys = { p256dh: 'p', auth: 'a' };
+
+  it.each([
+    ['endpoint som objekt', { endpoint: { a: 1 }, keys }],
+    ['endpoint över 512 tecken', { endpoint: `https://fcm.googleapis.com/${'x'.repeat(500)}`, keys }],
+    ['p256dh som tal', { endpoint: 'https://fcm.googleapis.com/t1', keys: { p256dh: 1, auth: 'a' } }],
+    ['p256dh över 128 tecken', { endpoint: 'https://fcm.googleapis.com/t2', keys: { p256dh: 'x'.repeat(129), auth: 'a' } }],
+    ['auth som array', { endpoint: 'https://fcm.googleapis.com/t3', keys: { p256dh: 'p', auth: ['a'] } }],
+    ['auth över 128 tecken', { endpoint: 'https://fcm.googleapis.com/t4', keys: { p256dh: 'p', auth: 'x'.repeat(129) } }],
+  ])('400 för %s', async (_label, body) => {
+    expect((await post(body)).status).toBe(400);
+  });
+
+  it('behåller högst 20 prenumerationer per användare och tar bort de äldsta', async () => {
+    db.prepare('DELETE FROM push_subscriptions WHERE user_id = ?').run(userId);
+    for (let i = 0; i < 21; i++) {
+      const res = await post({ endpoint: `https://fcm.googleapis.com/cap-${i}`, keys });
+      expect(res.status).toBe(201);
+      // Stabil ordning även när testet kör snabbare än klockans upplösning.
+      db.prepare('UPDATE push_subscriptions SET created_at = ? WHERE endpoint = ?')
+        .run(new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString(), `https://fcm.googleapis.com/cap-${i}`);
+    }
+    const left = (db.prepare('SELECT endpoint FROM push_subscriptions WHERE user_id = ?').all(userId) as { endpoint: string }[])
+      .map((r) => r.endpoint);
+    expect(left).toHaveLength(20);
+    expect(left).not.toContain('https://fcm.googleapis.com/cap-0');
+    expect(left).toContain('https://fcm.googleapis.com/cap-20');
+  });
+});
+
 describe('Subscribe → unsubscribe cycle', () => {
   const endpoint = 'https://fcm.googleapis.com/sub-1';
 

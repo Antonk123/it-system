@@ -115,6 +115,16 @@ describe('GET /api/users — auth required, payload by role', () => {
     expect(me.emailConfirmed).toBe(true);
   });
 
+  it('never lists the system user, for admins or other users', async () => {
+    const systemRow = db.prepare('SELECT id FROM users WHERE id = ?').get(SYSTEM_USER_ID);
+    expect(systemRow).toBeDefined();
+    for (const token of [admin.token, user.token]) {
+      const res = await request(app).get('/api/users').set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.users.map((u: { id: string }) => u.id)).not.toContain(SYSTEM_USER_ID);
+    }
+  });
+
   it('returns the reduced payload (no email) for a non-admin', async () => {
     const res = await request(app)
       .get('/api/users')

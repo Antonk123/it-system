@@ -97,7 +97,7 @@ passport.use(new JwtStrategy(
   },
   (payload, done) => {
     try {
-      const user = db.prepare('SELECT id, email, role, token_version FROM users WHERE id = ?').get(payload.sub) as UserRow | undefined;
+      const user = db.prepare('SELECT id, email, role, must_change_password, token_version FROM users WHERE id = ?').get(payload.sub) as UserRow | undefined;
 
       // `tv` höjs vid lösenordsbyte/-återställning: äldre access-tokens dör direkt
       // i stället för att leva kvar upp till 15 minuter. Token utan `tv` räknas som 0.
@@ -109,6 +109,7 @@ passport.use(new JwtStrategy(
         id: user.id,
         email: user.email,
         role: user.role,
+        mustChangePassword: user.must_change_password === 1,
       });
     } catch (error) {
       return done(error, false);

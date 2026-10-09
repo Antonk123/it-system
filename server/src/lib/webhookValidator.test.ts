@@ -275,19 +275,42 @@ describe('isSafeWebhookUrl — extended SSRF ranges', () => {
     '[fc00::1]',
     '[fdff::1]',
     '[ff02::1]', // multicast
+    '[64:ff9b::7f00:1]', // NAT64 -> 127.0.0.1
+    '[64:ff9b::10.0.0.1]', // NAT64 -> 10.0.0.1
+    '[64:ff9b::808:808]', // NAT64 -> public 8.8.8.8 is still refused
+    '[2002:7f00:1::]', // 6to4 -> 127.0.0.1
+    '[2002:a9fe:a9fe::1]', // 6to4 -> 169.254.169.254
+    '[2002:808:808::]', // 6to4 -> public 8.8.8.8 is still refused
+    '[fec0::1]', // site-local
+    '[febf::1]',
+    '[2001:0:4136:e378:8000:63bf:3fff:fdd2]', // Teredo
   ])('rejects IPv6 literal %s', async (host) => {
     const result = await isSafeWebhookUrl(`https://${host}/hook`);
     expect(result.ok).toBe(false);
     expect(lookupMock).not.toHaveBeenCalled();
   });
 
-  it.each(['[::ffff:5db8:d822]', '[2001:4860:4860::8888]', '[fec0::1]', '[::ffff:8.8.8.8]'])(
+  it.each(['[::ffff:5db8:d822]', '[2001:4860:4860::8888]', '[2001:db8::1]', '[::ffff:8.8.8.8]'])(
     'allows public IPv6 / mapped public literal %s',
     async (host) => {
       const result = await isSafeWebhookUrl(`https://${host}/hook`);
       expect(result.ok).toBe(true);
     },
   );
+
+  it('names the embedded private IPv4 in the reason for NAT64/6to4 literals', async () => {
+    const nat64 = await isSafeWebhookUrl('https://[64:ff9b::a00:1]/hook');
+    expect(nat64).toEqual({ ok: false, reason: expect.stringContaining('NAT64') });
+    expect(nat64.ok === false && nat64.reason).toContain('10.0.0.0/8');
+    const sixToFour = await isSafeWebhookUrl('https://[2002:c0a8:101::]/hook');
+    expect(sixToFour.ok === false && sixToFour.reason).toContain('192.168.0.0/16');
+  });
+
+  it('rejects a hostname resolving to a NAT64 address', async () => {
+    lookupMock.mockResolvedValueOnce([{ address: '64:ff9b::7f00:1', family: 6 }]);
+    const result = await isSafeWebhookUrl('https://nat64.example.com/hook');
+    expect(result.ok).toBe(false);
+  });
 
   it('rejects a hostname resolving to an IPv4-mapped loopback address', async () => {
     lookupMock.mockResolvedValueOnce([{ address: '::ffff:127.0.0.1', family: 6 }]);

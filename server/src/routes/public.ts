@@ -236,6 +236,12 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
     return res.status(400).json({ error: 'Name, email, and title are required' });
   }
 
+  // Icke-strängar (objekt, tal, array) skulle annars krascha längd-/regexkontrollerna till en 500.
+  if (typeof name !== 'string' || typeof email !== 'string' || typeof title !== 'string'
+    || (description != null && typeof description !== 'string')) {
+    return res.status(400).json({ error: 'Name, email, title and description must be strings' });
+  }
+
   // Description is not required if customFields are provided
   if (!description && (!customFields || customFields.length === 0)) {
     return res.status(400).json({ error: 'Either description or custom fields are required' });

@@ -5,6 +5,10 @@ import { randomUUID } from 'crypto';
 import { logger } from '../lib/logger.js';
 import { isAllowedPushEndpoint } from '../lib/push.js';
 
+const MAX_ENDPOINT_LENGTH = 512;
+const MAX_KEY_LENGTH = 128;
+const MAX_SUBSCRIPTIONS_PER_USER = 20;
+
 const router = Router();
 
 router.get('/vapid-public-key', authenticate, (_req, res) => {
@@ -16,7 +20,9 @@ router.get('/vapid-public-key', authenticate, (_req, res) => {
 router.post('/subscribe', authenticate, (req: AuthRequest, res) => {
   try {
     const { endpoint, keys } = req.body;
-    if (!endpoint || !keys?.p256dh || !keys?.auth)
+    if (typeof endpoint !== 'string' || !endpoint || endpoint.length > MAX_ENDPOINT_LENGTH
+      || typeof keys?.p256dh !== 'string' || !keys.p256dh || keys.p256dh.length > MAX_KEY_LENGTH
+      || typeof keys?.auth !== 'string' || !keys.auth || keys.auth.length > MAX_KEY_LENGTH)
       return res.status(400).json({ error: 'Invalid subscription' });
     if (!isAllowedPushEndpoint(endpoint))
       return res.status(400).json({ error: 'Ogiltig push-endpoint' });
@@ -30,6 +36,12 @@ router.post('/subscribe', authenticate, (req: AuthRequest, res) => {
     `).run(randomUUID(), endpoint, keys.p256dh, keys.auth, req.user!.id, new Date().toISOString());
     if (result.changes === 0)
       return res.status(409).json({ error: 'Endpointen tillhör en annan användare' });
+    // Äldsta prenumerationerna går först när en användare passerar taket.
+    db.prepare(`
+      DELETE FROM push_subscriptions WHERE user_id = ? AND id NOT IN (
+        SELECT id FROM push_subscriptions WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?
+      )
+    `).run(req.user!.id, req.user!.id, MAX_SUBSCRIPTIONS_PER_USER);
     res.status(201).json({ ok: true });
   } catch (err) {
     logger.error('Error subscribing to push notifications:', { error: String(err) });

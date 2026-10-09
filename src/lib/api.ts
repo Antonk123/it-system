@@ -279,6 +279,13 @@ class ApiClient {
 
       const error = await this.readErrorBody(response, `Request failed (${response.status})`);
 
+      // Servern spärrar alla anrop tills ett tillfälligt lösenord bytts — skicka
+      // användaren till bytesvyn i stället för att visa ett generiskt 403-fel.
+      if (response.status === 403 && error.code === 'PASSWORD_CHANGE_REQUIRED'
+          && !String(window.location.pathname ?? '').startsWith('/change-password')) {
+        window.location.assign('/change-password');
+      }
+
       // On CSRF failure: clear stale token and retry once
       if (response.status === 403 && !isRetry && this.isCsrfError(error)) {
         this.csrfToken = null;

@@ -105,6 +105,8 @@ async function attemptDelivery(
       // SSRF-valideringen ovan.
       redirect: 'manual',
     });
+    // Svarskroppen läses aldrig; utan cancel hålls socketen kvar tills GC.
+    await response.body?.cancel().catch(() => undefined);
 
     if (response.status >= 200 && response.status < 300) {
       db.prepare(

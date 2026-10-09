@@ -90,6 +90,19 @@ describe('createFailureTracker', () => {
     expect(tracker.lockedFor('a')).toBe(0);
   });
 
+  it('remembers only the five most recent successful IPs per key and clears failures on success', () => {
+    const tracker = createFailureTracker(60_000, 1);
+    tracker.recordFailure('a');
+    expect(tracker.lockedFor('a')).toBeGreaterThan(0);
+    tracker.recordSuccess('a', 'ip-1');
+    expect(tracker.lockedFor('a')).toBe(0);
+
+    for (const ip of ['ip-2', 'ip-3', 'ip-4', 'ip-5', 'ip-6']) tracker.recordSuccess('a', ip);
+    expect(tracker.isKnownIp('a', 'ip-1')).toBe(false);
+    expect(tracker.isKnownIp('a', 'ip-6')).toBe(true);
+    expect(tracker.isKnownIp('b', 'ip-6')).toBe(false);
+  });
+
   it('forgets failures once the window has passed', () => {
     vi.useFakeTimers();
     try {

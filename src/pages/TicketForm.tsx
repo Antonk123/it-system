@@ -58,6 +58,12 @@ const LookupError = ({ message, onRetry }: { message: string; onRetry: () => voi
   </p>
 );
 
+/**
+ * Skapa/redigera ärende. En komponent eftersom alla fält delar samma utkast-,
+ * mall- och valideringstillstånd: mallval fyller i titel/beskrivning/dynamiska
+ * fält, utkastet sparas lokalt (safeStorage) tills formuläret skickas, och
+ * handleSubmit mappar fält + bilagor + checklista till ett enda API-anrop.
+ */
 const TicketForm = () => {
   const { id } = useParams();
   const navigate = useNavigate();

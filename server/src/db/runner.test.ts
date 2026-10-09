@@ -75,6 +75,23 @@ describe('runMigrations: disableForeignKeys', () => {
     expect(() => runMigrations(db, [{ id: '1', name: 'rebuild', disableForeignKeys: true, up: rebuildParent }])).not.toThrow();
   });
 
+  it('fails on a NEW violation even when the migration also fixes an old one (equal count)', () => {
+    db.pragma('foreign_keys = OFF');
+    db.exec("INSERT INTO child VALUES ('old-orphan', 'ghost')");
+    db.pragma('foreign_keys = ON');
+    const swap: Migration = {
+      id: '1',
+      name: 'swap-orphans',
+      disableForeignKeys: true,
+      up: (d) => {
+        d.exec("INSERT INTO child VALUES ('new-orphan', 'ghost')");
+        d.exec("DELETE FROM child WHERE id = 'old-orphan'");
+      },
+    };
+    expect(() => runMigrations(db, [swap])).toThrow(/introduced 1 foreign key violation/);
+    expect(db.prepare("SELECT id FROM child WHERE id = 'old-orphan'").get()).toBeDefined();
+  });
+
   it('restores foreign keys when the migration itself throws', () => {
     const failing: Migration = { id: '1', name: 'boom', disableForeignKeys: true, up: () => { throw new Error('boom'); } };
     expect(() => runMigrations(db, [failing])).toThrow('boom');
@@ -158,6 +175,27 @@ describe('pre-migration snapshot', () => {
     expect(kept).toHaveLength(3);
     expect(kept.every((f) => /pre-migration-00[345]-/.test(f))).toBe(true);
     expect(snapshots()).toContain('backup-2026-10-01.zip');
+  });
+
+  it('does not write a second snapshot for the same migration id (crash loop keeps the pre-upgrade copy)', () => {
+    runMigrations(db, [noop('1')]);
+    const failing: Migration = { id: '2', name: 'boom', up: () => { throw new Error('boom'); } };
+    for (let i = 0; i < 3; i++) {
+      expect(() => runMigrations(db, [noop('1'), failing], { snapshotDir: backupDir })).toThrow('boom');
+    }
+    expect(snapshots()).toHaveLength(1);
+    expect(snapshots()[0]).toMatch(/^pre-migration-2-/);
+    // Ett annat id får däremot en egen kopia.
+    expect(takePreMigrationSnapshot(db, backupDir, '3')).not.toBeNull();
+    expect(snapshots()).toHaveLength(2);
+  });
+
+  it('removes the partial target and returns null when the copy fails', () => {
+    runMigrations(db, [noop('1')]);
+    // Orimlig källfil: copyFileSync kastar och ingen kopia får bli kvar.
+    const broken = { ...db, name: join(dir, 'does-not-exist.sqlite'), memory: false, pragma: db.pragma.bind(db) } as unknown as DatabaseType;
+    expect(takePreMigrationSnapshot(broken, backupDir, '9')).toBeNull();
+    expect(snapshots()).toEqual([]);
   });
 
   it('a failing snapshot does not block the migrations', () => {

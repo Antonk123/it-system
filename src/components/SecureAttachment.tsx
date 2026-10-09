@@ -35,7 +35,7 @@ export const SecureImage = ({ fileId, alt, className, ...props }: SecureImagePro
           setLoading(false);
         }
       } catch (err) {
-        console.error('Failed to load image:', err);
+        if (import.meta.env.DEV) console.error('Failed to load image:', err);
         if (mounted) {
           setError(true);
           setLoading(false);
@@ -89,7 +89,7 @@ export const SecureDownloadLink = ({ fileId, filename, children, className, ...p
       setDownloading(true);
       await downloadAuthenticatedFile(fileId, filename);
     } catch (error) {
-      console.error('Failed to download file:', error);
+      if (import.meta.env.DEV) console.error('Failed to download file:', error);
     } finally {
       setDownloading(false);
     }

@@ -1,4 +1,4 @@
-import { normalizeTemplateValues, missingRequiredTemplateFields, type TemplateFieldValue } from '../lib/templateValidation.js';
+import { normalizeTemplateValues, missingRequiredTemplateFields, composeDescriptionFromFields, type TemplateFieldValue } from '../lib/templateValidation.js';
 import { Router, Response } from 'express';
 import { randomUUID } from 'node:crypto';
 import multer from 'multer';
@@ -19,7 +19,7 @@ import { logger } from '../lib/logger.js';
 import { logAudit } from '../lib/auditLog.js';
 import { attachmentDisposition } from '../lib/contentDisposition.js';
 import { resolveUploadPath } from '../lib/uploadPath.js';
-import { validateTicketInput, type TicketInput } from '../lib/ticketValidation.js';
+import { validateTicketInput, MAX_BODY_LENGTH, type TicketInput } from '../lib/ticketValidation.js';
 import {
   TicketQueryParams,
   validatePaginationParams,
@@ -74,6 +74,7 @@ const ACTIVE_STATUSES = ['open', 'in-progress', 'waiting'];
 // SQLite-parametertak: IN-listor delas upp i bitar om högst så här många id:n.
 const IN_CHUNK_SIZE = 500;
 const MAX_BULK_IDS = 500;
+const COMPOSED_DESCRIPTION_TOO_LONG = `Mallfälten ger en beskrivning över ${MAX_BODY_LENGTH} tecken — korta ner fälten`;
 const MAX_REMINDER_MESSAGE_LENGTH = 500;
 
 function chunked<T>(items: T[], size = IN_CHUNK_SIZE): T[][] {
@@ -781,10 +782,8 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
     // This prevents duplicates when the frontend also pre-composes a placeholder description
     let finalDescription: string;
     if (customFields && Array.isArray(customFields) && customFields.length > 0) {
-      finalDescription = customFields
-        .filter((field: CustomFieldInput) => field.fieldLabel)
-        .map((field: CustomFieldInput) => `**${field.fieldLabel}**: ${field.fieldValue || '(ej angivet)'}`)
-        .join('  \n');
+      finalDescription = composeDescriptionFromFields(customFields);
+      if (finalDescription.length > MAX_BODY_LENGTH) return res.status(400).json({ error: COMPOSED_DESCRIPTION_TOO_LONG });
     } else {
       finalDescription = description || '';
     }
@@ -1182,10 +1181,8 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
     // When customFields are provided, compose description from them (same logic as POST)
     let finalDescription: string | undefined = description;
     if (customFields && Array.isArray(customFields) && customFields.length > 0) {
-      finalDescription = customFields
-        .filter((field: CustomFieldInput) => field.fieldLabel)
-        .map((field: CustomFieldInput) => `**${field.fieldLabel}**: ${field.fieldValue || '(ej angivet)'}`)
-        .join('  \n');
+      finalDescription = composeDescriptionFromFields(customFields);
+      if (finalDescription.length > MAX_BODY_LENGTH) return res.status(400).json({ error: COMPOSED_DESCRIPTION_TOO_LONG });
     }
 
     const updates: Record<string, unknown> = {};

@@ -114,6 +114,12 @@ const formatFileSize = (bytes: number | null) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+/**
+ * Ärendevy: huvuddata, kommentarer, bilagor, checklista, länkar och
+ * påminnelser. Varje sektion läser sin egen react-query-hook keyad på
+ * ärende-id; sidan själv äger bara status-/tilldelningsändringar och
+ * 404-/felhanteringen (TicketLoadError).
+ */
 const TicketDetail = () => {
   const { id } = useParams();
   const { user: currentUser } = useAuth();

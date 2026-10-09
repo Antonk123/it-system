@@ -25,7 +25,8 @@ const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
 const imageStorage = multer.diskStorage({
   destination: (_req, _file, cb) => { cb(null, UPLOAD_DIR); },
   filename: (_req, file, cb) => {
-    const uniqueSuffix = `${Date.now()}-${Math.random().toString(36).substring(2)}`;
+    // Slumpen måste vara oförutsägbar: bilderna serveras utan inloggning.
+    const uniqueSuffix = `${Date.now()}-${randomBytes(12).toString('hex')}`;
     const ext = file.originalname.split('.').pop()?.toLowerCase() || '';
     cb(null, `kb-${uniqueSuffix}.${ext}`);
   },

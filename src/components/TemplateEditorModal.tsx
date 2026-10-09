@@ -49,6 +49,12 @@ interface FieldFormData {
   position: number;
 }
 
+/**
+ * Redigerar en ärendemall inklusive dess dynamiska fält. Mallens metadata och
+ * fältlistan hålls i samma formulär så att "spara" kan vara atomiskt mot
+ * servern (POST /templates med fields inline); fältoperationer i redigeringsläge
+ * går via useTemplates-mutationerna så listcachen invalideras.
+ */
 export const TemplateEditorModal = ({
   open,
   onOpenChange,
@@ -151,7 +157,7 @@ export const TemplateEditorModal = ({
       const data = await api.getTemplateFields(templateId);
       setFields(data.sort((a, b) => a.position - b.position));
     } catch (error) {
-      console.error('Error loading template fields:', error);
+      if (import.meta.env.DEV) console.error('Error loading template fields:', error);
       toast.error('Kunde inte ladda formulärfält');
     } finally {
       setIsLoadingFields(false);

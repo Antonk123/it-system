@@ -142,6 +142,9 @@ describe('sendPushToAllSubscriptions', () => {
 
     expect(result).toEqual({ sent: 1, failed: 1 });
     expect(endpoints()).toEqual(['https://fcm.googleapis.com/ok']);
+    // Hemlig sökväg får inte hamna i loggen — bara värden.
+    expect(logger.info).toHaveBeenCalledWith('Removed expired push subscription', { host: 'fcm.googleapis.com' });
+    expect(JSON.stringify((logger.info as ReturnType<typeof vi.fn>).mock.calls)).not.toContain('/gone');
   });
 
   it('anropar aldrig en endpoint utanför tillåtlistan och rensar den ur databasen', async () => {

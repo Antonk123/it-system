@@ -472,6 +472,58 @@ describe('Custom fields round-trip + retired SLA', () => {
     expect(get.body.description).toContain('Windows 11');
   });
 
+  it('sanitises customFields (label, name, value and the composed description) like the public form', async () => {
+    const res = await admin.agent
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({
+        title: 'Sanitised custom fields',
+        customFields: [
+          { fieldName: 'os<script>x</script>', fieldLabel: '<img src=x onerror=alert(1)>OS', fieldValue: '<p>ok</p><script>alert(1)</script><img src=x onerror=alert(2)>' },
+        ],
+      });
+    expect(res.status).toBe(201);
+    const stored = db.prepare('SELECT field_name, field_label, field_value FROM ticket_field_values WHERE ticket_id = ?')
+      .get(res.body.id) as { field_name: string; field_label: string; field_value: string };
+    const description = (db.prepare('SELECT description FROM tickets WHERE id = ?').get(res.body.id) as { description: string }).description;
+    for (const text of [stored.field_name, stored.field_label, stored.field_value, description]) {
+      expect(text).not.toMatch(/<script|onerror/i);
+    }
+    expect(stored.field_label).toBe('OS');
+    expect(stored.field_value).toContain('<p>ok</p>');
+  });
+
+  it('rejects customFields over the label/value caps and a composed description over 5000 characters', async () => {
+    const post = (body: Record<string, unknown>) => admin.agent
+      .post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ title: 'Caps', ...body });
+
+    const longLabel = await post({ customFields: [{ fieldName: 'a', fieldLabel: 'x'.repeat(201), fieldValue: 'v' }] });
+    expect(longLabel.status).toBe(400);
+    const longValue = await post({ customFields: [{ fieldName: 'a', fieldLabel: 'A', fieldValue: 'x'.repeat(5001) }] });
+    expect(longValue.status).toBe(400);
+
+    const composed = await post({
+      customFields: Array.from({ length: 2 }, (_, i) => ({ fieldName: `f${i}`, fieldLabel: `F${i}`, fieldValue: 'x'.repeat(3000) })),
+    });
+    expect(composed.status).toBe(400);
+    expect(composed.body.error).toContain('5000');
+
+    const existing = await post({ description: 'ok' });
+    const composedUpdate = await admin.agent
+      .put(`/api/tickets/${existing.body.id}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({
+        customFields: Array.from({ length: 2 }, (_, i) => ({ fieldName: `f${i}`, fieldLabel: `F${i}`, fieldValue: 'x'.repeat(3000) })),
+      });
+    expect(composedUpdate.status).toBe(400);
+    expect(composedUpdate.body.error).toContain('5000');
+  });
+
   it('does not apply historical SLA policies to newly created tickets', async () => {
     const res = await admin.agent
       .post('/api/tickets')

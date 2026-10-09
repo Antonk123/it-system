@@ -464,8 +464,12 @@ Deploy-flödet (bygga images, redeploy i Portainer) ligger i `CLAUDE.md` och
       **Kontrollera först att inget annat (t.ex. Navet eller en extern proxy) anropar
       `:3002` direkt.**
 - [ ] **`COOKIE_SECURE=true`** i stackens env. Compose-defaulten är `false` (HTTP-på-LAN),
-      men prod körs bakom TLS på `ticket.prefabmastarna.se`. Servern loggar
-      `COOKIE_SECURE är inte "true" i produktion` vid start om den saknas.
+      men prod körs bakom TLS på `ticket.prefabmastarna.se`. Ett uttryckligt `false` (även
+      compose-defaulten) stänger av Secure; servern loggar `COOKIE_SECURE=false i produktion`
+      vid start. Lämnas variabeln tom/osatt i produktion är cookies Secure som default.
+- [ ] **Smalna av `set_real_ip_from` i `nginx.conf` till front-proxyns /32** (se nedan) och
+      binda `8082` till proxy-vänt gränssnitt (t.ex. `"<proxy-nätets-IP>:8082:80"`) i stället
+      för alla gränssnitt — annars kan vem som helst på LAN:et förfalska sin IP.
 - [ ] **`stop_grace_period: 20s`** på backend-tjänsten och `SHUTDOWN_TIMEOUT_MS=15000`.
 - [ ] **Off-site-backup:** `OFFSITE_BACKUP_CMD`, `OFFSITE_BACKUP_REQUIRED=true` och
       rclone-volymen (se "Off-site-backup (rclone)" i §4).

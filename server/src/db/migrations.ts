@@ -1642,10 +1642,12 @@ export const migrations: Migration[] = [
       // bara när en innehållskolumn skrivs. resolved_at/closed_at/template_id står
       // medvetet utanför: de ändras alltid tillsammans med status (som fyrar) resp.
       // är bokföring, och backfills av dem ska inte stämpla om hela tabellen.
+      // created_by står också utanför: när en användare raderas pekas den om, och
+      // det ska inte få deras ärenden att hoppa uppåt i "senast uppdaterad".
       db.exec('DROP TRIGGER IF EXISTS update_ticket_updated_at');
       db.exec(`CREATE TRIGGER update_ticket_updated_at
         AFTER UPDATE OF title, description, status, priority, category_id, requester_id,
-          notes, solution, company_id, assigned_to, created_by ON tickets FOR EACH ROW BEGIN
+          notes, solution, company_id, assigned_to ON tickets FOR EACH ROW BEGIN
           UPDATE tickets SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
         END`);
     },
@@ -1810,33 +1812,45 @@ export const migrations: Migration[] = [
     up: (db) => {
       // contacts.email var inte unik: samma adress i olika skiftläge gav flera
       // kontakter och ärendehistoriken splittrades. Behåll den äldsta raden per
-      // adress, peka om ärendena och radera resten — sedan unikt index.
+      // adress (saknad created_at räknas som yngst), fyll dess tomma fält från
+      // dubbletterna, peka om ärendena och radera resten — sedan unikt index.
+      // Tom e-post slås aldrig ihop: det är inte "samma adress", bara saknad data.
       const groups = db
-        .prepare('SELECT MIN(email) AS email FROM contacts GROUP BY email COLLATE NOCASE HAVING COUNT(*) > 1')
+        .prepare("SELECT MIN(email) AS email FROM contacts WHERE email != '' GROUP BY email COLLATE NOCASE HAVING COUNT(*) > 1")
         .all() as { email: string }[];
       const members = db.prepare(
-        'SELECT id FROM contacts WHERE email = ? COLLATE NOCASE ORDER BY created_at ASC, rowid ASC'
+        `SELECT id, company_id, phone, department FROM contacts WHERE email = ? COLLATE NOCASE
+         ORDER BY COALESCE(created_at, '9999-12-31') ASC, rowid ASC`
       );
       const repoint = db.prepare('UPDATE tickets SET requester_id = ? WHERE requester_id = ?');
       const remove = db.prepare('DELETE FROM contacts WHERE id = ?');
+      const fillKeeper = db.prepare(
+        'UPDATE contacts SET company_id = ?, phone = ?, department = ? WHERE id = ?'
+      );
+      type Member = { id: string; company_id: string | null; phone: string | null; department: string | null };
+      const firstNonNull = (rows: Member[], key: 'company_id' | 'phone' | 'department'): string | null =>
+        rows.find((row) => row[key] != null)?.[key] ?? null;
 
-      let removed = 0;
       // Ommärkningen av requester_id ska inte stämpla om updated_at på ärendena.
       withTriggersSuspended(db, ['update_ticket_updated_at'], () => {
         for (const { email } of groups) {
-          const [keeper, ...duplicates] = (members.all(email) as { id: string }[]).map((r) => r.id);
+          const rows = members.all(email) as Member[];
+          const [keeper, ...duplicates] = rows;
+          fillKeeper.run(
+            firstNonNull(rows, 'company_id'),
+            firstNonNull(rows, 'phone'),
+            firstNonNull(rows, 'department'),
+            keeper.id
+          );
           for (const duplicate of duplicates) {
-            repoint.run(keeper, duplicate);
-            remove.run(duplicate);
-            removed++;
+            repoint.run(keeper.id, duplicate.id);
+            remove.run(duplicate.id);
           }
+          logger.warn(`[migration 077] Behöll kontakt ${keeper.id}, tog bort dubblett(er): ${duplicates.map((d) => d.id).join(', ')}`);
         }
       });
-      if (removed > 0) {
-        logger.warn(`[migration 077] ${removed} dubblettkontakt(er) (samma e-post, olika skiftläge) sammanslagna med den äldsta.`);
-      }
 
-      db.prepare('CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_email_unique ON contacts(email COLLATE NOCASE)').run();
+      db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_contacts_email_unique ON contacts(email COLLATE NOCASE) WHERE email != ''").run();
     },
   },
   {
