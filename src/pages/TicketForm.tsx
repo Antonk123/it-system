@@ -2,6 +2,8 @@ import { useConfirmDiscard } from '@/hooks/useConfirmDiscard';
 import { hasVisibleText } from '@/lib/textValidation';
 import { ImageAdapterContext, useTicketImages } from '@/lib/ticketImages';
 import { useTicketDraft } from '@/hooks/useTicketDraft';
+import { useSupportProfile } from '@/hooks/useSupportProfile';
+import { SupportSender } from '@/components/SupportSender';
 import { useAuth } from '@/contexts/AuthContext';
 import { requiredTemplateFieldErrors } from '@/lib/templateValidation';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -68,17 +70,18 @@ const LookupError = ({ message, onRetry }: { message: string; onRetry: () => voi
  * fält, utkastet sparas lokalt (IndexedDB) tills formuläret skickas, och
  * handleSubmit sparar fält och inbäddade bilder atomärt före övriga bilagor/checklista.
  */
-const TicketForm = () => {
+const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
   const { confirm, confirmationDialog } = useConfirmDiscard();
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const supportMode = !id && (selfService || new URLSearchParams(location.search).get('support') === '1');
   // M9: mutations only — does NOT mount useTickets()'s unfiltered list query
   // (which previously hit the backend's legacy LIMIT-1000 branch on every
   // form open just to reach addTicket/updateTicket).
   const { addTicket, updateTicket } = useTicketMutations();
   const { users } = useUsers();
-  const { users: systemUsers } = useSystemUsers();
+  const { users: systemUsers } = useSystemUsers({ enabled: !supportMode });
   const { companies } = useCompanies();
   const { categories, addCategory, isError: categoriesError, refetch: refetchCategories } = useCategories();
   const { templates, isError: templatesError, refetch: refetchTemplates } = useTemplates();
@@ -101,9 +104,11 @@ const TicketForm = () => {
   } = useChecklistTemplates();
 
   // Fetch checklist templates on mount
-  useEffect(() => { fetchChecklistTemplates(); }, [fetchChecklistTemplates]);
+  useEffect(() => { if (!supportMode) fetchChecklistTemplates(); }, [fetchChecklistTemplates, supportMode]);
 
   const isEditing = !!id;
+  const supportProfile = useSupportProfile(supportMode);
+  const [supportSent, setSupportSent] = useState(false);
   // Authoritative single-ticket fetch (same pattern as TicketDetail): the
   // detail query is the sole source in edit mode. The old getTicketById
   // fallback read useTickets()'s own unfiltered list cache — a distinct cache
@@ -166,6 +171,9 @@ const TicketForm = () => {
   const [showNotes, setShowNotes] = useState(false);
 
   const { user: currentUser } = useAuth();
+  const selfContact = users.find(contact => contact.email.toLowerCase() === currentUser?.email?.toLowerCase());
+  const matchingProfile = supportProfile?.email.toLowerCase() === currentUser?.email?.toLowerCase() ? supportProfile : null;
+  const senderName = matchingProfile?.name || selfContact?.name || currentUser?.email || '';
   const imageState = useTicketImages();
   const submitLock = useRef(false);
   const restoredDraft = useRef(false);
@@ -173,7 +181,7 @@ const TicketForm = () => {
   const onImageBusyChange = useCallback((busy: boolean) => setImageBusy(count => Math.max(0, count + (busy ? 1 : -1))), []);
   const [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID());
   const draftValue = useMemo(() => ({ formData, selectedTemplate, customFieldValues, images: imageState.images, pendingFiles, pendingChecklistItems, submissionKey, failedUploads }), [formData, selectedTemplate, customFieldValues, imageState.images, pendingFiles, pendingChecklistItems, submissionKey, failedUploads]);
-  const draft = useTicketDraft(`user:${currentUser?.id}:ticket:${id || 'new'}`, draftValue, (hasUnsavedChanges || !!failedUploads), saved => {
+  const draft = useTicketDraft(`user:${currentUser?.id}:ticket:${id || (supportMode ? 'support' : 'new')}`, draftValue, (hasUnsavedChanges || !!failedUploads), saved => {
     if (location.state?.cloneData) return;
     restoredDraft.current = true;
     populatedTicketIdRef.current = id || null;
@@ -484,15 +492,21 @@ const TicketForm = () => {
       return;
     }
 
-    if (!formData.requesterId) {
+    if (!supportMode && !formData.requesterId) {
       toast.error('Välj en beställare');
+      return;
+    }
+
+    if (supportMode && !hasVisibleText(formData.description) && !/<img\b/i.test(formData.description)) {
+      setErrors({ description: 'Beskriv vad du behöver hjälp med.' });
+      requestAnimationFrame(() => document.getElementById('description')?.focus());
       return;
     }
 
     // Best-effort validation of required dynamic template fields. The ticket
     // zod schema can't see these (placeholder description), so check required
     // fields here and surface inline errors via DynamicFieldsForm's `errors`.
-    if (selectedTemplate?.fields && selectedTemplate.fields.length > 0) {
+    if (!supportMode && selectedTemplate?.fields && selectedTemplate.fields.length > 0) {
       const dynErrors = requiredTemplateFieldErrors(selectedTemplate.fields, customFieldValues);
       setDynamicFieldErrors(dynErrors);
       if (Object.keys(dynErrors).length > 0) {
@@ -510,8 +524,8 @@ const TicketForm = () => {
 
     // If dynamic fields are used, use a placeholder so Zod validation passes.
     // The backend composes the real description from customFields.
-    let submitFormData = { ...formData };
-    if (customFieldValues.length > 0) {
+    let submitFormData = supportMode ? { ...formData, requesterId: '', company_id: '', priority: 'medium' as TicketPriority, category: 'none', assigned_to: '', notes: '', solution: '' } : { ...formData };
+    if (!supportMode && customFieldValues.length > 0) {
       submitFormData = { ...submitFormData, description: 'Fältdata' };
     }
 
@@ -580,14 +594,14 @@ const TicketForm = () => {
           navigate('/tickets');
         }
       } else {
-        const extraFields = { submission: { images: imageState.referenced({ formData, customFieldValues }), idempotencyKey: submissionKey }, assigned_to: formData.assigned_to || undefined, company_id: formData.company_id || undefined };
-        const ticketWithTemplate = selectedTemplate
+        const extraFields = { submission: { images: imageState.referenced({ formData, customFieldValues }), idempotencyKey: submissionKey }, selfService: supportMode, assigned_to: submitFormData.assigned_to || undefined, company_id: submitFormData.company_id || undefined };
+        const ticketWithTemplate = !supportMode && selectedTemplate
           ? { ...submitFormData, templateId: selectedTemplate.id, ...extraFields }
           : { ...submitFormData, ...extraFields };
-        const newTicket = await addTicket(ticketWithTemplate, customFieldValues.length > 0 ? customFieldValues : undefined);
+        const newTicket = await addTicket(ticketWithTemplate, !supportMode && customFieldValues.length > 0 ? customFieldValues : undefined);
 
         if (newTicket) {
-          const { failedFiles, checklistFailed } = await saveExtras(newTicket.id, pendingFiles, pendingChecklistItems.map(i => i.label));
+          const { failedFiles, checklistFailed } = await saveExtras(newTicket.id, pendingFiles, supportMode ? [] : pendingChecklistItems.map(i => i.label));
 
           setHasUnsavedChanges(false);
           try { localStorage.removeItem(NEW_TICKET_DRAFT_KEY); } catch { /* draft cleared */ }
@@ -603,7 +617,8 @@ const TicketForm = () => {
           await draft.clear();
           if (checklistFailed) toast.warning('Ärendet skapades, men checklistan kunde inte läggas till');
           else toast.success('Ärendet skapades');
-          navigate(`/tickets/${newTicket.id}`);
+          if (supportMode) setSupportSent(true);
+          else navigate(`/tickets/${newTicket.id}`);
           return;
         }
       }
@@ -632,9 +647,10 @@ const TicketForm = () => {
       const ticketId = failedUploads.ticketId;
       await clearDraft();
       setFailedUploads(null);
-      navigate(`/tickets/${ticketId}`);
+      if (supportMode) setSupportSent(true);
+      else navigate(`/tickets/${ticketId}`);
     }
-  }, [failedUploads, saveExtras, navigate, clearDraft]);
+  }, [failedUploads, saveExtras, navigate, clearDraft, supportMode]);
 
   const handleSkipFailedUploads = useCallback(async () => {
     // Guard against skipping mid-retry: a retry in flight may still resolve and
@@ -644,8 +660,9 @@ const TicketForm = () => {
     const ticketId = failedUploads.ticketId;
     await clearDraft();
     setFailedUploads(null);
-    navigate(`/tickets/${ticketId}`);
-  }, [failedUploads, isRetrying, navigate, clearDraft]);
+    if (supportMode) setSupportSent(true);
+    else navigate(`/tickets/${ticketId}`);
+  }, [failedUploads, isRetrying, navigate, clearDraft, supportMode]);
 
   const handleNavigateBack = async () => {
     const goBack = () => {
@@ -737,11 +754,13 @@ const TicketForm = () => {
     </>
   );
 
+  if (supportSent) return <Card className="mx-auto max-w-xl"><CardContent className="space-y-4 pt-6 text-center"><h1 className="text-xl font-semibold">Ärendet skickat!</h1><p className="text-muted-foreground">Vi återkommer så snart som möjligt.</p><Button onClick={() => window.location.reload()}>Skicka ett nytt ärende</Button></CardContent></Card>;
+
   return (
     <ImageAdapterContext.Provider value={imageState.adapter}>
     {confirmationDialog}
     <div className="max-w-2xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+      <div className={cn("flex items-center justify-between", supportMode && "hidden")}>
         <Button
           variant="ghost"
           className="gap-2"
@@ -820,9 +839,10 @@ const TicketForm = () => {
           <h1 className="flex items-center gap-2 text-lg font-semibold leading-none tracking-tight">
             {isEditing
               ? <><Pencil className="w-5 h-5 text-primary" />Redigera ärende</>
-              : <><PlusCircle className="w-5 h-5 text-primary" />Skapa nytt ärende</>
+              : supportMode ? <>Vad behöver du hjälp med?</> : <><PlusCircle className="w-5 h-5 text-primary" />Skapa nytt ärende</>
             }
           </h1>
+          {supportMode && <p className="text-sm text-muted-foreground">Beskriv kort vad du behöver. Vi hjälper dig vidare.</p>}
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit}>
@@ -831,30 +851,10 @@ const TicketForm = () => {
             {draft.storageError && <p role="alert" className="text-sm text-destructive">Utkastet kan inte sparas på den här enheten. Håll sidan öppen tills ärendet sparats.</p>}
 
             {/* Titel + Mall row */}
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-end">
-              <div className="space-y-2">
-                <Label htmlFor="title">Titel *</Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => { setFormData({ ...formData, title: e.target.value }); setErrors(prev => { const p = { ...prev }; delete p['title']; return p; }); }}
-                  placeholder="Kort beskrivning av problemet"
-                  required
-                  disabled={isSubmitting}
-                  // Autofocus only on create — editing an existing ticket
-                  // shouldn't steal focus on mount (user may be scrolling
-                  // to a specific field, and autofocus jumps the viewport).
-                  autoFocus={!isEditing}
-                  aria-required="true"
-                  aria-invalid={!!errors.title}
-                  aria-describedby={errors.title ? 'title-error' : undefined}
-                  className={errors.title ? 'border-destructive focus-visible:ring-destructive' : ''}
-                />
-                {errors.title && <p id="title-error" role="alert" className="text-sm text-destructive mt-1">{errors.title}</p>}
-              </div>
+            <div className="flex flex-col gap-4">
               {!isEditing && (
-                <details className="space-y-2 sm:w-[240px]" open={selectedTemplate ? true : undefined}>
-                  <summary className="min-h-11 py-2 cursor-pointer">Använd mall</summary>
+                <details className="group space-y-2" open={selectedTemplate ? true : undefined}>
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-2 text-sm text-primary [&::-webkit-details-marker]:hidden">Ta hjälp av en mall<ChevronDown aria-hidden="true" className="h-4 w-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" /></summary>
                   <Label id="label-template">Mall</Label>
                   <div aria-labelledby="label-template">
                   <TemplateCombobox
@@ -868,7 +868,7 @@ const TicketForm = () => {
                       setFormData({
                         ...formData,
                         title: template.titleTemplate,
-                        description: hasFields ? '' : (template.descriptionTemplate ?? ''),
+                        description: supportMode ? (template.descriptionTemplate || formData.description) : hasFields ? '' : (template.descriptionTemplate ?? ''),
                         priority: template.priority,
                         category: template.category || 'none',
                         notes: hasFields ? '' : (template.notesTemplate || ''),
@@ -890,9 +890,30 @@ const TicketForm = () => {
                   {templatesError && <LookupError message="Kunde inte hämta mallar." onRetry={() => void refetchTemplates()} />}
                 </details>
               )}
+              <div className="space-y-2">
+                <Label htmlFor="title">{supportMode ? "Kort rubrik" : "Titel *"}</Label>
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) => { setFormData({ ...formData, title: e.target.value }); setErrors(prev => { const p = { ...prev }; delete p['title']; return p; }); }}
+                  placeholder="Kort beskrivning av problemet"
+                  required
+                  disabled={isSubmitting}
+                  // Autofocus only on create — editing an existing ticket
+                  // shouldn't steal focus on mount (user may be scrolling
+                  // to a specific field, and autofocus jumps the viewport).
+                  autoFocus={!isEditing}
+                  aria-required="true"
+                  aria-invalid={!!errors.title}
+                  aria-describedby={errors.title ? 'title-error' : undefined}
+                  className={errors.title ? 'border-destructive focus-visible:ring-destructive' : ''}
+                />
+                {errors.title && <p id="title-error" role="alert" className="text-sm text-destructive mt-1">{errors.title}</p>}
+              </div>
+
             </div>
 
-              <div className="space-y-2">
+              {!supportMode && <div className="space-y-2">
                 <Label id="label-requester">Beställare *</Label>
                 <div aria-labelledby="label-requester">
                 <UserCombobox
@@ -919,13 +940,13 @@ const TicketForm = () => {
                   <p className="text-sm text-muted-foreground">Företag: {companyName} — kan ändras under Fler uppgifter.</p>
                 )}
                 {errors.requesterId && <p id="requester-error" role="alert" className="text-sm text-destructive mt-1">{errors.requesterId}</p>}
-              </div>
+              </div>}
             {/* Beskrivning / DynamicFieldsForm */}
             {isLoadingTemplate ? (
               <div className="border border-dashed border-muted p-4 rounded text-center text-sm text-muted-foreground">
                 Laddar mallfält...
               </div>
-            ) : selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0 ? (
+            ) : !supportMode && selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0 ? (
               <div>
                 <ErrorBoundary
                   fallback={
@@ -991,7 +1012,7 @@ const TicketForm = () => {
             ) : (
               <div className="space-y-2">
                 <Label htmlFor="description">
-                  Beskrivning (valfritt)
+                  {supportMode ? "Berätta lite mer" : "Beskrivning (valfritt)"}
                 </Label>
                 <div className={errors.description ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
                   <ErrorBoundary
@@ -1006,11 +1027,12 @@ const TicketForm = () => {
                       onImageBusyChange={onImageBusyChange}
                       value={formData.description}
                       onChange={(html) => { setFormData({ ...formData, description: html }); setErrors(prev => { const p = { ...prev }; delete p['description']; return p; }); }}
-                      placeholder="Detaljerad beskrivning av problemet..."
+                      placeholder="Vad vill du kunna göra, eller vad händer när du försöker?"
                       minHeight="90px"
                       compact
                       id="description"
-                      ariaLabel="Beskrivning (valfritt)"
+                      ariaLabel={supportMode ? "Berätta lite mer" : "Beskrivning (valfritt)"}
+                      ariaRequired={supportMode}
                       error={!!errors.description}
                       describedBy="description-error"
                     />
@@ -1078,7 +1100,7 @@ const TicketForm = () => {
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : !supportMode ? (
               <Collapsible open={detailsOpen} onOpenChange={setDetailsOpen}>
                 <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-card px-4 h-11 text-sm font-semibold hover:bg-accent/10 transition-colors">
                   <span>Fler uppgifter</span>
@@ -1120,12 +1142,12 @@ const TicketForm = () => {
                   </div>
                 </CollapsibleContent>
               </Collapsible>
-            )}
+            ) : null}
 
             {!isEditing && (<>
                     {/* File Attachments */}
                     <div className="space-y-2">
-                      <Label>Bilagor</Label>
+                      <Label>Bilagor (valfritt)</Label>
                       <FileUpload
                     compact={!isEditing}
                         attachments={attachments}
@@ -1144,7 +1166,7 @@ const TicketForm = () => {
               <div className="space-y-4">
                 {/* File Attachments */}
                 <div className="space-y-2">
-                  <Label>Bilagor</Label>
+                  <Label>Bilagor (valfritt)</Label>
                   <FileUpload
                     compact={!isEditing}
                     attachments={attachments}
@@ -1183,7 +1205,7 @@ const TicketForm = () => {
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : !supportMode ? (
               <Collapsible open={attachmentsOpen} onOpenChange={setAttachmentsOpen}>
                 <CollapsibleTrigger className="flex w-full items-center justify-between rounded-md border border-border bg-card px-4 h-11 text-sm font-semibold hover:bg-accent/10 transition-colors">
                   <span>Checklista</span>
@@ -1224,7 +1246,7 @@ const TicketForm = () => {
                   </div>
                 </CollapsibleContent>
               </Collapsible>
-            )}
+            ) : null}
 
             {/* Edit form: Handläggning section with hidden-until-clicked fields */}
             {isEditing && (
@@ -1285,7 +1307,8 @@ const TicketForm = () => {
               </>
             )}
 
-            <div className="flex items-center justify-end gap-2 pt-4">
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
+              {supportMode && <div className="mr-auto"><SupportSender name={senderName} photo={matchingProfile?.photo} /></div>}
               <span aria-live="polite" aria-atomic="true" className="text-sm text-muted-foreground flex items-center gap-2">
                 {uploadProgress && (
                   <>
@@ -1294,13 +1317,13 @@ const TicketForm = () => {
                   </>
                 )}
               </span>
-              <Button type="button" variant="outline" onClick={handleNavigateBack} disabled={isSaving}>
+              <Button type="button" variant="outline" onClick={handleNavigateBack} disabled={isSaving} className={supportMode ? "hidden" : undefined}>
                 Avbryt
               </Button>
               <Button type="submit" disabled={isSubmitting || isUploading || isSaving || !!failedUploads || imageBusy > 0 || !draft.ready} className="gap-2">
                 {isSubmitting ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />Sparar...</>
-                ) : isEditing ? 'Spara ändringar' : 'Skapa ärende'}
+                ) : isEditing ? 'Spara ändringar' : supportMode ? 'Skicka till IT' : 'Skapa ärende'}
               </Button>
             </div>
             </fieldset>
@@ -1313,9 +1336,11 @@ const TicketForm = () => {
 };
 
 // Remount when draft ownership or edited ticket changes; state must never cross scopes.
-const ScopedTicketForm = () => {
+const ScopedTicketForm = ({ selfService = false }: { selfService?: boolean }) => {
   const { id } = useParams();
   const { user } = useAuth();
-  return <TicketForm key={`${user?.id}:${id || 'new'}`} />;
+  const location = useLocation();
+  const supportMode = new URLSearchParams(location.search).get('support') === '1';
+  return <TicketForm selfService={selfService} key={`${user?.id}:${id || 'new'}:${selfService || supportMode}`} />;
 };
 export default ScopedTicketForm;

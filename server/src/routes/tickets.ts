@@ -803,6 +803,18 @@ router.post('/', writeRateLimiter, authenticate, ticketImageSubmission, async (r
     // Wrap all inserts in a transaction for atomicity
     const now = new Date().toISOString();
     const createTransaction = db.transaction(() => {
+      let resolvedRequesterId = requester_id || null;
+      if (req.body.self_service === true) {
+        // Use the authenticated account, never identity supplied by the frame.
+        const account = db.prepare('SELECT email, display_name FROM users WHERE id = ?').get(req.user!.id) as { email: string; display_name: string | null };
+        let contact = db.prepare('SELECT id, company_id FROM contacts WHERE LOWER(email) = LOWER(?)').get(account.email) as { id: string; company_id: string | null } | undefined;
+        if (!contact) {
+          contact = { id: randomUUID(), company_id: null };
+          db.prepare('INSERT INTO contacts (id, name, email, created_at) VALUES (?, ?, ?, ?)').run(contact.id, account.display_name || account.email, account.email, now);
+        }
+        resolvedRequesterId = contact.id;
+        resolvedCompanyId = contact.company_id;
+      }
       db.prepare(`
         INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution, template_id, created_by, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -813,7 +825,7 @@ router.post('/', writeRateLimiter, authenticate, ticketImageSubmission, async (r
         status || 'open',
         finalPriority,
         category_id || null,
-        requester_id || null,
+        resolvedRequesterId,
         resolvedCompanyId,
         assigned_to || null,
         notes || null,

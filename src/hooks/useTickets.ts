@@ -35,7 +35,7 @@ interface TicketWriteExtras {
 }
 
 export type TicketUpdates = Partial<Ticket> & TicketWriteExtras;
-export type NewTicket = Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { assigned_to?: string; company_id?: string; submission?: TicketSubmission };
+export type NewTicket = Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { selfService?: boolean; assigned_to?: string; company_id?: string; submission?: TicketSubmission };
 export type BulkTicketUpdates = { status?: string; priority?: string; category_id?: string | null; assigned_to?: string | null };
 
 interface TicketListData {
@@ -89,7 +89,7 @@ export const ticketKeys = {
 export function buildAddTicketMutationOptions(queryClient: QueryClient) {
   return {
     mutationFn: async (ticket: NewTicket & { customFields?: CustomFieldInput[] }) => {
-      const { customFields, templateId, assigned_to, company_id, submission, ...ticketData } = ticket;
+      const { customFields, templateId, assigned_to, company_id, submission, selfService, ...ticketData } = ticket;
       const validation = ticketInsertSchema.safeParse(ticketData);
       if (!validation.success) {
         const errorMsg = getValidationError(validation.error);
@@ -97,6 +97,7 @@ export function buildAddTicketMutationOptions(queryClient: QueryClient) {
       }
 
       const data = await api.createTicket({
+        self_service: selfService,
         title: validation.data.title,
         description: validation.data.description,
         status: validation.data.status,

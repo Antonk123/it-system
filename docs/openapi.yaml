@@ -572,7 +572,7 @@ paths:
               type: object
               required: [payload]
               properties:
-                payload: { type: string, description: "JSON med samma fält som application/json." }
+                payload: { type: string, description: "JSON med samma fält som application/json. Bildfält namnges med UUID, vanliga bilagor attachment-0 osv. Högst 10 filer, 10 MB per fil och 25 MB totalt." }
               additionalProperties: { type: string, format: binary }
             encoding:
               payload: { contentType: text/plain }
@@ -624,7 +624,7 @@ paths:
               type: object
               required: [payload]
               properties:
-                payload: { type: string, description: "JSON med samma fält som application/json." }
+                payload: { type: string, description: "JSON med samma fält som application/json. Bildfält namnges med UUID, vanliga bilagor attachment-0 osv. Högst 10 filer, 10 MB per fil och 25 MB totalt." }
               additionalProperties: { type: string, format: binary }
             encoding:
               payload: { contentType: text/plain }
@@ -1117,7 +1117,7 @@ paths:
               type: object
               required: [payload]
               properties:
-                payload: { type: string, description: "JSON med samma fält som application/json." }
+                payload: { type: string, description: "JSON med samma fält som application/json. Bildfält namnges med UUID, vanliga bilagor attachment-0 osv. Högst 10 filer, 10 MB per fil och 25 MB totalt." }
               additionalProperties: { type: string, format: binary }
             encoding:
               payload: { contentType: text/plain }
@@ -4886,6 +4886,9 @@ components:
       required: [title]
       description: Antingen `description` eller `customFields` krävs.
       properties:
+        self_service:
+          type: boolean
+          description: Vid POST härleds beställare och företag från det autentiserade kontot. Saknad kontakt skapas atomärt.
         title: { type: string }
         description: { type: string }
         status: { type: string, enum: [open, in-progress, waiting, resolved, closed] }

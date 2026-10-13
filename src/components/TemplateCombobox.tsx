@@ -113,7 +113,7 @@ export const TemplateCombobox = ({
       {selectedTemplate !== null && (
         <button
           type="button"
-          className="text-xs text-accent hover:text-accent/80 mt-1"
+          className="min-h-11 text-sm text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring mt-1"
           onClick={onClear}
         >
           Rensa mall

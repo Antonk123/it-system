@@ -5,6 +5,8 @@ import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/re
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 
+const bridge = vi.hoisted(() => ({ profile: null as null | { name: string; email: string; photo: string | null } }));
+vi.mock('@/hooks/useSupportProfile', () => ({ useSupportProfile: () => bridge.profile }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: null, isLoading: false }) }));
 vi.mock('@/components/ui/rich-text-editor', () => ({
   RichTextEditor: ({ id, value, onChange, placeholder }: { id?: string; value: string; onChange: (value: string) => void; placeholder?: string }) =>
@@ -39,7 +41,7 @@ beforeEach(() => {
   submitPublicTicket.mockResolvedValue({ id: 'new-ticket' });
   getPublicCategories.mockResolvedValue([]);
 });
-afterEach(cleanup);
+afterEach(() => { cleanup(); bridge.profile = null; });
 
 describe('PublicTicketForm — en sida, inga steg', () => {
   it('visar alla fält (namn, e-post, titel, beskrivning) på en och samma vy, utan prioritetsval', () => {
@@ -147,19 +149,34 @@ describe('PublicTicketForm — inbäddad i Prefabnavet', () => {
     expect(screen.queryByRole('link', { name: /Tillbaka till inloggning/ })).toBeNull();
     expect(screen.getByLabelText('Ditt namn *')).toBeTruthy();
     expect(screen.getByLabelText('Din e-post *')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /Skicka ärende/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Skicka till IT/ })).toBeTruthy();
   });
 
   it('visar bekräftelsen utan tillbaka-länk i inbäddat läge', async () => {
     renderForm('/submit-ticket?embed=1');
     fireEvent.change(screen.getByLabelText('Ditt namn *'), { target: { value: 'Anna Andersson' } });
     fireEvent.change(screen.getByLabelText('Din e-post *'), { target: { value: 'anna@example.com' } });
-    fireEvent.change(screen.getByLabelText('Ärendets titel *'), { target: { value: 'Skrivaren fungerar inte' } });
+    fireEvent.change(screen.getByLabelText('Kort rubrik'), { target: { value: 'Skrivaren fungerar inte' } });
     fireEvent.change(screen.getByPlaceholderText('Beskriv ditt problem i detalj...'), { target: { value: 'Felkod E-04.' } });
-    fireEvent.click(screen.getByRole('button', { name: /Skicka ärende/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Skicka till IT/ }));
 
     await waitFor(() => expect(screen.getByText('Ärendet skickat!')).toBeTruthy());
     expect(screen.getByRole('button', { name: 'Skicka ett nytt ärende' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: /Tillbaka till inloggning/ })).toBeNull();
   });
+});
+
+
+it('uses the Navet profile and sends a file without asking for contact details', async () => {
+  bridge.profile = { name: 'Anna Andersson', email: 'anna@example.com', photo: null };
+  const { container } = renderForm('/submit-ticket?embed=1');
+  expect(screen.queryByLabelText('Ditt namn *')).toBeNull();
+  expect(screen.getByText('Anna Andersson')).toBeTruthy();
+  fireEvent.change(screen.getByLabelText('Kort rubrik'), { target: { value: 'Hjälp med Outlook' } });
+  fireEvent.change(screen.getByPlaceholderText('Beskriv ditt problem i detalj...'), { target: { value: 'Felmeddelande vid start.' } });
+  const file = new File(['%PDF-1.4 test'], 'error.pdf', { type: 'application/pdf' });
+  fireEvent.change(container.querySelector('input[type=file]')!, { target: { files: [file] } });
+  fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+  await waitFor(() => expect(submitPublicTicket).toHaveBeenCalledWith(expect.objectContaining({ name: 'Anna Andersson', email: 'anna@example.com', template_id: undefined }), expect.objectContaining({ attachments: [file] })));
+  bridge.profile = null;
 });

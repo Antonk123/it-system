@@ -43,7 +43,7 @@ const commonDraftSchema = z.object({
   }).nullable(),
 });
 const draftSchema = z.union([
-  commonDraftSchema.extend({ formData: formSchema.extend({ name: z.string(), email: z.string() }), formStartedAt: z.number() }),
+  commonDraftSchema.extend({ formData: formSchema.extend({ name: z.string(), email: z.string() }), formStartedAt: z.number(), pendingFiles: z.array(fileSchema).optional() }),
   commonDraftSchema.extend({
     formData: formSchema.extend({ requesterId: z.string(), status: z.string(), notes: z.string(), solution: z.string(), assigned_to: z.string(), company_id: z.string() }),
     pendingFiles: z.array(fileSchema),

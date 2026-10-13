@@ -428,10 +428,11 @@ class ApiClient {
     const headers: Record<string, string> = {};
     if (submission.idempotencyKey) headers['Idempotency-Key'] = submission.idempotencyKey;
     let body: BodyInit;
-    if (submission.images?.length) {
+    if (submission.images?.length || submission.attachments?.length) {
       const multipart = new FormData();
       multipart.append('payload', JSON.stringify(payload));
-      for (const image of submission.images) multipart.append(image.id, image.file, image.file.name);
+      for (const image of submission.images || []) multipart.append(image.id, image.file, image.file.name);
+      for (const [index, file] of (submission.attachments || []).entries()) multipart.append(`attachment-${index}`, file, file.name);
       body = multipart;
     } else { headers['Content-Type'] = 'application/json'; body = JSON.stringify(payload); }
     if (!anonymous) {
@@ -634,7 +635,7 @@ class ApiClient {
     return this.request<TemplateRow & { fields: TemplateFieldRow[] }>(`/templates/${id}`);
   }
 
-  async createTicket(ticket: Partial<TicketRow> & { customFields?: CustomFieldInput[]; template_id?: string | null }, submission?: TicketSubmission) {
+  async createTicket(ticket: Partial<TicketRow> & { self_service?: boolean; customFields?: CustomFieldInput[]; template_id?: string | null }, submission?: TicketSubmission) {
     return this.submitTicketData<TicketRow>('/tickets', ticket, submission);
   }
 

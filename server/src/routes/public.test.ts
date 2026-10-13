@@ -625,3 +625,29 @@ describe('inline image byte limits', () => {
     expect(db.prepare('SELECT id FROM tickets WHERE title = ?').get(body.title)).toBeUndefined();
   });
 });
+
+
+describe('Public file attachments', () => {
+  it('saves a PDF atomically and replays without duplicate attachments', async () => {
+    const key = randomUUID(); const body = validTicketBody();
+    const companyId = randomUUID();
+    db.prepare('INSERT INTO companies (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)').run(companyId, 'Test Company', new Date().toISOString(), new Date().toISOString());
+    db.prepare('INSERT INTO contacts (id, name, email, company_id, created_at) VALUES (?, ?, ?, ?, ?)').run(randomUUID(), body.name, body.email, companyId, new Date().toISOString());
+    const send = () => request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp()).set('Idempotency-Key', key)
+      .field('payload', JSON.stringify(body)).attach('attachment-0', Buffer.from('%PDF-1.4 test document'), { filename: 'Fel på skärmen.pdf', contentType: 'application/pdf' });
+    const first = await send(); expect(first.status).toBe(201);
+    const second = await send(); expect(second.status).toBe(201);
+    expect(second.body.ticketId).toBe(first.body.ticketId);
+    const files = db.prepare('SELECT id, file_name FROM ticket_attachments WHERE ticket_id = ?').all(first.body.ticketId) as { id: string; file_name: string }[];
+    expect(files).toHaveLength(1); expect(files[0].file_name).toBe('Fel på skärmen.pdf');
+    expect(db.prepare('SELECT company_id FROM tickets WHERE id = ?').get(first.body.ticketId)).toEqual({ company_id: companyId });
+    expect((await request(app).get(`/api/attachments/file/${files[0].id}`)).status).toBe(401);
+  });
+  it('rejects a spoofed PDF before creating a ticket', async () => {
+    const body = validTicketBody({ title: 'Spoofed attachment' });
+    const res = await request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp())
+      .field('payload', JSON.stringify(body)).attach('attachment-0', Buffer.from('not PDF'), { filename: 'error.pdf', contentType: 'application/pdf' });
+    expect(res.status).toBe(400);
+    expect(db.prepare('SELECT id FROM tickets WHERE title = ?').get(body.title)).toBeUndefined();
+  });
+});

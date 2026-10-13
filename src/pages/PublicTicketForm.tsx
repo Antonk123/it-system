@@ -1,3 +1,6 @@
+import { useSupportProfile, type SupportProfile } from '@/hooks/useSupportProfile';
+import { FileUpload } from '@/components/FileUpload';
+import { SupportSender } from '@/components/SupportSender';
 import { getErrorCode } from '@/lib/apiErrorStatus';
 import { useConfirmDiscard } from '@/hooks/useConfirmDiscard';
 import { hasVisibleText } from '@/lib/textValidation';
@@ -6,7 +9,8 @@ import { useTicketDraft } from '@/hooks/useTicketDraft';
 import { requiredTemplateFieldErrors } from '@/lib/templateValidation';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { CheckCircle, Send, AlertCircle, Loader2, ArrowLeft, FileText, ChevronDown } from 'lucide-react';
-import { Link, Navigate, useSearchParams } from 'react-router';
+import TicketForm from './TicketForm';
+import { Link, useSearchParams } from 'react-router';
 import { api, CustomFieldInput, TemplateFieldRow } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -30,8 +34,9 @@ interface Template {
   fields?: TemplateFieldRow[];
 }
 
-const PublicTicketForm = () => {
+const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | null; embedded: boolean }) => {
   const { confirm, confirmationDialog } = useConfirmDiscard();
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,10 +57,11 @@ const PublicTicketForm = () => {
   const onImageBusyChange = useCallback((busy: boolean) => setImageBusy(count => Math.max(0, count + (busy ? 1 : -1))), []);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID());
-  const dirty = !!(formData.name || formData.email || formData.title || hasVisibleText(formData.description) || /<img\b/i.test(formData.description) || customFieldValues.some(v => hasVisibleText(v.fieldValue) || /<img\b/i.test(v.fieldValue)) || imageState.images.length);
+  const dirty = pendingFiles.length > 0 || !!(formData.name || formData.email || formData.title || hasVisibleText(formData.description) || /<img\b/i.test(formData.description) || customFieldValues.some(v => hasVisibleText(v.fieldValue) || /<img\b/i.test(v.fieldValue)) || imageState.images.length);
   const [initialValues, setInitialValues] = useState<CustomFieldInput[]>([]);
-  const draftValue = useMemo(() => ({ formData, selectedTemplate, customFieldValues, images: imageState.images, submissionKey, formStartedAt }), [formData, selectedTemplate, customFieldValues, imageState.images, submissionKey, formStartedAt]);
-  const draft = useTicketDraft('public:new', draftValue, dirty && !isSuccess, saved => {
+  const draftValue = useMemo(() => ({ pendingFiles, formData, selectedTemplate, customFieldValues, images: imageState.images, submissionKey, formStartedAt }), [pendingFiles, formData, selectedTemplate, customFieldValues, imageState.images, submissionKey, formStartedAt]);
+  const draft = useTicketDraft(profile ? `public:support:${profile.email.toLowerCase()}` : embedded ? 'public:support:anonymous' : 'public:new', draftValue, dirty && !isSuccess, saved => {
+    setPendingFiles(saved.pendingFiles || []);
     setFormData(saved.formData); setSelectedTemplate(saved.selectedTemplate); setCustomFieldValues(saved.customFieldValues);
     setInitialValues(saved.customFieldValues); imageState.setImages(saved.images); setSubmissionKey(saved.submissionKey); setFormStartedAt(saved.formStartedAt);
   });
@@ -65,16 +71,7 @@ const PublicTicketForm = () => {
     if (used.length !== imageState.images.length) imageState.setImages(used);
   }, [formData, customFieldValues, imageBusy, imageState, draft.ready]);
 
-  const { user, isLoading: isAuthLoading } = useAuth();
-  // Embedded in Prefabnavet's Felanmälan view, the host already supplies the
-  // page heading and a way back, so this page drops its own chrome and viewport
-  // height. Same flag as ArchitectureMap (?embed=1).
-  const [searchParams] = useSearchParams();
-  const embedded = searchParams.get('embed') === '1';
-
   useEffect(() => {
-    // Skip data fetch if we'll redirect a logged-in user — saves a wasted call.
-    if (isAuthLoading || user) return;
     const fetchData = async () => {
       try {
         const [categoriesData, templatesData] = await Promise.all([
@@ -88,21 +85,9 @@ const PublicTicketForm = () => {
       }
     };
     fetchData();
-  }, [isAuthLoading, user]);
+  }, []);
 
-  // Logged-in users go to the internal ticket form. The minimal "logged-in" branch
-  // of this public form discarded most fields and didn't support attachments —
-  // routing them to /tickets/new is the right experience anyway.
-  if (isAuthLoading || !draft.ready) {
-    return (
-      <div className="min-h-dvh flex items-center justify-center bg-background">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
-  if (user) {
-    return <Navigate to="/tickets/new" replace />;
-  }
+  if (!draft.ready) return <div className="p-6 text-center"><Loader2 aria-label="Laddar formulär" className="h-6 w-6 animate-spin" /></div>;
 
   const handleTemplateSelect = async (templateId: string) => {
     if (templateId === selectedTemplate?.id) return;
@@ -120,20 +105,20 @@ const PublicTicketForm = () => {
       setFormData({
         ...formData,
         title: template.title_template,
-        description: template.fields && template.fields.length > 0 ? '' : template.description_template,
+        description: embedded ? (template.description_template || formData.description) : template.fields && template.fields.length > 0 ? '' : template.description_template,
         category: template.category_id || '',
         priority: template.priority,
       });
     }
   };
 
-  const usesDynamicFields = !!(selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0);
+  const usesDynamicFields = !embedded && !!(selectedTemplate && selectedTemplate.fields && selectedTemplate.fields.length > 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     if (submitLock.current || imageBusy || !draft.ready) return;
-    const errors = requiredTemplateFieldErrors(selectedTemplate?.fields || [], customFieldValues);
+    const errors = requiredTemplateFieldErrors(embedded ? [] : selectedTemplate?.fields || [], customFieldValues);
     setFieldErrors(errors);
     if (Object.keys(errors).length) { setError('Fyll i obligatoriska mallfält.'); return; }
 
@@ -146,17 +131,17 @@ const PublicTicketForm = () => {
     setIsSubmitting(true);
     try {
       await api.submitPublicTicket({
-        name: formData.name,
-        email: formData.email,
+        name: profile?.name || formData.name,
+        email: profile?.email || formData.email,
         title: formData.title,
         description: formData.description,
-        category: formData.category || undefined,
-        priority: formData.priority,
-        customFields: customFieldValues.length > 0 ? customFieldValues : undefined,
-        template_id: selectedTemplate?.id,
+        category: embedded ? undefined : formData.category || undefined,
+        priority: embedded ? 'medium' : formData.priority,
+        customFields: !embedded && customFieldValues.length > 0 ? customFieldValues : undefined,
+        template_id: embedded ? undefined : selectedTemplate?.id,
         website,
         formStartedAt,
-      }, { images: imageState.referenced({ formData, customFieldValues }), idempotencyKey: submissionKey });
+      }, { images: imageState.referenced({ formData, customFieldValues }), attachments: pendingFiles, idempotencyKey: submissionKey });
       await draft.clear();
       setIsSuccess(true);
     } catch (err) {
@@ -169,6 +154,7 @@ const PublicTicketForm = () => {
   };
 
   const handleReset = () => {
+    setPendingFiles([]);
     draft.resume(); imageState.setImages([]); setInitialValues([]); setSubmissionKey(crypto.randomUUID());
     setFormData({ name: '', email: '', title: '', description: '', category: '', priority: 'medium' });
     setSelectedTemplate(null);
@@ -219,7 +205,7 @@ const PublicTicketForm = () => {
     <ImageAdapterContext.Provider value={imageState.adapter}>
     {confirmationDialog}
     <div className={cn("bg-background flex items-start justify-center p-4", embedded ? "py-6" : "min-h-dvh py-10")}>
-      <div className="w-full max-w-lg">
+      <div className="w-full max-w-2xl">
         {/* Brand header — the host page carries it when embedded */}
         {!embedded && (
           <div className="text-center mb-8">
@@ -236,6 +222,7 @@ const PublicTicketForm = () => {
 
         {/* Card */}
         <div className="bg-card border border-border rounded-lg p-6 sm:p-8">
+          {embedded && <div className="mb-5"><h1 className="text-lg font-semibold">Vad behöver du hjälp med?</h1><p className="mt-2 text-sm text-muted-foreground">Beskriv kort vad du behöver. Vi hjälper dig vidare.</p></div>}
           <form onSubmit={handleSubmit}>
             <fieldset disabled={isSubmitting} className="min-w-0 space-y-5">
             {draft.restoreError && <p role="alert" className="text-sm text-destructive">Det sparade utkastet kunde inte återställas. Du kan fylla i ett nytt ärende.</p>}
@@ -268,7 +255,7 @@ const PublicTicketForm = () => {
             </div>
 
             {/* Name + Email */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {!profile && <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label htmlFor="name" className="text-foreground text-sm font-medium">Ditt namn *</Label>
                 <Input
@@ -299,12 +286,13 @@ const PublicTicketForm = () => {
               </div>
             </div>
 
+            }
             {/* Template */}
             {templates.length > 0 && (
-              <div className="space-y-1.5">
+              <details className="group space-y-2"><summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm text-primary [&::-webkit-details-marker]:hidden"><FileText aria-hidden="true" className="h-4 w-4" />Ta hjälp av en mall<ChevronDown aria-hidden="true" className="h-4 w-4 group-open:rotate-180" /></summary>
                 <Label htmlFor="template" className="text-foreground text-sm font-medium flex items-center gap-1.5">
                   <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                  Använd mall (valfritt)
+                  Mall (valfritt)
                 </Label>
                 <Select value={selectedTemplate?.id || ''} onValueChange={handleTemplateSelect}>
                   <SelectTrigger id="template" className={selectTriggerClass}>
@@ -324,7 +312,7 @@ const PublicTicketForm = () => {
                     ))}
                   </SelectContent>
                 </Select>
-              </div>
+              </details>
             )}
 
             {/* Dynamic fields */}
@@ -342,7 +330,7 @@ const PublicTicketForm = () => {
 
             {/* Title */}
             <div className="space-y-1.5">
-              <Label htmlFor="title" className="text-foreground text-sm font-medium">Ärendets titel *</Label>
+              <Label htmlFor="title" className="text-foreground text-sm font-medium">{embedded ? "Kort rubrik" : "Ärendets titel *"}</Label>
               <Input
                 id="title"
                 value={formData.title}
@@ -357,7 +345,7 @@ const PublicTicketForm = () => {
             {/* Description */}
             {!usesDynamicFields && (
               <div className="space-y-1.5">
-                <Label htmlFor="description" className="text-foreground text-sm font-medium">Beskrivning *</Label>
+                <Label htmlFor="description" className="text-foreground text-sm font-medium">{embedded ? "Berätta lite mer" : "Beskrivning *"}</Label>
                 <RichTextEditor
                   onImageBusyChange={onImageBusyChange}
                   disabled={isSubmitting || imageBusy > 0 || !draft.ready}
@@ -367,7 +355,7 @@ const PublicTicketForm = () => {
                   minHeight="100px"
                   compact
                   id="description"
-                  ariaLabel="Beskrivning"
+                  ariaLabel={embedded ? "Berätta lite mer" : "Beskrivning"}
                   required
                 />
                 <p className="text-xs text-muted-foreground">Ta gärna med eventuella felmeddelanden eller vad du redan provat.</p>
@@ -382,7 +370,7 @@ const PublicTicketForm = () => {
                 reporter rarely judges urgency well, and IT sets it at
                 triage in the internal tool instead; new tickets default
                 to medium (or whatever a chosen template specifies). */}
-            {categories.length > 0 && (
+            {!embedded && categories.length > 0 && (
               <div className="space-y-1.5">
                 <details className="group"><summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-md px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">Kategori (valfritt)<ChevronDown aria-hidden="true" className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" /></summary>
                 <div className="flex flex-wrap gap-1.5">
@@ -410,15 +398,20 @@ const PublicTicketForm = () => {
               </div>
             )}
 
-            {/* Attachment hint — public form does not support direct upload */}
-            <p className="text-xs text-muted-foreground text-center">
-              Infoga bilder direkt i texten, klistra in eller dra in dem. Max 10 bilder, 10 MB per bild och 25 MB totalt.
-            </p>
+            <div className="space-y-2">
+              <Label>Bilagor (valfritt)</Label>
+              <FileUpload compact attachments={[]} pendingFiles={pendingFiles}
+                onFilesSelect={files => setPendingFiles(previous => [...previous, ...files])}
+                onRemovePending={index => setPendingFiles(previous => previous.filter((_, i) => i !== index))}
+                onRemoveAttachment={() => {}} disabled={isSubmitting} />
+            </div>
 
+            <div className="flex flex-wrap items-center justify-end gap-3 border-t border-border pt-5">
+            {profile && <div className="mr-auto"><SupportSender name={profile.name} photo={profile.photo} /></div>}
             {/* Submit */}
             <Button
               type="submit"
-              className="w-full h-11 rounded-md font-semibold"
+              className="h-11 rounded-md font-semibold"
               disabled={isSubmitting || imageBusy > 0 || !draft.ready}
             >
               {isSubmitting ? (
@@ -429,10 +422,11 @@ const PublicTicketForm = () => {
               ) : (
                 <>
                   <Send className="h-4 w-4 mr-2" />
-                  Skicka ärende
+                  {embedded ? "Skicka till IT" : "Skicka ärende"}
                 </>
               )}
             </Button>
+            </div>
             </fieldset>
           </form>
         </div>
@@ -455,4 +449,13 @@ const PublicTicketForm = () => {
   );
 };
 
-export default PublicTicketForm;
+const SupportEntry = () => {
+  const { user, isLoading } = useAuth();
+  const [params] = useSearchParams();
+  const embedded = params.get('embed') === '1';
+  const profile = useSupportProfile(embedded);
+  if (isLoading) return <div className="p-6"><Loader2 aria-label="Laddar formulär" className="h-6 w-6 animate-spin" /></div>;
+  if (user) return <div className="bg-background px-4 py-6"><TicketForm selfService /></div>;
+  return <PublicTicketForm key={profile?.email.toLowerCase() || 'anonymous'} profile={profile} embedded={embedded} />;
+};
+export default SupportEntry;

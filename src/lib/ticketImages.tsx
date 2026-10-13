@@ -3,7 +3,7 @@ import { api } from './api';
 import { getAuthenticatedFileUrl } from './secureFileAccess';
 
 export interface InlineImage { id: string; file: File }
-export interface TicketSubmission { images?: InlineImage[]; idempotencyKey?: string }
+export interface TicketSubmission { attachments?: File[]; images?: InlineImage[]; idempotencyKey?: string }
 export interface ImageAdapter { add: (file: File) => Promise<string>; resolve?: (src: string) => Promise<string> }
 export const ImageAdapterContext = createContext<ImageAdapter | null>(null);
 export const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.gif,.webp';

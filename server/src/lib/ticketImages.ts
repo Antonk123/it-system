@@ -4,7 +4,7 @@ import { mkdirSync, unlinkSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import multer from 'multer';
 import { db } from '../db/connection.js';
-import { hasMagicByteMatch } from '../routes/attachments.js';
+import { hasMagicByteMatch, ALLOWED_MIME_TYPES, ALLOWED_EXTENSIONS } from '../routes/attachments.js';
 import type { AuthRequest } from '../middleware/auth.js';
 
 const directory = process.env.UPLOAD_DIR || join(import.meta.dirname, '../../data/uploads');
@@ -14,6 +14,7 @@ const mimeExtensions: Record<string, string[]> = {
 };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const upload = multer({
+  defParamCharset: 'utf8',
   storage: multer.diskStorage({ destination: directory, filename: (_req, _file, cb) => cb(null, `inline-${randomUUID()}`) }),
   limits: { fileSize: 10 * 1024 * 1024, files: 10, fields: 1, fieldSize: 512 * 1024, parts: 11 },
 }).any();
@@ -84,15 +85,24 @@ export function ticketImageSubmission(req: Request, res: Response, next: NextFun
     };
     res.once('finish', clean);
     res.once('close', clean);
-    if (error) { clean(); res.status(413).json({ error: 'Högst 10 bilder, 10 MB per bild och 25 MB totalt.' }); return; }
+    if (error) { clean(); res.status(413).json({ error: 'Högst 10 filer, 10 MB per fil och 25 MB totalt.' }); return; }
     try {
-      if (files.reduce((sum, f) => sum + f.size, 0) > 25 * 1024 * 1024) throw new Error('Bilderna får vara högst 25 MB sammanlagt.');
+      if (files.reduce((sum, f) => sum + f.size, 0) > 25 * 1024 * 1024) throw new Error('Filerna får vara högst 25 MB sammanlagt.');
       const body: unknown = JSON.parse(req.body.payload);
       if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Ogiltiga formulärdata.');
       if (key) submission(res).requestHash = fingerprint(body, files);
       const ids = new Set<string>();
       let serialized = JSON.stringify(body);
       for (const file of files) {
+        if (/^attachment-\d+$/.test(file.fieldname)) {
+          const ext = file.originalname.split('.').pop()?.toLowerCase() || '';
+          if (['md', 'markdown'].includes(ext) && ['', 'application/octet-stream', 'text/plain'].includes(file.mimetype)) file.mimetype = 'text/markdown';
+          if (ids.has(file.fieldname) || !file.size || !ALLOWED_EXTENSIONS.includes(ext)
+            || !ALLOWED_MIME_TYPES.includes(file.mimetype) || !hasMagicByteMatch(file.path, file.mimetype)) throw new Error('Ogiltig bilaga eller filtyp.');
+          ids.add(file.fieldname);
+          submission(res).files.push({ id: randomUUID(), file });
+          continue;
+        }
         if (!uuid.test(file.fieldname) || ids.has(file.fieldname)) throw new Error('Ogiltig bildreferens.');
         ids.add(file.fieldname);
         const ext = file.originalname.split('.').pop()?.toLowerCase() || '';

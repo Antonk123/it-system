@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import TicketForm from './TicketForm';
-vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'test-user' } }) }));
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'test-user', email: 'anna@example.com' } }) }));
 vi.mock('@/hooks/useTicketDraft', () => ({ useTicketDraft: () => ({ ready: true, storageError: false, clear: async () => {}, resume: () => {} }) }));
 
 const data = vi.hoisted(() => ({
@@ -105,5 +105,27 @@ describe('Spara ärende med bilagor', () => {
     await waitFor(() => expect(screen.queryByText(/Ärendet sparades, men 1 fil/)).toBeNull());
     expect(data.addTicket).toHaveBeenCalledTimes(1);
     expect(data.uploadAttachment).toHaveBeenCalledTimes(3);
+  });
+});
+
+
+describe('Snabb felanmälan', () => {
+  it('skickar som inloggad utan beställarval, obligatoriska mallfält eller handläggning', async () => {
+    data.addTicket.mockResolvedValueOnce({ id: 'support-ticket' });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/tickets/new?support=1']}><TicketForm /></MemoryRouter></QueryClientProvider>);
+    expect(screen.queryByLabelText('Beställare')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Fler uppgifter|Checklista/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Skickas som')).toBeInTheDocument();
+    expect(screen.getByText('Anna')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Välj testmall' }));
+    expect(screen.queryByLabelText('Antal')).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Berätta lite mer'), { target: { value: 'Behöver åtkomst till Outlook.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+    await waitFor(() => expect(data.addTicket).toHaveBeenCalledWith(expect.objectContaining({
+      selfService: true, requesterId: '', company_id: undefined, description: 'Behöver åtkomst till Outlook.', category: 'none', priority: 'medium',
+    }), undefined));
+    expect(data.addTicket).toHaveBeenCalledWith(expect.not.objectContaining({ templateId: 'tmpl' }), undefined);
+    expect(await screen.findByText('Ärendet skickat!')).toBeInTheDocument();
   });
 });

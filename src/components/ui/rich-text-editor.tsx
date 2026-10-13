@@ -249,6 +249,7 @@ export interface RichTextEditorProps {
   className?: string;
   disabled?: boolean;
   required?: boolean;
+  ariaRequired?: boolean;
   minHeight?: string;
   showToolbar?: boolean;
   compact?: boolean;
@@ -273,6 +274,7 @@ export const RichTextEditor = ({
   className,
   disabled = false,
   required = false,
+  ariaRequired = required,
   minHeight = '200px',
   showToolbar = true,
   compact = false,
@@ -376,6 +378,7 @@ export const RichTextEditor = ({
         role: 'textbox',
         'aria-label': ariaLabel || placeholder,
         'aria-multiline': 'true',
+        'aria-required': String(ariaRequired),
         ...(describedBy && { 'aria-describedby': describedBy }),
       },
       // Ctrl+Enter (or Cmd+Enter on Mac) submits the surrounding form. TipTap

@@ -222,7 +222,7 @@ an API key without `admin` scope never counts as admin.
 | GET | `/api/tickets/requester-open-counts` | `authenticate` | Non-closed ticket count per requester | — | `Record<requesterId, count>` |
 | GET | `/api/tickets/upcoming-reminders` | `authenticate` | Unsent future reminders across all tickets (top 6) | — | reminder array |
 | GET | `/api/tickets/:id` | `authenticate` | Get one ticket + custom fields | params: `id` | `{ ...ticket, field_values[] }`; 404 |
-| POST | `/api/tickets` | `writeRateLimiter` → `authenticate` | Create ticket (+ custom fields, auto-priority, email, webhook) | body: `title`(req), `description`/`customFields`(one req), + optional fields | 201 `{ ...ticket, warnings? }`; 400 |
+| POST | `/api/tickets` | `writeRateLimiter` → `authenticate` | Create ticket (+ custom fields, auto-priority, email, webhook) | body: `title`(req), `description`/`customFields`(one req), optional `self_service: true` derives requester/company from authenticated account and atomically creates a missing contact, + optional fields | 201 `{ ...ticket, warnings? }`; 400 |
 | GET | `/api/tickets/:id/history` | `authenticate` | Ticket change history (cap 500) | params: `id` | history-row array; 404 |
 | PUT | `/api/tickets/bulk` | `writeRateLimiter` → `authenticate` (+ per-ticket write check) | Bulk-update status/priority/category/assignee (≤500, chunked, history rows per change); tickets the caller may not write land in `skipped` | body: `ids[]`, `updates{}` | `{ updated, skipped[] }`; 400 |
 | POST | `/api/tickets/bulk-delete` | `writeRateLimiter` → `authenticate` → `requireAdmin` | Permanently delete many tickets + attachment files | body: `ids[]` | `{ deleted, alreadyGone? }`; 400 |
@@ -606,3 +606,5 @@ compares every mounted route with `docs/openapi.yaml`.
 Skapandeanrop använder `Idempotency-Key` (16–128 tecken, klienten använder slumpad UUID). Nyckeln sparas atomärt i SQLite, avgränsas per inloggad användare eller publik kanal och gäller i 24 timmar, även efter omstart. Återförsök med samma nyckel och samma innehåll returnerar samma ärende. Annat innehåll eller andra bildbytes ger `409 IDEMPOTENCY_CONFLICT`; klienten behåller uppgifterna, visar att en tidigare version redan sparats och använder en ny nyckel endast när användaren väljer att skicka igen. Den publika kanalen kräver ingen session och får aldrig utlösa inloggningsredirect.
 
 Utkast med originalbilder sparas lokalt i IndexedDB i 24 timmar, separat för publik kanal och respektive användare/ärende. Det är ett återställningsskydd, inte ett skickat ärende.
+
+Vanliga bilagor kan också skickas i samma multipart-anrop som `attachment-0`, `attachment-1`, osv. Befintlig MIME-/filändelseallowlist och signaturkontroll för bilagor gäller. Bilder och bilagor delar gränsen tio filer, 10 MB per fil och 25 MB totalt, och sparas i samma transaktion med samma återförsöksskydd.

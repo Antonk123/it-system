@@ -774,3 +774,32 @@ describe('inline images for ordinary users', () => {
     expect(db.prepare('SELECT count(*) AS total FROM ticket_attachments WHERE ticket_id = ?').get(first.body.id)).toEqual({ total: 1 });
   });
 });
+
+
+describe('Self-service requester identity', () => {
+  it('creates the authenticated users contact atomically and reuses it', async () => {
+    const submit = () => alice.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${alice.token}`).set('x-csrf-token', alice.csrf)
+      .send({ title: 'Snabb hjälp', description: '<p>Outlook fungerar inte</p>', self_service: true });
+    const first = await submit();
+    expect(first.status).toBe(201);
+    const contact = db.prepare('SELECT * FROM contacts WHERE id = ?').get(first.body.requester_id) as { email: string; name: string };
+    expect(contact.email).toBe('alice@ticketstest.local');
+    expect(contact.name).toBe('Alice');
+    const second = await submit();
+    expect(second.status).toBe(201);
+    expect(second.body.requester_id).toBe(first.body.requester_id);
+  });
+  it('ignores another requester in self-service and takes company from the own contact', async () => {
+    const otherId = randomUUID();
+    db.prepare('INSERT INTO contacts (id, name, email, created_at) VALUES (?, ?, ?, ?)').run(otherId, 'Other', 'other@example.com', new Date().toISOString());
+    const response = await bob.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${bob.token}`).set('x-csrf-token', bob.csrf)
+      .send({ title: 'Behöver hjälp', description: '<p>Hej</p>', self_service: true, requester_id: otherId });
+    expect(response.status).toBe(201);
+    expect(response.body.requester_id).not.toBe(otherId);
+    expect(response.body.company_id).toBeNull();
+    const own = db.prepare('SELECT email FROM contacts WHERE id = ?').get(response.body.requester_id) as { email: string };
+    expect(own.email).toBe('bob@ticketstest.local');
+  });
+});

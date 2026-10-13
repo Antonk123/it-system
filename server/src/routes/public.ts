@@ -34,6 +34,7 @@ function formFillTooFast(formStartedAt: unknown): boolean {
 }
 
 interface ContactRow {
+  company_id?: string | null;
   id: string;
   name: string;
   email: string;
@@ -288,7 +289,7 @@ router.post('/tickets', publicWriteRateLimiter, ticketImageSubmission, (req: Req
     const createTicket = db.transaction(() => {
       // Find or create contact (e-post matchas skiftlägesokänsligt)
       const now = new Date().toISOString();
-      let contact = db.prepare('SELECT id, name, email FROM contacts WHERE lower(email) = lower(?)').get(email) as ContactRow | undefined;
+      let contact = db.prepare('SELECT id, name, email, company_id FROM contacts WHERE lower(email) = lower(?)').get(email) as ContactRow | undefined;
 
       if (!contact) {
         const contactId = randomUUID();
@@ -321,9 +322,9 @@ router.post('/tickets', publicWriteRateLimiter, ticketImageSubmission, (req: Req
       // description) and length-validated above, before any DB writes.
       const ticketId = randomUUID();
       db.prepare(`
-        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, template_id, created_at, updated_at)
-        VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?)
-      `).run(ticketId, title, finalDescription, ticketPriority, categoryId, contact.id, templateId, now, now);
+        INSERT INTO tickets (id, title, description, status, priority, category_id, requester_id, template_id, company_id, created_at, updated_at)
+        VALUES (?, ?, ?, 'open', ?, ?, ?, ?, ?, ?, ?)
+      `).run(ticketId, title, finalDescription, ticketPriority, categoryId, contact.id, templateId, contact.company_id || null, now, now);
 
       // FTS5 synkas automatiskt via triggers (migration 050)
 
