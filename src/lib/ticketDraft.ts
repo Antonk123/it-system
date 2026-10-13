@@ -9,7 +9,7 @@ const database = () => new Promise<IDBDatabase>((resolve, reject) => {
   request.onerror = () => reject(request.error);
   request.onblocked = () => reject(new Error('Utkastslagringen är blockerad.'));
 });
-async function operation<T>(key: string, mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest): Promise<T> {
+async function operation<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest): Promise<T> {
   const db = await database();
   return new Promise((resolve, reject) => {
     const tx = db.transaction('drafts', mode);
@@ -20,13 +20,13 @@ async function operation<T>(key: string, mode: IDBTransactionMode, run: (store: 
   });
 }
 export async function readTicketDraft<T>(key: string): Promise<T | null> {
-  const record = await operation<{ expires: number; value: T } | undefined>(key, 'readonly', store => store.get(key));
+  const record = await operation<{ expires: number; value: T } | undefined>('readonly', store => store.get(key));
   if (!record) return null;
   if (record.expires < Date.now()) { await deleteTicketDraft(key); return null; }
   return record.value;
 }
-export const writeTicketDraft = (key: string, value: unknown) => operation(key, 'readwrite', store => store.put({ expires: Date.now() + TTL, value }, key));
-export const deleteTicketDraft = (key: string) => operation(key, 'readwrite', store => store.delete(key));
+export const writeTicketDraft = (key: string, value: unknown) => operation('readwrite', store => store.put({ expires: Date.now() + TTL, value }, key));
+export const deleteTicketDraft = (key: string) => operation('readwrite', store => store.delete(key));
 
 // IndexedDB survives app upgrades. Validate before any React state is restored,
 // otherwise one stale/corrupt record can crash the form on every future visit.
