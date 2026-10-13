@@ -1,3 +1,4 @@
+import { kbImageAdapter } from '@/lib/ticketImages';
 import { templateFieldName } from '@/lib/templateValidation';
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -511,7 +512,7 @@ export const TemplateEditorModal = ({
                     <Label htmlFor="descriptionTemplate">
                       Beskrivningsmall * <span className="text-xs text-muted-foreground">(används som huvudbeskrivning)</span>
                     </Label>
-                    <RichTextEditor
+                    <RichTextEditor imageAdapter={kbImageAdapter}
                       value={formData.descriptionTemplate}
                       onChange={(html) => setFormData({ ...formData, descriptionTemplate: html })}
                       placeholder="Detaljerad beskrivning av problemet..."
@@ -561,7 +562,7 @@ export const TemplateEditorModal = ({
                     <Label htmlFor="notesTemplate">
                       Anteckningar mall <span className="text-xs text-muted-foreground">(valfritt)</span>
                     </Label>
-                    <RichTextEditor
+                    <RichTextEditor imageAdapter={kbImageAdapter}
                       value={formData.notesTemplate}
                       onChange={(html) => setFormData({ ...formData, notesTemplate: html })}
                       placeholder="Kom ihåg att verifiera..."
@@ -576,7 +577,7 @@ export const TemplateEditorModal = ({
                     <Label htmlFor="solutionTemplate">
                       Lösning mall <span className="text-xs text-muted-foreground">(valfritt)</span>
                     </Label>
-                    <RichTextEditor
+                    <RichTextEditor imageAdapter={kbImageAdapter}
                       value={formData.solutionTemplate}
                       onChange={(html) => setFormData({ ...formData, solutionTemplate: html })}
                       placeholder="Löst genom att..."

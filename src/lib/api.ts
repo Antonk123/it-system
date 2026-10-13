@@ -1,3 +1,4 @@
+import type { TicketSubmission } from './ticketImages';
 
 import { safeStorage } from '@/lib/safeStorage';
 
@@ -321,7 +322,7 @@ class ApiClient {
   // session-expiry-hantering som request() — men utan JSON-parsning/Content-Type.
   async requestBlob(
     endpoint: string,
-    options: { signal?: AbortSignal; onResponse?: (headers: Headers) => void } = {},
+    options: { signal?: AbortSignal; onResponse?: (headers: Headers) => void; redirectOnAuthFailure?: boolean } = {},
     isRetry = false,
   ): Promise<Blob> {
     const { signal, onResponse } = options;
@@ -345,7 +346,7 @@ class ApiClient {
         if (await this.tryRefresh()) {
           return this.requestBlob(endpoint, options, true);
         }
-        this.sessionExpired();
+        if (options.redirectOnAuthFailure !== false) this.sessionExpired();
       }
 
       const error = await this.readErrorBody(response, `Request failed (${response.status})`);
@@ -382,6 +383,7 @@ class ApiClient {
     fieldName: string,
     fallbackMessage: string,
     isRetry = false,
+    redirectOnAuthFailure = true,
   ): Promise<T> {
     const token = await this.getFreshToken(isRetry);
     const formData = new FormData();
@@ -404,21 +406,52 @@ class ApiClient {
     if (!response.ok) {
       if (response.status === 401 && !isRetry) {
         if (await this.tryRefresh()) {
-          return this.postFile<T>(endpoint, file, fieldName, fallbackMessage, true);
+          return this.postFile<T>(endpoint, file, fieldName, fallbackMessage, true, redirectOnAuthFailure);
         }
-        this.sessionExpired();
+        if (redirectOnAuthFailure) this.sessionExpired();
       }
 
       const error = await this.readErrorBody(response, fallbackMessage);
 
       if (response.status === 403 && !isRetry && this.isCsrfError(error)) {
         this.csrfToken = null;
-        return this.postFile<T>(endpoint, file, fieldName, fallbackMessage, true);
+        return this.postFile<T>(endpoint, file, fieldName, fallbackMessage, true, redirectOnAuthFailure);
       }
 
       throw this.toApiError(response, error, fallbackMessage);
     }
 
+    return response.json();
+  }
+
+  private async submitTicketData<T>(endpoint: string, payload: unknown, submission: TicketSubmission = {}, anonymous = false, method: 'POST' | 'PUT' = 'POST', retry = false): Promise<T> {
+    const headers: Record<string, string> = {};
+    if (submission.idempotencyKey) headers['Idempotency-Key'] = submission.idempotencyKey;
+    let body: BodyInit;
+    if (submission.images?.length) {
+      const multipart = new FormData();
+      multipart.append('payload', JSON.stringify(payload));
+      for (const image of submission.images) multipart.append(image.id, image.file, image.file.name);
+      body = multipart;
+    } else { headers['Content-Type'] = 'application/json'; body = JSON.stringify(payload); }
+    if (!anonymous) {
+      const token = await this.getFreshToken(retry);
+      if (token) headers.Authorization = `Bearer ${token}`;
+      headers['X-CSRF-Token'] = await this.getCsrfToken();
+    }
+    const response = await fetch(`${this.baseUrl}${endpoint}`, { method, headers, body, credentials: 'include' });
+    if (!response.ok) {
+      if (!anonymous && response.status === 401 && !retry) {
+        if (await this.tryRefresh()) return this.submitTicketData<T>(endpoint, payload, submission, anonymous, method, true);
+        // Let the form retain its draft instead of hard-navigating mid-upload.
+      }
+      const error = await this.readErrorBody(response, 'Ärendet kunde inte sparas. Dina uppgifter finns kvar.');
+      if (!anonymous && response.status === 403 && !retry && this.isCsrfError(error)) {
+        this.csrfToken = null;
+        return this.submitTicketData<T>(endpoint, payload, submission, anonymous, method, true);
+      }
+      throw this.toApiError(response, error, 'Ärendet kunde inte sparas');
+    }
     return response.json();
   }
 
@@ -601,18 +634,12 @@ class ApiClient {
     return this.request<TemplateRow & { fields: TemplateFieldRow[] }>(`/templates/${id}`);
   }
 
-  async createTicket(ticket: Partial<TicketRow> & { customFields?: CustomFieldInput[]; template_id?: string | null }) {
-    return this.request<TicketRow>('/tickets', {
-      method: 'POST',
-      body: ticket,
-    });
+  async createTicket(ticket: Partial<TicketRow> & { customFields?: CustomFieldInput[]; template_id?: string | null }, submission?: TicketSubmission) {
+    return this.submitTicketData<TicketRow>('/tickets', ticket, submission);
   }
 
-  async updateTicket(id: string, updates: Partial<TicketRow> & { customFields?: CustomFieldInput[] }) {
-    return this.request<TicketRow>(`/tickets/${id}`, {
-      method: 'PUT',
-      body: updates,
-    });
+  async updateTicket(id: string, updates: Partial<TicketRow> & { customFields?: CustomFieldInput[] }, submission?: TicketSubmission) {
+    return this.submitTicketData<TicketRow>(`/tickets/${id}`, updates, submission, false, 'PUT');
   }
 
   async bulkUpdateTickets(ids: string[], updates: { status?: string; priority?: string; category_id?: string | null; assigned_to?: string | null }) {
@@ -924,6 +951,10 @@ class ApiClient {
 
   async uploadAttachment(ticketId: string, file: File) {
     return this.uploadFile<AttachmentRow>(`/attachments/ticket/${ticketId}`, file);
+  }
+
+  async uploadInlineTicketImage(ticketId: string, file: File) {
+    return this.postFile<AttachmentRow>(`/attachments/ticket/${ticketId}`, file, 'file', 'Bilden kunde inte laddas upp.', false, false);
   }
 
   async deleteAttachment(id: string) {
@@ -1259,7 +1290,7 @@ class ApiClient {
   }
 
   async uploadKbImage(file: File): Promise<{ url: string }> {
-    return this.postFile<{ url: string }>('/kb/upload-image', file, 'image', 'Upload failed');
+    return this.postFile<{ url: string }>('/kb/upload-image', file, 'image', 'Bilden kunde inte laddas upp.', false, false);
   }
 
   // Public endpoints (no auth)
@@ -1291,12 +1322,8 @@ class ApiClient {
     template_id?: string;
     website?: string; // honeypot — måste vara tomt
     formStartedAt?: number; // ms när formuläret öppnades
-  }) {
-    return this.request<{ message: string; ticketId: string }>('/public/tickets', {
-      method: 'POST',
-      body: data,
-      skipAuthRefresh: true,
-    });
+  }, submission?: TicketSubmission) {
+    return this.submitTicketData<{ message: string; ticketId: string }>('/public/tickets', data, submission, true);
   }
 
   async getRequesterAnalytics(year: string, month: string) {

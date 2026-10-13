@@ -30,6 +30,7 @@ const { DB_PATH } = vi.hoisted(() => {
   const { tmpdir } = require('node:os') as typeof import('node:os');
   const { join } = require('node:path') as typeof import('node:path');
   const dbPath = join(tmpdir(), `itticket-test-${process.pid}-${Date.now()}-tickets.sqlite`);
+  process.env.UPLOAD_DIR = dbPath + '-uploads';
   process.env.DB_PATH = dbPath;
   process.env.NODE_ENV = 'test';
   process.env.CSRF_SECRET = 'test-csrf-secret-tickets-0123456789abcdef0123456789abcdef';
@@ -110,6 +111,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
+  rmSync(DB_PATH + '-uploads', { recursive: true, force: true });
   try { closeDatabase(); } catch { /* ignore */ }
   for (const s of ['', '-wal', '-shm']) {
     const f = DB_PATH + s;
@@ -751,5 +753,24 @@ describe('Server-required dynamic template fields', () => {
       .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).send({ customFields: values() });
     expect(corrected.status).toBe(200);
     expect(corrected.body.status).toBe('in-progress');
+  });
+});
+
+describe('inline images for ordinary users', () => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lN8AAAAASUVORK5CYII=', 'base64');
+  it('creates atomically, replays the same ticket, and enforces attachment read access', async () => {
+    const imageId = randomUUID(); const key = randomUUID();
+    const payload = { title: 'Non-admin image', description: `<p>Problem</p><img src="/api/attachments/file/${imageId}">`, assigned_to: aliceId };
+    const send = () => alice.agent.post('/api/tickets').set('Authorization', `Bearer ${alice.token}`).set('x-csrf-token', alice.csrf).set('Idempotency-Key', key).field('payload', JSON.stringify(payload)).attach(imageId, png, { filename: 'image.png', contentType: 'image/png' });
+    const first = await send(); expect(first.status).toBe(201);
+    const again = await send(); expect(again.body.id).toBe(first.body.id);
+    const rows = db.prepare('SELECT id FROM ticket_attachments WHERE ticket_id = ?').all(first.body.id) as Array<{ id: string }>;
+    expect(rows).toHaveLength(1);
+    expect((await alice.agent.get(`/api/attachments/file/${rows[0].id}`).set('Authorization', `Bearer ${alice.token}`)).status).toBe(200);
+    expect((await bob.agent.get(`/api/attachments/file/${rows[0].id}`).set('Authorization', `Bearer ${bob.token}`)).status).toBe(200);
+    const deniedId = randomUUID();
+    const denied = await bob.agent.put(`/api/tickets/${first.body.id}`).set('Authorization', `Bearer ${bob.token}`).set('x-csrf-token', bob.csrf).field('payload', JSON.stringify({ description: `<img src="/api/attachments/file/${deniedId}">` })).attach(deniedId, png, { filename: 'image.png', contentType: 'image/png' });
+    expect(denied.status).toBe(403);
+    expect(db.prepare('SELECT count(*) AS total FROM ticket_attachments WHERE ticket_id = ?').get(first.body.id)).toEqual({ total: 1 });
   });
 });

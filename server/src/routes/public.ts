@@ -1,3 +1,5 @@
+import { normalizeTemplateValues, missingRequiredTemplateFields, composeDescriptionFromFields } from '../lib/templateValidation.js';
+import { ticketImageSubmission, commitTicketImages } from '../lib/ticketImages.js';
 import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
 import { db } from '../db/connection.js';
@@ -22,22 +24,6 @@ const publicBrandingReadRateLimiter = createRateLimiter(60 * 1000, 120);
 // Honeypot (dolt fält "website") och minsta ifyllnadstid mot enkla bottar.
 const MIN_FORM_FILL_MS = 3000;
 
-// ─── Idempotency key store (in-memory, 5-minute TTL) ────────────────────────
-// Prevents duplicate ticket creation from network retries on the public form.
-const idempotencyStore = new Map<string, { ticketId: string; expiresAt: number }>();
-const IDEMPOTENCY_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
-const MAX_IDEMPOTENCY_ENTRIES = 10_000;
-
-function rememberIdempotencyKey(key: string, ticketId: string): void {
-  // Map bevarar insättningsordning: vid tak slängs äldsta posten först.
-  if (idempotencyStore.size >= MAX_IDEMPOTENCY_ENTRIES && !idempotencyStore.has(key)) {
-    const oldest = idempotencyStore.keys().next().value;
-    if (oldest !== undefined) idempotencyStore.delete(oldest);
-  }
-  idempotencyStore.set(key, { ticketId, expiresAt: Date.now() + IDEMPOTENCY_TTL_MS });
-}
-
 /** formStartedAt kan vara epoch-ms eller ISO-sträng; ogiltigt värde ignoreras. */
 function formFillTooFast(formStartedAt: unknown): boolean {
   if (formStartedAt === undefined || formStartedAt === null || formStartedAt === '') return false;
@@ -46,14 +32,6 @@ function formFillTooFast(formStartedAt: unknown): boolean {
   const elapsed = Date.now() - started;
   return elapsed >= 0 && elapsed < MIN_FORM_FILL_MS;
 }
-
-// Periodic cleanup every 60s to evict expired entries
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of idempotencyStore) {
-    if (entry.expiresAt <= now) idempotencyStore.delete(key);
-  }
-}, 60_000).unref();
 
 interface ContactRow {
   id: string;
@@ -202,22 +180,7 @@ router.get('/branding/logo', publicBrandingReadRateLimiter, (_req: Request, res:
 });
 
 // Submit public ticket
-router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) => {
-  // ─── Idempotency: prevent duplicate tickets from network retries ───
-  const idempotencyKey = req.headers['idempotency-key'] as string | undefined;
-  if (idempotencyKey && idempotencyKey.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
-    return res.status(400).json({ error: `Idempotency-Key must be ${MAX_IDEMPOTENCY_KEY_LENGTH} characters or less` });
-  }
-  if (idempotencyKey) {
-    const existing = idempotencyStore.get(idempotencyKey);
-    if (existing && existing.expiresAt > Date.now()) {
-      return res.status(201).json({
-        message: 'Ticket submitted successfully',
-        ticketId: existing.ticketId,
-      });
-    }
-  }
-
+router.post('/tickets', publicWriteRateLimiter, ticketImageSubmission, (req: Request, res: Response) => {
   let { name, email, title, description, category, priority, customFields, template_id } = req.body;
   const { website, formStartedAt } = req.body;
 
@@ -307,28 +270,12 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
   title = sanitizePlainText(title);
   if (description !== undefined) description = sanitizeRichText(description);
 
-  // customFields are plain-text label/value pairs (not rich text — same
-  // treatment as name/title above), and were previously stored raw. Sanitize
-  // once here and reuse the same sanitized list both for composing
-  // finalDescription and for the ticket_field_values rows below.
-  const sanitizedCustomFields: CustomFieldInput[] = Array.isArray(customFields)
-    ? (customFields as CustomFieldInput[]).map((field) => ({
-        fieldName: field?.fieldName,
-        fieldLabel: sanitizePlainText(field?.fieldLabel),
-        fieldValue: sanitizePlainText(field?.fieldValue),
-      }))
-    : [];
-
-  // Prepare description: when customFields provided, compose ONLY from them (prevents duplicates)
-  let finalDescription: string;
-  if (sanitizedCustomFields.length > 0) {
-    finalDescription = sanitizedCustomFields
-      .filter((field) => field.fieldLabel)
-      .map((field) => `**${field.fieldLabel}**: ${field.fieldValue || '(ej angivet)'}`)
-      .join('  \n');
-  } else {
-    finalDescription = description || '';
-  }
+  // Match internal templates: sanitize rich field values once and retain inline images.
+  const sanitizedCustomFields = customFields === undefined ? [] : normalizeTemplateValues(customFields);
+  if (!sanitizedCustomFields) return res.status(400).json({ error: 'Ogiltiga mallfält' });
+  const fieldErrors = missingRequiredTemplateFields(typeof template_id === 'string' ? template_id : null, sanitizedCustomFields);
+  if (Object.keys(fieldErrors).length) return res.status(400).json({ error: 'Fyll i obligatoriska mallfält', fieldErrors });
+  const finalDescription = sanitizedCustomFields.length ? composeDescriptionFromFields(sanitizedCustomFields) : description || '';
 
   // The composed description shares the same cap as a free-text description.
   if (finalDescription.length > 5000) {
@@ -394,6 +341,7 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
         });
       }
 
+      commitTicketImages(res, ticketId);
       return { ticketId, categoryId, contact };
     });
 
@@ -412,8 +360,6 @@ router.post('/tickets', publicWriteRateLimiter, (req: Request, res: Response) =>
       logger.error('Error sending public ticket email:', { error: String(error) });
     });
 
-    // Store idempotency key (efter commit) so retries return the same ticket
-    if (idempotencyKey) rememberIdempotencyKey(idempotencyKey, ticketId);
 
     res.status(201).json({
       message: 'Ticket submitted successfully',

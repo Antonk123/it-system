@@ -664,7 +664,7 @@ describe('uploadKbImage', () => {
     expect(body.get('file')).toBeNull(); // annan nyckel än import-metoderna
   });
 
-  it('kastar "Upload failed" när felsvaret saknar en error-nyckel och JSON', async () => {
+  it('kastar "Bilden kunde inte laddas upp." när felsvaret saknar en error-nyckel och JSON', async () => {
     fetchMock.mockImplementation(
       csrfDispatch('csrf-1', () =>
         Promise.resolve(fakeResponse({ ok: false, status: 500, json: () => Promise.reject(new Error('no json')) }))
@@ -672,7 +672,7 @@ describe('uploadKbImage', () => {
     );
 
     const api = await freshApi();
-    await expect(api.uploadKbImage(new File(['x'], 'x.png'))).rejects.toThrow('Upload failed');
+    await expect(api.uploadKbImage(new File(['x'], 'x.png'))).rejects.toThrow('Bilden kunde inte laddas upp.');
   });
 
   it('401 → EN /auth/refresh → EN omkörning som lyckas, med nya token i Authorization', async () => {
@@ -702,7 +702,7 @@ describe('uploadKbImage', () => {
     expect(refreshCalls).toHaveLength(1);
   });
 
-  it('401, refresh misslyckas → session expired: token rensad, redirect till /login, kastar', async () => {
+  it('401, refresh misslyckas → felet visas utan navigering eller förlorat formulär', async () => {
     const loc = stubLocation();
     localStorage.setItem('auth_token', makeJwt(Math.floor(Date.now() / 1000) + 3600));
     localStorage.setItem('user', JSON.stringify({ id: 'u1' }));
@@ -716,15 +716,15 @@ describe('uploadKbImage', () => {
     );
 
     const api = await freshApi();
-    await expect(api.uploadKbImage(new File(['a'], 'bild.png'))).rejects.toThrow('Session expired');
+    await expect(api.uploadKbImage(new File(['a'], 'bild.png'))).rejects.toMatchObject({ status: 401 });
 
     const targetCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/kb/upload-image`);
     expect(targetCalls).toHaveLength(1);
     const refreshCalls = fetchMock.mock.calls.filter((c) => urlOfCall(c) === `${BASE}/auth/refresh`);
     expect(refreshCalls).toHaveLength(1);
-    expect(localStorage.getItem('auth_token')).toBeNull();
-    expect(localStorage.getItem('user')).toBeNull();
-    expect(loc.href).toBe('/login');
+    expect(localStorage.getItem('auth_token')).not.toBeNull();
+    expect(localStorage.getItem('user')).not.toBeNull();
+    expect(loc.href).not.toContain('/login');
   });
 
   it('proaktiv refresh: nära-utgången token förnyas INNAN anropet', async () => {

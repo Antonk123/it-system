@@ -9,8 +9,8 @@ import { existsSync, rmSync } from 'fs';
  *
  * Coverage:
  *  1. POST /tickets — happy path (ticket + contact), validation, and the
- *     in-memory Idempotency-Key store (same key → same ticket, no duplicate row;
- *     different keys → two tickets; TTL expiry → a fresh ticket after 5 min).
+ *     persistent Idempotency-Key store (same key → same ticket, no duplicate row;
+ *     different keys → two tickets; TTL expiry → a fresh ticket after 24 hours).
  *  2. Rate limiting — publicWriteRateLimiter (30/min) guards POST /tickets.
  *  3. CSRF exemption — /api/public/* is listed in app.ts's
  *     csrfExemptPrefixes; mutating calls with NO x-csrf-token header must
@@ -26,6 +26,7 @@ const { DB_PATH } = vi.hoisted(() => {
   const { tmpdir } = require('node:os') as typeof import('node:os');
   const { join } = require('node:path') as typeof import('node:path');
   const dbPath = join(tmpdir(), `itticket-public-test-${process.pid}-${Date.now()}.sqlite`);
+  process.env.UPLOAD_DIR = dbPath + '-uploads';
   process.env.DB_PATH = dbPath;
   process.env.NODE_ENV = 'test';
   process.env.CSRF_SECRET = 'test-csrf-secret-public-0123456789abcdef0123456789abcdef';
@@ -65,6 +66,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+  rmSync(DB_PATH + '-uploads', { recursive: true, force: true });
   try { closeDatabase(); } catch { /* ignore */ }
   for (const suffix of ['', '-wal', '-shm']) {
     const f = DB_PATH + suffix;
@@ -318,14 +320,22 @@ describe('POST /api/public/tickets', () => {
         .post('/api/public/tickets')
         .set('X-Forwarded-For', freshIp())
         .set('Idempotency-Key', key)
-        // Even a DIFFERENT body must be ignored — the store short-circuits
-        // before any validation/DB work runs.
-        .send(validTicketBody({ title: 'Helt annan titel', email: `other-${randomUUID()}@publictest.local` }));
+        .send(body);
       expect(second.status).toBe(201);
       expect(second.body.ticketId).toBe(first.body.ticketId);
 
       const rows = db.prepare('SELECT id FROM tickets WHERE title = ?').all(body.title) as { id: string }[];
       expect(rows).toHaveLength(1);
+    });
+
+    it('does not falsely acknowledge changed content from another tab as saved', async () => {
+      const key = randomUUID(); const body = validTicketBody();
+      const send = (payload: typeof body) => request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp()).set('Idempotency-Key', key).send(payload);
+      expect((await send(body)).status).toBe(201);
+      const second = await send({ ...body, title: 'Ändrat ärende från en annan flik' });
+      expect(second.status).toBe(409);
+      expect(second.body.code).toBe('IDEMPOTENCY_CONFLICT');
+      expect(db.prepare('SELECT id FROM tickets WHERE title = ?').get('Ändrat ärende från en annan flik')).toBeUndefined();
     });
 
     it('different keys create two distinct tickets', async () => {
@@ -348,7 +358,7 @@ describe('POST /api/public/tickets', () => {
       expect(resA.body.ticketId).not.toBe(resB.body.ticketId);
     });
 
-    it('a key reused after the 5-minute TTL expires creates a NEW ticket instead of returning the stale one', async () => {
+    it('a key reused after the 24-hour TTL expires creates a NEW ticket instead of returning the stale one', async () => {
       const key = `idem-ttl-${randomUUID()}`;
       const body = validTicketBody();
 
@@ -364,8 +374,8 @@ describe('POST /api/public/tickets', () => {
           .send(body);
         expect(first.status).toBe(201);
 
-        // Jump past the 5-minute TTL (IDEMPOTENCY_TTL_MS in public.ts).
-        vi.setSystemTime(realNow + 5 * 60 * 1000 + 1_000);
+        // Jump past the 24-hour TTL (IDEMPOTENCY_TTL_MS in public.ts).
+        vi.setSystemTime(realNow + 24 * 60 * 60 * 1000 + 1_000);
 
         const second = await request(app)
           .post('/api/public/tickets')
@@ -551,5 +561,67 @@ describe('CSRF exemption for /api/public/*', () => {
       .send(validTicketBody());
 
     expect(res.status).toBe(201);
+  });
+});
+
+describe('public inline images — atomic submission and retry', () => {
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lN8AAAAASUVORK5CYII=', 'base64');
+  it('stores original bytes and rich field HTML, then replays without duplicate files', async () => {
+    const id = randomUUID(); const key = randomUUID();
+    const body = validTicketBody({ description: '', customFields: [{ fieldName: 'reason', fieldLabel: 'Motivering', fieldValue: `<p>Behöver tillgång</p><img src="/api/attachments/file/${id}" width="50%">` }] });
+    const send = () => request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp()).set('Idempotency-Key', key).field('payload', JSON.stringify(body)).attach(id, png, { filename: 'screen.png', contentType: 'image/png' });
+    const first = await send(); expect(first.status).toBe(201);
+    const second = await send(); expect(second.status).toBe(201); expect(second.body.ticketId).toBe(first.body.ticketId);
+    const attachments = db.prepare('SELECT * FROM ticket_attachments WHERE ticket_id = ?').all(first.body.ticketId) as Array<{ id: string; file_path: string }>;
+    expect(attachments).toHaveLength(1);
+    const row = db.prepare('SELECT field_value FROM ticket_field_values WHERE ticket_id = ?').get(first.body.ticketId) as { field_value: string };
+    expect(row.field_value).toContain(`<p>Behöver tillgång</p>`);
+    expect(row.field_value).toContain(`/api/attachments/file/${attachments[0].id}`);
+    expect(row.field_value).toContain('width="50%"');
+    const { readFileSync, readdirSync } = await import('node:fs');
+    expect(readFileSync(`${DB_PATH}-uploads/${attachments[0].file_path}`)).toEqual(png);
+    expect(readdirSync(`${DB_PATH}-uploads`).filter(name => name.startsWith('inline-'))).toHaveLength(1);
+    expect((await request(app).get(`/api/attachments/file/${attachments[0].id}`)).status).toBe(401);
+  });
+  it('rejects missing local image bytes without creating an incomplete ticket', async () => {
+    const body = validTicketBody({ description: `<p>Text kvar</p><img src="/api/attachments/file/${randomUUID()}">` });
+    const res = await request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp()).send(body);
+    expect(res.status).toBe(400); expect(res.body.error).toContain('bild saknas');
+    expect(db.prepare('SELECT id FROM tickets WHERE title = ?').get(body.title)).toBeUndefined();
+  });
+  it('rejects a spoofed image without storing ticket or file', async () => {
+    const id = randomUUID(); const body = validTicketBody({ description: `<img src="/api/attachments/file/${id}">` });
+    const res = await request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp()).field('payload', JSON.stringify(body)).attach(id, Buffer.from('not an image'), { filename: 'fake.png', contentType: 'image/png' });
+    expect(res.status).toBe(400);
+    expect(db.prepare('SELECT id FROM tickets WHERE title = ?').get(body.title)).toBeUndefined();
+  });
+  it('cleans up validated files when form validation fails', async () => {
+    const id = randomUUID(); const body = validTicketBody({ email: 'invalid', description: `<img src="/api/attachments/file/${id}">` });
+    const { readdirSync } = await import('node:fs'); const before = readdirSync(`${DB_PATH}-uploads`);
+    const res = await request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp()).field('payload', JSON.stringify(body)).attach(id, png, { filename: 'screen.png', contentType: 'image/png' });
+    expect(res.status).toBe(400); expect(readdirSync(`${DB_PATH}-uploads`)).toEqual(before);
+  });
+  it('rejects more than ten images before creating a ticket', async () => {
+    const ids = Array.from({ length: 11 }, () => randomUUID());
+    const body = validTicketBody({ description: ids.map(id => `<img src="/api/attachments/file/${id}">`).join('') });
+    let req = request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp()).field('payload', JSON.stringify(body));
+    for (const id of ids) req = req.attach(id, png, { filename: 'screen.png', contentType: 'image/png' });
+    expect((await req).status).toBe(413);
+    expect(db.prepare('SELECT id FROM tickets WHERE title = ?').get(body.title)).toBeUndefined();
+  });
+});
+
+describe('inline image byte limits', () => {
+  it.each([[1, 10 * 1024 * 1024 + 1, 413], [3, 9 * 1024 * 1024, 400]])('rejects %i oversized payloads and removes temporary files', async (count, size, status) => {
+    const { readdirSync } = await import('node:fs');
+    const before = readdirSync(`${DB_PATH}-uploads`);
+    const ids = Array.from({ length: count }, () => randomUUID());
+    const body = validTicketBody({ description: ids.map(id => `<img src="/api/attachments/file/${id}">`).join('') });
+    const bytes = Buffer.alloc(size); Buffer.from('89504e470d0a1a0a', 'hex').copy(bytes);
+    let req = request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp()).field('payload', JSON.stringify(body));
+    for (const id of ids) req = req.attach(id, bytes, { filename: 'screen.png', contentType: 'image/png' });
+    expect((await req).status).toBe(status);
+    expect(readdirSync(`${DB_PATH}-uploads`)).toEqual(before);
+    expect(db.prepare('SELECT id FROM tickets WHERE title = ?').get(body.title)).toBeUndefined();
   });
 });

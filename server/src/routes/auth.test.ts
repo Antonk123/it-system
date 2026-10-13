@@ -29,6 +29,11 @@ import { randomUUID, createHash, randomBytes } from 'crypto';
  * so it can deliberately exhaust that single bucket and observe the 429.
  */
 
+// These real-bcrypt scenarios perform up to 20 sequential password checks.
+// Keep the production work factor; allow the whole scenario to finish under
+// coverage/parallel CI load instead of leaking timed-out requests into the next test.
+vi.setConfig({ testTimeout: 30_000 });
+
 const { DB_PATH } = vi.hoisted(() => {
   const { tmpdir } = require('node:os') as typeof import('node:os');
   const { join } = require('node:path') as typeof import('node:path');

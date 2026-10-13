@@ -1,5 +1,11 @@
-import { useState, useEffect } from 'react';
-import { CheckCircle, Send, AlertCircle, Loader2, ArrowLeft, FileText } from 'lucide-react';
+import { getErrorCode } from '@/lib/apiErrorStatus';
+import { useConfirmDiscard } from '@/hooks/useConfirmDiscard';
+import { hasVisibleText } from '@/lib/textValidation';
+import { ImageAdapterContext, useTicketImages } from '@/lib/ticketImages';
+import { useTicketDraft } from '@/hooks/useTicketDraft';
+import { requiredTemplateFieldErrors } from '@/lib/templateValidation';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { CheckCircle, Send, AlertCircle, Loader2, ArrowLeft, FileText, ChevronDown } from 'lucide-react';
 import { Link, Navigate, useSearchParams } from 'react-router';
 import { api, CustomFieldInput, TemplateFieldRow } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,6 +31,7 @@ interface Template {
 }
 
 const PublicTicketForm = () => {
+  const { confirm, confirmationDialog } = useConfirmDiscard();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +45,25 @@ const PublicTicketForm = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [customFieldValues, setCustomFieldValues] = useState<CustomFieldInput[]>([]);
   const [formData, setFormData] = useState({ name: '', email: '', title: '', description: '', category: '', priority: 'medium' });
+
+  const imageState = useTicketImages(true);
+  const submitLock = useRef(false);
+  const [imageBusy, setImageBusy] = useState(0);
+  const onImageBusyChange = useCallback((busy: boolean) => setImageBusy(count => Math.max(0, count + (busy ? 1 : -1))), []);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID());
+  const dirty = !!(formData.name || formData.email || formData.title || hasVisibleText(formData.description) || /<img\b/i.test(formData.description) || customFieldValues.some(v => hasVisibleText(v.fieldValue) || /<img\b/i.test(v.fieldValue)) || imageState.images.length);
+  const [initialValues, setInitialValues] = useState<CustomFieldInput[]>([]);
+  const draftValue = useMemo(() => ({ formData, selectedTemplate, customFieldValues, images: imageState.images, submissionKey, formStartedAt }), [formData, selectedTemplate, customFieldValues, imageState.images, submissionKey, formStartedAt]);
+  const draft = useTicketDraft('public:new', draftValue, dirty && !isSuccess, saved => {
+    setFormData(saved.formData); setSelectedTemplate(saved.selectedTemplate); setCustomFieldValues(saved.customFieldValues);
+    setInitialValues(saved.customFieldValues); imageState.setImages(saved.images); setSubmissionKey(saved.submissionKey); setFormStartedAt(saved.formStartedAt);
+  });
+  useEffect(() => {
+    if (imageBusy || !draft.ready) return;
+    const used = imageState.referenced({ formData, customFieldValues });
+    if (used.length !== imageState.images.length) imageState.setImages(used);
+  }, [formData, customFieldValues, imageBusy, imageState, draft.ready]);
 
   const { user, isLoading: isAuthLoading } = useAuth();
   // Embedded in Prefabnavet's Felanmälan view, the host already supplies the
@@ -67,7 +93,7 @@ const PublicTicketForm = () => {
   // Logged-in users go to the internal ticket form. The minimal "logged-in" branch
   // of this public form discarded most fields and didn't support attachments —
   // routing them to /tickets/new is the right experience anyway.
-  if (isAuthLoading) {
+  if (isAuthLoading || !draft.ready) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -78,7 +104,10 @@ const PublicTicketForm = () => {
     return <Navigate to="/tickets/new" replace />;
   }
 
-  const handleTemplateSelect = (templateId: string) => {
+  const handleTemplateSelect = async (templateId: string) => {
+    if (templateId === selectedTemplate?.id) return;
+    if ((customFieldValues.some(v => hasVisibleText(v.fieldValue) || /<img\b/i.test(v.fieldValue)) || hasVisibleText(formData.description) || /<img\b/i.test(formData.description)) && !await confirm('Dina ifyllda mallsvar och beskrivningen ersätts när du byter mall.')) return;
+    setInitialValues([]); setCustomFieldValues([]); setFieldErrors({});
     if (templateId === 'none') {
       setSelectedTemplate(null);
       setCustomFieldValues([]);
@@ -103,12 +132,17 @@ const PublicTicketForm = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (submitLock.current || imageBusy || !draft.ready) return;
+    const errors = requiredTemplateFieldErrors(selectedTemplate?.fields || [], customFieldValues);
+    setFieldErrors(errors);
+    if (Object.keys(errors).length) { setError('Fyll i obligatoriska mallfält.'); return; }
 
     if (!formData.title.trim()) {
       setError('Ärenderubrik krävs.');
       return;
     }
 
+    submitLock.current = true;
     setIsSubmitting(true);
     try {
       await api.submitPublicTicket({
@@ -122,16 +156,20 @@ const PublicTicketForm = () => {
         template_id: selectedTemplate?.id,
         website,
         formStartedAt,
-      });
+      }, { images: imageState.referenced({ formData, customFieldValues }), idempotencyKey: submissionKey });
+      await draft.clear();
       setIsSuccess(true);
     } catch (err) {
+      if (getErrorCode(err) === 'IDEMPOTENCY_CONFLICT') setSubmissionKey(crypto.randomUUID());
       setError(err instanceof Error ? err.message : 'Ett oväntat fel uppstod');
     } finally {
+      submitLock.current = false;
       setIsSubmitting(false);
     }
   };
 
   const handleReset = () => {
+    draft.resume(); imageState.setImages([]); setInitialValues([]); setSubmissionKey(crypto.randomUUID());
     setFormData({ name: '', email: '', title: '', description: '', category: '', priority: 'medium' });
     setSelectedTemplate(null);
     setCustomFieldValues([]);
@@ -178,6 +216,8 @@ const PublicTicketForm = () => {
 
   // ── Form ──────────────────────────────────────────────────────
   return (
+    <ImageAdapterContext.Provider value={imageState.adapter}>
+    {confirmationDialog}
     <div className={cn("bg-background flex items-start justify-center p-4", embedded ? "py-6" : "min-h-dvh py-10")}>
       <div className="w-full max-w-lg">
         {/* Brand header — the host page carries it when embedded */}
@@ -196,7 +236,11 @@ const PublicTicketForm = () => {
 
         {/* Card */}
         <div className="bg-card border border-border rounded-lg p-6 sm:p-8">
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit}>
+            <fieldset disabled={isSubmitting} className="min-w-0 space-y-5">
+            {draft.restoreError && <p role="alert" className="text-sm text-destructive">Det sparade utkastet kunde inte återställas. Du kan fylla i ett nytt ärende.</p>}
+            {draft.storageError && <p role="alert" className="text-sm text-destructive">Utkastet kan inte sparas på den här enheten. Håll sidan öppen tills ärendet skickats.</p>}
+
 
             {/* Error */}
             {error && (
@@ -264,7 +308,7 @@ const PublicTicketForm = () => {
                 </Label>
                 <Select value={selectedTemplate?.id || ''} onValueChange={handleTemplateSelect}>
                   <SelectTrigger id="template" className={selectTriggerClass}>
-                    <SelectValue placeholder="Välj en mall för att förfylla formuläret" />
+                    <SelectValue placeholder="Välj en mall för att förfylla formuläret">{selectedTemplate?.name}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Ingen mall</SelectItem>
@@ -286,8 +330,13 @@ const PublicTicketForm = () => {
             {/* Dynamic fields */}
             {usesDynamicFields && (
               <DynamicFieldsForm
+                requester={{ name: formData.name, email: formData.email, actionLabel: 'Gäller mig' }}
                 fields={selectedTemplate!.fields!}
                 onValuesChange={setCustomFieldValues}
+                initialValues={initialValues}
+                errors={fieldErrors}
+                disabled={isSubmitting || imageBusy > 0 || !draft.ready}
+                onImageBusyChange={onImageBusyChange}
               />
             )}
 
@@ -310,6 +359,8 @@ const PublicTicketForm = () => {
               <div className="space-y-1.5">
                 <Label htmlFor="description" className="text-foreground text-sm font-medium">Beskrivning *</Label>
                 <RichTextEditor
+                  onImageBusyChange={onImageBusyChange}
+                  disabled={isSubmitting || imageBusy > 0 || !draft.ready}
                   value={formData.description}
                   onChange={(html) => setFormData({ ...formData, description: html })}
                   placeholder="Beskriv ditt problem i detalj..."
@@ -333,7 +384,7 @@ const PublicTicketForm = () => {
                 to medium (or whatever a chosen template specifies). */}
             {categories.length > 0 && (
               <div className="space-y-1.5">
-                <details><summary className="min-h-11 py-2 cursor-pointer">Kategori (valfritt)</summary>
+                <details className="group"><summary className="flex min-h-11 cursor-pointer list-none items-center justify-between rounded-md px-3 py-2 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden">Kategori (valfritt)<ChevronDown aria-hidden="true" className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" /></summary>
                 <div className="flex flex-wrap gap-1.5">
                   {categories.map((cat) => {
                     const selected = formData.category === cat.id;
@@ -361,14 +412,14 @@ const PublicTicketForm = () => {
 
             {/* Attachment hint — public form does not support direct upload */}
             <p className="text-xs text-muted-foreground text-center">
-              Behöver du bifoga filer? Svara på bekräftelsemailet du får efter att ärendet skickats — bilagor läggs då till automatiskt.
+              Infoga bilder direkt i texten, klistra in eller dra in dem. Max 10 bilder, 10 MB per bild och 25 MB totalt.
             </p>
 
             {/* Submit */}
             <Button
               type="submit"
               className="w-full h-11 rounded-md font-semibold"
-              disabled={isSubmitting}
+              disabled={isSubmitting || imageBusy > 0 || !draft.ready}
             >
               {isSubmitting ? (
                 <>
@@ -382,6 +433,7 @@ const PublicTicketForm = () => {
                 </>
               )}
             </Button>
+            </fieldset>
           </form>
         </div>
 
@@ -399,6 +451,7 @@ const PublicTicketForm = () => {
         )}
       </div>
     </div>
+    </ImageAdapterContext.Provider>
   );
 };
 

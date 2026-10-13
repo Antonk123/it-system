@@ -1,3 +1,4 @@
+import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer, type ReactNodeViewProps } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Link } from '@tiptap/extension-link';
@@ -18,7 +19,8 @@ import { cn } from '@/lib/utils';
 import { useEffect, useState, useMemo, useRef } from 'react';
 import { shouldApplyExternalValue } from './rich-text-sync';
 import { toast } from 'sonner';
-import { api } from '@/lib/api';
+import { ImageAdapterContext, IMAGE_ACCEPT, checkImage, imageDimensions, useImageSource, type ImageAdapter } from '@/lib/ticketImages';
+import { useContext } from 'react';
 import { Button } from './button';
 import { Input } from './input';
 import { Label } from './label';
@@ -56,6 +58,7 @@ const ResizableImageView = ({
     title?: string;
     width?: string;
   };
+  const displayedSrc = useImageSource(src);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDragging = useRef(false);
 
@@ -112,7 +115,7 @@ const ResizableImageView = ({
         }}
       >
         <img
-          src={src}
+          src={displayedSrc}
           alt={alt ?? ''}
           title={title ?? undefined}
           draggable={false}
@@ -127,8 +130,7 @@ const ResizableImageView = ({
               style={{
                 position: 'absolute',
                 top: '-2.25rem',
-                left: '50%',
-                transform: 'translateX(-50%)',
+                left: 0,
                 display: 'flex',
                 gap: '2px',
                 padding: '3px',
@@ -227,11 +229,11 @@ const ResizableImage = Image.extend({
       ...this.parent?.(),
       width: {
         default: null,
-        renderHTML: (attrs) => (attrs.width ? { style: `width: ${attrs.width}` } : {}),
+        renderHTML: (attrs) => (attrs.width ? { width: attrs.width } : {}),
         parseHTML: (el) => {
           const style = el.getAttribute('style') ?? '';
           const m = style.match(/width:\s*([^;]+)/);
-          return m ? m[1].trim() : null;
+          return m ? m[1].trim() : el.getAttribute('width');
         },
       },
     };
@@ -254,11 +256,13 @@ export interface RichTextEditorProps {
   error?: boolean;
   describedBy?: string;
   id?: string;
+  imageAdapter?: ImageAdapter;
+  onImageBusyChange?: (busy: boolean) => void;
 }
 
 /**
  * TipTap-baserad editor som används för ärenden, kommentarer, mallar och KB.
- * Verktygsraden, bilduppladdning (via KB-endpointen) och tabellstöd ligger här
+ * Verktygsraden, bildintag (med uttrycklig lagringsadapter) och tabellstöd ligger här
  * så att alla ytor beter sig lika; `compact` fäller ihop verktygsraden bakom
  * en "Formatering"-knapp på smala ytor.
  */
@@ -276,7 +280,14 @@ export const RichTextEditor = ({
   error = false,
   describedBy,
   id,
+  imageAdapter,
+  onImageBusyChange,
 }: RichTextEditorProps) => {
+  const inheritedAdapter = useContext(ImageAdapterContext);
+  const activeAdapter = imageAdapter ?? inheritedAdapter;
+  const adapterRef = useRef(activeAdapter); adapterRef.current = activeAdapter;
+  const insertFilesRef = useRef<(files: File[]) => void>(() => {});
+  const imageBusyRef = useRef(false);
   const [formattingOpen, setFormattingOpen] = useState(false);
   const toolbarVisible = showToolbar && (!compact || formattingOpen);
   const [imageUploading, setImageUploading] = useState(false);
@@ -308,7 +319,13 @@ export const RichTextEditor = ({
       },
     }),
     Underline,
-    ResizableImage.configure({ inline: false, allowBase64: false }),
+    ResizableImage.extend({
+      addNodeView() {
+        return ReactNodeViewRenderer((props: ReactNodeViewProps) => (
+          <ImageAdapterContext.Provider value={adapterRef.current || null}><ResizableImageView {...props} /></ImageAdapterContext.Provider>
+        ));
+      },
+    }).configure({ inline: false, allowBase64: false }),
     Table.configure({
       resizable: true,
     }),
@@ -338,6 +355,23 @@ export const RichTextEditor = ({
     content: value || '',
     editable: !disabled,
     editorProps: {
+      handlePaste: (_view, event) => {
+        const files = Array.from(event.clipboardData?.files || []);
+        if (!files.length) return false;
+        event.preventDefault();
+        insertFilesRef.current(files);
+        return true;
+      },
+      handleDrop: (view, event, _slice, moved) => {
+        if (moved) return false;
+        const files = Array.from(event.dataTransfer?.files || []);
+        if (!files.length) return false;
+        event.preventDefault();
+        const position = view.posAtCoords({ left: event.clientX, top: event.clientY });
+        if (position) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, position.pos)));
+        insertFilesRef.current(files);
+        return true;
+      },
       attributes: {
         role: 'textbox',
         'aria-label': ariaLabel || placeholder,
@@ -514,35 +548,35 @@ export const RichTextEditor = ({
     editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   };
 
-  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) return;
-    // Reset input so same files can be re-selected
-    e.target.value = '';
+  const insertImageFiles = async (files: File[]) => {
+    if (!files.length || disabled || imageBusyRef.current || !editor || editor.isDestroyed) return;
+    const adapter = adapterRef.current;
+    if (!adapter) { toast.error('Bilder kan inte infogas i detta fält.'); return; }
+    imageBusyRef.current = true;
     setImageUploading(true);
-    let uploadedCount = 0;
+    onImageBusyChange?.(true);
     try {
       for (const file of files) {
-        // Client-side size guard — server enforces 10 MB but we want to avoid
-        // a wasted round-trip and give the user immediate feedback per file.
-        if (file.size > 10 * 1024 * 1024) {
-          toast.error(`${file.name} är större än 10 MB och hoppades över`);
-          continue;
-        }
-        const { url } = await api.uploadKbImage(file);
-        editor.chain().focus().setImage({ src: url }).run();
-        uploadedCount++;
+        try {
+          checkImage(file);
+          const [src, dimensions] = await Promise.all([adapter.add(file), imageDimensions(file)]);
+          if (editor.isDestroyed) return;
+          // Navet: inserting after a selected image must not replace that image.
+          const selection = editor.state.selection;
+          const contentWidth = editor.view.dom.getBoundingClientRect().width;
+          const width = dimensions.width && contentWidth ? `${Math.min(100, Math.max(1, Math.floor(dimensions.width / contentWidth * 100)))}%` : '100%';
+          const node = { type: 'image', attrs: { src, alt: file.name, width } };
+          if (selection instanceof NodeSelection && selection.node.type.name === 'image') editor.chain().focus().insertContentAt(selection.to, node).run();
+          else editor.chain().focus().insertContent(node).run();
+        } catch (err) { toast.error(err instanceof Error ? err.message : 'Bilden kunde inte infogas. Försök igen.'); }
       }
-      if (uploadedCount === 0 && files.length > 0) {
-        // Every file was rejected by the size guard — make it explicit.
-        toast.error('Inga bilder kunde laddas upp');
-      }
-    } catch (err) {
-      if (import.meta.env.DEV) console.error('KB image upload failed:', err);
-      toast.error('Bildupladdningen misslyckades. Försök igen.');
-    } finally {
-      setImageUploading(false);
-    }
+    } finally { imageBusyRef.current = false; setImageUploading(false); onImageBusyChange?.(false); }
+  };
+  insertFilesRef.current = files => { void insertImageFiles(files); };
+  const handleImageFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    void insertImageFiles(files);
   };
 
   return (
@@ -805,7 +839,7 @@ export const RichTextEditor = ({
             size="sm"
             onClick={() => imageInputRef.current?.click()}
             className="h-11 w-11 p-0 md:h-8 md:w-8"
-            disabled={disabled || imageUploading}
+            disabled={disabled || imageUploading || !activeAdapter}
             aria-label="Infoga bild"
             title="Infoga bild"
           >
@@ -926,7 +960,7 @@ export const RichTextEditor = ({
       {/* Hidden file input for image upload */}
       <input
         type="file"
-        accept="image/*"
+        accept={IMAGE_ACCEPT}
         multiple
         className="sr-only"
         ref={imageInputRef}

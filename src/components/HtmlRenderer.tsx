@@ -1,4 +1,6 @@
-import { useMemo } from 'react';
+import { SecureImage } from '@/components/SecureAttachment';
+import { imageId } from '@/lib/ticketImages';
+import { createElement, useMemo, type ReactNode } from 'react';
 import DOMPurify from 'dompurify';
 import { cn } from '@/lib/utils';
 
@@ -59,7 +61,26 @@ interface HtmlRendererProps {
  */
 export const HtmlRenderer = ({ content, className }: HtmlRendererProps) => {
   // Sanera bara när innehållet ändras — inte vid varje omrendering.
-  const sanitizedHtml = useMemo(() => DOMPurify.sanitize(content, SANITIZE_OPTIONS), [content]);
+  const rendered = useMemo(() => {
+    const fragment = DOMPurify.sanitize(content, { ...SANITIZE_OPTIONS, RETURN_DOM_FRAGMENT: true });
+    const renderNode = (node: Node, key: number): ReactNode => {
+      if (node.nodeType === Node.TEXT_NODE) return node.textContent;
+      if (!(node instanceof Element)) return null;
+      const tag = node.tagName.toLowerCase();
+      const props: Record<string, string | number> = {};
+      const names: Record<string, string> = { class: 'className', colspan: 'colSpan', rowspan: 'rowSpan' };
+      for (const attribute of Array.from(node.attributes)) props[names[attribute.name] || attribute.name] = attribute.value;
+      const id = tag === 'img' ? imageId(node.getAttribute('src') || '') : undefined;
+      if (id) {
+        delete props.src;
+        return <SecureImage {...props} key={key} fileId={id} data-ticket-image={id} />;
+      }
+      return node.childNodes.length
+        ? createElement(tag, { ...props, key }, Array.from(node.childNodes).map(renderNode))
+        : createElement(tag, { ...props, key });
+    };
+    return Array.from(fragment.childNodes).map(renderNode);
+  }, [content]);
 
   if (!content) return null;
 
@@ -87,7 +108,6 @@ export const HtmlRenderer = ({ content, className }: HtmlRendererProps) => {
         "prose-td:border prose-td:border-border prose-td:p-2",
         className
       )}
-      dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
-    />
+    >{rendered}</div>
   );
 };

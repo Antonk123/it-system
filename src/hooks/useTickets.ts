@@ -1,3 +1,4 @@
+import type { TicketSubmission } from '@/lib/ticketImages';
 import { useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { api, CustomFieldInput, PaginatedResponse, TicketRow } from '@/lib/api';
@@ -28,12 +29,13 @@ interface UseTicketsOptions {
 
 // Fält som formuläret skickar i snake_case vid tilldelning/företag.
 interface TicketWriteExtras {
+  submission?: TicketSubmission;
   assigned_to?: string | null;
   company_id?: string | null;
 }
 
 export type TicketUpdates = Partial<Ticket> & TicketWriteExtras;
-export type NewTicket = Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { assigned_to?: string; company_id?: string };
+export type NewTicket = Omit<Ticket, 'id' | 'createdAt' | 'updatedAt'> & { assigned_to?: string; company_id?: string; submission?: TicketSubmission };
 export type BulkTicketUpdates = { status?: string; priority?: string; category_id?: string | null; assigned_to?: string | null };
 
 interface TicketListData {
@@ -87,7 +89,7 @@ export const ticketKeys = {
 export function buildAddTicketMutationOptions(queryClient: QueryClient) {
   return {
     mutationFn: async (ticket: NewTicket & { customFields?: CustomFieldInput[] }) => {
-      const { customFields, templateId, assigned_to, company_id, ...ticketData } = ticket;
+      const { customFields, templateId, assigned_to, company_id, submission, ...ticketData } = ticket;
       const validation = ticketInsertSchema.safeParse(ticketData);
       if (!validation.success) {
         const errorMsg = getValidationError(validation.error);
@@ -108,7 +110,7 @@ export function buildAddTicketMutationOptions(queryClient: QueryClient) {
         template_id: templateId || null,
         assigned_to: assigned_to || null,
         company_id: company_id || null,
-      });
+      }, submission);
 
       if (data.warnings) {
         data.warnings.forEach((w: string) => toast.warning(w));
@@ -154,7 +156,7 @@ export function buildUpdateTicketMutationOptions(queryClient: QueryClient) {
       // We deliberately no longer follow with a second GET /tickets/:id — that
       // doubled latency on slow links (VPN/5G) for every status/category/solution
       // change, since the detail page then also had to wait for a third refetch.
-      const updated = await api.updateTicket(id, { ...updateData, customFields: customFields || undefined });
+      const updated = await api.updateTicket(id, { ...updateData, customFields: customFields || undefined }, updates.submission);
 
       if (updated?.warnings) {
         updated.warnings.forEach((w: string) => toast.warning(w));

@@ -1,0 +1,284 @@
+[
+  {
+    "name": "Behörighetsförfrågan",
+    "description": "Förfrågan om åtkomst till system, mappar eller applikationer",
+    "title_template": "Behörighet: [System/Mapp]",
+    "description_template": "<p>Fyll i formuläret för att begära åtkomst.</p>",
+    "priority": "medium",
+    "fields": [
+      {
+        "field_name": "system_name",
+        "field_label": "System / tjänst",
+        "field_type": "text",
+        "placeholder": "T.ex. SharePoint, ERP",
+        "required": 1,
+        "options": null
+      },
+      {
+        "field_name": "access_level",
+        "field_label": "Behörighetsnivå",
+        "field_type": "select",
+        "placeholder": null,
+        "required": 1,
+        "options": [
+          "Läs",
+          "Skriv",
+          "Admin"
+        ]
+      },
+      {
+        "field_name": "anvandare",
+        "field_label": "Användare",
+        "field_type": "text",
+        "placeholder": "Namn eller e-post på den som behöver åtkomst",
+        "required": 1,
+        "options": null
+      },
+      {
+        "field_name": "motivering",
+        "field_label": "Motivering",
+        "field_type": "textarea",
+        "placeholder": "Beskriv varför åtkomst behövs",
+        "required": 1,
+        "options": null
+      }
+    ],
+    "template_type": "dynamic"
+  },
+  {
+    "name": "Programvaruinstallation",
+    "description": "Begäran om installation av ny mjukvara",
+    "title_template": "Installation: [Programvarunamn]",
+    "description_template": "<p>Fyll i formuläret för att begära programvaruinstallation.</p>",
+    "priority": "medium",
+    "fields": [
+      {
+        "field_name": "program_name",
+        "field_label": "Programvarans namn",
+        "field_type": "text",
+        "placeholder": "T.ex. Microsoft Visio",
+        "required": 1,
+        "options": null
+      },
+      {
+        "field_name": "version",
+        "field_label": "Version",
+        "field_type": "text",
+        "placeholder": "T.ex. 2024, senaste",
+        "required": 0,
+        "options": null
+      },
+      {
+        "field_name": "antal_datorer",
+        "field_label": "Antal datorer",
+        "field_type": "number",
+        "placeholder": "1",
+        "required": 1,
+        "options": null
+      },
+      {
+        "field_name": "motivering",
+        "field_label": "Motivering",
+        "field_type": "textarea",
+        "placeholder": "Beskriv varför programvaran behövs",
+        "required": 1,
+        "options": null
+      }
+    ],
+    "template_type": "dynamic"
+  },
+  {
+    "name": "Nätverksproblem",
+    "description": "För anslutningsproblem och nätverksfrågor",
+    "title_template": "Nätverk: [Problem]",
+    "description_template": "<p>Beskriv ditt nätverksproblem med formuläret nedan.</p>",
+    "priority": "high",
+    "fields": [
+      {
+        "field_name": "plats",
+        "field_label": "Plats / rum",
+        "field_type": "text",
+        "placeholder": "T.ex. Kontor 3, Rum 201",
+        "required": 1,
+        "options": null
+      },
+      {
+        "field_name": "problem_type",
+        "field_label": "Typ av problem",
+        "field_type": "select",
+        "placeholder": null,
+        "required": 1,
+        "options": [
+          "Ingen anslutning",
+          "Långsamt",
+          "Instabilt",
+          "VPN-problem",
+          "Wi-Fi",
+          "Annat"
+        ]
+      },
+      {
+        "field_name": "start_time",
+        "field_label": "När började problemet?",
+        "field_type": "text",
+        "placeholder": "T.ex. idag kl 09:00",
+        "required": 0,
+        "options": null
+      },
+      {
+        "field_name": "antal_drabbade",
+        "field_label": "Antal drabbade",
+        "field_type": "number",
+        "placeholder": "1",
+        "required": 0,
+        "options": null
+      },
+      {
+        "field_name": "beskrivning",
+        "field_label": "Beskriv problemet",
+        "field_type": "textarea",
+        "placeholder": "Vad händer? Felmeddelanden?",
+        "required": 1,
+        "options": null
+      }
+    ],
+    "template_type": "dynamic"
+  },
+  {
+    "name": "Skrivarproblem",
+    "description": "För vanliga skrivarproblem och supportärenden",
+    "title_template": "Skrivare: [Skrivarens namn/plats]",
+    "description_template": "<p>Beskriv ditt skrivarproblem.</p>",
+    "priority": "medium",
+    "fields": [
+      {
+        "field_name": "skrivare_namn",
+        "field_label": "Skrivarens namn / modell",
+        "field_type": "text",
+        "placeholder": "T.ex. HP LaserJet Pro, Kontor-Skrivare",
+        "required": 1,
+        "options": null
+      },
+      {
+        "field_name": "skrivare_plats",
+        "field_label": "Plats",
+        "field_type": "text",
+        "placeholder": "T.ex. Kontor 2, Plan 3",
+        "required": 0,
+        "options": null
+      },
+      {
+        "field_name": "problem_type",
+        "field_label": "Typ av problem",
+        "field_type": "select",
+        "placeholder": null,
+        "required": 1,
+        "options": [
+          "Skriver inte ut",
+          "Papper fastnar",
+          "Dålig utskriftskvalitet",
+          "Offline / hittas ej",
+          "Tonerbyte",
+          "Annat"
+        ]
+      },
+      {
+        "field_name": "felmeddelande",
+        "field_label": "Eventuellt felmeddelande",
+        "field_type": "text",
+        "placeholder": "Vad står det på skärmen / datorn?",
+        "required": 0,
+        "options": null
+      }
+    ],
+    "template_type": "dynamic"
+  },
+  {
+    "name": "Licensbeställning",
+    "description": "Används för att beställa licenser",
+    "title_template": "Beställning av licens - [Program/Tjänst]",
+    "description_template": "",
+    "priority": "medium",
+    "fields": [
+      {
+        "field_name": "program_typ",
+        "field_label": "Vilket program?",
+        "field_type": "select",
+        "placeholder": null,
+        "required": 0,
+        "options": [
+          "Business Central (BC)",
+          "IMAPACT - t.ex Precast Wall",
+          "M365 licens - t.ex Copilot",
+          "Bluebeam Revu"
+        ]
+      },
+      {
+        "field_name": "antal_enheter",
+        "field_label": "Hur många?",
+        "field_type": "number",
+        "placeholder": "1",
+        "required": 1,
+        "options": null
+      }
+    ],
+    "template_type": "dynamic"
+  },
+  {
+    "name": "Hårdvarubeställning",
+    "description": "Används vid beställning av hårdvara",
+    "title_template": "Hårdvarubeställning -",
+    "description_template": "",
+    "priority": "medium",
+    "fields": [
+      {
+        "field_name": "typ_utrustning",
+        "field_label": "Typ av utrustning",
+        "field_type": "text",
+        "placeholder": "Dator/Skärm/Telefon",
+        "required": 0,
+        "options": null
+      },
+      {
+        "field_name": "antal_enheter",
+        "field_label": "Antal",
+        "field_type": "number",
+        "placeholder": "1",
+        "required": 0,
+        "options": null
+      },
+      {
+        "field_name": "reason",
+        "field_label": "Anledning",
+        "field_type": "text",
+        "placeholder": "Varför?",
+        "required": 0,
+        "options": null
+      },
+      {
+        "field_name": "location",
+        "field_label": "Leveransadress",
+        "field_type": "select",
+        "placeholder": "Vilket kontor?",
+        "required": 0,
+        "options": [
+          "Öjebyn",
+          "Luleå",
+          "Sävast",
+          "Norsjö",
+          "Umeå",
+          "Strömsund"
+        ]
+      },
+      {
+        "field_name": "other_info",
+        "field_label": "Övriga önskemål",
+        "field_type": "textarea",
+        "placeholder": "Specifikationer",
+        "required": 0,
+        "options": null
+      }
+    ],
+    "template_type": "dynamic"
+  }
+]

@@ -1,3 +1,4 @@
+import { kbImageAdapter } from '@/lib/ticketImages';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router';
 import { ArrowLeft, Loader2, X, Link2, Tag } from 'lucide-react';
@@ -320,7 +321,7 @@ const KBArticleForm = () => {
             Innehåll <span className="text-destructive">*</span>
           </Label>
           <div role="group" aria-labelledby="kb-content-label" className={errors.content ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
-            <RichTextEditor
+            <RichTextEditor imageAdapter={kbImageAdapter}
               value={content}
               onChange={(html) => {
                 setContent(html);

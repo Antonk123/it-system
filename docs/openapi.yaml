@@ -558,6 +558,8 @@ paths:
     post:
       tags: [Tickets]
       summary: Skapa ärende
+      parameters:
+        - { name: Idempotency-Key, in: header, schema: { type: string, minLength: 16, maxLength: 128 }, description: "Samma innehåll och nyckel inom 24 timmar ger samma ärende; ändrat innehåll ger 409 IDEMPOTENCY_CONFLICT. Nyckeln är användarspecifik." }
       security:
         - bearerAuth: []
           csrfToken: []
@@ -565,6 +567,15 @@ paths:
       requestBody:
         required: true
         content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [payload]
+              properties:
+                payload: { type: string, description: "JSON med samma fält som application/json." }
+              additionalProperties: { type: string, format: binary }
+            encoding:
+              payload: { contentType: text/plain }
           application/json:
             schema: { $ref: "#/components/schemas/TicketInput" }
       responses:
@@ -574,6 +585,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Ticket" }
         "400": { $ref: "#/components/responses/Error" }
+        "409":
+          description: Återförsöksnyckeln hör till ett redan sparat ärende med annat innehåll (IDEMPOTENCY_CONFLICT).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /tickets/{id}:
     parameters:
@@ -603,6 +619,15 @@ paths:
       requestBody:
         required: true
         content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [payload]
+              properties:
+                payload: { type: string, description: "JSON med samma fält som application/json." }
+              additionalProperties: { type: string, format: binary }
+            encoding:
+              payload: { contentType: text/plain }
           application/json:
             schema: { $ref: "#/components/schemas/TicketInput" }
       responses:
@@ -1080,10 +1105,22 @@ paths:
     post:
       tags: [Public]
       summary: Skapa ärende från portalen
+      description: "Multipart-bilder använder UUID som fältnamn och /api/attachments/file/UUID i HTML. Högst tio PNG/JPEG/GIF/WebP, 10 MB per bild och 25 MB totalt. Servern ersätter referenserna och sparar bilder atomärt med ärendet. Återanvänd idempotensnyckel med ändrat innehåll ger 409 IDEMPOTENCY_CONFLICT. Bilder kräver ärendebehörighet vid läsning."
+      parameters:
+        - { name: Idempotency-Key, in: header, schema: { type: string, minLength: 16, maxLength: 128 }, description: "Slumpad nyckel per utkast. Samma innehåll och nyckel inom 24 timmar ger samma ärende; ändrat innehåll ger 409 IDEMPOTENCY_CONFLICT." }
       security: []
       requestBody:
         required: true
         content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [payload]
+              properties:
+                payload: { type: string, description: "JSON med samma fält som application/json." }
+              additionalProperties: { type: string, format: binary }
+            encoding:
+              payload: { contentType: text/plain }
           application/json:
             schema:
               type: object
@@ -1134,6 +1171,11 @@ paths:
                   message: { type: string }
                   ticketId: { type: string }
         "400": { $ref: "#/components/responses/Error" }
+        "409":
+          description: Återförsöksnyckeln hör till ett redan sparat ärende med annat innehåll (IDEMPOTENCY_CONFLICT).
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   /users:
     get:

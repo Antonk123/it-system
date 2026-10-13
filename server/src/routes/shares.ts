@@ -1,3 +1,4 @@
+import { sanitizeRichText } from '../lib/htmlSanitizer.js';
 import { Router, Request, Response } from 'express';
 import { db } from '../db/connection.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
@@ -211,6 +212,21 @@ router.get('/public/:token', sharePublicRateLimiter, (req: Request, res: Respons
       url: `/api/shares/public/file/${share.share_token}/${a.id}`,
     }));
 
+    // Inline images use exactly the same token-bound file access as the
+    // attachment list. Never expose an attachment from a different ticket.
+    const sharedUrls = new Map(attachmentsWithUrls.map(file => [file.id, file.url]));
+    const publicContent = (content: string | null) => content?.replace(
+      /\/api\/attachments\/file\/([0-9a-f-]{36})/gi,
+      (_reference, id: string) => sharedUrls.get(id) || '',
+    ) ?? null;
+    // Dynamic templates store a Markdown summary alongside rich field values.
+    // Render the values as sanitized HTML so Markdown conversion cannot escape images.
+    const fields = db.prepare('SELECT field_label, field_value FROM ticket_field_values WHERE ticket_id = ? ORDER BY rowid').all(share.ticket_id) as Array<{ field_label: string; field_value: string }>;
+    const description = fields.length ? fields.map(field => {
+      const label = field.field_label.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return `<div><p><strong>${label}</strong></p>${sanitizeRichText(field.field_value)}</div>`;
+    }).join('') : ticket.description;
+
     // Get checklists
     const checklistItems = db.prepare(`
       SELECT id, label, completed, position FROM ticket_checklists WHERE ticket_id = ? ORDER BY position ASC
@@ -224,6 +240,8 @@ router.get('/public/:token', sharePublicRateLimiter, (req: Request, res: Respons
     res.json({
       ticket: {
         ...ticketPublic,
+        description: publicContent(description),
+        solution: publicContent(ticket.solution),
         category,
       },
       requester,

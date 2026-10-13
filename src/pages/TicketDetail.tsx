@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { ImageAdapterContext, ticketImageAdapter } from '@/lib/ticketImages';
 import { useAuth } from '@/contexts/AuthContext';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { useEffect, useState, useRef } from 'react';
@@ -962,4 +964,9 @@ const TicketDetail = () => {
   );
 };
 
-export default TicketDetail;
+const TicketDetailWithImages = () => {
+  const { id } = useParams();
+  const adapter = useMemo(() => ticketImageAdapter(id || ''), [id]);
+  return <ImageAdapterContext.Provider value={adapter}><TicketDetail /></ImageAdapterContext.Provider>;
+};
+export default TicketDetailWithImages;

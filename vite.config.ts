@@ -4,7 +4,7 @@ import path from "path";
 import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
-export default defineConfig(() => ({
+export default defineConfig({
   // tools/sqlite-mcp och server/ är fristående paket med egna beroenden och
   // egen vitest-svit — appens svit ska inte plocka upp deras tester.
   // Speglar att tools/ redan är exkluderad från eslint (eslint.config.js).
@@ -120,4 +120,4 @@ export default defineConfig(() => ({
       },
     },
   },
-}));
+});

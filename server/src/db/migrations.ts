@@ -2049,4 +2049,14 @@ export const migrations: Migration[] = [
       }
     },
   },
+  { id: '091', name: 'ticket_submission_retries', up: db => { db.exec(`CREATE TABLE IF NOT EXISTS ticket_submissions (
+  scope TEXT NOT NULL,
+  key TEXT NOT NULL,
+  ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL,
+  PRIMARY KEY (scope, key)
+);`); } },
+  { id: '092', name: 'ticket_submission_fingerprints', up: (db, { columnExists }) => {
+    if (!columnExists('ticket_submissions', 'request_hash')) db.exec('ALTER TABLE ticket_submissions ADD COLUMN request_hash TEXT');
+  } },
 ];

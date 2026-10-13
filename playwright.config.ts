@@ -41,11 +41,11 @@ export default defineConfig({
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'], ...(process.env.E2E_EDGE === '1' ? { channel: 'msedge' } : {}) } }],
   webServer: [
     {
       // Nollställ state, seeda admin (init-db) och starta sedan servern utan watch-läge.
-      command: `rm -rf "${tmp}" && mkdir -p "${tmp}/uploads" && npx tsx src/db/init.ts && npx tsx src/index.ts`,
+      command: `rm -rf "${tmp}" && mkdir -p "${tmp}/uploads" && node node_modules/tsx/dist/cli.mjs src/db/init.ts && node node_modules/tsx/dist/cli.mjs src/index.ts`,
       cwd: path.join(root, 'server'),
       url: 'http://localhost:3001/api/health',
       env: backendEnv,
@@ -55,7 +55,7 @@ export default defineConfig({
       stderr: 'pipe',
     },
     {
-      command: 'npx vite --port 5173 --strictPort',
+      command: 'node node_modules/vite/bin/vite.js --port 5173 --strictPort',
       cwd: root,
       url: 'http://localhost:5173',
       env: { API_TARGET: 'http://localhost:3001' },

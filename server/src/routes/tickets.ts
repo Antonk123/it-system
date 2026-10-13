@@ -1,3 +1,4 @@
+import { ticketImageSubmission, commitTicketImages } from '../lib/ticketImages.js';
 import { normalizeTemplateValues, missingRequiredTemplateFields, composeDescriptionFromFields, type TemplateFieldValue } from '../lib/templateValidation.js';
 import { Router, Response } from 'express';
 import { randomUUID } from 'node:crypto';
@@ -741,7 +742,7 @@ router.get('/:id', authenticate, (req: AuthRequest, res: Response) => {
 });
 
 // Create ticket
-router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
+router.post('/', writeRateLimiter, authenticate, ticketImageSubmission, async (req: AuthRequest, res: Response) => {
   let { customFields } = req.body;
   const { template_id } = req.body;
 
@@ -822,6 +823,8 @@ router.post('/', writeRateLimiter, authenticate, async (req: AuthRequest, res: R
         now,
         now
       );
+
+      commitTicketImages(res, id);
 
       // Store custom field values if provided
       if (customFields && Array.isArray(customFields) && customFields.length > 0) {
@@ -1136,7 +1139,7 @@ router.post('/bulk-delete', writeRateLimiter, authenticate, requireAdmin, (req: 
 });
 
 // Update ticket
-router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res: Response) => {
+router.put('/:id', writeRateLimiter, authenticate, ticketImageSubmission, async (req: AuthRequest, res: Response) => {
   let { customFields } = req.body;
   const { template_id } = req.body;
 
@@ -1238,6 +1241,7 @@ router.put('/:id', writeRateLimiter, authenticate, async (req: AuthRequest, res:
 
     // Wrap all DB writes (including history) in a transaction for atomicity
     const updateTransaction = db.transaction(() => {
+      commitTicketImages(res, String(req.params.id));
       if (setClauses) {
         db.prepare(`UPDATE tickets SET ${setClauses} WHERE id = ?`).run(...values, req.params.id);
       }

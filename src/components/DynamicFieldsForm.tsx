@@ -1,8 +1,12 @@
 import { TemplateFieldRow, CustomFieldInput } from '@/lib/api';
 import { DynamicField } from './DynamicField';
 import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
 
 interface DynamicFieldsFormProps {
+  requester?: { name: string; email: string; actionLabel: string };
+  disabled?: boolean;
+  onImageBusyChange?: (busy: boolean) => void;
   fields: TemplateFieldRow[];
   onValuesChange: (values: CustomFieldInput[]) => void;
   initialValues?: CustomFieldInput[];
@@ -11,24 +15,18 @@ interface DynamicFieldsFormProps {
   errors?: Record<string, string>;
 }
 
-export const DynamicFieldsForm = ({ fields, onValuesChange, initialValues, errors: externalErrors }: DynamicFieldsFormProps) => {
-  const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
+export const DynamicFieldsForm = ({ fields, onValuesChange, initialValues, errors: externalErrors, disabled, onImageBusyChange, requester }: DynamicFieldsFormProps) => {
+  const initialize = () => {
+    const saved = new Map((initialValues || []).map(v => [v.fieldName, v.fieldValue]));
+    return Object.fromEntries(fields.map(field => [field.field_name, saved.get(field.field_name) ?? field.default_value ?? '']));
+  };
+  const signature = JSON.stringify(fields);
+  const [state, setState] = useState(() => ({ signature, values: initialize() }));
   const [errors, setErrors] = useState<Record<string, string>>({});
-
-  // Initialize field values: prefer initialValues (edit mode), fall back to defaults.
-  // Only depends on `fields` so changing parent state doesn't reset user input.
-  useEffect(() => {
-    const saved: Record<string, string> = {};
-    if (initialValues && initialValues.length > 0) {
-      initialValues.forEach(v => { saved[v.fieldName] = v.fieldValue; });
-    }
-    const init: Record<string, string> = {};
-    fields.forEach(field => {
-      init[field.field_name] = saved[field.field_name] ?? field.default_value ?? '';
-    });
-    setFieldValues(init);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fields]);
+  // Reset only when the definition changes, never on a background refetch's new array identity.
+  // Render-time adjustment prevents notifying the parent with an empty intermediate snapshot.
+  if (state.signature !== signature) setState({ signature, values: initialize() });
+  const fieldValues = state.values;
 
   // Notify parent of value changes (runs immediately when fields change)
   useEffect(() => {
@@ -40,10 +38,12 @@ export const DynamicFieldsForm = ({ fields, onValuesChange, initialValues, error
 
     onValuesChange(customFields);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fieldValues, fields]); // Remove onValuesChange from deps to prevent re-runs
+  }, [signature]); // Initial/default values only; edits notify synchronously below.
 
   const handleFieldChange = (fieldName: string, value: string) => {
-    setFieldValues(prev => ({ ...prev, [fieldName]: value }));
+    const values = { ...fieldValues, [fieldName]: value };
+    setState(prev => ({ ...prev, values }));
+    onValuesChange(fields.map(field => ({ fieldName: field.field_name, fieldLabel: field.field_label, fieldValue: values[field.field_name] || '' })));
     // Clear error when field is modified
     if (errors[fieldName]) {
       setErrors(prev => {
@@ -57,16 +57,28 @@ export const DynamicFieldsForm = ({ fields, onValuesChange, initialValues, error
   return (
     <div className="space-y-4">
       <div className="border-t pt-4">
-        <h3 className="text-sm font-semibold mb-3">Formulärfält</h3>
+        <h3 className="text-sm font-semibold mb-3">Uppgifter om ärendet</h3>
         <div className="space-y-4">
           {fields.map(field => (
-            <DynamicField
-              key={field.id}
-              field={field}
-              value={fieldValues[field.field_name] || ''}
-              onChange={(value) => handleFieldChange(field.field_name, value)}
-              error={externalErrors?.[field.field_name] ?? errors[field.field_name]}
-            />
+            <div key={field.id} className="space-y-2">
+              <DynamicField
+                field={field}
+                disabled={disabled}
+                onImageBusyChange={onImageBusyChange}
+                value={fieldValues[field.field_name] || ''}
+                onChange={(value) => handleFieldChange(field.field_name, value)}
+                error={externalErrors?.[field.field_name] ?? errors[field.field_name]}
+              />
+              {requester && field.field_name === 'anvandare' && field.field_type === 'text' && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" className="min-h-11" disabled={disabled || !requester.name.trim() || !requester.email.trim()}
+                    onClick={() => handleFieldChange(field.field_name, `${requester.name.trim()} (${requester.email.trim()})`)}>
+                    {requester.actionLabel}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">Den som behöver åtkomst. Återanvänd kontaktuppgifterna eller skriv en annan person.</p>
+                </div>
+              )}
+            </div>
           ))}
         </div>
       </div>

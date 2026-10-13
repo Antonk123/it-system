@@ -333,3 +333,12 @@ CREATE TABLE IF NOT EXISTS app_settings (
 -- OBS: tickets_fts och kb_articles_fts (migration 052/081) är contentless och nycklade
 -- på rowid i tabeller med TEXT-PK. Kör ALDRIG VACUUM manuellt — det får numrera om
 -- rowid och då pekar varje FTS-rad på fel post. Bygg om med rebuildFts() (lib/fts.ts).
+
+CREATE TABLE IF NOT EXISTS ticket_submissions (
+  scope TEXT NOT NULL,
+  key TEXT NOT NULL,
+  ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+  expires_at INTEGER NOT NULL,
+  request_hash TEXT,
+  PRIMARY KEY (scope, key)
+);

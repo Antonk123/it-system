@@ -25,7 +25,7 @@
  * förstör den bakom ryggen på React, vilket är exakt det tillstånd prod hamnade i.
  */
 import '@testing-library/jest-dom/vitest';
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeAll } from 'vitest';
 import { render, cleanup, act, screen } from '@testing-library/react';
 import { useState } from 'react';
 
@@ -38,6 +38,11 @@ vi.mock('sonner', () => ({
 }));
 
 import { RichTextEditor } from './rich-text-editor';
+
+beforeAll(() => {
+  Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+});
 
 type EditorHost = HTMLElement & { editor?: { destroy: () => void; isDestroyed: boolean } };
 
@@ -103,5 +108,38 @@ describe('RichTextEditor mot en förstörd editor-instans', () => {
         screen.getByText('sätt externt').click();
       });
     }).not.toThrow();
+  });
+});
+
+describe('bildadapter i den riktiga editorn', () => {
+  it('behåller text och båda bilderna, skickar originalfilen och använder aldrig KB implicit', async () => {
+    const { fireEvent, waitFor } = await import('@testing-library/react');
+    const { api } = await import('@/lib/api');
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 120, height: 60, close: vi.fn() })));
+    const add = vi.fn(async (file: File) => `/images/${file.name}`);
+    const { container } = render(<RichTextEditor value="<p>Viktig text</p>" onChange={() => {}} imageAdapter={{ add }} />);
+    const input = container.querySelector('input[type=file]')!;
+    const first = new File(['original'], 'one.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [first] } });
+    await waitFor(() => expect(container.querySelectorAll('.ProseMirror img')).toHaveLength(1));
+    const second = new File(['second'], 'two.png', { type: 'image/png' });
+    fireEvent.change(input, { target: { files: [second] } });
+    await waitFor(() => expect(container.querySelectorAll('.ProseMirror img')).toHaveLength(2));
+    expect(add.mock.calls[0][0]).toBe(first);
+    expect(container.querySelector('.ProseMirror')).toHaveTextContent('Viktig text');
+    expect(api.uploadKbImage).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it('behåller text när bildadaptern avvisar filen', async () => {
+    const { fireEvent, waitFor } = await import('@testing-library/react');
+    const { toast } = await import('sonner');
+    vi.stubGlobal('createImageBitmap', vi.fn(async () => ({ width: 100, height: 100, close: vi.fn() })));
+    const { container } = render(<RichTextEditor value="<p>Behåll mig</p>" onChange={() => {}} imageAdapter={{ add: async () => { throw new Error('Nätverksfel'); } }} />);
+    fireEvent.change(container.querySelector('input[type=file]')!, { target: { files: [new File(['x'], 'one.png', { type: 'image/png' })] } });
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Nätverksfel'));
+    expect(container.querySelector('.ProseMirror')).toHaveTextContent('Behåll mig');
+    expect(container.querySelectorAll('.ProseMirror img')).toHaveLength(0);
+    vi.unstubAllGlobals();
   });
 });

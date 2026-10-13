@@ -196,7 +196,7 @@ describe('getAuthenticatedFileUrl', () => {
     expect(localStorage.getItem('auth_token')).toBe('nytt-token');
   });
 
-  it('loggar ut och redirectar till /login när refresh misslyckas efter 401', async () => {
+  it('kastar 401 utan att navigera bort när refresh misslyckas', async () => {
     localStorage.setItem('auth_token', 'gammalt-token');
     localStorage.setItem('user', '{"id":"1"}');
 
@@ -211,12 +211,11 @@ describe('getAuthenticatedFileUrl', () => {
     vi.stubGlobal('window', { location });
     const { getAuthenticatedFileUrl } = await import('./secureFileAccess');
 
-    // Samma session-expiry-hantering som api.request() ger överallt annars —
-    // inte det tysta 401-svar den gamla lokala fetchWithRefresh() returnerade.
-    await expect(getAuthenticatedFileUrl('fil-refresh-fail')).rejects.toThrow('Session expired');
-    expect(location.href).toBe('/login');
-    expect(localStorage.getItem('auth_token')).toBeNull();
-    expect(localStorage.getItem('user')).toBeNull();
+    // Inline image failures must leave the surrounding form and draft intact.
+    await expect(getAuthenticatedFileUrl('fil-refresh-fail')).rejects.toMatchObject({ status: 401 });
+    expect(location.href).toBe('');
+    expect(localStorage.getItem('auth_token')).toBe('gammalt-token');
+    expect(localStorage.getItem('user')).toBe('{"id":"1"}');
   });
 });
 

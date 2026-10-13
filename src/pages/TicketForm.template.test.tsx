@@ -5,6 +5,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import TicketForm from './TicketForm';
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'test-user' } }) }));
+vi.mock('@/hooks/useTicketDraft', () => ({ useTicketDraft: () => ({ ready: true, storageError: false, clear: async () => {}, resume: () => {} }) }));
 
 const data = vi.hoisted(() => ({
   contacts: [

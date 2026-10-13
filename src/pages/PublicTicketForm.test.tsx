@@ -23,6 +23,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 import PublicTicketForm from './PublicTicketForm';
+vi.mock('@/hooks/useTicketDraft', () => ({ useTicketDraft: () => ({ ready: true, storageError: false, clear: async () => {}, resume: () => {} }) }));
 
 function renderForm(path = '/submit-ticket') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -79,7 +80,7 @@ describe('PublicTicketForm — en sida, inga steg', () => {
       title: 'Skrivaren fungerar inte',
       description: 'Felkod E-04.',
       priority: 'medium',
-    }));
+    }), expect.objectContaining({ images: [], idempotencyKey: expect.any(String) }));
   });
 });
 

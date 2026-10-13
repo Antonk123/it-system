@@ -598,3 +598,11 @@ app-level routes (`/api/health`, `/api/csrf-token`); the template-fields sub-rou
 is mounted under `/api/templates/:templateId/fields` and counted within the Templates
 section. The count is enforced by `node scripts/check-openapi-coverage.mjs`, which
 compares every mounted route with `docs/openapi.yaml`.
+
+## Inline-bilder i ärenden
+
+`POST /api/public/tickets`, `POST /api/tickets` och `PUT /api/tickets/:id` accepterar både befintlig JSON och multipart. Multipart innehåller ett textfält `payload` med samma JSON samt högst tio bildfält. Bildfältens namn är klientgenererade UUID; HTML använder `/api/attachments/file/<UUID>`. Servern ersätter referenserna med egna bilage-ID:n. Bilder sparas tillsammans med ärendet i transaktionen; fel och återförsök städar osparade filer. PNG, JPEG, GIF och WebP tillåts, högst 10 MB per bild och 25 MB totalt. Filändelse, MIME och signatur kontrolleras. Befintlig ärendebehörighet gäller för läsning och ändring.
+
+Skapandeanrop använder `Idempotency-Key` (16–128 tecken, klienten använder slumpad UUID). Nyckeln sparas atomärt i SQLite, avgränsas per inloggad användare eller publik kanal och gäller i 24 timmar, även efter omstart. Återförsök med samma nyckel och samma innehåll returnerar samma ärende. Annat innehåll eller andra bildbytes ger `409 IDEMPOTENCY_CONFLICT`; klienten behåller uppgifterna, visar att en tidigare version redan sparats och använder en ny nyckel endast när användaren väljer att skicka igen. Den publika kanalen kräver ingen session och får aldrig utlösa inloggningsredirect.
+
+Utkast med originalbilder sparas lokalt i IndexedDB i 24 timmar, separat för publik kanal och respektive användare/ärende. Det är ett återställningsskydd, inte ett skickat ärende.

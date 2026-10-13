@@ -1,3 +1,8 @@
+import { useConfirmDiscard } from '@/hooks/useConfirmDiscard';
+import { hasVisibleText } from '@/lib/textValidation';
+import { ImageAdapterContext, useTicketImages } from '@/lib/ticketImages';
+import { useTicketDraft } from '@/hooks/useTicketDraft';
+import { useAuth } from '@/contexts/AuthContext';
 import { requiredTemplateFieldErrors } from '@/lib/templateValidation';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router';
@@ -6,7 +11,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ticketKeys } from '@/hooks/useTickets';
 import { useTicketMutations } from '@/hooks/useTicketMutations';
 import { mapTicketRow } from '@/lib/mapTicket';
-import { getErrorStatus } from '@/lib/apiErrorStatus';
+import { getErrorStatus, getErrorCode } from '@/lib/apiErrorStatus';
 import { TicketLoadError } from '@/components/TicketLoadError';
 import { useUsers } from '@/hooks/useUsers';
 import { useSystemUsers } from '@/hooks/useSystemUsers';
@@ -30,7 +35,7 @@ import { Input } from '@/components/ui/input';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { Label } from '@/components/ui/label';
 import { migrateContent } from '@/lib/contentMigration';
-import { hasDraftContent, readTicketPrefill } from '@/lib/prefillFromQuery';
+import { readTicketPrefill } from '@/lib/prefillFromQuery';
 import { saveTicketExtras } from '@/lib/ticketSaveExtras';
 import { cn } from '@/lib/utils';
 import {
@@ -47,8 +52,7 @@ import { toast } from 'sonner';
 import { ticketInsertSchema, ticketUpdateSchema } from '@/lib/validations';
 import { registerUnsavedWork } from '@/registerSW';
 
-// New-ticket draft is persisted here so a SW auto-reload, accidental refresh, or
-// iOS PWA suspend never loses what was typed on a phone. Cleared on successful create.
+// Legacy unscoped key: only removed on success; new drafts live in IndexedDB per user.
 const NEW_TICKET_DRAFT_KEY = 'it-ticket:new-ticket-draft';
 
 const LookupError = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
@@ -61,10 +65,11 @@ const LookupError = ({ message, onRetry }: { message: string; onRetry: () => voi
 /**
  * Skapa/redigera ärende. En komponent eftersom alla fält delar samma utkast-,
  * mall- och valideringstillstånd: mallval fyller i titel/beskrivning/dynamiska
- * fält, utkastet sparas lokalt (safeStorage) tills formuläret skickas, och
- * handleSubmit mappar fält + bilagor + checklista till ett enda API-anrop.
+ * fält, utkastet sparas lokalt (IndexedDB) tills formuläret skickas, och
+ * handleSubmit sparar fält och inbäddade bilder atomärt före övriga bilagor/checklista.
  */
 const TicketForm = () => {
+  const { confirm, confirmationDialog } = useConfirmDiscard();
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -160,6 +165,29 @@ const TicketForm = () => {
   const [showSolution, setShowSolution] = useState(false);
   const [showNotes, setShowNotes] = useState(false);
 
+  const { user: currentUser } = useAuth();
+  const imageState = useTicketImages();
+  const submitLock = useRef(false);
+  const restoredDraft = useRef(false);
+  const [imageBusy, setImageBusy] = useState(0);
+  const onImageBusyChange = useCallback((busy: boolean) => setImageBusy(count => Math.max(0, count + (busy ? 1 : -1))), []);
+  const [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID());
+  const draftValue = useMemo(() => ({ formData, selectedTemplate, customFieldValues, images: imageState.images, pendingFiles, pendingChecklistItems, submissionKey, failedUploads }), [formData, selectedTemplate, customFieldValues, imageState.images, pendingFiles, pendingChecklistItems, submissionKey, failedUploads]);
+  const draft = useTicketDraft(`user:${currentUser?.id}:ticket:${id || 'new'}`, draftValue, (hasUnsavedChanges || !!failedUploads), saved => {
+    if (location.state?.cloneData) return;
+    restoredDraft.current = true;
+    populatedTicketIdRef.current = id || null;
+    setFormData(saved.formData); setSelectedTemplate(saved.selectedTemplate); setCustomFieldValues(saved.customFieldValues);
+    setEditInitialFieldValues(saved.customFieldValues); imageState.setImages(saved.images); setSubmissionKey(saved.submissionKey);
+    setFailedUploads(saved.failedUploads || null);
+    setPendingFiles(saved.pendingFiles); setPendingChecklistItems(saved.pendingChecklistItems);
+  });
+  useEffect(() => {
+    if (imageBusy || !draft.ready) return;
+    const used = imageState.referenced({ formData, customFieldValues });
+    if (used.length !== imageState.images.length) imageState.setImages(used);
+  }, [formData, customFieldValues, imageBusy, imageState, draft.ready]);
+
   // Stable callback for DynamicFieldsForm to prevent unnecessary re-renders
   const handleCustomFieldsChange = useCallback((values: CustomFieldInput[]) => {
     setCustomFieldValues(values);
@@ -209,7 +237,7 @@ const TicketForm = () => {
       setIsLoadingTemplate(true);
       try {
         const freshTemplateRow = await api.getTemplate(templateId);
-        if (isCancelled) return;
+        if (isCancelled || restoredDraft.current) return;
 
         if (freshTemplateRow && freshTemplateRow.fields && freshTemplateRow.fields.length > 0) {
           // Map TemplateRow to Template format (snake_case to camelCase)
@@ -236,7 +264,7 @@ const TicketForm = () => {
           if (savedValues.length > 0) setEditInitialFieldValues(savedValues);
         }
       } catch (templateError) {
-        if (isCancelled) return;
+        if (isCancelled || restoredDraft.current) return;
         if (import.meta.env.DEV) console.error('Error loading template:', templateError);
         // Template deleted or not accessible — show saved values as read-only legacy fields
         if (savedValues.length > 0) {
@@ -322,12 +350,6 @@ const TicketForm = () => {
     if (isEditing || location.state?.cloneData) return;
     const prefill = readTicketPrefill(location.search);
     if (!prefill) return;
-    try {
-      const raw = localStorage.getItem(NEW_TICKET_DRAFT_KEY);
-      if (raw) {
-        if (hasDraftContent(JSON.parse(raw))) return;
-      }
-    } catch { /* corrupt draft — treat as none */ }
     setFormData((prev) => (prev.title || prev.description ? prev : { ...prev, ...prefill }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEditing]);
@@ -366,10 +388,10 @@ const TicketForm = () => {
       setHasUnsavedChanges(hasChanges);
     } else if (!isEditing) {
       // For new tickets, mark as unsaved if any data is entered
-      const hasData = formData.title || formData.description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() || /<img\b/i.test(formData.description) || formData.requesterId || pendingFiles.length || pendingChecklistItems.length;
+      const hasData = formData.title || formData.description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim() || /<img\b/i.test(formData.description) || formData.requesterId || pendingFiles.length || pendingChecklistItems.length || customFieldValues.some(v => v.fieldValue) || formData.notes || formData.solution || imageState.images.length;
       setHasUnsavedChanges(!!hasData);
     }
-  }, [formData, existingTicket, isEditing, pendingFiles, pendingChecklistItems, customFieldValues, editInitialFieldValues]);
+  }, [formData, existingTicket, isEditing, pendingFiles, pendingChecklistItems, customFieldValues, editInitialFieldValues, imageState.images.length]);
 
   // Prevent navigation with unsaved changes
   useEffect(() => {
@@ -383,37 +405,6 @@ const TicketForm = () => {
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasUnsavedChanges, isSubmitting]);
-
-  // Restore a previously-saved new-ticket draft on mount (mobile reliability).
-  // OBS: hoppa över vid klon (location.state.cloneData) — klon-effekten ovan har
-  // redan förfyllt formuläret, och ett gammalt utkast skulle annars skriva över
-  // det klonade innehållet (körs sist i effekt-ordningen) med en vilseledande
-  // "Återställde ditt osparade utkast"-toast.
-  useEffect(() => {
-    if (isEditing || location.state?.cloneData) return;
-    try {
-      const raw = localStorage.getItem(NEW_TICKET_DRAFT_KEY);
-      if (!raw) return;
-      const draft = JSON.parse(raw);
-      if (hasDraftContent(draft)) {
-        setFormData((prev) => ({ ...prev, ...draft }));
-        toast.info('Återställde ditt osparade utkast');
-      }
-    } catch { /* corrupt draft — ignore */ }
-  }, [isEditing, location.state?.cloneData]);
-
-  // Autosave the new-ticket draft (debounced). Edit forms have server state → skip.
-  useEffect(() => {
-    if (isEditing) return;
-    const hasData = hasDraftContent(formData);
-    const t = window.setTimeout(() => {
-      try {
-        if (hasData) localStorage.setItem(NEW_TICKET_DRAFT_KEY, JSON.stringify(formData));
-        else localStorage.removeItem(NEW_TICKET_DRAFT_KEY);
-      } catch { /* quota / private mode — non-fatal */ }
-    }, 400);
-    return () => window.clearTimeout(t);
-  }, [formData, isEditing]);
 
   // Mirror dirty state to the SW registrar so an auto-update defers its reload
   // until the user has saved/left, instead of discarding an in-progress ticket.
@@ -486,6 +477,7 @@ const TicketForm = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitLock.current || imageBusy || !draft.ready) return;
 
     if (failedUploads) {
       toast.error('Hantera de misslyckade bilagorna innan du sparar igen');
@@ -557,12 +549,13 @@ const TicketForm = () => {
       return;
     }
 
+    submitLock.current = true;
     setIsSubmitting(true);
     setIsSaving(true);
 
     try {
       if (isEditing && id) {
-        await updateTicket(id, { ...submitFormData, assigned_to: formData.assigned_to || undefined, company_id: formData.company_id || undefined }, customFieldValues.length > 0 ? customFieldValues : undefined);
+        await updateTicket(id, { ...submitFormData, submission: { images: imageState.referenced({ formData, customFieldValues }) }, assigned_to: formData.assigned_to || undefined, company_id: formData.company_id || undefined }, customFieldValues.length > 0 ? customFieldValues : undefined);
 
         const { failedFiles, checklistFailed } = await saveExtras(id, pendingFiles, pendingChecklistItems.map(i => i.label));
 
@@ -577,6 +570,7 @@ const TicketForm = () => {
           return;
         }
 
+        await draft.clear();
         if (checklistFailed) toast.warning('Ärendet uppdaterades, men checklistan kunde inte läggas till');
         else toast.success('Ärendet uppdaterades');
         // Navigate back to source instead of detail page
@@ -586,7 +580,7 @@ const TicketForm = () => {
           navigate('/tickets');
         }
       } else {
-        const extraFields = { assigned_to: formData.assigned_to || undefined, company_id: formData.company_id || undefined };
+        const extraFields = { submission: { images: imageState.referenced({ formData, customFieldValues }), idempotencyKey: submissionKey }, assigned_to: formData.assigned_to || undefined, company_id: formData.company_id || undefined };
         const ticketWithTemplate = selectedTemplate
           ? { ...submitFormData, templateId: selectedTemplate.id, ...extraFields }
           : { ...submitFormData, ...extraFields };
@@ -606,6 +600,7 @@ const TicketForm = () => {
             return;
           }
 
+          await draft.clear();
           if (checklistFailed) toast.warning('Ärendet skapades, men checklistan kunde inte läggas till');
           else toast.success('Ärendet skapades');
           navigate(`/tickets/${newTicket.id}`);
@@ -613,14 +608,17 @@ const TicketForm = () => {
         }
       }
     } catch (error) {
+      if (getErrorCode(error) === 'IDEMPOTENCY_CONFLICT') setSubmissionKey(crypto.randomUUID());
       // Mutationen har redan visat felet som toast.
       if (import.meta.env.DEV) console.error('Error submitting ticket:', error);
     } finally {
+      submitLock.current = false;
       setIsSubmitting(false);
       setIsSaving(false);
     }
   };
 
+  const clearDraft = draft.clear;
   const handleRetryUploads = useCallback(async () => {
     if (!failedUploads) return;
     setIsRetrying(true);
@@ -632,22 +630,24 @@ const TicketForm = () => {
     } else {
       toast.success('Alla filer uppladdade!');
       const ticketId = failedUploads.ticketId;
+      await clearDraft();
       setFailedUploads(null);
       navigate(`/tickets/${ticketId}`);
     }
-  }, [failedUploads, saveExtras, navigate]);
+  }, [failedUploads, saveExtras, navigate, clearDraft]);
 
-  const handleSkipFailedUploads = useCallback(() => {
+  const handleSkipFailedUploads = useCallback(async () => {
     // Guard against skipping mid-retry: a retry in flight may still resolve and
     // navigate, so ignore the skip until the retry settles (button is also
     // disabled, this is belt-and-suspenders against a queued click).
     if (!failedUploads || isRetrying) return;
     const ticketId = failedUploads.ticketId;
+    await clearDraft();
     setFailedUploads(null);
     navigate(`/tickets/${ticketId}`);
-  }, [failedUploads, isRetrying, navigate]);
+  }, [failedUploads, isRetrying, navigate, clearDraft]);
 
-  const handleNavigateBack = () => {
+  const handleNavigateBack = async () => {
     const goBack = () => {
       if (location.state?.from) {
         navigate(location.state.from);
@@ -657,7 +657,7 @@ const TicketForm = () => {
     };
 
     if (hasUnsavedChanges && !isSaving) {
-      if (window.confirm('Du har osparade ändringar. Är du säker på att du vill lämna sidan?')) {
+      if (await confirm('Du har osparade ändringar. Vill du lämna sidan?', 'Lämna sidan')) {
         goBack();
       }
     } else {
@@ -670,6 +670,8 @@ const TicketForm = () => {
       <TicketLoadError error={ticketLoadError} onRetry={() => void refetchTicket()} />
     );
   }
+
+  if (!draft.ready) return <p role="status">Laddar utkast…</p>;
 
   const requester = users.find(contact => contact.id === formData.requesterId);
   const companyName = companies.find(company => company.id === formData.company_id)?.name
@@ -736,6 +738,8 @@ const TicketForm = () => {
   );
 
   return (
+    <ImageAdapterContext.Provider value={imageState.adapter}>
+    {confirmationDialog}
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <Button
@@ -821,7 +825,10 @@ const TicketForm = () => {
           </h1>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit}>
+            <fieldset disabled={isSubmitting} className="min-w-0 space-y-4">
+            {draft.restoreError && <p role="alert" className="text-sm text-destructive">Det sparade utkastet kunde inte återställas. Du kan fylla i ett nytt ärende.</p>}
+            {draft.storageError && <p role="alert" className="text-sm text-destructive">Utkastet kan inte sparas på den här enheten. Håll sidan öppen tills ärendet sparats.</p>}
 
             {/* Titel + Mall row */}
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-end">
@@ -853,7 +860,9 @@ const TicketForm = () => {
                   <TemplateCombobox
                     templates={templates}
                     selectedTemplate={selectedTemplate}
-                    onSelect={(template) => {
+                    onSelect={async (template) => {
+                      if ((customFieldValues.some(v => hasVisibleText(v.fieldValue) || /<img\b/i.test(v.fieldValue)) || hasVisibleText(formData.notes) || hasVisibleText(formData.solution) || /<img\b/i.test(formData.notes + formData.solution) || hasVisibleText(formData.description) || /<img\b/i.test(formData.description)) && !await confirm('Dina ifyllda mallsvar och beskrivningen ersätts när du byter mall.')) return;
+                      setEditInitialFieldValues([]);
                       const hasFields = template.fields && template.fields.length > 0;
                       setSelectedTemplate(template);
                       setFormData({
@@ -867,7 +876,8 @@ const TicketForm = () => {
                       });
                       toast.success(`Mall "${template.name}" laddad`);
                     }}
-                    onClear={() => {
+                    onClear={async () => {
+                      if (customFieldValues.some(v => hasVisibleText(v.fieldValue) || /<img\b/i.test(v.fieldValue)) && !await confirm('Dina ifyllda mallsvar tas bort när du rensar mallen.', 'Rensa mall')) return;
                       if (isEditing && existingTicket && !formData.description) {
                         setFormData(prev => ({ ...prev, description: existingTicket.description }));
                       }
@@ -925,6 +935,9 @@ const TicketForm = () => {
                   }
                 >
                   <DynamicFieldsForm
+                    requester={requester ? { name: requester.name, email: requester.email, actionLabel: 'Samma som beställaren' } : undefined}
+                    disabled={isSubmitting}
+                    onImageBusyChange={onImageBusyChange}
                     fields={selectedTemplate.fields}
                     onValuesChange={handleCustomFieldsChange}
                     initialValues={editInitialFieldValues.length > 0 ? editInitialFieldValues : undefined}
@@ -946,6 +959,8 @@ const TicketForm = () => {
                     }
                   >
                     <RichTextEditor
+                      disabled={isSubmitting}
+                      onImageBusyChange={onImageBusyChange}
                       value={formData.notes || ''}
                       onChange={(html) => {
                         setFormData({ ...formData, notes: html });
@@ -959,7 +974,8 @@ const TicketForm = () => {
                 <button
                   type="button"
                   className="mt-2 text-xs text-muted-foreground hover:text-foreground underline"
-                  onClick={() => {
+                  onClick={async () => {
+                    if (customFieldValues.some(v => hasVisibleText(v.fieldValue) || /<img\b/i.test(v.fieldValue)) && !await confirm('Dina ifyllda mallsvar tas bort när du rensar mallen.', 'Rensa mall')) return;
                     // Restore existing description from ticket when clearing template
                     if (isEditing && existingTicket && !formData.description) {
                       setFormData(prev => ({ ...prev, description: existingTicket.description }));
@@ -986,6 +1002,8 @@ const TicketForm = () => {
                     }
                   >
                     <RichTextEditor
+                      disabled={isSubmitting}
+                      onImageBusyChange={onImageBusyChange}
                       value={formData.description}
                       onChange={(html) => { setFormData({ ...formData, description: html }); setErrors(prev => { const p = { ...prev }; delete p['description']; return p; }); }}
                       placeholder="Detaljerad beskrivning av problemet..."
@@ -1219,6 +1237,8 @@ const TicketForm = () => {
                   <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
                     <Label htmlFor="solution">Lösning</Label>
                     <RichTextEditor
+                      disabled={isSubmitting}
+                      onImageBusyChange={onImageBusyChange}
                       value={formData.solution}
                       onChange={(html) => setFormData({ ...formData, solution: html })}
                       placeholder="Dokumentera hur problemet löstes..."
@@ -1242,6 +1262,8 @@ const TicketForm = () => {
                   <div className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
                     <Label htmlFor="notes">Interna anteckningar</Label>
                     <RichTextEditor
+                      disabled={isSubmitting}
+                      onImageBusyChange={onImageBusyChange}
                       value={formData.notes}
                       onChange={(html) => setFormData({ ...formData, notes: html })}
                       placeholder="Lägg till interna anteckningar..."
@@ -1275,17 +1297,25 @@ const TicketForm = () => {
               <Button type="button" variant="outline" onClick={handleNavigateBack} disabled={isSaving}>
                 Avbryt
               </Button>
-              <Button type="submit" disabled={isSubmitting || isUploading || isSaving || !!failedUploads} className="gap-2">
+              <Button type="submit" disabled={isSubmitting || isUploading || isSaving || !!failedUploads || imageBusy > 0 || !draft.ready} className="gap-2">
                 {isSubmitting ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />Sparar...</>
                 ) : isEditing ? 'Spara ändringar' : 'Skapa ärende'}
               </Button>
             </div>
+            </fieldset>
           </form>
         </CardContent>
       </Card>
     </div>
+    </ImageAdapterContext.Provider>
   );
 };
 
-export default TicketForm;
+// Remount when draft ownership or edited ticket changes; state must never cross scopes.
+const ScopedTicketForm = () => {
+  const { id } = useParams();
+  const { user } = useAuth();
+  return <TicketForm key={`${user?.id}:${id || 'new'}`} />;
+};
+export default ScopedTicketForm;

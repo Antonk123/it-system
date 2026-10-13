@@ -7,13 +7,15 @@ import { TemplateFieldRow } from '@/lib/api';
 import { safeJsonParse } from '@/lib/safeJsonParse';
 
 interface DynamicFieldProps {
+  disabled?: boolean;
+  onImageBusyChange?: (busy: boolean) => void;
   field: TemplateFieldRow;
   value: string;
   onChange: (value: string) => void;
   error?: string;
 }
 
-export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProps) => {
+export const DynamicField = ({ field, value, onChange, error, disabled, onImageBusyChange }: DynamicFieldProps) => {
   const errorId = `${field.field_name}-error`;
   // a11y: when an error is present, associate it with the control and mark invalid.
   const a11yProps = error
@@ -39,6 +41,8 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
         // exposes an `error` boolean for invalid styling instead.
         return (
           <RichTextEditor
+            disabled={disabled}
+            onImageBusyChange={onImageBusyChange}
             value={value}
             onChange={onChange}
             placeholder={field.placeholder || 'Skriv här...'}
@@ -119,12 +123,12 @@ export const DynamicField = ({ field, value, onChange, error }: DynamicFieldProp
   };
 
   return (
-    <div className="space-y-2">
+    <fieldset disabled={disabled} className="min-w-0 space-y-2">
       <Label htmlFor={field.field_name}>
         {field.field_label} {field.required === 1 && '*'}
       </Label>
       {renderField()}
       {error && <p id={errorId} className="text-sm text-destructive">{error}</p>}
-    </div>
+    </fieldset>
   );
 };

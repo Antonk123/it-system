@@ -7,7 +7,7 @@ export async function getAuthenticatedFileUrl(fileId: string): Promise<string> {
     return blobUrlCache.get(fileId)!;
   }
 
-  const blob = await api.requestBlob(`/attachments/file/${fileId}`);
+  const blob = await api.requestBlob(`/attachments/file/${fileId}`, { redirectOnAuthFailure: false });
   const blobUrl = URL.createObjectURL(blob);
   blobUrlCache.set(fileId, blobUrl);
   return blobUrl;
@@ -15,7 +15,7 @@ export async function getAuthenticatedFileUrl(fileId: string): Promise<string> {
 
 export async function downloadAuthenticatedFile(fileId: string, filename: string): Promise<void> {
   // Always do a fresh fetch for downloads to avoid stale/empty blob cache issues
-  const blob = await api.requestBlob(`/attachments/file/${fileId}`);
+  const blob = await api.requestBlob(`/attachments/file/${fileId}`, { redirectOnAuthFailure: false });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;

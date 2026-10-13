@@ -5,6 +5,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import TicketForm from './TicketForm';
+vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'test-user' } }) }));
+vi.mock('@/hooks/useTicketDraft', () => ({ useTicketDraft: () => ({ ready: true, storageError: false, clear: async () => {}, resume: () => {} }) }));
 
 const noop = vi.hoisted(() => vi.fn());
 const empty = vi.hoisted(() => [] as never[]);
@@ -43,10 +45,10 @@ describe('Förifyllning från query', () => {
     expect(screen.getByTestId('editor')).toHaveAttribute('data-html', '<p>Rad ett</p><p>Rad två</p>');
   });
 
-  it('utkast vinner över query', () => {
+  it('läser inte gamla, oskopade utkast från en annan användare', () => {
     store.set('it-ticket:new-ticket-draft', JSON.stringify({ title: 'Mitt utkast', description: '<p>x</p>' }));
     renderAt('/tickets/new?title=Fr%C3%A5n%20query');
-    expect(screen.getByLabelText(/Titel/)).toHaveValue('Mitt utkast');
+    expect(screen.getByLabelText(/Titel/)).toHaveValue('Från query');
   });
 
   it('ett tomt editor-utkast (<p></p>) blockerar inte förifyllningen', () => {
