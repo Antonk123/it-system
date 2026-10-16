@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Plus, Pencil, Trash2, Check, X, Tag, Type, ListChecks, CornerDownRight, ArrowUp, ArrowDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { CategoryIcon, CategoryIconPicker } from '@/lib/categoryIcons';
 
 const CategoryItem = memo(({
   category,
@@ -30,14 +31,16 @@ const CategoryItem = memo(({
   isLast,
   editingId,
   editingName,
+  editingIcon,
   onMove,
   onStartEdit,
   onSaveEdit,
   onCancelEdit,
   onDelete,
-  setEditingName
+  setEditingName,
+  setEditingIcon
 }: any) => (
-  <div className="flex items-center gap-3 p-3">
+  <div className={editingId === category.id ? "flex flex-wrap items-center gap-3 p-3 sm:flex-nowrap" : "flex items-center gap-3 p-3"}>
     {editingId === category.id ? (
       <>
         <Input
@@ -47,9 +50,15 @@ const CategoryItem = memo(({
             if (e.key === 'Enter') onSaveEdit();
             if (e.key === 'Escape') onCancelEdit();
           }}
-          className="flex-1"
+          className="basis-full min-w-0 sm:basis-0 sm:flex-1"
           autoFocus
           aria-label="Redigera kategorinamn"
+        />
+        <CategoryIconPicker
+          value={editingIcon}
+          onChange={setEditingIcon}
+          className="min-w-0 flex-1 sm:w-[11rem] sm:flex-none"
+          label={`Ikon för ${category.label}`}
         />
         <Button size="icon" variant="ghost" onClick={onSaveEdit} aria-label="Spara kategorinamn">
           <Check className="w-4 h-4 text-[hsl(var(--success))]" />
@@ -60,7 +69,10 @@ const CategoryItem = memo(({
       </>
     ) : (
       <>
-        <span className="flex-1 font-medium">{category.label}</span>
+        <span className="flex flex-1 items-center gap-2 font-medium">
+          <CategoryIcon icon={category.icon} className="h-4 w-4" />
+          {category.label}
+        </span>
         <div className="flex items-center gap-1">
           <Button
             size="icon"
@@ -84,7 +96,7 @@ const CategoryItem = memo(({
         <Button
           size="icon"
           variant="ghost"
-          onClick={() => onStartEdit(category.id, category.label)}
+          onClick={() => onStartEdit(category.id, category.label, category.icon ?? null)}
           aria-label={`Redigera ${category.label}`}
         >
           <Pencil className="w-4 h-4 text-muted-foreground" />
@@ -177,6 +189,8 @@ const TicketsTab = () => {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
+  const [editingIcon, setEditingIcon] = useState<string | null>(null);
+  const [newCategoryIcon, setNewCategoryIcon] = useState<string | null>(null);
   // Lokal pending-flagga för kategoriläggning (useCategories exponerar inte isPending)
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   // Bekräftelsedialog för att ta bort kategori
@@ -218,19 +232,21 @@ const TicketsTab = () => {
       // visar då redan ett felmeddelande). Visa därför success BARA om vi fick
       // tillbaka en kategori — annars blev det en falsk "tillagd"-bekräftelse +
       // dubbel-toast tillsammans med onError.
-      const created = await addCategory(newCategoryName.trim());
+      const created = await addCategory(newCategoryName.trim(), newCategoryIcon);
       if (created) {
         setNewCategoryName('');
+        setNewCategoryIcon(null);
         toast.success('Kategori tillagd');
       }
     } finally {
       setIsAddingCategory(false);
     }
-  }, [newCategoryName, addCategory]);
+  }, [newCategoryName, newCategoryIcon, addCategory]);
 
-  const handleStartEdit = useCallback((id: string, label: string) => {
+  const handleStartEdit = useCallback((id: string, label: string, icon: string | null) => {
     setEditingId(id);
     setEditingName(label);
+    setEditingIcon(icon);
   }, []);
 
   const handleSaveEdit = useCallback(async () => {
@@ -240,7 +256,7 @@ const TicketsTab = () => {
     }
     if (editingId) {
       try {
-        await updateCategory(editingId, editingName.trim());
+        await updateCategory(editingId, editingName.trim(), editingIcon);
         setEditingId(null);
         setEditingName('');
         toast.success('Kategori uppdaterad');
@@ -248,7 +264,7 @@ const TicketsTab = () => {
         // Felet visas som toast av useCategories; redigeringen står kvar för nytt försök.
       }
     }
-  }, [editingName, editingId, updateCategory]);
+  }, [editingName, editingIcon, editingId, updateCategory]);
 
   const handleCancelEdit = useCallback(() => {
     setEditingId(null);
@@ -408,7 +424,7 @@ const TicketsTab = () => {
             </CollapsibleTrigger>
             <CollapsibleContent>
               <CardContent className="space-y-4">
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <Input
                 aria-label="Nytt kategorinamn"
                 placeholder="Nytt kategorinamn..."
@@ -417,7 +433,13 @@ const TicketsTab = () => {
                 onKeyDown={(e) => e.key === 'Enter' && !isAddingCategory && handleAddCategory()}
                 disabled={isAddingCategory}
               />
-              <Button onClick={handleAddCategory} className="shrink-0" disabled={isAddingCategory}>
+              <CategoryIconPicker
+                value={newCategoryIcon}
+                onChange={setNewCategoryIcon}
+                className="w-full sm:w-[11rem]"
+                label="Ikon för ny kategori"
+              />
+              <Button onClick={handleAddCategory} className="w-full sm:w-auto shrink-0" disabled={isAddingCategory}>
                 <Plus className="w-4 h-4 mr-2" />
                 Lägg till
               </Button>
@@ -432,12 +454,14 @@ const TicketsTab = () => {
                   isLast={index === categories.length - 1}
                   editingId={editingId}
                   editingName={editingName}
+                  editingIcon={editingIcon}
                   onMove={handleMoveCategory}
                   onStartEdit={handleStartEdit}
                   onSaveEdit={handleSaveEdit}
                   onCancelEdit={handleCancelEdit}
                   onDelete={setDeleteCategoryId}
                   setEditingName={setEditingName}
+                  setEditingIcon={setEditingIcon}
                 />
               ))}
               {categories.length === 0 && (

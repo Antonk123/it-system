@@ -6,6 +6,7 @@ import type { Category, Ticket } from '@/types/ticket';
 import { getInitials, AVATAR_GRADIENT } from '@/lib/avatar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PriorityBadge } from '@/components/PriorityBadge';
+import { CategoryIcon } from '@/lib/categoryIcons';
 
 interface TicketQueueTableProps {
   tickets: Ticket[];
@@ -66,7 +67,9 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
           <div className="md:hidden divide-y divide-border/35">
             {activeTickets.map(ticket => {
               const requesterName = ticket.requesterName || getUserName?.(ticket.requesterId) || 'Okänd beställare';
-              const categoryLabel = ticket.categoryLabel || categories.find(category => category.id === ticket.category)?.label;
+              const ticketCategory = categories.find(category => category.id === ticket.category);
+              const categoryLabel = ticket.categoryLabel || ticketCategory?.label;
+              const categoryIcon = ticketCategory?.icon;
 
               return (
                 <Link
@@ -85,7 +88,8 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
                     <StatusBadge status={ticket.status} />
                     <PriorityBadge priority={ticket.priority} />
                     {categoryLabel && (
-                      <span className="text-xs font-medium px-1.5 py-0.5 rounded-sm bg-muted/60 text-foreground/75 border border-border">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-sm bg-muted/60 text-foreground/75 border border-border">
+                        <CategoryIcon icon={categoryIcon} />
                         {categoryLabel}
                       </span>
                     )}
@@ -110,7 +114,9 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
                 {activeTickets.map(ticket => {
                   const assigneeName = ticket.assignedToName || (ticket.assignedTo && getUserName?.(ticket.assignedTo)) || null;
                   const requesterName = ticket.requesterName || getUserName?.(ticket.requesterId) || 'Okänd beställare';
-                  const categoryLabel = ticket.categoryLabel || categories.find(category => category.id === ticket.category)?.label;
+                  const ticketCategory = categories.find(category => category.id === ticket.category);
+                  const categoryLabel = ticket.categoryLabel || ticketCategory?.label;
+                  const categoryIcon = ticketCategory?.icon;
 
                   return (
                     <tr
@@ -132,7 +138,8 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
                         <p className="text-xs text-muted-foreground mt-0.5 break-words">Beställare: {requesterName}</p>
                         <div className="flex flex-wrap items-center gap-2 mt-0.5">
                           {categoryLabel && (
-                            <span className="text-xs font-medium px-1.5 py-0.5 rounded-sm bg-muted/60 text-foreground/75 border border-border">
+                            <span className="inline-flex items-center gap-1 text-xs font-medium px-1.5 py-0.5 rounded-sm bg-muted/60 text-foreground/75 border border-border">
+                              <CategoryIcon icon={categoryIcon} />
                               {categoryLabel}
                             </span>
                           )}

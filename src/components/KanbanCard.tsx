@@ -8,6 +8,7 @@ import { useCategories } from '@/hooks/useCategories';
 import { useKanban } from './KanbanContext';
 import { cn } from '@/lib/utils';
 import { Tag } from 'lucide-react';
+import { CategoryIcon, isCategoryIconKey } from '@/lib/categoryIcons';
 
 interface KanbanCardProps {
   ticket: TicketType;
@@ -16,7 +17,8 @@ interface KanbanCardProps {
 export const KanbanCard = memo(function KanbanCard({ ticket }: KanbanCardProps) {
   const navigate = useNavigate();
   const { onTicketClick } = useKanban();
-  const { getCategoryLabel } = useCategories();
+  const { getCategoryLabel, getCategoryIcon } = useCategories();
+  const categoryIcon = ticket.category ? getCategoryIcon(ticket.category) : undefined;
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
 
   const {
@@ -102,7 +104,11 @@ export const KanbanCard = memo(function KanbanCard({ ticket }: KanbanCardProps) 
       {ticket.category && (
         <div className="pt-2 border-t border-border">
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <Tag className="h-3.5 w-3.5" />
+            {isCategoryIconKey(categoryIcon) ? (
+              <CategoryIcon icon={categoryIcon} />
+            ) : (
+              <Tag className="h-3.5 w-3.5" />
+            )}
             {getCategoryLabel(ticket.category)}
           </span>
         </div>

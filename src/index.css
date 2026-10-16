@@ -254,6 +254,13 @@
      specificitet och följer då värdens palett. */
   :root,
   .light {
+    --hue-blue: #41608a;
+    --hue-green: #3d6a4d;
+    --hue-purple: #6d4a73;
+    --hue-orange: #a14f40;
+    --hue-amber: #7a5326;
+    --hue-teal: #4a8f86;
+    --hue-pink: #8a6390;
     --background: 40.0000 45.4545% 93.5294%;
     --foreground: 35.2941 30.9091% 10.7843%;
     --card: 45.0000 100.0000% 98.4314%;
@@ -322,6 +329,13 @@
   }
 
   .dark {
+    --hue-blue: #a3bdd8;
+    --hue-green: #9cc4a8;
+    --hue-purple: #c9a8ce;
+    --hue-orange: #d98a7c;
+    --hue-amber: #d4a574;
+    --hue-teal: #6fb5ab;
+    --hue-pink: #bb93c2;
     --background: 25.7143 17.9487% 7.6471%;
     --foreground: 40.0000 40.0000% 88.2353%;
     --card: 32.7273 21.5686% 10.0000%;

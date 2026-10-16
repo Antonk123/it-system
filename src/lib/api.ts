@@ -751,10 +751,10 @@ class ApiClient {
     return this.request<CategoryRow[]>('/categories');
   }
 
-  async createCategory(label: string) {
+  async createCategory(label: string, icon?: string | null) {
     return this.request<CategoryRow>('/categories', {
       method: 'POST',
-      body: { label },
+      body: { label, ...(icon !== undefined && { icon }) },
     });
   }
 
@@ -765,10 +765,10 @@ class ApiClient {
     });
   }
 
-  async updateCategory(id: string, label: string) {
+  async updateCategory(id: string, label: string, icon?: string | null) {
     return this.request<CategoryRow>(`/categories/${id}`, {
       method: 'PUT',
-      body: { label },
+      body: { label, ...(icon !== undefined && { icon }) },
     });
   }
 
@@ -1125,17 +1125,17 @@ class ApiClient {
     return this.request<KbCategoryRow[]>('/kb/categories');
   }
 
-  async createKbCategory(name: string, color?: string) {
+  async createKbCategory(name: string, color?: string, icon?: string | null) {
     return this.request<KbCategoryRow>('/kb/categories', {
       method: 'POST',
-      body: { name, color },
+      body: { name, color, ...(icon !== undefined && { icon }) },
     });
   }
 
-  async updateKbCategory(id: string, name: string, color?: string) {
+  async updateKbCategory(id: string, name: string, color?: string, icon?: string | null) {
     return this.request<KbCategoryRow>(`/kb/categories/${id}`, {
       method: 'PUT',
-      body: { name, color },
+      body: { name, color, ...(icon !== undefined && { icon }) },
     });
   }
 
@@ -1506,6 +1506,7 @@ export interface CategoryRow {
   name: string;
   label: string;
   position: number;
+  icon: string | null;
   created_at: string;
 }
 
@@ -1691,6 +1692,7 @@ export interface KbCategoryRow {
   id: string;
   name: string;
   color: string | null;
+  icon: string | null;
   position: number;
   article_count: number;
   created_at: string;

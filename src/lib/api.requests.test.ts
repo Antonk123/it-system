@@ -344,3 +344,32 @@ describe('rena strängbyggare', () => {
     expect(api.oidcLoginUrl()).toBe(`${BASE}/auth/oidc/login`);
   });
 });
+
+describe('kategori-ikoner — request body', () => {
+  // Mutating requests first fetch a CSRF token — pick the call that carries a body.
+  const bodyOf = (calls: unknown[][]) => {
+    const withBody = calls.find((c) => typeof (c[1] as { body?: string } | undefined)?.body === 'string');
+    return JSON.parse((withBody?.[1] as { body: string }).body);
+  };
+
+  it('updateCategory utan icon → icon utelämnas ur body', async () => {
+    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve({}) }));
+    const api = await freshApi();
+    await api.updateCategory('c1', 'Nät');
+    expect(bodyOf(fetchMock.mock.calls)).toEqual({ label: 'Nät' });
+  });
+
+  it('updateCategory med icon: null → null skickas (rensar ikonen)', async () => {
+    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve({}) }));
+    const api = await freshApi();
+    await api.updateCategory('c1', 'Nät', null);
+    expect(bodyOf(fetchMock.mock.calls)).toEqual({ label: 'Nät', icon: null });
+  });
+
+  it('createKbCategory med icon skickar icon', async () => {
+    fetchMock.mockResolvedValue(fakeResponse({ json: () => Promise.resolve({}) }));
+    const api = await freshApi();
+    await api.createKbCategory('Guider', undefined, 'folder');
+    expect(bodyOf(fetchMock.mock.calls)).toMatchObject({ name: 'Guider', icon: 'folder' });
+  });
+});

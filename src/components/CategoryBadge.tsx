@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from 'react-router';
 import { Badge } from '@/components/ui/badge';
 import { useCategories } from '@/hooks/useCategories';
 import { Tag } from 'lucide-react';
+import { CategoryIcon, isCategoryIconKey } from '@/lib/categoryIcons';
 
 interface CategoryBadgeProps {
   category?: string;
@@ -9,13 +10,14 @@ interface CategoryBadgeProps {
 }
 
 export const CategoryBadge = ({ category, clickable = true }: CategoryBadgeProps) => {
-  const { getCategoryLabel } = useCategories();
+  const { getCategoryLabel, getCategoryIcon } = useCategories();
   const navigate = useNavigate();
   const location = useLocation();
 
   if (!category) return null;
 
   const label = getCategoryLabel(category);
+  const icon = getCategoryIcon(category);
 
   const handleClick = (e: React.MouseEvent) => {
     if (!clickable) return;
@@ -51,7 +53,7 @@ export const CategoryBadge = ({ category, clickable = true }: CategoryBadgeProps
       tabIndex={clickable ? 0 : undefined}
       aria-label={clickable ? `Filtrera på kategori ${label}` : label}
     >
-      <Tag className="h-3.5 w-3.5" />
+      {isCategoryIconKey(icon) ? <CategoryIcon icon={icon} /> : <Tag className="h-3.5 w-3.5" />}
       {label}
     </Badge>
   );

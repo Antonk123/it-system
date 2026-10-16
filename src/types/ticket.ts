@@ -5,6 +5,7 @@ export interface Category {
   id: string;
   label: string;
   position?: number;
+  icon?: string | null;
 }
 
 export interface User {
