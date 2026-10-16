@@ -781,10 +781,15 @@ router.post('/', writeRateLimiter, authenticate, ticketImageSubmission, async (r
       if (!normalized) return res.status(400).json({ error: 'Ogiltiga mallfält.' });
       customFields = normalized;
     }
-    const hasSubmittedContent = customFields?.length > 0
-      ? customFields.some((field: CustomFieldInput) => hasVisibleContent(field.fieldValue || ''))
-      : hasVisibleContent(description || '');
-    if (!hasSubmittedContent && res.locals.ticketSubmission.files.length === 0) {
+    // Supportformuläret kräver synligt innehåll eller en bilaga. Personalens
+    // formulär har valfri beskrivning och laddar upp bilagor först efter att
+    // ärendet skapats, så där gäller bara att något beskrivningsfält skickats.
+    const hasSubmittedContent = res.locals.ticketSubmission.files.length > 0 || (req.body.self_service === true
+      ? customFields?.length > 0
+        ? customFields.some((field: CustomFieldInput) => hasVisibleContent(field.fieldValue || ''))
+        : hasVisibleContent(description || '')
+      : !!description || customFields?.length > 0);
+    if (!hasSubmittedContent) {
       return res.status(400).json({ error: 'Skriv en kort beskrivning eller bifoga en bild.' });
     }
     const fieldErrors = missingRequiredTemplateFields(template_id || null, customFields ?? []);
