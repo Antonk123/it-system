@@ -5,6 +5,7 @@ import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { logger } from '../lib/logger.js';
 import { logAudit } from '../lib/auditLog.js';
 import { sanitizeLabel } from '../lib/ticketValidation.js';
+import { parseCategoryIcon } from '../lib/categoryIcons.js';
 
 const router = Router();
 
@@ -16,12 +17,13 @@ interface CategoryRow {
   label: string;
   position: number;
   created_at: string;
+  icon: string | null;
 }
 
 // Get all categories
 router.get('/', authenticate, (_req: AuthRequest, res: Response) => {
   try {
-    const categories = db.prepare('SELECT id, name, label, position, created_at FROM categories ORDER BY position ASC, created_at ASC').all() as CategoryRow[];
+    const categories = db.prepare('SELECT id, name, label, position, created_at, icon FROM categories ORDER BY position ASC, created_at ASC').all() as CategoryRow[];
     res.json(categories);
   } catch (error) {
     logger.error('Error fetching categories:', { error: String(error) });
@@ -36,6 +38,10 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
   if (!label) {
     return res.status(400).json({ error: 'Label is required (max 100 characters)' });
   }
+  const icon = parseCategoryIcon(req.body.icon);
+  if (icon === false) {
+    return res.status(400).json({ error: 'Unknown icon' });
+  }
 
   try {
     const id = randomUUID();
@@ -44,9 +50,9 @@ router.post('/', authenticate, requireAdmin, (req: AuthRequest, res: Response) =
     const maxRow = db.prepare('SELECT COALESCE(MAX(position), -1) as max FROM categories').get() as { max: number };
     const position = (maxRow?.max ?? -1) + 1;
 
-    db.prepare('INSERT INTO categories (id, name, label, position, created_at) VALUES (?, ?, ?, ?, ?)').run(id, name, label, position, new Date().toISOString());
+    db.prepare('INSERT INTO categories (id, name, label, position, created_at, icon) VALUES (?, ?, ?, ?, ?, ?)').run(id, name, label, position, new Date().toISOString(), icon ?? null);
     
-    const category = db.prepare('SELECT id, name, label, position, created_at FROM categories WHERE id = ?').get(id) as CategoryRow;
+    const category = db.prepare('SELECT id, name, label, position, created_at, icon FROM categories WHERE id = ?').get(id) as CategoryRow;
     res.status(201).json(category);
   } catch (error) {
     logger.error('Error creating category:', { error: String(error) });
@@ -72,7 +78,7 @@ router.put('/reorder', authenticate, requireAdmin, (req: AuthRequest, res: Respo
 
     transaction(ids);
 
-    const categories = db.prepare('SELECT id, name, label, position, created_at FROM categories ORDER BY position ASC, created_at ASC').all() as CategoryRow[];
+    const categories = db.prepare('SELECT id, name, label, position, created_at, icon FROM categories ORDER BY position ASC, created_at ASC').all() as CategoryRow[];
     res.json(categories);
   } catch (error) {
     logger.error('Error reordering categories:', { error: String(error) });
@@ -87,16 +93,23 @@ router.put('/:id', authenticate, requireAdmin, (req: AuthRequest, res: Response)
   if (!label) {
     return res.status(400).json({ error: 'Label is required (max 100 characters)' });
   }
+  const icon = parseCategoryIcon(req.body.icon);
+  if (icon === false) {
+    return res.status(400).json({ error: 'Unknown icon' });
+  }
 
   try {
     const name = label.toLowerCase().replace(/\s+/g, '-');
-    const result = db.prepare('UPDATE categories SET name = ?, label = ? WHERE id = ?').run(name, label, req.params.id);
+    // icon utelämnad = lämna orörd, så att ett namnbyte inte nollar ikonen.
+    const result = icon === undefined
+      ? db.prepare('UPDATE categories SET name = ?, label = ? WHERE id = ?').run(name, label, req.params.id)
+      : db.prepare('UPDATE categories SET name = ?, label = ?, icon = ? WHERE id = ?').run(name, label, icon, req.params.id);
     
     if (result.changes === 0) {
       return res.status(404).json({ error: 'Category not found' });
     }
     
-    const category = db.prepare('SELECT id, name, label, position, created_at FROM categories WHERE id = ?').get(req.params.id) as CategoryRow;
+    const category = db.prepare('SELECT id, name, label, position, created_at, icon FROM categories WHERE id = ?').get(req.params.id) as CategoryRow;
     res.json(category);
   } catch (error) {
     logger.error('Error updating category:', { error: String(error) });
