@@ -347,7 +347,7 @@ export const TicketTable = memo(function TicketTable({
                       <div className={cn(
                         'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0',
                         AVATAR_GRADIENT
-                      )}>
+                      )} aria-hidden="true">
                         {getInitials(assigneeName)}
                       </div>
                       <span className="text-sm font-medium">{assigneeName}</span>

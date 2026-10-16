@@ -112,7 +112,7 @@ const Dashboard = () => {
         <h1 className="module-h1 text-foreground">
           {getGreeting()}
           {greetingName && (
-            <>, <em className="italic">{greetingName}</em></>
+            <>, <span className="italic">{greetingName}</span></>
           )}
           .
         </h1>

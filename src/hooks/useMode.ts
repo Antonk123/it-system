@@ -24,7 +24,7 @@ export function useMode(): ModeTheme {
 
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'app-mode-theme') {
-        setMode((e.newValue as ModeTheme) ?? 'dark');
+        setMode(e.newValue === 'dark' ? 'dark' : 'light');
       }
     };
 

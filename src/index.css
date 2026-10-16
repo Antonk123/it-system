@@ -187,7 +187,7 @@
 }
 
 @utility priority-badge-critical {
-  @apply bg-[hsl(var(--priority-critical)/0.1)] text-[hsl(var(--priority-critical))] transition-all duration-200;
+  @apply bg-[hsl(var(--priority-critical)/0.1)] text-[hsl(var(--priority-critical))] font-semibold transition-all duration-200;
 }
 
 /* Navets modulskala — Newsreader för sidrubriker, Geist för allt funktionellt. */

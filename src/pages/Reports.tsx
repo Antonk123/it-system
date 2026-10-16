@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { STATUS_CHART_COLORS } from '@/lib/chartColors';
 import { BarChart3, PieChart as PieChartIcon, Calendar, Ticket, Clock, CheckCircle, AlertTriangle, Users, Scale, Download, Printer, RefreshCw, Loader2 } from 'lucide-react';
 
 const COLORS = [
@@ -35,14 +36,7 @@ const COLORS = [
   'hsl(var(--chart-5))',
 ];
 
-// Same colors but different order for visual distinction in Requester Analytics
-const REQUESTER_STATUS_COLORS: Record<string, string> = {
-  open: 'hsl(var(--chart-2))',            // Different from pie chart
-  'in-progress': 'hsl(var(--chart-4))',
-  waiting: 'hsl(var(--chart-1))',
-  resolved: 'hsl(var(--chart-3))',
-  closed: 'hsl(var(--muted-foreground))', // Same gray for consistency
-};
+const REQUESTER_STATUS_COLORS: Record<string, string> = STATUS_CHART_COLORS;
 
 const MONTH_NAMES = [
   'Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni',
@@ -781,6 +775,7 @@ const Reports = () => {
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '8px',
                       }}
+                      cursor={{ fill: 'hsl(var(--muted) / 0.5)' }}
                     />
                     <Bar dataKey="count" name="Ärenden" radius={[0, 4, 4, 0]}>
                       {summary.byCategory.map((_, index) => (
@@ -821,6 +816,7 @@ const Reports = () => {
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '8px',
                       }}
+                      cursor={{ fill: 'hsl(var(--muted) / 0.5)' }}
                     />
                     <Legend />
                     <Bar dataKey="created" name="Skapad" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
@@ -932,7 +928,7 @@ const Reports = () => {
                       </defs>
                       <XAxis type="number" allowDecimals={false} tick={{ fontSize: isMobile ? 10 : 12 }} />
                       <YAxis type="category" dataKey="name" width={userAxisWidth} interval={0} tick={{ fontSize: isMobile ? 10 : 12 }} />
-                      <Tooltip content={<RequesterTooltip />} />
+                      <Tooltip content={<RequesterTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} />
                       <Legend
                         wrapperStyle={{ paddingTop: '16px' }}
                         iconType="square"

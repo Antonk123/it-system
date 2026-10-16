@@ -153,7 +153,7 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
                             <div className={cn(
                               'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold',
                               AVATAR_GRADIENT
-                            )}>
+                            )} aria-hidden="true">
                               {getInitials(assigneeName)}
                             </div>
                             <span className="text-[12.5px] font-medium">{assigneeName}</span>
