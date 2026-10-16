@@ -100,7 +100,7 @@ export const HtmlRenderer = ({ content, className }: HtmlRendererProps) => {
         "prose-pre:bg-muted prose-pre:border prose-pre:border-border",
         "prose-ul:text-foreground prose-ol:text-foreground prose-ul:text-base prose-ol:text-base",
         "prose-li:marker:text-foreground prose-li:text-base",
-        "prose-blockquote:border-l-primary prose-blockquote:text-foreground",
+        "prose-blockquote:border-l-0 prose-blockquote:bg-muted prose-blockquote:rounded-md prose-blockquote:px-4 prose-blockquote:py-2 prose-blockquote:font-display prose-blockquote:text-foreground",
         "prose-strong:text-foreground prose-strong:font-bold",
         "prose-img:rounded-lg prose-img:border prose-img:border-border prose-img:shadow-sm prose-img:my-4",
         "prose-table:border prose-table:border-border",

@@ -172,65 +172,25 @@
 }
 
 @utility priority-badge-low {
-  @apply bg-[hsl(var(--priority-low)/0.1)] text-[hsl(var(--priority-low))] border-[hsl(var(--priority-low))] transition-all duration-200;
+  @apply bg-[hsl(var(--priority-low)/0.1)] text-[hsl(var(--priority-low))] transition-all duration-200;
 }
 
 @utility priority-badge-medium {
-  @apply bg-[hsl(var(--priority-medium)/0.1)] text-[hsl(var(--priority-medium))] border-[hsl(var(--priority-medium))] transition-all duration-200;
+  @apply bg-[hsl(var(--priority-medium)/0.1)] text-[hsl(var(--priority-medium))] transition-all duration-200;
 }
 
 @utility priority-badge-high {
-  @apply bg-[hsl(var(--priority-high)/0.1)] text-[hsl(var(--priority-high))] border-[hsl(var(--priority-high))] transition-all duration-200;
+  @apply bg-[hsl(var(--priority-high)/0.1)] text-[hsl(var(--priority-high))] transition-all duration-200;
 }
 
 @utility priority-badge-critical {
-  @apply bg-[hsl(var(--priority-critical)/0.1)] text-[hsl(var(--priority-critical))] border-[hsl(var(--priority-critical))] transition-all duration-200;
+  @apply bg-[hsl(var(--priority-critical)/0.1)] text-[hsl(var(--priority-critical))] transition-all duration-200;
 }
 
 @utility ticket-row {
   /* Table row styling */
   position: relative;
   transition: all 0.2s ease;
-}
-
-@utility geo-border {
-  /* Geometric accent borders */
-  position: relative;
-  isolation: isolate;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: linear-gradient(
-      180deg,
-      hsla(var(--primary), 0.8) 0%,
-      hsla(var(--accent), 0.8) 100%
-    );
-    clip-path: polygon(
-      0 0,
-      100% 0,
-      100% 30%,
-      0 35%,
-      0 65%,
-      100% 70%,
-      100% 100%,
-      0 100%
-    );
-    transition: all 0.3s ease;
-  }
-
-  &:hover::before {
-    width: 6px;
-    background: linear-gradient(
-      180deg,
-      hsla(var(--accent), 1) 0%,
-      hsla(var(--primary), 1) 100%
-    );
-  }
 }
 
 @utility floating-tag {

@@ -80,9 +80,7 @@ export const AgingTicketsPanel = ({ tickets, isLoading, isError, onRetry }: Agin
                 className={cn(
                   'flex items-center gap-3 px-1 py-2 rounded-md cursor-pointer',
                   'hover:bg-muted/40 transition-colors duration-150',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-                  ticket.age_days >= 14 && 'border-l-2 border-l-destructive/60',
-                  ticket.age_days >= 7 && ticket.age_days < 14 && 'border-l-2 border-l-[hsl(var(--priority-high))]/50'
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background'
                 )}
               >
                 <div className="flex-1 min-w-0">
@@ -93,7 +91,12 @@ export const AgingTicketsPanel = ({ tickets, isLoading, isError, onRetry }: Agin
                     <p className="text-xs text-muted-foreground truncate">{ticket.requester_name}</p>
                   )}
                 </div>
-                <span className="text-xs font-semibold tabular-nums text-muted-foreground w-16 text-right shrink-0">
+                <span className={cn(
+                  'text-xs font-semibold tabular-nums w-16 text-right shrink-0',
+                  ticket.age_days >= 14 ? 'text-destructive'
+                    : ticket.age_days >= 7 ? 'text-warning-text'
+                    : 'text-muted-foreground'
+                )}>
                   {ticket.age_days} {ticket.age_days === 1 ? 'dag' : 'dagar'}
                 </span>
                 <PriorityBadge priority={ticket.priority} className="shrink-0" />

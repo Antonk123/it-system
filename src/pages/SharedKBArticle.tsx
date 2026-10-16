@@ -191,16 +191,14 @@ const proseStyles = `
     font-size: inherit;
   }
   .kb-prose blockquote {
-    border-left: 3px solid hsl(var(--primary));
-    padding-left: 1.25em;
+    border-radius: 6px;
+    padding: 0.5em 1em;
     margin-left: 0;
+    font-family: var(--font-display, Georgia, serif);
     color: hsl(var(--muted-foreground));
     font-style: italic;
     margin-bottom: 1.25em;
-    background: hsl(var(--primary) / 0.05);
-    padding-top: 0.5em;
-    padding-bottom: 0.5em;
-    border-radius: 0 6px 6px 0;
+    background: hsl(var(--muted));
   }
   .kb-prose hr {
     border: none;

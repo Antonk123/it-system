@@ -35,7 +35,7 @@ export const publicKbProseStyles = `
   .public-kb-prose code { border: 1px solid hsl(var(--border)); border-radius: .25rem; background: hsl(var(--muted)); color: hsl(var(--primary)); padding: .15em .4em; font-size: .875em; }
   .public-kb-prose pre { overflow-x: auto; border: 1px solid hsl(var(--border)); border-radius: .5rem; background: hsl(var(--muted)); padding: 1rem; }
   .public-kb-prose pre code { border: 0; background: transparent; padding: 0; color: inherit; }
-  .public-kb-prose blockquote { border-left: 3px solid hsl(var(--primary)); border-radius: 0 .375rem .375rem 0; background: hsl(var(--primary) / .05); padding: .5rem 0 .5rem 1rem; color: hsl(var(--muted-foreground)); }
+  .public-kb-prose blockquote { border-radius: 6px; background: hsl(var(--muted)); padding: .5rem 1rem; font-family: var(--font-display, Georgia, serif); font-style: italic; color: hsl(var(--muted-foreground)); }
   .public-kb-prose img { max-width: 100%; border: 1px solid hsl(var(--border)); border-radius: .5rem; }
   .public-kb-prose table { width: 100%; border-collapse: collapse; } .public-kb-prose th, .public-kb-prose td { border: 1px solid hsl(var(--border)); padding: .65em .8em; text-align: left; vertical-align: top; } .public-kb-prose th { background: hsl(var(--muted)); }
   @media (prefers-reduced-motion: reduce) { .public-kb-prose *, .public-kb-prose *::before, .public-kb-prose *::after { scroll-behavior: auto !important; } }
