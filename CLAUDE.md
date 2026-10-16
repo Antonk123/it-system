@@ -180,18 +180,18 @@ Textbeskrivningar av UI är otillförlitliga. Titta på resultatet.
 2. Öppna vyn via Claude Browser eller Playwright-MCP. Logga in en gång — sessionen persisterar
    över iterationer.
 3. Skärmdump **före** och **efter** varje ändring — även `mobile`-viewport (375×812), inte bara desktop.
-4. **Tema byts via localStorage, inte `colorScheme`.** Appen kör `enableSystem={false}`, så
-   `prefers-color-scheme`-emulering gör *ingenting* — en "mörkt läge verifierat"-slutsats från den
-   spaken är alltid falsk. Tre oberoende klasser på `<html>`, nycklar i `src/lib/appearance.ts`:
+4. **Läge byts via localStorage, inte `colorScheme`.** Appen läser inte `prefers-color-scheme`,
+   så den emuleringsspaken gör *ingenting* — en "mörkt läge verifierat"-slutsats från den är
+   alltid falsk. Enda temat är Prefabnavets **Bibliotek** (`src/index.css`, speglar
+   `src/prefabnavet-theme.css`); bara ljust/mörkt väljs:
 
    | localStorage-nyckel | Värden | Default |
    |---|---|---|
    | `app-mode-theme` | `light`, `dark` | `light` |
-   | `theme` | `theme-default`, `theme-midnight`, `theme-graphite`, `theme-stone`, `theme-linear`, `theme-spotify`, `theme-forge` | `theme-forge` (`defaultTheme` i `src/App.tsx`) |
-   | `app-font-theme` | `font-jakarta`, `font-crimson`, `font-libre`, `font-jetbrains`, `font-inter` | `font-inter` |
 
    Sätt nyckeln, **ladda om**, och bekräfta med `document.documentElement.className`
-   (ska bli t.ex. `font-inter dark theme-stone`).
+   (`light` eller `dark`). Inbäddat läge styrs i stället av `data-prefabnavet-*` på `<html>`
+   (sätt `data-prefabnavet-embedded="true"`, `-theme` och `-palette` för att simulera Navet).
 5. Vid tveksamhet: skicka **bara skärmdumpen** till en subagent utan kontext och fråga "vad är fel
    här?". En informerad läsare läser in avsikten och missar det en användare faktiskt ser.
 
