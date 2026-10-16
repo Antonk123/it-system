@@ -923,3 +923,53 @@ describe('KB article share — admin-only read, optional expiry, image throttle'
     expect(last).toBe(429);
   });
 });
+
+describe('KB category icon', () => {
+  const auth = () => ({ Authorization: `Bearer ${adminToken}`, 'x-csrf-token': adminCsrfToken });
+  const iconOf = (id: string) => (db.prepare('SELECT icon FROM kb_categories WHERE id = ?').get(id) as { icon: string | null }).icon;
+  let id: string;
+
+  it('creates a category with an icon (201) and persists it', async () => {
+    const res = await adminAgent.post('/api/kb/categories').set(auth()).send({ name: 'Ikon-KB', icon: 'education' });
+    expect(res.status).toBe(201);
+    expect(res.body.icon).toBe('education');
+    id = res.body.id;
+    expect(iconOf(id)).toBe('education');
+  });
+
+  it('GET /categories includes icon', async () => {
+    const res = await adminAgent.get('/api/kb/categories').set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    const found = (res.body as Array<{ id: string; icon: string | null }>).find((c) => c.id === id);
+    expect(found?.icon).toBe('education');
+  });
+
+  it('PUT with name only keeps the icon', async () => {
+    const res = await adminAgent.put(`/api/kb/categories/${id}`).set(auth()).send({ name: 'Ikon-KB 2' });
+    expect(res.status).toBe(200);
+    expect(res.body.name).toBe('Ikon-KB 2');
+    expect(res.body.icon).toBe('education');
+    expect(iconOf(id)).toBe('education');
+  });
+
+  it('PUT with an unknown icon -> 400 and nothing changed', async () => {
+    const res = await adminAgent.put(`/api/kb/categories/${id}`).set(auth()).send({ name: 'Ska inte sparas', icon: 'not-an-icon' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Unknown icon');
+    expect(iconOf(id)).toBe('education');
+    expect((db.prepare('SELECT name FROM kb_categories WHERE id = ?').get(id) as { name: string }).name).toBe('Ikon-KB 2');
+  });
+
+  it('POST with an unknown icon -> 400 and nothing created', async () => {
+    const res = await adminAgent.post('/api/kb/categories').set(auth()).send({ name: 'Felikon-KB', icon: 'not-an-icon' });
+    expect(res.status).toBe(400);
+    expect(db.prepare('SELECT id FROM kb_categories WHERE name = ?').get('Felikon-KB')).toBeUndefined();
+  });
+
+  it('PUT with icon null clears the icon', async () => {
+    const res = await adminAgent.put(`/api/kb/categories/${id}`).set(auth()).send({ name: 'Ikon-KB 2', icon: null });
+    expect(res.status).toBe(200);
+    expect(res.body.icon).toBeNull();
+    expect(iconOf(id)).toBeNull();
+  });
+});

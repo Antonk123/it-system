@@ -39,7 +39,7 @@ export const useKbCategories = () => {
   const refetch = () => invalidateKbCaches(queryClient);
 
   const createMutation = useMutation({
-    mutationFn: (name: string) => api.createKbCategory(name),
+    mutationFn: ({ name, icon }: { name: string; icon?: string | null }) => api.createKbCategory(name, undefined, icon),
     onSuccess: () => {
       invalidateKbCaches(queryClient);
       toast.success('Kategori skapad');
@@ -48,7 +48,7 @@ export const useKbCategories = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => api.updateKbCategory(id, name),
+    mutationFn: ({ id, name, icon }: { id: string; name: string; icon?: string | null }) => api.updateKbCategory(id, name, undefined, icon),
     onSuccess: () => {
       invalidateKbCaches(queryClient);
       toast.success('Kategori uppdaterad');
@@ -66,15 +66,15 @@ export const useKbCategories = () => {
   });
 
   const createCategory = useCallback(
-    async (name: string) => {
-      try { await createMutation.mutateAsync(name); return true; } catch { return false; }
+    async (name: string, icon?: string | null) => {
+      try { await createMutation.mutateAsync({ name, icon }); return true; } catch { return false; }
     },
     [createMutation]
   );
 
   const updateCategory = useCallback(
-    async (id: string, name: string) => {
-      try { await updateMutation.mutateAsync({ id, name }); return true; } catch { return false; }
+    async (id: string, name: string, icon?: string | null) => {
+      try { await updateMutation.mutateAsync({ id, name, icon }); return true; } catch { return false; }
     },
     [updateMutation]
   );

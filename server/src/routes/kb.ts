@@ -14,6 +14,7 @@ import { logger } from '../lib/logger.js';
 import { deleteSetting, getSetting, setSetting } from '../lib/settings.js';
 import { logAudit } from '../lib/auditLog.js';
 import { UPLOAD_DIR, extractKbImageFilenames, deleteKbImageFile } from '../lib/kbImages.js';
+import { parseCategoryIcon } from '../lib/categoryIcons.js';
 
 if (!existsSync(UPLOAD_DIR)) {
   mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -62,6 +63,7 @@ interface KbCategoryRow {
   color: string | null;
   position: number;
   created_at: string;
+  icon: string | null;
 }
 
 interface KbTagRow { id: string; name: string; color: string; }
@@ -151,7 +153,7 @@ function requirePublicPortalToken(req: Request, res: Response): boolean {
 router.get('/categories', authenticate, (_req: AuthRequest, res: Response) => {
   try {
     const categories = db.prepare(`
-      SELECT c.id, c.name, c.color, c.position, c.created_at,
+      SELECT c.id, c.name, c.color, c.position, c.created_at, c.icon,
         (SELECT COUNT(*) FROM kb_articles a WHERE a.category_id = c.id AND a.status = 'published') AS article_count
       FROM kb_categories c
       ORDER BY c.position ASC, c.name ASC
@@ -169,15 +171,19 @@ router.post('/categories', authenticate, requireAdmin, (req: AuthRequest, res: R
   if (!name || typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'Name is required' });
   }
+  const icon = parseCategoryIcon(req.body.icon);
+  if (icon === false) {
+    return res.status(400).json({ error: 'Unknown icon' });
+  }
   try {
     const id = randomUUID();
     const now = new Date().toISOString();
     const safeName = sanitizePlainText(name.trim());
     const maxPos = (db.prepare('SELECT MAX(position) as m FROM kb_categories').get() as { m: number | null }).m ?? -1;
     db.prepare(
-      'INSERT INTO kb_categories (id, name, color, position, created_at) VALUES (?, ?, ?, ?, ?)'
-    ).run(id, safeName, color || null, maxPos + 1, now);
-    const category = db.prepare('SELECT id, name, color, position, created_at FROM kb_categories WHERE id = ?').get(id) as KbCategoryRow;
+      'INSERT INTO kb_categories (id, name, color, position, created_at, icon) VALUES (?, ?, ?, ?, ?, ?)'
+    ).run(id, safeName, color || null, maxPos + 1, now, icon ?? null);
+    const category = db.prepare('SELECT id, name, color, position, created_at, icon FROM kb_categories WHERE id = ?').get(id) as KbCategoryRow;
     res.status(201).json(category);
   } catch (error) {
     logger.error('Error creating KB category:', { error: String(error) });
@@ -191,13 +197,21 @@ router.put('/categories/:id', authenticate, requireAdmin, (req: AuthRequest, res
   if (!name || typeof name !== 'string' || !name.trim()) {
     return res.status(400).json({ error: 'Name is required' });
   }
+  const icon = parseCategoryIcon(req.body.icon);
+  if (icon === false) {
+    return res.status(400).json({ error: 'Unknown icon' });
+  }
   try {
     const existing = db.prepare('SELECT id FROM kb_categories WHERE id = ?').get(req.params.id);
     if (!existing) return res.status(404).json({ error: 'Category not found' });
     const safeName = sanitizePlainText(name.trim());
     db.prepare('UPDATE kb_categories SET name = ?, color = ? WHERE id = ?')
       .run(safeName, color || null, req.params.id);
-    const category = db.prepare('SELECT id, name, color, position, created_at FROM kb_categories WHERE id = ?').get(req.params.id) as KbCategoryRow;
+    // icon utelämnad = lämna orörd, så att ett namnbyte inte nollar ikonen.
+    if (icon !== undefined) {
+      db.prepare('UPDATE kb_categories SET icon = ? WHERE id = ?').run(icon, req.params.id);
+    }
+    const category = db.prepare('SELECT id, name, color, position, created_at, icon FROM kb_categories WHERE id = ?').get(req.params.id) as KbCategoryRow;
     res.json(category);
   } catch (error) {
     logger.error('Error updating KB category:', { error: String(error) });

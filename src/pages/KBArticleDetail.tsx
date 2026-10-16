@@ -11,7 +11,8 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { useKbArticle, kbArticleKeys, type KbArticleData } from '@/hooks/useKbArticle';
 import { kbArticlesKeys } from '@/hooks/useKbArticles';
-import { invalidateKbCaches } from '@/hooks/useKbCategories';
+import { invalidateKbCaches, useKbCategories } from '@/hooks/useKbCategories';
+import { CategoryIcon, isCategoryIconKey } from '@/lib/categoryIcons';
 import { formatDate } from '@/lib/date';
 import { addRecentlyViewedKB } from '@/lib/recentlyViewed';
 import { toast } from 'sonner';
@@ -48,6 +49,7 @@ const KBArticleDetail = () => {
   const isAdmin = user?.role === 'admin';
 
   const { data: kbData, isLoading, isError } = useKbArticle(id);
+  const { categories: kbCategories } = useKbCategories();
   const article = kbData?.article ?? null;
   const shareToken = kbData?.shareToken ?? null;
 
@@ -228,6 +230,8 @@ const KBArticleDetail = () => {
 
   if (!article) return null;
 
+  const categoryIcon = kbCategories.find((c) => c.id === article.category_id)?.icon;
+
   return (
     <div className="max-w-6xl mx-auto rounded-2xl border border-border bg-card p-4 sm:p-6 lg:p-8 space-y-8 print:border-0 print:p-0">
       {/* Back + actions */}
@@ -350,7 +354,9 @@ const KBArticleDetail = () => {
               variant="secondary"
               style={article.category_color ? { backgroundColor: article.category_color + '22', color: article.category_color } : undefined}
             >
-              <Folder className="h-3.5 w-3.5 mr-1.5" />
+              {isCategoryIconKey(categoryIcon)
+                ? <CategoryIcon icon={categoryIcon} className="mr-1.5" />
+                : <Folder className="h-3.5 w-3.5 mr-1.5" />}
               {article.category_name}
             </Badge>
           )}

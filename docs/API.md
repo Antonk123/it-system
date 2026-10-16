@@ -317,8 +317,8 @@ an API key without `admin` scope never counts as admin.
 | Method | Path | Auth | Purpose | Inputs | Response |
 |--------|------|------|---------|--------|----------|
 | GET | `/api/kb/categories` | `authenticate` | List categories + published-article counts | — | category array |
-| POST | `/api/kb/categories` | `authenticate` → `requireAdmin` | Create category | body: `name`(req), `color?` | 201 category; 400 |
-| PUT | `/api/kb/categories/:id` | `authenticate` → `requireAdmin` | Update category | params: `id`; body: `name`, `color?` | category; 400/404 |
+| POST | `/api/kb/categories` | `authenticate` → `requireAdmin` | Create category | body: `name`(req), `color?`, `icon?` (one of 17 keys, see `server/src/lib/categoryIcons.ts`; `null`/`''` = none) | 201 category; 400 (incl. `Unknown icon`) |
+| PUT | `/api/kb/categories/:id` | `authenticate` → `requireAdmin` | Update category | params: `id`; body: `name`, `color?`, `icon?` (omitted = unchanged; `null`/`''` clears) | category; 400 (incl. `Unknown icon`)/404 |
 | DELETE | `/api/kb/categories/:id` | `authenticate` → `requireAdmin` | Delete category | params: `id` | `{ message }`; 404 |
 | GET | `/api/kb/articles` | `authenticate` | List articles (FTS search/filters) + tags. Non-admins always see published only | query: `search?`, `category_id?`, `article_type?`, `tag?`, `stale?`, `status?` (`published`\|`draft`\|`all`, admin only), `fields=list` (replace `content` with a 300-char `preview`), `page?`, `limit?` (default 20, max 100) | article array; with `page`: `{ data, pagination: { page, limit, total } }` |
 | GET | `/api/kb/articles/:id` | `authenticate` | Single article (admins see drafts) | params: `id` | `{ ...article, tags }`; 404 |
@@ -353,9 +353,9 @@ an API key without `admin` scope never counts as admin.
 | Method | Path | Auth | Purpose | Inputs | Response |
 |--------|------|------|---------|--------|----------|
 | GET | `/api/categories` | `authenticate` | List categories | — | `CategoryRow[]` |
-| POST | `/api/categories` | `authenticate` → `requireAdmin` | Create category (derives slug from label) | body: `label` | 201 category; 400 |
+| POST | `/api/categories` | `authenticate` → `requireAdmin` | Create category (derives slug from label) | body: `label`, `icon?` (see KB categories) | 201 category; 400 |
 | PUT | `/api/categories/reorder` | `authenticate` → `requireAdmin` | Reorder by id array | body: `ids[]` | category array; 400 |
-| PUT | `/api/categories/:id` | `authenticate` → `requireAdmin` | Update label | params: `id`; body: `label` | category; 400/404 |
+| PUT | `/api/categories/:id` | `authenticate` → `requireAdmin` | Update label / icon | params: `id`; body: `label`, `icon?` (omitted = unchanged; `null`/`''` clears) | category; 400 (incl. `Unknown icon`)/404 |
 | DELETE | `/api/categories/:id` | `authenticate` → `requireAdmin` | Delete category | params: `id` | `{ message }`; 404 |
 
 ---

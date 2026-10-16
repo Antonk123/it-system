@@ -52,7 +52,8 @@ CREATE TABLE IF NOT EXISTS categories (
   name TEXT NOT NULL,
   label TEXT NOT NULL,
   position INTEGER DEFAULT 0,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  icon TEXT
 );
 
 -- Tickets
@@ -189,7 +190,8 @@ CREATE TABLE IF NOT EXISTS kb_categories (
   name TEXT NOT NULL,
   color TEXT,
   position INTEGER DEFAULT 0,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  icon TEXT
 );
 
 -- Knowledge Base articles

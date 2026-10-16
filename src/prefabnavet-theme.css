@@ -657,3 +657,24 @@ html[data-prefabnavet-embedded="true"] {
   --brand-accent-2: var(--pn-accent-2);
   --radius: var(--pn-radius);
 }
+
+/* Kategoriikonernas nyanser delas av alla Navet-paletter. */
+html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="light"] {
+  --hue-blue: #41608a;
+  --hue-green: #3d6a4d;
+  --hue-purple: #6d4a73;
+  --hue-orange: #a14f40;
+  --hue-amber: #7a5326;
+  --hue-teal: #4a8f86;
+  --hue-pink: #8a6390;
+}
+
+html[data-prefabnavet-embedded="true"][data-prefabnavet-theme="dark"] {
+  --hue-blue: #a3bdd8;
+  --hue-green: #9cc4a8;
+  --hue-purple: #c9a8ce;
+  --hue-orange: #d98a7c;
+  --hue-amber: #d4a574;
+  --hue-teal: #6fb5ab;
+  --hue-pink: #bb93c2;
+}

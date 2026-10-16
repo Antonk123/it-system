@@ -231,3 +231,54 @@ describe('Category ordering and linked records', () => {
     expect(db.prepare('SELECT name, category_id FROM ticket_templates WHERE id = ?').get(templateId)).toEqual({ name: 'Bevarad mall', category_id: null });
   });
 });
+
+describe('Category icon (admin)', () => {
+  const auth = () => ({ Authorization: `Bearer ${adminToken}`, 'x-csrf-token': adminCsrf });
+  const iconOf = (id: string) => (db.prepare('SELECT icon FROM categories WHERE id = ?').get(id) as { icon: string | null }).icon;
+  let id: string;
+
+  it('creates a category with an icon (201) and persists it', async () => {
+    const res = await adminAgent.post('/api/categories').set(auth()).send({ label: 'Ikonkategori', icon: 'support' });
+    expect(res.status).toBe(201);
+    expect(res.body.icon).toBe('support');
+    id = res.body.id;
+    expect(iconOf(id)).toBe('support');
+  });
+
+  it('GET / includes icon', async () => {
+    const res = await adminAgent.get('/api/categories').set('Authorization', `Bearer ${adminToken}`);
+    expect(res.status).toBe(200);
+    const found = (res.body as Array<{ id: string; icon: string | null }>).find((c) => c.id === id);
+    expect(found?.icon).toBe('support');
+  });
+
+  it('PUT with only label keeps the icon', async () => {
+    const res = await adminAgent.put(`/api/categories/${id}`).set(auth()).send({ label: 'Ikonkategori 2' });
+    expect(res.status).toBe(200);
+    expect(res.body.label).toBe('Ikonkategori 2');
+    expect(res.body.icon).toBe('support');
+    expect(iconOf(id)).toBe('support');
+  });
+
+  it('PUT with an unknown icon -> 400 and nothing changed', async () => {
+    const res = await adminAgent.put(`/api/categories/${id}`).set(auth()).send({ label: 'Ska inte sparas', icon: 'not-an-icon' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Unknown icon');
+    expect(iconOf(id)).toBe('support');
+    expect((db.prepare('SELECT label FROM categories WHERE id = ?').get(id) as { label: string }).label).toBe('Ikonkategori 2');
+  });
+
+  it('POST with an unknown icon -> 400 and nothing created', async () => {
+    const res = await adminAgent.post('/api/categories').set(auth()).send({ label: 'Felikon', icon: 'not-an-icon' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Unknown icon');
+    expect(db.prepare('SELECT id FROM categories WHERE label = ?').get('Felikon')).toBeUndefined();
+  });
+
+  it('PUT with icon null clears the icon', async () => {
+    const res = await adminAgent.put(`/api/categories/${id}`).set(auth()).send({ label: 'Ikonkategori 2', icon: null });
+    expect(res.status).toBe(200);
+    expect(res.body.icon).toBeNull();
+    expect(iconOf(id)).toBeNull();
+  });
+});

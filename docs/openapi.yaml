@@ -676,12 +676,18 @@ paths:
               required: [label]
               properties:
                 label: { type: string }
+                icon:
+                  type: string
+                  nullable: true
+                  enum: [default, document, spreadsheet, people, project, production, chart, finance, safety, quality, calendar, time, checklist, folder, support, education, grid, null]
+                  description: Navet toolbox icon key; null = no icon.
       responses:
         "201":
           description: Skapad kategori
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Category" }
+        "400": { $ref: "#/components/responses/Error" }
         "403": { $ref: "#/components/responses/Forbidden" }
 
   /categories/{id}:
@@ -702,12 +708,18 @@ paths:
               required: [label]
               properties:
                 label: { type: string }
+                icon:
+                  type: string
+                  nullable: true
+                  enum: [default, document, spreadsheet, people, project, production, chart, finance, safety, quality, calendar, time, checklist, folder, support, education, grid, null]
+                  description: Navet toolbox icon key; null = no icon. Omitting icon on PUT leaves the stored icon unchanged; null or an empty string clears it.
       responses:
         "200":
           description: Uppdaterad kategori
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Category" }
+        "400": { $ref: "#/components/responses/Error" }
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
       tags: [Categories]
@@ -4917,6 +4929,11 @@ components:
         label: { type: string }
         position: { type: integer }
         created_at: { type: string, format: date-time }
+        icon:
+          type: string
+          nullable: true
+          enum: [default, document, spreadsheet, people, project, production, chart, finance, safety, quality, calendar, time, checklist, folder, support, education, grid, null]
+          description: Navet toolbox icon key; null = no icon.
 
     Contact:
       type: object
@@ -5746,6 +5763,11 @@ components:
         position: { type: integer }
         created_at: { type: string, format: date-time }
         article_count: { type: integer, description: Published articles only. Present on the list endpoint. }
+        icon:
+          type: string
+          nullable: true
+          enum: [default, document, spreadsheet, people, project, production, chart, finance, safety, quality, calendar, time, checklist, folder, support, education, grid, null]
+          description: Navet toolbox icon key; null = no icon.
 
     KbCategoryInput:
       type: object
@@ -5753,6 +5775,11 @@ components:
       properties:
         name: { type: string }
         color: { type: string, nullable: true }
+        icon:
+          type: string
+          nullable: true
+          enum: [default, document, spreadsheet, people, project, production, chart, finance, safety, quality, calendar, time, checklist, folder, support, education, grid, null]
+          description: Navet toolbox icon key; null = no icon. Omitting icon on PUT leaves the stored icon unchanged; null or an empty string clears it. An unknown key returns 400 `Unknown icon`.
 
     BackupFile:
       type: object

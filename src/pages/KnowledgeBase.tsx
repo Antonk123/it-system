@@ -29,6 +29,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { CategoryIcon, CategoryIconPicker, isCategoryIconKey } from '@/lib/categoryIcons';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -121,6 +122,8 @@ const KnowledgeBase = () => {
   const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
   const [isSavingCategoryId, setIsSavingCategoryId] = useState<string | null>(null);
   const [editingCategoryName, setEditingCategoryName] = useState('');
+  const [newCategoryIcon, setNewCategoryIcon] = useState<string | null>(null);
+  const [editingCategoryIcon, setEditingCategoryIcon] = useState<string | null>(null);
 
   const isStale = (article: KbArticleSummary): boolean => {
     const ref = article.last_reviewed_at || article.created_at;
@@ -143,7 +146,10 @@ const KnowledgeBase = () => {
   const handleCreateCategory = async () => {
     if (!newCategoryName.trim()) return;
     setIsCreatingCategory(true);
-    if (await createCategory(newCategoryName.trim())) setNewCategoryName('');
+    if (await createCategory(newCategoryName.trim(), newCategoryIcon)) {
+      setNewCategoryName('');
+      setNewCategoryIcon(null);
+    }
     setIsCreatingCategory(false);
   };
 
@@ -151,7 +157,7 @@ const KnowledgeBase = () => {
     if (!editingCategoryName.trim()) return;
     if (isSavingCategoryId) return;
     setIsSavingCategoryId(id);
-    if (await updateCategory(id, editingCategoryName.trim())) setEditingCategoryId(null);
+    if (await updateCategory(id, editingCategoryName.trim(), editingCategoryIcon)) setEditingCategoryId(null);
     setIsSavingCategoryId(null);
   };
 
@@ -335,7 +341,11 @@ const KnowledgeBase = () => {
                 aria-current={selectedCategoryId === cat.id && !isSearching ? 'page' : undefined}
                 className={cn('w-full min-h-11 flex items-center gap-2 rounded-lg px-3 text-sm text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                   selectedCategoryId === cat.id && !isSearching ? 'bg-primary/10 text-primary font-semibold' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}>
-                <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: cat.color || 'currentColor' }} aria-hidden="true" />
+                {cat.icon && isCategoryIconKey(cat.icon) ? (
+                  <CategoryIcon icon={cat.icon} className="h-4 w-4" />
+                ) : (
+                  <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: cat.color || 'currentColor' }} aria-hidden="true" />
+                )}
                 <span className="min-w-0 flex-1 break-words">{cat.name}</span>
                 <span className="text-xs tabular-nums rounded-md bg-muted px-1.5 py-0.5">{cat.article_count}</span>
               </button>
@@ -355,7 +365,7 @@ const KnowledgeBase = () => {
               ) : (
                 <div className="space-y-1">
                   {categories.map((cat) => (
-                    <div key={cat.id} className="flex items-center gap-1 group">
+                    <div key={cat.id} className={cn('flex items-center gap-1 group', editingCategoryId === cat.id && 'flex-wrap')}>
                       {editingCategoryId === cat.id ? (
                         <>
                           <Input
@@ -368,6 +378,12 @@ const KnowledgeBase = () => {
                               if (e.key === 'Escape') setEditingCategoryId(null);
                             }}
                             autoFocus
+                          />
+                          <CategoryIconPicker
+                            value={editingCategoryIcon}
+                            onChange={setEditingCategoryIcon}
+                            className="h-11 w-full basis-full text-sm"
+                            label={`Ikon för ${cat.name}`}
                           />
                           <Button
                             size="sm"
@@ -391,6 +407,7 @@ const KnowledgeBase = () => {
                         </>
                       ) : (
                         <>
+                          <CategoryIcon icon={cat.icon} />
                           <span className="flex-1 text-xs text-foreground truncate">{cat.name}</span>
                           <Button
                             size="sm"
@@ -399,6 +416,7 @@ const KnowledgeBase = () => {
                             onClick={() => {
                               setEditingCategoryId(cat.id);
                               setEditingCategoryName(cat.name);
+                              setEditingCategoryIcon(cat.icon ?? null);
                             }}
                             aria-label={`Redigera kategorin ${cat.name}`}
                           >
@@ -444,6 +462,7 @@ const KnowledgeBase = () => {
                   aria-label="Ny kategori"
                   onKeyDown={(e) => e.key === 'Enter' && handleCreateCategory()}
                 />
+                <CategoryIconPicker value={newCategoryIcon} onChange={setNewCategoryIcon} className="h-11 w-full text-sm" label="Ikon för ny kategori" />
                 <Button
                   size="sm"
                   className="min-h-11 w-full shrink-0 whitespace-nowrap text-sm px-3"
@@ -540,7 +559,9 @@ const KnowledgeBase = () => {
                   variants={listContainer}
                   className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4"
                 >
-                  {articles.map((article, index) => (
+                  {articles.map((article, index) => {
+                    const articleIcon = categories.find(category => category.id === article.category_id)?.icon;
+                    return (
                     <motion.div key={article.id} variants={index < STAGGERED_ITEMS ? listItem : undefined}>
                       <button
                         onClick={() => navigate(`/kb/${article.id}`)}
@@ -552,7 +573,9 @@ const KnowledgeBase = () => {
                       >
                         <div className="flex h-full flex-col gap-4">
                           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            <Folder className="h-3.5 w-3.5" aria-hidden="true" />
+                            {isCategoryIconKey(articleIcon)
+                              ? <CategoryIcon icon={articleIcon} />
+                              : <Folder className="h-3.5 w-3.5" aria-hidden="true" />}
                             <span>{article.category_name || categories.find(category => category.id === article.category_id)?.name || 'Utan kategori'}</span>
                             <ArrowUpRight className="ml-auto h-4 w-4 group-hover:text-primary" aria-hidden="true" />
                           </div>
@@ -596,7 +619,7 @@ const KnowledgeBase = () => {
                         </div>
                       </button>
                     </motion.div>
-                  ))}
+                  );})}
                 </motion.div>
               )}
             </AnimatePresence>

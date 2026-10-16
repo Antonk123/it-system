@@ -2059,4 +2059,13 @@ export const migrations: Migration[] = [
   { id: '092', name: 'ticket_submission_fingerprints', up: (db, { columnExists }) => {
     if (!columnExists('ticket_submissions', 'request_hash')) db.exec('ALTER TABLE ticket_submissions ADD COLUMN request_hash TEXT');
   } },
+  {
+    id: '093',
+    name: 'add_category_icons',
+    up: (db, { columnExists }) => {
+      // Nyckel ur Navets verktygslådeikoner (lib/categoryIcons.ts); NULL = ingen ikon.
+      if (!columnExists('categories', 'icon')) db.exec('ALTER TABLE categories ADD COLUMN icon TEXT');
+      if (!columnExists('kb_categories', 'icon')) db.exec('ALTER TABLE kb_categories ADD COLUMN icon TEXT');
+    },
+  },
 ];

@@ -20,7 +20,7 @@ export const useCategories = () => {
     queryKey: categoryKeys.list(),
     queryFn: async () => {
       const data = await api.getCategories();
-      const mapped: Category[] = data.map((c) => ({ id: c.id, label: c.label, position: c.position }));
+      const mapped: Category[] = data.map((c) => ({ id: c.id, label: c.label, position: c.position, icon: c.icon ?? null }));
       return mapped;
     },
     staleTime: 1000 * 60 * 10, // Categories rarely change, cache for 10 minutes
@@ -28,13 +28,13 @@ export const useCategories = () => {
 
   // Add category mutation
   const addCategoryMutation = useMutation({
-    mutationFn: async (label: string) => {
+    mutationFn: async ({ label, icon }: { label: string; icon?: string | null }) => {
       const validation = categorySchema.safeParse({ label });
       if (!validation.success) {
         throw new Error(getValidationError(validation.error) || 'Invalid category data');
       }
-      const data = await api.createCategory(validation.data.label);
-      return { id: data.id, label: data.label, position: data.position };
+      const data = await api.createCategory(validation.data.label, icon);
+      return { id: data.id, label: data.label, position: data.position, icon: data.icon ?? null };
     },
     onSuccess: (newCategory) => {
       // Optimistically update the cache
@@ -50,19 +50,19 @@ export const useCategories = () => {
 
   // Update category mutation
   const updateCategoryMutation = useMutation({
-    mutationFn: async ({ id, label }: { id: string; label: string }) => {
+    mutationFn: async ({ id, label, icon }: { id: string; label: string; icon?: string | null }) => {
       const validation = categorySchema.safeParse({ label });
       if (!validation.success) {
         throw new Error(getValidationError(validation.error) || 'Invalid category data');
       }
-      await api.updateCategory(id, validation.data.label);
-      return { id, label: validation.data.label };
+      await api.updateCategory(id, validation.data.label, icon);
+      return { id, label: validation.data.label, icon };
     },
-    onSuccess: ({ id, label }) => {
+    onSuccess: ({ id, label, icon }) => {
       // Optimistically update the cache
       queryClient.setQueryData(categoryKeys.list(), (old: Category[] | undefined) => {
         if (!old) return old;
-        return old.map((c) => (c.id === id ? { ...c, label } : c));
+        return old.map((c) => (c.id === id ? { ...c, label, ...(icon !== undefined && { icon }) } : c));
       });
     },
     onError: () => {
@@ -92,7 +92,7 @@ export const useCategories = () => {
   const reorderCategoriesMutation = useMutation({
     mutationFn: async (ids: string[]) => {
       const data = await api.reorderCategories(ids);
-      return data.map((c) => ({ id: c.id, label: c.label, position: c.position }));
+      return data.map((c) => ({ id: c.id, label: c.label, position: c.position, icon: c.icon ?? null }));
     },
     onSuccess: (newCategories) => {
       // Update the cache with new order
@@ -104,9 +104,9 @@ export const useCategories = () => {
   });
 
   const addCategory = useCallback(
-    async (label: string) => {
+    async (label: string, icon?: string | null) => {
       try {
-        return await addCategoryMutation.mutateAsync(label);
+        return await addCategoryMutation.mutateAsync({ label, icon });
       } catch (error) {
         return null;
       }
@@ -115,8 +115,8 @@ export const useCategories = () => {
   );
 
   const updateCategory = useCallback(
-    async (id: string, label: string) => {
-      await updateCategoryMutation.mutateAsync({ id, label });
+    async (id: string, label: string, icon?: string | null) => {
+      await updateCategoryMutation.mutateAsync({ id, label, icon });
     },
     [updateCategoryMutation]
   );
@@ -143,9 +143,11 @@ export const useCategories = () => {
 
   const getCategoryLabel = useCallback((id: string) => categories.find((c) => c.id === id)?.label || id, [categories]);
 
+  const getCategoryIcon = useCallback((id: string): string | null => categories.find((c) => c.id === id)?.icon ?? null, [categories]);
+
   const refetch = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: categoryKeys.list() });
   }, [queryClient]);
 
-  return { categories, isLoading, isError, addCategory, updateCategory, deleteCategory, reorderCategories, getCategoryLabel, refetch };
+  return { categories, isLoading, isError, addCategory, updateCategory, deleteCategory, reorderCategories, getCategoryLabel, getCategoryIcon, refetch };
 };
