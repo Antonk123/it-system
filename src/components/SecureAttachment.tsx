@@ -105,7 +105,7 @@ export const SecureDownloadLink = ({ fileId, filename, children, className, ...p
     >
       {downloading ? (
         <>
-          <Loader2 className="inline w-3 h-3 animate-spin mr-1" />
+          <Loader2 className="inline h-3.5 w-3.5 animate-spin mr-1" />
           {children}
         </>
       ) : (

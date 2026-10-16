@@ -51,7 +51,7 @@ export const CategoryBadge = ({ category, clickable = true }: CategoryBadgeProps
       tabIndex={clickable ? 0 : undefined}
       aria-label={clickable ? `Filtrera på kategori ${label}` : label}
     >
-      <Tag className="w-3 h-3" />
+      <Tag className="h-3.5 w-3.5" />
       {label}
     </Badge>
   );

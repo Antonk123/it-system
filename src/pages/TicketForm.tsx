@@ -1354,7 +1354,7 @@ const TicketForm = ({ selfService = false, embedded = false }: { selfService?: b
               <span aria-live="polite" aria-atomic="true" className="text-sm text-muted-foreground flex items-center gap-2">
                 {uploadProgress && (
                   <>
-                    <Loader2 className="w-3 h-3 animate-spin" />
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     {uploadProgress}
                   </>
                 )}

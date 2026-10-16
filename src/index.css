@@ -329,6 +329,12 @@
     overflow-wrap: normal;
   }
 
+  /* Ikoner i Prefabnavet-stil: lucide sätter klassen "lucide" på varje ikon,
+     så linjetjockleken sätts en gång här i stället för per ikon. */
+  .lucide {
+    stroke-width: 1.75;
+  }
+
   /* Search snippet highlight */
   mark {
     background-color: hsl(var(--warning) / 0.22);

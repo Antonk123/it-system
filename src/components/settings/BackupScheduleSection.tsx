@@ -65,7 +65,7 @@ export const BackupScheduleSection = memo(function BackupScheduleSection() {
     : cfg?.lastStatus === 'failed'
     ? <X className="w-4 h-4" aria-hidden="true" />
     : cfg?.lastStatus === 'offsite_failed'
-    ? <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-500" aria-hidden="true" />
+    ? <AlertTriangle className="w-4 h-4 text-warning-text" aria-hidden="true" />
     : null;
   const sizeLabel = formatBytes(cfg?.lastSizeBytes ?? null);
   const consecutiveFailures = cfg?.consecutiveFailures ?? 0;
@@ -126,7 +126,7 @@ export const BackupScheduleSection = memo(function BackupScheduleSection() {
       </p>
 
       {cfg?.lastStatus === 'offsite_failed' && (
-        <p className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-500" role="status">
+        <p className="flex items-center gap-1.5 text-sm text-warning-text" role="status">
           <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
           Lokal backup OK, men offsite-uppladdningen misslyckades.
         </p>
@@ -145,7 +145,7 @@ export const BackupScheduleSection = memo(function BackupScheduleSection() {
       )}
 
       {offsiteFailures > 0 && (
-        <p className="flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-500" role="status">
+        <p className="flex items-center gap-1.5 text-sm text-warning-text" role="status">
           <AlertTriangle className="w-4 h-4 shrink-0" aria-hidden="true" />
           {offsiteFailures === 1
             ? 'Senaste offsite-uppladdningen misslyckades.'

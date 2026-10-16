@@ -350,7 +350,7 @@ const KBArticleDetail = () => {
               variant="secondary"
               style={article.category_color ? { backgroundColor: article.category_color + '22', color: article.category_color } : undefined}
             >
-              <Folder className="w-3 h-3 mr-1.5" />
+              <Folder className="h-3.5 w-3.5 mr-1.5" />
               {article.category_name}
             </Badge>
           )}

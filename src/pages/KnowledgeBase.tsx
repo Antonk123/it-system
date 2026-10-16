@@ -402,7 +402,7 @@ const KnowledgeBase = () => {
                             }}
                             aria-label={`Redigera kategorin ${cat.name}`}
                           >
-                            <Pencil className="w-3 h-3" />
+                            <Pencil className="h-3.5 w-3.5" />
                           </Button>
                           <AlertDialog>
                             <AlertDialogTrigger asChild>
@@ -412,7 +412,7 @@ const KnowledgeBase = () => {
                                 className="h-11 w-11 p-0 md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100 transition-opacity text-destructive hover:text-destructive shrink-0"
                                 aria-label={`Ta bort kategorin ${cat.name}`}
                               >
-                                <Trash2 className="w-3 h-3" />
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>
@@ -450,7 +450,7 @@ const KnowledgeBase = () => {
                   onClick={handleCreateCategory}
                   disabled={isCreatingCategory || !newCategoryName.trim()}
                 >
-                  <Plus className="w-3 h-3 mr-1" />
+                  <Plus className="h-3.5 w-3.5 mr-1" />
                   Lägg till
                 </Button>
               </div>
@@ -584,12 +584,12 @@ const KnowledgeBase = () => {
                             )}
                             {isStale(article) && (
                               <Badge variant="outline" className="text-xs border-[hsl(var(--warning))]/50 text-[hsl(var(--warning))] gap-1">
-                                <AlertTriangle className="w-3 h-3" />
+                                <AlertTriangle className="h-3.5 w-3.5" />
                                 Inaktuell
                               </Badge>
                             )}
                             <span className="text-xs text-muted-foreground flex items-center gap-1 ml-auto">
-                              <Clock className="w-3 h-3" />
+                              <Clock className="h-3.5 w-3.5" />
                               {formatDate(article.updated_at, { year: 'numeric', month: 'short', day: 'numeric' })}
                             </span>
                           </div>

@@ -74,13 +74,13 @@ const SharedKBArticle = () => {
               >
                 {!article.category_color && (
                   <span className="bg-primary/10 border-primary/30 text-primary rounded-full px-2.5 py-1 flex items-center gap-1">
-                    <Folder className="w-3 h-3" />
+                    <Folder className="h-3.5 w-3.5" />
                     {article.category_name}
                   </span>
                 )}
                 {article.category_color && (
                   <>
-                    <Folder className="w-3 h-3" />
+                    <Folder className="h-3.5 w-3.5" />
                     {article.category_name}
                   </>
                 )}

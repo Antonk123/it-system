@@ -71,7 +71,7 @@ export function ActiveFilterChips({
             className="ml-1 rounded-sm hover:text-destructive p-0.5"
             aria-label="Ta bort prioritetsfilter"
           >
-            <X className="w-3 h-3" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </Badge>
       )}
@@ -89,7 +89,7 @@ export function ActiveFilterChips({
             className="ml-1 rounded-sm hover:text-destructive p-0.5"
             aria-label="Ta bort kategorifilter"
           >
-            <X className="w-3 h-3" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </Badge>
       )}
@@ -107,7 +107,7 @@ export function ActiveFilterChips({
             className="ml-1 rounded-sm hover:text-destructive p-0.5"
             aria-label="Ta bort checklistefilter"
           >
-            <X className="w-3 h-3" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </Badge>
       )}
@@ -129,7 +129,7 @@ export function ActiveFilterChips({
             className="ml-1 rounded-sm hover:text-destructive p-0.5"
             aria-label="Ta bort datumfilter"
           >
-            <X className="w-3 h-3" />
+            <X className="h-3.5 w-3.5" />
           </button>
         </Badge>
       )}

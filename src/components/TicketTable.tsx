@@ -101,7 +101,7 @@ export const TicketTable = memo(function TicketTable({
         className="flex items-center gap-2 text-left hover:text-foreground/80 active:opacity-70 transition-colors min-h-[36px] py-1"
       >
         <span>{label}</span>
-        <ArrowUpDown className={`h-3 w-3 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`} />
+        <ArrowUpDown className={`h-3.5 w-3.5 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`} />
         {isActive && (
           <span className="sr-only">
             Sortering {sortDirection === 'asc' ? 'stigande' : 'fallande'}
@@ -206,7 +206,7 @@ export const TicketTable = memo(function TicketTable({
             className="ml-auto min-h-11 gap-1"
             onClick={() => { onSelectionChange?.([]); setSelectionMode(false); }}
           >
-            <X className="h-3 w-3" />
+            <X className="h-3.5 w-3.5" />
             Avmarkera
           </Button>
         </div>
