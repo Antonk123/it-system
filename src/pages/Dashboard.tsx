@@ -109,10 +109,10 @@ const Dashboard = () => {
         animate={prefersReducedMotion ? false : { opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
       >
-        <h1 className="text-2xl md:text-[30px] font-bold tracking-tight text-foreground">
+        <h1 className="module-h1 text-foreground">
           {getGreeting()}
           {greetingName && (
-            <>, {greetingName}</>
+            <>, <em className="italic">{greetingName}</em></>
           )}
           .
         </h1>

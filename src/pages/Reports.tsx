@@ -66,7 +66,7 @@ const RequesterTooltip = ({ active, payload }: any) => {
     <div className="bg-popover text-popover-foreground px-4 py-3 rounded-lg shadow-lg border max-w-xs backdrop-blur-xs">
       {/* Header with gradient accent */}
       <div className="mb-3 pb-2 border-b relative">
-        <p className="font-semibold font-serif text-base bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+        <p className="font-semibold font-display text-base bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
           {requester.name}
         </p>
         <div className="absolute bottom-0 left-0 right-0 h-px bg-linear-to-r from-primary/50 via-accent/50 to-transparent" />
@@ -416,7 +416,7 @@ const Reports = () => {
     <div className="space-y-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold font-serif text-foreground">Rapporter</h1>
+          <h1 className="module-h1 text-foreground">Rapporter</h1>
           <p className="text-muted-foreground mt-2 text-lg font-light">Ärendeanalys och insikter</p>
         </div>
         <div className="reports-filter-bar flex flex-wrap items-center gap-2">
@@ -634,7 +634,7 @@ const Reports = () => {
           <Card className="animate-fade-in" style={{ animationDelay: '350ms' }}>
             <CardHeader className="flex flex-row items-center gap-2">
               <PieChartIcon className="h-5 w-5 text-primary" />
-              <CardTitle as="h2" className="text-xl font-semibold font-serif">Ärenden per status</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-display">Ärenden per status</CardTitle>
             </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -716,7 +716,7 @@ const Reports = () => {
           <Card className="animate-fade-in" style={{ animationDelay: '300ms' }}>
             <CardHeader className="flex flex-row items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              <CardTitle as="h2" className="text-xl font-semibold font-serif">Ärenden per prioritet</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-display">Ärenden per prioritet</CardTitle>
             </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -763,7 +763,7 @@ const Reports = () => {
           <Card className="animate-fade-in" style={{ animationDelay: '400ms' }}>
             <CardHeader className="flex flex-row items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              <CardTitle as="h2" className="text-xl font-semibold font-serif">Kategorier</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-display">Kategorier</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -807,7 +807,7 @@ const Reports = () => {
           <Card>
             <CardHeader className="flex flex-row items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
-              <CardTitle as="h2" className="text-xl font-semibold font-serif">Skapade och stängda ärenden</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-display">Skapade och stängda ärenden</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -840,7 +840,7 @@ const Reports = () => {
           {/* Status Flow */}
           <Card className="animate-fade-in" style={{ animationDelay: '500ms' }}>
             <CardHeader>
-              <CardTitle as="h2" className="text-xl font-semibold font-serif">Statusflöde över tid</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-display">Statusflöde över tid</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 Statusfördelning de senaste 12 månaderna
               </p>
@@ -856,7 +856,7 @@ const Reports = () => {
           <Card className="animate-fade-in" style={{ animationDelay: '700ms' }}>
             <CardHeader className="flex flex-row items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              <CardTitle as="h2" className="text-xl font-semibold font-serif">Per person</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-display">Per person</CardTitle>
             </CardHeader>
               <CardContent>
                 {/* KPI Summary - enkla divs utan nästlade Card-komponenter */}

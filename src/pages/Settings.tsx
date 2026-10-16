@@ -22,7 +22,7 @@ const Settings = () => {
 
   return (
     <div className="max-w-2xl space-y-5">
-      <h1 className="text-xl font-bold">Inställningar</h1>
+      <h1 className="module-h1 text-foreground">Inställningar</h1>
       <Tabs defaultValue="general">
         {/*
           Mobile: horizontal scroll keeps every tab tappable at 360px even with

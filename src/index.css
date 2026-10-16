@@ -190,6 +190,29 @@
   @apply bg-[hsl(var(--priority-critical)/0.1)] text-[hsl(var(--priority-critical))] transition-all duration-200;
 }
 
+/* Navets modulskala — Newsreader för sidrubriker, Geist för allt funktionellt. */
+@utility module-h1 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(28px, 3.2vw, 36px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+@utility module-h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+@utility module-h3 {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
 @utility ticket-row {
   /* Table row styling */
   position: relative;
