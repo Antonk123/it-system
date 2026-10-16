@@ -199,7 +199,7 @@ describe('POST /api/tickets without description', () => {
   ])('rejects %s on the signed-in self-service route', async (_case, description) => {
     const res = await admin.agent.post('/api/tickets')
       .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).set('X-Forwarded-For', freshCaseIp())
-      .send({ title: 'Skärmfel', description, selfService: true });
+      .send({ title: 'Skärmfel', description, self_service: true });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
   });
@@ -207,7 +207,7 @@ describe('POST /api/tickets without description', () => {
   it('rejects custom fields whose values are all blank', async () => {
     const res = await admin.agent.post('/api/tickets')
       .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).set('X-Forwarded-For', freshCaseIp())
-      .send({ title: 'Skärmfel', description: 'Klientens platshållare', selfService: true,
+      .send({ title: 'Skärmfel', description: 'Klientens platshållare', self_service: true,
         customFields: [{ fieldName: 'room', fieldLabel: 'Rum', fieldValue: '<p></p>' }] });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
@@ -216,7 +216,7 @@ describe('POST /api/tickets without description', () => {
   it('rejects an image whose src is removed by sanitization', async () => {
     const res = await admin.agent.post('/api/tickets')
       .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).set('X-Forwarded-For', freshCaseIp())
-      .send({ title: 'Skärmfel', description: '<img src="javascript:alert(1)">', selfService: true });
+      .send({ title: 'Skärmfel', description: '<img src="javascript:alert(1)">', self_service: true });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
   });
@@ -238,6 +238,14 @@ describe('POST /api/tickets without description', () => {
       .send({ title: 'Skärmfel', description: '' });
     expect(res.status).toBe(400);
     expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
+  });
+
+  it('lets staff create a ticket with the empty editor value', async () => {
+    // Personalens beskrivning är valfri; bilagor laddas upp efter att ärendet skapats.
+    const res = await admin.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).set('X-Forwarded-For', freshCaseIp())
+      .send({ title: 'Bara rubrik', description: '<p></p>' });
+    expect(res.status).toBe(201);
   });
 
   it('returns a Swedish error for a missing title', async () => {

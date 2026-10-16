@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type FrameLocator, type Page } from '@playwright/test';
 import templates from './fixtures/ticket-templates.json' with { type: 'json' };
 import { E2E_ADMIN, E2E_CONTACT } from './constants';
 const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
@@ -40,16 +40,24 @@ async function fillTemplate(page: Page, template: typeof templates[number]) {
   }
 }
 
+/** Mallväljaren i supportformuläret ligger i en hopfälld "Ta hjälp av en mall"-sektion. */
+async function choosePublicTemplate(scope: Page | FrameLocator, name: string) {
+  const section = scope.locator('details').filter({ has: scope.locator('summary', { hasText: 'Ta hjälp av en mall' }) });
+  if (await section.getAttribute('open') === null) await section.locator('summary').click();
+  await scope.locator('#template').click();
+  await scope.getByRole('option').filter({ hasText: name }).click();
+}
+
 for (const template of templates) {
   test(`publik mall: ${template.name} — riktiga editorfält, bild och sändning`, async ({ page }) => {
     const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
     const forbidden: string[] = []; page.on('request', request => { if (request.url().includes('/kb/upload-image')) forbidden.push(request.url()); });
-    await page.goto('/submit-ticket?embed=1');
+    // Mallfälten finns bara i det fristående formuläret; inbäddat i Navet blir mallen en förifylld beskrivning.
+    await page.goto('/submit-ticket');
     await expect(page.getByRole('button', { name: 'Skicka ärende' })).toBeEnabled();
     await page.getByLabel('Ditt namn *').fill('Bildtest');
     await page.getByLabel('Din e-post *').fill('image-test@example.com');
-    await page.getByRole('combobox').first().click();
-    await page.getByRole('option').filter({ hasText: template.name }).click();
+    await choosePublicTemplate(page, template.name);
     await fillTemplate(page, template);
     if (template.fields.some(field => field.field_type === 'textarea')) {
       await page.locator('.rich-text-editor input[type=file]').first().setInputFiles(file);
@@ -146,8 +154,8 @@ test('ordinary signed-in user: all six templates and original inline images', as
   await expect(page).not.toHaveURL(/change-password/);
   for (const template of templates) {
     await page.goto('/tickets/new');
-    await page.getByText('Använd mall', { exact: true }).click();
-    await page.locator('details').filter({ hasText: 'Använd mall' }).getByRole('combobox').click();
+    await page.getByText('Ta hjälp av en mall', { exact: true }).click();
+    await page.locator('details').filter({ hasText: 'Ta hjälp av en mall' }).getByRole('combobox').click();
     await page.getByRole('option').filter({ hasText: template.name }).click();
     await fillTemplate(page, template);
     await page.getByRole('combobox', { name: 'Beställare' }).click();
@@ -190,26 +198,28 @@ test('ordinary signed-in user: all six templates and original inline images', as
   expect(forbidden).toEqual([]);
 });
 
-test('Navet iframe sandbox and theme bridge, category keyboard action and local images', async ({ page }) => {
+test('Navet iframe sandbox and theme bridge, template keyboard action and local images', async ({ page, baseURL }) => {
   const host = 'https://navet-dev.prefabmastarna.se/__ticket-image-local-test';
   // Real support-frame sandbox and appearance protocol; only the local test form is mutated.
   await page.route('https://ticket-image.test/**', async route => {
-    const response = await route.fetch({ url: route.request().url().replace('https://ticket-image.test', 'http://localhost:5173') });
+    const response = await route.fetch({ url: route.request().url().replace('https://ticket-image.test', baseURL!) });
     await route.fulfill({ response });
   });
   await page.route(host, route => route.fulfill({ contentType: 'text/html', body: `<html><body style="margin:0"><iframe title="Felanmälan" style="width:100%;height:95vh;border:0" sandbox="allow-scripts allow-same-origin allow-forms allow-downloads allow-popups allow-popups-to-escape-sandbox" src="https://ticket-image.test/submit-ticket?embed=1"></iframe></body></html>` }));
   await page.goto(host);
   const frame = page.frameLocator('iframe');
-  await expect(frame.getByRole('button', { name: 'Skicka ärende' })).toBeEnabled();
+  await expect(frame.getByRole('button', { name: 'Skicka till IT' })).toBeEnabled();
   await frame.getByLabel('Ditt namn *').fill('Navet-test');
-  await frame.getByLabel('Ärendets titel *').fill('Bild inifrån Navet');
+  await frame.getByLabel('Kort rubrik *').fill('Bild inifrån Navet');
   await frame.locator('.ProseMirror').fill('Text från inbäddat formulär.');
   await frame.locator('.rich-text-editor input[type=file]').setInputFiles(file);
   await expect(frame.locator('.ProseMirror img')).toHaveCount(1);
-  const summary = frame.locator('summary').filter({ hasText: 'Kategori' });
+  // Navet sätter ingen kategori; mallsektionen ska gå att öppna med tangentbordet.
+  await expect(frame.locator('summary').filter({ hasText: 'Kategori' })).toHaveCount(0);
+  const summary = frame.locator('summary').filter({ hasText: 'Ta hjälp av en mall' });
   await summary.focus(); await summary.press('Enter');
-  await expect(frame.getByRole('button', { name: 'Testkategori', exact: true }).first()).toBeVisible();
-  await expect(summary.locator('svg')).toBeVisible();
+  await expect(frame.locator('#template')).toBeVisible();
+  await expect(summary.locator('svg').last()).toBeVisible();
   for (const theme of ['light', 'dark']) {
     await page.evaluate(theme => document.querySelector('iframe')!.contentWindow!.postMessage({ type: 'prefabnavet.appearance', version: 1, theme, palette: 'bibliotek' }, 'https://ticket-image.test'), theme);
     await expect(frame.locator('html')).toHaveAttribute('data-prefabnavet-theme', theme);
@@ -219,8 +229,7 @@ test('Navet iframe sandbox and theme bridge, category keyboard action and local 
   await page.screenshot({ path: 'test-results/navet-iframe-mobile.png', fullPage: true });
   await expect(frame.getByLabel('Ditt namn *')).toHaveValue('Navet-test');
   await expect.poll(() => frame.locator('.ProseMirror img').evaluate((img: HTMLImageElement) => img.naturalWidth)).toBeGreaterThan(0);
-  await frame.getByRole('combobox').first().click();
-  await frame.getByRole('option').filter({ hasText: templates[0].name }).click();
+  await choosePublicTemplate(frame, templates[0].name);
   await expect(frame.getByRole('alertdialog')).toBeVisible();
   await expect(frame.getByRole('listbox')).toHaveCount(0);
   await expect.poll(() => frame.getByRole('alertdialog').evaluate(el => getComputedStyle(el).opacity)).toBe('1');
@@ -229,11 +238,13 @@ test('Navet iframe sandbox and theme bridge, category keyboard action and local 
   expect(dialog!.x + dialog!.width).toBeLessThanOrEqual(390);
   await page.screenshot({ path: 'test-results/navet-template-confirmation.png', fullPage: true, animations: 'disabled' });
   await frame.getByRole('button', { name: 'Behåll innehållet', exact: true }).click();
-  await expect(frame.getByLabel('Ärendets titel *')).toHaveValue('Bild inifrån Navet');
-  await frame.getByRole('combobox').first().click();
-  await frame.getByRole('option').filter({ hasText: templates[0].name }).click();
+  await expect(frame.getByLabel('Kort rubrik *')).toHaveValue('Bild inifrån Navet');
+  await choosePublicTemplate(frame, templates[0].name);
   await frame.getByRole('button', { name: 'Byt mall', exact: true }).click();
-  await expect(frame.locator('#system_name')).toBeVisible();
+  // Inbäddat ersätter mallen rubrik och beskrivning i stället för att visa mallfält.
+  await expect(frame.getByLabel('Kort rubrik *')).toHaveValue(templates[0].title_template);
+  await expect(frame.locator('.ProseMirror')).toHaveText('Fyll i formuläret för att begära åtkomst.');
+  await expect(frame.locator('#system_name')).toHaveCount(0);
 
 });
 
@@ -267,8 +278,7 @@ test('draft expiration, scope isolation, cancelled picker and template choice ke
   await page.getByRole('button', { name: 'Infoga', exact: true }).click();
   await expect(page.locator('.ProseMirror a')).toHaveAttribute('href', 'https://example.com');
   await expect(page.getByLabel('Ärendets titel *')).toHaveValue('Behåll denna titel');
-  await page.getByRole('combobox').first().click();
-  await page.getByRole('option').filter({ hasText: templates[0].name }).click();
+  await choosePublicTemplate(page, templates[0].name);
   await page.getByRole('button', { name: 'Behåll innehållet', exact: true }).click();
   await expect(page.getByLabel('Ärendets titel *')).toHaveValue('Behåll denna titel');
   await expect(page.locator('.ProseMirror img')).toHaveCount(1);
@@ -404,8 +414,7 @@ test('public share shows permitted inline images and stops working when revoked'
 
 test('permission request reuses contact details without losing the option to request for someone else', async ({ page }) => {
   await page.goto('/submit-ticket');
-  await page.getByRole('combobox').first().click();
-  await page.getByRole('option').filter({ hasText: templates[0].name }).click();
+  await choosePublicTemplate(page, templates[0].name);
   const reuse = page.getByRole('button', { name: 'Gäller mig', exact: true });
   await expect(reuse).toBeDisabled();
   await page.getByLabel('Ditt namn *').fill('Kontaktperson');

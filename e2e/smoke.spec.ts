@@ -38,7 +38,8 @@ async function createTicket(page: Page, title: string, opts: { attach?: boolean 
   }
 
   await page.getByRole('button', { name: 'Skapa ärende' }).click();
-  await expect(page).toHaveURL(/\/tickets\/[^/]+$/);
+  // Ett ärende-id är ett UUID — /tickets/new får inte räknas som lyckat skapande.
+  await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}$/);
   await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
 }
 
