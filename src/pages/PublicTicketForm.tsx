@@ -9,7 +9,7 @@ import { useTicketDraft } from '@/hooks/useTicketDraft';
 import { requiredTemplateFieldErrors } from '@/lib/templateValidation';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { CheckCircle, Send, AlertCircle, Loader2, ArrowLeft, FileText, ChevronDown } from 'lucide-react';
-import TicketForm from './TicketForm';
+import TicketForm, { MISSING_CONTENT_MESSAGE } from './TicketForm';
 import { Link, useSearchParams } from 'react-router';
 import { api, CustomFieldInput, TemplateFieldRow } from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
@@ -90,6 +90,14 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
     fetchData();
   }, []);
 
+  // Clear the missing-content banner once a file, text or image satisfies it.
+  // Other errors are left alone and removing content does not bring it back.
+  const contentPresent = pendingFiles.length > 0 || hasVisibleText(formData.description) || /<img\b/i.test(formData.description)
+    || customFieldValues.some(v => hasVisibleText(v.fieldValue) || /<img\b/i.test(v.fieldValue));
+  useEffect(() => {
+    if (contentPresent) setError(current => current === MISSING_CONTENT_MESSAGE ? null : current);
+  }, [contentPresent]);
+
   useEffect(() => {
     if (!error) return;
     errorBannerRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
@@ -169,7 +177,7 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
     if (!hasVisibleText(formData.description) && !/<img\b/i.test(formData.description)
       && pendingFiles.length === 0
       && !customFieldValues.some(v => hasVisibleText(v.fieldValue) || /<img\b/i.test(v.fieldValue))) {
-      validationError('Skriv en kort beskrivning eller bifoga en bild.', focusableField('description'));
+      validationError(MISSING_CONTENT_MESSAGE, focusableField('description'));
       return;
     }
 

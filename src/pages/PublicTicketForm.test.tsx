@@ -8,7 +8,7 @@ import { MemoryRouter } from 'react-router';
 const bridge = vi.hoisted(() => ({ profile: null as null | { name: string; email: string; photo: string | null }, user: null as null | { id: string } }));
 vi.mock('@/hooks/useSupportProfile', () => ({ useSupportProfile: () => bridge.profile }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: bridge.user, isLoading: false }) }));
-vi.mock('./TicketForm', () => ({ default: ({ selfService, embedded }: { selfService: boolean; embedded: boolean }) =>
+vi.mock('./TicketForm', () => ({ MISSING_CONTENT_MESSAGE: 'Skriv en kort beskrivning eller bifoga en bild.', default: ({ selfService, embedded }: { selfService: boolean; embedded: boolean }) =>
   <div data-testid="signed-in-form" data-self-service={selfService} data-embedded={embedded} /> }));
 vi.mock('@/components/ui/rich-text-editor', () => ({
   RichTextEditor: ({ id, value, onChange, placeholder, required }: { id?: string; value: string; onChange: (value: string) => void; placeholder?: string; required?: boolean }) =>
@@ -118,6 +118,50 @@ describe('PublicTicketForm — en sida, inga steg', () => {
     expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
     expect(screen.getByPlaceholderText('Beskriv ditt problem i detalj...')).toHaveFocus();
     expect(submitPublicTicket).not.toHaveBeenCalled();
+  });
+
+  it('tar bort innehållsfelet när en bilaga läggs till och visar det inte igen när bilagan tas bort', async () => {
+    const { container } = renderForm();
+    fireEvent.change(screen.getByLabelText('Ditt namn *'), { target: { value: 'Anna Andersson' } });
+    fireEvent.change(screen.getByLabelText('Din e-post *'), { target: { value: 'anna@example.com' } });
+    fireEvent.change(screen.getByLabelText('Ärendets titel *'), { target: { value: 'Fel på skärmen' } });
+    fireEvent.click(screen.getByRole('button', { name: /Skicka ärende/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Skriv en kort beskrivning eller bifoga en bild.');
+
+    const file = new File(['%PDF-1.4 test'], 'fel.pdf', { type: 'application/pdf' });
+    fireEvent.change(container.querySelector('input[type=file]')!, { target: { files: [file] } });
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ta bort bilaga' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(submitPublicTicket).not.toHaveBeenCalled();
+  });
+
+  it('tar bort innehållsfelet när beskrivningen får text', async () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText('Ditt namn *'), { target: { value: 'Anna Andersson' } });
+    fireEvent.change(screen.getByLabelText('Din e-post *'), { target: { value: 'anna@example.com' } });
+    fireEvent.change(screen.getByLabelText('Ärendets titel *'), { target: { value: 'Fel på skärmen' } });
+    fireEvent.click(screen.getByRole('button', { name: /Skicka ärende/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Skriv en kort beskrivning eller bifoga en bild.');
+
+    fireEvent.change(screen.getByPlaceholderText('Beskriv ditt problem i detalj...'), { target: { value: '   ' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('Skriv en kort beskrivning eller bifoga en bild.');
+    fireEvent.change(screen.getByPlaceholderText('Beskriv ditt problem i detalj...'), { target: { value: 'Skärmen flimrar.' } });
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+  });
+
+  it('låter rubrikfelet ligga kvar när en bilaga läggs till', async () => {
+    const { container } = renderForm();
+    fireEvent.change(screen.getByLabelText('Ditt namn *'), { target: { value: 'Anna Andersson' } });
+    fireEvent.change(screen.getByLabelText('Din e-post *'), { target: { value: 'anna@example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: /Skicka ärende/ }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ärenderubrik krävs.');
+
+    const file = new File(['%PDF-1.4 test'], 'fel.pdf', { type: 'application/pdf' });
+    fireEvent.change(container.querySelector('input[type=file]')!, { target: { files: [file] } });
+    await screen.findByText('fel.pdf');
+    expect(screen.getByRole('alert')).toHaveTextContent('Ärenderubrik krävs.');
   });
 
   it('visar ärenderubrikens fel före innehållsfelet', async () => {

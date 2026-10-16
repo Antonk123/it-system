@@ -57,6 +57,9 @@ import { registerUnsavedWork } from '@/registerSW';
 // Legacy unscoped key: only removed on success; new drafts live in IndexedDB per user.
 const NEW_TICKET_DRAFT_KEY = 'it-ticket:new-ticket-draft';
 
+/** Shown (banner + inline) when a support ticket has no description, image or file. */
+export const MISSING_CONTENT_MESSAGE = 'Skriv en kort beskrivning eller bifoga en bild.';
+
 const LookupError = ({ message, onRetry }: { message: string; onRetry: () => void }) => (
   <p role="alert" className="text-sm text-destructive">
     {message}{' '}
@@ -191,6 +194,20 @@ const TicketForm = ({ selfService = false, embedded = false }: { selfService?: b
   const onImageBusyChange = useCallback((busy: boolean) => setImageBusy(count => Math.max(0, count + (busy ? 1 : -1))), []);
   const [submissionKey, setSubmissionKey] = useState(() => crypto.randomUUID());
   const draftValue = useMemo(() => ({ formData, selectedTemplate, customFieldValues, images: imageState.images, pendingFiles, pendingChecklistItems, submissionKey, failedUploads }), [formData, selectedTemplate, customFieldValues, imageState.images, pendingFiles, pendingChecklistItems, submissionKey, failedUploads]);
+  // The missing-content error goes away as soon as a file or description content
+  // satisfies the requirement; removing it again leaves the form quiet until the
+  // next submit. Unrelated errors (title, server, number/date) are left alone.
+  const supportContentPresent = pendingFiles.length > 0 || hasVisibleText(formData.description) || /<img\b/i.test(formData.description);
+  useEffect(() => {
+    if (!supportMode || !supportContentPresent) return;
+    setSupportError(current => current === MISSING_CONTENT_MESSAGE ? null : current);
+    setErrors(prev => {
+      if (prev.description !== MISSING_CONTENT_MESSAGE) return prev;
+      const next = { ...prev };
+      delete next.description;
+      return next;
+    });
+  }, [supportMode, supportContentPresent]);
   const draft = useTicketDraft(`user:${currentUser?.id}:ticket:${id || (supportMode ? 'support' : 'new')}`, draftValue, (hasUnsavedChanges || !!failedUploads), saved => {
     if (location.state?.cloneData) return;
     restoredDraft.current = true;
@@ -509,9 +526,9 @@ const TicketForm = ({ selfService = false, embedded = false }: { selfService?: b
     }
 
     if (supportMode && !hasVisibleText(formData.description) && !/<img\b/i.test(formData.description) && pendingFiles.length === 0) {
-      setErrors({ description: 'Skriv en kort beskrivning eller bifoga en bild.' });
+      setErrors({ description: MISSING_CONTENT_MESSAGE });
       supportInvalidFieldRef.current = document.querySelector<HTMLElement>('#description [contenteditable="true"]') ?? document.getElementById('description');
-      setSupportError('Skriv en kort beskrivning eller bifoga en bild.');
+      setSupportError(MISSING_CONTENT_MESSAGE);
       setSupportValidationAttempt(attempt => attempt + 1);
       return;
     }

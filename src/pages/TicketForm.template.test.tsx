@@ -188,6 +188,67 @@ describe('Snabb felanmälan', () => {
     }
   });
 
+  const MISSING = 'Skriv en kort beskrivning eller bifoga en bild.';
+  const renderEmbedded = () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/submit-ticket?embed=1']}><TicketForm selfService embedded /></MemoryRouter></QueryClientProvider>);
+  };
+
+  it('tar bort innehållsfelet (banner och fältfel) när en bilaga läggs till och visar det inte igen när den tas bort', async () => {
+    const { container } = renderEmbedded();
+    fireEvent.change(screen.getByLabelText('Kort rubrik *'), { target: { value: 'Skärmfel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+    expect(screen.getAllByText(MISSING)).toHaveLength(2);
+    expect(document.getElementById('description-error')).toHaveTextContent(MISSING);
+
+    const file = new File(['%PDF-1.4 test'], 'fel.pdf', { type: 'application/pdf' });
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    await waitFor(() => expect(screen.queryByText(MISSING)).toBeNull());
+    expect(document.getElementById('description-error')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ta bort bilaga' }));
+    expect(screen.queryByText(MISSING)).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(data.addTicket).not.toHaveBeenCalled();
+  });
+
+  it('tar bort innehållsfelet när beskrivningen får text', async () => {
+    renderEmbedded();
+    fireEvent.change(screen.getByLabelText('Kort rubrik *'), { target: { value: 'Skärmfel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+    expect(screen.getAllByText(MISSING)).toHaveLength(2);
+
+    fireEvent.change(screen.getByLabelText(/Berätta lite mer/), { target: { value: 'Skärmen flimrar.' } });
+    await waitFor(() => expect(screen.queryByText(MISSING)).toBeNull());
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('låter bannern med innehållsfelet stå kvar medan beskrivningen bara är blanksteg', () => {
+    renderEmbedded();
+    fireEvent.change(screen.getByLabelText('Kort rubrik *'), { target: { value: 'Skärmfel' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+    fireEvent.change(screen.getByLabelText(/Berätta lite mer/), { target: { value: '<p> </p>' } });
+    expect(screen.getByRole('alert')).toHaveTextContent(MISSING);
+  });
+
+  it('låter rubrikfelet ligga kvar när en bilaga läggs till', async () => {
+    const { container } = renderEmbedded();
+    fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+    expect(screen.getByRole('alert')).toHaveTextContent(MISSING);
+    fireEvent.change(screen.getByLabelText('Kort rubrik *'), { target: { value: '' } });
+    // Fyll i beskrivningen så att nästa inskick fastnar på rubriken i stället.
+    fireEvent.change(screen.getByLabelText(/Berätta lite mer/), { target: { value: 'Text.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Ärenderubrik krävs.');
+
+    const file = new File(['%PDF-1.4 test'], 'fel.pdf', { type: 'application/pdf' });
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    await screen.findByText('fel.pdf');
+    expect(screen.getByRole('alert')).toHaveTextContent('Ärenderubrik krävs.');
+    expect(data.addTicket).not.toHaveBeenCalled();
+  });
+
   it('skickar självserviceärende med enbart bilaga', async () => {
     data.addTicket.mockResolvedValueOnce({ id: 'attachment-ticket' });
     data.uploadAttachment.mockResolvedValueOnce({ id: 'file-id' });
