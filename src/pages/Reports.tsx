@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
+import { STATUS_CHART_COLORS } from '@/lib/chartColors';
 import { BarChart3, PieChart as PieChartIcon, Calendar, Ticket, Clock, CheckCircle, AlertTriangle, Users, Scale, Download, Printer, RefreshCw, Loader2 } from 'lucide-react';
 
 const COLORS = [
@@ -35,14 +36,7 @@ const COLORS = [
   'hsl(var(--chart-5))',
 ];
 
-// Same colors but different order for visual distinction in Requester Analytics
-const REQUESTER_STATUS_COLORS: Record<string, string> = {
-  open: 'hsl(var(--chart-2))',            // Different from pie chart
-  'in-progress': 'hsl(var(--chart-4))',
-  waiting: 'hsl(var(--chart-1))',
-  resolved: 'hsl(var(--chart-3))',
-  closed: 'hsl(var(--muted-foreground))', // Same gray for consistency
-};
+const REQUESTER_STATUS_COLORS: Record<string, string> = STATUS_CHART_COLORS;
 
 const MONTH_NAMES = [
   'Januari', 'Februari', 'Mars', 'April', 'Maj', 'Juni',
@@ -64,12 +58,10 @@ const RequesterTooltip = ({ active, payload }: any) => {
 
   return (
     <div className="bg-popover text-popover-foreground px-4 py-3 rounded-lg shadow-lg border max-w-xs backdrop-blur-xs">
-      {/* Header with gradient accent */}
       <div className="mb-3 pb-2 border-b relative">
-        <p className="font-semibold font-serif text-base bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+        <p className="font-semibold font-display text-base text-foreground">
           {requester.name}
         </p>
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-linear-to-r from-primary/50 via-accent/50 to-transparent" />
       </div>
 
       {/* Status breakdown */}
@@ -416,7 +408,7 @@ const Reports = () => {
     <div className="space-y-5">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-xl font-bold font-serif text-foreground">Rapporter</h1>
+          <h1 className="module-h1 text-foreground">Rapporter</h1>
           <p className="text-muted-foreground mt-2 text-lg font-light">Ärendeanalys och insikter</p>
         </div>
         <div className="reports-filter-bar flex flex-wrap items-center gap-2">
@@ -634,7 +626,7 @@ const Reports = () => {
           <Card className="animate-fade-in" style={{ animationDelay: '350ms' }}>
             <CardHeader className="flex flex-row items-center gap-2">
               <PieChartIcon className="h-5 w-5 text-primary" />
-              <CardTitle as="h2" className="text-xl font-semibold font-serif">Ärenden per status</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-display">Ärenden per status</CardTitle>
             </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -651,11 +643,10 @@ const Reports = () => {
                           <Ticket className="w-4 h-4 text-primary" />
                         </div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total</p>
-                        <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                        <p className="text-2xl font-mono font-bold text-foreground">
                           {statusKPIs.total}
                         </p>
                       </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </Card>
 
                     <Card className="relative overflow-hidden">
@@ -665,7 +656,7 @@ const Reports = () => {
                         </div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Vanligast</p>
                         <div className="flex items-baseline gap-2">
-                          <p className="text-lg font-semibold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent truncate">
+                          <p className="text-lg font-semibold text-foreground truncate">
                             {statusKPIs.dominantStatus.name}
                           </p>
                           <p className="text-xs text-muted-foreground">
@@ -673,7 +664,6 @@ const Reports = () => {
                           </p>
                         </div>
                       </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </Card>
 
                     <Card className="relative overflow-hidden">
@@ -682,11 +672,10 @@ const Reports = () => {
                           <AlertTriangle className="w-4 h-4 text-primary" />
                         </div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Aktiva</p>
-                        <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                        <p className="text-2xl font-mono font-bold text-foreground">
                           {statusKPIs.activeTickets}
                         </p>
                       </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </Card>
 
                     <Card className="relative overflow-hidden">
@@ -695,17 +684,16 @@ const Reports = () => {
                           <CheckCircle className="w-4 h-4 text-primary" />
                         </div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Lösningsgrad</p>
-                        <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                        <p className="text-2xl font-mono font-bold text-foreground">
                           {statusKPIs.resolvedRate.toFixed(0)}%
                         </p>
                         <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-linear-to-r from-primary to-accent transition-[width] duration-300"
+                            className="h-full bg-primary transition-[width] duration-300"
                             style={{ width: `${statusKPIs.resolvedRate}%` }}
                           />
                         </div>
                       </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </Card>
                   </div>
                 )}
@@ -716,7 +704,7 @@ const Reports = () => {
           <Card className="animate-fade-in" style={{ animationDelay: '300ms' }}>
             <CardHeader className="flex flex-row items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              <CardTitle as="h2" className="text-xl font-semibold font-serif">Ärenden per prioritet</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-display">Ärenden per prioritet</CardTitle>
             </CardHeader>
               <CardContent>
                 {isLoading ? (
@@ -763,7 +751,7 @@ const Reports = () => {
           <Card className="animate-fade-in" style={{ animationDelay: '400ms' }}>
             <CardHeader className="flex flex-row items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              <CardTitle as="h2" className="text-xl font-semibold font-serif">Kategorier</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-display">Kategorier</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -787,6 +775,7 @@ const Reports = () => {
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '8px',
                       }}
+                      cursor={{ fill: 'hsl(var(--muted) / 0.5)' }}
                     />
                     <Bar dataKey="count" name="Ärenden" radius={[0, 4, 4, 0]}>
                       {summary.byCategory.map((_, index) => (
@@ -807,7 +796,7 @@ const Reports = () => {
           <Card>
             <CardHeader className="flex flex-row items-center gap-2">
               <Calendar className="h-5 w-5 text-primary" />
-              <CardTitle as="h2" className="text-xl font-semibold font-serif">Skapade och stängda ärenden</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-display">Skapade och stängda ärenden</CardTitle>
             </CardHeader>
             <CardContent>
               {isLoading ? (
@@ -827,6 +816,7 @@ const Reports = () => {
                         border: '1px solid hsl(var(--border))',
                         borderRadius: '8px',
                       }}
+                      cursor={{ fill: 'hsl(var(--muted) / 0.5)' }}
                     />
                     <Legend />
                     <Bar dataKey="created" name="Skapad" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
@@ -840,7 +830,7 @@ const Reports = () => {
           {/* Status Flow */}
           <Card className="animate-fade-in" style={{ animationDelay: '500ms' }}>
             <CardHeader>
-              <CardTitle as="h2" className="text-xl font-semibold font-serif">Statusflöde över tid</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-display">Statusflöde över tid</CardTitle>
               <p className="text-sm text-muted-foreground mt-1">
                 Statusfördelning de senaste 12 månaderna
               </p>
@@ -856,7 +846,7 @@ const Reports = () => {
           <Card className="animate-fade-in" style={{ animationDelay: '700ms' }}>
             <CardHeader className="flex flex-row items-center gap-2">
               <BarChart3 className="h-5 w-5 text-primary" />
-              <CardTitle as="h2" className="text-xl font-semibold font-serif">Per person</CardTitle>
+              <CardTitle as="h2" className="text-xl font-semibold font-display">Per person</CardTitle>
             </CardHeader>
               <CardContent>
                 {/* KPI Summary - enkla divs utan nästlade Card-komponenter */}
@@ -867,10 +857,9 @@ const Reports = () => {
                         <Users className="w-4 h-4 text-primary" />
                       </div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Antal personer</p>
-                      <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                      <p className="text-2xl font-mono font-bold text-foreground">
                         {requesterKPIs.totalRequesters}
                       </p>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </div>
 
                     <div className="relative overflow-hidden p-4 rounded-lg border bg-card">
@@ -878,10 +867,9 @@ const Reports = () => {
                         <BarChart3 className="w-4 h-4 text-primary" />
                       </div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Snitt per person</p>
-                      <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                      <p className="text-2xl font-mono font-bold text-foreground">
                         {requesterKPIs.avgTicketsPerRequester.toFixed(1)}
                       </p>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </div>
 
                     <div className="relative overflow-hidden p-4 rounded-lg border bg-card">
@@ -890,7 +878,7 @@ const Reports = () => {
                       </div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Arbetsbelastning</p>
                       <div className="flex items-baseline gap-2">
-                        <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                        <p className="text-2xl font-mono font-bold text-foreground">
                           {requesterKPIs.workloadBalance.toFixed(0)}%
                         </p>
                         <p className="text-xs text-muted-foreground">
@@ -899,11 +887,10 @@ const Reports = () => {
                       </div>
                       <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-linear-to-r from-primary to-accent transition-all duration-500"
+                          className="h-full bg-primary transition-all duration-500"
                           style={{ width: `${Math.min(100, requesterKPIs.workloadBalance)}%` }}
                         />
                       </div>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </div>
 
                     <div className="relative overflow-hidden p-4 rounded-lg border bg-card">
@@ -911,10 +898,9 @@ const Reports = () => {
                         <CheckCircle className="w-4 h-4 text-primary" />
                       </div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Snitt avslutning</p>
-                      <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                      <p className="text-2xl font-mono font-bold text-foreground">
                         {requesterKPIs.avgCompletionRate.toFixed(0)}%
                       </p>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </div>
                   </div>
                 )}
@@ -942,7 +928,7 @@ const Reports = () => {
                       </defs>
                       <XAxis type="number" allowDecimals={false} tick={{ fontSize: isMobile ? 10 : 12 }} />
                       <YAxis type="category" dataKey="name" width={userAxisWidth} interval={0} tick={{ fontSize: isMobile ? 10 : 12 }} />
-                      <Tooltip content={<RequesterTooltip />} />
+                      <Tooltip content={<RequesterTooltip />} cursor={{ fill: 'hsl(var(--muted) / 0.5)' }} />
                       <Legend
                         wrapperStyle={{ paddingTop: '16px' }}
                         iconType="square"

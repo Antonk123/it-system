@@ -289,7 +289,7 @@ const AdminTab = () => {
                         <span className="font-medium truncate min-w-0">{sysUser.displayName || sysUser.email}</span>
                         {sysUser.role === 'admin' && (
                           <Badge variant="secondary" className="shrink-0">
-                            <Shield className="w-3 h-3 mr-1" />
+                            <Shield className="h-3.5 w-3.5 mr-1" />
                             Admin
                           </Badge>
                         )}
@@ -300,7 +300,7 @@ const AdminTab = () => {
                         )}
                         {sysUser.ssoLinked && (
                           <Badge variant="outline" className="shrink-0">
-                            <KeyRound className="w-3 h-3 mr-1" />
+                            <KeyRound className="h-3.5 w-3.5 mr-1" />
                             SSO-länkad
                           </Badge>
                         )}
@@ -339,7 +339,7 @@ const AdminTab = () => {
                           aria-label={`Koppla loss SSO för ${sysUser.displayName || sysUser.email}`}
                           title="Koppla loss kontot från dess SSO-identitet"
                         >
-                          <Unlink className="w-3 h-3 mr-1" />
+                          <Unlink className="h-3.5 w-3.5 mr-1" />
                           Koppla loss SSO
                         </Button>
                       )}
@@ -351,7 +351,7 @@ const AdminTab = () => {
                             onClick={() => updateRole(sysUser.id, sysUser.role === 'admin' ? 'user' : 'admin')}
                             title={sysUser.role === 'admin' ? 'Nedgradera till användare' : 'Uppgradera till admin'}
                           >
-                            <Shield className="w-3 h-3 mr-1" />
+                            <Shield className="h-3.5 w-3.5 mr-1" />
                             {sysUser.role === 'admin' ? 'Ta bort admin' : 'Gör admin'}
                           </Button>
                           <Button

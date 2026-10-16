@@ -1,15 +1,14 @@
-import { useTheme } from "next-themes";
+import { useMode } from "@/hooks/useMode";
 import { Toaster as Sonner, toast } from "sonner";
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "theme-default" } = useTheme();
-  const resolvedTheme = theme === "light" || theme === "dark" ? theme : "dark";
+  const mode = useMode();
 
   return (
     <Sonner
-      theme={resolvedTheme as ToasterProps["theme"]}
+      theme={mode}
       className="toaster group"
       // Lift mobile toasts above the fixed BottomTabBar (~3.5rem) + home indicator
       // so save/error confirmations aren't clipped or hidden behind the nav.

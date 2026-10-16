@@ -1,4 +1,3 @@
-import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -6,7 +5,7 @@ import { MotionConfig } from "framer-motion";
 import { BrowserRouter, Routes, Route, Navigate, Outlet, matchPath, useLocation, useNavigate, useNavigationType } from "react-router";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ApiError } from "@/lib/api";
-import { applyFontTheme, getStoredFontTheme, applyMode, getStoredMode } from "@/lib/appearance";
+import { applyMode, getStoredMode } from "@/lib/appearance";
 import { safeStorage } from "@/lib/safeStorage";
 import { parseSwNavigateMessage } from "@/lib/swNavigation";
 import { sanitizeReturnTo } from "@/lib/returnTo";
@@ -60,15 +59,15 @@ const queryClient = new QueryClient({
 
 const AppearanceInitializer = () => {
   useEffect(() => {
-    applyFontTheme(getStoredFontTheme());
     applyMode(getStoredMode());
-    // Migrate users who had daylight selected — fall back to default
-    const storedTheme = safeStorage.getItem('theme');
-    if (storedTheme === 'theme-daylight') {
-      safeStorage.setItem('theme', 'theme-default');
-      document.documentElement.classList.remove('theme-daylight');
-      document.documentElement.classList.add('theme-default');
-    }
+    // Bibliotek är enda temat: städa bort val från de avvecklade tema- och
+    // typsnittsväljarna så att inga gamla klasser ligger kvar på <html>.
+    const root = document.documentElement;
+    [...root.classList]
+      .filter((name) => name.startsWith('theme-') || name.startsWith('font-'))
+      .forEach((name) => root.classList.remove(name));
+    safeStorage.removeItem('theme');
+    safeStorage.removeItem('app-font-theme');
   }, []);
 
   return null;
@@ -299,26 +298,17 @@ export const AppRoutes = () => {
 const App = () => (
   <ErrorBoundary>
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider
-        attribute="class"
-        // Förvalt tema är Forge (inte theme-default/Slate); de sju valbara temana
-        // listas i `themes` nedan och i Inställningar → Allmänt.
-        defaultTheme="theme-forge"
-        enableSystem={false}
-        themes={["theme-default", "theme-midnight", "theme-graphite", "theme-stone", "theme-linear", "theme-spotify", "theme-forge"]}
-      >
-        <AppearanceInitializer />
-        <MotionConfig reducedMotion="user">
-          <TooltipProvider>
-            <Sonner />
-            <BrowserRouter>
-              <AuthProvider>
-                <AppRoutes />
-              </AuthProvider>
-            </BrowserRouter>
-          </TooltipProvider>
-        </MotionConfig>
-      </ThemeProvider>
+      <AppearanceInitializer />
+      <MotionConfig reducedMotion="user">
+        <TooltipProvider>
+          <Sonner />
+          <BrowserRouter>
+            <AuthProvider>
+              <AppRoutes />
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </MotionConfig>
     </QueryClientProvider>
   </ErrorBoundary>
 );

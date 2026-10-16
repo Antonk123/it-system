@@ -653,5 +653,7 @@ html[data-prefabnavet-embedded="true"] {
   --font-serif: var(--pn-font-display);
   --font-mono: var(--pn-font-mono);
   --app-font-family: var(--pn-font-ui);
+  --font-display: var(--pn-font-display);
+  --brand-accent-2: var(--pn-accent-2);
   --radius: var(--pn-radius);
 }

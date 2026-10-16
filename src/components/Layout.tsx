@@ -77,7 +77,7 @@ const TitleSection = ({ open }: TitleSectionProps) => {
 
         {open && (
           <div className="transition-opacity duration-200">
-            <span className="block text-sm font-semibold text-sidebar-foreground">
+            <span className="block font-display text-[16.5px] font-semibold text-sidebar-foreground">
               IT-ärenden
             </span>
           </div>

@@ -97,7 +97,7 @@ export const TicketChecklist = ({
             : 'bg-muted text-muted-foreground'
         }`}
       >
-        <Calendar className="h-3 w-3" />
+        <Calendar className="h-3.5 w-3.5" />
         {format(parseISO(item.due_date), 'd MMM', { locale: sv })}
       </span>
     );
@@ -137,7 +137,7 @@ export const TicketChecklist = ({
             isChild ? 'ml-6' : ''
           }`}
         >
-          {isChild && <CornerDownRight className="h-3 w-3 text-muted-foreground shrink-0" />}
+          {isChild && <CornerDownRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
           <Checkbox
             checked={item.completed}
             onCheckedChange={(checked) => {

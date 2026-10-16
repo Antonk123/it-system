@@ -45,6 +45,7 @@
 
   --color-accent: hsl(var(--accent));
   --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-accent-2: var(--brand-accent-2);
 
   --color-popover: hsl(var(--popover));
   --color-popover-foreground: hsl(var(--popover-foreground));
@@ -63,7 +64,8 @@
 
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
-  --radius-sm: calc(var(--radius) - 4px);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-xl: 12px;
 
   --animate-accordion-down: accordion-down 0.2s ease-out;
   --animate-accordion-up: accordion-up 0.2s ease-out;
@@ -72,9 +74,10 @@
   --animate-scale-in: scale-in 0.3s ease-out;
   --animate-spin-slow: spin 4s linear infinite;
 
-  --font-sans: Plus Jakarta Sans, ui-sans-serif, system-ui, sans-serif;
-  --font-serif: Crimson Pro, Libre Caslon Text, ui-serif, Georgia, serif;
-  --font-mono: JetBrains Mono, ui-monospace, Fira Code, monospace;
+  --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Newsreader', Georgia, serif;
+  --font-serif: 'Newsreader', Georgia, serif;
+  --font-mono: 'Geist Mono', ui-monospace, monospace;
 
   --shadow-2xs: var(--shadow-2xs);
   --shadow-xs: var(--shadow-xs);
@@ -172,160 +175,48 @@
 }
 
 @utility priority-badge-low {
-  @apply bg-[hsl(var(--priority-low)/0.1)] text-[hsl(var(--priority-low))] border-[hsl(var(--priority-low))] transition-all duration-200;
+  @apply bg-[hsl(var(--priority-low)/0.1)] text-[hsl(var(--priority-low))] transition-all duration-200;
 }
 
 @utility priority-badge-medium {
-  @apply bg-[hsl(var(--priority-medium)/0.1)] text-[hsl(var(--priority-medium))] border-[hsl(var(--priority-medium))] transition-all duration-200;
+  @apply bg-[hsl(var(--priority-medium)/0.1)] text-[hsl(var(--priority-medium))] transition-all duration-200;
 }
 
 @utility priority-badge-high {
-  @apply bg-[hsl(var(--priority-high)/0.1)] text-[hsl(var(--priority-high))] border-[hsl(var(--priority-high))] transition-all duration-200;
+  @apply bg-[hsl(var(--priority-high)/0.1)] text-[hsl(var(--priority-high))] transition-all duration-200;
 }
 
 @utility priority-badge-critical {
-  @apply bg-[hsl(var(--priority-critical)/0.1)] text-[hsl(var(--priority-critical))] border-[hsl(var(--priority-critical))] transition-all duration-200;
+  @apply bg-[hsl(var(--priority-critical)/0.1)] text-[hsl(var(--priority-critical))] font-semibold transition-all duration-200;
+}
+
+/* Navets modulskala — Newsreader för sidrubriker, Geist för allt funktionellt. */
+@utility module-h1 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(28px, 3.2vw, 36px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+@utility module-h2 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 22px;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+@utility module-h3 {
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.3;
 }
 
 @utility ticket-row {
   /* Table row styling */
   position: relative;
   transition: all 0.2s ease;
-}
-
-@utility geo-border {
-  /* Geometric accent borders */
-  position: relative;
-  isolation: isolate;
-
-  &::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 4px;
-    background: linear-gradient(
-      180deg,
-      hsla(var(--primary), 0.8) 0%,
-      hsla(var(--accent), 0.8) 100%
-    );
-    clip-path: polygon(
-      0 0,
-      100% 0,
-      100% 30%,
-      0 35%,
-      0 65%,
-      100% 70%,
-      100% 100%,
-      0 100%
-    );
-    transition: all 0.3s ease;
-  }
-
-  &:hover::before {
-    width: 6px;
-    background: linear-gradient(
-      180deg,
-      hsla(var(--accent), 1) 0%,
-      hsla(var(--primary), 1) 100%
-    );
-  }
-}
-
-@utility floating-tag {
-  /* Floating tag effect */
-  animation: float 3s ease-in-out infinite;
-}
-
-@utility neon-glow {
-  /* Neon glow effect */
-  text-shadow:
-    0 0 10px hsla(var(--primary), 0.5),
-    0 0 20px hsla(var(--primary), 0.3),
-    0 0 30px hsla(var(--primary), 0.2);
-}
-
-@utility skew-container {
-  /* Skewed container for visual interest */
-  position: relative;
-  isolation: isolate;
-
-  &::before {
-    content: '';
-    position: absolute;
-    inset: -2px;
-    background: linear-gradient(
-      135deg,
-      hsla(var(--primary), 0.1) 0%,
-      hsla(var(--accent), 0.05) 100%
-    );
-    transform: skewY(-1deg);
-    border-radius: inherit;
-    z-index: -1;
-  }
-}
-
-@utility glow-subtle {
-  /* Utility classes for enhanced visuals */
-  box-shadow: 0 0 20px hsla(var(--primary), 0.3);
-}
-
-@utility glow-accent {
-  box-shadow: 0 0 30px hsla(var(--accent), 0.4);
-}
-
-@utility grid-pattern {
-  /* Grid pattern background */
-  background-image:
-    linear-gradient(hsla(var(--primary), 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, hsla(var(--primary), 0.03) 1px, transparent 1px);
-  background-size: 32px 32px;
-}
-
-@utility holographic {
-  /* Holographic shimmer effect */
-  position: relative;
-  overflow: hidden;
-
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      110deg,
-      transparent 30%,
-      hsla(var(--primary), 0.2) 50%,
-      transparent 70%
-    );
-    animation: shimmer 3s infinite;
-    pointer-events: none;
-  }
-}
-
-@utility ring-segment {
-  /* Theme-specific enhancements */
-
-  /* Radial Progress Rings animations */
-
-  /* Ring segment hover effects */
-  transition: all 0.3s ease;
-}
-
-@utility ring-segment-active {
-  filter: drop-shadow(0 0 8px currentColor) brightness(1.1);
-  stroke-width: 10;
-}
-
-@utility ring-legend-item {
-  /* Legend item hover effects */
-  transition:
-    transform 0.2s ease,
-    background-color 0.2s ease;
-
-  &:hover {
-    transform: translateX(4px);
-  }
 }
 
 @utility requester-bar {
@@ -343,1261 +234,167 @@
     overflow-wrap: normal;
   }
 
+  /* Ikoner i Prefabnavet-stil: lucide sätter klassen "lucide" på varje ikon,
+     så linjetjockleken sätts en gång här i stället för per ikon. */
+  .lucide {
+    stroke-width: 1.75;
+  }
+
   /* Search snippet highlight */
   mark {
-    background-color: hsl(45 93% 47% / 0.25);
-    color: hsl(45 93% 80%);
+    background-color: hsl(var(--warning) / 0.22);
+    color: inherit;
     border-radius: 2px;
     padding: 0 1px;
   }
 
-  .light mark {
-    background-color: hsl(45 93% 47% / 0.35);
-    color: hsl(var(--foreground));
-  }
-
-  /* Slate - Linear/Vercel-inspired clean dark */
+  /* Bibliotek — Prefabnavets identitet (designsystemet "Prefabnavet").
+     Värdena speglar Bibliotek-blocken i src/prefabnavet-theme.css så att
+     fristående och inbäddat läge ser likadana ut. Inbäddat vinner via högre
+     specificitet och följer då värdens palett. */
   :root,
-  .theme-default {
-    --app-font-family: 'Plus Jakarta Sans', sans-serif;
-    --background: 222 47% 6%;
-    --foreground: 210 20% 95%;
-
-    --card: 220 40% 9%;
-    --card-foreground: 210 20% 95%;
-
-    --popover: 220 40% 9%;
-    --popover-foreground: 210 20% 95%;
-
-    --primary: 214 100% 60%;
-    --primary-foreground: 222 47% 6%;
-
-    --secondary: 220 35% 13%;
-    --secondary-foreground: 210 15% 90%;
-
-    --muted: 218 32% 15%;
-    --muted-foreground: 215 18% 60%;
-
-    --accent: 199 85% 58%;
-    --accent-foreground: 222 47% 6%;
-
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 215 28% 18%;
-    --input: 218 38% 11%;
-    --ring: 214 100% 60%;
-
-
-    /* Custom ticket status colors */
-    --status-open: 217 91% 50%;
-    --status-in-progress: 45 93% 47%;
-    --status-waiting: 195 70% 45%;
-    --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 65%; /* WCAG AA: höjd från 47% → 65% för kontrast på mörk bakgrund */
-
-    /* Priority colors */
-    --priority-low: 142 71% 45%;
-    --priority-medium: 45 93% 47%;
-    --priority-high: 25 95% 53%;
-    --priority-critical: 0 84% 60%;
-
-    /* Sidebar */
-    --sidebar-background: 222 50% 4%;
-    --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 214 100% 60%;
-    --sidebar-primary-foreground: 222 50% 4%;
-    --sidebar-accent: 220 40% 8%;
-    --sidebar-accent-foreground: 210 20% 95%;
-    --sidebar-border: 215 28% 16%;
-    --sidebar-ring: 214 100% 60%;
-
-    /* Chart colors - blue spectrum */
-    --chart-1: 214 100% 60%;
-    --chart-2: 199 85% 58%;
-    --chart-3: 221 70% 70%;
-    --chart-4: 187 70% 55%;
-    --chart-5: 235 65% 65%;
-    --sidebar: 0 0% 98%;
-    --font-sans: 'Plus Jakarta Sans', ui-sans-serif, system-ui, sans-serif;
-    --font-serif: 'Crimson Pro', 'Libre Caslon Text', ui-serif, Georgia, serif;
-    --font-mono: 'JetBrains Mono', ui-monospace, 'Fira Code', monospace;
-
-    /* Subtle elevation shadows */
-    --shadow-2xs: 0 1px 2px 0px hsl(0 0% 0% / 0.15);
-    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.2);
-    --shadow-sm: 0 2px 4px -1px hsl(0 0% 0% / 0.25), 0 1px 2px 0px hsl(0 0% 0% / 0.15);
-    --shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.3), 0 2px 4px -1px hsl(0 0% 0% / 0.2);
-    --shadow-md: 0 6px 12px -2px hsl(0 0% 0% / 0.3), 0 3px 6px -1px hsl(0 0% 0% / 0.2);
-    --shadow-lg: 0 10px 20px -3px hsl(0 0% 0% / 0.35), 0 4px 8px -2px hsl(0 0% 0% / 0.25);
-    --shadow-xl: 0 20px 30px -5px hsl(0 0% 0% / 0.4), 0 8px 12px -3px hsl(0 0% 0% / 0.3);
-    --shadow-2xl: 0 30px 50px -10px hsl(0 0% 0% / 0.45), 0 12px 20px -5px hsl(0 0% 0% / 0.35);
-    --tracking-normal: 0em;
-    --spacing: 0.25rem;
-
-    /* Animated search glow colors */
-    --search-input-bg: 218 38% 10%;
-
-    /* Semantic accent — AI / branded actions (purple/violet family).
-       Dark default — brightened för läsbarhet på mörk bakgrund. */
-    --ai: 270 85% 70%;
-    --ai-foreground: 270 100% 5%;
-
-    /* Warning — amber för "behöver uppmärksamhet, inte kritiskt". */
-    --warning: 38 95% 60%;
-    --warning-foreground: 0 0% 5%;
-    --warning-text: 38 95% 60%;
-
-    /* Success — confirmation green. --success-foreground definieras här,
-       --success ärvs/överskrivs av .dark och light-teman. */
-    --success: 142 65% 55%;
-    --success-foreground: 0 0% 5%;
-    --success-text: 142 65% 55%;
-  }
-
-  /* Midnight - GitHub dark-inspired deep indigo */
-  .theme-midnight {
-    --app-font-family: 'Plus Jakarta Sans', sans-serif;
-    --background: 234 50% 5%;
-    --foreground: 220 15% 94%;
-
-    --card: 233 42% 9%;
-    --card-foreground: 220 15% 94%;
-
-    --popover: 233 42% 9%;
-    --popover-foreground: 220 15% 94%;
-
-    --primary: 243 75% 68%;
-    --primary-foreground: 234 50% 5%;
-
-    --secondary: 232 38% 13%;
-    --secondary-foreground: 220 12% 88%;
-
-    --muted: 232 35% 15%;
-    --muted-foreground: 225 18% 58%;
-
-    --accent: 196 72% 58%;
-    --accent-foreground: 234 50% 5%;
-
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 232 32% 19%;
-    --input: 233 40% 11%;
-    --ring: 243 75% 68%;
-
-
-    /* Custom ticket status colors */
-    --status-open: 217 91% 50%;
-    --status-in-progress: 45 93% 47%;
-    --status-waiting: 195 70% 45%;
-    --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 65%; /* WCAG AA: höjd från 47% → 65% */
-
-    /* Priority colors */
-    --priority-low: 142 71% 45%;
-    --priority-medium: 45 93% 47%;
-    --priority-high: 25 95% 53%;
-    --priority-critical: 0 84% 60%;
-
-    /* Sidebar */
-    --sidebar-background: 235 55% 3%;
-    --sidebar-foreground: 220 15% 92%;
-    --sidebar-primary: 243 75% 68%;
-    --sidebar-primary-foreground: 235 55% 3%;
-    --sidebar-accent: 233 42% 8%;
-    --sidebar-accent-foreground: 220 15% 94%;
-    --sidebar-border: 232 32% 17%;
-    --sidebar-ring: 243 75% 68%;
-
-    /* Chart colors - indigo spectrum */
-    --chart-1: 243 75% 68%;
-    --chart-2: 196 72% 58%;
-    --chart-3: 258 60% 65%;
-    --chart-4: 210 65% 60%;
-    --chart-5: 228 55% 70%;
-
-    /* Subtle elevation shadows */
-    --shadow-2xs: 0 1px 2px 0px hsl(0 0% 0% / 0.18);
-    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.22);
-    --shadow-sm: 0 2px 4px -1px hsl(0 0% 0% / 0.28), 0 1px 2px 0px hsl(0 0% 0% / 0.18);
-    --shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.32), 0 2px 4px -1px hsl(0 0% 0% / 0.22);
-    --shadow-md: 0 6px 12px -2px hsl(0 0% 0% / 0.32), 0 3px 6px -1px hsl(0 0% 0% / 0.22);
-    --shadow-lg: 0 10px 20px -3px hsl(0 0% 0% / 0.38), 0 4px 8px -2px hsl(0 0% 0% / 0.28);
-    --shadow-xl: 0 20px 30px -5px hsl(0 0% 0% / 0.42), 0 8px 12px -3px hsl(0 0% 0% / 0.32);
-    --shadow-2xl: 0 30px 50px -10px hsl(0 0% 0% / 0.48), 0 12px 20px -5px hsl(0 0% 0% / 0.38);
-
-    /* Animated search glow colors */
-    --search-input-bg: 233 40% 10%;
-  }
-
-  /* Graphite - Raycast-inspired warm neutral dark */
-  .theme-graphite {
-    --app-font-family: 'Plus Jakarta Sans', sans-serif;
-    --background: 220 14% 7%;
-    --foreground: 220 8% 94%;
-
-    --card: 218 12% 11%;
-    --card-foreground: 220 8% 94%;
-
-    --popover: 218 12% 11%;
-    --popover-foreground: 220 8% 94%;
-
-    --primary: 38 92% 55%;
-    --primary-foreground: 220 14% 7%;
-
-    --secondary: 218 10% 15%;
-    --secondary-foreground: 220 8% 88%;
-
-    --muted: 218 10% 17%;
-    --muted-foreground: 218 8% 56%;
-
-    --accent: 32 85% 50%;
-    --accent-foreground: 220 14% 7%;
-
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 218 10% 20%;
-    --input: 218 12% 12%;
-    --ring: 38 92% 55%;
-
-
-    /* Custom ticket status colors */
-    --status-open: 217 91% 50%;
-    --status-in-progress: 45 93% 47%;
-    --status-waiting: 195 70% 45%;
-    --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 65%; /* WCAG AA: höjd från 47% → 65% */
-
-    /* Priority colors */
-    --priority-low: 142 71% 45%;
-    --priority-medium: 45 93% 47%;
-    --priority-high: 25 95% 53%;
-    --priority-critical: 0 84% 60%;
-
-    /* Sidebar */
-    --sidebar-background: 220 16% 5%;
-    --sidebar-foreground: 220 8% 90%;
-    --sidebar-primary: 38 92% 55%;
-    --sidebar-primary-foreground: 220 16% 5%;
-    --sidebar-accent: 218 12% 10%;
-    --sidebar-accent-foreground: 220 8% 94%;
-    --sidebar-border: 218 10% 18%;
-    --sidebar-ring: 38 92% 55%;
-
-    /* Chart colors - amber/warm spectrum */
-    --chart-1: 38 92% 55%;
-    --chart-2: 25 80% 55%;
-    --chart-3: 48 88% 60%;
-    --chart-4: 15 75% 52%;
-    --chart-5: 50 70% 65%;
-
-    /* Minimal flat dark shadows */
-    --shadow-2xs: 0 1px 2px 0px hsl(0 0% 0% / 0.2);
-    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
-    --shadow-sm: 0 2px 4px -1px hsl(0 0% 0% / 0.3), 0 1px 2px 0px hsl(0 0% 0% / 0.2);
-    --shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.35), 0 2px 4px -1px hsl(0 0% 0% / 0.25);
-    --shadow-md: 0 6px 12px -2px hsl(0 0% 0% / 0.35), 0 3px 6px -1px hsl(0 0% 0% / 0.25);
-    --shadow-lg: 0 10px 20px -3px hsl(0 0% 0% / 0.4), 0 4px 8px -2px hsl(0 0% 0% / 0.3);
-    --shadow-xl: 0 20px 30px -5px hsl(0 0% 0% / 0.45), 0 8px 12px -3px hsl(0 0% 0% / 0.35);
-    --shadow-2xl: 0 30px 50px -10px hsl(0 0% 0% / 0.5), 0 12px 20px -5px hsl(0 0% 0% / 0.4);
-
-    /* Animated search glow colors */
-    --search-input-bg: 218 12% 11%;
-  }
-
-  /* Stone - Obsidian-inspired cool neutral with emerald */
-  .theme-stone {
-    --app-font-family: 'Plus Jakarta Sans', sans-serif;
-    --background: 200 8% 7%;
-    --foreground: 180 5% 94%;
-
-    --card: 198 7% 11%;
-    --card-foreground: 180 5% 94%;
-
-    --popover: 198 7% 11%;
-    --popover-foreground: 180 5% 94%;
-
-    --primary: 160 55% 46%;
-    --primary-foreground: 200 8% 7%;
-
-    --secondary: 198 6% 15%;
-    --secondary-foreground: 180 5% 88%;
-
-    --muted: 198 6% 17%;
-    --muted-foreground: 195 6% 55%;
-
-    --accent: 152 45% 40%;
-    --accent-foreground: 200 8% 7%;
-
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 196 6% 20%;
-    --input: 198 7% 12%;
-    --ring: 160 55% 46%;
-
-
-    /* Custom ticket status colors */
-    --status-open: 217 91% 50%;
-    --status-in-progress: 45 93% 47%;
-    --status-waiting: 195 70% 45%;
-    --status-resolved: 142 71% 45%;
-    --status-closed: 215 16% 65%; /* WCAG AA: höjd från 47% → 65% */
-
-    /* Priority colors */
-    --priority-low: 142 71% 45%;
-    --priority-medium: 45 93% 47%;
-    --priority-high: 25 95% 53%;
-    --priority-critical: 0 84% 60%;
-
-    /* Sidebar */
-    --sidebar-background: 200 10% 5%;
-    --sidebar-foreground: 180 5% 90%;
-    --sidebar-primary: 160 55% 46%;
-    --sidebar-primary-foreground: 200 10% 5%;
-    --sidebar-accent: 198 7% 10%;
-    --sidebar-accent-foreground: 180 5% 94%;
-    --sidebar-border: 196 6% 18%;
-    --sidebar-ring: 160 55% 46%;
-
-    /* Chart colors - greens */
-    --chart-1: 160 55% 46%;
-    --chart-2: 152 45% 40%;
-    --chart-3: 168 50% 52%;
-    --chart-4: 142 40% 44%;
-    --chart-5: 175 48% 55%;
-
-    /* Neutral dark shadows */
-    --shadow-2xs: 0 1px 2px 0px hsl(0 0% 0% / 0.18);
-    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.22);
-    --shadow-sm: 0 2px 4px -1px hsl(0 0% 0% / 0.28), 0 1px 2px 0px hsl(0 0% 0% / 0.18);
-    --shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.32), 0 2px 4px -1px hsl(0 0% 0% / 0.22);
-    --shadow-md: 0 6px 12px -2px hsl(0 0% 0% / 0.32), 0 3px 6px -1px hsl(0 0% 0% / 0.22);
-    --shadow-lg: 0 10px 20px -3px hsl(0 0% 0% / 0.38), 0 4px 8px -2px hsl(0 0% 0% / 0.28);
-    --shadow-xl: 0 20px 30px -5px hsl(0 0% 0% / 0.42), 0 8px 12px -3px hsl(0 0% 0% / 0.32);
-    --shadow-2xl: 0 30px 50px -10px hsl(0 0% 0% / 0.48), 0 12px 20px -5px hsl(0 0% 0% / 0.38);
-
-    /* Animated search glow colors */
-    --search-input-bg: 198 7% 11%;
-  }
-
-  /* Linear - precision-engineered dark UI inspired by Linear.app */
-  .theme-linear {
-    --app-font-family: 'Inter', -apple-system, system-ui, sans-serif;
-    --background: 210 11% 4%;
-    --foreground: 180 7% 97%;
-
-    --card: 210 4% 10%;
-    --card-foreground: 180 7% 97%;
-
-    --popover: 210 4% 10%;
-    --popover-foreground: 180 7% 97%;
-
-    --primary: 234 56% 64%;
-    --primary-foreground: 180 7% 5%;
-
-    --secondary: 240 5% 16%;
-    --secondary-foreground: 218 20% 85%;
-
-    --muted: 210 6% 6%;
-    --muted-foreground: 219 7% 57%;
-
-    --accent: 240 100% 72%;
-    --accent-foreground: 180 7% 5%;
-
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 223 9% 15%;
-    --input: 210 6% 6%;
-    --ring: 234 56% 64%;
-
-
-    /* Ticket status colors */
-    --status-open: 217 91% 50%;
-    --status-in-progress: 45 93% 47%;
-    --status-waiting: 195 70% 45%;
-    --status-resolved: 134 62% 40%;
-    --status-closed: 219 7% 65%; /* WCAG AA: höjd från 57% → 65% */
-
-    /* Priority colors */
-    --priority-low: 134 62% 40%;
-    --priority-medium: 45 93% 47%;
-    --priority-high: 25 95% 53%;
-    --priority-critical: 0 84% 60%;
-
-    /* Sidebar */
-    --sidebar-background: 210 11% 3%;
-    --sidebar-foreground: 218 20% 85%;
-    --sidebar-primary: 234 56% 64%;
-    --sidebar-primary-foreground: 180 7% 5%;
-    --sidebar-accent: 210 4% 10%;
-    --sidebar-accent-foreground: 180 7% 97%;
-    --sidebar-border: 223 9% 15%;
-    --sidebar-ring: 234 56% 64%;
-
-    /* Chart colors - indigo-violet spectrum */
-    --chart-1: 234 56% 64%;
-    --chart-2: 240 100% 72%;
-    --chart-3: 237 100% 76%;
-    --chart-4: 160 84% 39%;
-    --chart-5: 219 7% 57%;
-
-    /* Linear-style minimal shadows (elevation via luminance, not shadow) */
-    --shadow-2xs: 0 0 0 1px rgba(0,0,0,0.2);
-    --shadow-xs: 0 0 0 1px rgba(0,0,0,0.2);
-    --shadow-sm: 0 0 0 1px rgba(0,0,0,0.2), 0 1px 2px rgba(0,0,0,0.1);
-    --shadow: 0 0 0 1px rgba(0,0,0,0.2), 0 2px 4px rgba(0,0,0,0.15);
-    --shadow-md: 0 0 0 1px rgba(0,0,0,0.2), 0 4px 8px rgba(0,0,0,0.2);
-    --shadow-lg: 0 0 0 1px rgba(0,0,0,0.2), 0 8px 16px rgba(0,0,0,0.25);
-    --shadow-xl: 0 0 0 1px rgba(0,0,0,0.2), 0 16px 32px rgba(0,0,0,0.3);
-    --shadow-2xl: 0 0 0 1px rgba(0,0,0,0.2), 0 24px 48px rgba(0,0,0,0.35);
-
-    /* Search glow - indigo-violet */
-    --search-input-bg: 210 6% 6%;
-  }
-
-  /* Spotify - immersive near-black with signature green accent */
-  .theme-spotify {
-    --app-font-family: 'Inter', -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    --background: 0 0% 7%;
-    --foreground: 0 0% 100%;
-
-    --card: 0 0% 9%;
-    --card-foreground: 0 0% 100%;
-
-    --popover: 0 0% 12%;
-    --popover-foreground: 0 0% 100%;
-
-    --primary: 141 73% 48%;
-    --primary-foreground: 0 0% 0%;
-
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 100%;
-
-    --muted: 0 0% 9%;
-    --muted-foreground: 0 0% 70%;
-
-    --accent: 141 76% 42%;
-    --accent-foreground: 0 0% 0%;
-
-    --destructive: 354 85% 70%;
-    --destructive-foreground: 0 0% 7%;
-
-    --border: 0 0% 18%;
-    --input: 0 0% 12%;
-    --ring: 141 73% 48%;
-
-
-    /* Ticket status colors */
-    --status-open: 215 89% 64%;
-    --status-in-progress: 32 100% 58%;
-    --status-waiting: 195 70% 55%;
-    --status-resolved: 141 73% 48%;
-    --status-closed: 0 0% 65%; /* WCAG AA: höjd från 49% → 65% */
-
-    /* Priority colors */
-    --priority-low: 141 73% 48%;
-    --priority-medium: 32 100% 58%;
-    --priority-high: 15 90% 58%;
-    --priority-critical: 354 85% 60%;
-
-    /* Sidebar */
-    --sidebar-background: 0 0% 7%;
-    --sidebar-foreground: 0 0% 70%;
-    --sidebar-primary: 141 73% 48%;
-    --sidebar-primary-foreground: 0 0% 0%;
-    --sidebar-accent: 0 0% 12%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 0 0% 15%;
-    --sidebar-ring: 141 73% 48%;
-
-    /* Chart colors - green spectrum */
-    --chart-1: 141 73% 48%;
-    --chart-2: 141 76% 42%;
-    --chart-3: 215 89% 64%;
-    --chart-4: 32 100% 58%;
-    --chart-5: 354 85% 70%;
-
-    /* Spotify-style heavy shadows (visible against dark) */
-    --shadow-2xs: 0 1px 2px 0px rgba(0,0,0,0.3);
-    --shadow-xs: 0 2px 4px 0px rgba(0,0,0,0.3);
-    --shadow-sm: 0 4px 8px 0px rgba(0,0,0,0.3);
-    --shadow: 0 8px 8px 0px rgba(0,0,0,0.3);
-    --shadow-md: 0 8px 16px 0px rgba(0,0,0,0.4);
-    --shadow-lg: 0 8px 24px 0px rgba(0,0,0,0.5);
-    --shadow-xl: 0 16px 32px 0px rgba(0,0,0,0.5);
-    --shadow-2xl: 0 24px 48px 0px rgba(0,0,0,0.6);
-
-    /* Search glow - Spotify green */
-    --search-input-bg: 0 0% 12%;
-  }
-
-  /* Forge — materials-specification board: steel/concrete grades, stamped
-     approval states, no glass/blur/glow. Direction contract:
-     .impeccable/surfaces/dashboard-ticketlist.md (seed key 31bea677). */
-  .theme-forge {
-    --app-font-family: 'Inter', -apple-system, system-ui, sans-serif;
-    --background: 200 10% 8%;
-    --foreground: 60 5% 93%;
-
-    --card: 200 9% 11%;
-    --card-foreground: 60 5% 93%;
-
-    --popover: 200 9% 12%;
-    --popover-foreground: 60 5% 93%;
-
-    --primary: 205 45% 49%;
-    --primary-foreground: 200 10% 8%;
-
-    --secondary: 200 8% 15%;
-    --secondary-foreground: 60 5% 88%;
-
-    --muted: 200 7% 16%;
-    --muted-foreground: 195 6% 58%;
-
-    --accent: 28 60% 48%;
-    --accent-foreground: 200 10% 8%;
-
-    --destructive: 9 70% 48%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 200 8% 22%;
-    --input: 200 8% 13%;
-    --ring: 205 45% 49%;
-
-
-    /* Status = approval stamp ink (procedural, cooler family than priority) */
-    --status-open: 205 55% 52%;
-    --status-in-progress: 32 70% 50%;
-    --status-waiting: 195 15% 55%;
-    --status-resolved: 150 35% 45%;
-    --status-closed: 200 8% 50%;
-
-    /* Priority = material grade. Warm (critical/high) vs cool (medium/low)
-       hue families so urgency reads before the label is even parsed. */
-    --priority-critical: 9 75% 50%;
-    --priority-high: 28 75% 50%;
-    --priority-medium: 205 30% 52%;
-    --priority-low: 150 20% 42%;
-
-    /* Sidebar */
-    --sidebar-background: 200 12% 6%;
-    --sidebar-foreground: 60 5% 90%;
-    --sidebar-primary: 205 45% 49%;
-    --sidebar-primary-foreground: 200 10% 8%;
-    --sidebar-accent: 200 9% 10%;
-    --sidebar-accent-foreground: 60 5% 93%;
-    --sidebar-border: 200 8% 18%;
-    --sidebar-ring: 205 45% 49%;
-
-    /* Chart colors - steel-blue spectrum matching primary family */
-    --chart-1: 205 45% 49%;
-    --chart-2: 28 60% 48%;
-    --chart-3: 150 35% 45%;
-    --chart-4: 9 70% 48%;
-    --chart-5: 195 15% 55%;
-
-    /* Flat surfaces: borders carry structure, shadows stay tight and only
-       for genuinely floating UI (dialogs/menus), never panels/cards. */
-    --shadow-2xs: 0 1px 1px 0px hsl(200 10% 3% / 0.25);
-    --shadow-xs: 0 1px 2px 0px hsl(200 10% 3% / 0.3);
-    --shadow-sm: 0 1px 3px -1px hsl(200 10% 3% / 0.35), 0 1px 1px 0px hsl(200 10% 3% / 0.2);
-    --shadow: 0 2px 4px -1px hsl(200 10% 3% / 0.4), 0 1px 2px -1px hsl(200 10% 3% / 0.25);
-    --shadow-md: 0 4px 8px -2px hsl(200 10% 3% / 0.42), 0 2px 4px -1px hsl(200 10% 3% / 0.28);
-    --shadow-lg: 0 8px 16px -3px hsl(200 10% 3% / 0.45), 0 3px 6px -2px hsl(200 10% 3% / 0.3);
-    --shadow-xl: 0 14px 24px -4px hsl(200 10% 3% / 0.48), 0 6px 10px -3px hsl(200 10% 3% / 0.32);
-    --shadow-2xl: 0 22px 36px -6px hsl(200 10% 3% / 0.5), 0 10px 16px -4px hsl(200 10% 3% / 0.35);
-    --tracking-normal: 0em;
-    --spacing: 0.25rem;
-
-    --search-input-bg: 200 8% 12%;
-
-    --ai: 255 25% 55%;
-    --ai-foreground: 200 10% 8%;
-
-    --warning: 32 70% 50%;
-    --warning-foreground: 200 10% 6%;
-
-    --success: 150 35% 45%;
-    --success-foreground: 200 10% 6%;
-  }
-
-  /* Per-theme light variants — D-01/D-03 */
-
-  /* Gemensamma semantiska tokens för light-mode. Per-tema light-block
-     ärver dessa men kan override:a vid behov (samma specificitet,
-     senare regel vinner — så .light.theme-* placeras efter denna). */
   .light {
-    /* AI accent — purple-600-ish (WCAG AA ≈ 4.6:1 mot vit). */
-    --ai: 270 70% 50%;
-    --ai-foreground: 270 100% 97%;
-
-    /* Warning — amber-500 (used som badge-bakgrund med mörk text). */
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 100%;
-
-    /* Success default (override:as redan i flera light-teman). */
-    --success: 142 60% 35%;
-    --success-foreground: 0 0% 100%;
-
-    /* Text-varianter (≥4.5:1 mot bakgrund/kort) — --success/--warning är
-       fyllnadsfärger och räcker inte som textfärg i light-mode. */
-    --success-text: 142 60% 28%;
-    --warning-text: 32 90% 28%;
-  }
-
-  /* Slate Light — blue accent */
-  .light.theme-default {
-    --app-font-family: 'Plus Jakarta Sans', sans-serif;
-    --background: 210 18% 98%;
-    --foreground: 222 47% 11%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-
-    --primary: 214 100% 47%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 220 15% 93%;
-    --secondary-foreground: 222 47% 20%;
-
-    --muted: 220 14% 93%;
-    --muted-foreground: 220 12% 38%; /* WCAG AA: 6.0:1 mot light bg (var 48% = 4.1:1) */
-
-    --accent: 199 85% 37%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 142 60% 35%;
-    --success-foreground: 0 0% 100%;
-
-    --border: 220 15% 86%;
-    --input: 220 15% 91%;
-    --ring: 214 100% 47%;
-
-
-    /* Custom ticket status colors */
-    --status-open: 217 91% 42%; /* WCAG AA: djupare blå ≥4.5:1 mot status-badge-tint (var 50% = 3.6:1) */
-    --status-in-progress: 42 90% 25%; /* WCAG AA: djup amber ≥4.5:1 även mot 20%-tint. Amber (ej grön) särskiljer från resolved + speglar dark-temats in-progress (45°) */
-    --status-waiting: 195 70% 29%; /* WCAG AA: djup cyan ≥4.5:1 mot status-badge-tint (var 45% = 2.4:1) */
-    --status-resolved: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1. Särskiljs från in-progress via HUE (amber vs grön), inte lightness */
-    --status-closed: 215 16% 38%; /* WCAG AA: djupare grå ≥4.5:1 mot status-badge-tint (var 47% = 3.5:1) */
-
-    /* Priority colors */
-    --priority-low: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 45% = 2.1:1) */
-    --priority-medium: 38 95% 25%; /* WCAG AA: djup amber ≥4.5:1 mot badge-tint (var 35% = 3.6:1 — tidigare "fix" felräknad mot vit) */
-    --priority-high: 25 95% 30%; /* WCAG AA: djup orange ≥4.5:1 mot badge-tint (var 53% = 2.5:1) */
-    --priority-critical: 0 84% 37%; /* WCAG AA: djup röd ≥4.5:1 mot badge-tint (var 60% = 3.3:1) */
-
-    /* Sidebar */
-    --sidebar-background: 220 20% 96%;
-    --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 214 100% 47%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 15% 92%;
-    --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 220 15% 88%;
-    --sidebar-ring: 214 100% 47%;
-
-    /* Chart colors - blue spectrum */
-    --chart-1: 214 100% 50%;
-    --chart-2: 199 85% 48%;
-    --chart-3: 221 70% 60%;
-    --chart-4: 187 70% 45%;
-    --chart-5: 235 65% 55%;
-
-    /* Light subtle shadows */
-    --shadow-2xs: 0 1px 2px 0px hsl(220 15% 50% / 0.08);
-    --shadow-xs: 0 1px 3px 0px hsl(220 15% 50% / 0.1);
-    --shadow-sm: 0 2px 4px -1px hsl(220 15% 50% / 0.12), 0 1px 2px 0px hsl(220 15% 50% / 0.08);
-    --shadow: 0 4px 6px -1px hsl(220 15% 50% / 0.12), 0 2px 4px -1px hsl(220 15% 50% / 0.08);
-    --shadow-md: 0 6px 12px -2px hsl(220 15% 50% / 0.15), 0 3px 6px -1px hsl(220 15% 50% / 0.1);
-    --shadow-lg: 0 10px 20px -3px hsl(220 15% 50% / 0.18), 0 4px 8px -2px hsl(220 15% 50% / 0.12);
-    --shadow-xl: 0 20px 30px -5px hsl(220 15% 50% / 0.2), 0 8px 12px -3px hsl(220 15% 50% / 0.15);
-    --shadow-2xl: 0 30px 50px -10px hsl(220 15% 50% / 0.25), 0 12px 20px -5px hsl(220 15% 50% / 0.18);
+    --background: 40.0000 45.4545% 93.5294%;
+    --foreground: 35.2941 30.9091% 10.7843%;
+    --card: 45.0000 100.0000% 98.4314%;
+    --card-foreground: 35.2941 30.9091% 10.7843%;
+    --popover: 45.0000 100.0000% 98.4314%;
+    --popover-foreground: 35.2941 30.9091% 10.7843%;
+    --primary: 9.1139 46.1988% 33.5294%;
+    --primary-foreground: 40.0000 65.2174% 95.4902%;
+    --secondary: 39.1304 41.8182% 89.2157%;
+    --secondary-foreground: 35.2941 30.9091% 10.7843%;
+    --muted: 39.1304 41.8182% 89.2157%;
+    --muted-foreground: 34.2857 14.4330% 38.0392%;
+    --accent: 39.1304 41.8182% 89.2157%;
+    --accent-foreground: 9.1139 46.1988% 33.5294%;
+    --destructive: 4.0678 54.1284% 42.7451%;
+    --destructive-foreground: 40.0000 65.2174% 95.4902%;
+    --border: 38.3890 19.9358% 82.9059%;
+    --input: var(--search-input-bg);
+    --ring: 9.1139 46.1988% 33.5294%;
+    --sidebar-background: 39.1304 41.8182% 89.2157%;
+    --sidebar: 39.1304 41.8182% 89.2157%;
+    --sidebar-foreground: 35.2941 30.9091% 10.7843%;
+    --sidebar-primary: 9.1139 46.1988% 33.5294%;
+    --sidebar-primary-foreground: 40.0000 65.2174% 95.4902%;
+    --sidebar-accent: 40.0000 40.2985% 86.8627%;
+    --sidebar-accent-foreground: 35.2941 30.9091% 10.7843%;
+    --sidebar-border: 38.3890 19.9358% 82.9059%;
+    --sidebar-ring: 9.1139 46.1988% 33.5294%;
+    --success: 137.1429 24.7059% 33.3333%;
+    --success-foreground: 40.0000 45.4545% 93.5294%;
+    --warning: 41.6529 88.3212% 26.8627%;
+    --warning-foreground: 40.0000 45.4545% 93.5294%;
+    --ai: 9.1139 46.1988% 33.5294%;
+    --ai-foreground: 40.0000 45.4545% 93.5294%;
+    --search-input-bg: 40.0000 40.2985% 86.8627%;
+    --chart-1: 9.1139 46.1988% 33.5294%;
+    --chart-2: 34.2857 43.1280% 41.3725%;
+    --chart-3: 137.1429 24.7059% 33.3333%;
+    --chart-4: 211.8750 31.6832% 39.6078%;
+    --chart-5: 41.6529 88.3212% 26.8627%;
+    --status-open: 211.8750 31.6832% 39.6078%;
+    --status-in-progress: 41.6529 88.3212% 26.8627%;
+    --status-waiting: 211.8750 31.6832% 39.6078%;
+    --status-resolved: 137.1429 24.7059% 33.3333%;
+    --status-closed: 34.2857 14.4330% 38.0392%;
+    --priority-low: 137.1429 24.7059% 33.3333%;
+    --priority-medium: 41.6529 88.3212% 26.8627%;
+    --priority-high: 4.0678 54.1284% 42.7451%;
+    --priority-critical: 4.0678 54.1284% 42.7451%;
+    /* Textvarianter följer fyllnadsfärgen; Biblioteks status-hues klarar AA som text. */
+    --success-text: var(--success);
+    --warning-text: var(--warning);
     --tracking-normal: 0em;
     --spacing: 0.25rem;
-
-    /* Animated search glow colors */
-    --search-input-bg: 220 15% 90%;
-  }
-
-  /* Midnight Light — indigo accent */
-  .light.theme-midnight {
-    --app-font-family: 'Plus Jakarta Sans', sans-serif;
-    --background: 230 25% 97%;
-    --foreground: 234 40% 13%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 234 40% 13%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 234 40% 13%;
-
-    --primary: 243 75% 55%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 232 20% 93%;
-    --secondary-foreground: 234 40% 20%;
-
-    --muted: 232 18% 93%;
-    --muted-foreground: 225 14% 38%; /* WCAG AA */
-
-    --accent: 196 72% 37%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 142 60% 35%;
-    --success-foreground: 0 0% 100%;
-
-    --border: 232 18% 86%;
-    --input: 232 18% 91%;
-    --ring: 243 75% 55%;
-
-
-    /* Custom ticket status colors */
-    --status-open: 217 91% 42%; /* WCAG AA: djupare blå ≥4.5:1 mot status-badge-tint (var 50% = 3.6:1) */
-    --status-in-progress: 42 90% 25%; /* WCAG AA: djup amber ≥4.5:1 även mot 20%-tint. Amber (ej grön) särskiljer från resolved + speglar dark-temats in-progress (45°) */
-    --status-waiting: 195 70% 29%; /* WCAG AA: djup cyan ≥4.5:1 mot status-badge-tint (var 45% = 2.4:1) */
-    --status-resolved: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1. Särskiljs från in-progress via HUE (amber vs grön), inte lightness */
-    --status-closed: 215 16% 38%; /* WCAG AA: djupare grå ≥4.5:1 mot status-badge-tint (var 47% = 3.5:1) */
-
-    /* Priority colors */
-    --priority-low: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 45% = 2.1:1) */
-    --priority-medium: 38 95% 25%; /* WCAG AA: djup amber ≥4.5:1 mot badge-tint (var 35% = 3.6:1 — tidigare "fix" felräknad mot vit) */
-    --priority-high: 25 95% 30%; /* WCAG AA: djup orange ≥4.5:1 mot badge-tint (var 53% = 2.5:1) */
-    --priority-critical: 0 84% 37%; /* WCAG AA: djup röd ≥4.5:1 mot badge-tint (var 60% = 3.3:1) */
-
-    /* Sidebar */
-    --sidebar-background: 232 22% 96%;
-    --sidebar-foreground: 234 40% 13%;
-    --sidebar-primary: 243 75% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 232 18% 92%;
-    --sidebar-accent-foreground: 234 40% 13%;
-    --sidebar-border: 232 18% 88%;
-    --sidebar-ring: 243 75% 55%;
-
-    /* Chart colors - indigo spectrum */
-    --chart-1: 243 75% 55%;
-    --chart-2: 196 72% 48%;
-    --chart-3: 258 60% 58%;
-    --chart-4: 210 65% 52%;
-    --chart-5: 228 55% 62%;
-
-    /* Light subtle shadows */
-    --shadow-2xs: 0 1px 2px 0px hsl(232 20% 50% / 0.08);
-    --shadow-xs: 0 1px 3px 0px hsl(232 20% 50% / 0.1);
-    --shadow-sm: 0 2px 4px -1px hsl(232 20% 50% / 0.12), 0 1px 2px 0px hsl(232 20% 50% / 0.08);
-    --shadow: 0 4px 6px -1px hsl(232 20% 50% / 0.12), 0 2px 4px -1px hsl(232 20% 50% / 0.08);
-    --shadow-md: 0 6px 12px -2px hsl(232 20% 50% / 0.15), 0 3px 6px -1px hsl(232 20% 50% / 0.1);
-    --shadow-lg: 0 10px 20px -3px hsl(232 20% 50% / 0.18), 0 4px 8px -2px hsl(232 20% 50% / 0.12);
-    --shadow-xl: 0 20px 30px -5px hsl(232 20% 50% / 0.2), 0 8px 12px -3px hsl(232 20% 50% / 0.15);
-    --shadow-2xl: 0 30px 50px -10px hsl(232 20% 50% / 0.25), 0 12px 20px -5px hsl(232 20% 50% / 0.18);
-    --tracking-normal: 0em;
-    --spacing: 0.25rem;
-
-    /* Animated search glow colors */
-    --search-input-bg: 232 18% 90%;
-  }
-
-  /* Graphite Light — amber accent */
-  .light.theme-graphite {
-    --app-font-family: 'Plus Jakarta Sans', sans-serif;
-    --background: 220 12% 97%;
-    --foreground: 220 14% 12%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 220 14% 12%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 14% 12%;
-
-    --primary: 38 92% 31%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 218 10% 93%;
-    --secondary-foreground: 220 14% 20%;
-
-    --muted: 218 10% 93%;
-    --muted-foreground: 218 8% 38%; /* WCAG AA */
-
-    --accent: 32 85% 36%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 142 60% 35%;
-    --success-foreground: 0 0% 100%;
-
-    --border: 218 10% 86%;
-    --input: 218 10% 91%;
-    --ring: 38 92% 31%;
-
-
-    /* Custom ticket status colors */
-    --status-open: 217 91% 42%; /* WCAG AA: djupare blå ≥4.5:1 mot status-badge-tint (var 50% = 3.6:1) */
-    --status-in-progress: 42 90% 25%; /* WCAG AA: djup amber ≥4.5:1 även mot 20%-tint. Amber (ej grön) särskiljer från resolved + speglar dark-temats in-progress (45°) */
-    --status-waiting: 195 70% 29%; /* WCAG AA: djup cyan ≥4.5:1 mot status-badge-tint (var 45% = 2.4:1) */
-    --status-resolved: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1. Särskiljs från in-progress via HUE (amber vs grön), inte lightness */
-    --status-closed: 215 16% 38%; /* WCAG AA: djupare grå ≥4.5:1 mot status-badge-tint (var 47% = 3.5:1) */
-
-    /* Priority colors */
-    --priority-low: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 45% = 2.1:1) */
-    --priority-medium: 38 95% 25%; /* WCAG AA: djup amber ≥4.5:1 mot badge-tint (var 35% = 3.6:1 — tidigare "fix" felräknad mot vit) */
-    --priority-high: 25 95% 30%; /* WCAG AA: djup orange ≥4.5:1 mot badge-tint (var 53% = 2.5:1) */
-    --priority-critical: 0 84% 37%; /* WCAG AA: djup röd ≥4.5:1 mot badge-tint (var 60% = 3.3:1) */
-
-    /* Sidebar */
-    --sidebar-background: 218 12% 96%;
-    --sidebar-foreground: 220 14% 12%;
-    --sidebar-primary: 38 92% 31%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 218 10% 92%;
-    --sidebar-accent-foreground: 220 14% 12%;
-    --sidebar-border: 218 10% 88%;
-    --sidebar-ring: 38 92% 31%;
-
-    /* Chart colors - amber/warm spectrum */
-    --chart-1: 38 92% 31%;
-    --chart-2: 25 80% 45%;
-    --chart-3: 48 88% 50%;
-    --chart-4: 15 75% 45%;
-    --chart-5: 50 70% 55%;
-
-    /* Light subtle shadows */
-    --shadow-2xs: 0 1px 2px 0px hsl(218 10% 50% / 0.08);
-    --shadow-xs: 0 1px 3px 0px hsl(218 10% 50% / 0.1);
-    --shadow-sm: 0 2px 4px -1px hsl(218 10% 50% / 0.12), 0 1px 2px 0px hsl(218 10% 50% / 0.08);
-    --shadow: 0 4px 6px -1px hsl(218 10% 50% / 0.12), 0 2px 4px -1px hsl(218 10% 50% / 0.08);
-    --shadow-md: 0 6px 12px -2px hsl(218 10% 50% / 0.15), 0 3px 6px -1px hsl(218 10% 50% / 0.1);
-    --shadow-lg: 0 10px 20px -3px hsl(218 10% 50% / 0.18), 0 4px 8px -2px hsl(218 10% 50% / 0.12);
-    --shadow-xl: 0 20px 30px -5px hsl(218 10% 50% / 0.2), 0 8px 12px -3px hsl(218 10% 50% / 0.15);
-    --shadow-2xl: 0 30px 50px -10px hsl(218 10% 50% / 0.25), 0 12px 20px -5px hsl(218 10% 50% / 0.18);
-    --tracking-normal: 0em;
-    --spacing: 0.25rem;
-
-    /* Animated search glow colors */
-    --search-input-bg: 218 10% 90%;
-  }
-
-  /* Stone Light — emerald accent */
-  .light.theme-stone {
-    --app-font-family: 'Plus Jakarta Sans', sans-serif;
-    --background: 200 8% 97%;
-    --foreground: 200 10% 12%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 200 10% 12%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 200 10% 12%;
-
-    --primary: 160 55% 32%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 196 6% 93%;
-    --secondary-foreground: 200 10% 20%;
-
-    --muted: 196 6% 93%;
-    --muted-foreground: 195 6% 38%; /* WCAG AA */
-
-    --accent: 152 45% 35%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 142 60% 35%;
-    --success-foreground: 0 0% 100%;
-
-    --border: 196 6% 86%;
-    --input: 196 6% 91%;
-    --ring: 160 55% 32%;
-
-
-    /* Custom ticket status colors */
-    --status-open: 217 91% 42%; /* WCAG AA: djupare blå ≥4.5:1 mot status-badge-tint (var 50% = 3.6:1) */
-    --status-in-progress: 42 90% 25%; /* WCAG AA: djup amber ≥4.5:1 även mot 20%-tint. Amber (ej grön) särskiljer från resolved + speglar dark-temats in-progress (45°) */
-    --status-waiting: 195 70% 29%; /* WCAG AA: djup cyan ≥4.5:1 mot status-badge-tint (var 45% = 2.4:1) */
-    --status-resolved: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1. Särskiljs från in-progress via HUE (amber vs grön), inte lightness */
-    --status-closed: 215 16% 38%; /* WCAG AA: djupare grå ≥4.5:1 mot status-badge-tint (var 47% = 3.5:1) */
-
-    /* Priority colors */
-    --priority-low: 142 71% 24%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 45% = 2.1:1) */
-    --priority-medium: 38 95% 25%; /* WCAG AA: djup amber ≥4.5:1 mot badge-tint (var 35% = 3.6:1 — tidigare "fix" felräknad mot vit) */
-    --priority-high: 25 95% 30%; /* WCAG AA: djup orange ≥4.5:1 mot badge-tint (var 53% = 2.5:1) */
-    --priority-critical: 0 84% 37%; /* WCAG AA: djup röd ≥4.5:1 mot badge-tint (var 60% = 3.3:1) */
-
-    /* Sidebar */
-    --sidebar-background: 198 8% 96%;
-    --sidebar-foreground: 200 10% 12%;
-    --sidebar-primary: 160 55% 32%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 196 6% 92%;
-    --sidebar-accent-foreground: 200 10% 12%;
-    --sidebar-border: 196 6% 88%;
-    --sidebar-ring: 160 55% 32%;
-
-    /* Chart colors - emerald spectrum */
-    --chart-1: 160 55% 32%;
-    --chart-2: 152 45% 35%;
-    --chart-3: 168 50% 44%;
-    --chart-4: 142 40% 38%;
-    --chart-5: 175 48% 46%;
-
-    /* Light subtle shadows */
-    --shadow-2xs: 0 1px 2px 0px hsl(196 6% 50% / 0.08);
-    --shadow-xs: 0 1px 3px 0px hsl(196 6% 50% / 0.1);
-    --shadow-sm: 0 2px 4px -1px hsl(196 6% 50% / 0.12), 0 1px 2px 0px hsl(196 6% 50% / 0.08);
-    --shadow: 0 4px 6px -1px hsl(196 6% 50% / 0.12), 0 2px 4px -1px hsl(196 6% 50% / 0.08);
-    --shadow-md: 0 6px 12px -2px hsl(196 6% 50% / 0.15), 0 3px 6px -1px hsl(196 6% 50% / 0.1);
-    --shadow-lg: 0 10px 20px -3px hsl(196 6% 50% / 0.18), 0 4px 8px -2px hsl(196 6% 50% / 0.12);
-    --shadow-xl: 0 20px 30px -5px hsl(196 6% 50% / 0.2), 0 8px 12px -3px hsl(196 6% 50% / 0.15);
-    --shadow-2xl: 0 30px 50px -10px hsl(196 6% 50% / 0.25), 0 12px 20px -5px hsl(196 6% 50% / 0.18);
-    --tracking-normal: 0em;
-    --spacing: 0.25rem;
-
-    /* Animated search glow colors */
-    --search-input-bg: 196 6% 90%;
-  }
-
-  /* Linear Light — indigo-violet accent on clean white */
-  .light.theme-linear {
-    --app-font-family: 'Inter', -apple-system, system-ui, sans-serif;
-    --background: 180 7% 97%;
-    --foreground: 210 11% 10%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 210 11% 10%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 210 11% 10%;
-
-    --primary: 234 56% 52%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 210 7% 93%;
-    --secondary-foreground: 210 11% 20%;
-
-    --muted: 210 7% 93%;
-    --muted-foreground: 219 7% 38%; /* WCAG AA */
-
-    --accent: 240 100% 62%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 70% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 134 62% 35%;
-    --success-foreground: 0 0% 100%;
-
-    --border: 218 20% 88%;
-    --input: 210 7% 93%;
-    --ring: 234 56% 52%;
-
-
-    /* Ticket status colors */
-    --status-open: 217 91% 42%; /* WCAG AA: djupare blå ≥4.5:1 mot status-badge-tint (var 50% = 3.6:1) */
-    --status-in-progress: 42 90% 25%; /* WCAG AA: djup amber ≥4.5:1 även mot 20%-tint. Amber (ej grön) särskiljer från resolved + speglar dark-temats in-progress (45°) */
-    --status-waiting: 195 70% 29%; /* WCAG AA: djup cyan ≥4.5:1 mot status-badge-tint (var 45% = 2.4:1) */
-    --status-resolved: 134 62% 26%; /* WCAG AA: djup grön ≥4.5:1. Särskiljs från in-progress via HUE (amber vs grön), inte lightness */
-    --status-closed: 219 7% 38%; /* WCAG AA: djupare grå ≥4.5:1 mot status-badge-tint (var 50% = 3.1:1) */
-
-    /* Priority colors */
-    --priority-low: 134 62% 25%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 40% = 2.9:1) */
-    --priority-medium: 38 95% 25%; /* WCAG AA: djup amber ≥4.5:1 mot badge-tint (var 35% = 3.6:1 — tidigare "fix" felräknad mot vit) */
-    --priority-high: 25 95% 30%; /* WCAG AA: djup orange ≥4.5:1 mot badge-tint (var 53% = 2.5:1) */
-    --priority-critical: 0 84% 37%; /* WCAG AA: djup röd ≥4.5:1 mot badge-tint (var 60% = 3.3:1) */
-
-    /* Sidebar */
-    --sidebar-background: 210 7% 96%;
-    --sidebar-foreground: 210 11% 10%;
-    --sidebar-primary: 234 56% 52%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 7% 93%;
-    --sidebar-accent-foreground: 210 11% 10%;
-    --sidebar-border: 218 20% 88%;
-    --sidebar-ring: 234 56% 52%;
-
-    /* Chart colors - indigo spectrum */
-    --chart-1: 234 56% 52%;
-    --chart-2: 240 100% 62%;
-    --chart-3: 237 80% 68%;
-    --chart-4: 134 62% 40%;
-    --chart-5: 219 7% 50%;
-
-    /* Light subtle shadows */
-    --shadow-2xs: 0 1px 2px 0px hsl(234 20% 50% / 0.06);
-    --shadow-xs: 0 1px 3px 0px hsl(234 20% 50% / 0.08);
-    --shadow-sm: 0 2px 4px -1px hsl(234 20% 50% / 0.1), 0 1px 2px 0px hsl(234 20% 50% / 0.06);
-    --shadow: 0 4px 6px -1px hsl(234 20% 50% / 0.1), 0 2px 4px -1px hsl(234 20% 50% / 0.06);
-    --shadow-md: 0 6px 12px -2px hsl(234 20% 50% / 0.12), 0 3px 6px -1px hsl(234 20% 50% / 0.08);
-    --shadow-lg: 0 10px 20px -3px hsl(234 20% 50% / 0.15), 0 4px 8px -2px hsl(234 20% 50% / 0.1);
-    --shadow-xl: 0 20px 30px -5px hsl(234 20% 50% / 0.18), 0 8px 12px -3px hsl(234 20% 50% / 0.12);
-    --shadow-2xl: 0 30px 50px -10px hsl(234 20% 50% / 0.22), 0 12px 20px -5px hsl(234 20% 50% / 0.15);
-    --tracking-normal: 0em;
-    --spacing: 0.25rem;
-
-    /* Search glow - indigo */
-    --search-input-bg: 210 7% 91%;
-  }
-
-  /* Spotify Light — green accent on clean white (rare mode for Spotify) */
-  .light.theme-spotify {
-    --app-font-family: 'Inter', -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
-    --background: 0 0% 97%;
-    --foreground: 0 0% 7%;
-
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 7%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 7%;
-
-    --primary: 141 76% 28%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 0 0% 93%;
-    --secondary-foreground: 0 0% 10%;
-
-    --muted: 0 0% 93%;
-    --muted-foreground: 0 0% 40%;
-
-    --accent: 141 73% 30%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 354 70% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 141 73% 36%;
-    --success-foreground: 0 0% 100%;
-
-    --border: 0 0% 86%;
-    --input: 0 0% 93%;
-    --ring: 141 76% 28%;
-
-
-    /* Ticket status colors */
-    --status-open: 215 89% 40%; /* WCAG AA: djupare blå ≥4.5:1 mot status-badge-tint (var 50% = 3.4:1) */
-    --status-in-progress: 42 90% 25%; /* WCAG AA: djup amber ≥4.5:1 även mot 20%-tint. Amber (ej grön) särskiljer från resolved + speglar dark-temats in-progress (45°) */
-    --status-waiting: 195 70% 29%; /* WCAG AA: djup cyan ≥4.5:1 mot status-badge-tint (var 45% = 2.4:1) */
-    --status-resolved: 141 73% 24%; /* WCAG AA: djup grön ≥4.5:1. Särskiljs från in-progress via HUE (amber vs grön), inte lightness */
-    --status-closed: 0 0% 37%; /* WCAG AA: djupare grå ≥4.5:1 mot status-badge-tint (var 45% = 3.5:1) */
-
-    /* Priority colors */
-    --priority-low: 141 73% 23%; /* WCAG AA: djup grön ≥4.5:1 mot badge-tint (var 40% = 2.6:1) */
-    --priority-medium: 38 95% 25%; /* WCAG AA: djup amber ≥4.5:1 mot badge-tint (var 35% = 3.6:1 — tidigare "fix" felräknad mot vit) */
-    --priority-high: 15 85% 34%; /* WCAG AA: djup röd-orange ≥4.5:1 mot badge-tint (var 50% = 3.3:1) */
-    --priority-critical: 354 75% 39%; /* WCAG AA: djup röd ≥4.5:1 mot badge-tint (var 50% = 4.1:1) */
-
-    /* Sidebar */
-    --sidebar-background: 0 0% 96%;
-    --sidebar-foreground: 0 0% 10%;
-    --sidebar-primary: 141 76% 28%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 92%;
-    --sidebar-accent-foreground: 0 0% 7%;
-    --sidebar-border: 0 0% 88%;
-    --sidebar-ring: 141 76% 28%;
-
-    /* Chart colors - green spectrum */
-    --chart-1: 141 76% 28%;
-    --chart-2: 141 73% 40%;
-    --chart-3: 215 89% 50%;
-    --chart-4: 32 90% 48%;
-    --chart-5: 354 70% 60%;
-
-    /* Light subtle shadows */
-    --shadow-2xs: 0 1px 2px 0px hsl(0 0% 0% / 0.06);
-    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.08);
-    --shadow-sm: 0 2px 4px -1px hsl(0 0% 0% / 0.1), 0 1px 2px 0px hsl(0 0% 0% / 0.06);
-    --shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.06);
-    --shadow-md: 0 6px 12px -2px hsl(0 0% 0% / 0.12), 0 3px 6px -1px hsl(0 0% 0% / 0.08);
-    --shadow-lg: 0 10px 20px -3px hsl(0 0% 0% / 0.15), 0 4px 8px -2px hsl(0 0% 0% / 0.1);
-    --shadow-xl: 0 20px 30px -5px hsl(0 0% 0% / 0.18), 0 8px 12px -3px hsl(0 0% 0% / 0.12);
-    --shadow-2xl: 0 30px 50px -10px hsl(0 0% 0% / 0.22), 0 12px 20px -5px hsl(0 0% 0% / 0.15);
-    --tracking-normal: 0em;
-    --spacing: 0.25rem;
-
-    /* Search glow - green */
-    --search-input-bg: 0 0% 91%;
-  }
-
-  /* Forge Light — cold concrete ground, deep steel/rust ink for AA contrast */
-  .light.theme-forge {
-    --app-font-family: 'Inter', -apple-system, system-ui, sans-serif;
-    --background: 195 8% 95%;
-    --foreground: 200 12% 12%;
-
-    --card: 195 6% 98%;
-    --card-foreground: 200 12% 12%;
-
-    --popover: 195 6% 99%;
-    --popover-foreground: 200 12% 12%;
-
-    --primary: 205 55% 34%;
-    --primary-foreground: 0 0% 100%;
-
-    --secondary: 195 6% 90%;
-    --secondary-foreground: 200 10% 20%;
-
-    --muted: 195 6% 90%;
-    --muted-foreground: 195 6% 40%;
-
-    --accent: 28 70% 38%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 9 70% 40%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 195 8% 78%;
-    --input: 195 6% 92%;
-    --ring: 205 55% 34%;
-
-
-    /* Status = approval stamp ink */
-    --status-open: 205 65% 32%;
-    --status-in-progress: 32 80% 28%;
-    --status-waiting: 195 12% 38%;
-    --status-resolved: 150 45% 26%;
-    --status-closed: 200 8% 40%;
-
-    /* Priority = material grade, WCAG AA-deep (≥4.5:1 vs. 14% badge tint) */
-    --priority-critical: 9 75% 36%;
-    --priority-high: 28 75% 32%;
-    --priority-medium: 205 35% 34%;
-    --priority-low: 150 25% 28%;
-
-    /* Sidebar */
-    --sidebar-background: 195 8% 92%;
-    --sidebar-foreground: 200 12% 12%;
-    --sidebar-primary: 205 55% 34%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 195 6% 88%;
-    --sidebar-accent-foreground: 200 12% 12%;
-    --sidebar-border: 195 8% 82%;
-    --sidebar-ring: 205 55% 34%;
-
-    /* Chart colors */
-    --chart-1: 205 55% 34%;
-    --chart-2: 28 70% 38%;
-    --chart-3: 150 45% 30%;
-    --chart-4: 9 70% 40%;
-    --chart-5: 195 12% 42%;
-
-    /* Light subtle shadows — tight, no blur-heavy elevation */
-    --shadow-2xs: 0 1px 1px 0px hsl(195 8% 50% / 0.08);
-    --shadow-xs: 0 1px 2px 0px hsl(195 8% 50% / 0.1);
-    --shadow-sm: 0 1px 3px -1px hsl(195 8% 50% / 0.12), 0 1px 1px 0px hsl(195 8% 50% / 0.08);
-    --shadow: 0 2px 4px -1px hsl(195 8% 50% / 0.12), 0 1px 2px -1px hsl(195 8% 50% / 0.08);
-    --shadow-md: 0 4px 8px -2px hsl(195 8% 50% / 0.14), 0 2px 4px -1px hsl(195 8% 50% / 0.1);
-    --shadow-lg: 0 8px 16px -3px hsl(195 8% 50% / 0.16), 0 3px 6px -2px hsl(195 8% 50% / 0.1);
-    --shadow-xl: 0 14px 24px -4px hsl(195 8% 50% / 0.18), 0 6px 10px -3px hsl(195 8% 50% / 0.12);
-    --shadow-2xl: 0 22px 36px -6px hsl(195 8% 50% / 0.2), 0 10px 16px -4px hsl(195 8% 50% / 0.14);
-    --tracking-normal: 0em;
-    --spacing: 0.25rem;
-
-    --search-input-bg: 195 6% 90%;
-
-    --ai: 255 25% 40%;
-    --ai-foreground: 0 0% 100%;
-
-    --warning: 32 80% 30%;
-    --warning-foreground: 0 0% 100%;
-
-    --success: 150 45% 26%;
-    --success-foreground: 0 0% 100%;
-  }
-
-  .font-jakarta {
-    --app-font-family: 'Plus Jakarta Sans', sans-serif;
-  }
-
-  .font-inter {
-    --app-font-family: 'Inter', -apple-system, system-ui, sans-serif;
-  }
-
-  .font-crimson {
-    --app-font-family: 'Crimson Pro', serif;
-  }
-
-  .font-libre {
-    --app-font-family: 'Libre Caslon Text', serif;
-  }
-
-  .font-jetbrains {
-    --app-font-family: 'JetBrains Mono', monospace;
+    --brand-accent-2: #97703c;
+
+    /* Tre skuggor: small / base / large. */
+    --shadow-2xs: 0 1px 2px rgba(61, 47, 29, 0.05);
+    --shadow-xs: 0 1px 2px rgba(61, 47, 29, 0.05);
+    --shadow-sm: 0 1px 2px rgba(61, 47, 29, 0.05);
+    --shadow: 0 2px 10px rgba(61, 47, 29, 0.07), 0 1px 2px rgba(61, 47, 29, 0.05);
+    --shadow-md: 0 2px 10px rgba(61, 47, 29, 0.07), 0 1px 2px rgba(61, 47, 29, 0.05);
+    --shadow-lg: 0 18px 50px rgba(61, 47, 29, 0.16), 0 6px 14px rgba(61, 47, 29, 0.07);
+    --shadow-xl: 0 18px 50px rgba(61, 47, 29, 0.16), 0 6px 14px rgba(61, 47, 29, 0.07);
+    --shadow-2xl: 0 18px 50px rgba(61, 47, 29, 0.16), 0 6px 14px rgba(61, 47, 29, 0.07);
   }
 
   .dark {
-    --background: 0 0% 7%;
-    --foreground: 0 0% 98%;
+    --background: 25.7143 17.9487% 7.6471%;
+    --foreground: 40.0000 40.0000% 88.2353%;
+    --card: 32.7273 21.5686% 10.0000%;
+    --card-foreground: 40.0000 40.0000% 88.2353%;
+    --popover: 32.7273 21.5686% 10.0000%;
+    --popover-foreground: 40.0000 40.0000% 88.2353%;
+    --primary: 28.1081 50.6849% 57.0588%;
+    --primary-foreground: 33.6000 60.9756% 8.0392%;
+    --secondary: 34.2857 23.3333% 11.7647%;
+    --secondary-foreground: 40.0000 40.0000% 88.2353%;
+    --muted: 34.2857 23.3333% 11.7647%;
+    --muted-foreground: 36.0000 15.9817% 57.0588%;
+    --accent: 34.2857 23.3333% 11.7647%;
+    --accent-foreground: 30.0000 56.9620% 69.0196%;
+    --destructive: 5.6250 51.6129% 63.5294%;
+    --destructive-foreground: 33.6000 60.9756% 8.0392%;
+    --border: 29.6552 10.8614% 15.7059%;
+    --input: var(--search-input-bg);
+    --ring: 28.1081 50.6849% 57.0588%;
+    --sidebar-background: 34.2857 23.3333% 11.7647%;
+    --sidebar: 34.2857 23.3333% 11.7647%;
+    --sidebar-foreground: 40.0000 40.0000% 88.2353%;
+    --sidebar-primary: 28.1081 50.6849% 57.0588%;
+    --sidebar-primary-foreground: 33.6000 60.9756% 8.0392%;
+    --sidebar-accent: 34.2857 24.1379% 5.6863%;
+    --sidebar-accent-foreground: 40.0000 40.0000% 88.2353%;
+    --sidebar-border: 29.6552 10.8614% 15.7059%;
+    --sidebar-ring: 28.1081 50.6849% 57.0588%;
+    --success: 136.5957 22.4880% 59.0196%;
+    --success-foreground: 25.7143 17.9487% 7.6471%;
+    --warning: 43.4921 80.4255% 46.0784%;
+    --warning-foreground: 25.7143 17.9487% 7.6471%;
+    --ai: 30.0000 56.9620% 69.0196%;
+    --ai-foreground: 25.7143 17.9487% 7.6471%;
+    --search-input-bg: 34.2857 24.1379% 5.6863%;
+    --chart-1: 28.1081 50.6849% 57.0588%;
+    --chart-2: 30.6250 52.7473% 64.3137%;
+    --chart-3: 136.5957 22.4880% 59.0196%;
+    --chart-4: 211.4286 34.8066% 64.5098%;
+    --chart-5: 43.4921 80.4255% 46.0784%;
+    --status-open: 211.4286 34.8066% 64.5098%;
+    --status-in-progress: 43.4921 80.4255% 46.0784%;
+    --status-waiting: 211.4286 34.8066% 64.5098%;
+    --status-resolved: 136.5957 22.4880% 59.0196%;
+    --status-closed: 36.0000 15.9817% 57.0588%;
+    --priority-low: 136.5957 22.4880% 59.0196%;
+    --priority-medium: 43.4921 80.4255% 46.0784%;
+    --priority-high: 5.6250 51.6129% 63.5294%;
+    --priority-critical: 5.6250 51.6129% 63.5294%;
+    --brand-accent-2: #d4a574;
 
-    --card: 0 0% 7%;
-    --card-foreground: 0 0% 98%;
-
-    --popover: 0 0% 12%;
-    --popover-foreground: 0 0% 98%;
-
-    --secondary: 0 0% 18%;
-    --secondary-foreground: 0 0% 98%;
-
-    --muted: 0 0% 7%;
-    --muted-foreground: 0 0% 65%;
-
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 7%; /* 4.96:1 mot --destructive (vitt gav 3.43:1) */
-
-    --success: 142 60% 25%;
-    --success-foreground: 142 70% 90%;
-    --success-text: 142 60% 50%;
-
-    /* Semantic accent (AI) — brighter for dark mode legibility. */
-    --ai: 270 85% 72%;
-    --ai-foreground: 270 100% 5%;
-
-    /* Warning — slightly brighter amber on dark. */
-    --warning: 38 95% 62%;
-    --warning-foreground: 0 0% 5%;
-    --warning-text: 38 95% 62%;
-
-    --sidebar-background: 0 0% 7%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-border: 0 0% 32%;
-    --chart-1: 30 97% 72%;
-    --chart-2: 45 96% 64%;
-    --chart-3: 48 96% 76%;
-    --chart-4: 27 95% 60%;
-    --chart-5: 0 0% 45%;
-    --sidebar: 0 0% 7%;
-    --shadow-2xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-    --shadow-xs: 0 1px 3px 0px hsl(0 0% 0% / 0.05);
-    --shadow-sm: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-    --shadow: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 1px 2px -1px hsl(0 0% 0% / 0.1);
-    --shadow-md: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.1);
-    --shadow-lg: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 4px 6px -1px hsl(0 0% 0% / 0.1);
-    --shadow-xl: 0 1px 3px 0px hsl(0 0% 0% / 0.1), 0 8px 10px -1px hsl(0 0% 0% / 0.1);
-    --shadow-2xl: 0 1px 3px 0px hsl(0 0% 0% / 0.25);
+    /* I mörkt bär yttrappan djupet; shadow-sm är none. */
+    --shadow-2xs: none;
+    --shadow-xs: none;
+    --shadow-sm: none;
+    --shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    --shadow-md: 0 2px 10px rgba(0, 0, 0, 0.25);
+    --shadow-lg: 0 18px 50px rgba(0, 0, 0, 0.5);
+    --shadow-xl: 0 18px 50px rgba(0, 0, 0, 0.5);
+    --shadow-2xl: 0 18px 50px rgba(0, 0, 0, 0.5);
   }
 
 }
 
 @layer base {
   :root {
-    /* Shared shape across color themes: controls 12px, smaller elements 8–10px. */
-    --radius: 0.75rem;
+    /* Bibliotek: knappar/inputs/menyer 8px, rader och chips 6px, dialoger 12px. */
+    --radius: 8px;
+    --font-sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+    --font-display: 'Newsreader', Georgia, serif;
+    --font-serif: 'Newsreader', Georgia, serif;
+    --font-mono: 'Geist Mono', ui-monospace, monospace;
+    --app-font-family: var(--font-sans);
   }
 
   * {
@@ -1607,6 +404,8 @@
   body {
     @apply text-foreground font-sans antialiased;
     font-family: var(--app-font-family);
+    font-feature-settings: "cv11", "ss01";
+    line-height: 1.5;
     background: hsl(var(--background));
   }
 
@@ -1626,27 +425,6 @@
   #root {
     position: relative;
     z-index: 1;
-  }
-}
-
-@layer components {
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-4px); }
-  }
-
-  @keyframes shimmer {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-  }
-  @keyframes ring-fill {
-    from {
-      stroke-dashoffset: var(--dash-total);
-    }
-    to {
-      stroke-dashoffset: var(--dash-offset);
-    }
   }
 }
 
@@ -1676,7 +454,7 @@
   }
 
   /* Force light theme variables for print */
-  :root, .dark, .light, [class*="theme-"] {
+  :root, .dark, .light {
     --background: 0 0% 100% !important;
     --foreground: 222 47% 11% !important;
     --card: 0 0% 100% !important;
@@ -1684,7 +462,7 @@
     --muted: 220 14% 93% !important;
     --muted-foreground: 220 12% 38% !important; /* WCAG AA — print */
     --border: 220 13% 85% !important;
-    --primary: 214 100% 47% !important;
+    --primary: 9.1139 46.1988% 33.5294% !important;
     --primary-foreground: 0 0% 100% !important;
   }
 

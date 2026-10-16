@@ -1091,9 +1091,11 @@ export const RichTextEditor = ({
         }
 
         .rich-text-editor-content .ProseMirror blockquote {
-          border-left: 3px solid hsl(var(--primary));
-          padding-left: 1rem;
+          background: hsl(var(--muted));
+          border-radius: 6px;
+          padding: 0.5rem 1rem;
           margin: 1rem 0;
+          font-family: var(--font-display, Georgia, serif);
           font-style: italic;
         }
 

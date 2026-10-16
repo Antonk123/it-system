@@ -273,7 +273,7 @@ const UserList = () => {
 <nav aria-label="Kontakter och företag" className="flex gap-4 border-b pb-3"><Link className="inline-flex min-h-11 items-center hover:underline" to="/users" aria-current="page">Kontakter</Link><Link className="inline-flex min-h-11 items-center hover:underline" to="/companies">Företag</Link></nav>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Kontakter</h1>
+          <h1 className="module-h1 text-foreground">Kontakter</h1>
           <p className="text-muted-foreground mt-1">
             {total} {total === 1 ? 'kontakt' : 'kontakter'} {search || filteringByCompany ? 'matchar' : 'i systemet'}
           </p>

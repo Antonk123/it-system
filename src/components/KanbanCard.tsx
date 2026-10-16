@@ -102,7 +102,7 @@ export const KanbanCard = memo(function KanbanCard({ ticket }: KanbanCardProps) 
       {ticket.category && (
         <div className="pt-2 border-t border-border">
           <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-            <Tag className="w-3 h-3" />
+            <Tag className="h-3.5 w-3.5" />
             {getCategoryLabel(ticket.category)}
           </span>
         </div>

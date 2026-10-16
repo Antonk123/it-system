@@ -16,7 +16,7 @@ const ChangePassword = () => {
           <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
             <KeyRound className="w-6 h-6 text-primary" aria-hidden="true" />
           </div>
-          <h1 className="text-lg font-semibold leading-none tracking-tight">Byt lösenord</h1>
+          <h1 className="module-h2">Byt lösenord</h1>
           <CardDescription>
             {user?.mustChangePassword
               ? 'Du måste välja ett nytt lösenord innan du kan fortsätta.'

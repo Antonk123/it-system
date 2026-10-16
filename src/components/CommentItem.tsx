@@ -80,7 +80,7 @@ export const CommentItem = memo(function CommentItem({ comment, onUpdate, onDele
           <span className="font-medium text-sm">{authorName}</span>
           {viaEmail && (
             <span className="ml-2 inline-flex items-center gap-1 rounded-sm bg-muted px-1.5 py-0.5 align-middle text-xs font-medium text-muted-foreground">
-              <Mail className="h-3 w-3" aria-hidden="true" />
+              <Mail className="h-3.5 w-3.5" aria-hidden="true" />
               via e-post
               <span className="sr-only">{` från ${comment.emailFromAddress}`}</span>
             </span>
@@ -150,11 +150,11 @@ export const CommentItem = memo(function CommentItem({ comment, onUpdate, onDele
               disabled={isUpdating}
               className="h-11 md:h-7 text-xs"
             >
-              <X className="w-3 h-3 mr-1" />
+              <X className="h-3.5 w-3.5 mr-1" />
               Avbryt
             </Button>
             <Button size="sm" onClick={handleUpdate} disabled={isUpdating || !hasVisibleText(editContent)} className="h-11 md:h-7 text-xs">
-              <Check className="w-3 h-3 mr-1" />
+              <Check className="h-3.5 w-3.5 mr-1" />
               Spara
             </Button>
           </div>
