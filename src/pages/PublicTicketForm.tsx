@@ -40,6 +40,9 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [validationAttempt, setValidationAttempt] = useState(0);
+  const errorBannerRef = useRef<HTMLDivElement>(null);
+  const invalidFieldRef = useRef<HTMLElement | null>(null);
   const [loadError, setLoadError] = useState(false);
   // Skräpfångst: botar fyller i det dolda fältet, och servern avvisar formulär
   // som skickas in direkt efter att sidan öppnats.
@@ -87,6 +90,13 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (!error) return;
+    errorBannerRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    (invalidFieldRef.current ?? errorBannerRef.current)?.focus({ preventScroll: true });
+    invalidFieldRef.current = null;
+  }, [error, validationAttempt]);
+
   if (!draft.ready) return <div className="p-6 text-center"><Loader2 aria-label="Laddar formulär" className="h-6 w-6 animate-spin" /></div>;
 
   const handleTemplateSelect = async (templateId: string) => {
@@ -118,12 +128,48 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
     e.preventDefault();
     setError(null);
     if (submitLock.current || imageBusy || !draft.ready) return;
+    const form = e.currentTarget as HTMLFormElement;
+    const validationError = (message: string, field: HTMLElement | null) => {
+      invalidFieldRef.current = field;
+      setError(message);
+      setValidationAttempt(attempt => attempt + 1);
+    };
+    const focusableField = (id: string) => {
+      const field = document.getElementById(id);
+      return field?.querySelector<HTMLElement>('[contenteditable="true"]') ?? field;
+    };
+    const badInput = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="number"], input[type="date"]'))
+      .find(input => input.validity.badInput);
+    if (badInput) {
+      validationError(`Ange ett giltigt värde för ${badInput.labels?.[0]?.textContent?.replace(/\s*\*\s*$/, '').trim() || 'fältet'}.`, badInput);
+      return;
+    }
+
     const errors = requiredTemplateFieldErrors(embedded ? [] : selectedTemplate?.fields || [], customFieldValues);
     setFieldErrors(errors);
-    if (Object.keys(errors).length) { setError('Fyll i obligatoriska mallfält.'); return; }
+    if (Object.keys(errors).length) {
+      validationError('Fyll i obligatoriska mallfält.', focusableField(Object.keys(errors)[0]));
+      return;
+    }
 
     if (!formData.title.trim()) {
-      setError('Ärenderubrik krävs.');
+      validationError('Ärenderubrik krävs.', focusableField('title'));
+      return;
+    }
+
+    if (!(profile?.name || formData.name).trim() || !(profile?.email || formData.email).trim()) {
+      validationError('Fyll i namn och e-post.', focusableField(!formData.name.trim() ? 'name' : 'email'));
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile?.email || formData.email)) {
+      validationError('Ange en giltig e-postadress.', focusableField('email'));
+      return;
+    }
+
+    if (!hasVisibleText(formData.description) && !/<img\b/i.test(formData.description)
+      && pendingFiles.length === 0
+      && !customFieldValues.some(v => hasVisibleText(v.fieldValue) || /<img\b/i.test(v.fieldValue))) {
+      validationError('Skriv en kort beskrivning eller bifoga en bild.', focusableField('description'));
       return;
     }
 
@@ -167,6 +213,7 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
 
   const inputClass = "h-11 rounded-md bg-input border-border text-foreground placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring";
   const selectTriggerClass = "h-11 rounded-md bg-input border-border text-foreground focus:ring-2 focus:ring-ring";
+  const descriptionRequired = pendingFiles.length === 0 && !/<img\b/i.test(formData.description);
 
   // ── Success state ─────────────────────────────────────────────
   if (isSuccess) {
@@ -204,7 +251,7 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
   return (
     <ImageAdapterContext.Provider value={imageState.adapter}>
     {confirmationDialog}
-    <div className={cn("bg-background flex items-start justify-center p-4", embedded ? "py-6" : "min-h-dvh py-10")}>
+    <div className={cn("bg-background flex items-start justify-center", embedded ? "p-0" : "min-h-dvh p-4 py-10")}>
       <div className="w-full max-w-2xl">
         {/* Brand header — the host page carries it when embedded */}
         {!embedded && (
@@ -222,8 +269,7 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
 
         {/* Card */}
         <div className="bg-card border border-border rounded-lg p-6 sm:p-8">
-          {embedded && <div className="mb-5"><h1 className="text-lg font-semibold">Vad behöver du hjälp med?</h1><p className="mt-2 text-sm text-muted-foreground">Beskriv kort vad du behöver. Vi hjälper dig vidare.</p></div>}
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate>
             <fieldset disabled={isSubmitting} className="min-w-0 space-y-5">
             {draft.restoreError && <p role="alert" className="text-sm text-destructive">Det sparade utkastet kunde inte återställas. Du kan fylla i ett nytt ärende.</p>}
             {draft.storageError && <p role="alert" className="text-sm text-destructive">Utkastet kan inte sparas på den här enheten. Håll sidan öppen tills ärendet skickats.</p>}
@@ -231,7 +277,7 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
 
             {/* Error */}
             {error && (
-              <div className="flex items-start gap-3 rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
+              <div ref={errorBannerRef} role="alert" tabIndex={-1} className="flex items-start gap-3 rounded-md bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
                 <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -330,7 +376,7 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
 
             {/* Title */}
             <div className="space-y-1.5">
-              <Label htmlFor="title" className="text-foreground text-sm font-medium">{embedded ? "Kort rubrik" : "Ärendets titel *"}</Label>
+              <Label htmlFor="title" className="text-foreground text-sm font-medium">{embedded ? "Kort rubrik *" : "Ärendets titel *"}</Label>
               <Input
                 id="title"
                 value={formData.title}
@@ -345,7 +391,7 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
             {/* Description */}
             {!usesDynamicFields && (
               <div className="space-y-1.5">
-                <Label htmlFor="description" className="text-foreground text-sm font-medium">{embedded ? "Berätta lite mer" : "Beskrivning *"}</Label>
+                <Label htmlFor="description" className="text-foreground text-sm font-medium">{embedded ? "Berätta lite mer" : "Beskrivning"}{descriptionRequired ? ' *' : ''}</Label>
                 <RichTextEditor
                   onImageBusyChange={onImageBusyChange}
                   disabled={isSubmitting || imageBusy > 0 || !draft.ready}
@@ -356,7 +402,7 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
                   compact
                   id="description"
                   ariaLabel={embedded ? "Berätta lite mer" : "Beskrivning"}
-                  required
+                  required={descriptionRequired}
                 />
                 <p className="text-xs text-muted-foreground">Ta gärna med eventuella felmeddelanden eller vad du redan provat.</p>
               </div>
@@ -455,7 +501,7 @@ const SupportEntry = () => {
   const embedded = params.get('embed') === '1';
   const profile = useSupportProfile(embedded);
   if (isLoading) return <div className="p-6"><Loader2 aria-label="Laddar formulär" className="h-6 w-6 animate-spin" /></div>;
-  if (user) return <div className="bg-background px-4 py-6"><TicketForm selfService /></div>;
+  if (user) return <div className={cn('bg-background', !embedded && 'px-4 py-6')}><TicketForm selfService embedded={embedded} /></div>;
   return <PublicTicketForm key={profile?.email.toLowerCase() || 'anonymous'} profile={profile} embedded={embedded} />;
 };
 export default SupportEntry;

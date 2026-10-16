@@ -121,7 +121,13 @@ describe('POST / and PUT /:id — shared validation', () => {
     for (const field of ['category_id', 'requester_id', 'company_id', 'assigned_to']) {
       const res = await call(admin, 'post', '', { ...base, [field]: randomUUID() });
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(field === 'assigned_to' ? /assigned_to/ : new RegExp(field));
+      const messages: Record<string, RegExp> = {
+        category_id: /Ogiltig kategori:/,
+        requester_id: /Ogiltig beställare:/,
+        company_id: /Ogiltigt företag:/,
+        assigned_to: /Ogiltig handläggare:/,
+      };
+      expect(res.body.error).toMatch(messages[field]);
     }
     expect((await call(admin, 'post', '', { ...base, category_id: 42 })).status).toBe(400);
   });

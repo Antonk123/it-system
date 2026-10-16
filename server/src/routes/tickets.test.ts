@@ -187,6 +187,68 @@ describe('Ticket CRUD happy path (admin)', () => {
   });
 });
 
+describe('POST /api/tickets without description', () => {
+  let caseIp = 0;
+  const freshCaseIp = () => `198.51.100.${++caseIp}`;
+
+  it.each([
+    ['empty paragraph', '<p></p>'],
+    ['whitespace', '  \n '],
+    ['line break paragraph', '<p><br></p>'],
+    ['space paragraph', '<p> </p>'],
+  ])('rejects %s on the signed-in self-service route', async (_case, description) => {
+    const res = await admin.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).set('X-Forwarded-For', freshCaseIp())
+      .send({ title: 'Skärmfel', description, selfService: true });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
+  });
+
+  it('rejects custom fields whose values are all blank', async () => {
+    const res = await admin.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).set('X-Forwarded-For', freshCaseIp())
+      .send({ title: 'Skärmfel', description: 'Klientens platshållare', selfService: true,
+        customFields: [{ fieldName: 'room', fieldLabel: 'Rum', fieldValue: '<p></p>' }] });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
+  });
+
+  it('rejects an image whose src is removed by sanitization', async () => {
+    const res = await admin.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf).set('X-Forwarded-For', freshCaseIp())
+      .send({ title: 'Skärmfel', description: '<img src="javascript:alert(1)">', selfService: true });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
+  });
+
+  it('accepts a staged attachment and stores it with the ticket', async () => {
+    const res = await admin.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .field('payload', JSON.stringify({ title: 'Skärmfel', description: '' }))
+      .attach('attachment-0', Buffer.from('%PDF-1.4 test document'), { filename: 'fel.pdf', contentType: 'application/pdf' });
+    expect(res.status).toBe(201);
+    expect(res.body.description).toBe('');
+    const files = db.prepare('SELECT file_name FROM ticket_attachments WHERE ticket_id = ?').all(res.body.id) as { file_name: string }[];
+    expect(files).toEqual([{ file_name: 'fel.pdf' }]);
+  });
+
+  it('returns a Swedish error for an empty submission', async () => {
+    const res = await admin.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ title: 'Skärmfel', description: '' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
+  });
+
+  it('returns a Swedish error for a missing title', async () => {
+    const res = await admin.agent.post('/api/tickets')
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ description: '<p>Skärmen fungerar inte.</p>' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Ärenderubrik krävs.');
+  });
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 describe('PUT /:id — input-length validation', () => {
   // Length validation runs before the existence/auth check, but to keep the test

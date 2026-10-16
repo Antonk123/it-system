@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { db } from '../db/connection.js';
 import { sendTicketCreatedEmail } from '../lib/email.js';
 import { sanitizeRichText, sanitizePlainText } from '../lib/htmlSanitizer.js';
+import { hasVisibleContent } from '../lib/ticketContent.js';
 import { publicWriteRateLimiter, createRateLimiter } from '../middleware/rateLimit.js';
 import { getBrandingInfo, getStoredLogoPath } from '../lib/branding.js';
 import { logger } from '../lib/logger.js';
@@ -197,66 +198,61 @@ router.post('/tickets', publicWriteRateLimiter, ticketImageSubmission, (req: Req
 
   // Validate required fields
   if (!name || !email || !title) {
-    return res.status(400).json({ error: 'Name, email, and title are required' });
+    return res.status(400).json({ error: 'Namn, e-post och ärenderubrik krävs.' });
   }
 
   // Icke-strängar (objekt, tal, array) skulle annars krascha längd-/regexkontrollerna till en 500.
   if (typeof name !== 'string' || typeof email !== 'string' || typeof title !== 'string'
     || (description != null && typeof description !== 'string')) {
-    return res.status(400).json({ error: 'Name, email, title and description must be strings' });
-  }
-
-  // Description is not required if customFields are provided
-  if (!description && (!customFields || customFields.length === 0)) {
-    return res.status(400).json({ error: 'Either description or custom fields are required' });
+    return res.status(400).json({ error: 'Namn, e-post, ärenderubrik och beskrivning måste vara text.' });
   }
 
   // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
-    return res.status(400).json({ error: 'Invalid email format' });
+    return res.status(400).json({ error: 'Ogiltigt e-postformat.' });
   }
 
   // Validate lengths
   if (name.length > 100) {
-    return res.status(400).json({ error: 'Name must be 100 characters or less' });
+    return res.status(400).json({ error: 'Namnet får vara högst 100 tecken.' });
   }
   if (title.length > 200) {
-    return res.status(400).json({ error: 'Title must be 200 characters or less' });
+    return res.status(400).json({ error: 'Ärenderubriken får vara högst 200 tecken.' });
   }
   if (description && description.length > 5000) {
-    return res.status(400).json({ error: 'Description must be 5000 characters or less' });
+    return res.status(400).json({ error: 'Beskrivningen får vara högst 5000 tecken.' });
   }
 
   // Validate customFields shape and caps BEFORE any DB work, so a rejected
   // submission never creates a contact/ticket row as a side effect.
   if (customFields !== undefined) {
     if (!Array.isArray(customFields)) {
-      return res.status(400).json({ error: 'customFields must be an array' });
+      return res.status(400).json({ error: 'Mallfält måste vara en lista.' });
     }
     if (customFields.length > MAX_CUSTOM_FIELDS) {
-      return res.status(400).json({ error: `A maximum of ${MAX_CUSTOM_FIELDS} custom fields is allowed` });
+      return res.status(400).json({ error: `Högst ${MAX_CUSTOM_FIELDS} mallfält är tillåtna.` });
     }
     for (const field of customFields as CustomFieldInput[]) {
       // Icke-strängar (objekt/array/boolean) skulle annars kringgå caps och
       // krascha sanitize-html till en 500 — avvisa allt utom string/undefined.
       if (field?.fieldName !== undefined && typeof field.fieldName !== 'string') {
-        return res.status(400).json({ error: 'Field name must be a string' });
+        return res.status(400).json({ error: 'Mallfältets namn måste vara text.' });
       }
       if (field?.fieldLabel !== undefined && typeof field.fieldLabel !== 'string') {
-        return res.status(400).json({ error: 'Field label must be a string' });
+        return res.status(400).json({ error: 'Mallfältets etikett måste vara text.' });
       }
       if (field?.fieldValue !== undefined && typeof field.fieldValue !== 'string') {
-        return res.status(400).json({ error: 'Field value must be a string' });
+        return res.status(400).json({ error: 'Mallfältets värde måste vara text.' });
       }
       if (typeof field?.fieldName === 'string' && field.fieldName.length > MAX_FIELD_LABEL_LENGTH) {
-        return res.status(400).json({ error: `Field name must be ${MAX_FIELD_LABEL_LENGTH} characters or less` });
+        return res.status(400).json({ error: `Mallfältets namn får vara högst ${MAX_FIELD_LABEL_LENGTH} tecken.` });
       }
       if (typeof field?.fieldLabel === 'string' && field.fieldLabel.length > MAX_FIELD_LABEL_LENGTH) {
-        return res.status(400).json({ error: `Field label must be ${MAX_FIELD_LABEL_LENGTH} characters or less` });
+        return res.status(400).json({ error: `Mallfältets etikett får vara högst ${MAX_FIELD_LABEL_LENGTH} tecken.` });
       }
       if (typeof field?.fieldValue === 'string' && field.fieldValue.length > MAX_FIELD_VALUE_LENGTH) {
-        return res.status(400).json({ error: `Field value must be ${MAX_FIELD_VALUE_LENGTH} characters or less` });
+        return res.status(400).json({ error: `Mallfältets värde får vara högst ${MAX_FIELD_VALUE_LENGTH} tecken.` });
       }
     }
   }
@@ -274,13 +270,21 @@ router.post('/tickets', publicWriteRateLimiter, ticketImageSubmission, (req: Req
   // Match internal templates: sanitize rich field values once and retain inline images.
   const sanitizedCustomFields = customFields === undefined ? [] : normalizeTemplateValues(customFields);
   if (!sanitizedCustomFields) return res.status(400).json({ error: 'Ogiltiga mallfält' });
+  // Fältnamn och tom HTML räknas inte som ett ärendeinnehåll.
+  const hasSubmittedContent = sanitizedCustomFields.length > 0
+    ? sanitizedCustomFields.some(field => hasVisibleContent(field.fieldValue))
+    : hasVisibleContent(description || '');
+  if (!hasSubmittedContent
+    && res.locals.ticketSubmission.files.length === 0) {
+    return res.status(400).json({ error: 'Skriv en kort beskrivning eller bifoga en bild.' });
+  }
   const fieldErrors = missingRequiredTemplateFields(typeof template_id === 'string' ? template_id : null, sanitizedCustomFields);
   if (Object.keys(fieldErrors).length) return res.status(400).json({ error: 'Fyll i obligatoriska mallfält', fieldErrors });
   const finalDescription = sanitizedCustomFields.length ? composeDescriptionFromFields(sanitizedCustomFields) : description || '';
 
   // The composed description shares the same cap as a free-text description.
   if (finalDescription.length > 5000) {
-    return res.status(400).json({ error: 'Description must be 5000 characters or less' });
+    return res.status(400).json({ error: 'Beskrivningen får vara högst 5000 tecken.' });
   }
 
   try {

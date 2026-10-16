@@ -120,12 +120,98 @@ describe('Snabb felanmälan', () => {
     expect(screen.getByText('Anna')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Välj testmall' }));
     expect(screen.queryByLabelText('Antal')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Berätta lite mer'), { target: { value: 'Behöver åtkomst till Outlook.' } });
+    fireEvent.change(screen.getByLabelText(/Berätta lite mer/), { target: { value: 'Behöver åtkomst till Outlook.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
     await waitFor(() => expect(data.addTicket).toHaveBeenCalledWith(expect.objectContaining({
       selfService: true, requesterId: '', company_id: undefined, description: 'Behöver åtkomst till Outlook.', category: 'none', priority: 'medium',
     }), undefined));
     expect(data.addTicket).toHaveBeenCalledWith(expect.not.objectContaining({ templateId: 'tmpl' }), undefined);
     expect(await screen.findByText('Ärendet skickat!')).toBeInTheDocument();
+  });
+
+  it('visar svensk banner och fokuserar editorn vid tomt självserviceärende', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/submit-ticket?embed=1']}><TicketForm selfService embedded /></MemoryRouter></QueryClientProvider>);
+    expect(screen.queryByRole('heading', { name: 'Vad behöver du hjälp med?' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Skriv en kort beskrivning eller bifoga en bild.');
+    expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+    expect(screen.getByLabelText(/Berätta lite mer/)).toHaveFocus();
+    expect(data.addTicket).not.toHaveBeenCalled();
+  });
+
+  it('ger kortets innehåll toppmarginal när rubriken är dold i inbäddat supportläge', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/submit-ticket?embed=1']}><TicketForm selfService embedded /></MemoryRouter></QueryClientProvider>);
+    const form = container.querySelector('form');
+    expect(form?.parentElement).toHaveClass('pt-4');
+    expect(form?.parentElement).not.toHaveClass('pt-0');
+  });
+
+  it('visar rubrikfel i bannern och fokuserar rubriken', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/submit-ticket?embed=1']}><TicketForm selfService embedded /></MemoryRouter></QueryClientProvider>);
+    fireEvent.change(screen.getByLabelText(/Berätta lite mer/), { target: { value: 'Skrivaren startar inte.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Ärenderubrik krävs.');
+    expect(screen.getByLabelText('Kort rubrik *')).toHaveFocus();
+    expect(data.addTicket).not.toHaveBeenCalled();
+  });
+
+  it('visar längdfelet för en rubrik över schemats gräns', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/submit-ticket?embed=1']}><TicketForm selfService embedded /></MemoryRouter></QueryClientProvider>);
+    const title = screen.getByLabelText('Kort rubrik *');
+    fireEvent.change(title, { target: { value: 'A'.repeat(201) } });
+    fireEvent.change(screen.getByLabelText(/Berätta lite mer/), { target: { value: 'Beskrivning' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+    expect(screen.getByRole('alert')).toHaveTextContent('Ärenderubriken får vara högst 200 tecken.');
+    expect(title).toHaveAttribute('maxLength', '200');
+    expect(data.addTicket).not.toHaveBeenCalled();
+  });
+
+  it('skrollar till och fokuserar felbannern när fältet saknas i DOM', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/submit-ticket?embed=1']}><TicketForm selfService embedded /></MemoryRouter></QueryClientProvider>);
+    fireEvent.change(screen.getByLabelText(/Berätta lite mer/), { target: { value: 'Beskrivning' } });
+    const getElementById = document.getElementById.bind(document);
+    const lookup = vi.spyOn(document, 'getElementById').mockImplementation(id => id === 'title' ? null : getElementById(id));
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+      const banner = screen.getByRole('alert');
+      expect(banner).toHaveTextContent('Ärenderubrik krävs.');
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalled();
+      expect(banner).toHaveFocus();
+      expect(banner).toHaveAttribute('tabIndex', '-1');
+    } finally {
+      lookup.mockRestore();
+    }
+  });
+
+  it('skickar självserviceärende med enbart bilaga', async () => {
+    data.addTicket.mockResolvedValueOnce({ id: 'attachment-ticket' });
+    data.uploadAttachment.mockResolvedValueOnce({ id: 'file-id' });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { container } = render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/submit-ticket?embed=1']}><TicketForm selfService embedded /></MemoryRouter></QueryClientProvider>);
+    fireEvent.change(screen.getByLabelText('Kort rubrik *'), { target: { value: 'Skärmfel' } });
+    const file = new File(['%PDF-1.4 test'], 'fel.pdf', { type: 'application/pdf' });
+    fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+    await waitFor(() => expect(data.addTicket).toHaveBeenCalledWith(expect.objectContaining({
+      selfService: true, description: '', title: 'Skärmfel', submission: expect.objectContaining({ attachments: [file] }),
+    }), undefined));
+    expect(data.uploadAttachment).not.toHaveBeenCalled();
+  });
+
+  it('skickar självserviceärende med enbart bild i editorn', async () => {
+    data.addTicket.mockResolvedValueOnce({ id: 'image-ticket' });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/submit-ticket?embed=1']}><TicketForm selfService embedded /></MemoryRouter></QueryClientProvider>);
+    fireEvent.change(screen.getByLabelText('Kort rubrik *'), { target: { value: 'Skärmfel' } });
+    fireEvent.change(screen.getByLabelText(/Berätta lite mer/), { target: { value: '<p><img src="/api/attachments/file/12345678-1234-1234-1234-123456789abc"></p>' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Skicka till IT' }));
+    await waitFor(() => expect(data.addTicket).toHaveBeenCalledWith(expect.objectContaining({
+      selfService: true, description: expect.stringContaining('<img'), title: 'Skärmfel',
+    }), undefined));
   });
 });

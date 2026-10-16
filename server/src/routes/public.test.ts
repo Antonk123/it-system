@@ -154,6 +154,22 @@ describe('POST /api/public/tickets', () => {
     expect(fieldRows).toHaveLength(2);
   });
 
+  it('accepts an attachment without a description or custom fields → 201', async () => {
+    const body = validTicketBody({ description: '' });
+    const res = await request(app)
+      .post('/api/public/tickets')
+      .set('X-Forwarded-For', freshIp())
+      .field('payload', JSON.stringify(body))
+      .attach('attachment-0', Buffer.from('%PDF-1.4 test document'), { filename: 'fel.pdf', contentType: 'application/pdf' });
+
+    expect(res.status).toBe(201);
+    const ticket = db.prepare('SELECT description FROM tickets WHERE id = ?').get(res.body.ticketId) as { description: string } | undefined;
+    expect(ticket?.description).toBe('');
+    const attachments = db.prepare('SELECT file_name, file_path FROM ticket_attachments WHERE ticket_id = ?').all(res.body.ticketId) as { file_name: string; file_path: string }[];
+    expect(attachments).toHaveLength(1);
+    expect(attachments[0].file_name).toBe('fel.pdf');
+  });
+
   // ─── customFields sanitization & caps ────────────────────────────────────
   // Security fix: the customFields path used to store field_label/field_value
   // (and the composed description built from them) completely unsanitized,
@@ -202,7 +218,7 @@ describe('POST /api/public/tickets', () => {
         .send(body);
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/30 custom fields/i);
+      expect(res.body.error).toMatch(/högst 30 mallfält/i);
     });
 
     it('400 when a fieldValue exceeds 2000 characters', async () => {
@@ -218,7 +234,7 @@ describe('POST /api/public/tickets', () => {
         .send(body);
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/2000 characters/i);
+      expect(res.body.error).toMatch(/högst 2000 tecken/i);
     });
 
     it('400 (not 500) when fieldLabel/fieldValue/fieldName are non-strings — type confusion must not reach the sanitizer', async () => {
@@ -235,7 +251,7 @@ describe('POST /api/public/tickets', () => {
           .set('X-Forwarded-For', freshIp())
           .send(validTicketBody({ description: undefined, customFields: [badField] }));
         expect(res.status).toBe(400);
-        expect(res.body.error).toMatch(/must be a string/i);
+        expect(res.body.error).toMatch(/måste vara text/i);
       }
     });
 
@@ -256,7 +272,7 @@ describe('POST /api/public/tickets', () => {
         .send(body);
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/5000 characters/i);
+      expect(res.body.error).toMatch(/högst 5000 tecken/i);
     });
   });
 
@@ -267,7 +283,7 @@ describe('POST /api/public/tickets', () => {
       .send({ description: 'Ofullständigt formulär' });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/Name, email, and title/i);
+    expect(res.body.error).toMatch(/Namn, e-post och ärenderubrik krävs/i);
   });
 
   it.each([
@@ -290,7 +306,43 @@ describe('POST /api/public/tickets', () => {
       .send(validTicketBody({ description: undefined, customFields: undefined }));
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/description or custom fields/i);
+    expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
+  });
+
+  it('rejects a completely empty submission without a staged file → 400', async () => {
+    const res = await request(app)
+      .post('/api/public/tickets')
+      .set('X-Forwarded-For', freshIp())
+      .send(validTicketBody({ description: '', customFields: undefined }));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
+  });
+
+  it.each([
+    ['empty HTML', '<p></p>', undefined],
+    ['whitespace', '  \n ', undefined],
+    ['empty custom fields', '<p> </p>', [{ fieldName: 'room', fieldLabel: 'Rum', fieldValue: '<p></p>' }]],
+  ])('rejects %s without a staged file → 400', async (_case, description, customFields) => {
+    const res = await request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp())
+      .send(validTicketBody({ description, customFields }));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
+  });
+
+  it('rejects an image whose src is removed by sanitization', async () => {
+    const res = await request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp())
+      .send(validTicketBody({ description: '<img src="javascript:alert(1)">' }));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
+  });
+
+  it('rejects blank custom fields even when a client placeholder description was sent', async () => {
+    const res = await request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp())
+      .send(validTicketBody({ description: 'Klientens platshållare',
+        customFields: [{ fieldName: 'room', fieldLabel: 'Rum', fieldValue: '<p></p>' }] }));
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('Skriv en kort beskrivning eller bifoga en bild.');
   });
 
   it('400 when the email format is invalid', async () => {
@@ -300,7 +352,7 @@ describe('POST /api/public/tickets', () => {
       .send(validTicketBody({ email: 'not-an-email' }));
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toMatch(/Invalid email format/i);
+    expect(res.body.error).toMatch(/Ogiltigt e-postformat/i);
   });
 
   // ─── Idempotency-Key ────────────────────────────────────────────────────
@@ -566,6 +618,17 @@ describe('CSRF exemption for /api/public/*', () => {
 
 describe('public inline images — atomic submission and retry', () => {
   const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lN8AAAAASUVORK5CYII=', 'base64');
+  it('accepts a staged image as the entire description', async () => {
+    const id = randomUUID();
+    const body = validTicketBody({ description: `<p><img src="/api/attachments/file/${id}"></p>` });
+    const res = await request(app).post('/api/public/tickets').set('X-Forwarded-For', freshIp())
+      .field('payload', JSON.stringify(body))
+      .attach(id, png, { filename: 'screen.png', contentType: 'image/png' });
+    expect(res.status).toBe(201);
+    const ticket = db.prepare('SELECT description FROM tickets WHERE id = ?').get(res.body.ticketId) as { description: string };
+    expect(ticket.description).toMatch(/<img\b/);
+    expect(db.prepare('SELECT id FROM ticket_attachments WHERE ticket_id = ?').all(res.body.ticketId)).toHaveLength(1);
+  });
   it('stores original bytes and rich field HTML, then replays without duplicate files', async () => {
     const id = randomUUID(); const key = randomUUID();
     const body = validTicketBody({ description: '', customFields: [{ fieldName: 'reason', fieldLabel: 'Motivering', fieldValue: `<p>Behöver tillgång</p><img src="/api/attachments/file/${id}" width="50%">` }] });
@@ -580,7 +643,7 @@ describe('public inline images — atomic submission and retry', () => {
     expect(row.field_value).toContain('width="50%"');
     const { readFileSync, readdirSync } = await import('node:fs');
     expect(readFileSync(`${DB_PATH}-uploads/${attachments[0].file_path}`)).toEqual(png);
-    expect(readdirSync(`${DB_PATH}-uploads`).filter(name => name.startsWith('inline-'))).toHaveLength(1);
+    expect(readdirSync(`${DB_PATH}-uploads`).filter(name => name === attachments[0].file_path)).toHaveLength(1);
     expect((await request(app).get(`/api/attachments/file/${attachments[0].id}`)).status).toBe(401);
   });
   it('rejects missing local image bytes without creating an incomplete ticket', async () => {

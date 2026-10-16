@@ -70,12 +70,22 @@ const LookupError = ({ message, onRetry }: { message: string; onRetry: () => voi
  * fält, utkastet sparas lokalt (IndexedDB) tills formuläret skickas, och
  * handleSubmit sparar fält och inbäddade bilder atomärt före övriga bilagor/checklista.
  */
-const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
+const TicketForm = ({ selfService = false, embedded = false }: { selfService?: boolean; embedded?: boolean }) => {
   const { confirm, confirmationDialog } = useConfirmDiscard();
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const supportMode = !id && (selfService || new URLSearchParams(location.search).get('support') === '1');
+  const [supportError, setSupportError] = useState<string | null>(null);
+  const [supportValidationAttempt, setSupportValidationAttempt] = useState(0);
+  const supportErrorRef = useRef<HTMLDivElement>(null);
+  const supportInvalidFieldRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    if (!supportError) return;
+    supportErrorRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    (supportInvalidFieldRef.current ?? supportErrorRef.current)?.focus({ preventScroll: true });
+    supportInvalidFieldRef.current = null;
+  }, [supportError, supportValidationAttempt]);
   // M9: mutations only — does NOT mount useTickets()'s unfiltered list query
   // (which previously hit the backend's legacy LIMIT-1000 branch on every
   // form open just to reach addTicket/updateTicket).
@@ -486,6 +496,7 @@ const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitLock.current || imageBusy || !draft.ready) return;
+    setSupportError(null);
 
     if (failedUploads) {
       toast.error('Hantera de misslyckade bilagorna innan du sparar igen');
@@ -497,9 +508,11 @@ const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
       return;
     }
 
-    if (supportMode && !hasVisibleText(formData.description) && !/<img\b/i.test(formData.description)) {
-      setErrors({ description: 'Beskriv vad du behöver hjälp med.' });
-      requestAnimationFrame(() => document.getElementById('description')?.focus());
+    if (supportMode && !hasVisibleText(formData.description) && !/<img\b/i.test(formData.description) && pendingFiles.length === 0) {
+      setErrors({ description: 'Skriv en kort beskrivning eller bifoga en bild.' });
+      supportInvalidFieldRef.current = document.querySelector<HTMLElement>('#description [contenteditable="true"]') ?? document.getElementById('description');
+      setSupportError('Skriv en kort beskrivning eller bifoga en bild.');
+      setSupportValidationAttempt(attempt => attempt + 1);
       return;
     }
 
@@ -536,9 +549,19 @@ const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
       const fieldErrors: Record<string, string> = {};
       validation.error.issues.forEach((err) => {
         const key = err.path[0] ? String(err.path[0]) : '_form';
-        fieldErrors[key] = err.message;
+        fieldErrors[key] = supportMode && key === 'title' && err.code === 'too_small'
+          ? 'Ärenderubrik krävs.'
+          : supportMode && key === 'title' && err.code === 'too_big'
+            ? `Ärenderubriken får vara högst ${err.maximum} tecken.`
+            : err.message;
       });
       setErrors(fieldErrors);
+      if (supportMode) {
+        supportInvalidFieldRef.current = document.getElementById(Object.keys(fieldErrors)[0]);
+        setSupportError(fieldErrors[Object.keys(fieldErrors)[0]]);
+        setSupportValidationAttempt(attempt => attempt + 1);
+        return;
+      }
       // Open collapsed sections if an errored field lives inside them (create
       // mode) BEFORE scrolling — otherwise the field is unmounted and scroll
       // targets nothing. Status isn't rendered in create mode, so only
@@ -594,14 +617,14 @@ const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
           navigate('/tickets');
         }
       } else {
-        const extraFields = { submission: { images: imageState.referenced({ formData, customFieldValues }), idempotencyKey: submissionKey }, selfService: supportMode, assigned_to: submitFormData.assigned_to || undefined, company_id: submitFormData.company_id || undefined };
+        const extraFields = { submission: { images: imageState.referenced({ formData, customFieldValues }), attachments: supportMode ? pendingFiles : undefined, idempotencyKey: submissionKey }, selfService: supportMode, assigned_to: submitFormData.assigned_to || undefined, company_id: submitFormData.company_id || undefined };
         const ticketWithTemplate = !supportMode && selectedTemplate
           ? { ...submitFormData, templateId: selectedTemplate.id, ...extraFields }
           : { ...submitFormData, ...extraFields };
         const newTicket = await addTicket(ticketWithTemplate, !supportMode && customFieldValues.length > 0 ? customFieldValues : undefined);
 
         if (newTicket) {
-          const { failedFiles, checklistFailed } = await saveExtras(newTicket.id, pendingFiles, supportMode ? [] : pendingChecklistItems.map(i => i.label));
+          const { failedFiles, checklistFailed } = await saveExtras(newTicket.id, supportMode ? [] : pendingFiles, supportMode ? [] : pendingChecklistItems.map(i => i.label));
 
           setHasUnsavedChanges(false);
           try { localStorage.removeItem(NEW_TICKET_DRAFT_KEY); } catch { /* draft cleared */ }
@@ -835,7 +858,7 @@ const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
       )}
 
       <Card>
-        <CardHeader>
+        {!(supportMode && embedded) && <CardHeader>
           <h1 className="flex items-center gap-2 text-lg font-semibold leading-none tracking-tight">
             {isEditing
               ? <><Pencil className="w-5 h-5 text-primary" />Redigera ärende</>
@@ -843,10 +866,11 @@ const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
             }
           </h1>
           {supportMode && <p className="text-sm text-muted-foreground">Beskriv kort vad du behöver. Vi hjälper dig vidare.</p>}
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit}>
+        </CardHeader>}
+        <CardContent className={supportMode && embedded ? 'pt-4' : undefined}>
+          <form onSubmit={handleSubmit} noValidate={supportMode}>
             <fieldset disabled={isSubmitting} className="min-w-0 space-y-4">
+            {supportError && <div ref={supportErrorRef} role="alert" tabIndex={-1} className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{supportError}</div>}
             {draft.restoreError && <p role="alert" className="text-sm text-destructive">Det sparade utkastet kunde inte återställas. Du kan fylla i ett nytt ärende.</p>}
             {draft.storageError && <p role="alert" className="text-sm text-destructive">Utkastet kan inte sparas på den här enheten. Håll sidan öppen tills ärendet sparats.</p>}
 
@@ -891,13 +915,14 @@ const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
                 </details>
               )}
               <div className="space-y-2">
-                <Label htmlFor="title">{supportMode ? "Kort rubrik" : "Titel *"}</Label>
+                <Label htmlFor="title">{supportMode ? "Kort rubrik *" : "Titel *"}</Label>
                 <Input
                   id="title"
                   value={formData.title}
                   onChange={(e) => { setFormData({ ...formData, title: e.target.value }); setErrors(prev => { const p = { ...prev }; delete p['title']; return p; }); }}
                   placeholder="Kort beskrivning av problemet"
                   required
+                  maxLength={ticketInsertSchema.shape.title.maxLength ?? undefined}
                   disabled={isSubmitting}
                   // Autofocus only on create — editing an existing ticket
                   // shouldn't steal focus on mount (user may be scrolling
@@ -908,7 +933,7 @@ const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
                   aria-describedby={errors.title ? 'title-error' : undefined}
                   className={errors.title ? 'border-destructive focus-visible:ring-destructive' : ''}
                 />
-                {errors.title && <p id="title-error" role="alert" className="text-sm text-destructive mt-1">{errors.title}</p>}
+                {errors.title && <p id="title-error" role={supportMode ? undefined : 'alert'} className="text-sm text-destructive mt-1">{errors.title}</p>}
               </div>
 
             </div>
@@ -1012,7 +1037,7 @@ const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
             ) : (
               <div className="space-y-2">
                 <Label htmlFor="description">
-                  {supportMode ? "Berätta lite mer" : "Beskrivning (valfritt)"}
+                  {supportMode ? `Berätta lite mer${pendingFiles.length === 0 && !/<img\b/i.test(formData.description) ? ' *' : ''}` : "Beskrivning (valfritt)"}
                 </Label>
                 <div className={errors.description ? 'rounded-md ring-2 ring-destructive ring-offset-1' : ''}>
                   <ErrorBoundary
@@ -1032,13 +1057,13 @@ const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
                       compact
                       id="description"
                       ariaLabel={supportMode ? "Berätta lite mer" : "Beskrivning (valfritt)"}
-                      ariaRequired={supportMode}
+                      ariaRequired={supportMode && pendingFiles.length === 0 && !/<img\b/i.test(formData.description)}
                       error={!!errors.description}
                       describedBy="description-error"
                     />
                   </ErrorBoundary>
                 </div>
-                {errors.description && <p id="description-error" role="alert" className="text-sm text-destructive mt-1">{errors.description}</p>}
+                {errors.description && <p id="description-error" role={supportMode ? undefined : 'alert'} className="text-sm text-destructive mt-1">{errors.description}</p>}
               </div>
             )}
 
@@ -1336,11 +1361,11 @@ const TicketForm = ({ selfService = false }: { selfService?: boolean }) => {
 };
 
 // Remount when draft ownership or edited ticket changes; state must never cross scopes.
-const ScopedTicketForm = ({ selfService = false }: { selfService?: boolean }) => {
+const ScopedTicketForm = ({ selfService = false, embedded = false }: { selfService?: boolean; embedded?: boolean }) => {
   const { id } = useParams();
   const { user } = useAuth();
   const location = useLocation();
   const supportMode = new URLSearchParams(location.search).get('support') === '1';
-  return <TicketForm selfService={selfService} key={`${user?.id}:${id || 'new'}:${selfService || supportMode}`} />;
+  return <TicketForm selfService={selfService} embedded={embedded} key={`${user?.id}:${id || 'new'}:${selfService || supportMode}`} />;
 };
 export default ScopedTicketForm;

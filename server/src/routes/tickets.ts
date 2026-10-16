@@ -16,6 +16,7 @@ import { writeRateLimiter } from '../middleware/rateLimit.js';
 import { dispatchWebhook } from '../lib/webhookDispatcher.js';
 import { notifyStaffOfNewTicket } from '../lib/ticketNotifications.js';
 import { sanitizePlainText } from '../lib/htmlSanitizer.js';
+import { hasVisibleContent } from '../lib/ticketContent.js';
 import { logger } from '../lib/logger.js';
 import { logAudit } from '../lib/auditLog.js';
 import { attachmentDisposition } from '../lib/contentDisposition.js';
@@ -77,6 +78,26 @@ const IN_CHUNK_SIZE = 500;
 const MAX_BULK_IDS = 500;
 const COMPOSED_DESCRIPTION_TOO_LONG = `Mallfälten ger en beskrivning över ${MAX_BODY_LENGTH} tecken — korta ner fälten`;
 const MAX_REMINDER_MESSAGE_LENGTH = 500;
+
+const createTicketValidationMessage = (error: string): string => {
+  const messages: Record<string, string> = {
+    'Title is required': 'Ärenderubrik krävs.',
+    'Title must be 200 characters or less': 'Ärenderubriken får vara högst 200 tecken.',
+    'Description must be a string': 'Beskrivningen måste vara text.',
+    'Description must be 5000 characters or less': 'Beskrivningen får vara högst 5000 tecken.',
+    'Notes must be a string': 'Anteckningar måste vara text.',
+    'Notes must be 5000 characters or less': 'Anteckningar får vara högst 5000 tecken.',
+    'Solution must be a string': 'Lösningen måste vara text.',
+    'Solution must be 5000 characters or less': 'Lösningen får vara högst 5000 tecken.',
+    'Invalid status value': 'Ogiltig ärendestatus.',
+    'Invalid priority value': 'Ogiltig prioritet.',
+    'Invalid assigned_to: user does not exist': 'Ogiltig handläggare: användaren finns inte.',
+    'Ogiltig category_id: kategorin finns inte': 'Ogiltig kategori: kategorin finns inte.',
+    'Ogiltig requester_id: kontakten finns inte': 'Ogiltig beställare: kontakten finns inte.',
+    'Ogiltig company_id: företaget finns inte': 'Ogiltigt företag: företaget finns inte.',
+  };
+  return messages[error] ?? error;
+};
 
 function chunked<T>(items: T[], size = IN_CHUNK_SIZE): T[][] {
   const chunks: T[][] = [];
@@ -751,18 +772,20 @@ router.post('/', writeRateLimiter, authenticate, ticketImageSubmission, async (r
     // API-direkta anrop inte kan smuggla in <script>/onerror/javascript:).
     const validation = validateTicketInput(req.body, { partial: false });
     if (!validation.ok) {
-      return res.status(400).json({ error: validation.error });
+      return res.status(400).json({ error: createTicketValidationMessage(validation.error) });
     }
     const { title, description, status, priority, category_id, requester_id, company_id, assigned_to, notes, solution } = validation.value;
 
-    if (!description && (!customFields || customFields.length === 0)) {
-      return res.status(400).json({ error: 'Either description or custom fields are required' });
-    }
-
     if (customFields !== undefined) {
       const normalized = normalizeTemplateValues(customFields);
-      if (!normalized) return res.status(400).json({ error: 'Invalid custom fields' });
+      if (!normalized) return res.status(400).json({ error: 'Ogiltiga mallfält.' });
       customFields = normalized;
+    }
+    const hasSubmittedContent = customFields?.length > 0
+      ? customFields.some((field: CustomFieldInput) => hasVisibleContent(field.fieldValue || ''))
+      : hasVisibleContent(description || '');
+    if (!hasSubmittedContent && res.locals.ticketSubmission.files.length === 0) {
+      return res.status(400).json({ error: 'Skriv en kort beskrivning eller bifoga en bild.' });
     }
     const fieldErrors = missingRequiredTemplateFields(template_id || null, customFields ?? []);
     if (Object.keys(fieldErrors).length > 0) {
@@ -892,7 +915,7 @@ router.post('/', writeRateLimiter, authenticate, ticketImageSubmission, async (r
     res.status(201).json({ ...ticket, warnings: warnings.length > 0 ? warnings : undefined });
   } catch (error) {
     logger.error('Error creating ticket:', { error: String(error) });
-    res.status(500).json({ error: 'Failed to create ticket' });
+    res.status(500).json({ error: 'Kunde inte skapa ärendet.' });
   }
 });
 
