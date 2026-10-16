@@ -9,7 +9,7 @@ import { randomUUID } from 'crypto';
  * exact sendMail options without a real SMTP connection.
  */
 
-const { DB_PATH, sendMailMock, createTransportMock } = vi.hoisted(() => {
+const { DB_PATH, sendMailMock, createTransportMock, transportOptions } = vi.hoisted(() => {
   const { tmpdir } = require('node:os') as typeof import('node:os');
   const { join } = require('node:path') as typeof import('node:path');
   const dbPath = join(tmpdir(), `itticket-test-${process.pid}-${Date.now()}-emailreply.sqlite`);
@@ -23,8 +23,15 @@ const { DB_PATH, sendMailMock, createTransportMock } = vi.hoisted(() => {
   process.env.EMAIL_TO = 'support@example.com';
   process.env.IMAP_USER = 'support@example.com';
   const sendMailMock = vi.fn(async (_options: Record<string, unknown>) => ({ messageId: 'accepted' }));
-  const createTransportMock = vi.fn((_options: Record<string, unknown>) => ({ sendMail: sendMailMock }));
-  return { DB_PATH: dbPath, sendMailMock, createTransportMock };
+  // Transportern skapas en gång och cachas i modulen, oavsett vilket test som
+  // råkar skicka först. vitest 5 rensar mock-historiken mellan tester
+  // (clearMocks: true), så alternativen samlas här i stället för mock.calls.
+  const transportOptions: Record<string, unknown>[] = [];
+  const createTransportMock = vi.fn((options: Record<string, unknown>) => {
+    transportOptions.push(options);
+    return { sendMail: sendMailMock };
+  });
+  return { DB_PATH: dbPath, sendMailMock, createTransportMock, transportOptions };
 });
 
 vi.mock('nodemailer', () => ({
@@ -203,8 +210,8 @@ describe('delad transporter', () => {
       title: 'Två',
     });
 
-    expect(createTransportMock).toHaveBeenCalledTimes(1);
-    expect(createTransportMock.mock.calls[0][0]).toMatchObject({
+    expect(transportOptions).toHaveLength(1);
+    expect(transportOptions[0]).toMatchObject({
       pool: true,
       secure: false,
       requireTLS: true,
