@@ -9,7 +9,9 @@ export default defineConfig({
   // egen vitest-svit — appens svit ska inte plocka upp deras tester.
   // Speglar att tools/ redan är exkluderad från eslint (eslint.config.js).
   test: {
-    exclude: [...configDefaults.exclude, "tools/**", "server/**", "e2e/**"],
+    // .claude/** rymmer Claude Codes worktrees: hela kopior av repot vars tester
+    // annars körs (och fallerar) mot fel kod, även i pre-commit-hookens `vitest related`.
+    exclude: [...configDefaults.exclude, "tools/**", "server/**", "e2e/**", ".claude/**"],
     // Täckningsratchet (baslinje 2026-10-09: 41/40/33/43). Höj när sviten växer,
     // sänk aldrig utan beslut. shadcn-primitiverna i components/ui är vendorkod.
     coverage: {
