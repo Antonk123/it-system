@@ -50,8 +50,8 @@ export default defineConfig({
         // Följer standardmärkets grund (src/assets/logo-default.svg). Var tidigare
         // #ff9e4d — en orange som hörde till det gamla märkets bock och blev
         // föräldralös när märket byttes.
-        theme_color: '#1C1C1E',
-        background_color: '#0f0f14',
+        theme_color: '#f6f1e7',
+        background_color: '#f6f1e7',
         display: 'standalone',
         orientation: 'portrait-primary',
         scope: '/',

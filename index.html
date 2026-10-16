@@ -2,13 +2,6 @@
 <html lang="sv">
   <head>
     <meta charset="UTF-8" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Inter (standardtypsnittet) laddas utan att blockera första målningen:
-         media=print hämtas i bakgrunden och byts till all när filen är nere.
-         Övriga typsnitt laddas först när de väljs (src/lib/appearance.ts). -->
-    <link rel="stylesheet" media="print" onload="this.media='all'" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" />
-    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" /></noscript>
     <link rel="stylesheet" href="/theme-kit/1.2.0/prefabnavet-theme.css" />
     <script src="/theme-kit/1.2.0/prefabnavet-theme-bridge.js"></script>
     <!-- viewport-fit=cover is required for env(safe-area-inset-*) to resolve to
@@ -25,7 +18,7 @@
          Do NOT add a hand-authored <link rel="manifest"> here: the browser uses
          the FIRST manifest link it sees, and a stale /manifest.json (77x86 icon)
          previously shadowed the real one, breaking Add-to-Home-Screen. -->
-    <meta name="theme-color" content="#1C1C1E" />
+    <meta name="theme-color" content="#f6f1e7" />
 
     <!-- iOS PWA Support -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -43,18 +36,15 @@
 
     <meta name="twitter:card" content="summary_large_image" />
 
-    <!-- FOUC prevention: apply mode and font classes before React hydrates (D-08) -->
+    <!-- FOUC prevention: apply the light/dark mode class before React hydrates (D-08) -->
     <script>
       (function() {
         var mode = 'light';
-        var font = 'font-inter';
         try {
           var storedMode = localStorage.getItem('app-mode-theme');
           if (storedMode === 'light' || storedMode === 'dark') mode = storedMode;
-          var storedFont = localStorage.getItem('app-font-theme');
-          if (['font-jakarta','font-crimson','font-libre','font-jetbrains','font-inter'].indexOf(storedFont) !== -1) font = storedFont;
         } catch (e) {}
-        document.documentElement.classList.add(mode, font);
+        document.documentElement.classList.add(mode);
       })();
     </script>
   </head>
