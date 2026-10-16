@@ -74,13 +74,13 @@ const SharedKBArticle = () => {
               >
                 {!article.category_color && (
                   <span className="bg-primary/10 border-primary/30 text-primary rounded-full px-2.5 py-1 flex items-center gap-1">
-                    <Folder className="w-3 h-3" />
+                    <Folder className="h-3.5 w-3.5" />
                     {article.category_name}
                   </span>
                 )}
                 {article.category_color && (
                   <>
-                    <Folder className="w-3 h-3" />
+                    <Folder className="h-3.5 w-3.5" />
                     {article.category_name}
                   </>
                 )}
@@ -92,7 +92,7 @@ const SharedKBArticle = () => {
         {/* Hero */}
         <div className="bg-card/50 border-b border-border">
           <div className="max-w-3xl mx-auto px-6 pt-12 pb-10">
-            <h1 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold text-foreground mb-5 leading-tight">
+            <h1 className="module-h1 text-foreground mb-5">
               {article.title}
             </h1>
             <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
@@ -191,16 +191,14 @@ const proseStyles = `
     font-size: inherit;
   }
   .kb-prose blockquote {
-    border-left: 3px solid hsl(var(--primary));
-    padding-left: 1.25em;
+    border-radius: 6px;
+    padding: 0.5em 1em;
     margin-left: 0;
+    font-family: var(--font-display, Georgia, serif);
     color: hsl(var(--muted-foreground));
     font-style: italic;
     margin-bottom: 1.25em;
-    background: hsl(var(--primary) / 0.05);
-    padding-top: 0.5em;
-    padding-bottom: 0.5em;
-    border-radius: 0 6px 6px 0;
+    background: hsl(var(--muted));
   }
   .kb-prose hr {
     border: none;

@@ -6,11 +6,10 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
   <div
     ref={ref}
     className={cn(
-      // Flat panel: theme's own --radius/--shadow tokens, no gradient fill,
-      // no blur, no hover-lift/glow — those are a per-instance opt-in
-      // (see KPICard), not a base-primitive default.
-      "rounded-lg border border-border bg-card text-card-foreground",
-      "shadow-none",
+      // Bibliotek-kort: 14px hörn, 1px kant och vilande shadow-sm (none i mörkt).
+      // Ingen gradient, blur eller hover-lyft — det är opt-in per instans.
+      "rounded-[14px] border border-border bg-card text-card-foreground",
+      "shadow-sm",
       "transition-colors duration-150",
       "relative overflow-hidden",
       className

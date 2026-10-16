@@ -8,7 +8,7 @@ import { PriorityBadge } from './PriorityBadge';
 import { StatusBadge } from './StatusBadge';
 import { CategoryBadge } from './CategoryBadge';
 import { cn } from '@/lib/utils';
-import { getInitials, hashColor } from '@/lib/avatar';
+import { getInitials, AVATAR_GRADIENT } from '@/lib/avatar';
 import { Progress } from '@/components/ui/progress';
 import { useCategories } from '@/hooks/useCategories';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -101,7 +101,7 @@ export const TicketTable = memo(function TicketTable({
         className="flex items-center gap-2 text-left hover:text-foreground/80 active:opacity-70 transition-colors min-h-[36px] py-1"
       >
         <span>{label}</span>
-        <ArrowUpDown className={`h-3 w-3 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`} />
+        <ArrowUpDown className={`h-3.5 w-3.5 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`} />
         {isActive && (
           <span className="sr-only">
             Sortering {sortDirection === 'asc' ? 'stigande' : 'fallande'}
@@ -206,7 +206,7 @@ export const TicketTable = memo(function TicketTable({
             className="ml-auto min-h-11 gap-1"
             onClick={() => { onSelectionChange?.([]); setSelectionMode(false); }}
           >
-            <X className="h-3 w-3" />
+            <X className="h-3.5 w-3.5" />
             Avmarkera
           </Button>
         </div>
@@ -345,9 +345,9 @@ export const TicketTable = memo(function TicketTable({
                   return (
                     <div className="flex items-center gap-2">
                       <div className={cn(
-                        'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0',
-                        hashColor(assigneeName)
-                      )}>
+                        'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0',
+                        AVATAR_GRADIENT
+                      )} aria-hidden="true">
                         {getInitials(assigneeName)}
                       </div>
                       <span className="text-sm font-medium">{assigneeName}</span>

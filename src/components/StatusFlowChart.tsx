@@ -4,6 +4,7 @@ import { format, parse } from 'date-fns';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useStatusFlow } from '@/hooks/useStatusFlow';
 import { cn } from '@/lib/utils';
+import { STATUS_CHART_COLORS } from '@/lib/chartColors';
 import { AlertTriangle } from 'lucide-react';
 
 interface StatusFlowChartProps {
@@ -98,14 +99,7 @@ export const StatusFlowChart = ({
     closed: 'gradient-status-closed',
   };
 
-  // Status colors from Reports.tsx
-  const statusColors = {
-    open: 'hsl(var(--chart-1))',
-    'in-progress': 'hsl(var(--chart-2))',
-    waiting: 'hsl(var(--chart-5))',
-    resolved: 'hsl(var(--chart-3))',
-    closed: 'hsl(var(--chart-4))',
-  };
+  const statusColors = STATUS_CHART_COLORS;
 
   return (
     <div className={cn('w-full', className)}>

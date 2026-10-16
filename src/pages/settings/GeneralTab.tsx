@@ -1,36 +1,17 @@
 import { useState, useCallback, useEffect } from 'react';
-import { useTheme } from 'next-themes';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Palette, Type, Bell, Loader2, KeyRound } from 'lucide-react';
+import { Palette, Bell, Loader2, KeyRound } from 'lucide-react';
 import { toast } from 'sonner';
-import { FONT_OPTIONS, FontTheme, applyFontTheme, getStoredFontTheme, isFontTheme, saveFontTheme, ModeTheme, applyMode, getStoredMode, saveModeTheme } from '@/lib/appearance';
+import { ModeTheme, applyMode, getStoredMode, saveModeTheme } from '@/lib/appearance';
+import { dispatchModeChange } from '@/hooks/useMode';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
 import { BrandingSection } from '@/components/settings/BrandingSection';
 import { ChangePasswordForm } from '@/components/ChangePasswordForm';
 
-const themeOptions = [
-  { value: 'theme-default', label: 'Slate' },
-  { value: 'theme-midnight', label: 'Midnight' },
-  { value: 'theme-graphite', label: 'Graphite' },
-  { value: 'theme-stone', label: 'Stone' },
-  { value: 'theme-linear', label: 'Linear' },
-  { value: 'theme-spotify', label: 'Spotify' },
-  { value: 'theme-forge', label: 'Forge' },
-] as const;
-
 const GeneralTab = () => {
-  const { theme, setTheme } = useTheme();
-  const [fontTheme, setFontTheme] = useState<FontTheme>(getStoredFontTheme());
   const [mode, setMode] = useState<ModeTheme>(getStoredMode());
   const [pushLoading, setPushLoading] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -117,22 +98,6 @@ const GeneralTab = () => {
     }
   }, []);
 
-  const handleThemeChange = (value: string) => {
-    setTheme(value);
-    toast.success('Tema uppdaterat');
-  };
-
-  const handleFontThemeChange = (value: string) => {
-    if (!isFontTheme(value)) {
-      return;
-    }
-    const nextFontTheme = value as FontTheme;
-    setFontTheme(nextFontTheme);
-    applyFontTheme(nextFontTheme);
-    saveFontTheme(nextFontTheme);
-    toast.success('Teckensnitt uppdaterat');
-  };
-
   return (
     <>
         <BrandingSection />
@@ -147,7 +112,7 @@ const GeneralTab = () => {
                   <span className="ml-auto text-sm text-muted-foreground">{sectionsOpen.appearance ? '−' : '+'}</span>
                 </CardTitle>
                 <CardDescription>
-                  Justera tema och teckensnitt för hela sidan.
+                  Välj ljust eller mörkt läge.
                 </CardDescription>
               </CardHeader>
             </CollapsibleTrigger>
@@ -166,6 +131,7 @@ const GeneralTab = () => {
                     setMode(newMode);
                     applyMode(newMode);
                     saveModeTheme(newMode);
+                    dispatchModeChange(newMode);
                     toast.success(checked ? "Bytte till ljust läge" : "Bytte till mörkt läge");
                   }}
                 />
@@ -173,41 +139,6 @@ const GeneralTab = () => {
               <p className="text-xs text-muted-foreground">
                 Växla mellan ljust och mörkt läge
               </p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Tema</label>
-              <Select value={theme || 'theme-midnight'} onValueChange={handleThemeChange}>
-                <SelectTrigger aria-label="Tema">
-                  <SelectValue placeholder="Välj tema" />
-                </SelectTrigger>
-                <SelectContent>
-                  {themeOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-2">
-                <Type className="w-4 h-4" />
-                Teckensnitt
-              </label>
-              <Select value={fontTheme} onValueChange={handleFontThemeChange}>
-                <SelectTrigger aria-label="Teckensnitt">
-                  <SelectValue placeholder="Välj teckensnitt" />
-                </SelectTrigger>
-                <SelectContent>
-                  {FONT_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
             </div>
 
               </CardContent>

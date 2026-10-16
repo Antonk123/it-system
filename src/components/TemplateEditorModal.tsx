@@ -424,7 +424,7 @@ export const TemplateEditorModal = ({
                 <p className="text-sm text-muted-foreground">
                   Strukturerad data med anpassade fält. Rekommenderat för repetitiva ärenden där du vill samla specifik information.
                 </p>
-                <div className="text-xs text-primary font-medium">→ Rekommenderat</div>
+                <div className="text-xs text-primary font-medium">Rekommenderat</div>
               </button>
 
               {/* Standard template option */}

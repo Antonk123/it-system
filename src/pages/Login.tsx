@@ -165,7 +165,7 @@ const Login = () => {
               {/* Dekorativ (alt=""): rubriken "Ärendesystem" direkt under förmedlar redan namnet */}
               <BrandLogo alt="" className="w-full h-full object-cover" />
             </div>
-            <h1 className="text-2xl font-bold tracking-tight">Ärendesystem</h1>
+            <h1 className="module-h1">Ärendesystem</h1>
             <p className="text-sm text-muted-foreground mt-1.5">Logga in för att fortsätta</p>
           </div>
 

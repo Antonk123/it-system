@@ -108,7 +108,7 @@ export const UserTicketHistory = ({ userId }: UserTicketHistoryProps) => {
             {userTickets.map((ticket) => (
               <TableRow
                 key={ticket.id}
-                className="cursor-pointer transition-all duration-200 hover:bg-linear-to-r hover:from-primary/5 hover:to-accent/5 border-b border-border/30 last:border-0 group"
+                className="cursor-pointer transition-all duration-200 hover:bg-muted/60 border-b border-border/30 last:border-0 group"
               >
                 <TableCell>
                   <Link

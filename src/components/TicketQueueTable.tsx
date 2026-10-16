@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { Category, Ticket } from '@/types/ticket';
-import { getInitials, hashColor } from '@/lib/avatar';
+import { getInitials, AVATAR_GRADIENT } from '@/lib/avatar';
 import { StatusBadge } from '@/components/StatusBadge';
 import { PriorityBadge } from '@/components/PriorityBadge';
 
@@ -151,9 +151,9 @@ export const TicketQueueTable = ({ tickets, isLoading, getUserName, categories =
                         {assigneeName ? (
                           <div className="flex items-center gap-2">
                             <div className={cn(
-                              'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white',
-                              hashColor(assigneeName)
-                            )}>
+                              'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold',
+                              AVATAR_GRADIENT
+                            )} aria-hidden="true">
                               {getInitials(assigneeName)}
                             </div>
                             <span className="text-[12.5px] font-medium">{assigneeName}</span>

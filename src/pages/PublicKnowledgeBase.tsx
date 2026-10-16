@@ -108,7 +108,7 @@ export default function PublicKnowledgeBase() {
     <PublicKBChrome>
       <main id="huvudinnehall" className="mx-auto max-w-6xl px-4 py-7 sm:px-6 sm:py-10">
         <div className="mb-7 max-w-2xl">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Hur kan vi hjälpa dig?</h1>
+          <h1 className="module-h1">Hur kan vi hjälpa dig?</h1>
           <p className="mt-2 text-base leading-relaxed text-muted-foreground">Sök bland guider, rutiner och beprövade lösningar.</p>
         </div>
 

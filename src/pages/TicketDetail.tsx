@@ -594,7 +594,7 @@ const TicketDetail = () => {
           <CardHeader className="pb-4">
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
-                <h1 className="text-xl font-semibold leading-none tracking-tight mb-2">{ticket.title}</h1>
+                <h1 className="module-h2 mb-2">{ticket.title}</h1>
                 <div className="flex items-center gap-3 flex-wrap">
                   <StatusBadge status={ticket.status} />
                   <PriorityBadge priority={ticket.priority} />

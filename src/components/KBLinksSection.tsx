@@ -201,7 +201,7 @@ export const KBLinksSection = ({ ticketId, ticketTitle }: KBLinksSectionProps) =
               filteredResults.map((article: KbArticleRow) => (
                 <div
                   key={article.id}
-                  className="p-2 rounded-lg border-l-2 border-primary/30 bg-muted/30 hover:bg-muted transition-colors"
+                  className="p-2 rounded-lg bg-muted/30 hover:bg-muted transition-colors"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">

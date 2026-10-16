@@ -49,7 +49,7 @@ class ErrorBoundary extends Component<Props, State> {
               <AlertTriangle className="w-7 h-7 text-destructive" />
             </div>
             <div className="space-y-2">
-              <h1 className="text-xl font-semibold text-foreground">
+              <h1 className="module-h2 text-foreground">
                 Något gick fel
               </h1>
               <p className="text-sm text-muted-foreground">

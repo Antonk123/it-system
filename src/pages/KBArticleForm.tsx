@@ -258,7 +258,7 @@ const KBArticleForm = () => {
             {isEditing ? 'Avbryt' : 'Kunskapsbas'}
           </Link>
         </Button>
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
+        <h1 className="module-h1 text-foreground">
           {isEditing ? 'Redigera artikel' : 'Ny artikel'}
         </h1>
       </div>
@@ -397,7 +397,7 @@ const KBArticleForm = () => {
                   <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: tag.color }} />
                   {tag.name}
                   <button type="button" onClick={() => setSelectedTagIds(prev => prev.filter(id => id !== tagId))} className="ml-0.5 rounded-sm hover:opacity-70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`Ta bort taggen ${tag.name}`}>
-                    <X className="h-3 w-3" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 </Badge>
               );

@@ -86,7 +86,7 @@ export const TicketComments = memo(function TicketComments({
                 isInternal ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <Lock className="w-3 h-3" />
+              <Lock className="h-3.5 w-3.5" />
               Internt
             </button>
             <button
@@ -99,7 +99,7 @@ export const TicketComments = memo(function TicketComments({
                 !isInternal ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground',
               )}
             >
-              <Send className="w-3 h-3" />
+              <Send className="h-3.5 w-3.5" />
               Publikt svar
             </button>
           </div>
@@ -121,7 +121,7 @@ export const TicketComments = memo(function TicketComments({
               : 'Skickas som e-post till beställaren.'}
           </p>
           <Button type="submit" size="sm" disabled={isSubmitting || !hasVisibleText(newComment)}>
-            {isSubmitting && <Loader2 className="w-3 h-3 mr-2 animate-spin" />}
+            {isSubmitting && <Loader2 className="h-3.5 w-3.5 mr-2 animate-spin" />}
             {isInternal ? 'Lägg till kommentar' : 'Skicka svar till kund'}
           </Button>
         </div>

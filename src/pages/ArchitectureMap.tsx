@@ -66,7 +66,7 @@ function MapContent() {
 export default function ArchitectureMap() {
   const { user } = useAuth();
   if (user?.role !== 'admin') {
-    return <main className="p-6"><h1 className="text-xl font-semibold">Administratörsbehörighet krävs</h1><Link className="inline-flex min-h-11 items-center underline" to="/settings">Till inställningar</Link></main>;
+    return <main className="p-6"><h1 className="module-h2">Administratörsbehörighet krävs</h1><Link className="inline-flex min-h-11 items-center underline" to="/settings">Till inställningar</Link></main>;
   }
   return <MapContent />;
 }

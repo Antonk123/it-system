@@ -542,7 +542,7 @@ const TicketsTab = () => {
                       {clTemplateItems.map((item, idx) => (
                         <div key={idx}>
                           <div className={`flex items-center gap-2 ${item.isChild ? 'ml-6' : ''}`}>
-                            {item.isChild && <CornerDownRight className="h-3 w-3 text-muted-foreground shrink-0" />}
+                            {item.isChild && <CornerDownRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
                             <span className="flex-1 text-sm border rounded px-2 py-1 bg-muted/30">{item.label}</span>
                             {!item.isChild && (
                               <Button
@@ -556,17 +556,17 @@ const TicketsTab = () => {
                                   setClNewSubItemLabel('');
                                 }}
                               >
-                                <CornerDownRight className="h-3 w-3" />
+                                <CornerDownRight className="h-3.5 w-3.5" />
                               </Button>
                             )}
                             <Button variant="ghost" size="icon" className="h-11 w-11 md:h-7 md:w-7" onClick={() => handleClDeleteItem(idx)} aria-label="Ta bort checklistepunkt">
-                              <X className="h-3 w-3" />
+                              <X className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                           {/* Inline-input för sub-item direkt under aktuell parent */}
                           {addingSubItemFor === idx && (
                             <div className="flex items-center gap-2 ml-6 mt-1">
-                              <CornerDownRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                              <CornerDownRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                               <Input
                                 placeholder="Deluppgiftens text..."
                                 value={clNewSubItemLabel}
@@ -607,7 +607,7 @@ const TicketsTab = () => {
                                   setClNewSubItemLabel('');
                                 }}
                               >
-                                <Check className="h-3 w-3 text-[hsl(var(--success))]" />
+                                <Check className="h-3.5 w-3.5 text-[hsl(var(--success))]" />
                               </Button>
                               <Button
                                 variant="ghost"
@@ -619,7 +619,7 @@ const TicketsTab = () => {
                                   setClNewSubItemLabel('');
                                 }}
                               >
-                                <X className="h-3 w-3" />
+                                <X className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           )}
