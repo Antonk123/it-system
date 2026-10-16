@@ -106,7 +106,7 @@ const CompanyDetail = () => {
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <Building2 className="w-6 h-6 text-primary" />
-            <h1 className="text-xl font-bold text-foreground">{company.name}</h1>
+            <h1 className="module-h1 text-foreground">{company.name}</h1>
           </div>
           <Button variant="outline" className="gap-2 self-start sm:self-auto" onClick={openEdit}>
             <Pencil className="w-4 h-4" />

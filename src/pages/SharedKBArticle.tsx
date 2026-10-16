@@ -92,7 +92,7 @@ const SharedKBArticle = () => {
         {/* Hero */}
         <div className="bg-card/50 border-b border-border">
           <div className="max-w-3xl mx-auto px-6 pt-12 pb-10">
-            <h1 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold text-foreground mb-5 leading-tight">
+            <h1 className="module-h1 text-foreground mb-5">
               {article.title}
             </h1>
             <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">

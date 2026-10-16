@@ -8,7 +8,7 @@ import { PriorityBadge } from './PriorityBadge';
 import { StatusBadge } from './StatusBadge';
 import { CategoryBadge } from './CategoryBadge';
 import { cn } from '@/lib/utils';
-import { getInitials, hashColor } from '@/lib/avatar';
+import { getInitials, AVATAR_GRADIENT } from '@/lib/avatar';
 import { Progress } from '@/components/ui/progress';
 import { useCategories } from '@/hooks/useCategories';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -345,8 +345,8 @@ export const TicketTable = memo(function TicketTable({
                   return (
                     <div className="flex items-center gap-2">
                       <div className={cn(
-                        'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0',
-                        hashColor(assigneeName)
+                        'w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0',
+                        AVATAR_GRADIENT
                       )}>
                         {getInitials(assigneeName)}
                       </div>

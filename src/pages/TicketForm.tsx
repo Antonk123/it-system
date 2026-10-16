@@ -794,7 +794,7 @@ const TicketForm = ({ selfService = false, embedded = false }: { selfService?: b
     </>
   );
 
-  if (supportSent) return <Card className="mx-auto max-w-xl"><CardContent className="space-y-4 pt-6 text-center"><h1 className="text-xl font-semibold">Ärendet skickat!</h1><p className="text-muted-foreground">Vi återkommer så snart som möjligt.</p><Button onClick={() => window.location.reload()}>Skicka ett nytt ärende</Button></CardContent></Card>;
+  if (supportSent) return <Card className="mx-auto max-w-xl"><CardContent className="space-y-4 pt-6 text-center"><h1 className="module-h2">Ärendet skickat!</h1><p className="text-muted-foreground">Vi återkommer så snart som möjligt.</p><Button onClick={() => window.location.reload()}>Skicka ett nytt ärende</Button></CardContent></Card>;
 
   return (
     <ImageAdapterContext.Provider value={imageState.adapter}>
@@ -876,7 +876,7 @@ const TicketForm = ({ selfService = false, embedded = false }: { selfService?: b
 
       <Card>
         {!(supportMode && embedded) && <CardHeader>
-          <h1 className="flex items-center gap-2 text-lg font-semibold leading-none tracking-tight">
+          <h1 className="module-h2 flex items-center gap-2">
             {isEditing
               ? <><Pencil className="w-5 h-5 text-primary" />Redigera ärende</>
               : supportMode ? <>Vad behöver du hjälp med?</> : <><PlusCircle className="w-5 h-5 text-primary" />Skapa nytt ärende</>

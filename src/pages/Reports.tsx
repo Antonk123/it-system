@@ -64,12 +64,10 @@ const RequesterTooltip = ({ active, payload }: any) => {
 
   return (
     <div className="bg-popover text-popover-foreground px-4 py-3 rounded-lg shadow-lg border max-w-xs backdrop-blur-xs">
-      {/* Header with gradient accent */}
       <div className="mb-3 pb-2 border-b relative">
-        <p className="font-semibold font-display text-base bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+        <p className="font-semibold font-display text-base text-foreground">
           {requester.name}
         </p>
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-linear-to-r from-primary/50 via-accent/50 to-transparent" />
       </div>
 
       {/* Status breakdown */}
@@ -651,11 +649,10 @@ const Reports = () => {
                           <Ticket className="w-4 h-4 text-primary" />
                         </div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total</p>
-                        <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                        <p className="text-2xl font-mono font-bold text-foreground">
                           {statusKPIs.total}
                         </p>
                       </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </Card>
 
                     <Card className="relative overflow-hidden">
@@ -665,7 +662,7 @@ const Reports = () => {
                         </div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Vanligast</p>
                         <div className="flex items-baseline gap-2">
-                          <p className="text-lg font-semibold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent truncate">
+                          <p className="text-lg font-semibold text-foreground truncate">
                             {statusKPIs.dominantStatus.name}
                           </p>
                           <p className="text-xs text-muted-foreground">
@@ -673,7 +670,6 @@ const Reports = () => {
                           </p>
                         </div>
                       </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </Card>
 
                     <Card className="relative overflow-hidden">
@@ -682,11 +678,10 @@ const Reports = () => {
                           <AlertTriangle className="w-4 h-4 text-primary" />
                         </div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Aktiva</p>
-                        <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                        <p className="text-2xl font-mono font-bold text-foreground">
                           {statusKPIs.activeTickets}
                         </p>
                       </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </Card>
 
                     <Card className="relative overflow-hidden">
@@ -695,17 +690,16 @@ const Reports = () => {
                           <CheckCircle className="w-4 h-4 text-primary" />
                         </div>
                         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Lösningsgrad</p>
-                        <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                        <p className="text-2xl font-mono font-bold text-foreground">
                           {statusKPIs.resolvedRate.toFixed(0)}%
                         </p>
                         <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-linear-to-r from-primary to-accent transition-[width] duration-300"
+                            className="h-full bg-primary transition-[width] duration-300"
                             style={{ width: `${statusKPIs.resolvedRate}%` }}
                           />
                         </div>
                       </CardContent>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </Card>
                   </div>
                 )}
@@ -867,10 +861,9 @@ const Reports = () => {
                         <Users className="w-4 h-4 text-primary" />
                       </div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Antal personer</p>
-                      <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                      <p className="text-2xl font-mono font-bold text-foreground">
                         {requesterKPIs.totalRequesters}
                       </p>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </div>
 
                     <div className="relative overflow-hidden p-4 rounded-lg border bg-card">
@@ -878,10 +871,9 @@ const Reports = () => {
                         <BarChart3 className="w-4 h-4 text-primary" />
                       </div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Snitt per person</p>
-                      <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                      <p className="text-2xl font-mono font-bold text-foreground">
                         {requesterKPIs.avgTicketsPerRequester.toFixed(1)}
                       </p>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </div>
 
                     <div className="relative overflow-hidden p-4 rounded-lg border bg-card">
@@ -890,7 +882,7 @@ const Reports = () => {
                       </div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Arbetsbelastning</p>
                       <div className="flex items-baseline gap-2">
-                        <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                        <p className="text-2xl font-mono font-bold text-foreground">
                           {requesterKPIs.workloadBalance.toFixed(0)}%
                         </p>
                         <p className="text-xs text-muted-foreground">
@@ -899,11 +891,10 @@ const Reports = () => {
                       </div>
                       <div className="mt-2 h-1.5 bg-muted rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-linear-to-r from-primary to-accent transition-all duration-500"
+                          className="h-full bg-primary transition-all duration-500"
                           style={{ width: `${Math.min(100, requesterKPIs.workloadBalance)}%` }}
                         />
                       </div>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </div>
 
                     <div className="relative overflow-hidden p-4 rounded-lg border bg-card">
@@ -911,10 +902,9 @@ const Reports = () => {
                         <CheckCircle className="w-4 h-4 text-primary" />
                       </div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Snitt avslutning</p>
-                      <p className="text-2xl font-mono font-bold bg-linear-to-r from-primary to-accent bg-clip-text text-transparent">
+                      <p className="text-2xl font-mono font-bold text-foreground">
                         {requesterKPIs.avgCompletionRate.toFixed(0)}%
                       </p>
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-linear-to-bl from-primary/5 to-transparent rounded-bl-full opacity-50" />
                     </div>
                   </div>
                 )}

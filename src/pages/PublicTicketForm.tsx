@@ -270,7 +270,7 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
                   på den här oinloggade sidan. */}
               <BrandLogo alt="IT-Ticket" className="w-full h-full object-cover" />
             </div>
-            <h1 className="text-2xl font-semibold text-foreground tracking-tight">Skicka en supportförfrågan</h1>
+            <h1 className="module-h1 text-foreground">Skicka en supportförfrågan</h1>
             <p className="text-sm text-muted-foreground mt-1.5">Fyll i formuläret så återkommer vi så snart som möjligt.</p>
           </div>
         )}

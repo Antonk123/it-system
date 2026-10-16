@@ -46,7 +46,7 @@ const SharedTicket = () => {
   return (
     <div className="min-h-dvh bg-background">
       <div className="max-w-3xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        <div className="text-center pb-4 border-b"><p className="text-sm text-muted-foreground mb-2">Delat ärende</p><h1 className="text-2xl font-bold text-foreground">{ticket.title}</h1></div>
+        <div className="text-center pb-4 border-b"><p className="text-sm text-muted-foreground mb-2">Delat ärende</p><h1 className="module-h1 text-foreground">{ticket.title}</h1></div>
         <Card>
           <CardHeader className="pb-4"><div className="flex items-center gap-3 flex-wrap"><StatusBadge status={ticket.status as TicketStatus} /><PriorityBadge priority={ticket.priority as TicketPriority} />{ticket.category && <Badge variant="outline" className="gap-1 font-normal"><Tag className="h-3.5 w-3.5" />{ticket.category.label}</Badge>}</div></CardHeader>
           <CardContent className="space-y-6">

@@ -340,7 +340,7 @@ const KBArticleDetail = () => {
 
       {/* Article header */}
       <div className="max-w-[72ch] text-base space-y-4 border-b border-border pb-6">
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight leading-tight text-foreground break-words">{article.title}</h1>
+        <h1 className="module-h1 text-foreground break-words">{article.title}</h1>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
           {article.status === 'draft' && (
             <Badge variant="outline" className="border-[hsl(var(--warning))] text-[hsl(var(--warning))]">Utkast</Badge>

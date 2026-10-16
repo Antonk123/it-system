@@ -185,7 +185,7 @@ const KnowledgeBase = () => {
   return (
     <>
       <div className="mx-auto max-w-7xl space-y-6">
-        <section aria-label="Sök i kunskapsbasen" className="rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-card to-card p-5 md:p-8 space-y-6">
+        <section aria-label="Sök i kunskapsbasen" className="rounded-[14px] border border-border bg-card shadow-sm p-5 md:p-8 space-y-6">
             {/* Header */}
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex items-center gap-3">
@@ -193,7 +193,7 @@ const KnowledgeBase = () => {
                   <BookOpen className="w-7 h-7 text-primary" />
                 </div>
                 <div>
-                  <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-foreground">Kunskapsbas</h1>
+                  <h1 className="module-h1 text-foreground">Kunskapsbas</h1>
                   <p className="mt-2 text-sm md:text-base text-muted-foreground">Instruktioner och lösningar för arbetsdagen.</p>
                 </div>
               </div>

@@ -258,7 +258,7 @@ const KBArticleForm = () => {
             {isEditing ? 'Avbryt' : 'Kunskapsbas'}
           </Link>
         </Button>
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-foreground">
+        <h1 className="module-h1 text-foreground">
           {isEditing ? 'Redigera artikel' : 'Ny artikel'}
         </h1>
       </div>
