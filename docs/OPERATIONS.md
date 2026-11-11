@@ -369,8 +369,11 @@ Logik i `server/src/lib/emailInbound.ts`. Statusendpoint:
 | `IMAP_SECURE` | `true` | Stängs av endast med exakt `false` |
 | `IMAP_POLL_INTERVAL` | `60` (sek) | |
 | `IMAP_AUTO_CREATE_CONTACT` | `true` | Stängs av endast med exakt `false` |
+| `EMAIL_INBOUND_EXCLUDED_RECIPIENTS` | Tom i servern; `teknikstandard@prefabmastarna.se` i Compose | Kommaseparerade exakta adresser i Till/Kopia, skiftlägesokänsligt. Tomt värde stänger av filtret. |
 | `IMAP_PASS` | — | Basic Auth |
 | `IMAP_TENANT_ID` / `IMAP_CLIENT_ID` / `IMAP_CLIENT_SECRET` | — | OAuth2 (M365 client credentials). Alla tre krävs för OAuth2-läge |
+
+**Mottagarfilter:** Mejlen till en utesluten adress flyttas till `Processed` utan att skapa ärenden, kommentarer, kontakter eller bekräftelser. Detta gäller även om IT-adressen också finns i Till/Kopia. Medlemskapet i gruppen och mejlens innehåll bevaras för backup. Filtret läser Till/Kopia samt det första originalets Till/Kopia i automatiska Exchange-vidarebefordringar (AutoForwarded=true och avsändare lika med Inbox-Rules-Loop). Vanlig brödtext, manuella vidarebefordringar och äldre citerade original påverkar inte filtret. Befintliga ärenden påverkas inte. Ändrad konfiguration kräver att backend-containern återskapas.
 
 **Beteende:**
 - Polling med rekursiv `setTimeout` (inte `setInterval`) → inga överlappande polls.
