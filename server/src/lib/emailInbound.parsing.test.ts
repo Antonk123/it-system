@@ -62,6 +62,8 @@ vi.mock('../routes/attachments.js', () => ({
 }));
 
 import { __test__ } from './emailInbound.js';
+import { sendTicketReceivedConfirmation } from './email.js';
+import { dispatchWebhook } from './webhookDispatcher.js';
 
 const { processEmail } = __test__;
 
@@ -185,6 +187,92 @@ afterEach(() => {
   rmSync(uploadDir, { recursive: true, force: true });
   delete process.env.UPLOAD_DIR;
   vi.clearAllMocks();
+  vi.unstubAllEnvs();
+});
+
+describe('recipient exclusions with real MIME parsing', () => {
+  beforeEach(() => {
+    vi.stubEnv('EMAIL_INBOUND_EXCLUDED_RECIPIENTS', ' teknikstandard@prefabmastarna.se , backup@example.com ');
+  });
+
+  const incoming = (headers: string[]) => mime([
+    'From: Robin <robin@example.com>',
+    ...headers,
+    'Subject: Typritning OP',
+    'Message-ID: <group-message@example.com>',
+    'Content-Type: text/plain; charset=utf-8',
+    '', 'Vidarebefordrat: Till: teknikstandard@prefabmastarna.se',
+  ]);
+
+  it.each([
+    [['To: Teknikstandard <TEKNIKSTANDARD@prefabmastarna.se>']],
+    [['To: it@prefabmastarna.se', 'Cc: other@example.com, Teknikstandard <teknikstandard@prefabmastarna.se>']],
+    [['To: Archive: backup@example.com, other@example.com;']],
+  ])('skips excluded recipients without records or confirmations: %s', async (headers) => {
+    expect(await processEmail(incoming(headers), config)).toBe('processed');
+    for (const table of ['tickets', 'contacts', 'ticket_comments', 'ticket_attachments', 'ticket_shares', 'audit_log']) {
+      expect((memDb.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n).toBe(0);
+    }
+    expect(sendTicketReceivedConfirmation).not.toHaveBeenCalled();
+    expect(dispatchWebhook).not.toHaveBeenCalled();
+  });
+
+  it('does not append excluded group replies to existing tickets', async () => {
+    memDb.prepare("INSERT INTO tickets (id, title, email_message_id) VALUES ('existing', 'Typritning OP', '<original@example.com>')").run();
+    await processEmail(incoming([
+      'To: teknikstandard@prefabmastarna.se',
+      'In-Reply-To: <original@example.com>',
+    ]), config);
+    expect((memDb.prepare('SELECT COUNT(*) AS n FROM tickets').get() as { n: number }).n).toBe(1);
+    expect((memDb.prepare('SELECT COUNT(*) AS n FROM ticket_comments').get() as { n: number }).n).toBe(0);
+  });
+
+  it.each([
+    'To: it@prefabmastarna.se',
+    'To: teknikstandard@other.example',
+    'To: otherteknikstandard@prefabmastarna.se',
+    'To: "teknikstandard@prefabmastarna.se" <someone@example.com>',
+  ])('keeps ordinary mail and matches exact addresses only: %s', async (header) => {
+    await processEmail(incoming([header]), config);
+    expect(getTicket().title).toBe('Typritning OP');
+    expect(sendTicketReceivedConfirmation).toHaveBeenCalledOnce();
+  });
+
+  it.each(['Till: Teknikstandard <Teknikstandard@prefabmastarna.se>', 'Till: it@example.com\nKopia: Teknikstandard <Teknikstandard@prefabmastarna.se>'])(
+    'filters Exchange automatic forwards using the original recipients: %s', async recipients => {
+      const source = mime([
+        'From: IT <it@prefabmastarna.se>', 'To: help@prefabmastarna.se',
+        'Subject: VB: Typritning OP',
+        'X-MS-Exchange-Organization-AutoForwarded: true',
+        'X-MS-Exchange-Inbox-Rules-Loop: it@prefabmastarna.se',
+        'Content-Type: text/html; charset=utf-8', '',
+        '<hr><b>Från:</b> Robin &lt;robin@example.com&gt;<br>',
+        '<b>Skickat:</b> onsdag 11 november 2026<br>',
+        recipients.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>') + '<br>',
+        '<b>Ämne:</b> Typritning OP<br><br>Ny ritning.',
+      ]);
+      expect(await processEmail(source, config)).toBe('processed');
+      expect(getTicket()).toBeUndefined();
+      expect(sendTicketReceivedConfirmation).not.toHaveBeenCalled();
+    });
+
+  it('does not filter an older quoted group envelope inside an automatic support forward', async () => {
+    await processEmail(mime([
+      'From: IT <it@prefabmastarna.se>', 'To: help@prefabmastarna.se',
+      'Subject: VB: Support', 'X-MS-Exchange-Organization-AutoForwarded: true',
+      'X-MS-Exchange-Inbox-Rules-Loop: it@prefabmastarna.se', '',
+      'Från: User <user@example.com>', 'Skickat: today', 'Till: it@prefabmastarna.se', 'Ämne: Support', '',
+      'Från: Robin <robin@example.com>', 'Skickat: yesterday',
+      'Till: teknikstandard@prefabmastarna.se', 'Ämne: Old group mail',
+    ]), config);
+    expect(getTicket().title).toBe('VB: Support');
+  });
+
+  it('can disable the filter with an empty configuration', async () => {
+    vi.stubEnv('EMAIL_INBOUND_EXCLUDED_RECIPIENTS', '');
+    await processEmail(incoming(['To: teknikstandard@prefabmastarna.se']), config);
+    expect(getTicket().title).toBe('Typritning OP');
+  });
 });
 
 describe('emailInbound — riktig mailparser + html-to-text', () => {

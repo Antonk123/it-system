@@ -1,5 +1,5 @@
 import { ImapFlow } from 'imapflow';
-import { simpleParser, type ParsedMail } from 'mailparser';
+import { simpleParser, type ParsedMail, type EmailAddress } from 'mailparser';
 import { convert } from 'html-to-text';
 import { ConfidentialClientApplication } from '@azure/msal-node';
 import { db } from '../db/connection.js';
@@ -285,6 +285,44 @@ function senderTicketsLastDay(fromAddress: string): number {
   return row.n;
 }
 
+async function hasExcludedRecipient(parsed: ParsedMail): Promise<boolean> {
+  const excluded = new Set((process.env.EMAIL_INBOUND_EXCLUDED_RECIPIENTS || '')
+    .split(',').map(address => address.trim().toLowerCase()).filter(Boolean));
+  if (excluded.size === 0) return false;
+
+  const matches = (address: EmailAddress): boolean =>
+    !!(address.address && excluded.has(address.address.trim().toLowerCase())) ||
+    !!address.group?.some(matches);
+
+  // Only inspect actual recipients, never quoted/forwarded headers in the body.
+  const directMatch = [parsed.to, parsed.cc].some(field =>
+    (Array.isArray(field) ? field : field ? [field] : [])
+      .some(addresses => addresses.value.some(matches)));
+  if (directMatch) return true;
+
+  // Exchange inbox rules wrap the original recipients in an Outlook header block.
+  // Only unwrap automatic forwards from the mailbox named by that rule header.
+  const ruleMailbox = String(parsed.headers.get('x-ms-exchange-inbox-rules-loop') || '').trim().toLowerCase();
+  const sender = parsed.from?.value[0]?.address?.toLowerCase();
+  if (String(parsed.headers.get('x-ms-exchange-organization-autoforwarded')).toLowerCase() !== 'true' ||
+      !ruleMailbox || sender !== ruleMailbox) return false;
+
+  const text = parsed.html ? convert(parsed.html, {
+    wordwrap: false,
+    selectors: [{ selector: 'a', options: { ignoreHref: true } }, { selector: 'img', format: 'skip' }],
+  }) : parsed.text || '';
+  // Read only the first forwarded envelope, never older quoted messages below it.
+  const envelope = text.replace(/\r\n/g, '\n').match(
+    /(?:^|\n)(?:Från|From):[^\n]+\n(?:Skickat|Sent):[^\n]+\n((?:(?:Till|To|Kopia|Cc):[^\n]*\n)+)(?:Ämne|Subject):/i
+  );
+  if (!envelope) return false;
+  const headers = envelope[1].replace(/^(?:Till|To):/gmi, 'To:').replace(/^(?:Kopia|Cc):/gmi, 'Cc:');
+  const original = await simpleParser(Buffer.from(`${headers}\n`, 'utf8'));
+  return [original.to, original.cc].some(field =>
+    (Array.isArray(field) ? field : field ? [field] : [])
+      .some(addresses => addresses.value.some(matches)));
+}
+
 /**
  * Parsar ett råmail (Buffer) och skapar antingen ett nytt ärende eller lägger till
  * en kommentar på ett befintligt ärende via trådnings-/ämneslogik.
@@ -337,6 +375,13 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<'proce
   }
 
   const parsed = await simpleParser(source);
+
+  // A group copy retained for backup must not create tickets, comments or replies.
+  // 'processed' preserves the message in the existing Processed IMAP folder.
+  if (await hasExcludedRecipient(parsed)) {
+    logger.info('Skipping email addressed to an excluded recipient');
+    return 'processed';
+  }
 
   const fromAddress = parsed.from?.value?.[0]?.address;
   const fromName = parsed.from?.value?.[0]?.name || fromAddress || '';
