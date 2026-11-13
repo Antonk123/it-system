@@ -10,6 +10,9 @@ IT-Ticket levereras rullande från `main` (en instans per deployment). Sektionen
 
 ## [Orutinerat]
 
+### Ärendevy (2026-11-13)
+- Sparade lösningar visas även om webbläsaren har ett tomt lokalt lösningsutkast. Påbörjade utkast med innehåll bevaras.
+
 ### Backend-granskning (2026-10-09, branch `audit-fixes`)
 
 #### Brytande ändringar
