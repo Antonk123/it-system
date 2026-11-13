@@ -116,6 +116,11 @@ const formatFileSize = (bytes: number | null) => {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const hasVisibleContent = (html: string | null | undefined): boolean => {
+  if (!html) return false;
+  return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
+};
+
 /**
  * Ärendevy: huvuddata, kommentarer, bilagor, checklista, länkar och
  * påminnelser. Varje sektion läser sin egen react-query-hook keyad på
@@ -127,7 +132,11 @@ const TicketDetail = () => {
   const { user: currentUser } = useAuth();
   const solutionDraftKey = `ticket-solution:${currentUser?.id}:${id}`;
   const [solutionDraft, setSolutionDraft] = useState<string | null>(() => {
-    try { return sessionStorage.getItem(solutionDraftKey); } catch { return null; }
+    try {
+      const draft = sessionStorage.getItem(solutionDraftKey);
+      // An empty editor draft must not mask a solution saved from another view/API.
+      return hasVisibleContent(draft) ? draft : null;
+    } catch { return null; }
   });
   useEffect(() => {
     try {
@@ -193,10 +202,6 @@ const TicketDetail = () => {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
   const [pendingTemplateItems, setPendingTemplateItems] = useState<ChecklistItem[]>([]);
-  const hasVisibleContent = (html: string | null | undefined): boolean => {
-    if (!html) return false;
-    return html.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim().length > 0;
-  };
   const [ticketFieldValues, setTicketFieldValues] = useState<
     { field_name: string; field_label: string; field_value: string }[]
   >([]);

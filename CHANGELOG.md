@@ -10,6 +10,9 @@ IT-Ticket levereras rullande från `main` (en instans per deployment). Sektionen
 
 ## [Orutinerat]
 
+### Ärendevy (2026-11-13)
+- Sparade lösningar visas även om webbläsaren har ett tomt lokalt lösningsutkast. Påbörjade utkast med innehåll bevaras.
+
 ### E-postfilter (2026-11-11)
 - Mottagarfilter med `EMAIL_INBOUND_EXCLUDED_RECIPIENTS`: mejl till angivna adresser i Till/Kopia sparas i `Processed` utan ärenden, kommentarer eller bekräftelser. Compose undantar Teknikstandard som standard så IT-kontot kan vara kvar i gruppen för backup.
 

@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   lookupShare: vi.fn(async () => null),
   createShare: vi.fn(),
   deleteTicket: vi.fn(),
-  ticket: { id: 't1', title: 'Testärende', description: '', status: 'open', priority: 'medium', created_at: '2026-09-08T10:00:00Z', updated_at: '2026-09-08T10:00:00Z' },
+  ticket: { solution: null as string | null, id: 't1', title: 'Testärende', description: '', status: 'open', priority: 'medium', created_at: '2026-09-08T10:00:00Z', updated_at: '2026-09-08T10:00:00Z' },
 }));
 vi.mock('@/contexts/AuthContext', () => ({ useAuth: () => ({ user: { id: 'agent', role: 'admin' } }) }));
 vi.mock('@/components/ui/rich-text-editor', () => ({ RichTextEditor: ({ value, onChange, id }: { value: string; onChange: (value: string) => void; id: string }) => <textarea id={id} value={value} onChange={event => onChange(event.target.value)} /> }));
@@ -36,6 +36,8 @@ import TicketDetail from './TicketDetail';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionStorage.clear();
+  mocks.ticket.solution = null;
   Element.prototype.scrollIntoView = vi.fn();
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => setTimeout(() => callback(0), 0));
   vi.stubGlobal('cancelAnimationFrame', clearTimeout);
@@ -115,4 +117,28 @@ it('tilldelar den inloggade handläggaren utan att öppna redigeringsformuläret
   await setup(1024);
   fireEvent.click(screen.getByRole('button', { name: 'Tilldela mig' }));
   await waitFor(() => expect(mocks.noop).toHaveBeenCalledWith('t1', { assignedTo: 'agent' }));
+});
+
+it.each(['', '<p></p>', '<p>&nbsp;</p>'])('visar sparad lösning trots ett tomt lokalt utkast (%s)', async draft => {
+  mocks.ticket.solution = '<p>Kabelkontakterna åtgärdades och pannan fungerar igen.</p>';
+  sessionStorage.setItem('ticket-solution:agent:t1', draft);
+  await setup(1024);
+  expect(screen.getByRole('region', { name: 'Lösning' })).toHaveTextContent('Kabelkontakterna åtgärdades och pannan fungerar igen.');
+  expect(screen.queryByLabelText('Hur löstes problemet?')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Redigera lösning' }));
+  expect(screen.getByLabelText('Hur löstes problemet?')).toHaveValue(mocks.ticket.solution);
+});
+
+it('visar HTML-lösningen utan redigering när inget utkast finns', async () => {
+  mocks.ticket.solution = '<p><strong>Åtgärd:</strong> Kabelkontakterna åtgärdades.</p>';
+  await setup(1024);
+  expect(screen.getByRole('region', { name: 'Lösning' })).toHaveTextContent('Åtgärd: Kabelkontakterna åtgärdades.');
+  expect(screen.queryByLabelText('Hur löstes problemet?')).not.toBeInTheDocument();
+});
+
+it('behåller ett påbörjat lokalt lösningsutkast', async () => {
+  mocks.ticket.solution = '<p>Sparad lösning</p>';
+  sessionStorage.setItem('ticket-solution:agent:t1', '<p>Påbörjad ändring</p>');
+  await setup(1024);
+  expect(screen.getByLabelText('Hur löstes problemet?')).toHaveValue('<p>Påbörjad ändring</p>');
 });
