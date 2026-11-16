@@ -27,6 +27,7 @@ import linkRoutes from './routes/links.js';
 import shareRoutes from './routes/shares.js';
 import userRoutes from './routes/users.js';
 import publicRoutes from './routes/public.js';
+import selfServiceRoutes from './routes/selfService.js';
 import templateRoutes from './routes/templates.js';
 import tagRoutes from './routes/tags.js';
 import kbRoutes from './routes/kb.js';
@@ -317,6 +318,7 @@ export function createApp() {
   app.use('/api/links', linkRoutes);
   app.use('/api/shares', shareRoutes);
   app.use('/api/users', userRoutes);
+  app.use('/api/self-service', selfServiceRoutes);
   app.use('/api/public', publicRoutes);
   app.use('/api/templates', templateRoutes);
   app.use('/api/tags', tagRoutes);

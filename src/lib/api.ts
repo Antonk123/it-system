@@ -107,6 +107,7 @@ export class ApiError extends Error {
 }
 
 class ApiClient {
+  private supportCsrfToken: string | null = null;
   private baseUrl: string;
   private csrfToken: string | null = null;
 
@@ -120,14 +121,14 @@ class ApiClient {
 
   setToken(token: string): void {
     safeStorage.setItem('auth_token', token);
-    this.csrfToken = null; // Invalidera cachad CSRF-token vid auth-byte
+    this.csrfToken = null; this.supportCsrfToken = null; // Invalidera cachad CSRF-token vid auth-byte
   }
 
   clearToken(): void {
     safeStorage.removeItem('auth_token');
     safeStorage.removeItem('token');
     safeStorage.removeItem('refreshToken'); // rensa ev. gammal token (pre-cookie-migration)
-    this.csrfToken = null;
+    this.csrfToken = null; this.supportCsrfToken = null;
   }
 
   private async readErrorBody(response: Response, fallbackMessage: string): Promise<ErrorBody> {
@@ -143,7 +144,12 @@ class ApiClient {
 
   // Lazily fetch and cache the CSRF token. The token is bound to the current
   // auth session via the Authorization header (see backend getSessionIdentifier).
-  private async getCsrfToken(skipAuthRefresh = false): Promise<string> {
+  private async getCsrfToken(skipAuthRefresh = false, supportToken?: string): Promise<string> {
+    if (supportToken) {
+      if (this.supportCsrfToken) return this.supportCsrfToken;
+      const data = await this.request<{csrfToken:string}>('/csrf-token', {headers:{'X-Navet-Support':supportToken},skipAuthRefresh:true});
+      this.supportCsrfToken=data.csrfToken; return data.csrfToken;
+    }
     if (this.csrfToken) return this.csrfToken;
     const data = await this.request<{ csrfToken: string }>('/csrf-token', { skipAuthRefresh });
     this.csrfToken = data.csrfToken;
@@ -252,13 +258,13 @@ class ApiClient {
       ...headers,
     };
 
-    if (token) {
+    if (token && !headers['X-Navet-Support']) {
       requestHeaders['Authorization'] = `Bearer ${token}`;
     }
 
     // Attach CSRF token for all state-changing requests
     if (MUTATING_METHODS.has(method)) {
-      requestHeaders['X-CSRF-Token'] = await this.getCsrfToken(skipAuthRefresh);
+      requestHeaders['X-CSRF-Token'] = await this.getCsrfToken(skipAuthRefresh, headers['X-Navet-Support']);
     }
 
     const response = await fetch(`${this.baseUrl}${endpoint}`, {
@@ -289,7 +295,7 @@ class ApiClient {
 
       // On CSRF failure: clear stale token and retry once
       if (response.status === 403 && !isRetry && this.isCsrfError(error)) {
-        this.csrfToken = null;
+        this.csrfToken = null; this.supportCsrfToken = null;
         return this.request<T>(endpoint, options, true);
       }
 
@@ -322,14 +328,15 @@ class ApiClient {
   // session-expiry-hantering som request() — men utan JSON-parsning/Content-Type.
   async requestBlob(
     endpoint: string,
-    options: { signal?: AbortSignal; onResponse?: (headers: Headers) => void; redirectOnAuthFailure?: boolean } = {},
+    options: { signal?: AbortSignal; onResponse?: (headers: Headers) => void; redirectOnAuthFailure?: boolean; supportToken?: string } = {},
     isRetry = false,
   ): Promise<Blob> {
     const { signal, onResponse } = options;
 
-    const token = await this.getFreshToken(isRetry);
+    const token = options.supportToken ? null : await this.getFreshToken(isRetry);
 
     const requestHeaders: Record<string, string> = {};
+    if (options.supportToken) requestHeaders['X-Navet-Support'] = options.supportToken;
     if (token) {
       requestHeaders['Authorization'] = `Bearer ${token}`;
     }
@@ -342,7 +349,7 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      if (response.status === 401 && !isRetry) {
+      if (response.status === 401 && !isRetry && !options.supportToken) {
         if (await this.tryRefresh()) {
           return this.requestBlob(endpoint, options, true);
         }
@@ -414,7 +421,7 @@ class ApiClient {
       const error = await this.readErrorBody(response, fallbackMessage);
 
       if (response.status === 403 && !isRetry && this.isCsrfError(error)) {
-        this.csrfToken = null;
+        this.csrfToken = null; this.supportCsrfToken = null;
         return this.postFile<T>(endpoint, file, fieldName, fallbackMessage, true, redirectOnAuthFailure);
       }
 
@@ -426,6 +433,7 @@ class ApiClient {
 
   private async submitTicketData<T>(endpoint: string, payload: unknown, submission: TicketSubmission = {}, anonymous = false, method: 'POST' | 'PUT' = 'POST', retry = false): Promise<T> {
     const headers: Record<string, string> = {};
+    if (submission.supportToken) { headers['X-Navet-Support'] = submission.supportToken; headers['X-CSRF-Token'] = await this.getCsrfToken(true, submission.supportToken); }
     if (submission.idempotencyKey) headers['Idempotency-Key'] = submission.idempotencyKey;
     let body: BodyInit;
     if (submission.images?.length || submission.attachments?.length) {
@@ -447,8 +455,8 @@ class ApiClient {
         // Let the form retain its draft instead of hard-navigating mid-upload.
       }
       const error = await this.readErrorBody(response, 'Ärendet kunde inte sparas. Dina uppgifter finns kvar.');
-      if (!anonymous && response.status === 403 && !retry && this.isCsrfError(error)) {
-        this.csrfToken = null;
+      if ((!anonymous || submission.supportToken) && response.status === 403 && !retry && this.isCsrfError(error)) {
+        this.csrfToken = null; this.supportCsrfToken = null;
         return this.submitTicketData<T>(endpoint, payload, submission, anonymous, method, true);
       }
       throw this.toApiError(response, error, 'Ärendet kunde inte sparas');
@@ -1312,6 +1320,10 @@ class ApiClient {
     }[]>('/public/templates', { skipAuthRefresh: true });
   }
 
+  async submitSupportReply(id: string, content: string, submission: TicketSubmission) {
+    return this.submitTicketData('/self-service/tickets/' + encodeURIComponent(id) + '/replies', {content}, submission, true);
+  }
+
   async submitPublicTicket(data: {
     name: string;
     email: string;
@@ -1324,7 +1336,7 @@ class ApiClient {
     website?: string; // honeypot — måste vara tomt
     formStartedAt?: number; // ms när formuläret öppnades
   }, submission?: TicketSubmission) {
-    return this.submitTicketData<{ message: string; ticketId: string }>('/public/tickets', data, submission, true);
+    return this.submitTicketData<{ message: string; ticketId: string }>(submission?.supportToken ? '/self-service/tickets' : '/public/tickets', data, submission, true);
   }
 
   async getRequesterAnalytics(year: string, month: string) {

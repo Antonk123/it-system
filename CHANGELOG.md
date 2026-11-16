@@ -228,3 +228,10 @@ faktureringsfunktionerna. Detaljerad changelog infördes från och med
 [1.2]: https://github.com/Antonk123/it-system/compare/v1.1...v1.2
 [1.1]: https://github.com/Antonk123/it-system/compare/v1.0...v1.1
 [1.0]: https://github.com/Antonk123/it-system/releases/tag/v1.0
+
+## Under utveckling — Mina ärenden i Navet
+
+- En separat användarvy kan visa egna felanmälningar, publika svar och bilagor.
+  Användaren kan svara och komplettera ett öppet ärende. Aktiveras separat per miljö.
+
+- När användaren svarar i Navet får tilldelad handläggare mejl och push enligt befintliga inställningar. Omsändning av samma svar ger ingen dubbel notis.

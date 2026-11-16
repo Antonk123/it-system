@@ -43,7 +43,7 @@ function fingerprint(body: unknown, files: Express.Multer.File[] = []): string {
 
 /** Disk-backed multipart parsing, bounded before validation. JSON clients remain supported. */
 export function ticketImageSubmission(req: Request, res: Response, next: NextFunction): void {
-  const scope = (req as AuthRequest).user?.id || 'public';
+  const scope = res.locals.supportIdentity ? 'support:' + JSON.stringify([res.locals.supportIdentity.issuer, res.locals.supportIdentity.subject, req.path]) : (req as AuthRequest).user?.id || 'public';
   const key = req.method === 'POST' ? req.get('Idempotency-Key') : undefined;
   if (key && (key.length > 128 || key.length < 16)) { res.status(400).json({ error: 'Ogiltig idempotensnyckel' }); return; }
   res.locals.ticketSubmission = { files: [], scope, key } satisfies Submission;
@@ -57,7 +57,11 @@ export function ticketImageSubmission(req: Request, res: Response, next: NextFun
           return;
         }
         const ticket = db.prepare('SELECT * FROM tickets WHERE id = ?').get(saved.ticket_id);
-        if (ticket) { res.status(201).json(scope === 'public' ? { message: 'Ticket submitted successfully', ticketId: saved.ticket_id } : ticket); return; }
+        if (ticket && res.locals.supportIdentity && req.path.endsWith('/replies')) {
+          const reply = db.prepare('SELECT comment_id AS id FROM support_ticket_replies WHERE ticket_id=? AND request_key=?').get(saved.ticket_id, key);
+          res.status(201).json(reply); return;
+        }
+        if (ticket) { res.status(201).json((scope === 'public' || res.locals.supportIdentity) ? { message: 'Ticket submitted successfully', ticketId: saved.ticket_id } : ticket); return; }
       }
     }
     // Do not publish a draft whose local image file was lost. Existing images
@@ -66,7 +70,7 @@ export function ticketImageSubmission(req: Request, res: Response, next: NextFun
     const references = JSON.stringify(req.body ?? {}).matchAll(/\/api\/attachments\/file\/([0-9a-f-]{36})/gi);
     for (const [, id] of references) {
       if (stagedIds.has(id)) continue;
-      if (scope === 'public' || !db.prepare('SELECT 1 FROM ticket_attachments WHERE id = ?').get(id)) {
+      if (scope === 'public' || res.locals.supportIdentity || !db.prepare('SELECT 1 FROM ticket_attachments WHERE id = ?').get(id)) {
         res.status(400).json({ error: 'En bild saknas. Infoga den igen innan du skickar ärendet.' });
         return;
       }

@@ -50,10 +50,11 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
     const comments = db.prepare(`
       SELECT
         c.id, c.ticket_id, c.user_id, c.content, c.is_internal, c.created_at, c.updated_at, c.deleted_at,
-        COALESCE(u.display_name, contact.name, u.email) as user_name,
+        COALESCE(portal.author_name, u.display_name, contact.name, u.email) as user_name,
         u.email as user_email,
         c.email_from_name, c.email_from_address
       FROM ticket_comments c
+      LEFT JOIN support_ticket_replies portal ON portal.comment_id = c.id
       LEFT JOIN users u ON c.user_id = u.id
       LEFT JOIN contacts contact ON contact.email = u.email
       WHERE c.ticket_id = ? AND c.deleted_at IS NULL

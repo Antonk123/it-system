@@ -1,3 +1,4 @@
+import SelfService from './pages/SelfService';
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -152,6 +153,7 @@ const ROUTE_TITLES: ReadonlyArray<readonly [string, string]> = [
   ['/reset-password/:token', 'Återställ lösenord'],
   ['/change-password', 'Byt lösenord'],
   ['/submit-ticket', 'Skapa ärende'],
+  ['/support', 'IT-hjälp'],
   ['/shared/:token', 'Delat ärende'],
   ['/kb/shared/:token', 'Delad artikel'],
   ['/kb/public/:token', 'Kunskapsbas'],
@@ -263,6 +265,7 @@ export const AppRoutes = () => {
           <Route path="/login" element={withBoundary(<PublicRoute><Login /></PublicRoute>)} />
           <Route path="/forgot-password" element={withBoundary(<PublicRoute><ForgotPassword /></PublicRoute>)} />
           <Route path="/reset-password/:token" element={withBoundary(<PublicRoute><ResetPassword /></PublicRoute>)} />
+          <Route path="/support" element={withBoundary(<SelfService />)} />
           <Route path="/submit-ticket" element={withBoundary(<PublicTicketForm />)} />
           <Route path="/shared/:token" element={withBoundary(<SharedTicket />)} />
           <Route path="/kb/shared/:token" element={withBoundary(<SharedKBArticle />)} />

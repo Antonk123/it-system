@@ -71,11 +71,13 @@ export async function notifyStaffOfNewTicket(
 }
 
 /**
- * A customer replied (inbound email became a public comment) → notify the
+ * A customer replied (inbound email or the Navet requester portal) → notify the
  * assigned technician: fire the comment.created webhook and push + email the
- * assignee. Called fire-and-forget from the inbound-email path.
+ * assignee. Called after the comment transaction commits.
  */
-export async function notifyAgentOfCustomerReply(ticketId: string, content: string): Promise<void> {
+export async function notifyAgentOfCustomerReply(
+  ticketId: string, content: string, source: 'email' | 'navet' = 'email',
+): Promise<void> {
   const ticket = db.prepare('SELECT id, title, assigned_to FROM tickets WHERE id = ?')
     .get(ticketId) as { id: string; title: string; assigned_to: string | null } | undefined;
   if (!ticket) return;
@@ -86,7 +88,7 @@ export async function notifyAgentOfCustomerReply(ticketId: string, content: stri
     ticket_id: ticket.id,
     ticket_title: ticket.title,
     is_internal: false,
-    source: 'email',
+    source,
     content_snippet: snip,
   }).catch((err) => logger.error('comment.created webhook failed', { error: String(err) }));
 

@@ -608,3 +608,29 @@ Skapandeanrop använder `Idempotency-Key` (16–128 tecken, klienten använder s
 Utkast med originalbilder sparas lokalt i IndexedDB i 24 timmar, separat för publik kanal och respektive användare/ärende. Det är ett återställningsskydd, inte ett skickat ärende.
 
 Vanliga bilagor kan också skickas i samma multipart-anrop som `attachment-0`, `attachment-1`, osv. Befintlig MIME-/filändelseallowlist och signaturkontroll för bilagor gäller. Bilder och bilagor delar gränsen tio filer, 10 MB per fil och 25 MB totalt, och sparas i samma transaktion med samma återförsöksskydd.
+
+## Navets användarportal (opt-in)
+
+`/api/self-service` använder **inte** personalens JWT/API-nycklar. Varje anrop
+kräver `X-Navet-Support`: HS256, exakt `NAVET_SUPPORT_ISSUER`, audience
+`it-ticket:self-service`, scope `own-tickets`, sub och högst fem minuters
+livslängd. Navet utfärdar två minuter. Separat `NAVET_SUPPORT_SECRET` (minst
+32 tecken), inte personalens JWT_SECRET. Saknad konfiguration ger 503.
+Skrivningar behåller CSRF och rate limiting. Tokens lagras inte i klientlagring.
+
+- `GET /tickets?state=open|closed&page=1`: 30 egna ärenden/sida med total.
+- `POST /tickets`: samma validering, mallar och multipartuppladdning som publika
+  formuläret. Namn/e-post kommer från verifierad identitet. Ägarkoppling och
+  bilagor sparas atomiskt. `Idempotency-Key` isoleras per identitet och sökväg.
+- `GET /tickets/:id`: explicit fältlista, inga interna/raderade kommentarer,
+  interna anteckningar eller lösningsfält. Text återges utan exekverbart HTML.
+- `POST /tickets/:id/replies`: content, Idempotency-Key, valfria multipartbilagor;
+  alltid publikt svar. Avslutade ärenden avvisas. Ingen ändring av status/ansvar.
+- `GET /tickets/:id/files/:fileId`: endast bilagor uppladdade via portalen,
+  nedladdning med ägarkontroll. Personalens övriga filer exponeras inte.
+
+Historiska ärenden kopplas inte genom e-postmatchning. Listan börjar med ärenden
+skapade genom den verifierade portalen. Befintliga personalvyer ändrar inte
+åtkomstregler; portalsvar visar avsändarens namn via separat proveniens.
+
+Användarsvar från Navet utlöser efter sparning befintliga handläggarnotiser (mejl/push till tilldelad handläggare) och `comment.created` med `source: navet`. Otilldelade ärenden ger endast webhook. Återförsök av samma sparade svar utlöser ingen ytterligare notis. Leverans är best effort enligt befintligt notisflöde; notisfel gör inte ett sparat svar misslyckat.

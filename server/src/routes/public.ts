@@ -182,10 +182,13 @@ router.get('/branding/logo', publicBrandingReadRateLimiter, (_req: Request, res:
 });
 
 // Submit public ticket
-router.post('/tickets', publicWriteRateLimiter, ticketImageSubmission, (req: Request, res: Response) => {
+export function submitPublicTicket(req: Request, res: Response) {
   let { name, email, title, description, category, priority, customFields, template_id } = req.body;
   const { website, formStartedAt } = req.body;
 
+  if (res.locals.supportIdentity) {
+    name = res.locals.supportIdentity.name; email = res.locals.supportIdentity.email;
+  }
   // Honeypot: riktiga användare ser aldrig fältet. Boten får ett falskt
   // lyckat svar men ingenting sparas.
   if (typeof website === 'string' && website.trim() !== '') {
@@ -347,6 +350,11 @@ router.post('/tickets', publicWriteRateLimiter, ticketImageSubmission, (req: Req
       }
 
       commitTicketImages(res, ticketId);
+      if (res.locals.supportIdentity) {
+        const identity = res.locals.supportIdentity;
+        db.prepare('INSERT INTO support_ticket_owners (ticket_id,issuer,subject) VALUES (?,?,?)').run(ticketId,identity.issuer,identity.subject);
+        db.prepare('INSERT INTO support_ticket_files (attachment_id) SELECT id FROM ticket_attachments WHERE ticket_id=?').run(ticketId);
+      }
       return { ticketId, categoryId, contact };
     });
 
@@ -374,6 +382,8 @@ router.post('/tickets', publicWriteRateLimiter, ticketImageSubmission, (req: Req
     logger.error('Error creating public ticket:', { error: String(error) });
     res.status(500).json({ error: 'Failed to submit ticket' });
   }
-});
+}
+
+router.post('/tickets', publicWriteRateLimiter, ticketImageSubmission, submitPublicTicket);
 
 export default router;

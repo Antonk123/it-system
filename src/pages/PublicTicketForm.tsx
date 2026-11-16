@@ -34,7 +34,7 @@ interface Template {
   fields?: TemplateFieldRow[];
 }
 
-const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | null; embedded: boolean }) => {
+export const PublicTicketForm = ({ profile, embedded, supportToken, onCreated }: { profile: SupportProfile | null; embedded: boolean; supportToken?: string; onCreated?: (id: string) => void }) => {
   const { confirm, confirmationDialog } = useConfirmDiscard();
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -184,7 +184,7 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
     submitLock.current = true;
     setIsSubmitting(true);
     try {
-      await api.submitPublicTicket({
+      const result = await api.submitPublicTicket({
         name: profile?.name || formData.name,
         email: profile?.email || formData.email,
         title: formData.title,
@@ -195,9 +195,10 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
         template_id: embedded ? undefined : selectedTemplate?.id,
         website,
         formStartedAt,
-      }, { images: imageState.referenced({ formData, customFieldValues }), attachments: pendingFiles, idempotencyKey: submissionKey });
+      }, { supportToken, images: imageState.referenced({ formData, customFieldValues }), attachments: pendingFiles, idempotencyKey: submissionKey });
       await draft.clear();
       setIsSuccess(true);
+      if (onCreated) onCreated(result.ticketId);
     } catch (err) {
       if (getErrorCode(err) === 'IDEMPOTENCY_CONFLICT') setSubmissionKey(crypto.randomUUID());
       setError(err instanceof Error ? err.message : 'Ett oväntat fel uppstod');

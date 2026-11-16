@@ -2068,4 +2068,17 @@ export const migrations: Migration[] = [
       if (!columnExists('kb_categories', 'icon')) db.exec('ALTER TABLE kb_categories ADD COLUMN icon TEXT');
     },
   },
+  { id: '094', name: 'navet_requester_portal', up: db => { db.exec(`CREATE TABLE IF NOT EXISTS support_ticket_owners (
+ ticket_id TEXT PRIMARY KEY REFERENCES tickets(id) ON DELETE CASCADE,
+ issuer TEXT NOT NULL, subject TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_support_ticket_owner ON support_ticket_owners(issuer, subject);
+CREATE TABLE IF NOT EXISTS support_ticket_replies (
+ comment_id TEXT PRIMARY KEY REFERENCES ticket_comments(id) ON DELETE CASCADE,
+ ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+ request_key TEXT NOT NULL, content TEXT NOT NULL, author_name TEXT NOT NULL, UNIQUE(ticket_id,request_key)
+);
+CREATE TABLE IF NOT EXISTS support_ticket_files (
+ attachment_id TEXT PRIMARY KEY REFERENCES ticket_attachments(id) ON DELETE CASCADE
+);`); } },
 ];

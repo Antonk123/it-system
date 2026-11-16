@@ -20,9 +20,12 @@ const { DB_PATH } = vi.hoisted(() => {
   return { DB_PATH: dbPath };
 });
 
+vi.mock('./email.js', () => ({ sendTicketReplyEmail: vi.fn(async () => undefined), sendAgentReplyNotificationEmail: vi.fn(async () => undefined) }));
+
 vi.mock('./push.js', () => ({ sendPushToAllSubscriptions: vi.fn(async () => undefined) }));
 
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
+import { sendAgentReplyNotificationEmail } from './email.js';
 import { sendPushToAllSubscriptions } from './push.js';
 import { notifyCustomerOfPublicReply, notifyAgentOfCustomerReply, notifyStaffOfNewTicket } from './ticketNotifications.js';
 
@@ -63,6 +66,7 @@ beforeAll(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   pushMock.mockClear();
+  vi.mocked(sendAgentReplyNotificationEmail).mockClear();
   captured = [];
 });
 
@@ -96,6 +100,30 @@ describe('notifyCustomerOfPublicReply', () => {
 });
 
 describe('notifyAgentOfCustomerReply', () => {
+  it('notifies only the assigned agent of a Navet reply and tags its webhook', async () => {
+    stubFetch();
+    const userId = randomUUID();
+    db.prepare('INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, ?)')
+      .run(userId, 'portal-agent@example.test', 'x', 'user');
+    const ticketId = makeTicketWithRequester();
+    db.prepare('UPDATE tickets SET assigned_to = ? WHERE id = ?').run(userId, ticketId);
+    await notifyAgentOfCustomerReply(ticketId, '<p>Nytt svar från Navet</p>', 'navet');
+    expect(JSON.parse(captured[0].body).payload).toMatchObject({ source: 'navet', ticket_id: ticketId });
+    expect(pushMock).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ ticketId, body: 'Nytt svar från Navet' }), userId);
+    expect(sendAgentReplyNotificationEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ toEmail: 'portal-agent@example.test', ticketId, snippet: 'Nytt svar från Navet' }));
+  });
+  it('continues to email when push fails for a Navet reply', async () => {
+    stubFetch();
+    const userId = randomUUID();
+    db.prepare('INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, ?)')
+      .run(userId, 'portal-fallback@example.test', 'x', 'user');
+    const ticketId = makeTicketWithRequester();
+    db.prepare('UPDATE tickets SET assigned_to = ? WHERE id = ?').run(userId, ticketId);
+    pushMock.mockRejectedValueOnce(new Error('Synthetic push failure'));
+    await expect(notifyAgentOfCustomerReply(ticketId, 'Svar', 'navet')).resolves.toBeUndefined();
+    expect(sendAgentReplyNotificationEmail).toHaveBeenCalledTimes(1);
+  });
+
   it('dispatches a comment.created webhook tagged source=email', async () => {
     stubFetch();
     const userId = randomUUID();
@@ -116,16 +144,17 @@ describe('notifyAgentOfCustomerReply', () => {
     expect(pushMock.mock.calls[0][1]).toBe(userId);
   });
 
-  it('does NOT broadcast push when the ticket is unassigned (still fires the webhook)', async () => {
+  it.each(['email', 'navet'] as const)('does NOT broadcast push when the ticket is unassigned (%s)', async (source) => {
     stubFetch();
     const ticketId = makeTicketWithRequester(); // assigned_to is null
 
-    await notifyAgentOfCustomerReply(ticketId, 'fortfarande trasigt');
+    await notifyAgentOfCustomerReply(ticketId, 'fortfarande trasigt', source);
 
     // Webhook still closes the loop...
     expect(captured.some((c) => c.event === 'comment.created')).toBe(true);
     // ...but we do not push the ticket title to every staff device.
     expect(pushMock).not.toHaveBeenCalled();
+    expect(sendAgentReplyNotificationEmail).not.toHaveBeenCalled();
   });
 });
 

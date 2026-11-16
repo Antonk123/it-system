@@ -140,6 +140,96 @@ security:
   - apiKeyAuth: []
 
 paths:
+  /self-service/tickets:
+    get:
+      summary: Lista egna ärenden
+      description: Kräver separat signerad Navet-identitet via X-Navet-Support. Personalens JWT och API-nycklar ger ingen åtkomst. Skrivningar kräver även CSRF.
+      security: []
+      parameters:
+        - in: header
+          name: X-Navet-Support
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Begäran hanterad}
+        "401": {description: Navet-identitet saknas eller har gått ut}
+        "404": {description: Ärendet eller filen finns inte för denna användare}
+        "503": {description: Funktionen är inte aktiverad}
+    post:
+      summary: Skapa eget ärende
+      description: Kräver separat signerad Navet-identitet via X-Navet-Support. Personalens JWT och API-nycklar ger ingen åtkomst. Skrivningar kräver även CSRF.
+      security: []
+      parameters:
+        - in: header
+          name: X-Navet-Support
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Begäran hanterad}
+        "401": {description: Navet-identitet saknas eller har gått ut}
+        "404": {description: Ärendet eller filen finns inte för denna användare}
+        "503": {description: Funktionen är inte aktiverad}
+  /self-service/tickets/{id}:
+    get:
+      summary: Läs eget ärende och publika kommentarer
+      description: Kräver separat signerad Navet-identitet via X-Navet-Support. Personalens JWT och API-nycklar ger ingen åtkomst. Skrivningar kräver även CSRF.
+      security: []
+      parameters:
+        - in: header
+          name: X-Navet-Support
+          required: true
+          schema: {type: string}
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Begäran hanterad}
+        "401": {description: Navet-identitet saknas eller har gått ut}
+        "404": {description: Ärendet eller filen finns inte för denna användare}
+        "503": {description: Funktionen är inte aktiverad}
+  /self-service/tickets/{id}/replies:
+    post:
+      summary: Svara på eget öppet ärende
+      description: Kräver separat signerad Navet-identitet via X-Navet-Support. Personalens JWT och API-nycklar ger ingen åtkomst. Skrivningar kräver även CSRF.
+      security: []
+      parameters:
+        - in: header
+          name: X-Navet-Support
+          required: true
+          schema: {type: string}
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Begäran hanterad}
+        "401": {description: Navet-identitet saknas eller har gått ut}
+        "404": {description: Ärendet eller filen finns inte för denna användare}
+        "503": {description: Funktionen är inte aktiverad}
+  /self-service/tickets/{id}/files/{fileId}:
+    get:
+      summary: Hämta egen bilaga
+      description: Kräver separat signerad Navet-identitet via X-Navet-Support. Personalens JWT och API-nycklar ger ingen åtkomst. Skrivningar kräver även CSRF.
+      security: []
+      parameters:
+        - in: header
+          name: X-Navet-Support
+          required: true
+          schema: {type: string}
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+        - in: path
+          name: fileId
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Begäran hanterad}
+        "401": {description: Navet-identitet saknas eller har gått ut}
+        "404": {description: Ärendet eller filen finns inte för denna användare}
+        "503": {description: Funktionen är inte aktiverad}
   /health:
     get:
       tags: [System]

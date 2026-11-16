@@ -344,3 +344,18 @@ CREATE TABLE IF NOT EXISTS ticket_submissions (
   request_hash TEXT,
   PRIMARY KEY (scope, key)
 );
+
+-- Navet requester portal: isolated from staff accounts.
+CREATE TABLE IF NOT EXISTS support_ticket_owners (
+ ticket_id TEXT PRIMARY KEY REFERENCES tickets(id) ON DELETE CASCADE,
+ issuer TEXT NOT NULL, subject TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_support_ticket_owner ON support_ticket_owners(issuer, subject);
+CREATE TABLE IF NOT EXISTS support_ticket_replies (
+ comment_id TEXT PRIMARY KEY REFERENCES ticket_comments(id) ON DELETE CASCADE,
+ ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+ request_key TEXT NOT NULL, content TEXT NOT NULL, author_name TEXT NOT NULL, UNIQUE(ticket_id,request_key)
+);
+CREATE TABLE IF NOT EXISTS support_ticket_files (
+ attachment_id TEXT PRIMARY KEY REFERENCES ticket_attachments(id) ON DELETE CASCADE
+);

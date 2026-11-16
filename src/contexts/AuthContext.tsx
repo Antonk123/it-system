@@ -33,6 +33,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // saknas fast sessionen lever, t.ex. om localStorage rensats eller är blockerad).
     const checkAuth = async () => {
       try {
+        // The requester portal uses Navet's scoped assertion, never a staff session.
+        if (window.location.pathname === '/support') return;
         if (!safeStorage.getItem('auth_token') && !(await api.refreshSession())) {
           return;
         }
