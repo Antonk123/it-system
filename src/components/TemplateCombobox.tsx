@@ -48,8 +48,10 @@ export const TemplateCombobox = ({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
+            type="button"
             variant="outline"
             role="combobox"
+            aria-label="Ta hjälp av en mall"
             aria-expanded={open}
             className="w-full justify-between font-normal"
           >

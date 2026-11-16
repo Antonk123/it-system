@@ -894,11 +894,9 @@ const TicketForm = ({ selfService = false, embedded = false }: { selfService?: b
             {/* Titel + Mall row */}
             <div className="flex flex-col gap-4">
               {!isEditing && (
-                <details className="group space-y-2" open={selectedTemplate ? true : undefined}>
-                  <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 py-2 text-sm text-primary [&::-webkit-details-marker]:hidden">Ta hjälp av en mall<ChevronDown aria-hidden="true" className="h-4 w-4 transition-transform group-open:rotate-180 motion-reduce:transition-none" /></summary>
-                  <Label id="label-template">Mall</Label>
-                  <div aria-labelledby="label-template">
+                <div className="space-y-2">
                   <TemplateCombobox
+                    placeholder="Ta hjälp av en mall"
                     templates={templates}
                     selectedTemplate={selectedTemplate}
                     onSelect={async (template) => {
@@ -927,9 +925,8 @@ const TicketForm = ({ selfService = false, embedded = false }: { selfService?: b
                       setEditInitialFieldValues([]);
                     }}
                   />
-                  </div>
                   {templatesError && <LookupError message="Kunde inte hämta mallar." onRetry={() => void refetchTemplates()} />}
-                </details>
+                </div>
               )}
               <div className="space-y-2">
                 <Label htmlFor="title">{supportMode ? "Kort rubrik *" : "Titel *"}</Label>

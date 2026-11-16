@@ -40,10 +40,8 @@ async function fillTemplate(page: Page, template: typeof templates[number]) {
   }
 }
 
-/** Mallväljaren i supportformuläret ligger i en hopfälld "Ta hjälp av en mall"-sektion. */
+/** Ett klick öppnar mallistan direkt. */
 async function choosePublicTemplate(scope: Page | FrameLocator, name: string) {
-  const section = scope.locator('details').filter({ has: scope.locator('summary', { hasText: 'Ta hjälp av en mall' }) });
-  if (await section.getAttribute('open') === null) await section.locator('summary').click();
   await scope.locator('#template').click();
   await scope.getByRole('option').filter({ hasText: name }).click();
 }
@@ -154,8 +152,7 @@ test('ordinary signed-in user: all six templates and original inline images', as
   await expect(page).not.toHaveURL(/change-password/);
   for (const template of templates) {
     await page.goto('/tickets/new');
-    await page.getByText('Ta hjälp av en mall', { exact: true }).click();
-    await page.locator('details').filter({ hasText: 'Ta hjälp av en mall' }).getByRole('combobox').click();
+    await page.getByRole('combobox', { name: 'Ta hjälp av en mall' }).click();
     await page.getByRole('option').filter({ hasText: template.name }).click();
     await fillTemplate(page, template);
     await page.getByRole('combobox', { name: 'Beställare' }).click();
@@ -216,10 +213,10 @@ test('Navet iframe sandbox and theme bridge, template keyboard action and local 
   await expect(frame.locator('.ProseMirror img')).toHaveCount(1);
   // Navet sätter ingen kategori; mallsektionen ska gå att öppna med tangentbordet.
   await expect(frame.locator('summary').filter({ hasText: 'Kategori' })).toHaveCount(0);
-  const summary = frame.locator('summary').filter({ hasText: 'Ta hjälp av en mall' });
-  await summary.focus(); await summary.press('Enter');
-  await expect(frame.locator('#template')).toBeVisible();
-  await expect(summary.locator('svg').last()).toBeVisible();
+  const picker = frame.getByRole('combobox', { name: 'Ta hjälp av en mall' });
+  await picker.focus(); await picker.press('Enter');
+  await expect(frame.getByRole('listbox')).toBeVisible();
+  await frame.getByRole('listbox').press('Escape');
   for (const theme of ['light', 'dark']) {
     await page.evaluate(theme => document.querySelector('iframe')!.contentWindow!.postMessage({ type: 'prefabnavet.appearance', version: 1, theme, palette: 'bibliotek' }, 'https://ticket-image.test'), theme);
     await expect(frame.locator('html')).toHaveAttribute('data-prefabnavet-theme', theme);

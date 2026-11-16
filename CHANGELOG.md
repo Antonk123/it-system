@@ -10,6 +10,9 @@ IT-Ticket levereras rullande från `main` (en instans per deployment). Sektionen
 
 ## [Orutinerat]
 
+### Mallval (2026-11-16)
+- ”Ta hjälp av en mall” öppnar mallistan direkt i felanmälan och när du skapar ärenden. Bekräftelsen innan ifylld text ersätts finns kvar.
+
 ### Ärendevy (2026-11-13)
 - Sparade lösningar visas även om webbläsaren har ett tomt lokalt lösningsutkast. Påbörjade utkast med innehåll bevaras.
 

@@ -8,7 +8,7 @@ import { ImageAdapterContext, useTicketImages } from '@/lib/ticketImages';
 import { useTicketDraft } from '@/hooks/useTicketDraft';
 import { requiredTemplateFieldErrors } from '@/lib/templateValidation';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { CheckCircle, Send, AlertCircle, Loader2, ArrowLeft, FileText, ChevronDown } from 'lucide-react';
+import { CheckCircle, Send, AlertCircle, Loader2, ArrowLeft, ChevronDown } from 'lucide-react';
 import TicketForm, { MISSING_CONTENT_MESSAGE } from './TicketForm';
 import { Link, useSearchParams } from 'react-router';
 import { api, CustomFieldInput, TemplateFieldRow } from '@/lib/api';
@@ -343,14 +343,10 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
             }
             {/* Template */}
             {templates.length > 0 && (
-              <details className="group space-y-2"><summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm text-primary [&::-webkit-details-marker]:hidden"><FileText aria-hidden="true" className="h-4 w-4" />Ta hjälp av en mall<ChevronDown aria-hidden="true" className="h-4 w-4 group-open:rotate-180" /></summary>
-                <Label htmlFor="template" className="text-foreground text-sm font-medium flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                  Mall (valfritt)
-                </Label>
+              <div className="space-y-2">
                 <Select value={selectedTemplate?.id || ''} onValueChange={handleTemplateSelect}>
-                  <SelectTrigger id="template" className={selectTriggerClass}>
-                    <SelectValue placeholder="Välj en mall för att förfylla formuläret">{selectedTemplate?.name}</SelectValue>
+                  <SelectTrigger id="template" aria-label="Ta hjälp av en mall" className={selectTriggerClass}>
+                    <SelectValue placeholder="Ta hjälp av en mall">{selectedTemplate?.name}</SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Ingen mall</SelectItem>
@@ -366,7 +362,7 @@ const PublicTicketForm = ({ profile, embedded }: { profile: SupportProfile | nul
                     ))}
                   </SelectContent>
                 </Select>
-              </details>
+              </div>
             )}
 
             {/* Dynamic fields */}
