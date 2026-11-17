@@ -172,6 +172,19 @@ describe("requester portal boundary", () => {
     expect(r.body.comments).toHaveLength(1);
     expect(r.body.attachments).toEqual([]);
   });
+  it("preserves plain email paragraphs and formats HTML replies without exposing markup", async () => {
+    const description = "Hej!\nEn rad till.\n\nFrån: Anna\nÄmne: Flytten\n\n1. Kontrollera kontot\n2. Öppna https://example.test/help";
+    db.prepare("UPDATE tickets SET description=? WHERE id=?").run(description, id);
+    db.prepare("INSERT INTO ticket_comments(id,ticket_id,user_id,content,is_internal) VALUES(?,?,?,?,0)")
+      .run("formatted-reply", id, getSystemUserId(), '<p>Första stycket</p><p>Andra<br>Ny rad</p><script>alert(1)</script>');
+    const r = await request(app).get(`/api/self-service/tickets/${id}`).set("X-Navet-Support", token());
+    expect(r.status).toBe(200);
+    expect(r.body.description).toBe(description);
+    const reply = r.body.comments.find((c: {id: string}) => c.id === "formatted-reply");
+    expect(reply.content).toContain("Första stycket\n\nAndra\nNy rad");
+    expect(reply.content).not.toContain("<script>");
+    expect(reply.content).not.toContain("alert(1)");
+  });
   it("accepts own public reply once; denies other users and closed tickets", async () => {
     vi.mocked(notifyAgentOfCustomerReply).mockClear();
     const c = await client();

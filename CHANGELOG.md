@@ -10,6 +10,9 @@ IT-Ticket levereras rullande från `main` (en instans per deployment). Sektionen
 
 ## [Orutinerat]
 
+### Mina ärenden (2026-11-17)
+- Mejl och svar behåller radbrytningar och stycken. Befintlig textvisare ger läsbara listor och klickbara länkar som öppnas separat från ärendet.
+
 ### Mallval (2026-11-16)
 - ”Ta hjälp av en mall” öppnar mallistan direkt i felanmälan och när du skapar ärenden. Bekräftelsen innan ifylld text ersätts finns kvar.
 
