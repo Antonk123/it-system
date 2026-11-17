@@ -348,7 +348,7 @@ CREATE TABLE IF NOT EXISTS ticket_submissions (
 -- Navet requester portal: isolated from staff accounts.
 CREATE TABLE IF NOT EXISTS support_ticket_owners (
  ticket_id TEXT PRIMARY KEY REFERENCES tickets(id) ON DELETE CASCADE,
- issuer TEXT NOT NULL, subject TEXT NOT NULL
+ issuer TEXT NOT NULL, subject TEXT NOT NULL, read_revision TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_support_ticket_owner ON support_ticket_owners(issuer, subject);
 CREATE TABLE IF NOT EXISTS support_ticket_replies (

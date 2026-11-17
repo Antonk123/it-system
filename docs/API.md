@@ -634,3 +634,13 @@ skapade genom den verifierade portalen. Befintliga personalvyer ändrar inte
 åtkomstregler; portalsvar visar avsändarens namn via separat proveniens.
 
 Användarsvar från Navet utlöser efter sparning befintliga handläggarnotiser (mejl/push till tilldelad handläggare) och `comment.created` med `source: navet`. Otilldelade ärenden ger endast webhook. Återförsök av samma sparade svar utlöser ingen ytterligare notis. Leverans är best effort enligt befintligt notisflöde; notisfel gör inte ett sparat svar misslyckat.
+
+### Olästa uppdateringar i Navets användarportal
+
+`GET /api/self-service/updates` ger `{count}` för samma signerade ägare som övriga
+self-service-routes. Listan inkluderar `unread`; detaljen inkluderar `revision`.
+`POST /api/self-service/tickets/:id/read` med `{revision}` och ordinarie CSRF
+kvitterar endast exakt visad revision (204; 409 vid nyare uppdatering).
+Status och publika, ej raderade svar från andra räknas; egna portalsvar och interna
+anteckningar räknas inte. Även avslutade ärenden kan ha oläst slutbesked.
+Lässtatus lagras på befintlig ägarkoppling, migration 095. Ingen e-postmatchning.

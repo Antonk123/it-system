@@ -240,4 +240,53 @@ describe("requester portal boundary", () => {
     expect(after.body.comments[0].author).toBe('Du');
   });
 
+  it("counts only own public updates and acknowledges the exact visible revision", async () => {
+    const c = await client("reader");
+    const created = await c.agent.post("/api/self-service/tickets")
+      .set("X-Navet-Support", c.t).set("X-CSRF-Token", c.csrf)
+      .set("Idempotency-Key", "unread-ticket-reader-001")
+      .send({title: "Unread test", description: "Synthetic test"});
+    const ticket = created.body.ticketId;
+    expect(created.status).toBe(201);
+    const get = (path: string, t = c.t) => c.agent.get('/api/self-service/' + path).set('X-Navet-Support', t);
+    const count = async () => (await get('updates')).body.count;
+    const read = (revision: string, t = c.t) => c.agent.post(`/api/self-service/tickets/${ticket}/read`)
+      .set('X-Navet-Support', t).set('X-CSRF-Token', c.csrf).send({revision});
+    expect(await count()).toBe(0);
+    const add = (id: string, internal: number) => db.prepare(
+      'INSERT INTO ticket_comments (id,ticket_id,user_id,content,is_internal,created_at,updated_at) VALUES (?,?,?,?,?,?,?)'
+    ).run(id,ticket,getSystemUserId(),'Text',internal,new Date().toISOString(),new Date().toISOString());
+    add('internal-unread', 1);
+    expect(await count()).toBe(0);
+    const reply = await c.agent.post(`/api/self-service/tickets/${ticket}/replies`)
+      .set('X-Navet-Support',c.t).set('X-CSRF-Token',c.csrf)
+      .set('Idempotency-Key','own-unread-reply-001').send({content:'Own reply'});
+    expect(reply.status).toBe(201);
+    expect(await count()).toBe(0);
+    add('public-unread', 0);
+    expect(await count()).toBe(1);
+    expect((await get('updates',token('other-reader'))).body.count).toBe(0);
+    expect((await get('tickets')).body.data[0].unread).toBe(true);
+    const detail = await get(`tickets/${ticket}`);
+    expect(await count()).toBe(1); // GET is never an acknowledgement.
+    expect((await read(detail.body.revision, token('other-reader'))).status).toBe(404);
+    db.prepare("UPDATE tickets SET status='closed' WHERE id=?").run(ticket);
+    expect((await read(detail.body.revision)).status).toBe(409); // Newer update survives.
+    const latest = await get(`tickets/${ticket}`);
+    expect((await read(latest.body.revision)).status).toBe(204);
+    expect((await read(latest.body.revision)).status).toBe(204);
+    expect(await count()).toBe(0);
+    expect((await get('updates')).headers['cache-control']).toBe('private, no-store');
+    // Reuse status history: a change back to the same displayed status is still new.
+    db.prepare('INSERT INTO ticket_history(id,ticket_id,user_id,field_name,old_value,new_value,changed_at) VALUES (?,?,?,?,?,?,?)')
+      .run('status-roundtrip',ticket,getSystemUserId(),'status','open','closed',new Date().toISOString());
+    expect(await count()).toBe(1);
+    const roundtrip = await get(`tickets/${ticket}`);
+    expect((await read(roundtrip.body.revision)).status).toBe(204);
+    expect(await count()).toBe(0);
+    add('after-read',0);
+    expect(await count()).toBe(1); // Closure and subsequent public replies are visible too.
+    expect((await request(app).get('/api/self-service/updates')).status).toBe(401);
+  });
+
 });

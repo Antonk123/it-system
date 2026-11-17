@@ -125,4 +125,22 @@ describe("requester view", () => {
       expect(screen.queryByText("Vilken skrivare?")).not.toBeInTheDocument(),
     );
   });
+  it("acknowledges only rendered visible detail, not the list", async () => {
+    Object.defineProperty(document, 'visibilityState', {configurable: true, value: 'hidden'});
+    mocks.request.mockImplementation((url: string) => Promise.resolve(
+      url.endsWith('/read') ? null : url.includes('?') ? {data: [{...ticket, unread:true}], total:1} : {...ticket, revision:'shown-revision'}));
+    render(<SelfService />); session();
+    fireEvent.click(screen.getByRole('button', {name:'Mina ärenden'}));
+    await screen.findByText('Ny uppdatering');
+    expect(mocks.request.mock.calls.some(([url]) => url.endsWith('/read'))).toBe(false);
+    fireEvent.click(screen.getByRole('button', {name:/Skrivaren/}));
+    await screen.findByText('Vilken skrivare?');
+    expect(mocks.request.mock.calls.some(([url]) => url.endsWith('/read'))).toBe(false);
+    Object.defineProperty(document, 'visibilityState', {configurable:true, value:'visible'});
+    fireEvent(document, new Event('visibilitychange'));
+    await waitFor(() => expect(mocks.request).toHaveBeenCalledWith('/self-service/tickets/owned/read', expect.objectContaining({
+      method:'POST', body:{revision:'shown-revision'}, headers:{'X-Navet-Support':'local-test-token'}, skipAuthRefresh:true
+    })));
+  });
+
 });

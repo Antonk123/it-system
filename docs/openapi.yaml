@@ -140,6 +140,49 @@ security:
   - apiKeyAuth: []
 
 paths:
+  /self-service/updates:
+    get:
+      summary: Antal egna ärenden med olästa publika uppdateringar
+      security: []
+      parameters:
+        - in: header
+          name: X-Navet-Support
+          required: true
+          schema: {type: string}
+      responses:
+        "200": {description: Ägarbundet antal, private no-store}
+        "401": {description: Ogiltig Navet-identitet}
+        "503": {description: Portalen är inte aktiverad}
+  /self-service/tickets/{id}/read:
+    post:
+      summary: Kvittera den visade revisionen av eget ärende
+      description: Kräver signerad Navet-identitet och ordinarie CSRF. Nyare uppdateringar kvitteras aldrig genom en äldre revision.
+      security: []
+      parameters:
+        - in: header
+          name: X-Navet-Support
+          required: true
+          schema: {type: string}
+        - in: path
+          name: id
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              properties:
+                revision: {type: string}
+      responses:
+        "204": {description: Visad revision kvitterad}
+        "401": {description: Ogiltig Navet-identitet}
+        "403": {description: CSRF-kontroll misslyckades}
+        "404": {description: Ärendet tillhör inte användaren}
+        "409": {description: Revisionen är inaktuell}
+        "503": {description: Portalen är inte aktiverad}
   /self-service/tickets:
     get:
       summary: Lista egna ärenden

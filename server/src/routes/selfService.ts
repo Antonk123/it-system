@@ -21,6 +21,7 @@ import {
 } from "../middleware/rateLimit.js";
 import { notifyAgentOfCustomerReply } from "../lib/ticketNotifications.js";
 import { logger } from "../lib/logger.js";
+import { supportUpdates } from "../lib/supportUpdates.js";
 const router = Router();
 router.use(supportIdentity, createRateLimiter(60000, 120));
 const text = (html: string) =>
@@ -35,6 +36,27 @@ function owns(identity: SupportIdentity, ticket: string) {
     )
     .get(identity.issuer, identity.subject, ticket);
 }
+router.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "private, no-store");
+  next();
+});
+router.get("/updates", (_req, res) => {
+  const updates = supportUpdates(res.locals.supportIdentity);
+  res.json({ count: updates.filter(t => t.unread).length });
+});
+router.post("/tickets/:id/read", (req, res) => {
+  const identity: SupportIdentity = res.locals.supportIdentity;
+  const result = db.transaction(() => {
+    const current = supportUpdates(identity, req.params.id)[0];
+    if (!current) return 404;
+    if (typeof req.body?.revision !== "string" || req.body.revision !== current.revision) return 409;
+    db.prepare("UPDATE support_ticket_owners SET read_revision=? WHERE ticket_id=? AND issuer=? AND subject=?")
+      .run(current.revision, current.id, identity.issuer, identity.subject);
+    return 204;
+  })();
+  if (result === 204) return res.status(204).end();
+  res.status(result).json({ error: result === 404 ? "Ärendet finns inte." : "Ärendet har uppdaterats. Öppna det igen för att läsa det senaste." });
+});
 router.get("/tickets", (req, res) => {
   const identity: SupportIdentity = res.locals.supportIdentity;
   const page = Math.max(
@@ -55,7 +77,8 @@ router.get("/tickets", (req, res) => {
     .get(identity.issuer, identity.subject) as {
     total: number;
   };
-  res.json({ data, page, total: count.total });
+  const updates = new Map(supportUpdates(identity).map(t => [t.id, t.unread]));
+  res.json({ data: (data as {id: string}[]).map(t => ({...t, unread: updates.get(t.id) || false})), page, total: count.total });
 });
 router.get("/tickets/:id", (req, res) => {
   const identity: SupportIdentity = res.locals.supportIdentity;
@@ -82,6 +105,7 @@ router.get("/tickets/:id", (req, res) => {
     .all(req.params.id);
   res.json({
     ...ticket,
+    revision: supportUpdates(identity, req.params.id)[0].revision,
     description: text(ticket.description),
     comments: comments.map((c) => ({ ...c, content: text(c.content) })),
     attachments,

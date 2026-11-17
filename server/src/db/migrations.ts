@@ -2081,4 +2081,8 @@ CREATE TABLE IF NOT EXISTS support_ticket_replies (
 CREATE TABLE IF NOT EXISTS support_ticket_files (
  attachment_id TEXT PRIMARY KEY REFERENCES ticket_attachments(id) ON DELETE CASCADE
 );`); } },
+  { id: '095', name: 'support_read_revision', up: (db, { columnExists }) => {
+    if (!columnExists('support_ticket_owners', 'read_revision'))
+      db.exec('ALTER TABLE support_ticket_owners ADD COLUMN read_revision TEXT');
+  } },
 ];

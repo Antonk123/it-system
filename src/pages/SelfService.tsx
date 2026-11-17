@@ -16,8 +16,10 @@ interface Summary {
   title: string;
   status: string;
   updated_at: string;
+  unread?: boolean;
 }
 interface Detail extends Summary {
+  revision: string;
   description: string;
   comments: {
     id: string;
@@ -59,6 +61,7 @@ const parentOrigins = [
 export default function SelfService() {
   const visualProfile = useSupportProfile(true);
   const identityRef = useRef<string | null>(null);
+  const parentOriginRef = useRef<string | null>(null);
   const { confirm, confirmationDialog } = useConfirmDiscard();
   const [session, setSession] = useState<Session | null>(null),
     [view, setView] = useState<"new" | "list" | "detail" | "confirm">("new");
@@ -108,6 +111,7 @@ export default function SelfService() {
         replyKey.current = crypto.randomUUID();
         setView("new");
       }
+      parentOriginRef.current = event.origin;
       identityRef.current = event.data.subject;
       setSession({
         subject: event.data.subject,
@@ -181,6 +185,28 @@ export default function SelfService() {
     window.addEventListener("beforeunload", warn);
     return () => window.removeEventListener("beforeunload", warn);
   }, [reply, files]);
+  useEffect(() => {
+    if (!session || !detail || view !== "detail" || !detail.revision) return;
+    let disposed = false, inFlight = false, acknowledged = false;
+    const acknowledge = async () => {
+      if (disposed || inFlight || acknowledged || document.visibilityState === "hidden") return;
+      inFlight = true;
+      try {
+        await api.request(`/self-service/tickets/${encodeURIComponent(detail.id)}/read`, {
+          method: "POST", body: { revision: detail.revision },
+          headers: { "X-Navet-Support": session.token }, skipAuthRefresh: true,
+        });
+        if (disposed || identityRef.current !== session.subject) return;
+        acknowledged = true;
+        if (parentOriginRef.current) window.parent.postMessage(
+          {type: "prefabnavet.support-updates-changed", version: 1}, parentOriginRef.current);
+      } catch { /* Keep unread on failure; opening the detail again retries. */ }
+      finally { inFlight = false; }
+    };
+    void acknowledge();
+    document.addEventListener("visibilitychange", acknowledge);
+    return () => { disposed = true; document.removeEventListener("visibilitychange", acknowledge); };
+  }, [session, detail, view]);
   const open = async (id: string) => {
     if (!session) return;
     setBusy(true);
@@ -360,7 +386,7 @@ export default function SelfService() {
                         }}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <span className="font-medium">{t.title}</span>
+                          <span className="font-medium">{t.title}{t.unread && <span className="ml-2 text-sm text-primary">Ny uppdatering</span>}</span>
                           <span className="text-sm bg-muted rounded-full px-3 py-1">
                             {labels[t.status] || t.status}
                           </span>
