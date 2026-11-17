@@ -558,3 +558,56 @@ Frontend och backend bör uppdateras tillsammans så att vanliga bilagor skickas
 äldre cachade klienter utan dessa flaggor interna; säkerheten kräver alltså inte
 att alla öppna flikar redan har laddats om. Sådana uppladdningar kan behöva göras
 om med uppdaterad klient för extern delning.
+
+## Historiska ärenden i Navet — granskad engångskoppling
+
+`server/src/scripts/backfillSupportOwners.ts` används endast efter ett uttryckligt
+beslut och granskning av befintlig personkontakt mot aktiv Navet-identitet.
+Verktyget matchar aldrig e-post automatiskt och expanderar inte listan till nya
+eller framtida ärenden. Delade konton, tester och osäkra kopplingar ska undantas
+från planen. Se ADR 0004.
+
+Planen är privat JSON med exakt följande format; alla ärenden anges individuellt:
+
+```json
+{
+  "version": 1,
+  "issuer": "https://navet.prefabmastarna.se",
+  "actorUserId": "IT-personalens befintliga admin-ID",
+  "reason": "Dokumenterat användarbeslut och granskningsreferens",
+  "entries": [{
+    "ticketId": "ärende-ID",
+    "requesterId": "granskat kontakt-ID",
+    "subject": "befintligt Navet-användar-ID",
+    "requesterName": "exakt nuvarande kontaktnamn",
+    "requesterEmail": "granskad nuvarande kontaktadress",
+    "ticketUpdatedAt": "2026-11-17T10:00:00.000Z"
+  }]
+}
+```
+
+Skydda planen med `0600`. Kör med backendens befintliga runtimekonfiguration;
+`NAVET_SUPPORT_ISSUER` måste matcha planen. Ingen assertion eller hemlighet
+behöver skrivas i planen. Torrkör först (Node 22, byggd backend):
+
+```sh
+node dist/scripts/backfillSupportOwners.js --db /app/data/database.sqlite --plan /secure/review.json
+```
+
+Standard är skrivskyddad anslutning, inga migrationer eller appstart. Tillämpa
+endast den granskade planen med `--apply --backup NY_PRIVAT_SQLITE_SÖKVÄG`.
+Backupfilen måste vara ny och reserveras med `0600` innan WAL-säker backup och
+integritetskontroll. Verktyget vägrar befintlig ägare eller portalfilallowlist och
+ändrad kontakt, beställare eller ärendetidstämpel. Alla förutsättningar läses igen
+under `BEGIN IMMEDIATE`; ägarposter och en strikt auditpost per ärende skrivs
+atomiskt. Auditfel rullar tillbaka hela batchen. En ändrad plan kräver ny granskning.
+
+Utdata innehåller antal, batch-ID och planhash, inga namn, adresser eller innehåll.
+Verifiera antalen mot auditloggen och portalens riktiga användarsession efteråt.
+`read_revision=NULL` innebär att tidigare status-/publika kommentarsuppdateringar
+kan visas som olästa; inga mejl, push eller webhooks skickas av kopplingen.
+Ärendeinnehåll, bilagor och `support_ticket_files` ändras inte. Den separata
+DB-säkerhetskopian innehåller inte uploads och omfattas inte av den vanliga
+`backup-*.zip`-retentionen. Återställ inte hela databasen för att ångra en koppling:
+använd den exakta auditbatchen och ta bara bort ägarposter som fortfarande har
+samma ärende/issuer/subject, efter ny granskning.

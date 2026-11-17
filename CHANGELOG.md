@@ -18,6 +18,7 @@ IT-Ticket levereras rullande från `main` (en instans per deployment). Sektionen
 - Webhooks försöker igen efter DNS-fel med ordinarie backoff. KB-formulär skjuter upp PWA-omladdning vid osparat arbete, och autentisering fungerar även när lokal tokenlagring kastar.
 - Äldre filer med okänt ursprung visas enbart för personal tills de uttryckligen laddas upp för delning igen. Migration 096 bevarar filerna och belagd publik användning; se driftrutinen i docs/OPERATIONS.md.
 - Beroendegaten avvisar misslyckade eller ofullständiga audit-svar. Routetesterna omfattar även Navets supportportal.
+- Administrationsverktyg för granskad engångskoppling av äldre beställarärenden till befintliga Navet-användare, med torrkörning, privat backup och atomisk loggning. Ingen automatisk e-postmatchning eller delning av bilagor.
 
 ### Mallval (2026-11-16)
 - ”Ta hjälp av en mall” öppnar mallistan direkt i felanmälan och när du skapar ärenden. Bekräftelsen innan ifylld text ersätts finns kvar.
