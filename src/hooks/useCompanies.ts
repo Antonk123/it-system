@@ -4,15 +4,10 @@ import { api, CompanyRow } from '@/lib/api';
 import { companySchema, getValidationError } from '@/lib/validations';
 import { userKeys } from '@/hooks/useUsers';
 import { ticketKeys } from '@/hooks/useTickets';
+import { companyKeys } from '@/hooks/companyKeys';
 import { toast } from 'sonner';
 
-export const companyKeys = {
-  all: ['companies'] as const,
-  lists: () => [...companyKeys.all, 'list'] as const,
-  list: () => [...companyKeys.lists()] as const,
-  details: () => [...companyKeys.all, 'detail'] as const,
-  detail: (id: string) => [...companyKeys.details(), id] as const,
-};
+export { companyKeys } from '@/hooks/companyKeys';
 
 export const useCompanies = () => {
   const queryClient = useQueryClient();

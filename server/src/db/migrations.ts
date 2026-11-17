@@ -2128,4 +2128,20 @@ CREATE TABLE IF NOT EXISTS support_ticket_files (
       }
     },
   },
+  {
+    id: '097',
+    name: 'update_comment_timestamp_only_when_content_changes',
+    up: (db) => {
+      // Reassigning a deleted user's comments, soft deletion or mail metadata
+      // must preserve edit history. UPDATE OF alone also fires for content=content.
+      db.exec(`DROP TRIGGER IF EXISTS update_comment_updated_at;
+        CREATE TRIGGER update_comment_updated_at
+        AFTER UPDATE OF content ON ticket_comments
+        FOR EACH ROW
+        WHEN NEW.content IS NOT OLD.content
+        BEGIN
+          UPDATE ticket_comments SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
+        END;`);
+    },
+  },
 ];

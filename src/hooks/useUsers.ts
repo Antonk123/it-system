@@ -4,6 +4,7 @@ import { api, ContactRow } from '@/lib/api';
 import { User } from '@/types/ticket';
 import { contactSchema, contactUpdateSchema, getValidationError } from '@/lib/validations';
 import { parseServerDate } from '@/lib/date';
+import { companyKeys } from '@/hooks/companyKeys';
 import { toast } from 'sonner';
 
 // Query keys for React Query
@@ -81,6 +82,7 @@ export const useUsers = ({ enabled = true }: { enabled?: boolean } = {}) => {
       // company_name, and on a PWA the in-memory cache is lost when iOS
       // suspends the app — without this the new contact "disappears".
       queryClient.invalidateQueries({ queryKey: userKeys.list() });
+      queryClient.invalidateQueries({ queryKey: companyKeys.all });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Kunde inte skapa kontakt');
@@ -109,6 +111,7 @@ export const useUsers = ({ enabled = true }: { enabled?: boolean } = {}) => {
         return old.map((u) => (u.id === id ? { ...u, ...updates } : u));
       });
       queryClient.invalidateQueries({ queryKey: userKeys.list() });
+      queryClient.invalidateQueries({ queryKey: companyKeys.all });
     },
     onError: (error) => {
       toast.error(error instanceof Error ? error.message : 'Kunde inte uppdatera kontakt');
@@ -128,6 +131,7 @@ export const useUsers = ({ enabled = true }: { enabled?: boolean } = {}) => {
         return old.filter((u) => u.id !== id);
       });
       queryClient.invalidateQueries({ queryKey: userKeys.list() });
+      queryClient.invalidateQueries({ queryKey: companyKeys.all });
     },
     onError: (error) => {
       if (import.meta.env.DEV) console.error('Error deleting user:', error);
@@ -164,6 +168,8 @@ export const useUsers = ({ enabled = true }: { enabled?: boolean } = {}) => {
 
   const refetch = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: userKeys.list() });
+    // CSV import may also create companies; refresh their lists and contacts.
+    queryClient.invalidateQueries({ queryKey: companyKeys.all });
   }, [queryClient]);
 
   return { users, isLoading, isError, addUser, updateUser, deleteUser, getUserById, refetch };

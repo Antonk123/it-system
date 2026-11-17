@@ -301,13 +301,16 @@ BEGIN
   UPDATE ticket_checklists SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
 END;
 
--- Trigger to update updated_at on comments.
+-- Comment edit time follows actual body changes (migration 097).
+-- Account reattribution, visibility, soft deletion and mail metadata have their
+-- own meaning and must not make an unchanged comment appear edited.
 -- Skriver ISO-8601 (matchar app-kodens new Date().toISOString()) så datumfilter
 -- på updated_at träffar exakta gränser. Tidigare CURRENT_TIMESTAMP gav SQLite-
 -- format ('YYYY-MM-DD HH:MM:SS') som skiljde sig från app-värdet.
 CREATE TRIGGER IF NOT EXISTS update_comment_updated_at
-AFTER UPDATE ON ticket_comments
+AFTER UPDATE OF content ON ticket_comments
 FOR EACH ROW
+WHEN NEW.content IS NOT OLD.content
 BEGIN
   UPDATE ticket_comments SET updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = NEW.id;
 END;

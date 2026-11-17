@@ -12,6 +12,7 @@ import { activityFeedKeys } from './useActivityFeed';
 import { reportsKeys } from './useReportsSummary';
 import { ticketHistoryKeys } from './useTicketHistory';
 import { requesterOpenCountsKeys } from './invalidateTicketDerived';
+import { companyKeys } from './companyKeys';
 
 const row = vi.hoisted(() => ({
   id: 't1', title: 'Skrivare', status: 'open', priority: 'medium', category_id: null, requester_id: 'c1',
@@ -31,6 +32,7 @@ vi.mock('sonner', () => ({ toast: { error: vi.fn(), warning: vi.fn() } }));
 
 const derivedKeys = [
   ticketKeys.all,
+  companyKeys.all,
   statusCountsKeys.all,
   dashboardOverviewKeys.all,
   activeQueueKeys.all,

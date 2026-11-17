@@ -611,3 +611,15 @@ DB-säkerhetskopian innehåller inte uploads och omfattas inte av den vanliga
 `backup-*.zip`-retentionen. Återställ inte hela databasen för att ångra en koppling:
 använd den exakta auditbatchen och ta bara bort ägarposter som fortfarande har
 samma ärende/issuer/subject, efter ny granskning.
+
+## Kommentarhistorik — migration 097
+
+Migration 097 ersätter kommentarens `updated_at`-trigger vid vanlig backendstart.
+Nyinstallationens `schema.sql` har samma regel: bara en faktiskt ändrad
+`content` sätter ny ISO-tid. Ompekning till systemanvändaren vid kontoradering,
+synlighet, mjuk radering och e-postmetadata bevarar den tidigare redigeringstiden.
+Ingen manuell SQL-körning krävs.
+
+Migrationen ändrar inga befintliga kommentarer eller tidsstämplar. Redan
+överskrivna historiska redigeringstider återskapas inte utan tillförlitligt
+underlag; rättningen förhindrar nya sådana följdfel.

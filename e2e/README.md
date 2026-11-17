@@ -17,3 +17,8 @@ Navet-testet återskapar iframe-sandboxen och temaprotokollet lokalt, inklusive
 mallbyte och smal skärm. Det ersätter inte en kontroll i riktiga Navet efter
 driftsättning. Lokal E2E skickar inte e-post; verklig leverans måste verifieras
 separat i godkänd miljö.
+
+`company-cache.spec.ts` verifierar företagslistans och detaljvyns kontakt-/ärendeantal
+efter skapande via de riktiga formulären. Navigationen sker i samma SPA-dokument
+så att en omladdad, tom cache inte kan dölja regressionsfelet. Fallen körs i
+ljust/mörkt läge och tar skärmbilder före/efter mutation vid 1440/375 px.

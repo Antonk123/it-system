@@ -11,6 +11,8 @@ IT-Ticket levereras rullande från `main` (en instans per deployment). Sektionen
 ## [Orutinerat]
 
 ### Säkerhet och verifiering (2026-11-17)
+- Kontoradering bevarar kommentarernas text och tidigare redigeringstid. Ändrad författarattribution ger inte längre en ny redigeringsmarkering.
+- Företagsvyer uppdaterar kontaktlistor och ärendestatistik direkt efter kontakt- och ärendeändringar, även kontaktimport.
 - Uppdaterad JSON-parser och filuppladdning till rättade beroendeversioner.
 - Interna bilder och mailbilagor skyddas i både delningslistor och direkta filhämtningar. Osparade editorbilder delas först när de sparats i publikt innehåll. Interna e-postsvar skickas inte vidare som publika webhookhändelser.
 - KB-bilder raderas först när alla lagrade referenser är borta och uppladdningsfristen gått ut, även vid artikeländring och radering.

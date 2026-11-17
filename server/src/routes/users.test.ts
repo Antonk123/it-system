@@ -329,8 +329,13 @@ describe('DELETE /api/users/:id — admin only', () => {
     db.prepare(`INSERT INTO tickets (id, title, description, status, priority, created_by) VALUES (?, ?, ?, ?, ?, ?)`)
       .run(ticketId, 'Owned by departing', 'd', 'open', 'low', departingId);
     const commentId = randomUUID();
-    db.prepare(`INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal) VALUES (?, ?, ?, ?, 1)`)
-      .run(commentId, ticketId, departingId, 'Important note');
+    const createdAt = '2020-01-01T08:00:00.000Z';
+    const editedAt = '2020-01-02T09:00:00.000Z';
+    db.prepare(`INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
+      .run(commentId, ticketId, departingId, 'Important note', createdAt, editedAt);
+    const untouchedId = randomUUID();
+    db.prepare(`INSERT INTO ticket_comments (id, ticket_id, user_id, content, is_internal, created_at, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)`)
+      .run(untouchedId, ticketId, departingId, 'Never edited', createdAt, createdAt);
     const historyId = randomUUID();
     db.prepare(`INSERT INTO ticket_history (id, ticket_id, user_id, field_name, old_value, new_value) VALUES (?, ?, ?, 'status', 'open', 'closed')`)
       .run(historyId, ticketId, departingId);
@@ -341,9 +346,34 @@ describe('DELETE /api/users/:id — admin only', () => {
       .set('x-csrf-token', admin.csrf);
     expect(res.status).toBe(200);
 
-    expect(db.prepare('SELECT user_id FROM ticket_comments WHERE id = ?').get(commentId)).toEqual({ user_id: SYSTEM_USER_ID });
+    expect(db.prepare('SELECT user_id, content, created_at, updated_at FROM ticket_comments WHERE id = ?').get(commentId))
+      .toEqual({ user_id: SYSTEM_USER_ID, content: 'Important note', created_at: createdAt, updated_at: editedAt });
     expect(db.prepare('SELECT user_id FROM ticket_history WHERE id = ?').get(historyId)).toEqual({ user_id: SYSTEM_USER_ID });
     expect(db.prepare('SELECT created_by FROM tickets WHERE id = ?').get(ticketId)).toEqual({ created_by: SYSTEM_USER_ID });
+
+    const comments = await admin.agent.get(`/api/comments/ticket/${ticketId}`)
+      .set('Authorization', `Bearer ${admin.token}`);
+    expect(comments.status).toBe(200);
+    const untouched = comments.body.find((comment: { id: string }) => comment.id === untouchedId);
+    expect(untouched).toMatchObject({ user_id: SYSTEM_USER_ID, content: 'Never edited', created_at: createdAt, updated_at: createdAt });
+    expect(untouched.updated_at).toBe(untouched.created_at);
+
+    // Reattribution is bookkeeping; a later real edit still stamps the comment.
+    const edit = await admin.agent.put(`/api/comments/${commentId}`)
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf)
+      .send({ content: 'Important note edited' });
+    expect(edit.status).toBe(200);
+    expect(edit.body).toMatchObject({ user_id: SYSTEM_USER_ID, content: 'Important note edited', created_at: createdAt });
+    expect(edit.body.updated_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
+    expect(edit.body.updated_at).not.toBe(editedAt);
+
+    const deleted = await admin.agent.delete(`/api/comments/${commentId}`)
+      .set('Authorization', `Bearer ${admin.token}`).set('x-csrf-token', admin.csrf);
+    expect(deleted.status).toBe(200);
+    const stored = db.prepare('SELECT content, created_at, updated_at, deleted_at FROM ticket_comments WHERE id=?').get(commentId) as
+      { content: string; created_at: string; updated_at: string; deleted_at: string };
+    expect(stored).toMatchObject({ content: 'Important note edited', created_at: createdAt, updated_at: edit.body.updated_at });
+    expect(stored.deleted_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/);
   });
 
   it('refuses to delete the system user (409) and leaves it in place', async () => {

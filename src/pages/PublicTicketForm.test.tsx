@@ -2,8 +2,9 @@
 import '@testing-library/jest-dom/vitest';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, QueryObserver } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
+import { companyKeys } from '@/hooks/useCompanies';
 
 const bridge = vi.hoisted(() => ({ profile: null as null | { name: string; email: string; photo: string | null }, user: null as null | { id: string } }));
 vi.mock('@/hooks/useSupportProfile', () => ({ useSupportProfile: () => bridge.profile }));
@@ -29,8 +30,7 @@ vi.mock('@/lib/api', () => ({
 import PublicTicketForm from './PublicTicketForm';
 vi.mock('@/hooks/useTicketDraft', () => ({ useTicketDraft: () => ({ ready: true, storageError: false, clear: async () => {}, resume: () => {} }) }));
 
-function renderForm(path = '/submit-ticket') {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderForm(path = '/submit-ticket', client = new QueryClient({ defaultOptions: { queries: { retry: false } } })) {
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}><PublicTicketForm /></MemoryRouter>
@@ -47,6 +47,39 @@ beforeEach(() => {
 afterEach(() => { cleanup(); bridge.profile = null; bridge.user = null; });
 
 describe('PublicTicketForm — en sida, inga steg', () => {
+  it('uppdaterar aktiva företagsdetaljer och listantal efter en publik inskickning i samma appsession', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    let createdTickets = 0;
+    const detail = new QueryObserver(client, {
+      queryKey: companyKeys.detail('company-a'), staleTime: 120_000,
+      queryFn: async () => ({ stats: { total: createdTickets, open_count: createdTickets } }),
+    });
+    const list = new QueryObserver(client, {
+      queryKey: companyKeys.list(), staleTime: 300_000,
+      queryFn: async () => [{ id: 'company-a', total_ticket_count: createdTickets, open_ticket_count: createdTickets }],
+    });
+    const stopDetail = detail.subscribe(() => undefined);
+    const stopList = list.subscribe(() => undefined);
+    try {
+      await waitFor(() => {
+        expect(detail.getCurrentResult().data?.stats.total).toBe(0);
+        expect(list.getCurrentResult().data?.[0].total_ticket_count).toBe(0);
+      });
+      submitPublicTicket.mockImplementationOnce(async () => { createdTickets++; return { ticketId: 'new-ticket' }; });
+      renderForm('/submit-ticket', client);
+      fireEvent.change(screen.getByLabelText('Ditt namn *'), { target: { value: 'Anna Andersson' } });
+      fireEvent.change(screen.getByLabelText('Din e-post *'), { target: { value: 'anna@example.com' } });
+      fireEvent.change(screen.getByLabelText('Ärendets titel *'), { target: { value: 'Publikt ärende' } });
+      fireEvent.change(screen.getByPlaceholderText('Beskriv ditt problem i detalj...'), { target: { value: 'Beskrivning' } });
+      fireEvent.click(screen.getByRole('button', { name: /Skicka ärende/ }));
+      await screen.findByText('Ärendet skickat!');
+      await waitFor(() => {
+        expect(detail.getCurrentResult().data?.stats).toEqual({ total: 1, open_count: 1 });
+        expect(list.getCurrentResult().data?.[0]).toMatchObject({ total_ticket_count: 1, open_ticket_count: 1 });
+      });
+    } finally { stopDetail(); stopList(); client.clear(); }
+  });
+
   it('visar alla fält (namn, e-post, titel, beskrivning) på en och samma vy, utan prioritetsval', () => {
     renderForm();
     expect(screen.getByLabelText('Ditt namn *')).toBeTruthy();

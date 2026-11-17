@@ -21,6 +21,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DynamicFieldsForm } from '@/components/DynamicFieldsForm';
 import { BrandLogo } from '@/components/BrandLogo';
 import { cn } from '@/lib/utils';
+import { useQueryClient } from '@tanstack/react-query';
+import { invalidateTicketDerived } from '@/hooks/invalidateTicketDerived';
 
 interface Category { id: string; label: string; }
 interface Template {
@@ -35,6 +37,7 @@ interface Template {
 }
 
 export const PublicTicketForm = ({ profile, embedded, supportToken, onCreated }: { profile: SupportProfile | null; embedded: boolean; supportToken?: string; onCreated?: (id: string) => void }) => {
+  const queryClient = useQueryClient();
   const { confirm, confirmationDialog } = useConfirmDiscard();
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -196,6 +199,7 @@ export const PublicTicketForm = ({ profile, embedded, supportToken, onCreated }:
         website,
         formStartedAt,
       }, { supportToken, images: imageState.referenced({ formData, customFieldValues }), attachments: pendingFiles, idempotencyKey: submissionKey });
+      void invalidateTicketDerived(queryClient, result.ticketId);
       await draft.clear();
       setIsSuccess(true);
       if (onCreated) onCreated(result.ticketId);

@@ -6,6 +6,7 @@ import { activeQueueKeys } from '@/hooks/useActiveQueue';
 import { activityFeedKeys } from '@/hooks/useActivityFeed';
 import { reportsKeys } from '@/hooks/useReportsSummary';
 import { ticketHistoryKeys } from '@/hooks/useTicketHistory';
+import { companyKeys } from '@/hooks/companyKeys';
 
 export const requesterOpenCountsKeys = {
   all: ['requester-open-counts'] as const,
@@ -14,12 +15,14 @@ export const requesterOpenCountsKeys = {
 /**
  * Ogiltigförklarar allt som härleds från ärendedata: listor, detaljer, kön,
  * statusräknare, dashboard, aktivitetsflöde, rapporter och "öppna ärenden per
- * beställare". Anropas efter varje mutation som ändrar ett ärende eller dess
+ * beställare" samt företagens ärendeantal. Anropas efter varje mutation som ändrar ett ärende eller dess
  * checklista/påminnelser, så att ingen vy visar föråldrade siffror.
  */
 export function invalidateTicketDerived(queryClient: QueryClient, ticketId?: string): Promise<unknown> {
   const keys: (readonly unknown[])[] = [
     ticketKeys.all,
+    // Include both sides of moves/deletions, even when the old company is not cached with the ticket.
+    companyKeys.all,
     statusCountsKeys.all,
     dashboardOverviewKeys.all,
     activeQueueKeys.all,
