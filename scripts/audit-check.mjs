@@ -32,6 +32,7 @@ const active = new Map(
 
 // --- Kör npm audit ---------------------------------------------------------
 let raw;
+let auditExitCode = 0;
 try {
   // execFileSync (inte execSync): inget skal inblandat, inga metatecken tolkas.
   raw = execFileSync('npm', ['audit', '--json'], {
@@ -40,7 +41,13 @@ try {
     maxBuffer: 64 * 1024 * 1024,
   });
 } catch (err) {
-  // npm audit avslutar med kod 1 när sårbarheter hittas — utdatan är ändå giltig.
+  // npm audit använder kod 1 för sårbarheter. Andra processfel får inte bli
+  // en grön säkerhetskontroll, även om stdout råkar se ut som en rapport.
+  if (err.status !== 1 || err.signal) {
+    console.error(`[audit-check:${label}] npm audit kunde inte slutföras.`);
+    process.exit(1);
+  }
+  auditExitCode = err.status;
   raw = err.stdout;
 }
 if (!raw) {
@@ -48,8 +55,56 @@ if (!raw) {
   process.exit(1);
 }
 
-const report = JSON.parse(raw);
-const vulns = report.vulnerabilities ?? {};
+function invalidReport(reason) {
+  console.error(`[audit-check:${label}] Ogiltigt resultat från npm audit: ${reason}`);
+  process.exit(1);
+}
+
+const isRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const severities = ['info', 'low', 'moderate', 'high', 'critical'];
+let report;
+try {
+  report = JSON.parse(raw);
+} catch {
+  invalidReport('svaret är inte JSON.');
+}
+
+// Ett registryfel kan ge giltig JSON med enbart `error`. Kräv en komplett
+// rapport och kontrollera dess räkning innan den används som säkerhetsbevis.
+if (!isRecord(report) || Object.hasOwn(report, 'error') || report.auditReportVersion !== 2 ||
+    !isRecord(report.vulnerabilities) || !isRecord(report.metadata?.vulnerabilities)) {
+  invalidReport('förväntade en npm audit v2-rapport utan error.');
+}
+const vulns = report.vulnerabilities;
+const counts = report.metadata.vulnerabilities;
+const observedCounts = Object.fromEntries(severities.map((severity) => [severity, 0]));
+for (const [name, vulnerability] of Object.entries(vulns)) {
+  if (!isRecord(vulnerability) || vulnerability.name !== name ||
+      !severities.includes(vulnerability.severity) || !Array.isArray(vulnerability.via) ||
+      vulnerability.via.length === 0) {
+    invalidReport('en sårbarhet saknar giltigt namn, allvarlighetsgrad eller advisorykedja.');
+  }
+  for (const source of vulnerability.via) {
+    if (typeof source === 'string') {
+      if (!Object.hasOwn(vulns, source) || !isRecord(vulns[source]) || !severities.includes(vulns[source].severity)) {
+        invalidReport('en advisorykedja hänvisar till ett paket som saknas eller är ogiltigt.');
+      }
+    } else if (!isRecord(source) || typeof source.name !== 'string' || !source.name ||
+        !severities.includes(source.severity) || typeof source.url !== 'string' || !source.url) {
+      invalidReport('en advisory saknar giltig källa.');
+    }
+    const sourceSeverity = typeof source === 'string' ? vulns[source].severity : source.severity;
+    if (severities.indexOf(sourceSeverity) > severities.indexOf(vulnerability.severity)) {
+      invalidReport('ett paket har lägre allvarlighetsgrad än sin advisorykedja.');
+    }
+  }
+  observedCounts[vulnerability.severity]++;
+}
+if ([...severities, 'total'].some((severity) => !Number.isSafeInteger(counts[severity]) || counts[severity] < 0) ||
+    severities.some((severity) => counts[severity] !== observedCounts[severity]) ||
+    counts.total !== Object.keys(vulns).length || (auditExitCode === 1 && counts.total === 0)) {
+  invalidReport('sammanräkningen stämmer inte med rapportens sårbarheter eller exitkod.');
+}
 
 /** Samla advisory-id:n (GHSA-…) som en post pekar direkt på. */
 const advisoryIds = (v) =>
@@ -86,9 +141,8 @@ const blocking = Object.entries(vulns)
   .map(([name, v]) => ({ name, severity: v.severity, ids: advisoryIds(v), via: parents(v) }));
 
 // --- Rapport ---------------------------------------------------------------
-const counts = report.metadata?.vulnerabilities ?? {};
 console.log(
-  `[audit-check:${label}] high=${counts.high ?? 0} critical=${counts.critical ?? 0} ` +
+  `[audit-check:${label}] high=${counts.high} critical=${counts.critical} ` +
     `| undantagna=${cleared.size} | blockerande=${blocking.length}`,
 );
 

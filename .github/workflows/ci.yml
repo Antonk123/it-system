@@ -101,6 +101,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: cd server && npm ci
+      - run: node --test scripts/test-audit-check.mjs
       # Fäller bygget på ALLA high/critical-advisories utom de som uttryckligen
       # undantagits i audit-allowlist.json. Varje undantag kräver en motivering för
       # varför advisoryn inte är nåbar i den här appen, plus ett expires-datum som

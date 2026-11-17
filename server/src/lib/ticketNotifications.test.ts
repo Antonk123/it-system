@@ -100,6 +100,23 @@ describe('notifyCustomerOfPublicReply', () => {
 });
 
 describe('notifyAgentOfCustomerReply', () => {
+  it('keeps an internal email reply out of external webhooks while notifying its assigned staff member', async () => {
+    stubFetch();
+    const userId = randomUUID();
+    db.prepare('INSERT INTO users (id, email, password_hash, role) VALUES (?, ?, ?, ?)')
+      .run(userId, 'internal-reply-agent@example.test', 'x', 'user');
+    const ticketId = makeTicketWithRequester();
+    db.prepare('UPDATE tickets SET assigned_to = ? WHERE id = ?').run(userId, ticketId);
+
+    await notifyAgentOfCustomerReply(ticketId, '<p>Internal-only mail text</p>', 'email', { internal: true });
+
+    expect(captured).toEqual([]);
+    expect(pushMock).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ ticketId }), userId);
+    expect(sendAgentReplyNotificationEmail).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      toEmail: 'internal-reply-agent@example.test', ticketId, snippet: 'Internal-only mail text',
+    }));
+  });
+
   it('notifies only the assigned agent of a Navet reply and tags its webhook', async () => {
     stubFetch();
     const userId = randomUUID();

@@ -1,3 +1,4 @@
+import { getPublicTicketAttachments } from "../lib/attachmentVisibility.js";
 import type { AuthRequest } from "../middleware/auth.js";
 import { Router } from "express";
 import { randomUUID } from "node:crypto";
@@ -98,11 +99,13 @@ router.get("/tickets/:id", (req, res) => {
     .all(req.params.id) as {
     content: string;
   }[];
-  const attachments = db
+  const visibleFiles = new Set(getPublicTicketAttachments(db, req.params.id).map(file => file.id));
+  const attachments = (db
     .prepare(
       "SELECT a.id, a.file_name, a.file_size FROM ticket_attachments a JOIN support_ticket_files f ON f.attachment_id=a.id WHERE a.ticket_id=? ORDER BY a.created_at, a.id",
     )
-    .all(req.params.id);
+    .all(req.params.id) as { id: string; file_name: string; file_size: number }[])
+    .filter(file => visibleFiles.has(file.id));
   res.json({
     ...ticket,
     revision: supportUpdates(identity, req.params.id)[0].revision,
@@ -124,7 +127,8 @@ router.get("/tickets/:id/files/:fileId", (req, res) => {
         file_name: string;
       }
     | undefined;
-  if (!file || basename(file.file_path) !== file.file_path)
+  if (!file || basename(file.file_path) !== file.file_path ||
+    !getPublicTicketAttachments(db, req.params.id).some(visible => visible.id === req.params.fileId))
     return res.status(404).json({ error: "Filen finns inte." });
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.download(

@@ -1,3 +1,4 @@
+import { getPublicTicketAttachments } from '../lib/attachmentVisibility.js';
 import { sanitizeRichText } from '../lib/htmlSanitizer.js';
 import { Router, Request, Response } from 'express';
 import { db } from '../db/connection.js';
@@ -63,13 +64,6 @@ interface ContactRow {
   company: string | null;
 }
 
-interface AttachmentRow {
-  id: string;
-  file_name: string;
-  file_path: string;
-  file_type: string | null;
-  file_size: number | null;
-}
 
 interface ChecklistRow {
   id: string;
@@ -202,9 +196,7 @@ router.get('/public/:token', sharePublicRateLimiter, (req: Request, res: Respons
     }
 
     // Get attachments
-    const attachments = db.prepare(`
-      SELECT id, file_name, file_path, file_type, file_size FROM ticket_attachments WHERE ticket_id = ?
-    `).all(share.ticket_id) as AttachmentRow[];
+    const attachments = getPublicTicketAttachments(db, share.ticket_id);
 
     // Add public URLs for attachments
     const attachmentsWithUrls = attachments.map(a => ({
@@ -268,18 +260,9 @@ router.get('/public/file/:token/:attachmentId', sharePublicRateLimiter, (req: Re
       return res.status(404).json({ error: 'Invalid or expired share link' });
     }
 
-    // Verify attachment belongs to the shared ticket
-    interface AttachmentFullRow {
-      id: string;
-      ticket_id: string;
-      file_name: string;
-      file_path: string;
-      file_type: string | null;
-    }
-    
-    const attachment = db.prepare(
-      'SELECT id, ticket_id, file_name, file_path, file_type FROM ticket_attachments WHERE id = ? AND ticket_id = ?'
-    ).get(req.params.attachmentId, share.ticket_id) as AttachmentFullRow | undefined;
+    // Apply the same privacy rule as the list, even when the caller knows an ID.
+    const attachment = getPublicTicketAttachments(db, share.ticket_id)
+      .find(file => file.id === req.params.attachmentId);
 
     if (!attachment) {
       return res.status(404).json({ error: 'Attachment not found' });

@@ -150,7 +150,7 @@ paths:
           required: true
           schema: {type: string}
       responses:
-        "200": {description: Ägarbundet antal, private no-store}
+        "200": {description: "Ägarbundet antal, private no-store"}
         "401": {description: Ogiltig Navet-identitet}
         "503": {description: Portalen är inte aktiverad}
   /self-service/tickets/{id}/read:
@@ -1849,6 +1849,12 @@ paths:
         Office formats) — mismatches are rejected and the uploaded file is
         deleted. A per-ticket cap of 50 attachments is enforced before insert.
         Rate-limited via `writeRateLimiter` (60 requests/minute per IP).
+        Only an explicit `share=public` marks an ordinary upload shareable. Without
+        either flag the upload stays internal, including requests from older cached
+        clients. With `inline=1`, the file
+        is reference-dependent and stays private until referenced by saved public
+        ticket content. Internal notes/comment references always block external
+        sharing, including for files uploaded earlier.
 
 
         **Allowed MIME types:** `image/jpeg`, `image/png`, `image/gif`,
@@ -1880,6 +1886,16 @@ paths:
           in: path
           required: true
           schema: { type: string }
+        - name: inline
+          in: query
+          required: false
+          description: Stage an inline image; only saved public references permit external access.
+          schema: { type: string, enum: ["1"] }
+        - name: share
+          in: query
+          required: false
+          description: Explicit public attachment. Cannot be combined with inline; omitted flags keep it internal.
+          schema: { type: string, enum: ["public"] }
       requestBody:
         required: true
         content:
@@ -2139,9 +2155,11 @@ paths:
         ticket's `title`, `description`, `status`, `priority`, `category`,
         `created_at`/`updated_at`/`resolved_at`/`closed_at`, its `solution`
         text, the full `requester` contact record (`id`, `name`, `email`,
-        `company`), all attachment metadata with public download URLs, and
+        `company`), externally permitted attachment metadata with public download URLs, and
         all checklist items. The ticket's `notes` field (internal agent notes)
-        is explicitly stripped and never included. Comments and ticket links
+        is explicitly stripped and never included. Files from internal content,
+        unfinished inline drafts, or legacy uploads of unknown provenance are not
+        exposed, even if the caller knows the attachment ID. Comments and ticket links
         are not exposed by this endpoint. The response also includes
         `share_expires_at`, the UTC timestamp when the share link expires.
       security: []
@@ -2184,10 +2202,10 @@ paths:
       tags: [Shares]
       summary: Download an attachment of a shared ticket (no login required)
       description: >
-        **Public, unauthenticated endpoint.** Valid for any attachment
-        belonging to the ticket identified by `token` — the query verifies
-        `attachmentId` belongs to `share.ticket_id`, so a token only ever
-        exposes attachments of the one ticket it was created for. **Expired
+        **Public, unauthenticated endpoint.** The attachment must belong to the
+        ticket identified by `token` and pass the same file-visibility policy as
+        the shared-ticket list. Internal, unclassified legacy, and uncommitted
+        inline files return 404 even with a known attachment ID. **Expired
         tokens are treated as invalid** (fail-closed) and return 404.
         Served with `Content-Disposition: attachment` (forced download, never
         inline) to prevent in-origin script execution from an uploaded SVG

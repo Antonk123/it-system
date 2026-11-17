@@ -518,3 +518,27 @@ access-logg (`docker logs it-ticketing-frontend`) visar samma sak i första kolu
 nginx maskerar engångstokens (`/reset-password/<token>`, `/shared/<token>`,
 `/kb/public/<token>`, motsvarande `/api/`-vägar och OIDC-callbackens query) som
 `<redacted>` i access-loggen — även när adressen står i `Referer`.
+
+
+## Migration 096 — delningsregler för ärendefiler
+
+Migrationen lägger till `ticket_attachments.share_visibility`. Äldre filer utan
+belagt ursprung blir interna. Bilder som förekommer i sparat publikt innehåll får
+referensstyrd delning; befintliga filer i requesterportalens allowlist är belagt
+publika. En intern referens tar alltid företräde. Filerna behålls för personalens
+läsning; några filer eller befintliga delningstokens raderas inte av migrationen.
+
+Kontrollera därför representativa gamla delningslänkar efter uppgraderingen.
+En äldre vanlig bilaga kan sluta visas externt om dess ursprung inte kan beläggas.
+För att dela den igen väljer personalen medvetet en vanlig bilageuppladdning;
+markera inte samtliga gamla filer publika med ett generellt SQL-backfill.
+Testa både listsvaret och filhämtning med en känd bilageidentitet, samt en publik
+bild och en notes-only-bild. Requesterportalens ägarskap och egen filallowlist gäller
+utöver samma delningsregel. Ta ordinarie uppgraderingsbackup enligt runbooken innan
+nya backendimagen aktiveras. Ingen manuell SQL-migrering behövs.
+
+Frontend och backend bör uppdateras tillsammans så att vanliga bilagor skickas med
+`share=public` och editorbilder med `inline=1`. Backend lämnar uppladdningar från
+äldre cachade klienter utan dessa flaggor interna; säkerheten kräver alltså inte
+att alla öppna flikar redan har laddats om. Sådana uppladdningar kan behöva göras
+om med uppdaterad klient för extern delning.

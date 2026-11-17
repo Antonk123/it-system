@@ -66,6 +66,7 @@ vi.mock('@/pages/Login', () => ({ default: (p: unknown) => registry.Login(p) }))
 vi.mock('@/pages/ForgotPassword', () => ({ default: (p: unknown) => registry.ForgotPassword(p) }));
 vi.mock('@/pages/ResetPassword', () => ({ default: (p: unknown) => registry.ResetPassword(p) }));
 vi.mock('@/pages/PublicTicketForm', () => ({ default: (p: unknown) => registry.PublicTicketForm(p) }));
+vi.mock('@/pages/SelfService', () => ({ default: (p: unknown) => registry.SelfService(p) }));
 vi.mock('@/pages/SharedTicket', () => ({ default: (p: unknown) => registry.SharedTicket(p) }));
 vi.mock('@/pages/NotFound', () => ({ default: (p: unknown) => registry.NotFound(p) }));
 vi.mock('@/pages/KnowledgeBase', () => ({ default: (p: unknown) => registry.KnowledgeBase(p) }));
@@ -124,7 +125,7 @@ function makeStub(name: string) {
 
 const STUB_NAMES = [
   'Dashboard', 'ChangePassword', 'TicketList', 'TicketForm', 'TicketDetail', 'Archive', 'UserList', 'Settings', 'ArchitectureMap',
-  'Reports', 'Login', 'ForgotPassword', 'ResetPassword', 'PublicTicketForm', 'SharedTicket',
+  'Reports', 'Login', 'ForgotPassword', 'ResetPassword', 'PublicTicketForm', 'SelfService', 'SharedTicket',
   'NotFound', 'KnowledgeBase', 'KBArticleDetail', 'KBArticleForm', 'SharedKBArticle', 'PublicKnowledgeBase', 'PublicKBArticle',
   'CompanyList', 'CompanyDetail',
 ] as const;
@@ -244,6 +245,7 @@ const ROUTES: RouteCase[] = [
   { path: '/login', concretePath: '/login', stub: 'Login', guard: 'public' },
   { path: '/forgot-password', concretePath: '/forgot-password', stub: 'ForgotPassword', guard: 'public' },
   { path: '/reset-password/:token', concretePath: '/reset-password/reset-tok-7', stub: 'ResetPassword', guard: 'public' },
+  { path: '/support', concretePath: '/support', stub: 'SelfService', guard: 'none' },
   { path: '/submit-ticket', concretePath: '/submit-ticket', stub: 'PublicTicketForm', guard: 'none' },
   { path: '/shared/:token', concretePath: '/shared/share-tok-1', stub: 'SharedTicket', guard: 'none' },
   { path: '/kb/shared/:token', concretePath: '/kb/shared/kb-share-tok', stub: 'SharedKBArticle', guard: 'none' },
@@ -369,6 +371,20 @@ describe('öppna rutter — kräver inte auth', () => {
       expect(await screen.findByTestId(`stub:${route.stub}`)).toBeInTheDocument();
     }
   );
+});
+
+describe('Navets requesterportal', () => {
+  it.each([false, true])('öppnas utanför personalens guards och skal (staffinloggad=%s)', async (signedIn) => {
+    authState.isAuthenticated = signedIn;
+    // Portalens Navet-identitet hanteras av sidan, inte personalens authguard.
+    authState.isLoading = !signedIn;
+    authState.user = signedIn ? { mustChangePassword: true } : null;
+    renderRoutes('/support');
+    expect(await screen.findByTestId('stub:SelfService')).toBeInTheDocument();
+    expect(screen.queryByTestId('stub:Login')).toBeNull();
+    expect(screen.queryByTestId('stub:ChangePassword')).toBeNull();
+    expect(screen.queryByTestId('app-shell')).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

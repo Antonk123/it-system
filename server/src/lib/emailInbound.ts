@@ -484,12 +484,12 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<'proce
     addCommentToTicket(existingTicket.id, replyBody, fromAddress, fromName, { internal: !trusted, messageId });
 
     if (parsed.attachments && parsed.attachments.length > 0) {
-      await saveAttachments(parsed.attachments, existingTicket.id);
+      await saveAttachments(parsed.attachments, existingTicket.id, !trusted);
     }
 
     // Close the loop the other way: surface the customer's reply to the assigned
-    // technician (webhook + push + email). Fire-and-forget.
-    notifyAgentOfCustomerReply(existingTicket.id, replyBody)
+    // technician. Internal replies stay inside staff notifications. Fire-and-forget.
+    notifyAgentOfCustomerReply(existingTicket.id, replyBody, 'email', { internal: !trusted })
       .catch((err) => logger.error('notifyAgentOfCustomerReply failed', { error: String(err) }));
     return 'processed';
   }
@@ -516,7 +516,7 @@ async function processEmail(source: Buffer, config: EmailConfig): Promise<'proce
         messageId,
       });
       if (parsed.attachments && parsed.attachments.length > 0) {
-        await saveAttachments(parsed.attachments, recentDuplicate.id);
+        await saveAttachments(parsed.attachments, recentDuplicate.id, unverifiedSender);
       }
       return 'processed';
     }
@@ -603,7 +603,7 @@ function isSignatureImage(attachment: any): boolean {
   return false;
 }
 
-async function saveAttachments(attachments: any[], ticketId: string): Promise<void> {
+async function saveAttachments(attachments: any[], ticketId: string, internal = false): Promise<void> {
   const fs = await import('fs');
   const path = await import('path');
   const uploadDir = process.env.UPLOAD_DIR || path.join(process.cwd(), 'data/uploads');
@@ -660,9 +660,9 @@ async function saveAttachments(attachments: any[], ticketId: string): Promise<vo
       // Insert DB row first, then write file. If file write fails, clean up the DB row.
       // This avoids orphaned files on disk when the DB insert would have failed.
       db.prepare(
-        `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).run(attachId, ticketId, attachment.filename, storedName, attachment.size, attachment.contentType, new Date().toISOString());
+        `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type, created_at, share_visibility)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      ).run(attachId, ticketId, attachment.filename, storedName, attachment.size, attachment.contentType, new Date().toISOString(), internal ? 'internal' : 'public');
 
       try {
         fs.mkdirSync(uploadDir, { recursive: true });

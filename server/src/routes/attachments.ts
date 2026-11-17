@@ -200,6 +200,11 @@ router.get('/ticket/:ticketId', authenticate, (req: AuthRequest, res: Response) 
 
 // Upload attachment with error handling
 router.post('/ticket/:ticketId', writeRateLimiter, authenticate, (req: AuthRequest, res: Response) => {
+  if ((req.query.inline !== undefined && req.query.inline !== '1') ||
+      (req.query.share !== undefined && req.query.share !== 'public') ||
+      (req.query.inline !== undefined && req.query.share !== undefined)) {
+    return res.status(400).json({ error: 'Use either inline=1 or share=public, or omit both for an internal file' });
+  }
   // Wrap upload.single to catch multer errors
   upload.single('file')(req, res, (err) => {
     if (err) {
@@ -252,8 +257,8 @@ router.post('/ticket/:ticketId', writeRateLimiter, authenticate, (req: AuthReque
 
       const id = randomUUID();
       db.prepare(`
-        INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type, created_at, share_visibility)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         id,
         req.params.ticketId,
@@ -261,7 +266,8 @@ router.post('/ticket/:ticketId', writeRateLimiter, authenticate, (req: AuthReque
         req.file.filename,
         req.file.size,
         req.file.mimetype,
-        new Date().toISOString()
+        new Date().toISOString(),
+        req.query.inline === '1' ? 'referenced' : req.query.share === 'public' ? 'public' : 'internal'
       );
 
       const attachment = db.prepare('SELECT id, ticket_id, file_name, file_path, file_size, file_type, created_at FROM ticket_attachments WHERE id = ?').get(id) as AttachmentRow;

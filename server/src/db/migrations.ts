@@ -2085,4 +2085,47 @@ CREATE TABLE IF NOT EXISTS support_ticket_files (
     if (!columnExists('support_ticket_owners', 'read_revision'))
       db.exec('ALTER TABLE support_ticket_owners ADD COLUMN read_revision TEXT');
   } },
+  {
+    id: '096',
+    name: 'ticket_attachment_share_visibility',
+    up: (db, { columnExists }) => {
+      // Unclassified historical files stay staff-only. Only a saved public
+      // reference can establish intent; filenames and MIME types cannot.
+      if (columnExists('ticket_attachments', 'share_visibility')) return;
+      db.exec("ALTER TABLE ticket_attachments ADD COLUMN share_visibility TEXT NOT NULL DEFAULT 'internal' CHECK(share_visibility IN ('internal', 'public', 'referenced'))");
+      // Freeze the reference rules here: replay must not depend on a later helper.
+      const refs = (content: string | null): Set<string> => new Set(
+        Array.from((content || '').matchAll(/\/api\/attachments\/file\/([0-9a-f-]{36})/gi), match => match[1].toLowerCase()),
+      );
+      const publicRefs = new Map<string, Set<string>>();
+      const privateRefs = new Map<string, Set<string>>();
+      const add = (map: Map<string, Set<string>>, ticketId: string, content: string | null) => {
+        if (!map.has(ticketId)) map.set(ticketId, new Set());
+        for (const id of refs(content)) map.get(ticketId)!.add(id);
+      };
+      for (const ticket of db.prepare('SELECT id, description, solution, notes FROM tickets').all() as
+        { id: string; description: string; solution: string | null; notes: string | null }[]) {
+        add(publicRefs, ticket.id, ticket.description);
+        add(publicRefs, ticket.id, ticket.solution);
+        add(privateRefs, ticket.id, ticket.notes);
+      }
+      for (const field of db.prepare('SELECT ticket_id, field_value FROM ticket_field_values').all() as { ticket_id: string; field_value: string | null }[]) {
+        add(publicRefs, field.ticket_id, field.field_value);
+      }
+      for (const comment of db.prepare('SELECT ticket_id, content, is_internal, deleted_at FROM ticket_comments').all() as
+        { ticket_id: string; content: string; is_internal: number | null; deleted_at: string | null }[]) {
+        if (comment.is_internal !== 0) add(privateRefs, comment.ticket_id, comment.content);
+        else if (!comment.deleted_at) add(publicRefs, comment.ticket_id, comment.content);
+      }
+      // Requester-portal uploads already have an explicit public-file allowlist.
+      const portalFiles = new Set((db.prepare('SELECT attachment_id FROM support_ticket_files').all() as { attachment_id: string }[]).map(file => file.attachment_id));
+      const classify = db.prepare('UPDATE ticket_attachments SET share_visibility = ? WHERE id = ?');
+      for (const file of db.prepare('SELECT id, ticket_id FROM ticket_attachments').all() as { id: string; ticket_id: string }[]) {
+        const id = file.id.toLowerCase();
+        if (privateRefs.get(file.ticket_id)?.has(id)) continue;
+        if (portalFiles.has(file.id)) classify.run('public', file.id);
+        else if (publicRefs.get(file.ticket_id)?.has(id)) classify.run('referenced', file.id);
+      }
+    },
+  },
 ];

@@ -80,6 +80,7 @@ vi.mock('../routes/attachments.js', () => ({
 import { __test__, startEmailPolling, stopEmailPolling, getEmailInboundStatus } from './emailInbound.js';
 import { logger } from './logger.js';
 import { sendTicketReceivedConfirmation } from './email.js';
+import { notifyAgentOfCustomerReply } from './ticketNotifications.js';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -164,7 +165,8 @@ function createSchema(db: InstanceType<typeof Database>) {
       file_path TEXT NOT NULL,
       file_size INTEGER,
       file_type TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      share_visibility TEXT NOT NULL DEFAULT 'internal' CHECK(share_visibility IN ('internal', 'public', 'referenced'))
     );
 
     CREATE TABLE ticket_shares (
@@ -964,6 +966,7 @@ describe('processEmail — svar på befintligt ärende kräver betrodd avsändar
     await processEmail(Buffer.from('raw'), config);
 
     expect(lastComment().is_internal).toBe(0);
+    expect(notifyAgentOfCustomerReply).toHaveBeenCalledExactlyOnceWith(ticketId, 'Body text', 'email', { internal: false });
   });
 
   it('en obekant avsändare med rätt kort-id blir en intern anteckning', async () => {
@@ -978,6 +981,7 @@ describe('processEmail — svar på befintligt ärende kräver betrodd avsändar
 
     expect(countTickets()).toBe(1);
     expect(lastComment()).toEqual({ is_internal: 1, email_from_address: 'mallory@evil.example' });
+    expect(notifyAgentOfCustomerReply).toHaveBeenCalledExactlyOnceWith(ticketId, 'Body text', 'email', { internal: true });
   });
 
   it('SPF/DMARC-fail gör även beställaren obetrodd', async () => {
@@ -991,6 +995,7 @@ describe('processEmail — svar på befintligt ärende kräver betrodd avsändar
     await processEmail(Buffer.from('raw'), config);
 
     expect(lastComment().is_internal).toBe(1);
+    expect(notifyAgentOfCustomerReply).toHaveBeenCalledExactlyOnceWith(ticketId, 'Body text', 'email', { internal: true });
   });
 
   it('en tidigare publik e-postavsändare på ärendet är betrodd, en intern anteckning ger ingen tillit', async () => {
@@ -1212,6 +1217,57 @@ describe('processEmail — bilagor', () => {
   });
   const countAttachments = () =>
     (memDb.prepare('SELECT COUNT(*) AS n FROM ticket_attachments').get() as { n: number }).n;
+
+  it.each([
+    ['betrodd beställare', 'alice@example.com', {}, 'public'],
+    ['obekant avsändare', 'mallory@evil.example', {}, 'internal'],
+    ['beställare med underkänd SPF', 'alice@example.com', { 'authentication-results': 'mx.example; spf=fail' }, 'internal'],
+  ])('bevarar synlighet för bilaga från %s', async (_label, email, authentication, visibility) => {
+    insertUser(memDb);
+    insertContact(memDb, { id: 'c1', email: 'alice@example.com' });
+    insertTicket(memDb, { id: 't1', title: 'Original', requester_id: 'c1', email_message_id: '<root@x>' });
+    nextParsed = makeEmail({
+      from: { value: [{ address: email, name: 'Sender' }] },
+      inReplyTo: '<root@x>',
+      headers: headers(authentication),
+      attachments: [attachment('reply.txt')],
+    });
+
+    expect(await processEmail(Buffer.from('raw'), config)).toBe('processed');
+
+    expect(memDb.prepare('SELECT file_name, share_visibility FROM ticket_attachments').get())
+      .toEqual({ file_name: 'reply.txt', share_visibility: visibility });
+    expect(memDb.prepare('SELECT is_internal FROM ticket_comments').get())
+      .toEqual({ is_internal: visibility === 'internal' ? 1 : 0 });
+    expect(notifyAgentOfCustomerReply).toHaveBeenCalledExactlyOnceWith('t1', 'Body text', 'email', { internal: visibility === 'internal' });
+  });
+
+  it('bilagor på nytt ärende får publik synlighet', async () => {
+    insertUser(memDb);
+    nextParsed = makeEmail({ attachments: [attachment('new-ticket.txt')] });
+
+    await processEmail(Buffer.from('raw'), config);
+
+    expect(memDb.prepare('SELECT file_name, share_visibility FROM ticket_attachments').get())
+      .toEqual({ file_name: 'new-ticket.txt', share_visibility: 'public' });
+    expect(countTickets()).toBe(1);
+  });
+
+  it('bilaga på intern nära-dubblett förblir intern', async () => {
+    insertUser(memDb);
+    insertContact(memDb, { id: 'c1', email: 'alice@example.com' });
+    insertTicket(memDb, { id: 't1', title: 'Help me', requester_id: 'c1', createdSecondsAgo: 5 });
+    nextParsed = makeEmail({
+      headers: headers({ 'authentication-results': 'mx.example; spf=fail' }),
+      attachments: [attachment('duplicate.txt')],
+    });
+
+    await processEmail(Buffer.from('raw'), config);
+
+    expect(countTickets()).toBe(1);
+    expect(memDb.prepare('SELECT is_internal FROM ticket_comments').get()).toEqual({ is_internal: 1 });
+    expect(memDb.prepare('SELECT share_visibility FROM ticket_attachments').get()).toEqual({ share_visibility: 'internal' });
+  });
 
   it('en trasig bilaga stoppar inte de övriga', async () => {
     insertUser(memDb);

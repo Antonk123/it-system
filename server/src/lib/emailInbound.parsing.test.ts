@@ -103,7 +103,8 @@ function createSchema(db: InstanceType<typeof Database>) {
     CREATE TABLE ticket_attachments (
       id TEXT PRIMARY KEY, ticket_id TEXT NOT NULL, file_name TEXT NOT NULL,
       file_path TEXT NOT NULL, file_size INTEGER, file_type TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      share_visibility TEXT NOT NULL DEFAULT 'internal' CHECK(share_visibility IN ('internal', 'public', 'referenced'))
     );
 
     CREATE TABLE ticket_shares (

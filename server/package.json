@@ -31,7 +31,7 @@
     "imapflow": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "mailparser": "^3.9.39",
-    "multer": "^2.4.0",
+    "multer": "^2.5.0",
     "node-cron": "^4.4.1",
     "nodemailer": "^10.0.16",
     "openid-client": "^6.8.8",

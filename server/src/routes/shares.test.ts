@@ -243,7 +243,7 @@ describe('GET /api/shares/public/file/:token/:attachmentId — download headers 
       .send({});
     const attachmentId = randomUUID();
     db.prepare(
-      `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_type, file_size) VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_type, file_size, share_visibility) VALUES (?, ?, ?, ?, ?, ?, 'public')`
     ).run(attachmentId, tid, fileName, filePath, 'text/plain', 5);
     return { token: createRes.body.share_token as string, attachmentId };
   }
@@ -287,7 +287,7 @@ describe('GET /api/shares/public/file/:token/:attachmentId — fail-closed expir
     const fileName = `expiry-test-${attachmentId}.txt`;
     writeFileSync(join(UPLOAD_DIR, fileName), 'hello');
     db.prepare(
-      `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_type, file_size) VALUES (?, ?, ?, ?, ?, ?)`
+      `INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_type, file_size, share_visibility) VALUES (?, ?, ?, ?, ?, ?, 'public')`
     ).run(attachmentId, tid, fileName, fileName, 'text/plain', 5);
 
     const okRes = await request(app).get(`/api/shares/public/file/${token}/${attachmentId}`);

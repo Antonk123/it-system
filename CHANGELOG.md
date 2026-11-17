@@ -10,6 +10,12 @@ IT-Ticket levereras rullande från `main` (en instans per deployment). Sektionen
 
 ## [Orutinerat]
 
+### Säkerhet och verifiering (2026-11-17)
+- Uppdaterad JSON-parser och filuppladdning till rättade beroendeversioner.
+- Interna bilder och mailbilagor skyddas i både delningslistor och direkta filhämtningar. Osparade editorbilder delas först när de sparats i publikt innehåll. Interna e-postsvar skickas inte vidare som publika webhookhändelser.
+- Äldre filer med okänt ursprung visas enbart för personal tills de uttryckligen laddas upp för delning igen. Migration 096 bevarar filerna och belagd publik användning; se driftrutinen i docs/OPERATIONS.md.
+- Beroendegaten avvisar misslyckade eller ofullständiga audit-svar. Routetesterna omfattar även Navets supportportal.
+
 ### Mallval (2026-11-16)
 - ”Ta hjälp av en mall” öppnar mallistan direkt i felanmälan och när du skapar ärenden. Bekräftelsen innan ifylld text ersätts finns kvar.
 

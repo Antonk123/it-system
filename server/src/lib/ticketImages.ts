@@ -129,8 +129,8 @@ export function commitTicketImages(res: Response, ticketId: string): void {
   if (!state) return;
   const count = db.prepare('SELECT count(*) AS total FROM ticket_attachments WHERE ticket_id = ?').get(ticketId) as { total: number };
   if (count.total + state.files.length > 50) throw new Error('Ärendet har för många bilagor.');
-  const insert = db.prepare('INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  for (const { id, file } of state.files) insert.run(id, ticketId, file.originalname, file.filename, file.size, file.mimetype, new Date().toISOString());
+  const insert = db.prepare('INSERT INTO ticket_attachments (id, ticket_id, file_name, file_path, file_size, file_type, created_at, share_visibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  for (const { id, file } of state.files) insert.run(id, ticketId, file.originalname, file.filename, file.size, file.mimetype, new Date().toISOString(), /^attachment-\d+$/.test(file.fieldname) ? 'public' : 'referenced');
   if (state.key) {
     db.prepare('DELETE FROM ticket_submissions WHERE expires_at <= ?').run(Date.now());
     db.prepare('INSERT INTO ticket_submissions (scope, key, ticket_id, expires_at, request_hash) VALUES (?, ?, ?, ?, ?)').run(state.scope, state.key, ticketId, Date.now() + 24 * 60 * 60 * 1000, state.requestHash);

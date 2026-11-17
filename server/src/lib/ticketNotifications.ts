@@ -72,11 +72,13 @@ export async function notifyStaffOfNewTicket(
 
 /**
  * A customer replied (inbound email or the Navet requester portal) → notify the
- * assigned technician: fire the comment.created webhook and push + email the
- * assignee. Called after the comment transaction commits.
+ * assigned technician by push + email. Public replies also emit comment.created;
+ * an internal/unverified email must not export its text to external consumers.
+ * Called after the comment transaction commits.
  */
 export async function notifyAgentOfCustomerReply(
   ticketId: string, content: string, source: 'email' | 'navet' = 'email',
+  options: { internal?: boolean } = {},
 ): Promise<void> {
   const ticket = db.prepare('SELECT id, title, assigned_to FROM tickets WHERE id = ?')
     .get(ticketId) as { id: string; title: string; assigned_to: string | null } | undefined;
@@ -84,13 +86,15 @@ export async function notifyAgentOfCustomerReply(
 
   const snip = snippet(content);
 
-  await dispatchWebhook('comment.created', {
-    ticket_id: ticket.id,
-    ticket_title: ticket.title,
-    is_internal: false,
-    source,
-    content_snippet: snip,
-  }).catch((err) => logger.error('comment.created webhook failed', { error: String(err) }));
+  if (!options.internal) {
+    await dispatchWebhook('comment.created', {
+      ticket_id: ticket.id,
+      ticket_title: ticket.title,
+      is_internal: false,
+      source,
+      content_snippet: snip,
+    }).catch((err) => logger.error('comment.created webhook failed', { error: String(err) }));
+  }
 
   // Only notify the assigned technician — never broadcast the ticket title (which
   // may contain customer data) to every staff member's devices.

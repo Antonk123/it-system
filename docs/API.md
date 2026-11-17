@@ -296,8 +296,8 @@ an API key without `admin` scope never counts as admin.
 | GET | `/api/shares/ticket/:ticketId` | `authenticate` | Get existing active share token + expiry | params: `ticketId` | `{ share_token: string\|null, expires_at: string\|null }` |
 | POST | `/api/shares/ticket/:ticketId` | `authenticate` (+ `canAccessTicket(write)`) | Create share link (idempotent) with optional expiry. **Links always expire** — default 30 days, `expiresInDays` 1–365 | params: `ticketId`; body: `expiresInDays?` (int, 1–365, default 30) | `{ share_token, expires_at }` (200 existing / 201 new); 400 if invalid days/403/404 |
 | DELETE | `/api/shares/ticket/:ticketId` | `authenticate` (+ `canAccessTicket(write)`) | Delete share link | params: `ticketId` | `{ message }`; 403/404 |
-| GET | `/api/shares/public/:token` | `sharePublicRateLimiter` (public) | Public read of a shared ticket (strips internal `notes`); fails if expired | params: `token` | `{ ticket, requester, attachments[], checklistItems[], share_expires_at }`; 404 if invalid/expired |
-| GET | `/api/shares/public/file/:token/:attachmentId` | `sharePublicRateLimiter` (public) | Serve an attachment for a shared ticket (fails if expired); forced download | params: `token`, `attachmentId` | file download; 404 if invalid/expired/file missing |
+| GET | `/api/shares/public/:token` | `sharePublicRateLimiter` (public) | Public read of a shared ticket (strips internal `notes` and private/unclassified files); fails if expired | params: `token` | `{ ticket, requester, attachments[], checklistItems[], share_expires_at }`; 404 if invalid/expired |
+| GET | `/api/shares/public/file/:token/:attachmentId` | `sharePublicRateLimiter` (public) | Serve an externally permitted attachment for a shared ticket (fails if private or expired); forced download | params: `token`, `attachmentId` | file download; 404 if invalid/expired/file missing |
 
 ---
 
@@ -306,11 +306,31 @@ an API key without `admin` scope never counts as admin.
 | Method | Path | Auth | Purpose | Inputs | Response |
 |--------|------|------|---------|--------|----------|
 | GET | `/api/attachments/ticket/:ticketId` | `authenticate` | List attachment metadata (+ url) | params: `ticketId` | `AttachmentRow[]` |
-| POST | `/api/attachments/ticket/:ticketId` | `authenticate` (+ multer `upload.single('file')` 10 MB + MIME/extension allowlist + magic-byte + `canAccessTicket(write)` + per-ticket cap 50) | Upload one file. **SVG is not accepted** (neither `image/svg+xml` nor `.svg`); the file is removed again if a later check fails | params: `ticketId`; multipart `file` | 201 attachment (+ url); 400/403/404 |
+| POST | `/api/attachments/ticket/:ticketId` | `authenticate` (+ multer `upload.single('file')` 10 MB + MIME/extension allowlist + magic-byte + `canAccessTicket(write)` + per-ticket cap 50) | Upload one file. **SVG is not accepted** (neither `image/svg+xml` nor `.svg`); the file is removed again if a later check fails | params: `ticketId`; optional query `share=public` for an ordinary shared attachment or `inline=1` for a reference-dependent image; omitted flags keep it internal; multipart `file` | 201 attachment (+ url); 400/403/404 |
 | GET | `/api/attachments/file/:id` | `authenticate` | Download a file (forced attachment, never inline; UTF-8 filenames) | params: `id` | file download; 404 |
 | DELETE | `/api/attachments/:id` | `authenticate` (+ `canAccessTicket(write)` via attachment) | Delete attachment (row then file) | params: `id` | `{ message }`; 403/404 |
 
 ---
+
+### Attachment sharing policy
+
+Staff can still list/read files according to ADR 0001. External ticket shares and
+requester-portal downloads also enforce `ticket_attachments.share_visibility`:
+`internal` is never external; `public` is an explicit `share=public` or public-submission
+attachment; `referenced` is an inline image that is external only while a saved
+public description, solution, custom field or non-deleted public comment references
+it. Any reference in internal notes or an internal comment (including soft-deleted
+comments) takes precedence and blocks external list and direct-download access.
+Inline editor uploads use `POST /attachments/ticket/:ticketId?inline=1`; they stay
+private until the public reference is saved. Ordinary shared uploads use `?share=public`. Missing flags keep uploads internal, including uploads from older cached clients. Other values or combined flags return400.
+
+Migration 096 leaves legacy files with unknown provenance internal. Proven saved
+public references become reference-dependent, and existing requester-upload
+allowlist entries remain public unless an internal reference exists. No file is
+removed; an ambiguous older attachment must be deliberately uploaded again as an
+ordinary public attachment to make it external. Internal inbound-email replies
+keep their attachments internal and do not emit external `comment.created` events;
+assigned staff notifications still run.
 
 ## Knowledge base — `/api/kb`
 

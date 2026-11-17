@@ -100,7 +100,8 @@ CREATE TABLE IF NOT EXISTS ticket_attachments (
   file_path TEXT NOT NULL,
   file_size INTEGER,
   file_type TEXT,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  share_visibility TEXT NOT NULL DEFAULT 'internal' CHECK(share_visibility IN ('internal', 'public', 'referenced'))
 );
 
 -- Ticket checklists

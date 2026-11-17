@@ -959,11 +959,11 @@ class ApiClient {
   }
 
   async uploadAttachment(ticketId: string, file: File) {
-    return this.uploadFile<AttachmentRow>(`/attachments/ticket/${ticketId}`, file);
+    return this.uploadFile<AttachmentRow>(`/attachments/ticket/${ticketId}?share=public`, file);
   }
 
   async uploadInlineTicketImage(ticketId: string, file: File) {
-    return this.postFile<AttachmentRow>(`/attachments/ticket/${ticketId}`, file, 'file', 'Bilden kunde inte laddas upp.', false, false);
+    return this.postFile<AttachmentRow>(`/attachments/ticket/${ticketId}?inline=1`, file, 'file', 'Bilden kunde inte laddas upp.', false, false);
   }
 
   async deleteAttachment(id: string) {
