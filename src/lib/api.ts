@@ -110,22 +110,64 @@ class ApiClient {
   private supportCsrfToken: string | null = null;
   private baseUrl: string;
   private csrfToken: string | null = null;
+  private accessToken: string | null = null;
+  private tokenPersistencePending = false;
+  private stopWatchingTokenStorage: (() => void) | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
   }
 
   private getToken(): string | null {
-    return safeStorage.getItem('auth_token');
+    try {
+      // Retry failed writes before reading: a stale persisted token must not
+      // replace a newly issued token or undo a logout in this tab.
+      if (this.tokenPersistencePending) this.persistToken();
+      // Keep working storage authoritative so other tabs can refresh or clear it.
+      this.accessToken = localStorage.getItem('auth_token');
+    } catch {
+      // Browser policy/quota failures only disable persistence for this session.
+    }
+    return this.accessToken;
+  }
+
+  private persistToken(): void {
+    if (this.accessToken === null) localStorage.removeItem('auth_token');
+    else localStorage.setItem('auth_token', this.accessToken);
+    this.tokenPersistencePending = false;
+    this.stopWatchingTokenStorage?.();
+    this.stopWatchingTokenStorage = null;
+  }
+
+  private watchPendingTokenStorage(): void {
+    if (this.stopWatchingTokenStorage || typeof window === 'undefined' || !window.addEventListener) return;
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== 'auth_token' && event.key !== null) return;
+      if (event.storageArea) {
+        try { if (event.storageArea !== localStorage) return; } catch { /* Storage access may still be blocked. */ }
+      }
+      // A newer login/logout in another tab wins over our failed persistence.
+      this.accessToken = event.key === null ? null : event.newValue;
+      this.tokenPersistencePending = false;
+      this.csrfToken = null; this.supportCsrfToken = null;
+      this.stopWatchingTokenStorage?.();
+      this.stopWatchingTokenStorage = null;
+    };
+    window.addEventListener('storage', onStorage);
+    this.stopWatchingTokenStorage = () => window.removeEventListener('storage', onStorage);
   }
 
   setToken(token: string): void {
-    safeStorage.setItem('auth_token', token);
+    this.accessToken = token;
+    this.tokenPersistencePending = true;
+    try { this.persistToken(); } catch { this.watchPendingTokenStorage(); }
     this.csrfToken = null; this.supportCsrfToken = null; // Invalidera cachad CSRF-token vid auth-byte
   }
 
   clearToken(): void {
-    safeStorage.removeItem('auth_token');
+    this.accessToken = null;
+    this.tokenPersistencePending = true;
+    try { this.persistToken(); } catch { this.watchPendingTokenStorage(); }
     safeStorage.removeItem('token');
     safeStorage.removeItem('refreshToken'); // rensa ev. gammal token (pre-cookie-migration)
     this.csrfToken = null; this.supportCsrfToken = null;

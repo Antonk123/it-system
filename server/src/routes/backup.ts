@@ -1,18 +1,20 @@
+import { backupDataBytes, buildBackupArchive } from '../lib/backupArchive.js';
 import { Router, Response, Request, NextFunction } from 'express';
 import { authenticate, requireAdmin, AuthRequest } from '../middleware/auth.js';
 import { db, closeDatabase } from '../db/connection.js';
 import type { Database as DatabaseType } from 'better-sqlite3';
-import { ZipArchive } from 'archiver';
 import { join, dirname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync, unlinkSync, mkdirSync, createReadStream, createWriteStream, copyFileSync, cpSync, rmSync, openSync, readSync, closeSync, chmodSync, renameSync, readdirSync, statSync } from 'fs';
+import { existsSync, unlinkSync, mkdirSync, createReadStream, createWriteStream, copyFileSync, cpSync, rmSync, openSync, readSync, closeSync, chmodSync, renameSync, readdirSync, statSync, statfsSync } from 'fs';
 import { tmpdir } from 'os';
 import { randomUUID } from 'crypto';
+import { pipeline } from 'node:stream';
 import multer from 'multer';
 import unzipper from 'unzipper';
 import { logger } from '../lib/logger.js';
 import { createRateLimiter } from '../middleware/rateLimit.js';
 import {
+  assertEnoughDiskSpace,
   getBackupConfig,
   getBackupDir,
   runBackup,
@@ -236,67 +238,41 @@ export async function rebuildRestoredFts(dbPath: string): Promise<void> {
 const router = Router();
 
 router.get('/', authenticate, requireAdmin, backupDownloadLimiter, async (req: AuthRequest, res: Response) => {
-  // Temp-dumpen ligger i backup-katalogen (samma volym som övriga backuper, 0o700),
-  // inte i världsläsbara /tmp. Prefixet tmp- gör att retention och fillistan ignorerar den.
   const backupDir = getBackupDir();
   const tmpFile = join(backupDir, `tmp-download-${randomUUID()}.sqlite`);
-
+  const tmpZip = `${tmpFile}.zip.tmp`;
+  const cancellation = new AbortController();
+  let streaming = false;
+  const cleanup = () => {
+    for (const path of [tmpZip, tmpFile, `${tmpFile}-wal`, `${tmpFile}-shm`, `${tmpFile}-journal`]) {
+      try { unlinkSync(path); } catch { /* already removed */ }
+    }
+  };
+  res.once('close', () => {
+    if (!res.writableFinished) cancellation.abort();
+    if (streaming) cleanup();
+  });
   try {
-    mkdirSync(backupDir, { recursive: true, mode: 0o700 });
-    await db.backup(tmpFile);
-
-    // Backup-dumpen innehåller hela databasen (inkl. hemligheter) → minsta-rättighet 0o600.
-    try {
-      chmodSync(tmpFile, 0o600);
-    } catch (chmodErr) {
-      logger.warn('Kunde inte sätta läsrättigheter (0o600) på temporär backup-fil', { path: tmpFile, error: String(chmodErr) });
-    }
-
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const filename = `it-ticket-backup-${dateStr}.zip`;
-
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-
-    // Fynd F2: logga FÖRE strömningen börjar, inte efter finalize(). database.sqlite
-    // läggs i arkivet och strömmas till klienten redan under finalize — en klient
-    // som avbryter anslutningen sent kan i praktiken ha fått hela databasen utan
-    // att en audit-rad skrivits, om loggningen väntar på att strömmen ska bli klar.
-    // Logga alltså avsikten så snart requireAdmin + rate-limitern har passerats,
-    // oavsett om klienten sedan fullföljer nedladdningen eller avbryter den.
+    // Record intent before ANY archive creation/streaming, even on abort or failure.
     logAudit(req.user!.id, 'backup_download', 'backup', null, null, req.ip, req.apiKey?.id ?? null);
-
-    const archive = new ZipArchive({ zlib: { level: 6 } });
-
-    archive.pipe(res);
-
-    archive.file(tmpFile, { name: 'data/database.sqlite' });
-
-    if (existsSync(UPLOAD_DIR)) {
-      archive.directory(UPLOAD_DIR, 'data/uploads');
-    }
-
-    // Fynd 5: Rensa tmpfil även vid 'close' (avbruten anslutning) och 'error'.
-    const cleanupTmpFile = () => {
-      try { unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
-    };
-    res.on('finish', cleanupTmpFile);
-    res.on('close', cleanupTmpFile);
-    res.on('error', cleanupTmpFile);
-
-    archive.on('error', () => {
-      try { unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Backup failed' });
-      }
-    });
-
-    await archive.finalize();
+    mkdirSync(backupDir, { recursive: true, mode: 0o700 });
+    const disk = statfsSync(backupDir);
+    assertEnoughDiskSpace(disk.bavail * disk.bsize, backupDataBytes(db, UPLOAD_DIR));
+    await buildBackupArchive(db, tmpFile, tmpZip, UPLOAD_DIR, cancellation.signal);
+    if (res.destroyed) return;
+    // No ZIP bytes/headers reach the client until the snapshot's references pass.
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="it-ticket-backup-${new Date().toISOString().slice(0, 10)}.zip"`);
+    res.once('finish', cleanup);
+    res.once('error', cleanup);
+    streaming = true;
+    // pipeline also closes the file descriptor when the client aborts.
+    pipeline(createReadStream(tmpZip), res, cleanup);
   } catch (err) {
-    try { unlinkSync(tmpFile); } catch { /* ignore cleanup errors */ }
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Backup failed' });
-    }
+    logger.error('Backup download failed', { error: String(err) });
+    if (!res.headersSent && !res.destroyed) res.status(500).json({ error: 'Backup failed' });
+  } finally {
+    if (!streaming) cleanup();
   }
 });
 

@@ -19,6 +19,8 @@ const IMAGE_REFERENCE_COLUMNS: [table: string, column: string][] = [
   ['tickets', 'notes'],
   ['tickets', 'solution'],
   ['ticket_comments', 'content'],
+  ['ticket_field_values', 'field_value'],
+  ['template_fields', 'default_value'],
   ['ticket_templates', 'description_template'],
   ['ticket_templates', 'notes_template'],
   ['ticket_templates', 'solution_template'],
@@ -45,14 +47,17 @@ export function extractKbImageFilenames(content: string): Set<string> {
 }
 
 // Raderar en enskild lokalt uppladdad KB-bildfil (best-effort, icke-fatalt).
-export function deleteKbImageFile(filename: string, uploadDir: string = UPLOAD_DIR): void {
+function deleteKbImageFile(filename: string, uploadDir: string): boolean {
   const filePath = join(uploadDir, filename);
   // Radera bara filer som faktiskt ligger i uploadDir.
-  if (!filePath.startsWith(uploadDir + '/') && filePath !== uploadDir) return;
+  if (!filePath.startsWith(uploadDir + '/') && filePath !== uploadDir) return false;
   try {
-    if (existsSync(filePath)) unlinkSync(filePath);
+    if (!existsSync(filePath)) return false;
+    unlinkSync(filePath);
+    return true;
   } catch (unlinkErr) {
     logger.warn('KB: kunde inte radera inbäddad bild', { filePath, error: String(unlinkErr) });
+    return false;
   }
 }
 
@@ -60,6 +65,17 @@ function isReferenced(db: Database, filename: string): boolean {
   return IMAGE_REFERENCE_COLUMNS.some(([table, column]) =>
     db.prepare(`SELECT 1 FROM ${table} WHERE instr(${column}, ?) > 0 LIMIT 1`).get(`/api/kb/images/${filename}`) !== undefined
   );
+}
+
+/** Called after content commits; shared references and pending drafts take precedence. */
+export function deleteUnreferencedKbImage(db: Database, filename: string, uploadDir: string = UPLOAD_DIR, now: number = Date.now()): boolean {
+  if (!filename.startsWith('kb-') || filename.includes('/') || filename.includes('\\') || filename.includes('..')) return false;
+  const path = join(uploadDir, filename);
+  if (!existsSync(path)) return false;
+  // Keep the same grace period for direct article cleanup and nightly retention:
+  // a second editor may still hold a not-yet-saved reference to this image.
+  if (now - statSync(path).mtimeMs < PENDING_UPLOAD_GRACE_MS || isReferenced(db, filename)) return false;
+  return deleteKbImageFile(filename, uploadDir);
 }
 
 /**
@@ -73,10 +89,7 @@ export function cleanupOrphanKbImages(db: Database, uploadDir: string = UPLOAD_D
   for (const filename of readdirSync(uploadDir)) {
     if (!filename.startsWith('kb-')) continue;
     try {
-      if (now - statSync(join(uploadDir, filename)).mtimeMs < PENDING_UPLOAD_GRACE_MS) continue;
-      if (isReferenced(db, filename)) continue;
-      deleteKbImageFile(filename, uploadDir);
-      deleted++;
+      if (deleteUnreferencedKbImage(db, filename, uploadDir, now)) deleted++;
     } catch (err) {
       logger.warn('KB: kunde inte städa bildfil', { filename, error: String(err) });
     }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { existsSync, mkdirSync, rmSync } from 'fs';
+import { existsSync, mkdirSync, rmSync, utimesSync } from 'fs';
 import { randomUUID, randomBytes, createHash } from 'crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -477,7 +477,10 @@ describe('M11 regression — embedded <img> cleanup on update/delete', () => {
     expect(existsSync(join(UPLOAD_TEST_DIR, img2Filename))).toBe(true);
   });
 
-  it('PUT that drops one embedded image from content deletes ONLY that file from disk', async () => {
+  it('PUT removes only the old image no longer referenced by content', async () => {
+    const old = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    utimesSync(join(UPLOAD_TEST_DIR, img1Filename), old, old);
+    utimesSync(join(UPLOAD_TEST_DIR, img2Filename), old, old);
     const res = await adminAgent
       .put(`/api/kb/articles/${articleId}`)
       .set('Authorization', `Bearer ${adminToken}`)
@@ -501,6 +504,70 @@ describe('M11 regression — embedded <img> cleanup on update/delete', () => {
 
     expect(res.status).toBe(200);
     expect(existsSync(join(UPLOAD_TEST_DIR, img1Filename))).toBe(false);
+  });
+});
+
+describe('shared KB image lifetime (A03)', () => {
+  async function uploadSharedImage(): Promise<{ url: string; filename: string }> {
+    const uploaded = await adminAgent.post('/api/kb/upload-image')
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken)
+      .attach('image', VALID_PNG_BUFFER, { filename: 'shared.png', contentType: 'image/png' });
+    expect(uploaded.status).toBe(201);
+    const filename = uploaded.body.url.replace('/api/kb/images/', '');
+    const old = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    utimesSync(join(UPLOAD_TEST_DIR, filename), old, old);
+    return { url: uploaded.body.url, filename };
+  }
+
+  async function createSharedArticle(url: string): Promise<string> {
+    const created = await adminAgent.post('/api/kb/articles')
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken)
+      .send({ title: `Shared image ${randomUUID()}`, content: `<p><img src="${url}"></p>`, category_id: categoryId });
+    expect(created.status).toBe(201);
+    return created.body.id;
+  }
+
+  it('keeps the image when one article is deleted and removes it only after the last reference is removed', async () => {
+    const { url, filename } = await uploadSharedImage();
+    const first = await createSharedArticle(url);
+    const second = await createSharedArticle(url);
+    const deleted = await adminAgent.delete(`/api/kb/articles/${first}`)
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken);
+    expect(deleted.status).toBe(200);
+    const remaining = await adminAgent.get(`/api/kb/articles/${second}`).set('Authorization', `Bearer ${adminToken}`);
+    expect(remaining.status).toBe(200);
+    expect(remaining.body.content).toContain(url);
+    expect((await request(app).get(url)).status).toBe(200);
+    expect(existsSync(join(UPLOAD_TEST_DIR, filename))).toBe(true);
+
+    const updated = await adminAgent.put(`/api/kb/articles/${second}`)
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken)
+      .send({ title: 'No image left', content: '<p>Done</p>', category_id: categoryId });
+    expect(updated.status).toBe(200);
+    expect((await request(app).get(url)).status).toBe(404);
+  });
+
+  it('keeps an image referenced by an article when another article removes it', async () => {
+    const { url } = await uploadSharedImage();
+    const first = await createSharedArticle(url);
+    const second = await createSharedArticle(url);
+    const updated = await adminAgent.put(`/api/kb/articles/${first}`)
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken)
+      .send({ title: 'One image removed', content: '<p>Done</p>', category_id: categoryId });
+    expect(updated.status).toBe(200);
+    expect((await request(app).get(url)).status).toBe(200);
+    expect((await adminAgent.get(`/api/kb/articles/${second}`).set('Authorization', `Bearer ${adminToken}`)).body.content).toContain(url);
+  });
+
+  it('keeps a freshly removed image during the pending-upload grace period', async () => {
+    const { url, filename } = await uploadSharedImage();
+    const fresh = new Date();
+    utimesSync(join(UPLOAD_TEST_DIR, filename), fresh, fresh);
+    const article = await createSharedArticle(url);
+    const deleted = await adminAgent.delete(`/api/kb/articles/${article}`)
+      .set('Authorization', `Bearer ${adminToken}`).set('x-csrf-token', adminCsrfToken);
+    expect(deleted.status).toBe(200);
+    expect((await request(app).get(url)).status).toBe(200);
   });
 });
 

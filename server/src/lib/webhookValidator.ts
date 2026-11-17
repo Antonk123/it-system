@@ -1,6 +1,6 @@
 import dns from 'dns';
 
-export type WebhookUrlCheck = { ok: true } | { ok: false; reason: string };
+export type WebhookUrlCheck = { ok: true } | { ok: false; reason: string; retryable: boolean };
 
 type UnsafeCheck = { unsafe: true; reason: string } | { unsafe: false };
 
@@ -98,25 +98,25 @@ export async function isSafeWebhookUrl(raw: string): Promise<WebhookUrlCheck> {
   try {
     parsed = new URL(raw);
   } catch {
-    return { ok: false, reason: 'Invalid URL' };
+    return { ok: false, reason: 'Invalid URL', retryable: false };
   }
-  if (parsed.protocol !== 'https:') return { ok: false, reason: 'Only https:// URLs are allowed' };
+  if (parsed.protocol !== 'https:') return { ok: false, reason: 'Only https:// URLs are allowed', retryable: false };
 
   // Avslutande punkt ("localhost.") ska inte kringgå namnkontrollen.
   const host = parsed.hostname.toLowerCase().replace(/\.$/, '');
   if (host === 'localhost' || host === '::1' || host.endsWith('.localhost') || host.endsWith('.local')) {
-    return { ok: false, reason: 'Loopback/local hosts are not allowed' };
+    return { ok: false, reason: 'Loopback/local hosts are not allowed', retryable: false };
   }
 
   // Block raw IPv4 literal in private/loopback/link-local ranges
   const v4Check = isUnsafeIPv4(host);
-  if (v4Check.unsafe) return { ok: false, reason: v4Check.reason };
+  if (v4Check.unsafe) return { ok: false, reason: v4Check.reason, retryable: false };
 
   // Block IPv6 literal — URL hostname is wrapped in [...] for v6
   if (host.startsWith('[') && host.endsWith(']')) {
     const v6 = host.slice(1, -1);
     const v6Check = isUnsafeIPv6(v6);
-    if (v6Check.unsafe) return { ok: false, reason: v6Check.reason };
+    if (v6Check.unsafe) return { ok: false, reason: v6Check.reason, retryable: false };
   }
 
   // DNS-resolve hostname and verify EVERY resolved address is publicly routable.
@@ -128,18 +128,21 @@ export async function isSafeWebhookUrl(raw: string): Promise<WebhookUrlCheck> {
     try {
       addrs = await dns.promises.lookup(host, { all: true });
     } catch {
-      return { ok: false, reason: 'DNS lookup failed' };
+      // Resolution failure does not establish that the destination is unsafe.
+      // Still refuse this request; a later delivery may resolve successfully.
+      return { ok: false, reason: 'DNS lookup failed', retryable: true };
     }
+    if (addrs.length === 0) return { ok: false, reason: 'DNS lookup returned no addresses', retryable: true };
     for (const a of addrs) {
       if (a.family === 4) {
         const v4 = isUnsafeIPv4(a.address);
         if (v4.unsafe) {
-          return { ok: false, reason: `Resolved to private/loopback address: ${v4.reason}` };
+          return { ok: false, reason: `Resolved to private/loopback address: ${v4.reason}`, retryable: false };
         }
       } else if (a.family === 6) {
         const v6 = isUnsafeIPv6(a.address);
         if (v6.unsafe) {
-          return { ok: false, reason: `Resolved to private/loopback address: ${v6.reason}` };
+          return { ok: false, reason: `Resolved to private/loopback address: ${v6.reason}`, retryable: false };
         }
       }
     }

@@ -17,13 +17,13 @@ const { DB_PATH, DIR } = vi.hoisted(() => {
 });
 
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
-import { cleanupOrphanKbImages, extractKbImageFilenames } from './kbImages.js';
+import { cleanupOrphanKbImages, deleteUnreferencedKbImage, extractKbImageFilenames } from './kbImages.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const img = (name: string) => `<p><img src="/api/kb/images/${name}"></p>`;
 
-function put(name: string, ageMs: number): void {
-  const path = join(DIR, name);
+function put(name: string, ageMs: number, directory = DIR): void {
+  const path = join(directory, name);
   writeFileSync(path, 'x');
   const when = new Date(Date.now() - ageMs);
   utimesSync(path, when, when);
@@ -90,5 +90,62 @@ describe('cleanupOrphanKbImages', () => {
     expect(cleanupOrphanKbImages(db, DIR, Date.now() + 2 * DAY)).toBe(2);
     expect(existsSync(join(DIR, 'kb-late.png'))).toBe(false);
     expect(existsSync(join(DIR, 'kb-in-article.png'))).toBe(true);
+  });
+});
+
+describe('reference-safe article image cleanup (A03)', () => {
+  const referenceColumns = [
+    ['kb_articles', 'content'],
+    ['tickets', 'description'], ['tickets', 'notes'], ['tickets', 'solution'],
+    ['ticket_comments', 'content'], ['ticket_field_values', 'field_value'],
+    ['template_fields', 'default_value'],
+    ['ticket_templates', 'description_template'], ['ticket_templates', 'notes_template'],
+    ['ticket_templates', 'solution_template'],
+  ] as const;
+
+  it.each(referenceColumns)('preserves %s.%s references for direct and nightly cleanup', (table, column) => {
+    const id = randomUUID();
+    const filename = `kb-ref-${id}.png`;
+    const uploadDir = join(DIR, id);
+    mkdirSync(uploadDir);
+    put(filename, 2 * DAY, uploadDir);
+    const content = img(filename);
+    if (table === 'kb_articles') {
+      db.prepare("INSERT INTO kb_categories (id, name) VALUES (?, 'Shared images')").run(id);
+      db.prepare("INSERT INTO kb_articles (id, title, content, category_id) VALUES (?, 'shared', ?, ?)").run(id, content, id);
+    } else if (table === 'tickets') {
+      db.prepare("INSERT INTO tickets (id, title, description) VALUES (?, 'shared', '')").run(id);
+      db.prepare(`UPDATE tickets SET ${column} = ? WHERE id = ?`).run(content, id);
+    } else if (table === 'ticket_templates') {
+      db.prepare("INSERT INTO ticket_templates (id, name, title_template, description_template) VALUES (?, ?, 'title', '')").run(id, id);
+      db.prepare(`UPDATE ticket_templates SET ${column} = ? WHERE id = ?`).run(content, id);
+    } else if (table === 'template_fields') {
+      db.prepare("INSERT INTO ticket_templates (id, name, title_template, description_template) VALUES (?, ?, 'title', '')").run(id, id);
+      db.prepare("INSERT INTO template_fields (id, template_id, field_name, field_label, field_type, default_value) VALUES (?, ?, 'text', 'Default', 'textarea', ?)").run(id, id, content);
+    } else {
+      const ticketId = randomUUID();
+      db.prepare("INSERT INTO tickets (id, title, description) VALUES (?, 'shared', '')").run(ticketId);
+      if (table === 'ticket_comments') {
+        db.prepare("INSERT INTO users (id, email, password_hash, role, display_name) VALUES (?, ?, 'x', 'user', 'Shared images')").run(id, `${id}@test.local`);
+        db.prepare('INSERT INTO ticket_comments (id, ticket_id, user_id, content) VALUES (?, ?, ?, ?)').run(id, ticketId, id, content);
+      } else {
+        db.prepare("INSERT INTO ticket_field_values (id, ticket_id, field_name, field_label, field_value) VALUES (?, ?, 'richtext', 'Rich text', ?)").run(id, ticketId, content);
+      }
+    }
+
+    expect(deleteUnreferencedKbImage(db, filename, uploadDir)).toBe(false);
+    expect(cleanupOrphanKbImages(db, uploadDir)).toBe(0);
+    expect(existsSync(join(uploadDir, filename))).toBe(true);
+    db.prepare(`UPDATE ${table} SET ${column} = '' WHERE id = ?`).run(id);
+    expect(deleteUnreferencedKbImage(db, filename, uploadDir)).toBe(true);
+    expect(existsSync(join(uploadDir, filename))).toBe(false);
+  });
+
+  it('applies the same pending-upload grace to direct and nightly cleanup', () => {
+    const filename = 'kb-pending-reference.png';
+    put(filename, 0);
+    expect(deleteUnreferencedKbImage(db, filename, DIR)).toBe(false);
+    expect(cleanupOrphanKbImages(db, DIR)).toBe(0);
+    expect(deleteUnreferencedKbImage(db, filename, DIR, Date.now() + 2 * DAY)).toBe(true);
   });
 });

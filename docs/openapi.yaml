@@ -3158,7 +3158,13 @@ paths:
         every secret stored in the database (password hashes, API key
         hashes, webhook HMAC secrets, OAuth tokens, etc.) — treat the
         downloaded file as highly sensitive. Rate-limited to 10 downloads
-        per 15 minutes per IP.
+        per 15 minutes per IP. Builds a private temporary ZIP in the backup
+        directory before sending response bytes, with the same disk-space
+        margin as scheduled backups. Verifies database integrity and that all
+        persistent upload references in the SQLite snapshot exist in the ZIP.
+        Missing files, including concurrent deletions, fail with HTTP 500
+        before ZIP output. Temporary files are cleaned up on completion,
+        failure or client cancellation. This endpoint does not run offsite upload.
       security:
         - bearerAuth: []
         - apiKeyAuth: []

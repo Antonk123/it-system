@@ -19,8 +19,8 @@ const OFFSITE_TIMEOUT_MS = 15 * 60 * 1000;
  * Example OFFSITE_BACKUP_CMD value:
  *   rclone copy {file} remote:backups/
  *
- * If the variable is not set the function logs a notice and returns without
- * doing anything — the local backup cron continues unaffected.
+ * If the variable is not set and offsite is optional, the function logs a notice
+ * and returns. Required offsite must have a non-empty command.
  *
  * NOTE for ops: sätt OFFSITE_BACKUP_CMD i Portainer-stackens env (se docs/OPERATIONS.md
  * och .env.example), t.ex. `rclone copy {file} remote:itticket/`.
@@ -43,15 +43,16 @@ export function getOffsiteFailureCount(): number {
  * alla backuper på samma host/volym som databasen och går förlorade med den.
  */
 export function warnIfOffsiteMissing(): void {
-  if (process.env.NODE_ENV === 'production' && !process.env.OFFSITE_BACKUP_CMD) {
+  if (process.env.NODE_ENV === 'production' && !process.env.OFFSITE_BACKUP_CMD?.trim()) {
     logger.warn('Ingen off-site-backup konfigurerad — backuper ligger på samma host som databasen. Sätt OFFSITE_BACKUP_CMD (se docs/OPERATIONS.md).');
   }
 }
 
 export async function uploadBackupOffsite(filePath: string): Promise<void> {
   const cmdTemplate = process.env.OFFSITE_BACKUP_CMD;
+  const required = process.env.OFFSITE_BACKUP_REQUIRED === 'true';
 
-  if (!cmdTemplate) {
+  if (!cmdTemplate?.trim() && !required) {
     logger.info('Off-site backup ej konfigurerad (sätt OFFSITE_BACKUP_CMD)');
     return;
   }
@@ -60,9 +61,9 @@ export async function uploadBackupOffsite(filePath: string): Promise<void> {
   // filePath is then passed via the child process environment — never
   // interpolated into the shell string — so path characters like spaces or
   // parentheses cannot affect shell parsing.
-  const shellCmd = cmdTemplate.replace(/\{file\}/g, '"$BACKUP_FILE"');
-
   try {
+    if (!cmdTemplate?.trim()) throw new Error('OFFSITE_BACKUP_CMD must be configured when OFFSITE_BACKUP_REQUIRED=true');
+    const shellCmd = cmdTemplate.replace(/\{file\}/g, '"$BACKUP_FILE"');
     await new Promise<void>((resolve, reject) => {
       execFile('sh', ['-c', shellCmd], {
         env: { ...process.env, BACKUP_FILE: filePath },
@@ -85,7 +86,6 @@ export async function uploadBackupOffsite(filePath: string): Promise<void> {
     logger.info('Off-site backup completed', { file: filePath });
   } catch (err) {
     offsiteFailureCount += 1;
-    const required = process.env.OFFSITE_BACKUP_REQUIRED === 'true';
     if (required) {
       // Fatal: operatören har markerat offsite som obligatorisk. Logga ERROR och kasta
       // så att anroparen behandlar hela backupen som misslyckad.

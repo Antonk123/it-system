@@ -1,9 +1,7 @@
+import { backupDataBytes, buildBackupArchive } from './backupArchive.js';
 import cron from 'node-cron';
-import { ZipArchive } from 'archiver';
-import Database from 'better-sqlite3';
 import type { Database as DatabaseType } from 'better-sqlite3';
-import unzipper from 'unzipper';
-import { existsSync, mkdirSync, unlinkSync, createWriteStream, statSync, readdirSync, chmodSync, renameSync, statfsSync } from 'fs';
+import { mkdirSync, unlinkSync, statSync, readdirSync, chmodSync, renameSync, statfsSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { db as defaultDb } from '../db/connection.js';
@@ -177,32 +175,11 @@ function recordRun(database: DatabaseType, status: BackupRunStatus, sizeBytes: n
   }
 }
 
-function dirSizeBytes(dir: string): number {
-  if (!existsSync(dir)) return 0;
-  let total = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) total += dirSizeBytes(full);
-    else if (entry.isFile()) total += statSync(full).size;
-  }
-  return total;
-}
-
 /** Kastar om lediga bytes inte räcker till 2 × datamängden (och minst 500 MB). Exporterad för test. */
 export function assertEnoughDiskSpace(freeBytes: number, dataBytes: number): void {
   const required = Math.max(2 * dataBytes, MIN_FREE_BYTES);
   if (freeBytes < required) {
     throw new Error(`Otillräckligt diskutrymme för backup: ${freeBytes} byte lediga, ${required} krävs`);
-  }
-}
-
-// ZIP-filen öppnas på nytt efter skrivning: ett arkiv som inte går att läsa eller
-// saknar databasen får aldrig räknas som en lyckad backup.
-async function verifyBackupZip(zipPath: string): Promise<void> {
-  const directory = await unzipper.Open.file(zipPath);
-  const dbEntry = directory.files.find((f) => f.path === 'data/database.sqlite');
-  if (directory.files.length === 0 || !dbEntry || dbEntry.uncompressedSize <= 0) {
-    throw new Error('Backup-ZIP:en är ofullständig: data/database.sqlite saknas eller är tom');
   }
 }
 
@@ -260,7 +237,7 @@ export async function runBackup(
 
     // Diskkontroll före första skrivningen: en full disk ger annars en halv ZIP och
     // riskerar att fylla volymen som databasen själv ligger på.
-    const dataBytes = statSync(database.name).size + dirSizeBytes(uploadDir);
+    const dataBytes = backupDataBytes(database, uploadDir);
     const fsStats = statfsSync(backupDir);
     assertEnoughDiskSpace(fsStats.bavail * fsStats.bsize, dataBytes);
 
@@ -269,38 +246,8 @@ export async function runBackup(
     const backupPath = join(backupDir, `backup-${stamp.slice(0, 10)}-${stamp.slice(11, 13)}${stamp.slice(14, 16)}.zip`);
     tmpZipPath = `${backupPath}.tmp`;
 
-    // 1. WAL-säker online-snapshot
-    await database.backup(tmpDbPath);
-
-    // 2. Integritetskontroll — korrupt DB rullar aldrig in i retention
-    const verifyDb = new Database(tmpDbPath, { readonly: true });
-    try {
-      const res = verifyDb.pragma('integrity_check') as Array<{ integrity_check: string }>;
-      if (!(res.length === 1 && res[0].integrity_check === 'ok')) {
-        throw new Error(`integrity_check failed: ${JSON.stringify(res)}`);
-      }
-    } finally {
-      verifyDb.close();
-    }
-
-    // 3. Bunta DB + uploads till ZIP (samma struktur som manuell download → direkt restorebar).
-    // Skrivs till *.tmp och döps om först när arkivet är komplett och verifierat, så att
-    // en krasch eller full disk aldrig lämnar en trasig fil under ett riktigt backup-namn.
-    await new Promise<void>((resolve, reject) => {
-      const output = createWriteStream(tmpZipPath!);
-      const archive = new ZipArchive({ zlib: { level: 6 } });
-      output.on('close', () => resolve());
-      output.on('error', reject);
-      archive.on('error', reject);
-      archive.pipe(output);
-      archive.file(tmpDbPath, { name: 'data/database.sqlite' });
-      if (existsSync(uploadDir)) {
-        archive.directory(uploadDir, 'data/uploads');
-      }
-      archive.finalize();
-    });
-
-    await verifyBackupZip(tmpZipPath);
+    // Validate DB integrity and every persistent file reference before publishing.
+    await buildBackupArchive(database, tmpDbPath, tmpZipPath, uploadDir);
 
     // Fynd backup-audit-5 + commit-säkerhetsgranskning: arkivet är nu fullständigt
     // skrivet (output 'close' har triggat ovan). Backup-ZIP:en innehåller HELA

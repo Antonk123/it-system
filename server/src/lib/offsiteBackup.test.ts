@@ -68,6 +68,31 @@ describe('uploadBackupOffsite', () => {
     expect(getOffsiteFailureCount()).toBe(before);
   });
 
+  it.each([undefined, '', ' \t\n '])('rejects missing required offsite configuration (%s) and records a failure', async command => {
+    if (command !== undefined) process.env.OFFSITE_BACKUP_CMD = command;
+    process.env.OFFSITE_BACKUP_REQUIRED = 'true';
+    const before = getOffsiteFailureCount();
+    await expect(uploadBackupOffsite(backupFile)).rejects.toThrow(/OFFSITE_BACKUP_CMD/);
+    expect(execFileMock).not.toHaveBeenCalled();
+    expect(getOffsiteFailureCount()).toBe(before + 1);
+  });
+
+  it('treats a whitespace-only optional command as disabled', async () => {
+    process.env.OFFSITE_BACKUP_CMD = ' \t\n ';
+    process.env.OFFSITE_BACKUP_REQUIRED = 'false';
+    const before = getOffsiteFailureCount();
+    await expect(uploadBackupOffsite(backupFile)).resolves.toBeUndefined();
+    expect(execFileMock).not.toHaveBeenCalled();
+    expect(getOffsiteFailureCount()).toBe(before);
+  });
+
+  it('preserves meaningful whitespace in a configured shell command', async () => {
+    process.env.OFFSITE_BACKUP_CMD = 'printf \\ ';
+    mockExecSuccess();
+    await uploadBackupOffsite(backupFile);
+    expect(execFileMock.mock.calls[0][1]).toEqual(['-c', 'printf \\ ']);
+  });
+
   it('runs the template via sh -c with {file} replaced by "$BACKUP_FILE" (never the raw path)', async () => {
     process.env.OFFSITE_BACKUP_CMD = 'rclone copy {file} remote:itticket/';
     mockExecSuccess();
@@ -136,6 +161,13 @@ describe('warnIfOffsiteMissing', () => {
 
   it('warns in production when OFFSITE_BACKUP_CMD is empty', () => {
     process.env.NODE_ENV = 'production';
+    warnIfOffsiteMissing();
+    expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Ingen off-site-backup konfigurerad'));
+  });
+
+  it('warns in production when the command contains only whitespace', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.OFFSITE_BACKUP_CMD = ' \t ';
     warnIfOffsiteMissing();
     expect(logger.warn).toHaveBeenCalledWith(expect.stringContaining('Ingen off-site-backup konfigurerad'));
   });

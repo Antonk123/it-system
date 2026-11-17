@@ -172,13 +172,26 @@ describe('isSafeWebhookUrl — DNS-rebind guard (hostnames resolved via dns.prom
     expect(result.ok).toBe(true);
   });
 
-  it('fails CLOSED (rejects) when the DNS lookup itself throws', async () => {
-    lookupMock.mockRejectedValueOnce(new Error('ENOTFOUND'));
+  it.each(['EAI_AGAIN', 'ENOTFOUND', 'EAI_FAIL'])('fails closed but permits a later retry after DNS error %s', async (code) => {
+    lookupMock.mockRejectedValueOnce(Object.assign(new Error('DNS unavailable'), { code }));
 
     const result = await isSafeWebhookUrl('https://unresolvable.example.com/hook');
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.reason).toMatch(/dns lookup failed/i);
+    expect(result).toEqual({ ok: false, reason: 'DNS lookup failed', retryable: true });
+  });
+
+  it('fails closed on an empty DNS answer and permits a later retry', async () => {
+    lookupMock.mockResolvedValueOnce([]);
+
+    expect(await isSafeWebhookUrl('https://empty.example.com/hook'))
+      .toEqual({ ok: false, reason: 'DNS lookup returned no addresses', retryable: true });
+  });
+
+  it('marks a private DNS answer as a definitive policy failure', async () => {
+    lookupMock.mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
+
+    expect(await isSafeWebhookUrl('https://unsafe.example.com/hook'))
+      .toEqual({ ok: false, reason: expect.stringMatching(/private/), retryable: false });
   });
 });
 
@@ -300,7 +313,7 @@ describe('isSafeWebhookUrl — extended SSRF ranges', () => {
 
   it('names the embedded private IPv4 in the reason for NAT64/6to4 literals', async () => {
     const nat64 = await isSafeWebhookUrl('https://[64:ff9b::a00:1]/hook');
-    expect(nat64).toEqual({ ok: false, reason: expect.stringContaining('NAT64') });
+    expect(nat64).toEqual({ ok: false, reason: expect.stringContaining('NAT64'), retryable: false });
     expect(nat64.ok === false && nat64.reason).toContain('10.0.0.0/8');
     const sixToFour = await isSafeWebhookUrl('https://[2002:c0a8:101::]/hook');
     expect(sixToFour.ok === false && sixToFour.reason).toContain('192.168.0.0/16');

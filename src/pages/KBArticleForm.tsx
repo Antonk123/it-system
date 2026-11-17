@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { toast } from 'sonner';
+import { registerUnsavedWork } from '@/registerSW';
 
 const ARTICLE_TEMPLATES = [
   {
@@ -49,6 +50,21 @@ const ARTICLE_TEMPLATES = [
 ] as const;
 
 const VALID_ARTICLE_TYPES = ['how-to', 'solution'] as const;
+
+interface ArticleDraft {
+  title: string;
+  content: string;
+  categoryId: string;
+  articleType: string;
+  tagIds: string[];
+  status: string;
+}
+
+function draftSnapshot(draft: ArticleDraft): string {
+  // TipTap emits <p></p> for an untouched empty document.
+  const content = /^(?:\s|<p>|<\/p>|<br\s*\/?>|&nbsp;)*$/i.test(draft.content) ? '' : draft.content;
+  return JSON.stringify({ ...draft, content, tagIds: [...draft.tagIds].sort() });
+}
 
 const KBArticleForm = () => {
   const { id } = useParams<{ id: string }>();
@@ -75,6 +91,29 @@ const KBArticleForm = () => {
   const [templateDismissed, setTemplateDismissed] = useState(
     () => !!(searchParams.get('title') || searchParams.get('article_type'))
   );
+  const [savedSnapshot, setSavedSnapshot] = useState<string | null>(() => isEditing ? null : draftSnapshot({
+    title: '', content: '', categoryId: 'none', articleType: 'none', tagIds: [], status: 'published',
+  }));
+  const currentSnapshot = useMemo(() => draftSnapshot({
+    title, content, categoryId, articleType, tagIds: selectedTagIds, status,
+  }), [title, content, categoryId, articleType, selectedTagIds, status]);
+  const hasUnsavedChanges = savedSnapshot !== null && currentSnapshot !== savedSnapshot;
+
+  // Keep this registration stable throughout a dirty interval. Releasing it on
+  // every keystroke could flush a pending service-worker reload between edits.
+  useEffect(() => {
+    if (!hasUnsavedChanges) return;
+    const release = registerUnsavedWork();
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      release();
+    };
+  }, [hasUnsavedChanges]);
 
   // Edit mode: the article, its cross-refs and the link picker all come from react-query.
   const { data: kbData, isLoading: isArticleLoading, isError: isArticleError } = useKbArticle(isEditing ? id : undefined);
@@ -102,6 +141,14 @@ const KBArticleForm = () => {
     setArticleType(article.article_type || 'none');
     setSelectedTagIds((article.tags || []).map(t => t.id));
     setStatus(article.status || 'published');
+    setSavedSnapshot(draftSnapshot({
+      title: article.title,
+      content: article.content,
+      categoryId: article.category_id ?? 'none',
+      articleType: article.article_type || 'none',
+      tagIds: (article.tags || []).map(t => t.id),
+      status: article.status || 'published',
+    }));
   }, [kbData]);
 
   useEffect(() => {
@@ -169,6 +216,7 @@ const KBArticleForm = () => {
       };
       if (isEditing && id) {
         await api.updateKbArticle(id, payload);
+        setSavedSnapshot(currentSnapshot);
         invalidateKbCaches(queryClient);
         toast.success('Artikel uppdaterad');
         navigate(`/kb/${id}`);
@@ -182,6 +230,7 @@ const KBArticleForm = () => {
             if (import.meta.env.DEV) console.warn('Could not auto-link article to source ticket');
           }
         }
+        setSavedSnapshot(currentSnapshot);
         invalidateKbCaches(queryClient);
         if (sourceTicketId) {
           queryClient.invalidateQueries({ queryKey: ticketKbLinksKeys.ticket(sourceTicketId) });

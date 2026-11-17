@@ -13,7 +13,7 @@ import { createRateLimiter, writeRateLimiter } from '../middleware/rateLimit.js'
 import { logger } from '../lib/logger.js';
 import { deleteSetting, getSetting, setSetting } from '../lib/settings.js';
 import { logAudit } from '../lib/auditLog.js';
-import { UPLOAD_DIR, extractKbImageFilenames, deleteKbImageFile } from '../lib/kbImages.js';
+import { UPLOAD_DIR, extractKbImageFilenames, deleteUnreferencedKbImage } from '../lib/kbImages.js';
 import { parseCategoryIcon } from '../lib/categoryIcons.js';
 
 if (!existsSync(UPLOAD_DIR)) {
@@ -454,7 +454,7 @@ router.put('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, res: 
       const oldImages = extractKbImageFilenames(existing.content);
       const newImages = extractKbImageFilenames(articleContent);
       for (const filename of oldImages) {
-        if (!newImages.has(filename)) deleteKbImageFile(filename);
+        if (!newImages.has(filename)) deleteUnreferencedKbImage(db, filename);
       }
     } catch (parseErr) {
       logger.warn('KB article update: fel vid parsning av inbäddade bilder', { error: String(parseErr) });
@@ -500,12 +500,12 @@ router.delete('/articles/:id', authenticate, requireAdmin, (req: AuthRequest, re
       db.prepare('DELETE FROM kb_articles WHERE id = ?').run(req.params.id);
     })();
 
-    // Rensa inbäddade KB-bilder från disk (best-effort, blockerar ej raderingen).
+    // Rensa enbart gamla, orefererade KB-bilder (best-effort, blockerar ej raderingen).
     // Parsa alla <img src="..."> i artikelns HTML och ta bort filer som pekar på
     // lokalt uppladdade KB-bilder (/api/kb/images/<kb-…>-filnamn).
     try {
       for (const filename of extractKbImageFilenames(existing.content)) {
-        deleteKbImageFile(filename);
+        deleteUnreferencedKbImage(db, filename);
       }
     } catch (parseErr) {
       logger.warn('KB article delete: fel vid parsning av inbäddade bilder', { error: String(parseErr) });

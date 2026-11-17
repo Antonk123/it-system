@@ -13,6 +13,9 @@ IT-Ticket levereras rullande från `main` (en instans per deployment). Sektionen
 ### Säkerhet och verifiering (2026-11-17)
 - Uppdaterad JSON-parser och filuppladdning till rättade beroendeversioner.
 - Interna bilder och mailbilagor skyddas i både delningslistor och direkta filhämtningar. Osparade editorbilder delas först när de sparats i publikt innehåll. Interna e-postsvar skickas inte vidare som publika webhookhändelser.
+- KB-bilder raderas först när alla lagrade referenser är borta och uppladdningsfristen gått ut, även vid artikeländring och radering.
+- Färska och schemalagda backuper verifierar att databaskopians filreferenser finns i ZIP:en innan framgång rapporteras. Obligatorisk offsite utan giltigt kommando ger felstatus.
+- Webhooks försöker igen efter DNS-fel med ordinarie backoff. KB-formulär skjuter upp PWA-omladdning vid osparat arbete, och autentisering fungerar även när lokal tokenlagring kastar.
 - Äldre filer med okänt ursprung visas enbart för personal tills de uttryckligen laddas upp för delning igen. Migration 096 bevarar filerna och belagd publik användning; se driftrutinen i docs/OPERATIONS.md.
 - Beroendegaten avvisar misslyckade eller ofullständiga audit-svar. Routetesterna omfattar även Navets supportportal.
 

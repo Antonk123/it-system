@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { existsSync, rmSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync, copyFileSync } from 'fs';
+import { existsSync, rmSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, chmodSync, copyFileSync, unlinkSync, ReadStream, WriteStream } from 'fs';
 import { join, dirname } from 'node:path';
 import { tmpdir as osTmpdir } from 'node:os';
 import http from 'node:http';
@@ -36,17 +36,19 @@ const ADMIN_PASSWORD = 'Adm1n-S3cure-Pw!';
 // UPLOAD_DIR is read at backup.ts module-load time (same as kb.ts/attachments.ts),
 // so it must be set here too — otherwise the M14 happy-path restore below would
 // mirror uploads into the real server/data/uploads directory on disk.
-const { DB_PATH, UPLOAD_DIR } = vi.hoisted(() => {
+const { TEST_ROOT, DB_PATH, UPLOAD_DIR } = vi.hoisted(() => {
   const { tmpdir } = require('node:os') as typeof import('node:os');
   const { join } = require('node:path') as typeof import('node:path');
-  const dbPath = join(tmpdir(), `itticket-backup-test-${process.pid}-${Date.now()}.sqlite`);
-  const uploadDir = join(tmpdir(), `itticket-backup-uploads-${process.pid}-${Date.now()}`);
+  const { mkdtempSync } = require('node:fs') as typeof import('node:fs');
+  const root = mkdtempSync(join(tmpdir(), 'itticket-backup-routes-'));
+  const dbPath = join(root, 'database.sqlite');
+  const uploadDir = join(root, 'uploads');
   process.env.DB_PATH = dbPath;
   process.env.NODE_ENV = 'test';
   process.env.CSRF_SECRET = 'test-csrf-secret-backup-0123456789abcdef0123456789abcdef';
   process.env.JWT_SECRET = 'test-jwt-secret-backup-0123456789abcdef0123456789abcdef';
   process.env.UPLOAD_DIR = uploadDir;
-  return { DB_PATH: dbPath, UPLOAD_DIR: uploadDir };
+  return { TEST_ROOT: root, DB_PATH: dbPath, UPLOAD_DIR: uploadDir };
 });
 
 vi.mock('../middleware/rateLimit.js', async (importOriginal) => ({
@@ -303,33 +305,9 @@ afterAll(() => {
   } catch {
     /* ignore */
   }
-  for (const suffix of ['', '-wal', '-shm']) {
-    const f = DB_PATH + suffix;
-    if (existsSync(f)) {
-      try {
-        rmSync(f);
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-  // run-now-testet skriver verkliga backup-filer till dirname(DB_PATH)/backups.
+  // DB, uploads, backups and restore sidecars belong only to this test file.
   try {
-    const { dirname, join } = require('node:path') as typeof import('node:path');
-    rmSync(join(dirname(DB_PATH), 'backups'), { recursive: true, force: true });
-  } catch {
-    /* ignore */
-  }
-  // Städa UPLOAD_DIR (mkdirSync'ad av attachments.ts/kb.ts vid modul-load, och
-  // skriven till av M14-happy-path-testet nedan).
-  try {
-    rmSync(UPLOAD_DIR, { recursive: true, force: true });
-  } catch {
-    /* ignore */
-  }
-  try {
-    rmSync(`${DB_PATH}.pre-restore`, { force: true });
-    rmSync(`${UPLOAD_DIR}.pre-restore`, { recursive: true, force: true });
+    rmSync(TEST_ROOT, { recursive: true, force: true });
   } catch {
     /* ignore */
   }
@@ -340,6 +318,9 @@ afterAll(() => {
 // ---------------------------------------------------------------------------
 
 describe('GET /api/backup', () => {
+  const temporaryDownloads = () => readdirSync(join(TEST_ROOT, 'backups'))
+    .filter(name => name.startsWith('tmp-download-'));
+
   it('returns 401 when no token is provided', async () => {
     const res = await request(app).get('/api/backup');
     expect(res.status).toBe(401);
@@ -374,6 +355,166 @@ describe('GET /api/backup', () => {
     await vi.waitFor(() => {
       expect(readdirSync(backupDir).filter((f) => f.startsWith('tmp-download-'))).toEqual([]);
     });
+  });
+
+  it('rejects a snapshot whose attachment is deleted concurrently, before sending any ZIP headers or bytes (A04)', async () => {
+    const ticketId = randomUUID();
+    const fileId = randomUUID();
+    const filename = `attachment-${fileId}.txt`;
+    const filePath = join(UPLOAD_DIR, filename);
+    db.prepare("INSERT INTO tickets (id,title,description) VALUES (?, 'Backup race', '')").run(ticketId);
+    db.prepare('INSERT INTO ticket_attachments (id,ticket_id,file_name,file_path) VALUES (?,?,?,?)')
+      .run(fileId, ticketId, filename, filename);
+    writeFileSync(filePath, 'present in the snapshot, removed from live data');
+    const backup = db.backup.bind(db);
+    const snapshotSpy = vi.spyOn(db, 'backup').mockImplementationOnce(async destination => {
+      const result = await backup(destination);
+      db.prepare('DELETE FROM ticket_attachments WHERE id=?').run(fileId);
+      unlinkSync(filePath);
+      return result;
+    });
+    try {
+      const res = await adminAgent.get('/api/backup').set('Authorization', `Bearer ${adminToken}`);
+      expect(snapshotSpy).toHaveBeenCalledOnce();
+      expect(res.status).toBe(500);
+      expect(res.headers['content-type']).toMatch(/application\/json/);
+      expect(res.headers['content-disposition']).toBeUndefined();
+      expect(res.body).toEqual({ error: 'Backup failed' });
+      await vi.waitFor(() => expect(temporaryDownloads()).toEqual([]));
+    } finally {
+      snapshotSpy.mockRestore();
+      db.prepare('DELETE FROM tickets WHERE id=?').run(ticketId);
+      rmSync(filePath, { force: true });
+    }
+  });
+
+  it('cleans the real snapshot after a client disconnects while the archive is still being built (A04)', async () => {
+    let snapshotReady = false;
+    let responseClosed = false;
+    let responseReceived = false;
+    let releaseSnapshot!: () => void;
+    const paused = new Promise<void>(resolve => { releaseSnapshot = resolve; });
+    const backup = db.backup.bind(db);
+    const snapshotSpy = vi.spyOn(db, 'backup').mockImplementationOnce(async destination => {
+      const result = await backup(destination);
+      snapshotReady = true;
+      await paused;
+      return result;
+    });
+    const server = app.listen(0);
+    server.on('request', (_req, res) => { res.once('close', () => { responseClosed = true; }); });
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    const client = http.get({ hostname: '127.0.0.1', port, path: '/api/backup',
+      headers: { Authorization: `Bearer ${adminToken}` } }, res => {
+      responseReceived = true;
+      res.resume();
+    });
+    client.on('error', () => { /* expected socket close */ });
+    try {
+      await vi.waitFor(() => expect(snapshotReady).toBe(true));
+      expect(temporaryDownloads().some(name => name.endsWith('.sqlite'))).toBe(true);
+      client.destroy();
+      await vi.waitFor(() => expect(responseClosed).toBe(true));
+      releaseSnapshot();
+      await vi.waitFor(() => expect(temporaryDownloads()).toEqual([]));
+      expect(responseReceived).toBe(false);
+    } finally {
+      releaseSnapshot();
+      client.destroy();
+      snapshotSpy.mockRestore();
+      await new Promise<void>(resolve => { server.close(() => resolve()); });
+    }
+  });
+
+  it('closes the archive file descriptor and removes temporary files when a client aborts during streaming (A04)', async () => {
+    const fixturePath = join(UPLOAD_DIR, `stream-abort-${randomUUID()}.bin`);
+    writeFileSync(fixturePath, randomBytes(8 * 1024 * 1024));
+    const sources: ReadStream[] = [];
+    const emit = ReadStream.prototype.emit;
+    const streamSpy = vi.spyOn(ReadStream.prototype, 'emit').mockImplementation(function (this: ReadStream, event, ...args) {
+      if (event === 'open' && String(this.path).startsWith(join(TEST_ROOT, 'backups', 'tmp-download-')) &&
+        String(this.path).endsWith('.sqlite.zip.tmp')) sources.push(this);
+      return emit.call(this, event, ...args);
+    });
+    const server = app.listen(0);
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    let receivedBytes = 0;
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const client = http.get({ hostname: '127.0.0.1', port, path: '/api/backup',
+          headers: { Authorization: `Bearer ${adminToken}` } }, res => {
+          if (res.statusCode !== 200) { res.resume(); reject(new Error(`Unexpected HTTP ${res.statusCode}`)); return; }
+          res.once('data', (chunk: Buffer) => {
+            receivedBytes += chunk.length;
+            client.destroy();
+          });
+          res.once('error', () => resolve());
+          res.once('close', () => resolve());
+        });
+        client.once('error', error => { if (receivedBytes) resolve(); else reject(error); });
+      });
+      expect(receivedBytes).toBeGreaterThan(0);
+      expect(receivedBytes).toBeLessThan(8 * 1024 * 1024);
+      await vi.waitFor(() => {
+        const source = sources.at(-1);
+        expect(source).toBeDefined();
+        expect(source!.destroyed).toBe(true);
+        expect(source!.closed).toBe(true);
+        expect(Reflect.get(source!, 'fd')).toBeNull();
+        expect(source!.bytesRead).toBeLessThan(8 * 1024 * 1024);
+        expect(temporaryDownloads()).toEqual([]);
+      });
+    } finally {
+      sources.forEach(source => source.destroy());
+      streamSpy.mockRestore();
+      rmSync(fixturePath, { force: true });
+      await new Promise<void>(resolve => { server.close(() => resolve()); });
+    }
+  }, 15000);
+
+  it('closes the archive output and cleans temporary files when a client aborts during ZIP construction (A04)', async () => {
+    const outputs: WriteStream[] = [];
+    let client: http.ClientRequest | undefined;
+    let responseReceived = false;
+    const emit = WriteStream.prototype.emit;
+    const outputSpy = vi.spyOn(WriteStream.prototype, 'emit').mockImplementation(function (this: WriteStream, event, ...args) {
+      if (event === 'open' && String(this.path).startsWith(join(TEST_ROOT, 'backups', 'tmp-download-')) &&
+        String(this.path).endsWith('.sqlite.zip.tmp')) {
+        outputs.push(this);
+        // The archive file is open, but its final validation/HTTP transfer has not started.
+        queueMicrotask(() => client?.destroy());
+      }
+      return emit.call(this, event, ...args);
+    });
+    const server = app.listen(0);
+    const address = server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    try {
+      await new Promise<void>(resolve => {
+        client = http.get({ hostname: '127.0.0.1', port, path: '/api/backup',
+          headers: { Authorization: `Bearer ${adminToken}` } }, res => {
+          responseReceived = true;
+          res.resume();
+          res.once('close', () => resolve());
+        });
+        client.once('error', () => resolve());
+      });
+      await vi.waitFor(() => {
+        expect(outputs).toHaveLength(1);
+        expect(outputs[0].destroyed).toBe(true);
+        expect(outputs[0].closed).toBe(true);
+        expect(Reflect.get(outputs[0], 'fd')).toBeNull();
+        expect(temporaryDownloads()).toEqual([]);
+      });
+      expect(responseReceived).toBe(false);
+    } finally {
+      client?.destroy();
+      outputs.forEach(output => output.destroy());
+      outputSpy.mockRestore();
+      await new Promise<void>(resolve => { server.close(() => resolve()); });
+    }
   });
 
   it('skriver en audit-rad vid nedladdning (session, ingen API-nyckel → api_key_id NULL)', async () => {
@@ -488,6 +629,9 @@ describe('GET /api/backup', () => {
       // finalize() kastar innan några headers hunnit skickas → ytterkatchen
       // i backup.ts svarar 500.
       expect(res.status).toBe(500);
+      expect(res.headers['content-type']).toMatch(/application\/json/);
+      expect(res.headers['content-disposition']).toBeUndefined();
+      await vi.waitFor(() => expect(temporaryDownloads()).toEqual([]));
     } finally {
       finalizeSpy.mockRestore();
     }

@@ -548,13 +548,23 @@ All routes require `authenticate` → `requireAdmin`.
 
 | Method | Path | Auth | Purpose | Inputs | Response |
 |--------|------|------|---------|--------|----------|
-| GET | `/api/backup` | admin + `backupDownloadLimiter` | Stream a fresh ZIP backup (DB + uploads); audit-logged before streaming | — | ZIP stream |
+| GET | `/api/backup` | admin + `backupDownloadLimiter` | Build and verify a fresh ZIP backup (DB + uploads) before streaming; audit-logged before building | — | ZIP stream; 500 if build, disk-space or snapshot-reference checks fail |
 | GET | `/api/backup/files` | admin | List stored backup ZIPs (`backup-YYYY-MM-DD[-HHMM].zip`) in the server's backup directory, newest first | — | `[{ name, sizeBytes, modifiedAt }]` |
 | GET | `/api/backup/files/:name` | admin + `backupDownloadLimiter` | Download one stored backup (name validated against the pattern, resolved inside the backup dir; audit-logged) | params: `name` | ZIP stream; 400 bad name / 404 |
 | POST | `/api/backup/restore` | admin + `restoreLimiter` + multer `upload.single('file')` (ZIP, 500 MB) | Restore from uploaded ZIP (entry-count and extracted-size caps, zip-slip/magic/table validation, `PRAGMA quick_check`, pre-restore copies, then `process.exit` so the container restarts) | multipart `file` | `{ success, message, restartRequired }`; 400/413 |
 | GET | `/api/backup/config` | admin | Get backup schedule config + nextRunAt | — | `{ …cfg, nextRunAt, consecutiveFailures, lastError, offsiteFailureCount }` |
 | PUT | `/api/backup/config` | admin | Update schedule (enabled/time/retentionDays) | body: `enabled`, `time`(HH:MM), `retentionDays`(1–3650) | `{ …cfg, nextRunAt, consecutiveFailures, offsiteFailureCount }`; 400 |
 | POST | `/api/backup/run-now` | admin | Trigger backup immediately | — | `{ status, lastRunAt, lastSizeBytes }`; 409 if running |
+
+Fresh and scheduled backups verify that every persistent upload reference in the
+SQLite snapshot has a file entry in the completed ZIP. A concurrent deletion fails
+the run instead of publishing an incomplete archive. Fresh downloads first build a
+private temporary ZIP in the backup directory; they require the same free-space
+margin as scheduled runs and send no ZIP bytes before verification. Temporary files
+and read streams are cleaned up after completion, failure or client cancellation.
+Required offsite with an absent/blank command produces `offsite_failed` for scheduled
+and run-now backups; the verified local ZIP is retained. Fresh GET downloads do not
+run offsite upload.
 
 ---
 

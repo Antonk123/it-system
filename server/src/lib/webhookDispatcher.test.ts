@@ -6,10 +6,11 @@ import { randomUUID } from 'crypto';
  * Tester för dispatchWebhook/processWebhookRetries: backoff, non-2xx, redirect,
  * avstängd webhook, trasig events-rad och krasch-återhämtning. Date fejkas så
  * backoff-tidsstämplar blir deterministiska; fetch stubbas (inget riktigt nät).
- * Webhook-URL:en är en publik IP-literal så isSafeWebhookUrl inte gör DNS.
+ * De flesta URL:er är publika IP-literaler. DNS-tester använder en mockad
+ * resolver; ingen extern DNS- eller HTTP-trafik görs.
  */
 
-const { DB_PATH } = vi.hoisted(() => {
+const { DB_PATH, lookupMock } = vi.hoisted(() => {
   const { tmpdir } = require('node:os') as typeof import('node:os');
   const { join } = require('node:path') as typeof import('node:path');
   const dbPath = join(tmpdir(), `itticket-test-${process.pid}-${Date.now()}-webhook-dispatcher.sqlite`);
@@ -17,8 +18,10 @@ const { DB_PATH } = vi.hoisted(() => {
   process.env.NODE_ENV = 'test';
   process.env.CSRF_SECRET = 'test-csrf-secret-whdisp-0123456789abcdef0123456789abcdef';
   process.env.JWT_SECRET = 'test-jwt-secret-whdisp-0123456789abcdef0123456789abcdef';
-  return { DB_PATH: dbPath };
+  return { DB_PATH: dbPath, lookupMock: vi.fn() };
 });
+
+vi.mock('dns', () => ({ default: { promises: { lookup: lookupMock } } }));
 
 import { initializeDatabase, db, closeDatabase } from '../db/connection.js';
 import { dispatchWebhook, processWebhookRetries } from './webhookDispatcher.js';
@@ -65,6 +68,8 @@ afterAll(() => {
 beforeEach(() => {
   db.prepare('DELETE FROM webhooks').run();
   fetchMock.mockReset();
+  lookupMock.mockReset();
+  lookupMock.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
   vi.stubGlobal('fetch', fetchMock);
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(T0);
@@ -150,6 +155,77 @@ describe('dispatchWebhook', () => {
     const [d] = deliveriesOf(id);
     expect(d.next_retry_at).toBeNull();
     expect(d.last_error).toMatch(/re-validation failed/);
+  });
+
+  it('retries a temporary DNS lookup failure and delivers the same event after resolution recovers', async () => {
+    const id = addWebhook({ url: 'https://receiver.example.test/webhook' });
+    lookupMock.mockRejectedValueOnce(Object.assign(new Error('Temporary resolver failure'), { code: 'EAI_AGAIN' }));
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+
+    await dispatchWebhook('ticket.created', { id: 't1' });
+
+    const [failed] = deliveriesOf(id);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(failed.attempts).toBe(1);
+    expect(failed.next_retry_at).toBe(new Date(T0.getTime() + 60_000).toISOString());
+    expect(failed.delivered_at).toBeNull();
+    expect(failed.last_error).toMatch(/DNS lookup failed/);
+
+    vi.setSystemTime(new Date(failed.next_retry_at!));
+    await processWebhookRetries();
+
+    const [delivered] = deliveriesOf(id);
+    expect(deliveriesOf(id)).toHaveLength(1);
+    expect(delivered.id).toBe(failed.id);
+    expect(delivered.attempts).toBe(2);
+    expect(delivered.delivered_at).toBe(new Date(T0.getTime() + 60_000).toISOString());
+    expect(delivered.next_retry_at).toBeNull();
+    expect(delivered.last_error).toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][1].headers['X-Webhook-Id']).toBe(failed.id);
+  });
+
+  it('stops retrying repeated DNS failures after the existing five-attempt cap', async () => {
+    const id = addWebhook({ url: 'https://receiver.example.test/webhook' });
+    lookupMock.mockRejectedValue(Object.assign(new Error('Temporary resolver failure'), { code: 'EAI_AGAIN' }));
+
+    await dispatchWebhook('ticket.created', { id: 't1' });
+    const deliveryId = deliveriesOf(id)[0].id;
+    for (let attempt = 2; attempt <= 5; attempt++) {
+      const before = deliveriesOf(id)[0];
+      expect(before.next_retry_at).not.toBeNull();
+      vi.setSystemTime(new Date(before.next_retry_at!));
+      await processWebhookRetries();
+      expect(deliveriesOf(id)[0]).toMatchObject({ id: deliveryId, attempts: attempt });
+    }
+    expect(deliveriesOf(id)[0]).toMatchObject({ attempts: 5, next_retry_at: null, delivered_at: null });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(lookupMock).toHaveBeenCalledTimes(5);
+    vi.setSystemTime(new Date(Date.now() + 24 * 3_600_000));
+    await processWebhookRetries();
+    expect(lookupMock).toHaveBeenCalledTimes(5);
+  });
+
+  it('does not fetch an empty DNS response and schedules another resolution attempt', async () => {
+    const id = addWebhook({ url: 'https://receiver.example.test/webhook' });
+    lookupMock.mockResolvedValueOnce([]);
+    fetchMock.mockResolvedValue(new Response(null, { status: 200 }));
+
+    await dispatchWebhook('ticket.created', { id: 't1' });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(deliveriesOf(id)[0]).toMatchObject({ attempts: 1, delivered_at: null, next_retry_at: new Date(T0.getTime() + 60_000).toISOString() });
+  });
+
+  it('keeps a DNS result with a private address terminal without making a request', async () => {
+    const id = addWebhook({ url: 'https://receiver.example.test/webhook' });
+    lookupMock.mockResolvedValueOnce([{ address: '10.0.0.5', family: 4 }]);
+
+    await dispatchWebhook('ticket.created', { id: 't1' });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(deliveriesOf(id)[0]).toMatchObject({ attempts: 5, next_retry_at: null, delivered_at: null });
+    expect(deliveriesOf(id)[0].last_error).toMatch(/private/);
   });
 
   it('skips inactive webhooks', async () => {

@@ -58,7 +58,8 @@ async function attemptDelivery(
 
   // Re-validate URL right before fetch to defeat DNS-rebind attacks where the
   // webhook URL was clean at create-time but its hostname now resolves to an
-  // internal IP. A definitive failure here — do not retry.
+  // internal IP. Unsafe destinations are final; resolution failures defer the
+  // HTTP request and use the ordinary bounded retry schedule.
   //
   // TOCTTOU note: there is a small window between this validation (which does
   // dns.promises.lookup) and the fetch() call below where a hostile DNS server
@@ -72,8 +73,13 @@ async function attemptDelivery(
   const safety = await isSafeWebhookUrl(webhook.url);
   if (!safety.ok) {
     db.prepare(
-      'UPDATE webhook_deliveries SET response_code = 0, attempts = ?, next_retry_at = NULL, last_error = ? WHERE id = ?'
-    ).run(MAX_WEBHOOK_ATTEMPTS, `URL re-validation failed: ${safety.reason}`, delivery.id);
+      'UPDATE webhook_deliveries SET response_code = 0, attempts = ?, next_retry_at = ?, last_error = ? WHERE id = ?'
+    ).run(
+      safety.retryable ? attemptNumber : MAX_WEBHOOK_ATTEMPTS,
+      safety.retryable ? nextRetryAt(attemptNumber) : null,
+      `URL re-validation failed: ${safety.reason}`,
+      delivery.id,
+    );
     return;
   }
 

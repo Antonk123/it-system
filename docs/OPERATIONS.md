@@ -121,7 +121,8 @@ servern kör.
 
 ## 4. Backup & Restore
 
-Logik i `server/src/lib/backupScheduler.ts`; endpoints i
+Gemensamt arkivbygge och referenskontroll i `server/src/lib/backupArchive.ts`,
+schemaläggning i `server/src/lib/backupScheduler.ts`; endpoints i
 `server/src/routes/backup.ts` (alla **admin-only**).
 
 ### Automatisk backup (scheduler)
@@ -140,8 +141,12 @@ Körningssteg i `runBackup()`:
 4. `PRAGMA integrity_check` — korrupt snapshot rullar **aldrig** in i retention.
 5. Buntar `data/database.sqlite` + `data/uploads/` till `backup-<YYYY-MM-DD-HHMM>.zip.tmp`
    (HHMM i namnet så flera körningar samma dag inte skriver över varandra).
-6. Öppnar ZIP:en igen och verifierar att den har poster och att `data/database.sqlite`
-   finns och inte är tom — annars misslyckas körningen och `.tmp`-filen raderas.
+6. Öppnar ZIP:en igen och verifierar databaskopians storlek samt att alla
+   filreferenser i **databaskopian** finns i arkivet: ärendebilagor, KB-bilder i
+   artiklar/ärenden/kommentarer/anpassade fält/mallar och varumärkeslogotypen.
+   Om en fil saknas, exempelvis efter samtidig radering, misslyckas körningen;
+   temporärfiler städas och tidigare backuper behålls. Kontrollen ger inte en
+   gemensam tidpunkt för alla filbyte; uppladdade filer förutsätts vara oföränderliga.
 7. `chmod 0o600` (ZIP:en innehåller hela DB:n inkl. hemligheter) och omdöpning till
    det slutliga `backup-*.zip`-namnet.
 8. Off-site-upload (se nedan).
@@ -161,14 +166,19 @@ kräver `tzdata` i imagen, annars UTC).
 - `UPLOAD_DIR` — vilka filer som buntas in.
 - `TZ` — tolkning av schemats klockslag.
 - `OFFSITE_BACKUP_CMD` — shell-mall som körs efter nattlig backup (se nedan).
-- `OFFSITE_BACKUP_REQUIRED` — om `true` markeras en misslyckad off-site-upload som
+- `OFFSITE_BACKUP_REQUIRED` — om `true` markeras en misslyckad off-site-upload,
+  även saknat/tomt/whitespace-only `OFFSITE_BACKUP_CMD`, som
   `offsite_failed` (den lokala backupen och retention körs ändå); annars loggas
   felet och backupen förblir `success`.
 
 ### Manuell backup / nedladdning
 
-- `GET /api/backup/` — laddar ner en färsk ZIP (rate limit: 10/15 min/IP). Den
-  temporära dumpen skrivs i backup-katalogen (inte `/tmp`).
+- `GET /api/backup/` — laddar ner en färsk ZIP (rate limit: 10/15 min/IP).
+  Databaskopia och privat temporär ZIP skrivs i backup-katalogen (inte `/tmp`),
+  med samma diskkontroll och referenskontroll som schemalagd backup. Inga ZIP-byte
+  skickas innan kontrollen passerat. Fel ger HTTP 500; temporärfiler städas efter
+  fel, färdig nedladdning och klientavbrott. Räkna med byggtid och lokalt diskutrymme
+  innan nedladdningen börjar. Färsk GET gör ingen offsite-upload och lagras inte i retention.
 - `GET /api/backup/files` — lista lagrade `backup-*.zip` (`[{ name, sizeBytes, modifiedAt }]`, nyast först).
 - `GET /api/backup/files/:name` — ladda ner en lagrad backup (samma rate limit som ovan;
   `name` måste matcha `backup-YYYY-MM-DD[-HHMM].zip`).
@@ -181,7 +191,9 @@ kräver `tzdata` i imagen, annars UTC).
 `server/src/lib/offsiteBackup.ts`: om `OFFSITE_BACKUP_CMD` är satt körs den via
 `sh -c` där `{file}` ersätts av env-variabeln `$BACKUP_FILE` (filvägen
 interpoleras **aldrig** in i shell-strängen → ingen shell-injection). Kommandot
-avbryts med SIGKILL efter 15 minuter. Ej satt = ingen off-site-kopia, och då
+avbryts med SIGKILL efter 15 minuter. Ej satt/tomt kommando med valfri offsite
+innebär ingen off-site-kopia; med `OFFSITE_BACKUP_REQUIRED=true` registreras i stället
+ett offsitefel och körningen får `offsite_failed`. Utan konfigurerat kommando
 ligger alla backuper på samma host som databasen; servern loggar i så fall
 `Ingen off-site-backup konfigurerad` vid varje start i produktion.
 
@@ -316,6 +328,10 @@ Dispatcher: `server/src/lib/webhookDispatcher.ts`. Scheduler:
 - Payload signeras med HMAC-SHA256 (`X-Webhook-Signature`), event i `X-Webhook-Event`.
 - Fetch-timeout: 10 s (`AbortSignal.timeout(10000)`).
 - URL omvalideras precis före varje fetch (skydd mot DNS-rebind till intern IP).
+- DNS-fel och tomma DNS-svar stoppar den aktuella leveransen men använder samma
+  backoff och femförsöksgräns som nätverksfel. Ingen fetch görs innan DNS-kontrollen
+  lyckats. Otillåtna protokoll, lokala/privata adresser och redirects är fortsatt
+  permanenta fel. Nya/ändrade webhookadresser måste fortfarande klara valideringen.
 
 **Exponentiell backoff** (`RETRY_DELAYS_MINUTES`, max 5 försök, `MAX_WEBHOOK_ATTEMPTS = 5`):
 

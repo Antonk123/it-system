@@ -104,6 +104,42 @@ describe('getBackupConfig', () => {
 });
 
 describe('runBackup', () => {
+  it('records failure and preserves previous backups when a referenced upload disappears after the DB snapshot', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'sched-reference-race-'));
+    const backupDir = join(dir, 'backups');
+    const uploadDir = join(dir, 'uploads');
+    mkdirSync(backupDir);
+    mkdirSync(uploadDir);
+    const previous = 'backup-2020-01-01.zip';
+    writeFileSync(join(backupDir, previous), 'previous backup must survive failed run');
+    writeFileSync(join(uploadDir, 'document.txt'), 'referenced content');
+    const db = makeSourceDb(join(dir, 'db.sqlite'));
+    db.exec('CREATE TABLE ticket_attachments (file_path TEXT)');
+    db.prepare('INSERT INTO ticket_attachments VALUES (?)').run('document.txt');
+    const backup = db.backup.bind(db);
+    const snapshotSpy = vi.spyOn(db, 'backup').mockImplementationOnce(async destination => {
+      const result = await backup(destination);
+      db.prepare('DELETE FROM ticket_attachments').run();
+      rmSync(join(uploadDir, 'document.txt'));
+      return result;
+    });
+    try {
+      const result = await runBackup(db, { backupDir, uploadDir });
+      expect(result.status).toBe('failed');
+      expect(result.path).toBeUndefined();
+      expect(getBackupConfig(db)).toMatchObject({
+        lastStatus: 'failed', consecutiveFailures: 1,
+        lastError: expect.stringContaining('ofullständig'),
+      });
+      expect(readdirSync(backupDir)).toEqual([previous]);
+      expect(isBackupRunning()).toBe(false);
+    } finally {
+      snapshotSpy.mockRestore();
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('creates a dated zip, records success, sets the in-flight guard, cleans tmp sidecars', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'sched-run-'));
     const backupDir = join(dir, 'backups');
