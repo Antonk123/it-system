@@ -21,6 +21,8 @@ IT-Ticket levereras rullande från `main` (en instans per deployment). Sektionen
 - Äldre filer med okänt ursprung visas enbart för personal tills de uttryckligen laddas upp för delning igen. Migration 096 bevarar filerna och belagd publik användning; se driftrutinen i docs/OPERATIONS.md.
 - Beroendegaten avvisar misslyckade eller ofullständiga audit-svar. Routetesterna omfattar även Navets supportportal.
 - Administrationsverktyg för granskad engångskoppling av äldre beställarärenden till befintliga Navet-användare, med torrkörning, privat backup och atomisk loggning. Ingen automatisk e-postmatchning eller delning av bilagor.
+### Mina ärenden (2026-11-17)
+- Mejl och svar behåller radbrytningar och stycken. Befintlig textvisare ger läsbara listor och klickbara länkar som öppnas separat från ärendet.
 
 ### Mallval (2026-11-16)
 - ”Ta hjälp av en mall” öppnar mallistan direkt i felanmälan och när du skapar ärenden. Bekräftelsen innan ifylld text ersätts finns kvar.

@@ -68,6 +68,25 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 describe("requester view", () => {
+  it("renders readable paragraphs, lists and safe links without interpreting literal HTML", async () => {
+    const formatted = {...ticket,
+      description: 'Första stycket\nEn ny rad\n\nAndra stycket\n\n1. Kontrollera kontot\n2. Öppna https://example.test/help\n\n<img src="https://tracker.test/pixel" onerror="alert(1)">\n\n![Spårbild](https://tracker.test/pixel)',
+      comments: [{...ticket.comments[0], content: 'Svar först\n\nSvar sedan: https://example.test/reply'}],
+    };
+    mocks.request.mockImplementation((url: string) => Promise.resolve(url.includes("?") ? {data:[formatted],total:1} : formatted));
+    const {container} = render(<SelfService />);
+    session();
+    fireEvent.click(screen.getByRole("button", {name:"Mina ärenden"}));
+    fireEvent.click(await screen.findByRole("button", {name:/Skrivaren/}));
+    const link = await screen.findByRole("link", {name:"https://example.test/help"});
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(container.querySelectorAll("article ol li")).toHaveLength(2);
+    expect(screen.getByText("Andra stycket").tagName).toBe("P");
+    expect(container.querySelector("article br")).not.toBeNull();
+    expect(container.querySelector("article img")).toBeNull();
+    expect(await screen.findByRole("link", {name:"https://example.test/reply"})).toHaveAttribute("target", "_blank");
+  });
   it("preserves an unsent reply when cancelling return to the list", async () => {
     render(<SelfService />);
     session();

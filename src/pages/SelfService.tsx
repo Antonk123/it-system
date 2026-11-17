@@ -1,6 +1,8 @@
 import { useConfirmDiscard } from "@/hooks/useConfirmDiscard";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { ArrowLeft, Loader2, CheckCircle } from "lucide-react";
+import { HtmlRenderer } from "@/components/HtmlRenderer";
+import { markdownToHtml } from "@/lib/contentMigration";
 import { FileUpload } from "@/components/FileUpload";
 import { api, downloadBlob, ApiError } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -70,6 +72,10 @@ export default function SelfService() {
     [list, setList] = useState<Summary[]>([]),
     [total, setTotal] = useState(0),
     [detail, setDetail] = useState<Detail | null>(null);
+  const formattedDetail = useMemo(() => detail ? {
+    description: markdownToHtml(detail.description),
+    comments: new Map(detail.comments.map(c => [c.id, markdownToHtml(c.content)])),
+  } : null, [detail]);
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
@@ -460,9 +466,8 @@ export default function SelfService() {
                 </div>
                 <article className="py-5 border-b border-border">
                   <p className="font-medium">Din anmälan</p>
-                  <p className="mt-2 whitespace-pre-wrap break-words">
-                    {detail.description}
-                  </p>
+                  <HtmlRenderer content={formattedDetail?.description || ""} openLinksInNewTab renderImages={false}
+                    className="mt-2 break-words [overflow-wrap:anywhere] [&_a]:break-all" />
                 </article>
                 {detail.comments.map((c) => (
                   <article key={c.id} className="py-5 border-b border-border">
@@ -472,9 +477,8 @@ export default function SelfService() {
                         {date(c.created_at)}
                       </span>
                     </div>
-                    <p className="mt-2 whitespace-pre-wrap break-words">
-                      {c.content}
-                    </p>
+                    <HtmlRenderer content={formattedDetail?.comments.get(c.id) || ""} openLinksInNewTab renderImages={false}
+                      className="mt-2 break-words [overflow-wrap:anywhere] [&_a]:break-all" />
                   </article>
                 ))}
                 {detail.attachments.length > 0 && (

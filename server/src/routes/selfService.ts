@@ -28,6 +28,7 @@ router.use(supportIdentity, createRateLimiter(60000, 120));
 const text = (html: string) =>
   convert(html || "", {
     wordwrap: false,
+    preserveNewlines: true,
     selectors: [{ selector: "img", format: "skip" }],
   });
 function owns(identity: SupportIdentity, ticket: string) {

@@ -53,13 +53,15 @@ const SANITIZE_OPTIONS = {
 interface HtmlRendererProps {
   content: string;
   className?: string;
+  openLinksInNewTab?: boolean;
+  renderImages?: boolean;
 }
 
 /**
  * Safely render HTML content with DOMPurify sanitization
  * Replaces MarkdownRenderer for displaying HTML content from TipTap editor
  */
-export const HtmlRenderer = ({ content, className }: HtmlRendererProps) => {
+export const HtmlRenderer = ({ content, className, openLinksInNewTab = false, renderImages = true }: HtmlRendererProps) => {
   // Sanera bara när innehållet ändras — inte vid varje omrendering.
   const rendered = useMemo(() => {
     const fragment = DOMPurify.sanitize(content, { ...SANITIZE_OPTIONS, RETURN_DOM_FRAGMENT: true });
@@ -67,9 +69,14 @@ export const HtmlRenderer = ({ content, className }: HtmlRendererProps) => {
       if (node.nodeType === Node.TEXT_NODE) return node.textContent;
       if (!(node instanceof Element)) return null;
       const tag = node.tagName.toLowerCase();
+      if (tag === 'img' && !renderImages) return node.getAttribute('alt') || null;
       const props: Record<string, string | number> = {};
       const names: Record<string, string> = { class: 'className', colspan: 'colSpan', rowspan: 'rowSpan' };
       for (const attribute of Array.from(node.attributes)) props[names[attribute.name] || attribute.name] = attribute.value;
+      if (tag === 'a' && openLinksInNewTab) {
+        props.target = '_blank';
+        props.rel = 'noopener noreferrer';
+      }
       const id = tag === 'img' ? imageId(node.getAttribute('src') || '') : undefined;
       if (id) {
         delete props.src;
@@ -80,7 +87,7 @@ export const HtmlRenderer = ({ content, className }: HtmlRendererProps) => {
         : createElement(tag, { ...props, key });
     };
     return Array.from(fragment.childNodes).map(renderNode);
-  }, [content]);
+  }, [content, openLinksInNewTab, renderImages]);
 
   if (!content) return null;
 
